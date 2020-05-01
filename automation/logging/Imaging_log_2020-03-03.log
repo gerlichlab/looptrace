@@ -1,0 +1,12 @@
+2020-03-03 21:32:52,112 ERROR    myPIC macro not initialized correctly.
+2020-03-03 21:32:54,818 ERROR    myPIC macro not initialized correctly.
+2020-03-03 21:34:01,664 ERROR    myPIC macro not initialized correctly.
+2020-03-03 21:37:12,078 ERROR    Pause button not found.
+2020-03-03 21:37:47,788 ERROR    Pause button not found.
+2020-03-03 21:38:18,141 ERROR    Pause button not found.
+2020-03-03 21:47:54,393 INFO     Imaging started.
+2020-03-03 21:47:54,413 INFO     Status updated to: {'command': 'imaging', 'current_well': 'A2'}
+2020-03-03 21:48:10,700 INFO     Waiting for imaging
+2020-03-03 21:48:21,839 INFO     Waiting for imaging
+2020-03-03 21:48:34,059 INFO     Waiting for imaging
+2020-03-03 21:48:45,403 INFO     Waiting for imaging

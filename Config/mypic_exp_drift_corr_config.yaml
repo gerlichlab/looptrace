@@ -1,0 +1,59 @@
+#General settings
+output_folder: M:\ChromatinTeam\Images_processing\20200207_OO_311_BeforeAfterFixHCL_FISH_Tads_AF488\05_Single_Nuc_Analysis
+output_name: 311_BeforeAfterFixHCl_FISH_Tads_AF488_T2_vs_T4_Thresh
+filetype: 
+    - '.czi'
+tags:
+    - 'Title'
+    - 'SizeX'
+    - 'SizeY'
+    - 'SizeZ'
+    - 'SizeC'
+    - 'SizeS'
+    - 'Model'
+    - 'System'
+    - 'ScalingX'
+    - 'ScalingY'
+    - 'ScalingZ'
+
+#Settings for merging and alignment and tracing functions.
+folders:
+    - 
+    - 
+template:
+    -
+course_ch: 1
+fine_ch: -1
+
+#Settings for nuclear segmentation.   
+nuc_ch: 1
+min_nuc_vol: 100000
+nuc_exp_bb:
+    - 29
+    - 300
+    - 300
+
+#Settings for comparison functions
+plot_ssim: 0
+threshold_comparison: 1
+comp_folder_1: M:\ChromatinTeam\Images_processing\20200207_OO_311_BeforeAfterFixHCL_FISH_Tads_AF488\00_RAW_myPIC
+comp_folder_2: M:\ChromatinTeam\Images_processing\20200207_OO_311_BeforeAfterFixHCL_FISH_Tads_AF488\00_RAW_myPIC
+template_comp_1: 
+    - 'DE_2'
+    - 'T0002'
+template_comp_2: 
+    - 'DE_2'
+    - 'T0004'
+analysis_channels:
+    - 0
+    - 1
+
+#Settings for SR analysis
+const_gauss_sigma: 20
+cam_px: 512
+cam_nm: 103
+clip: 2
+grid_px_size: 10
+output_res: 4096
+dbscan_eps: 200
+dbscan_mins: 100

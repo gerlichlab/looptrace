@@ -1,0 +1,28 @@
+image_folder: M:\ChromatinTeam\Images_processing\20200304_Exp321_ELYRA_BS32-40_lowres_SP6G_2xA565_bruker\DC
+roi_folder: M:\ChromatinTeam\Images_processing\20200304_Exp321_ELYRA_BS32-40_lowres_SP6G_2xA565_bruker\DC
+output_folder: M:\ChromatinTeam\Images_processing\20200304_Exp321_ELYRA_BS32-40_lowres_SP6G_2xA565_bruker\05_Trace_Analysis
+output_name: 20200304_Exp321_ELYRA_BS32-40_out
+match_idx:
+    - -18
+    - -13
+    - -14
+    - -9
+
+xy_nm: 103
+z_nm: 200
+
+trace_ch: 1
+nuc_frame: 0
+nuc_ch: 2
+min_nuc_size: 100000
+pre_filter: 0
+roi_image_size:
+    - 16
+    - 64
+    - 64
+    
+A_to_BG: 2
+sigma_w_max: 800
+sigma_z_max: 2000
+man_qc:
+    - 9
