@@ -31,11 +31,11 @@ from mpl_toolkits.mplot3d import Axes3D
 from joblib import Parallel, delayed
 from sklearn.cluster import DBSCAN, OPTICS
 from sklearn.metrics import pairwise_distances
-import hdbscan
-import microscPSF.microscPSF as msPSF
-from flowdec import data as fd_data
-from flowdec import restoration as fd_restoration
-from sklearn.neighbors import KernelDensity
+#import hdbscan
+#import microscPSF.microscPSF as msPSF
+#from flowdec import data as fd_data
+#from flowdec import restoration as fd_restoration
+#from sklearn.neighbors import KernelDensity
 
 
 def load_config(config_file):
