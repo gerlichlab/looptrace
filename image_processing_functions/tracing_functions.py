@@ -17,6 +17,13 @@ from scipy.spatial.distance import cdist
 from scipy.cluster.hierarchy import single, dendrogram
 #from pycpd import RigidRegistration
 
+def pwd_calc(traces):
+    # Calculate pairwise distances for all traces.
+    points = [points_from_df_nan(df)[0] for _, df in traces.groupby(level=0)]
+    pwds = [cdist(p, p) for p in points]
+    pwds = np.stack(pwds)
+    return pwds
+
 def tracing_length_qc(traces, pwds, min_length=0):
     grouped=traces.groupby(level=0)
     traces_long=grouped.filter(lambda x : x['QC'].sum()>=min_length)

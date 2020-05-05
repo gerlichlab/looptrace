@@ -11,7 +11,6 @@ import pandas as pd
 from image_processing_functions.gaussfit import fitSymmetricGaussian3D,fitSymmetricGaussian3DMLE
 from read_roi import read_roi_zip, read_roi_file
 from skimage.filters import gaussian
-from scipy.spatial.distance import cdist
 from scipy.stats import mode
 import scipy.ndimage as ndi
 from image_processing_functions import image_processing_functions as ip
@@ -59,16 +58,14 @@ class Tracer:
         res = [self.tracing_3d(image_path, roi_path) for image_path, roi_path in zip(image_list, roi_list)]
         
         #Unpack res into traces and images
-        traces, imgs, pwds = list(zip(*res))
+        traces, imgs = list(zip(*res))
         
         #Flatten list of traces, imgs and pwds.
         traces = pd.concat(traces)     
         imgs = np.concatenate(imgs)
-        pwds = np.concatenate(pwds)
         
-        self.save_data(traces=traces,imgs=imgs,pwds=pwds,config=self.config)
-        return traces, imgs, pwds
-    
+        return traces, imgs
+
     def tracing_3d(self, image_path, roi_path):
         '''
         Fits gaussian maxima over time in list of ROIs in a given image.
@@ -156,18 +153,13 @@ class Tracer:
         traces['sigma_z']=traces['sigma_z']*self.config['z_nm']
         traces=traces.set_index(['trace_ID', 'img_name', 'roi_ID', 'cell_ID', 'frame'])
         traces['QC']=traces.apply(self.tracing_qc,axis=1)
-
-        # Calculate pairwise distances for all traces.
-        points = [tr.points_from_df_nan(df)[0] for _, df in traces.groupby(level=0)]
-        pwds = [cdist(p, p) for p in points]
-        pwds = np.stack(pwds)
         
         # Pad ROI images to standard shape to allow hyperstack generation.
         exp_shape=[image.shape[0]]+roi_image_size
         all_imgs=[ip.pad_to_shape(img, exp_shape) for img in all_imgs]
         imgs=np.stack(all_imgs)
         print('Processed image ', image_path)
-        return traces, imgs, pwds
+        return traces, imgs
     
     def tracing_qc(self, row):
         A_to_BG=self.config['A_to_BG']
