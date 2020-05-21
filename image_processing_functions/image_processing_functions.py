@@ -14,7 +14,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import cv2
+#import cv2
 from xml.etree import cElementTree as ElementTree
 from skimage.segmentation import clear_border
 from skimage.filters import threshold_otsu, gaussian
@@ -231,7 +231,7 @@ def detect_nuclei(nuc_image, min_size, exp_bb=-1, clear_edges=True):
     
 def pad_to_shape(arr, shape):
     '''
-    Pads an array with zeros to a given shape (list or tuple).
+    Pads an array with fill to a given shape (list or tuple).
     Shape must be of length equal to array ndim.
     Adds on both sides as far as possible, then at end if missing one.
     Returns padded array.

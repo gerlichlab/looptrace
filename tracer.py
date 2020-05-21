@@ -81,52 +81,69 @@ class Tracer:
         imgs : Hyperstack image with raw image data of each ROI.
     
         '''
+        #Read parameters from config.
         min_nuc_size=self.config['min_nuc_size']
         nuc_ch=self.config['nuc_ch']
         nuc_frame=self.config['nuc_frame']
         trace_ch=self.config['trace_ch']
+        crop_z = self.config['crop_z']
         roi_image_size=self.config['roi_image_size']
         man_qc=self.config['man_qc']
         # Read in images and ROIs.
         image=ip.read_tif_image(image_path)
         print('Loaded image ', image_path)
         
+        #Define image name and final image size for stacking.
         image_name=image_path.split('\\')[-1].split('.')[0]
+        exp_shape=[image.shape[0]]+roi_image_size
         
+        #Detect nuclei and data about nuclei.
         nuc_labels, nuc_props = ip.detect_nuclei(image[nuc_frame,:,nuc_ch,:,:], min_nuc_size)
         
-        
+        #Read ImageJ ROIs from .roi or .zip file.
         if roi_path[-3:] == 'roi':
             rois=read_roi_file(roi_path)
             rois=[rois[k] for k in list(rois)]
         else:
             rois=read_roi_zip(roi_path)
             rois=[rois[k] for k in list(rois)]
+            
+        #Initialize loop over ROIs.
         all_coords=[]
         all_imgs=[]
         roi_id=0
         for roi in rois:
-            # Generate cropped image from ROI specification
+            # Generate cropped image and expand with zeros from ROI and config specification
             crop_pos=(0, roi['position']['slice']-8, roi['top'], roi['left'])
-            size=(image.shape[0], 16, roi['height'], roi['width'])
-            crop_img=ip.crop_at_pos(image[:,:,trace_ch,:,:], crop_pos, size)
-            nuc_roi=ip.crop_at_pos(nuc_labels, crop_pos[1:], size[1:])
+            crop_size=(image.shape[0], crop_z, roi['height'], roi['width'])
+            crop_img=ip.crop_at_pos(image[:,:,trace_ch,:,:], crop_pos, crop_size)
+            transp_z=(exp_shape[1]-crop_z)/2
+            transp_y=(exp_shape[2]-roi['height']-1)/2
+            transp_x=(exp_shape[3]-roi['width']-1)/2
+            #Find out which nucleus the ROI belongs to.
+            nuc_roi=ip.crop_at_pos(nuc_labels, crop_pos[1:], crop_size[1:])
             try:
                 nuc_id=mode(nuc_roi[nuc_roi>0], axis=None)[0][0]
             except IndexError:
                 nuc_id = 0
             
+            #Prepare loop over each timepoint/exchange.
             roi_coords=[]
             trace_id=self.trace_id
-             # LS fit maxima in each timepoint of ROI by 3d gaussian.
+            
             for t in range(image.shape[0]):
+                # Select image and optionally filter, 
+                # find max index of DoG of image to initialize LS gaussian.
                 img=crop_img[t]
                 if self.config['pre_filter']==1:
                     img=ndi.median_filter(img,2)
                 dog=gaussian(img,1)-gaussian(img,10)
                 max_ind=list(np.unravel_index(np.argmax(dog, axis=None), dog.shape))
-                roi_coords.append([trace_id, image_name, roi_id, nuc_id, t]+[*fitSymmetricGaussian3D(img,3,max_ind)[0]])
+                roi_coords.append([trace_id, image_name, roi_id, nuc_id, t]+
+                                  [*fitSymmetricGaussian3D(img,3,max_ind)[0]]+
+                                  [transp_z, transp_y, transp_x])
             
+            # Add parameters to a list of pd DataFrames and images to list of images.
             all_coords.append(pd.DataFrame(roi_coords, columns=["trace_ID",
                                                                 "img_name",
                                                                 "roi_ID",
@@ -134,32 +151,37 @@ class Tracer:
                                                                 "frame",
                                                                 "BG", 
                                                                 "A", 
-                                                                "z",
-                                                                "y",
-                                                                "x",
+                                                                "z_px",
+                                                                "y_px",
+                                                                "x_px",
                                                                 "sigma_w",
-                                                                "sigma_z"]))
-            all_imgs.append(crop_img)
+                                                                "sigma_z",
+                                                                'transp_z',
+                                                                'transp_y',
+                                                                'transp_x']))
+            
+            all_imgs.append(ip.pad_to_shape(crop_img, exp_shape))
             roi_id+=1
             self.trace_id+=1
         
         #Apply quality control and calibration metrics to all traces.
-        
         traces=pd.concat(all_coords)
-        traces['z']=traces['z']*self.config['z_nm']
-        traces['y']=traces['y']*self.config['xy_nm']
-        traces['x']=traces['x']*self.config['xy_nm']
+        traces['z_px']=traces['z_px']+traces['transp_z']
+        traces['y_px']=traces['y_px']+traces['transp_y']
+        traces['x_px']=traces['x_px']+traces['transp_x']
+        traces=traces.drop(columns=['transp_z','transp_y','transp_x'])
+        traces['z']=traces['z_px']*self.config['z_nm']
+        traces['y']=traces['y_px']*self.config['xy_nm']
+        traces['x']=traces['x_px']*self.config['xy_nm']
         traces['sigma_w']=traces['sigma_w']*self.config['xy_nm']
         traces['sigma_z']=traces['sigma_z']*self.config['z_nm']
         traces=traces.set_index(['trace_ID', 'img_name', 'roi_ID', 'cell_ID', 'frame'])
         traces['QC']=traces.apply(self.tracing_qc,axis=1)
         
-        # Pad ROI images to standard shape to allow hyperstack generation.
-        exp_shape=[image.shape[0]]+roi_image_size
-        all_imgs=[ip.pad_to_shape(img, exp_shape) for img in all_imgs]
+        #Stack list of images to single array.
         imgs=np.stack(all_imgs)
         print('Processed image ', image_path)
-        return traces, imgs
+        return traces, all_imgs
     
     def tracing_qc(self, row):
         A_to_BG=self.config['A_to_BG']

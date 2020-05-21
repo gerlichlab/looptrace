@@ -16,6 +16,8 @@ nuc_frame: 0
 nuc_ch: 2
 min_nuc_size: 100000
 pre_filter: 0
+
+crop_z: 16
 roi_image_size:
     - 16
     - 64
