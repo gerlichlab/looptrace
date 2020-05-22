@@ -17,17 +17,66 @@ from scipy.spatial.distance import cdist
 from scipy.cluster.hierarchy import single, dendrogram
 #from pycpd import RigidRegistration
 
+def points_for_overlay(traces):
+    points_frame=traces.reset_index()[['trace_ID','frame','z_px','y_px','x_px']]
+    points_frame[['y_px','x_px']]=points_frame[['y_px','x_px']].clip(lower=0, upper=64)
+    points_frame[['z_px']]=points_frame[['z_px']].clip(lower=0, upper=16)
+    points=points_frame.to_numpy()
+    return points
+
+def pwd_calc(traces):
+    '''
+    Parameters
+    ----------
+    traces : pd DataFrame with trace data.
+
+    Returns
+    -------
+    pwds : Pair-wise distance matrixes for traces as an 3-dim numpy array.
+    '''
+    
+    points = [points_from_df_nan(df)[0] for _, df in traces.groupby(level=0)]
+    pwds = [cdist(p, p) for p in points]
+    pwds = np.stack(pwds)
+    return pwds
+
 def tracing_length_qc(traces, pwds, min_length=0):
+    '''
+    Parameters
+    ----------
+    traces : pd DataFrame with trace data.
+    pwds : 3dim np array from pwd_calc.
+    min_length : Int, minimum length of trace to pass QC
+
+    Returns
+    -------
+    traces : pd DataFrame with shorter traces removed.
+    pwds : 3-dim np array of pwds that passed length QC.
+
+    '''
     grouped=traces.groupby(level=0)
     traces_long=grouped.filter(lambda x : x['QC'].sum()>=min_length)
-    
-    points = [points_from_df_nan(df)[0] for _, df in traces_long.groupby(level=0)]
-    pwds = [cdist(p, p) for p in points]
-    pwds_long = np.stack(pwds)
-    
+    pwds_long = pwd_calc(traces)
     return traces_long, pwds_long
 
 def trace_analysis(traces, pwds):
+    '''
+    Calculates pairwise trace similarity based on :
+        - MSE of points after rigid alignment
+        - MSE of pairwise distance matrices
+        - Pearson's correlation coeff of pwds.
+        
+    Parameters
+    ----------
+    traces : pd DataFrame with trace data.
+    pwds : 3dim np array from pwd_calc.
+
+    Returns
+    -------
+    output : pd DataFrame with results, including indexes and point 
+                coordinates of original and aligned traces.
+    '''
+    
     pairwise_trace_idx = list(itertools.combinations(traces.index.get_level_values(0).unique(),2))
     pairwise_pwd_idx = list(itertools.combinations(range(pwds.shape[0]),2))
     res = []
@@ -41,6 +90,22 @@ def trace_analysis(traces, pwds):
     return output
 
 def trace_clustering(paired, metric):
+    '''
+    Calculates clusters nased on similarity metrics of 
+    pairwise analysis of traces. Also plots dendrogram of clusters.
+    
+    Parameters
+    ----------
+    paired : Paired analysis DataFrame, output of trace_analysis
+    metric : One of the similarity metrics from trace_analysis:
+            - 'aligned_mse'
+            - 'pwd_mse'
+            - 'pwd_pcc'
+    Returns
+    -------
+    Z : Clustering matrix based on hierarchial clustering (see scipy.cluster.hierarchy.single docs)
+    '''
+    
     labels=np.unique(np.concatenate((paired['idx1'],paired['idx2'])))
     if metric == 'aligned_mse' or metric == 'pwd_mse':
         Z=single(paired[metric])
@@ -53,6 +118,22 @@ def trace_clustering(paired, metric):
     return Z
 
 def rigid_transform_3D(df_A, df_B):
+    '''
+    Calculates rigid transformation of two 3d points sets based on:
+    Least-squares fitting of two 3-D point sets. IEEE T Pattern Anal 1987
+    DOI: 10.1109/TPAMI.1987.4767965
+    Only uses points present in both traces for alignment.
+
+    Parameters
+    ----------
+    df_A, df_B : pd DataFrames with single trace data.
+
+    Returns
+    -------
+    Point coordinates and indexes of original and aligned traces,
+    and MSE of alignment.
+    '''
+    
     A_orig, A_orig_idx = points_from_df(df_A)
     B_orig, B_orig_idx = points_from_df(df_B)
     A, idx_A, B, idx_B = matching_points_from_dfs(df_A,df_B)
@@ -109,19 +190,60 @@ def scale_rigid_transform_3D(df_A,df_B):
 '''
 
 def points_from_df(trace_df):
+    '''
+    Helper function to extract point coordinates from trace dataframe.
+    Only points passing QC during tracing are returned.
+
+    Parameters
+    ----------
+    trace_df : pd DataFrame with trace data.
+
+    Returns
+    -------
+    points : Nx3 np array with trace coordinates.
+    idx : List, Original index of trace coordinates.
+    '''
+    
     _traces = trace_df[trace_df['QC']==1]
     points = np.array([_traces['x'].values,_traces['y'].values,_traces['z'].values]).T
     idx = _traces.index.get_level_values('frame')
     return points, idx
 
 def points_from_df_nan(trace_df):
-    traces=trace_df.copy()
-    traces[traces['QC']==0] = np.nan
-    points = np.array([traces['x'].values,traces['y'].values,traces['z'].values]).T
-    idx = traces.index.get_level_values('frame')
+    '''
+    Helper function to extract point coordinates from trace dataframe.
+    All points are returned, but points not passing QC during tracing 
+    are returned as NaN.   
+
+    Parameters
+    ----------
+    trace_df : pd DataFrame with trace data.
+
+    Returns
+    -------
+    points : Nx3 np array with trace coordinates.
+    idx : List, Original index of trace coordinates.
+    '''
+    
+    _traces=trace_df.copy()
+    _traces[_traces['QC']==0] = np.nan
+    points = np.array([_traces['x'].values,_traces['y'].values,_traces['z'].values]).T
+    idx = _traces.index.get_level_values('frame')
     return points, idx
 
 def matching_points_from_dfs(df_A,df_B):
+    '''
+    Helper function to find points that are common to two traces.
+
+    Parameters
+    ----------
+    df_A, df_B : pd DataFrames with single trace data.
+
+    Returns
+    -------
+    Coordinates (np array) and indexes (list) of the matching points.
+
+    '''
     df_A_idx=df_A[df_A['QC']==1].index.get_level_values('frame')
     df_B_idx=df_B[df_B['QC']==1].index.get_level_values('frame')
     idx=df_A_idx.intersection(df_B_idx)
@@ -131,6 +253,19 @@ def matching_points_from_dfs(df_A,df_B):
     return points_A, idx_A, points_B, idx_B
 
 def spline_interp(points):
+    '''
+    Performs cubic B-spline interpolation on point coordinates.
+
+    Parameters
+    ----------
+    points : n_points X ndim list or array of point coordinates.
+
+    Returns
+    -------
+    fine : 100 X ndim nd array of interpolated points.
+
+    '''
+    
     tck, u = interpolate.splprep(points, s=0)
     knots = interpolate.splev(tck[0], tck)
     u_fine = np.linspace(0,1,num=100)
@@ -138,10 +273,17 @@ def spline_interp(points):
     return fine
 
 def mat_corr_mse(mat1, mat2):
+    '''
+    Calculate mean squared error of two matrices, ignoring nans.
+    '''
+    
     mse = np.nanmean((mat1-mat2)**2)
     return mse
 
 def mat_corr_pcc(mat1,mat2):
+    '''
+    Calculate pearson's corr coef of two matrices, ignoring nans.
+    '''
     mat1_bar=np.nanmean(mat1)
     mat2_bar=np.nanmean(mat2)
     
@@ -150,27 +292,18 @@ def mat_corr_pcc(mat1,mat2):
     pcc=pcc_num/pcc_denom
     
     return pcc
-    
-def plot_trace(points, idx):
-    points=points.T
-    z,y,x=points
-    z_fine,y_fine,x_fine=spline_interp(points)
-
-    #fig1 = plt.figure(1)
-    #ax3d = fig1.add_subplot(111, projection='3d')
-    cmap = matplotlib.cm.get_cmap('tab10')
-    #scatter = ax3d.scatter(points[2], points[1], points[0], '.', color=cmap(idx), alpha=1, lw=3)
-    #scatter_proxy = matplotlib.lines.Line2D(points[0],points[1], linestyle="none", c=cmap(idx), marker = 'o')
-    #ax3d.legend(scatter_proxy, loc="lower left", title="Seq")
-    #ax3d.plot(x_knots, y_knots, z_knots, 'go')
-    #ax3d.plot(x_fine, y_fine, z_fine, '-', lw=3)
-    fig = go.Figure(data=[go.Scatter3d(x=x, y=y, z=z,
-                                   mode='markers', marker_color=cmap(idx)),
-                          go.Scatter3d(x=x_fine,y=y_fine,z=z_fine, 
-                                       mode='lines')])
-    iplot(fig, auto_open=True)
-    
+        
 def plot_traces(traces,idx):
+    '''
+    Helper function for plotting one or several traces in one figure.
+    Also plots spline interpolation between points for visualization.
+    
+    Parameters
+    ----------
+    traces : pd DataFrame with trace data.
+    idx : Int or list of ints with trace_ID of traces to plot.     
+    '''
+    
     if type(idx) == int:
         idx=[idx]
     trace_df=traces[traces['QC']==1]
@@ -190,24 +323,28 @@ def plot_traces(traces,idx):
                                   mode ='lines',
                                   showlegend=False))
     iplot(fig)
+    
+def plot_paired_traces(pair_df, idx):
+    '''
+    Helper function for plotting two aligned traces in one figure.
+    Also plots spline interpolation between points for visualization.
+    
+    Parameters
+    ----------
+    pair_df : pd DataFrame with paired trace analysis, output of trace_analysis.
+    idx : Int, index of pair from paired dataframe. 
+    '''
+    
+    points1=pair_df['A'][idx]
+    idx1=pair_df['A_idx'][idx]
+    points2=pair_df['B_aligned'][idx]
+    idx2=pair_df['B_aligned_idx'][idx]
 
-'''
-def plot_traces_sub(traces,idx=False):
-    if idx==False:
-        idx=traces.index.levels[0]
+    z1,y1,x1=points1.T
+    z2,y2,x2=points2.T
     
-    fig = px.scatter_3d(traces, x='x', y='y', z='z',
-                        facet_row='')
-    plot(fig, auto_open=True)
-'''
-    
-def plot_double_trace(points1, idx1, points2, idx2):
-    points1=points1.T
-    points2=points2.T
-    z1,y1,x1=points1
-    z2,y2,x2=points2
-    z_fine1,y_fine1,x_fine1=spline_interp(points1)
-    z_fine2,y_fine2,x_fine2=spline_interp(points2)
+    z_fine1,y_fine1,x_fine1=spline_interp([z1,y1,x1])
+    z_fine2,y_fine2,x_fine2=spline_interp([z2,y2,x2])
     cmap = px.colors.qualitative.Plotly
     cmap1 = [cmap[i%10] for i in idx1]
     cmap2 = [cmap[i%10] for i in idx2]
@@ -225,11 +362,4 @@ def plot_double_trace(points1, idx1, points2, idx2):
                                        mode='lines')])
     
     iplot(fig)
-    
-def plot_paired_traces(pair_df, idx):
-    points1=pair_df['A'][idx]
-    idx1=pair_df['A_idx'][idx]
-    points2=pair_df['B_aligned'][idx]
-    idx2=pair_df['B_aligned_idx'][idx]
-    plot_double_trace(points1, idx1, points2, idx2)
     
