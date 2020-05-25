@@ -1,3 +1,4 @@
+#Input and output data:
 image_folder: M:\ChromatinTeam\Images_processing\20200304_Exp321_ELYRA_BS32-40_lowres_SP6G_2xA565_bruker\DC
 roi_folder: M:\ChromatinTeam\Images_processing\20200304_Exp321_ELYRA_BS32-40_lowres_SP6G_2xA565_bruker\DC
 output_folder: M:\ChromatinTeam\Images_processing\20200304_Exp321_ELYRA_BS32-40_lowres_SP6G_2xA565_bruker\05_Trace_Analysis
@@ -8,13 +9,23 @@ match_idx:
     - -14
     - -9
 
+#Camera properties
 xy_nm: 103
 z_nm: 200
 
-trace_ch: 1
+#Fiducial bead parameters:
+bead_ch: 0
+bead_threshold: 500
+bead_intensity: 800
+bead_points: 5
+
+#Nucleus parameters
 nuc_frame: 0
 nuc_ch: 2
 min_nuc_size: 100000
+
+#Tracing parameters
+trace_ch: 1
 pre_filter: 0
 
 crop_z: 16
@@ -24,7 +35,6 @@ roi_image_size:
     - 64
     
 A_to_BG: 2
-sigma_w_max: 800
+sigma_xy_max: 800
 sigma_z_max: 2000
 man_qc:
-    - 9
