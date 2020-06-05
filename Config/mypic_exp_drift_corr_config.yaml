@@ -1,6 +1,6 @@
 #General settings
-output_folder: M:\ChromatinTeam\Images_processing\20200207_OO_311_BeforeAfterFixHCL_FISH_Tads_AF488\05_Single_Nuc_Analysis
-output_name: 311_BeforeAfterFixHCl_FISH_Tads_AF488_T2_vs_T4_Thresh
+output_folder: M:\ChromatinTeam\Images_processing\20200604_Exp328_KSB_Elyra_tracing_myc_D1-10_v2\02_DC
+output_name: 20200604_328_tracing_D1_D10_v2_
 filetype: 
     - '.czi'
 tags:
@@ -36,14 +36,12 @@ nuc_exp_bb:
 #Settings for comparison functions
 plot_ssim: 0
 threshold_comparison: 1
-comp_folder_1: M:\ChromatinTeam\Images_processing\20200207_OO_311_BeforeAfterFixHCL_FISH_Tads_AF488\00_RAW_myPIC
-comp_folder_2: M:\ChromatinTeam\Images_processing\20200207_OO_311_BeforeAfterFixHCL_FISH_Tads_AF488\00_RAW_myPIC
+comp_folder_1: M:\ChromatinTeam\Images_processing\20200528_OO_332_TADhoechst_Fixed_FISHed_FA-vs-H1FA50_ibidi-2\01_MyPiC
+comp_folder_2: M:\ChromatinTeam\Images_processing\20200531_OO_332_TADhoechst_Fixed_FISHed_FA-vs-H1FA50_ibidi-2_afterFISH\01_MyPiC_repeat
 template_comp_1: 
     - 'DE_2'
-    - 'T0002'
 template_comp_2: 
-    - 'DE_2'
-    - 'T0004'
+    - 'DE_3'
 analysis_channels:
     - 0
     - 1

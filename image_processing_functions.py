@@ -199,6 +199,8 @@ def detect_nuclei(nuc_image, min_size, exp_bb=-1, clear_edges=True):
     #Blur image for cleaner thresholds
     nuc_image=gaussian(nuc_image, sigma=5)
     thresh_nuc = threshold_otsu(nuc_image)
+    print('Nuc threshold:', thresh_nuc)
+    #thresh_nuc = 15000
     nuc_labels, num_objects = ndi.label(nuc_image>thresh_nuc)
     
     if clear_edges:
@@ -433,7 +435,7 @@ def drift_corr_image_list(file_list, output_folder, course_ch, fine_ch):
     #Prepare for looping along channels for shifting, 
     #and stacking shifted images as hyperstack
             
-    output=Parallel(n_jobs=-1)(delayed(drift_shift)(template_image, offset_image, course_ch, fine_ch) for offset_image in offset_images)
+    output=Parallel(n_jobs=-2)(delayed(drift_shift)(template_image, offset_image, course_ch, fine_ch) for offset_image in offset_images)
     output=np.stack(output,axis=0)
     output=np.concatenate((template_image[np.newaxis,...],output),axis=0)
 

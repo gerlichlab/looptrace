@@ -84,18 +84,31 @@ class ImageProcess:
         sz,sy,sx = int(metadata[0]['SizeZ']),int(metadata[0]['SizeY']),int(metadata[0]['SizeX'])
         analysis_channels = self.config['analysis_channels']
         nuc_ch = int(self.config['nuc_ch'])
-        exp_shape = self.config['nuc_exp_bb']
+        exp_shape = tuple(self.config['nuc_exp_bb'])
         min_size = int(self.config['min_nuc_vol'])
         plot_ssim = bool(int(self.config['plot_ssim']))
         thresh = bool(int(self.config['threshold_comparison']))
+        output_folder=self.config['output_folder']
+        output_name=self.config['output_name']
+        output_name+='_'+path_set[0].split('_')[-3]
         
         #Load images and detect nuclear masks.
         images = [ip.read_czi_image(path) for path in path_set]
+        print('Loaded images:', path_set)
+        print('Image shape:', images[0].shape)
+        
         nuc_labels, nuc_props = ip.detect_nuclei(images[0][nuc_ch], min_size, exp_shape)
+        print('Detected {} nuclei.'.format(len(nuc_props)))
+        
+        #Handle case if no nuclei are detected.
+        if len(nuc_props) == 0:
+            print('No nuclei detected, returning empty.')
+            return pd.DataFrame()
+
         masks = [(nuc_labels == i).astype(int) for i in nuc_props['label'].values]
         #Calculate course drift correction of final image.
         shift=ip.drift_corr_cc(images[0][nuc_ch],ip.pad_to_shape(images[1][nuc_ch],images[0][nuc_ch].shape), upsampling=1, downsampling=8).astype(np.int)
-        print(shift)
+        print('Found course shift:', shift)
         nucs=[]
         final_img=[]
         print(nuc_props)
@@ -111,13 +124,13 @@ class ImageProcess:
             imgs2 = [images[1][ch][(slice(row['lbbox-0'],row['lbbox-3']),
                                slice(max(0,row['lbbox-1']-shift[1]),min(sy,row['lbbox-4']-shift[1])),
                                slice(max(0,row['lbbox-2']-shift[2]),min(sx,row['lbbox-5']-shift[2])))] for i, row in nuc_props.iterrows()]
-            print([img.shape for img in imgs2])
+            
             imgs2 = [ip.pad_to_shape(img, exp_shape) for img in imgs2]
-            print([img.shape for img in imgs2])
+            
             #Do a precise drift correction for second image in comparison.
             imgs2_shift = [ip.drift_corr_cc(img[0],img[1], upsampling=4, downsampling=1) for img in zip(imgs1,imgs2)]
             imgs2 = [ndi.shift(img, shift) for img, shift in zip(imgs2,imgs2_shift)]
-            
+
             #Standard filter and image adjustment before comparisons,
             #some comparisons work better when images rescaled to 0-1.
             
@@ -129,6 +142,7 @@ class ImageProcess:
             imgs1 = [img/np.max(img) for img in imgs1]
             imgs2 = [img/np.max(img) for img in imgs2]
             imgs2 = [match_histograms(img[1], img[0]) for img in zip(imgs1, imgs2)]
+            
             
             if thresh:
                 #If thresholded comparison is wanted, threshold nuclear mask.
@@ -147,6 +161,7 @@ class ImageProcess:
             pcc, mac = list(zip(*[ip.comp_pcc_man_coloc(img[0], img[1]) for img in zip(imgs1,imgs2)])) 
             orb_ratio = [ip.comp_orb_ratio(img[0], img[1]) for img in zip(imgs1,imgs2)]
             area_ratio, iou = list(zip(*[ip.comp_area_iou(img[0], img[1]) for img in zip(imgs1,imgs2)]))
+            
             nuc_props['Channel']=[ch+1]*len(imgs1)
             nuc_props['Title1']=[metadata[0]['Title']]*len(imgs1)
             nuc_props['Title2']=[metadata[1]['Title']]*len(imgs2)
@@ -163,7 +178,13 @@ class ImageProcess:
             final_img.append([imgs1, imgs2, ssim_images])
 
         #Return full dataframes and images containing all individual nuclei.
-        return pd.concat(nucs), np.concatenate(final_img, axis=0).astype(np.float32)
+        
+        final_img=np.concatenate(final_img, axis=0).astype(np.float32)
+        print('Final image shape', final_img.shape)
+        final_img=np.moveaxis(final_img, 0, 2)
+        tiff.imsave(output_folder+os.sep+output_name+'_imgs.tiff',final_img,imagej=True)
+        print('Processing done on:', path_set)
+        return pd.concat(nucs)
             
     def compare_multi_sc(self):
         '''
@@ -178,14 +199,12 @@ class ImageProcess:
         '''
         
         image_paths=self.gen_comp_image_paths()
-        res, imgs = list(zip(*Parallel(n_jobs=-2, backend='loky')(delayed(self.compare_sc)(path_set) for path_set in image_paths)))
+        res = Parallel(n_jobs=-2, backend='loky')(delayed(self.compare_sc)(path_set) for path_set in image_paths)
         res = pd.concat(res).reset_index()
-        imgs=np.moveaxis(np.concatenate(imgs,axis=1), 0,2)
-
+        
         output_folder=self.config['output_folder']
         output_name=self.config['output_name']
         res.to_csv(output_folder+os.sep+output_name+'_out.csv')
-        tiff.imsave(output_folder+os.sep+output_name+'_imgs.tiff',imgs,imagej=True)
         
         tags=self.config['tags']
         self.metadata=ip.read_czi_meta(image_paths[0][0], tags)
@@ -193,7 +212,7 @@ class ImageProcess:
         with open(output_folder+os.sep+output_name+'_meta.yaml', 'w') as myfile:
             yaml.safe_dump(self.config, myfile)
         
-        return res, imgs
+        return res
     
     def compare_multi_sr(self):
         config=self.config
