@@ -1,9 +1,0 @@
-h5py
-scipy
-numpy
-pandas
-scikit-image
-joblib
-tifffile
-czifile
-pyyaml
