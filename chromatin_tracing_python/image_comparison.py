@@ -9,6 +9,7 @@ import yaml
 import numpy as np
 import pandas as pd
 import image_processing_functions as ip
+import comparison_functions as comp
 from joblib import Parallel, delayed
 from scipy import ndimage as ndi
 from skimage.exposure import match_histograms
@@ -185,6 +186,14 @@ class ImageProcess:
         tiff.imsave(output_folder+os.sep+output_name+'_imgs.tiff',final_img,imagej=True)
         print('Processing done on:', path_set)
         return pd.concat(nucs)
+    
+    def merge_dc_matched(self):
+        #IN PROGRESS
+        image_paths=self.gen_comp_image_paths()
+        images = [ip.read_czi_image(path) for path in path_set]
+        print('Loaded images:', path_set)
+        print('Image shape:', images[0].shape)
+        
             
     def compare_multi_sc(self):
         '''

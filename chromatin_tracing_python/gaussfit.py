@@ -53,9 +53,9 @@ def fitAFunctionMLE(data, params, fn):
 #
 
 def symmetricGaussian3D(bg, A, center_z, center_y, center_x, sigma_z, sigma_xy):
-    return lambda z,y,x: bg + A*numpy.exp(-((center_x-x)**2/(2*sigma_xy)**2 +
-                                            (center_y-y)**2/(2*sigma_xy)**2 +
-                                            (center_z-z)**2/(2*sigma_z)**2))
+    return lambda z,y,x: bg + A*numpy.exp(-((x-center_x)**2/(2*sigma_xy)**2 +
+                                            (y-center_y)**2/(2*sigma_xy)**2 +
+                                            (z-center_z)**2/(2*sigma_z)**2))
 
 def fitSymmetricGaussian3D(data, sigma, center):
     """
@@ -64,8 +64,8 @@ def fitSymmetricGaussian3D(data, sigma, center):
     params = [numpy.min(data),
               numpy.max(data)]
     params += center
-    params += [2.0 * sigma,
-              2.0 * sigma]
+    params += [sigma,
+               sigma]
     return fitAFunctionLS(data, params, symmetricGaussian3D)
 
 def fitSymmetricGaussian3DMLE(data, sigma, center):

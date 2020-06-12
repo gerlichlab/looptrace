@@ -15,7 +15,20 @@ from plotly.subplots import make_subplots
 from scipy import interpolate
 from scipy.spatial.distance import cdist
 from scipy.cluster.hierarchy import single, dendrogram
+import napari
 #from pycpd import RigidRegistration
+
+def plot_fits(traces, imgs, mode='2D', contrast=(100,10000)):
+    points = points_for_overlay(traces)
+    if mode == '2D':
+        imgs=np.max(imgs, axis=2)
+        with napari.gui_qt():
+            viewer = napari.view_image(imgs, contrast_limits=contrast)
+            viewer.add_points(points[:,(0,1,3,4)], size=[0,0,1,1], face_color='blue', symbol='cross', n_dimensional=True)
+    elif mode == '3D':
+        with napari.gui_qt():
+            viewer = napari.view_image(imgs, contrast_limits=contrast)
+            viewer.add_points(points[:,(0,1,2,3,4)], size=[0,0,3,1,1], face_color='blue', symbol='cross', n_dimensional=True)
 
 def points_for_overlay(traces):
     points_frame=traces.reset_index()[['trace_ID','frame','z_px','y_px','x_px']]
