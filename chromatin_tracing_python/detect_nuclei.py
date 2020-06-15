@@ -5,6 +5,14 @@ Created on Wed Jun 10 06:22:09 2020
 @author: ellenberg
 """
 
+import numpy as np
+import pandas as pd
+from skimage.segmentation import clear_border
+from skimage.filters import gaussian, threshold_otsu
+from skimage.measure import regionprops_table
+import scipy.ndimage as ndi
+
+
 def detect_nuclei(nuc_image, min_size, exp_bb=-1, clear_edges=True):
     '''
     Detects nuclei based on otsu threshold, labels them and measures

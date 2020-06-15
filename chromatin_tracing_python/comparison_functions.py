@@ -6,7 +6,7 @@ Created on Wed Jun 10 06:23:05 2020
 """
 
 import numpy as np
-from skimage.feature import ORB, match_descriptors, plot_matches
+from skimage.feature import ORB
 from skimage.metrics import structural_similarity as ssim
 from scipy.spatial.distance import pdist
 from skimage.filters import threshold_otsu, gaussian

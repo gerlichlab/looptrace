@@ -1,6 +1,6 @@
 #General settings
-output_folder: M:\ChromatinTeam\Images_processing\20200604_Exp328_KSB_Elyra_tracing_myc_D1-10_v2\02_DC
-output_name: 20200604_328_tracing_D1_D10_v2_
+output_folder: M:\ChromatinTeam\Images_processing\20200526_Exp326_KSB_Elyra_DAPI_TADs_SIM_Live_fix_perm_HCl\Comparisons\Ibidi_2\Live_vs_fixed
+output_name: 326_SIM_Live_vs_Fixed_
 filetype: 
     - '.czi'
 tags:
@@ -34,24 +34,15 @@ nuc_exp_bb:
     - 300
 
 #Settings for comparison functions
-plot_ssim: 0
-threshold_comparison: 1
-comp_folder_1: M:\ChromatinTeam\Images_processing\20200528_OO_332_TADhoechst_Fixed_FISHed_FA-vs-H1FA50_ibidi-2\01_MyPiC
-comp_folder_2: M:\ChromatinTeam\Images_processing\20200531_OO_332_TADhoechst_Fixed_FISHed_FA-vs-H1FA50_ibidi-2_afterFISH\01_MyPiC_repeat
+threshold_comparison: 0
+comp_folder_1: M:\ChromatinTeam\Images_processing\20200526_Exp326_KSB_Elyra_DAPI_TADs_SIM_Live_fix_perm_HCl\Ibidi_2_SIM\Live
+comp_folder_2: M:\ChromatinTeam\Images_processing\20200526_Exp326_KSB_Elyra_DAPI_TADs_SIM_Live_fix_perm_HCl\Ibidi_2_SIM\Fixed
 template_comp_1: 
     - 'DE_2'
 template_comp_2: 
-    - 'DE_3'
+    - 'DE_2'
 analysis_channels:
     - 0
     - 1
+drift_correction_channel: 1
 
-#Settings for SR analysis
-const_gauss_sigma: 20
-cam_px: 512
-cam_nm: 103
-clip: 2
-grid_px_size: 10
-output_res: 4096
-dbscan_eps: 200
-dbscan_mins: 100

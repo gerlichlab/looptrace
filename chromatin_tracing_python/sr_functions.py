@@ -103,3 +103,59 @@ def clust_kde(df):
     kde = KernelDensity(kernel='gaussian', bandwidth=10).fit(X)
     Z = np.exp(kde.score_samples(xy_i))
     plt.contourf(xi,yi,np.clip(Z.reshape(512,512),0,1e-9))
+    
+def compare_multi_sr(self):
+    config=self.config
+    image_paths=self.gen_comp_image_paths()
+    sigma=config['const_gauss_sigma']
+    cam_px=config['cam_px']
+    cam_nm=config['cam_nm']
+    grid_px_size=config['grid_px_size']
+    output_res=config['output_res']
+    dbscan_eps=config['dbscan_eps']
+    dbscan_mins=config['dbscan_mins']
+    all_props=[]
+    image_props={}
+    imgs=[]
+    print(image_paths)
+    for image_set in image_paths:
+        locs1=pd.read_csv(image_set[0])
+        locs2=pd.read_csv(image_set[1])
+        
+        locs_db1=ip.clust_dbscan(locs1, dbscan_eps, dbscan_mins, hdb=True)
+        print('DBSCAN 1 done')
+        locs_db2=ip.clust_dbscan(locs2, dbscan_eps, dbscan_mins, hdb=True)
+        print('DBSCAN 2 done')
+        render1=ip.render_gauss_const(locs1[locs_db1],sigma,cam_px,cam_nm,grid_px_size, output_res)
+        print('Render 1 done')
+        render2=ip.render_gauss_const(locs2[locs_db2],sigma,cam_px,cam_nm,grid_px_size, output_res)
+        print('Render 2 done')
+        shift=ip.drift_corr_cc(np.clip(render1,0,0.5),np.clip(render2,0,0.5), upsampling=2)
+        render2=ndi.shift(render2,shift)
+        print('DC done')
+        pcc, mac = ip.comp_area_iou(render1,render2)
+        ssim_out, _ = ip.comp_ssim(render1,render2)
+        orb_ratio=ip.comp_orb_ratio(render1,render2)
+        area_ratio, iou = ip.comp_area_iou_sr(render1,render2)
+        
+        print(image_set[0].split('\\')[-1],  pcc, mac, ssim_out, orb_ratio, area_ratio, iou)
+        
+        image_props['Title1']=image_set[0].split('\\')[-1]
+        image_props['Title2']=image_set[1].split('\\')[-1]
+        image_props['MAC'] = mac
+        image_props['PCC'] = pcc
+        image_props['SSIM'] = ssim_out
+        image_props['ORB_ratio'] = orb_ratio
+        image_props['Area_ratio']= area_ratio
+        image_props['IOU'] = iou
+        all_props.append(image_props.copy())
+        imgs.append([render1,render2])
+    
+    output_folder=self.config['output_folder']
+    output_name=self.config['output_name']
+    image_props=pd.DataFrame(all_props)
+    image_props.to_csv(output_folder+os.sep+output_name+'_out.csv')
+    final_image=np.stack(imgs, axis=0).astype(np.float32)
+    tiff.imsave(output_folder+os.sep+output_name+'_imgs.tiff',final_image,imagej=True)
+    
+    return image_props,final_image

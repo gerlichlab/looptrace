@@ -5,6 +5,14 @@ Created on Wed Jun 10 06:18:05 2020
 @author: ellenberg
 """
 
+from skimage.registration import phase_cross_correlation
+import numpy as np
+import scipy.ndimage as ndi
+import chromatin_tracing_python.image_processing_functions as ip
+from joblib import Parallel, delayed
+import yaml
+import tifffile as tiff
+
 def drift_corr_cc(t_img, o_img, upsampling=1, downsampling=1):
     '''
     Performs drift correction by cross-correlation.
@@ -139,13 +147,13 @@ def drift_corr_image_list(file_list, output_folder, course_ch, fine_ch):
     
     #Load template image as CZYX stack.
     template_path = file_list[0]
-    template_image = read_czi_image(template_path)
+    template_image = ip.read_czi_image(template_path)
     print('Loaded template: ', template_path)
 
     #Load images to register
     offset_images = []
     for offset_image_path in file_list[1:]:
-        offset_images.append(read_czi_image(offset_image_path))
+        offset_images.append(ip.read_czi_image(offset_image_path))
         print('Loaded image', offset_image_path)
     
     #Prepare for looping along channels for shifting, 
@@ -169,7 +177,7 @@ def drift_corr_image_list(file_list, output_folder, course_ch, fine_ch):
           'ScalingX',
           'ScalingY',
           'ScalingZ']
-    metadata = read_czi_meta(template_path, tags)
+    metadata = ip.read_czi_meta(template_path, tags)
     metadata['SizeT']=str(len(file_list))
     metadata['Drift_correction'] = 'Cross correlation'
     filename=metadata['Title'][4:-11]
