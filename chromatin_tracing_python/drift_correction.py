@@ -5,6 +5,7 @@ Created on Wed Jun 10 06:18:05 2020
 @author: ellenberg
 """
 
+import os
 from skimage.registration import phase_cross_correlation
 import numpy as np
 import scipy.ndimage as ndi
@@ -116,7 +117,7 @@ def drift_shift(t_img, o_img, course_ch, fine_ch):
     print('Course shift is', shift)
     
     if fine_ch != -1:
-        course_shifted_for_fine=ndi.shift(offset_image[fine_ch],shift,order=0)
+        course_shifted_for_fine=ndi.shift(o_img[fine_ch],shift,order=0)
         shift_fine=drift_corr_multipoint_cc(t_img[fine_ch], course_shifted_for_fine, upsampling=100)
         print('Fine shift is', shift_fine)
         shift=shift+shift_fine
@@ -193,18 +194,18 @@ def drift_corr_mypic(toplevel_folder, output_folder, output_name, course_ch=0, f
     pos_folders=[f.path for f in os.scandir(toplevel_folder) if f.is_dir() and 'DE' in f.path]
     for pos in pos_folders:
         image_paths=[pos+os.sep+filename for filename in os.listdir(pos) if filetype in filename and template in filename]
-        drift_corr_image_list_h5(image_paths, output_folder, output_name, course_ch, fine_ch)
+        drift_corr_image_list(image_paths, output_folder, output_name, course_ch, fine_ch)
         
 
 def merge_multipos_lsm(folder):
-    image_paths=all_matching_files_in_subfolders(folder,['.lsm'])
+    image_paths=ip.all_matching_files_in_subfolders(folder,['.lsm'])
     images=[tiff.imread(img) for img in image_paths]
     images=np.concatenate(images, axis=1)
     for pos in range(images.shape[1]):
         tiff.imsave(folder+'_Pos000'+str(pos)+'.tiff',images[pos],imagej=True)
         
 def drift_corr_timelapse_tiff(folder, nuc_ch, output_folder):
-    image_paths=all_matching_files_in_subfolders(folder,['.tif'])
+    image_paths=ip.all_matching_files_in_subfolders(folder,['.tif'])
     for path in image_paths:
         img=tiff.imread(path)
         print('Loaded ', path)
