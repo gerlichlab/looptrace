@@ -139,11 +139,11 @@ def match_file_lists(t_list,o_list):
     return o_list_match
 
 def match_file_lists_decon(t_list,o_list):
-    t_list_match = [item.split('\\')[-1].split('__')[0] for item in t_list]
-    
+    t_list_match = [item.split('\\')[-1].split('__')[0][-5:] for item in t_list]
+
     o_list_match = [item for item in o_list if 
-                    item.split('\\')[-1].split('_P0001_')[0] in t_list_match]
-    
+                    item.split('\\')[-1].split('_P0001_')[0][-5:] in t_list_match]
+
     return o_list_match
 
 def image_from_svih5(path,ch=None,index=(slice(None),

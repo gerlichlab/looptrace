@@ -14,16 +14,16 @@ import os
 import yaml
 import numpy as np
 import pandas as pd
-from gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
+from chromatin_tracing_python.gaussfit import fitSymmetricGaussian3D
 from read_roi import read_roi_zip, read_roi_file
-from skimage.filters import gaussian
-from scipy.stats import mode
+#from skimage.filters import gaussian
+#from scipy.stats import mode
 import scipy.ndimage as ndi
-import image_processing_functions as ip
-import tracing_functions as tr
-import h5py
+import chromatin_tracing_python.image_processing_functions as ip
+#import tracing_functions as tr
+#import h5py
 import tifffile as tiff
-from joblib import Parallel, delayed
+#from joblib import Parallel, delayed
 
 class Tracer_decon:
     def __init__(self, config_path):
@@ -59,13 +59,12 @@ class Tracer_decon:
         roi_template = self.config['roi_template']
         image_list = ip.all_matching_files_in_subfolders(image_folder,image_template)
         roi_list = ip.all_matching_files_in_subfolders(roi_folder,roi_template)
-
         image_list = [ip.match_file_lists_decon([roi], image_list) for
                       roi in roi_list]
-
+        
         # res is a list of tuples, each with a list of lists for each image/roi set
-        res = [self.tracing_3d_decon(image_path, roi_path) for 
-               image_path, roi_path in zip(image_list, roi_list)]
+        res = [self.tracing_3d_decon(image_paths, roi_path) for 
+               image_paths, roi_path in zip(image_list, roi_list)]
         
         #Unpack res into traces and images
         traces, imgs = list(zip(*res))
@@ -99,7 +98,7 @@ class Tracer_decon:
         roi_scale = self.config['dc_scale_factor']
         drift_table = self.drift_table
         image_name=roi_path.split('\\')[-1].split('__')[0]
-        
+        print('Tracing image ', image_name)
 
         #Read ImageJ ROIs from .roi or .zip file.
         if roi_path[-3:] == 'roi':
@@ -153,7 +152,7 @@ class Tracer_decon:
                 sz=slice(max(0,z_min), z_max)
                 sy=slice(y_min, y_max)
                 sx=slice(x_min, x_max)
-                print(sz, sy, sx)
+                print('Tracing at ', sz, sy, sx)
                 img=ip.image_from_svih5(image_path, ch=trace_ch, index=(sz,sy,sx))
                 
                 if z_min < 0:
@@ -274,7 +273,7 @@ class Tracer_decon:
         if pwds is not None:
             np.save(output_file+'_pwds'+suffix+'.npy',pwds)
         if imgs is not None:
-            imgs=np.moveaxis(imgs,1,2)
+            imgs=np.moveaxis(imgs,0,2)
             tiff.imsave(output_file+'_imgs'+suffix+'.tiff', imgs, imagej=True)
         if pairs is not None:
             pairs.to_hdf(output_file+'_pairs'+suffix+'.h5', key='pairs', mode='w')
