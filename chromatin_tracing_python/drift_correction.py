@@ -13,6 +13,7 @@ import chromatin_tracing_python.image_processing_functions as ip
 from joblib import Parallel, delayed
 import yaml
 import tifffile as tiff
+import os
 
 def drift_corr_cc(t_img, o_img, upsampling=1, downsampling=1):
     '''
@@ -182,12 +183,12 @@ def drift_corr_image_list(file_list, output_folder, course_ch, fine_ch):
     metadata['SizeT']=str(len(file_list))
     metadata['Drift_correction'] = 'Cross correlation'
     filename=metadata['Title'][4:-11]
-    print(output_folder+os.sep+filename+'_dc.tiff')
+    print(output_folder+os.sep+filename+'_dc.tif')
     #Save metadata and image file in specified output folder.
     with open(output_folder+os.sep+filename+'_dc.yaml', 'w') as file:
         yaml.safe_dump(metadata, file)
     
-    tiff.imsave(output_folder+os.sep+filename+'_dc.tiff',output,imagej=True)
+    tiff.imsave(output_folder+os.sep+filename+'_dc.tif',output,imagej=True)
     
 def drift_corr_mypic(toplevel_folder, output_folder, output_name, course_ch=0, fine_ch=0, filetype='.czi', template='DE_2'):
     pos_folders=[f.path for f in os.scandir(toplevel_folder) if f.is_dir() and 'DE' in f.path]
