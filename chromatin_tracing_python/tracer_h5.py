@@ -121,18 +121,18 @@ class Tracer_decon:
             # Find transposition coordinates to transpose fit to 
             # correct place in ROI.
             transp_z=(roi_image_size[0]-crop_z)/2
-            transp_y=(roi_image_size[1]-roi['height'])/2
-            transp_x=(roi_image_size[2]-roi['width'])/2
+            transp_y=(roi_image_size[1]-roi['height']//roi_scale)/2
+            transp_x=(roi_image_size[2]-roi['width']//roi_scale)/2
             
             #Prepare loop over each timepoint/exchange.
             roi_coords=[]
             trace_id=self.trace_id
             t_img=[]
             for image_path in image_paths:
-                # Select image and optionally filter, 
-                # find max index of DoG of image to initialize LS gaussian.
+                # Determine image name.
                 image_name=image_path.split('\\')[-1]
                 
+                #Read drift from drift table.
                 drift_table_row = drift_table.loc[drift_table['filename'] == image_name]
                 t = int(drift_table_row['frame'])
                 z_drift_course = int(drift_table_row['z_px_course'])
@@ -142,11 +142,12 @@ class Tracer_decon:
                 y_drift_fine = float(drift_table_row['y_px_fine'])
                 x_drift_fine = float(drift_table_row['x_px_fine'])
                 
-                z_min = int(roi['position']['slice']-crop_z//2-z_drift_course)
-                z_max = int(roi['position']['slice']-z_drift_course+crop_z//2)
-                y_min = int(roi['top']/roi_scale-y_drift_course)
+                #Determine ROI box from ImageJ ROI, set to 0-index, account for drift.
+                z_min = int(roi['position']['slice']-1-crop_z//2-z_drift_course)
+                z_max = int(roi['position']['slice']-1-z_drift_course+crop_z//2)
+                y_min = int((roi['top']-1)/roi_scale-y_drift_course)
                 y_max = int(y_min + roi['height']/roi_scale)
-                x_min = int(roi['left']/roi_scale-x_drift_course)
+                x_min = int((roi['left']-1)/roi_scale-x_drift_course)
                 x_max = int(x_min + roi['width']/roi_scale)
                 
                 sz=slice(max(0,z_min), z_max)

@@ -13,9 +13,12 @@ import plotly.graph_objs as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 from scipy import interpolate
+from scipy.stats.stats import pearsonr
 from scipy.spatial.distance import cdist
-from scipy.cluster.hierarchy import single, dendrogram
+from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
+import matplotlib.pyplot as plt
 import napari
+from joblib import Parallel, delayed
 #from pycpd import RigidRegistration
 
 def plot_fits(traces, imgs, mode='2D', contrast=(100,10000)):
@@ -89,19 +92,24 @@ def trace_analysis(traces, pwds):
                 coordinates of original and aligned traces.
     '''
     
-    pairwise_trace_idx = list(itertools.combinations(traces.index.get_level_values(0).unique(),2))
+    pairwise_trace_idx = list(itertools.combinations(traces.index.unique(),2))
     pairwise_pwd_idx = list(itertools.combinations(range(pwds.shape[0]),2))
-    res = []
-    for ((idx1, idx2), (idx_p1, idx_p2)) in zip(pairwise_trace_idx,pairwise_pwd_idx):
-        A, A_idx, B, B_idx, B_aligned, B_aligned_idx, mse = rigid_transform_3D(traces.loc[idx1], traces.loc[idx2])
-        pwd_mse = mat_corr_mse(pwds[idx_p1],pwds[idx_p2])
-        pwd_pcc = mat_corr_pcc(pwds[idx_p1],pwds[idx_p2])        
-        res.append([idx1, idx2, A, A_idx, B, B_idx, B_aligned, B_aligned_idx, mse, pwd_mse, pwd_pcc])
-    columns=['idx1', 'idx2', 'A', 'A_idx', 'B', 'B_idx', 'B_aligned', 'B_aligned_idx', 'aligned_mse', 'pwd_mse', 'pwd_pcc']
+    res = Parallel(n_jobs=-2)(delayed(single_trace_analysis)
+                              (traces, pwds, idx1, idx2, idx_p1, idx_p2) for 
+                              ((idx1, idx2), (idx_p1, idx_p2)) in 
+                              zip(pairwise_trace_idx,pairwise_pwd_idx))
+
+    columns=['idx1', 'idx2', 'A', 'A_idx', 'B', 'B_idx', 'B_aligned', 'B_aligned_idx', 'aligned_mse', 'aligned_pcc', 'pwd_mse', 'pwd_pcc']
     output=pd.DataFrame(res,columns=columns)
     return output
 
-def trace_clustering(paired, metric):
+def single_trace_analysis(traces, pwds, idx1, idx2, idx_p1, idx_p2):
+    A, A_idx, B, B_idx, B_aligned, B_aligned_idx, aligned_mse, aligned_pcc = rigid_transform_3D(traces.loc[idx1], traces.loc[idx2])
+    pwd_mse = mat_corr_mse(pwds[idx_p1],pwds[idx_p2])
+    pwd_pcc = mat_corr_pcc(pwds[idx_p1],pwds[idx_p2])
+    return idx1, idx2, A, A_idx, B, B_idx, B_aligned, B_aligned_idx, aligned_mse, aligned_pcc, pwd_mse, pwd_pcc
+    
+def trace_clustering(paired, metric='pwd_pcc', method='single', color_threshold=1.0):
     '''
     Calculates clusters nased on similarity metrics of 
     pairwise analysis of traces. Also plots dendrogram of clusters.
@@ -113,6 +121,7 @@ def trace_clustering(paired, metric):
             - 'aligned_mse'
             - 'pwd_mse'
             - 'pwd_pcc'
+    method : see scipy.cluster.hierarchy.linkage documentation
     Returns
     -------
     Z : Clustering matrix based on hierarchial clustering (see scipy.cluster.hierarchy.single docs)
@@ -120,14 +129,18 @@ def trace_clustering(paired, metric):
     
     labels=np.unique(np.concatenate((paired['idx1'],paired['idx2'])))
     if metric == 'aligned_mse' or metric == 'pwd_mse':
-        Z=single(paired[metric])
-    elif metric == 'pwd_pcc':
-        Z=single(1-paired[metric])
+        Z=linkage(paired[metric], method=method)
+    elif metric == 'aligned_pcc' or metric == 'pwd_pcc':
+        Z=linkage(1-paired[metric], method=method)
     else:
         raise ValueError('Inappropriate metric.')
+    plt.figure(figsize=(15,15))
+    dendro=dendrogram(Z, labels=labels, color_threshold=color_threshold, leaf_font_size=12)
+    clusters=fcluster(Z, color_threshold, criterion='distance')
+    cluster_df=pd.DataFrame([labels, clusters]).T 
+    cluster_df.columns=['trace_ID', 'cluster']
     
-    dendrogram(Z, labels=labels)
-    return Z
+    return cluster_df
 
 def rigid_transform_3D(df_A, df_B):
     '''
@@ -146,8 +159,12 @@ def rigid_transform_3D(df_A, df_B):
     and MSE of alignment.
     '''
     
+    # Get points from input dataframe.
     A_orig, A_orig_idx = points_from_df(df_A)
     B_orig, B_orig_idx = points_from_df(df_B)
+
+    # Ensure only matching points are used.
+    # TODO: This is quite slow, bulk of this whole function. Implementing something faster should be easy.
     A, idx_A, B, idx_B = matching_points_from_dfs(df_A,df_B)
     
     #Need column vectors for calculation
@@ -170,24 +187,31 @@ def rigid_transform_3D(df_A, df_B):
     Am = A - Ac
     Bm = B - Bc
 
-    # dot is matrix multiplication for array
+    # Calculate covariance matrix
     H = np.matmul(Am, Bm.T)
 
-    # find rotation
+    # Find optimal rotation by SVD of the covariance matrix.
     U, S, Vt = np.linalg.svd(H)
     R = np.matmul(Vt.T,U.T)
 
-    # special reflection case 
+    # Handle case if the rotation matrix is reflected.
     if np.linalg.det(R) < 0:
         #print("det(R) < R, reflection detected!, correcting for it ...\n");
         Vt[2,:] *= -1
         R = np.matmul(Vt.T,U.T)
 
+    # calculate translation.
     t = Bc - np.matmul(R,Ac)
+    
+    # Transform the matched B matrix to A to calculate aligmen parameters.
     B_ = np.matmul(R.T,B-t)
-    mse = ((A - B_)**2).mean()
+    mse = mat_corr_mse(A, B_)
+    pcc = mat_corr_pcc(A, B_)
+    
+    # Transform the originial, unmatched B matrix. 
     B_aligned = np.matmul(R.T,B_orig.T-t).T
-    return A_orig, A_orig_idx, B_orig, B_orig_idx, B_aligned, B_orig_idx, mse
+
+    return A_orig, A_orig_idx, B_orig, B_orig_idx, B_aligned, B_orig_idx, mse, pcc
 
 '''
 def scale_rigid_transform_3D(df_A,df_B):
@@ -218,7 +242,7 @@ def points_from_df(trace_df):
     
     _traces = trace_df[trace_df['QC']==1]
     points = np.array([_traces['x'].values,_traces['y'].values,_traces['z'].values]).T
-    idx = _traces.index.get_level_values('frame')
+    idx = _traces['frame']
     return points, idx
 
 def points_from_df_nan(trace_df):
@@ -240,7 +264,7 @@ def points_from_df_nan(trace_df):
     _traces=trace_df.copy()
     _traces[_traces['QC']==0] = np.nan
     points = np.array([_traces['x'].values,_traces['y'].values,_traces['z'].values]).T
-    idx = _traces.index.get_level_values('frame')
+    idx = _traces['frame']
     return points, idx
 
 def matching_points_from_dfs(df_A,df_B):
@@ -256,12 +280,12 @@ def matching_points_from_dfs(df_A,df_B):
     Coordinates (np array) and indexes (list) of the matching points.
 
     '''
-    df_A_idx=df_A[df_A['QC']==1].index.get_level_values('frame')
-    df_B_idx=df_B[df_B['QC']==1].index.get_level_values('frame')
-    idx=df_A_idx.intersection(df_B_idx)
+    df_A_idx=df_A[df_A['QC']==1]['frame']
+    df_B_idx=df_B[df_B['QC']==1]['frame']
+    idx=np.intersect1d(df_A_idx, df_B_idx)
     i = pd.IndexSlice
-    points_A, idx_A = points_from_df(df_A.loc[i[:, :, :, idx], i[:]])
-    points_B, idx_B = points_from_df(df_B.loc[i[:, :, :, idx], i[:]])
+    points_A, idx_A = points_from_df(df_A.loc[df_A['frame'].isin(idx)])
+    points_B, idx_B = points_from_df(df_B.loc[df_B['frame'].isin(idx)])
     return points_A, idx_A, points_B, idx_B
 
 def spline_interp(points):
@@ -320,9 +344,10 @@ def plot_traces(traces,idx):
         idx=[idx]
     trace_df=traces[traces['QC']==1]
     trace_df_sel=pd.concat([trace_df.xs(i) for i in idx])
-    trace_index=trace_df_sel.index.get_level_values('frame')
-    
+    trace_index=list(trace_df_sel['frame'])
+    #print([i for i in trace_index])
     labels=['E'+str(t) for t in trace_index]
+    print(labels)
     fig = px.scatter_3d(trace_df_sel, x='x', y='y', z='z',
               color=labels)
     for i in idx:
