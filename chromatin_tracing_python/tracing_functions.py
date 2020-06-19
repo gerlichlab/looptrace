@@ -474,8 +474,6 @@ def plot_paired_traces(traces, idxs):
     
 def plot_gpa_output(aligned_points, mean_points):
     
-    
-    from plotly.offline import plot
     scatters = []
     cmap = px.colors.qualitative.Plotly
     for point_id, point_set in enumerate(aligned_points):
@@ -490,8 +488,10 @@ def plot_gpa_output(aligned_points, mean_points):
         scatters.append(go.Scatter3d(x=point_set[:,2], y=point_set[:,1], z=point_set[:,0], 
                                      mode='markers+lines+text', 
                                      marker_color=cmap_points, 
-                                     opacity=0.1,
-                                     name='Trace'+str(point_id)))
+                                     opacity=0.3,
+                                     name='Trace'+str(point_id),
+                                     line=dict(color='#1f77b4',
+                                               width=2)))
     
     mean_idx=np.arange(mean_points.shape[0])
     mean_qc_idx = mean_points[:,3] != 0
@@ -499,13 +499,15 @@ def plot_gpa_output(aligned_points, mean_points):
     print(mean_idx)
     mean_labels=['E'+str(i) for i in mean_idx]
     mean_cmap = [cmap[i%10] for i in mean_idx]
-    mean_points_plot = mean_points[qc_idx, 0:3]
+    mean_points_plot = mean_points[mean_qc_idx, 0:3]
     mean_fig = scatters.append(go.Scatter3d(x=mean_points_plot[:,2], y=mean_points_plot[:,1], z=mean_points_plot[:,0], 
                                             mode='markers+lines+text', 
                                             marker_color=mean_cmap,
-                                            name='Mean'))
+                                            name='Mean',
+                                            line=dict(color='#ff7f0e', 
+                                                      width=5)))
     
     fig = go.Figure(data=scatters)
     
-    plot(fig)
+    iplot(fig)
     
