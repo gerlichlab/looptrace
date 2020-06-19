@@ -19,6 +19,7 @@ from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
 import matplotlib.pyplot as plt
 import napari
 from joblib import Parallel, delayed
+import time
 #from pycpd import RigidRegistration
 
 def plot_fits(traces, imgs, mode='2D', contrast=(100,10000)):
@@ -99,15 +100,20 @@ def trace_analysis(traces, pwds):
                               ((idx1, idx2), (idx_p1, idx_p2)) in 
                               zip(pairwise_trace_idx,pairwise_pwd_idx))
 
-    columns=['idx1', 'idx2', 'A', 'A_idx', 'B', 'B_idx', 'B_aligned', 'B_aligned_idx', 'aligned_mse', 'aligned_pcc', 'pwd_mse', 'pwd_pcc']
+    columns=['idx1', 'idx2', 'aligned_mse', 'aligned_pcc', 'pwd_mse', 'pwd_pcc']
     output=pd.DataFrame(res,columns=columns)
     return output
 
 def single_trace_analysis(traces, pwds, idx1, idx2, idx_p1, idx_p2):
-    A, A_idx, B, B_idx, B_aligned, B_aligned_idx, aligned_mse, aligned_pcc = rigid_transform_3D(traces.loc[idx1], traces.loc[idx2])
+    point_set = points_from_traces(traces, [idx1,idx2])
+    aligned_points = rigid_transform_3D(point_set[1], point_set[0])
+    
+    aligned_mse = mat_corr_mse(point_set[0][:,:3], aligned_points[:,:3])
+    aligned_pcc = mat_corr_pcc(point_set[0][:,:3], aligned_points[:,:3])
+    
     pwd_mse = mat_corr_mse(pwds[idx_p1],pwds[idx_p2])
     pwd_pcc = mat_corr_pcc(pwds[idx_p1],pwds[idx_p2])
-    return idx1, idx2, A, A_idx, B, B_idx, B_aligned, B_aligned_idx, aligned_mse, aligned_pcc, pwd_mse, pwd_pcc
+    return idx1, idx2, aligned_mse, aligned_pcc, pwd_mse, pwd_pcc
     
 def trace_clustering(paired, metric='pwd_pcc', method='single', color_threshold=1.0):
     '''
@@ -142,23 +148,7 @@ def trace_clustering(paired, metric='pwd_pcc', method='single', color_threshold=
     
     return cluster_df
 
-def rigid_transform_3D(df_A, df_B):
-    '''
-    Calculates rigid transformation of two 3d points sets based on:
-    Least-squares fitting of two 3-D point sets. IEEE T Pattern Anal 1987
-    DOI: 10.1109/TPAMI.1987.4767965
-    Only uses points present in both traces for alignment.
 
-    Parameters
-    ----------
-    df_A, df_B : pd DataFrames with single trace data.
-
-    Returns
-    -------
-    Point coordinates and indexes of original and aligned traces,
-    and MSE of alignment.
-    '''
-    
     # Get points from input dataframe.
     A_orig, A_orig_idx = points_from_df(df_A)
     B_orig, B_orig_idx = points_from_df(df_B)
@@ -167,9 +157,80 @@ def rigid_transform_3D(df_A, df_B):
     # TODO: This is quite slow, bulk of this whole function. Implementing something faster should be easy.
     A, idx_A, B, idx_B = matching_points_from_dfs(df_A,df_B)
     
+def general_procrustes_analysis(traces, trace_ids, crit=0.01):
+    
+    trace_ids=list(trace_ids)
+    
+    # Make list of all points of selected traces
+    all_points = points_from_traces(traces, trace_ids)
+    
+    # Select a random template for initial loop
+    #np.random.seed(1)
+    t_idx = np.random.randint(0,len(all_points))
+    template = all_points[t_idx]
+    prev_dist = np.sum([procrustes_distance(template, points) for 
+                   points in all_points])
+    print('Initial distance is', prev_dist)
+    
+    all_points, points_mean, dist = general_procrustes_loop(all_points, template)
+    
+    n_cycles = 0
+    while np.abs(prev_dist-dist) > crit:
+        prev_dist = dist
+        all_points, points_mean, dist = general_procrustes_loop(all_points, points_mean)
+        n_cycles += 1
+        
+    print('GPA converged after {} cycles with distance {}'.format(n_cycles, dist))
+    return all_points, points_mean
+        
+def general_procrustes_loop(all_points, template):
+    # Align all to template
+    all_points_aligned = [rigid_transform_3D(offset, template) for 
+                          offset in all_points]
+    
+    #Calculate mean points:
+    points_mean = np.mean(np.stack(all_points_aligned), axis=0)
+    #The "QC" for the mean is 1 if at least one element has a QC=1
+    points_mean[:,3]=np.ceil(points_mean[:,3])
+    # Calculate distance to mean:
+    dist = np.sum([procrustes_distance(points_mean, points) for 
+                   points in all_points_aligned])
+    return all_points_aligned, points_mean, dist
+    
+def procrustes_distance(points_A, points_B):
+    points_A, points_B = match_two_pointsets(points_A, points_B)    
+    dist = np.sqrt(np.mean(np.sum((points_A-points_B)**2)))
+    return dist
+    
+def rigid_transform_3D(points_A, points_B):
+    '''
+    Calculates rigid transformation of two 3d points sets based on:
+    Least-squares fitting of two 3-D point sets. IEEE T Pattern Anal 1987
+    DOI: 10.1109/TPAMI.1987.4767965
+    
+    Finds the optimal (lest squares) of B = RA + t, so mapping of A onto B.
+    
+    Modified from http://nghiaho.com/?page_id=671
+    
+    Only uses points present in both traces for alignment.
+
+    Parameters
+    ----------
+    points_A, points_B : Nx4 (ZYX + condition) numpy ndarrays.
+
+    Returns
+    -------
+    Coordinates of registered and transformed points_B
+    '''
+    
+    #Ensure matching points
     #Need column vectors for calculation
-    A=A.T
-    B=B.T
+    A, B = match_two_pointsets(points_A, points_B)
+
+    A = A.T
+    B = B.T
+    
+    # Check that we have 3D column vectors
     num_rows, num_cols = A.shape;
 
     if num_rows != 3:
@@ -179,17 +240,17 @@ def rigid_transform_3D(df_A, df_B):
     if num_rows != 3:
         raise Exception("matrix B is not 3xN, it is {}x{}".format(num_rows, num_cols))
 
-    # find mean column wise and reshape to column vector
+    # find mean column wise and reshape to column vector (centroids)
     Ac = np.mean(A, axis=1).reshape((3,1))
     Bc = np.mean(B, axis=1).reshape((3,1))
 
     # subtract mean
     Am = A - Ac
     Bm = B - Bc
-
+    
     # Calculate covariance matrix
     H = np.matmul(Am, Bm.T)
-
+    
     # Find optimal rotation by SVD of the covariance matrix.
     U, S, Vt = np.linalg.svd(H)
     R = np.matmul(Vt.T,U.T)
@@ -203,15 +264,17 @@ def rigid_transform_3D(df_A, df_B):
     # calculate translation.
     t = Bc - np.matmul(R,Ac)
     
-    # Transform the matched B matrix to A to calculate aligmen parameters.
-    B_ = np.matmul(R.T,B-t)
-    mse = mat_corr_mse(A, B_)
-    pcc = mat_corr_pcc(A, B_)
+    # Transform the matched points using calculated R and t
+    A_reg = np.matmul(R,A)+t
     
-    # Transform the originial, unmatched B matrix. 
-    B_aligned = np.matmul(R.T,B_orig.T-t).T
-
-    return A_orig, A_orig_idx, B_orig, B_orig_idx, B_aligned, B_orig_idx, mse, pcc
+    #Calculate the RMSE of the alignment
+    rmse = np.sqrt(np.mean(np.sum((A_reg-B)**2)))
+    
+    #Transform the original vector with QC values
+    points_A_reg = np.copy(points_A)
+    points_A_reg[:,:3] = (np.matmul(R, points_A[:,:3].T)+t).T
+    
+    return points_A_reg#, rmse
 
 '''
 def scale_rigid_transform_3D(df_A,df_B):
@@ -225,25 +288,34 @@ def scale_rigid_transform_3D(df_A,df_B):
     return B_aligned, B_orig_idx, mse
 '''
 
-def points_from_df(trace_df):
+def match_two_pointsets(points_A, points_B):
+    
+    match_idx = points_A[:,3] * points_B[:,3] != 0
+    points_A_matched = points_A[match_idx,0:3]
+    points_B_matched = points_B[match_idx,0:3]
+    return points_A_matched, points_B_matched
+
+def points_from_traces(traces, trace_ids):
     '''
     Helper function to extract point coordinates from trace dataframe.
     Only points passing QC during tracing are returned.
 
     Parameters
     ----------
-    trace_df : pd DataFrame with trace data.
+    traces : pd DataFrame with trace data.
+    trace_ids: single or multiple trace_ids to extract
 
     Returns
     -------
-    points : Nx3 np array with trace coordinates.
-    idx : List, Original index of trace coordinates.
+    points : list of  Nx4 np array with trace coordinates and QC value.
     '''
     
-    _traces = trace_df[trace_df['QC']==1]
-    points = np.array([_traces['x'].values,_traces['y'].values,_traces['z'].values]).T
-    idx = _traces['frame']
-    return points, idx
+    if not isinstance(trace_ids, (list, tuple)):
+        trace_ids = [trace_ids]
+    points_with_qc=[]
+    for trace_id in trace_ids:
+        points_with_qc.append(traces.loc[trace_id,['z','y','x','QC']].to_numpy())
+    return points_with_qc
 
 def points_from_df_nan(trace_df):
     '''
@@ -361,7 +433,7 @@ def plot_traces(traces,idx):
                                   showlegend=False))
     iplot(fig)
     
-def plot_paired_traces(pair_df, idx):
+def plot_paired_traces(traces, idxs):
     '''
     Helper function for plotting two aligned traces in one figure.
     Also plots spline interpolation between points for visualization.
@@ -372,7 +444,7 @@ def plot_paired_traces(pair_df, idx):
     idx : Int, index of pair from paired dataframe. 
     '''
     
-    points1=pair_df['A'][idx]
+    points1=points_from_traces(traces, trace_ids)
     idx1=pair_df['A_idx'][idx]
     points2=pair_df['B_aligned'][idx]
     idx2=pair_df['B_aligned_idx'][idx]
@@ -399,4 +471,41 @@ def plot_paired_traces(pair_df, idx):
                                        mode='lines')])
     
     iplot(fig)
+    
+def plot_gpa_output(aligned_points, mean_points):
+    
+    
+    from plotly.offline import plot
+    scatters = []
+    cmap = px.colors.qualitative.Plotly
+    for point_id, point_set in enumerate(aligned_points):
+        idx=np.arange(point_set.shape[0])
+        qc_idx = point_set[:,3] != 0
+        idx=idx[qc_idx]
+        labels=['E'+str(i) for i in idx]
+        
+        cmap_points = [cmap[i%10] for i in idx]
+        
+        point_set = point_set[qc_idx, 0:3]
+        scatters.append(go.Scatter3d(x=point_set[:,2], y=point_set[:,1], z=point_set[:,0], 
+                                     mode='markers+lines+text', 
+                                     marker_color=cmap_points, 
+                                     opacity=0.1,
+                                     name='Trace'+str(point_id)))
+    
+    mean_idx=np.arange(mean_points.shape[0])
+    mean_qc_idx = mean_points[:,3] != 0
+    mean_idx=mean_idx[mean_qc_idx]
+    print(mean_idx)
+    mean_labels=['E'+str(i) for i in mean_idx]
+    mean_cmap = [cmap[i%10] for i in mean_idx]
+    mean_points_plot = mean_points[qc_idx, 0:3]
+    mean_fig = scatters.append(go.Scatter3d(x=mean_points_plot[:,2], y=mean_points_plot[:,1], z=mean_points_plot[:,0], 
+                                            mode='markers+lines+text', 
+                                            marker_color=mean_cmap,
+                                            name='Mean'))
+    
+    fig = go.Figure(data=scatters)
+    
+    plot(fig)
     
