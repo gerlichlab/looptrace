@@ -157,8 +157,10 @@ def trace_clustering(paired, metric='pwd_pcc', method='single', color_threshold=
     '''
 
 def run_gpa_all_clusters(traces, cluster_df, min_cluster = 1):
+    #Find unique cluster IDs from clustering table.
     cluster_ids=set(cluster_df['cluster'])
     
+    #Generate list of lists of all cluster members over min_cluster length.
     all_cluster_members = []
     for cluster_id in cluster_ids:
         cluster_members = list(cluster_df[cluster_df['cluster']==cluster_id]['trace_ID'])
@@ -166,11 +168,16 @@ def run_gpa_all_clusters(traces, cluster_df, min_cluster = 1):
             all_cluster_members.append(cluster_members)
 
     print(all_cluster_members)
+    #Perform GPA analysis on each of the clusters seperately.
     all_mean_points = [general_procrustes_analysis(traces, cluster_members)[1]
                         for cluster_members in all_cluster_members]
+    #Choose the first cluster mean as template for alignment.
     template = all_mean_points.pop(0)
+    #Align all other cluster means to template.
     aligned_mean_points = [rigid_transform_3D(mean_points, template) for 
                             mean_points in all_mean_points]
+    #Readd the template to the output.
+    aligned_mean_points += [template]
     return aligned_mean_points
 
 def general_procrustes_analysis(traces, trace_ids, crit=0.01):
