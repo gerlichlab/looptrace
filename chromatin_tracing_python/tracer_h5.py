@@ -260,7 +260,6 @@ class Tracer_decon:
     def reapply_QC(self,traces):
         traces['QC']=traces.apply(self.tracing_qc,axis=1)
         group_means=traces[traces['frame']==self.config['search_frame']]
-        print(group_means)
         traces['QC']=traces.apply(self.group_mean_qc, args=(group_means,), axis=1)
         return traces
     

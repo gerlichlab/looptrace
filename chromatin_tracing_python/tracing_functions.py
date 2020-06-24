@@ -156,10 +156,16 @@ def trace_clustering(paired, metric='pwd_pcc', method='single', color_threshold=
     A, idx_A, B, idx_B = matching_points_from_dfs(df_A,df_B)
     '''
 
-def run_gpa_all_clusters(traces, cluster_df):
+def run_gpa_all_clusters(traces, cluster_df, min_cluster = 1):
     cluster_ids=set(cluster_df['cluster'])
-    all_cluster_members = [cluster_df[cluster_df['cluster']==cluster_id]
-                            for cluster_id in cluster_ids]
+    
+    all_cluster_members = []
+    for cluster_id in cluster_ids:
+        cluster_members = list(cluster_df[cluster_df['cluster']==cluster_id]['trace_ID'])
+        if len(cluster_members)>=min_cluster:
+            all_cluster_members.append(cluster_members)
+
+    print(all_cluster_members)
     all_mean_points = [general_procrustes_analysis(traces, cluster_members)[1]
                         for cluster_members in all_cluster_members]
     template = all_mean_points.pop(0)
@@ -557,3 +563,26 @@ def plot_gpa_output(aligned_points, mean_points):
     
     iplot(fig)
     
+def plot_multi_points(list_of_points):
+    scatters = []
+    cmap = px.colors.qualitative.Light24
+    for point_id, point_set in enumerate(list_of_points):
+        idx=np.arange(point_set.shape[0])
+        qc_idx = point_set[:,3] != 0
+        idx=idx[qc_idx]
+        labels=['E'+str(i) for i in idx]
+        
+        cmap_points = [cmap[i%24] for i in idx]
+        
+        point_set_plot = point_set[qc_idx, 0:3]
+        scatters.append(go.Scatter3d(x=point_set_plot[:,2], y=point_set_plot[:,1], z=point_set_plot[:,0], 
+                                     mode='markers+lines', 
+                                     marker_color=cmap_points,
+                                     marker_size=5,
+                                     opacity=1,
+                                     name='Trace '+str(point_id),
+                                     line=dict(color=cmap[point_id],
+                                               width=2)))
+    fig = go.Figure(data=scatters)
+    
+    iplot(fig)
