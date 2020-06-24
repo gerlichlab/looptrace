@@ -7,20 +7,16 @@ Created on Wed Apr 29 09:19:04 2020
 import itertools
 import pandas as pd
 import numpy as np
-import matplotlib
-from plotly.offline import iplot
+from plotly.offline import iplot, plot
 import plotly.graph_objs as go
 import plotly.express as px
-from plotly.subplots import make_subplots
 from scipy import interpolate
-from scipy.stats.stats import pearsonr
+from scipy import stats
 from scipy.spatial.distance import cdist
 from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
 import matplotlib.pyplot as plt
 import napari
 from joblib import Parallel, delayed
-import time
-#from pycpd import RigidRegistration
 
 def plot_fits(traces, imgs, mode='2D', contrast=(100,10000)):
     points = points_for_overlay(traces)
@@ -108,10 +104,10 @@ def single_trace_analysis(traces, pwds, idx1, idx2, idx_p1, idx_p2):
     point_set = points_from_traces(traces, [idx1,idx2])
     aligned_points = rigid_transform_3D(point_set[1], point_set[0])
     
-    aligned_mse = mat_corr_mse(point_set[0][:,:3], aligned_points[:,:3])
+    aligned_mse = mat_corr_rmse(point_set[0][:,:3], aligned_points[:,:3])
     aligned_pcc = mat_corr_pcc(point_set[0][:,:3], aligned_points[:,:3])
     
-    pwd_mse = mat_corr_mse(pwds[idx_p1],pwds[idx_p2])
+    pwd_mse = mat_corr_rmse(pwds[idx_p1],pwds[idx_p2])
     pwd_pcc = mat_corr_pcc(pwds[idx_p1],pwds[idx_p2])
     return idx1, idx2, aligned_mse, aligned_pcc, pwd_mse, pwd_pcc
     
@@ -135,7 +131,7 @@ def trace_clustering(paired, metric='pwd_pcc', method='single', color_threshold=
     
     labels=np.unique(np.concatenate((paired['idx1'],paired['idx2'])))
     if metric == 'aligned_mse' or metric == 'pwd_mse':
-        Z=linkage(paired[metric], method=method)
+        Z=linkage(np.log(paired[metric]), method=method)
     elif metric == 'aligned_pcc' or metric == 'pwd_pcc':
         Z=linkage(1-paired[metric], method=method)
     else:
@@ -148,15 +144,29 @@ def trace_clustering(paired, metric='pwd_pcc', method='single', color_threshold=
     
     return cluster_df
 
-
+    '''
     # Get points from input dataframe.
+
+
     A_orig, A_orig_idx = points_from_df(df_A)
     B_orig, B_orig_idx = points_from_df(df_B)
 
     # Ensure only matching points are used.
     # TODO: This is quite slow, bulk of this whole function. Implementing something faster should be easy.
     A, idx_A, B, idx_B = matching_points_from_dfs(df_A,df_B)
-    
+    '''
+
+def run_gpa_all_clusters(traces, cluster_df):
+    cluster_ids=set(cluster_df['cluster'])
+    all_cluster_members = [cluster_df[cluster_df['cluster']==cluster_id]
+                            for cluster_id in cluster_ids]
+    all_mean_points = [general_procrustes_analysis(traces, cluster_members)[1]
+                        for cluster_members in all_cluster_members]
+    template = all_mean_points.pop(0)
+    aligned_mean_points = [rigid_transform_3D(mean_points, template) for 
+                            mean_points in all_mean_points]
+    return aligned_mean_points
+
 def general_procrustes_analysis(traces, trace_ids, crit=0.01):
     
     trace_ids=list(trace_ids)
@@ -188,8 +198,15 @@ def general_procrustes_loop(all_points, template):
     all_points_aligned = [rigid_transform_3D(offset, template) for 
                           offset in all_points]
     
-    #Calculate mean points:
-    points_mean = np.mean(np.stack(all_points_aligned), axis=0)
+
+    #Set values that do not pass QC to nan in new list.
+    all_points_aligned_qc=[]
+    for points in all_points_aligned:
+        points[points[:,3] == 0, 0:3]=np.nan
+        all_points_aligned_qc.append(points)
+    
+    #Calculate mean points from QC list ignoring nans.:
+    points_mean = np.nanmean(np.stack(all_points_aligned_qc), axis=0)
     #The "QC" for the mean is 1 if at least one element has a QC=1
     points_mean[:,3]=np.ceil(points_mean[:,3])
     # Calculate distance to mean:
@@ -199,7 +216,7 @@ def general_procrustes_loop(all_points, template):
     
 def procrustes_distance(points_A, points_B):
     points_A, points_B = match_two_pointsets(points_A, points_B)    
-    dist = np.sqrt(np.mean(np.sum((points_A-points_B)**2)))
+    dist = np.sqrt(np.mean((points_A-points_B)**2))
     return dist
     
 def rigid_transform_3D(points_A, points_B):
@@ -265,10 +282,10 @@ def rigid_transform_3D(points_A, points_B):
     t = Bc - np.matmul(R,Ac)
     
     # Transform the matched points using calculated R and t
-    A_reg = np.matmul(R,A)+t
+    #A_reg = np.matmul(R,A)+t
     
     #Calculate the RMSE of the alignment
-    rmse = np.sqrt(np.mean(np.sum((A_reg-B)**2)))
+    # rmse = np.sqrt(np.mean(np.sum((A_reg-B)**2)))
     
     #Transform the original vector with QC values
     points_A_reg = np.copy(points_A)
@@ -380,13 +397,12 @@ def spline_interp(points):
     fine = interpolate.splev(u_fine, tck)
     return fine
 
-def mat_corr_mse(mat1, mat2):
+def mat_corr_rmse(mat1, mat2):
     '''
     Calculate mean squared error of two matrices, ignoring nans.
     '''
-    
-    mse = np.nanmean((mat1-mat2)**2)
-    return mse
+    rmse = np.sqrt(np.nanmean((mat1-mat2)**2))
+    return rmse
 
 def mat_corr_pcc(mat1,mat2):
     '''
@@ -401,7 +417,7 @@ def mat_corr_pcc(mat1,mat2):
     
     return pcc
         
-def plot_traces(traces,idx):
+def plot_traces(traces, idx):
     '''
     Helper function for plotting one or several traces in one figure.
     Also plots spline interpolation between points for visualization.
@@ -411,7 +427,7 @@ def plot_traces(traces,idx):
     traces : pd DataFrame with trace data.
     idx : Int or list of ints with trace_ID of traces to plot.     
     '''
-    
+
     if type(idx) == int:
         idx=[idx]
     trace_df=traces[traces['QC']==1]
@@ -431,6 +447,34 @@ def plot_traces(traces,idx):
                                    z=interp[0],
                                   mode ='lines',
                                   showlegend=False))
+    iplot(fig)
+
+def plot_aligned_traces(traces, idx):
+    all_points = points_from_traces(traces, idx)
+    template = all_points.pop(0)
+    all_points_aligned = [template]+[rigid_transform_3D(offset, template) for 
+                          offset in all_points]
+    scatters = []
+    cmap = px.colors.qualitative.Plotly
+    for point_id, point_set in enumerate(all_points_aligned):
+        idx=np.arange(point_set.shape[0])
+        qc_idx = point_set[:,3] != 0
+        idx=idx[qc_idx]
+        labels=['E'+str(i) for i in idx]
+        
+        cmap_points = [cmap[i%10] for i in idx]
+        
+        point_set_plot = point_set[qc_idx, 0:3]
+        scatters.append(go.Scatter3d(x=point_set_plot[:,2], y=point_set_plot[:,1], z=point_set_plot[:,0], 
+                                     mode='markers+lines', 
+                                     marker_color=cmap_points,
+                                     marker_size=9,
+                                     opacity=1,
+                                     name='Trace '+str(point_id),
+                                     line=dict(color='#1f77b4',
+                                               width=1)))
+
+    fig = go.Figure(data=scatters)
     iplot(fig)
     
 def plot_paired_traces(traces, idxs):
@@ -484,24 +528,26 @@ def plot_gpa_output(aligned_points, mean_points):
         
         cmap_points = [cmap[i%10] for i in idx]
         
-        point_set = point_set[qc_idx, 0:3]
-        scatters.append(go.Scatter3d(x=point_set[:,2], y=point_set[:,1], z=point_set[:,0], 
-                                     mode='markers+lines+text', 
-                                     marker_color=cmap_points, 
+        point_set_plot = point_set[qc_idx, 0:3]
+        scatters.append(go.Scatter3d(x=point_set_plot[:,2], y=point_set_plot[:,1], z=point_set_plot[:,0], 
+                                     mode='markers+lines', 
+                                     marker_color=cmap_points,
+                                     marker_size=5,
                                      opacity=0.3,
-                                     name='Trace'+str(point_id),
+                                     name='Trace '+str(point_id),
                                      line=dict(color='#1f77b4',
-                                               width=2)))
+                                               width=1)))
     
     mean_idx=np.arange(mean_points.shape[0])
-    mean_qc_idx = mean_points[:,3] != 0
-    mean_idx=mean_idx[mean_qc_idx]
+    mean_qc = mean_points[:,3] != 0
+    mean_idx=mean_idx[mean_qc]
     print(mean_idx)
-    mean_labels=['E'+str(i) for i in mean_idx]
+    #mean_labels=['E'+str(i) for i in mean_idx]
     mean_cmap = [cmap[i%10] for i in mean_idx]
-    mean_points_plot = mean_points[mean_qc_idx, 0:3]
+    mean_points_plot = mean_points[mean_idx, 0:3]
+
     mean_fig = scatters.append(go.Scatter3d(x=mean_points_plot[:,2], y=mean_points_plot[:,1], z=mean_points_plot[:,0], 
-                                            mode='markers+lines+text', 
+                                            mode='markers+lines', 
                                             marker_color=mean_cmap,
                                             name='Mean',
                                             line=dict(color='#ff7f0e', 

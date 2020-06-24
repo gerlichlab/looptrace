@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Jun 10 06:09:16 2020
-
-@author: ellenberg
-"""
-# -*- coding: utf-8 -*-
 """
 Created on Thu Apr 23 09:26:44 2020
 
@@ -19,6 +12,7 @@ from read_roi import read_roi_zip, read_roi_file
 #from skimage.filters import gaussian
 #from scipy.stats import mode
 import scipy.ndimage as ndi
+from scipy import stats
 import chromatin_tracing_python.image_processing_functions as ip
 #import tracing_functions as tr
 #import h5py
@@ -244,14 +238,19 @@ class Tracer_decon:
         number of nm away from group mean each point can be.
         Preserves original QC, can only change 1 to 0.
         '''
-        
-        min_groups=groups-1000
-        max_groups=groups+1000
-        if max_groups.iloc[row.name[0]]['z']>row['z']<min_groups.iloc[row.name[0]]['z']:
+        #print(groups.iloc[row.name]['z'])
+        #min_groups=groups-self.config['max_dist_qc']
+        #max_groups=groups+self.config['max_dist_qc']
+        max_dist = self.config['max_dist_qc']
+        z_mean=groups.iloc[row.name]['z']
+        y_mean=groups.iloc[row.name]['y']
+        x_mean=groups.iloc[row.name]['x']
+
+        if row['z']>(z_mean+max_dist) or row['z']<(z_mean-max_dist):
             return 0
-        if max_groups.iloc[row.name[0]]['y']>row['y']<min_groups.iloc[row.name[0]]['y']:
+        if row['y']>(y_mean+max_dist) or row['y']<(y_mean-max_dist):
             return 0
-        if max_groups.iloc[row.name[0]]['x']>row['x']<min_groups.iloc[row.name[0]]['x']:
+        if row['x']>(x_mean+max_dist) or row['x']<(x_mean-max_dist):
             return 0
         if row['QC'] == 0:
             return 0
@@ -260,8 +259,9 @@ class Tracer_decon:
         
     def reapply_QC(self,traces):
         traces['QC']=traces.apply(self.tracing_qc,axis=1)
-        #group_means=traces.query('QC==1').groupby(level=0).mean()
-        #traces['QC']=traces.apply(self.group_mean_qc, args=(group_means,), axis=1)
+        group_means=traces[traces['frame']==self.config['search_frame']]
+        print(group_means)
+        traces['QC']=traces.apply(self.group_mean_qc, args=(group_means,), axis=1)
         return traces
     
     def save_data(self, traces=None, imgs=None, pwds=None, pairs=None, config=None, suffix=''):
