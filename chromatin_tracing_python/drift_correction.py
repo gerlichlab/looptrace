@@ -13,7 +13,6 @@ import chromatin_tracing_python.image_processing_functions as ip
 from joblib import Parallel, delayed
 import yaml
 import tifffile as tiff
-import os
 
 def drift_corr_cc(t_img, o_img, upsampling=1, downsampling=1):
     '''
