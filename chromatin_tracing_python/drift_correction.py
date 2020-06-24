@@ -300,7 +300,3 @@ def drift_corr_image_list_merge(file_list, output_folder, course_ch, fine_ch, fi
         yaml.safe_dump(metadata, file)
     
     tiff.imsave(output_folder+os.sep+filename+'_dc.tif',output,imagej=True)
-
-    
-os.chdir(r"M:\ChromatinTeam\Images_processing\20200618_OO_333_FIxed-FISH_TADs-Spots")
-
