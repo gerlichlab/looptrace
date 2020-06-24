@@ -429,7 +429,36 @@ def mat_corr_pcc(mat1,mat2):
     pcc=pcc_num/pcc_denom
     
     return pcc
-        
+
+def radius_of_gyration(point_set):
+    #Only include points passing QC:
+    qc_idx = point_set[:,3] != 0
+    point_set_qc = point_set[qc_idx, 0:3]
+
+    # Calculate ROG: R = sqrt(1/N * sum((r_k - r_mean)^2) for k points in structure.) 
+    # Source: https://en.wikipedia.org/wiki/Radius_of_gyration
+    points_mean=np.mean(point_set_qc, axis=0)
+    rog = np.sqrt(1/points_mean.shape[0] * np.sum((point_set_qc - points_mean)**2))
+    return rog
+
+def elongation(point_set):
+    #Only include points passing QC:
+    qc_idx = point_set[:,3] != 0
+    point_set_qc = point_set[qc_idx, 0:3]
+
+    #Center points to 0-mean
+    points_centered = point_set_qc - np.mean(point_set_qc, axis=0)
+    n, m = points_centered.shape
+    #Compute covariance matrix
+    cov = np.dot(points_centered.T, points_centered) / (n-1)
+    #Eigenvector decomposition of covariance matrix
+    eigen_vals, eigen_vecs = np.linalg.eig(cov)
+    #Elongation is the ratio of the secondary eigenvalue to primary eigenvalue
+    eigen_vals = np.sort(eigen_vals)[::-1]
+    print('Eigenvalues are ', eigen_vals))
+    elongation = 1-(eigen_vals[1]/eigen_vals[0])
+    return elongation
+
 def plot_traces(traces, idx):
     '''
     Helper function for plotting one or several traces in one figure.
