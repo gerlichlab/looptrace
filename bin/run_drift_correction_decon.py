@@ -45,6 +45,16 @@ def main():
                                 template)
         else:
             pass
+    else:
+        drift = dc.drift_corr_mypic_h5(input_folder,
+                    output_folder,
+                    threshold, 
+                    min_bead_int, 
+                    points, 
+                    t_index,
+                    ch,
+                    filetype, 
+                    template)
     
     apply=input('Apply drift correction? (y/n)')
     if apply == 'y':

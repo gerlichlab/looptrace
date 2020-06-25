@@ -1,6 +1,6 @@
 #Input and output data:
-input_folder: M:\ChromatinTeam\Images_processing\20200604_Exp328_KSB_Elyra_tracing_myc_D1-10_v2\02_DECON
-output_folder: M:\ChromatinTeam\Images_processing\20200604_Exp328_KSB_Elyra_tracing_myc_D1-10_v2\03_DC
+input_folder: M:\ChromatinTeam\Images_processing\20200617_Exp328_KSB_Elyra_tracing_myc_D1-10_v3\02_DECON
+output_folder: M:\ChromatinTeam\Images_processing\20200617_Exp328_KSB_Elyra_tracing_myc_D1-10_v3\03_DC
 drift_filename: drift_correction.csv
 image_filetype: '.h5'
 image_template: 'DE_2'
@@ -9,6 +9,6 @@ dc_image_scaling: 0.5
 #Fiducial parameters:
 bead_ch: 0
 bead_reference_timepoint : 0
-bead_threshold: 2000
-min_bead_intensity: 5000
+bead_threshold: 5000
+min_bead_intensity: 10000
 bead_points: 20

@@ -132,7 +132,7 @@ def drift_corr_mypic_h5(toplevel_folder,
     #List all files in top folder and group according to WXXXX position assuming format
     # *_WXXXX_PXXXX_TXXXX_*.h5
     all_files = ip.all_matching_files_in_subfolders(toplevel_folder, 
-                                                    [filetype, template]) 
+                                                    [filetype, template])
     groups = []
     pos_list=[]
     for k, g in itertools.groupby(sorted(all_files),
@@ -220,16 +220,16 @@ def apply_drift_corr_mypic(toplevel_folder,
                             img.shape[1], 
                             img.shape[2]*scale, 
                             img.shape[3]*scale))
-            print('Resized image.')
+            print('Resized image to ', img.shape)
             #Read course drifts from file.
             dz=row['z_px_course']
             dy=row['y_px_course']*scale
             dx=row['x_px_course']*scale
-            print(dz,dy,dx)
+            
             
             #Apply course drifts using linear (no) interpolation.
             img=ndi.shift(img,(0,dz,dy,dx), order=0)
-
+            print('Applied shift: ',dz,dy,dx)
             #Rescale each channel and convert to 8-bit.            
             for i in range(img.shape[0]):
                 img[i]=img[i]/np.max(img[i])*255
@@ -239,9 +239,10 @@ def apply_drift_corr_mypic(toplevel_folder,
         
         #Stack images per position together and save drift corrected image as tiff.
         pos_img=np.stack(pos_img, axis=0)
-        print(pos_img.shape, pos_img.dtype)
+        
         pos_img=np.moveaxis(pos_img,1,2)
         tiff.imsave(output_folder+os.sep+group_ind+'__dc.tif', pos_img, imagej=True)
+        print('Saved image '+group_ind+'__dc.tif')
         #with h5py.File(output_folder+os.sep+group_ind+'__dc.h5', 'w') as file:
         #    dset=file.create_dataset('Image', data=pos_img)
         #    dset.attrs['element_size_um'] = (0.2, 0.1/scale, 0.1/scale)
