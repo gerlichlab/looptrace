@@ -8,7 +8,6 @@ import os
 import yaml
 import numpy as np
 import pandas as pd
-import image_processing_functions as ip
 from chromatin_tracing_python import comparison_functions as comp
 from chromatin_tracing_python import image_processing_functions as ip
 from chromatin_tracing_python import drift_correction as dc
@@ -150,9 +149,10 @@ class Compare:
             #imgs2 = [ndi.gaussian_filter(img,sigma=2) for img in imgs2]
             #imgs2 = [ndi.median_filter(img,size=2) for img in imgs2]
             
-            imgs1 = [img/np.max(img) for img in imgs1]
-            imgs2 = [img/np.max(img) for img in imgs2]
-            imgs2 = [match_histograms(img[1], img[0]) for img in zip(imgs1, imgs2)]
+            imgs1 = [(img/np.max(img)).astype(np.float32) for img in imgs1]
+            imgs2 = [(img/np.max(img)).astype(np.float32) for img in imgs2]
+            imgs2 = [match_histograms(img[1], img[0]).astype(np.float32) 
+                    for img in zip(imgs1, imgs2)]
             print('Images rescaled.')
             
             if thresh:
@@ -187,11 +187,11 @@ class Compare:
             nucs.append(nuc_props.copy())
             #Add filtered, drift corrected, optionally thresholded images
             #to output list of images.
-            final_img.append([imgs1, imgs2, ssim_images])
+            final_img.append([imgs1, imgs2])
             print('Properties calculated.')
         #Return full dataframes and images containing all individual nuclei.
         del images
-        final_img=np.concatenate(final_img, axis=0).astype(np.float32)
+        final_img=np.concatenate(final_img, axis=0)
         print('Final image shape', final_img.shape)
         final_img=np.moveaxis(final_img, 0, 2)
         tiff.imsave(output_folder+os.sep+output_name+'_nucs_comp.tiff',final_img,imagej=True)
