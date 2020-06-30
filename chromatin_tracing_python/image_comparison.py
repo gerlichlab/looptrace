@@ -92,7 +92,7 @@ class Compare:
         plot_ssim = bool(int(self.config['plot_ssim']))
         thresh = bool(int(self.config['threshold_comparison']))
         output_folder=self.config['output_folder']
-        output_name=self.config['output_name']
+        output_name=metadata[0]['Title'].split(':')[-1]+self.config['output_name']
         output_name+='_'+path_set[0].split('_')[-4]
         
         #Load images and detect nuclear masks.
