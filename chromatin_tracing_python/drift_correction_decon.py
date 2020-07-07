@@ -47,9 +47,9 @@ def drift_svih5(t_path, o_path, ch, threshold, min_bead_int, points):
     o_img=ndi.shift(o_img,course_drift,order=0)
     
     #Calculate fine drift
-    fine_drift = drift_corr_multipoint_cc(t_img, o_img, threshold, min_bead_int, points)
+    fine_drift, fine_drift_std = drift_corr_multipoint_cc(t_img, o_img, threshold, min_bead_int, points)
     
-    return [*course_drift, *fine_drift]
+    return [*course_drift, *fine_drift, *fine_drift_std]
 
 def drift_corr_multipoint_cc(t_img, o_img, 
                              threshold, min_bead_int, 
@@ -100,18 +100,19 @@ def drift_corr_multipoint_cc(t_img, o_img,
         shifts[i] = shift
         
     #Return the 60% central mean to avoid outliers.
-    return trim_mean(shifts, proportiontocut=0.2, axis=0)
+    return trim_mean(shifts, proportiontocut=0.2, axis=0), np.std(shifts, axis=0)
 
     
 def drift_corr_mypic_h5(toplevel_folder,
                         output_folder,
+                        output_filename,
                         threshold, 
                         min_bead_int, 
                         points=5, 
                         t_index=0,
                         ch=0,
-                        filetype='.h5', 
-                        template='DE_2'):
+                        filetypes=['.h5'], 
+                        template=['DE_2']):
     '''
     Running function for drift correction of a whole deconvolved myPIC experiment.
 
@@ -131,8 +132,16 @@ def drift_corr_mypic_h5(toplevel_folder,
     '''
     #List all files in top folder and group according to WXXXX position assuming format
     # *_WXXXX_PXXXX_TXXXX_*.h5
+
+    if not isinstance(filetypes, list):
+        filetypes = [filetypes]
+    if not isinstance(template, list):
+        template = [template]
+
+    template_list = filetypes + template
     all_files = ip.all_matching_files_in_subfolders(toplevel_folder, 
-                                                    [filetype, template])
+                                                    template_list)
+    print(all_files)
     groups = []
     pos_list=[]
     for k, g in itertools.groupby(sorted(all_files),
@@ -166,10 +175,13 @@ def drift_corr_mypic_h5(toplevel_folder,
                         'z_px_fine',
                         'y_px_fine',
                         'x_px_fine',
+                        'z_px_fine_std',
+                        'y_px_fine_std',
+                        'x_px_fine_std',
                         'pos_id',
                         'filename']
     print(all_drifts)
-    all_drifts.to_csv(output_folder+os.sep+'drift_correction.csv')
+    all_drifts.to_csv(output_folder+os.sep+output_filename)
     
     return all_drifts
 
