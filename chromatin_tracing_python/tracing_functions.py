@@ -455,7 +455,7 @@ def elongation(point_set):
     eigen_vals, eigen_vecs = np.linalg.eig(cov)
     #Elongation is the ratio of the secondary eigenvalue to primary eigenvalue
     eigen_vals = np.sort(eigen_vals)[::-1]
-    print('Eigenvalues are ', eigen_vals))
+    print('Eigenvalues are ', eigen_vals)
     elongation = 1-(eigen_vals[1]/eigen_vals[0])
     return elongation
 
