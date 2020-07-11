@@ -3,7 +3,7 @@ import os
 import threading
 import napari
 from chromatin_tracing_python.tracer import Tracer
-from chromatin_tracing_python.drift_correction import Drifter
+from chromatin_tracing_python.drift_correction_tracing import Drifter
 import chromatin_tracing_python.image_processing_functions as ip
 
 
