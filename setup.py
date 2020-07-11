@@ -28,6 +28,7 @@ setuptools.setup(
           'joblib',
           'tifffile',
           'czifile',
-          'pyyaml'
+          'pyyaml',
+          'dask'
       ]
 )

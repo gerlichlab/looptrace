@@ -20,7 +20,8 @@ def main():
     
     input_folder = config['input_folder']
     output_folder = config['output_folder']
-    output_filename = config['drift_output_filename']
+    output_prefix = config['output_file_prefix']
+    dc_image_folder = config['dc_image_folder']
     filetypes = config['image_filetype']
     template = config['image_template']
     threshold = config['bead_threshold']
@@ -30,12 +31,12 @@ def main():
     points = config['bead_points']
     dc_image_scale = config['dc_image_scaling']
     
-    if os.path.exists(output_folder+os.sep+output_filename):
+    if os.path.exists(output_folder+os.sep+output_prefix+'drift_correction.csv'):
         skip=input('Existing drift correction file found, skip calculating drift? (y/n)')
         if skip != 'y':
             drift = dc.drift_corr_mypic_h5(input_folder,
                                 output_folder,
-                                output_filename,
+                                output_prefix,
                                 threshold, 
                                 min_bead_int, 
                                 points, 
@@ -48,7 +49,7 @@ def main():
     else:
         drift = dc.drift_corr_mypic_h5(input_folder,
                     output_folder,
-                    output_filename,
+                    output_prefix,
                     threshold, 
                     min_bead_int, 
                     points, 
@@ -62,8 +63,9 @@ def main():
     
         dc.apply_drift_corr_mypic(input_folder,
                                output_folder,
-                               dc_file,
-                               filetype,
+                               dc_image_folder,
+                               output_prefix,
+                               filetypes,
                                template,
                                dc_image_scale)
     else:

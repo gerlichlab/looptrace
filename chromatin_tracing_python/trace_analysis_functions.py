@@ -12,11 +12,17 @@ import plotly.graph_objs as go
 import plotly.express as px
 from scipy import interpolate
 from scipy import stats
+import scipy.ndimage as ndi
 from scipy.spatial.distance import cdist
 from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
+
 import matplotlib.pyplot as plt
 import napari
 from joblib import Parallel, delayed
+import dask.array as da
+from chromatin_tracing_python import image_processing_functions as ip
+import h5py
+
 
 def plot_fits(traces, imgs, mode='2D', contrast=(100,10000)):
     points = points_for_overlay(traces)
@@ -455,7 +461,7 @@ def elongation(point_set):
     eigen_vals, eigen_vecs = np.linalg.eig(cov)
     #Elongation is the ratio of the secondary eigenvalue to primary eigenvalue
     eigen_vals = np.sort(eigen_vals)[::-1]
-    print('Eigenvalues are ', eigen_vals))
+    print('Eigenvalues are ', eigen_vals)
     elongation = 1-(eigen_vals[1]/eigen_vals[0])
     return elongation
 
