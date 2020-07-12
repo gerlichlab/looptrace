@@ -197,7 +197,7 @@ class Tracer:
                 roi_image_shifted = delayed(ndi.shift)(roi_image_exp, (dz, dy, dx))
                 roi_images.append(roi_image_shifted)
                 #Add some parameters for tracing table
-                frame_index.append([index, frame, roi['position'], roi['roi_id'], dz, dy, dx])
+                frame_index.append([roi.name, frame, roi['position'], roi['roi_id'], dz, dy, dx])
             #Add all the results per timepoint, compute on delayed dask objects.
             trace_res.append(dask.compute(*frame_result))
             trace_index.append(frame_index)
@@ -238,61 +238,6 @@ class Tracer:
         all_images = np.stack(all_images)
         self.save_data(traces=traces, imgs=all_images)
         return traces, all_images
-
-    def tracing_qc(self, row):
-        '''
-        Function to set QC value of each fit based on 
-        settings from config file.
-        '''
-        
-        A_to_BG=self.config['A_to_BG']
-        sigma_xy_max=self.config['sigma_xy_max']
-        sigma_z_max=self.config['sigma_z_max']
-        man_qc=self.config['man_qc']
-        if row['A']<(A_to_BG*row['BG']):
-            return 0
-        elif row['sigma_xy'] > sigma_xy_max or row['sigma_z'] > sigma_z_max:
-            return 0
-        elif row['frame'] in man_qc:
-            return 0
-        elif row['x_px']<0 or row['y_px'] < 0 or row['z_px']<0:
-            return 0
-        elif row['x_px']>100 or row['y_px'] > 100 or row['z_px'] > 100:
-            return 0
-        else:
-            return 1
-        
-    def group_mean_qc(self, row, groups):
-        '''
-        Function to set QC value of each row
-        based on group calculation, in this case 
-        number of nm away from group mean each point can be.
-        Preserves original QC, can only change 1 to 0.
-        '''
-        #print(groups.iloc[row.name]['z'])
-        #min_groups=groups-self.config['max_dist_qc']
-        #max_groups=groups+self.config['max_dist_qc']
-        max_dist = self.config['max_dist_qc']
-        z_mean=groups.iloc[row.name]['z']
-        y_mean=groups.iloc[row.name]['y']
-        x_mean=groups.iloc[row.name]['x']
-
-        if row['z']>(z_mean+max_dist) or row['z']<(z_mean-max_dist):
-            return 0
-        if row['y']>(y_mean+max_dist) or row['y']<(y_mean-max_dist):
-            return 0
-        if row['x']>(x_mean+max_dist) or row['x']<(x_mean-max_dist):
-            return 0
-        if row['QC'] == 0:
-            return 0
-        else:
-            return 1
-        
-    def reapply_QC(self,traces):
-        traces['QC']=traces.apply(self.tracing_qc,axis=1)
-        #group_means=traces[traces['frame']==self.config['search_frame']]
-        #traces['QC']=traces.apply(self.group_mean_qc, args=(group_means,), axis=1)
-        return traces
     
     def save_data(self, traces=None, imgs=None, rois=None, pwds=None, pairs=None, config=None, suffix=''):
         output_folder=self.config['output_folder']
