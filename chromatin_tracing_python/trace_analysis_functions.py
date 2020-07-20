@@ -84,7 +84,7 @@ def view_context(all_images,
                               [roi['y_max'], roi['x_max']]])]
 
             for ch in range(all_images.shape[2]):
-                viewer.add_image(all_images[pos_index,:,ch,0], 
+                viewer.add_image(all_images[pos_index,:,ch], 
                                  contrast_limits=contrast[ch], 
                                  blending='additive', 
                                  colormap=colors[ch])
@@ -96,7 +96,7 @@ def view_context(all_images,
                                        face_color='transparent')
         else:
             for ch in range(all_images.shape[2]):
-                viewer.add_image(all_images[:,:,ch,0], 
+                viewer.add_image(all_images[:,:,ch], 
                                  contrast_limits=contrast[ch], 
                                  blending='additive', 
                                  colormap=colors[ch])
@@ -302,7 +302,11 @@ def general_procrustes_analysis(traces, trace_ids, crit=0.01):
         n_cycles += 1
         
     print('GPA converged after {} cycles with distance {}'.format(n_cycles, dist))
-    return all_points, points_mean
+    all_points_aligned = np.stack([rigid_transform_3D(offset, points_mean) for 
+                          offset in all_points])
+    points_std = np.nanstd(all_points_aligned, axis = 0)
+
+    return all_points, points_mean, points_std
         
 def general_procrustes_loop(all_points, template):
     # Align all to template
@@ -601,6 +605,7 @@ def plot_traces(traces, trace_id):
                                   mode ='lines',
                                   showlegend=False))
     iplot(fig)
+    return fig
 
 def plot_aligned_traces(traces, idx):
     all_points = points_from_traces(traces, idx)
@@ -627,6 +632,7 @@ def plot_aligned_traces(traces, idx):
 
     fig = go.Figure(data=scatters)
     iplot(fig)
+    return fig
     
 def plot_paired_traces(traces, trace_ids):
     '''
@@ -661,6 +667,7 @@ def plot_paired_traces(traces, trace_ids):
                                        mode='lines')])
     
     iplot(fig)
+    return fig
     
 def plot_gpa_output(aligned_points, mean_points, cluster_members):
     
@@ -702,6 +709,7 @@ def plot_gpa_output(aligned_points, mean_points, cluster_members):
     fig = go.Figure(data=scatters)
     
     iplot(fig)
+    return fig
     
 def plot_multi_points(list_of_points, names = None):
     scatters = []
@@ -729,3 +737,4 @@ def plot_multi_points(list_of_points, names = None):
     fig = go.Figure(data=scatters)
     
     iplot(fig)
+    return fig

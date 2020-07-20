@@ -10,7 +10,7 @@ import pandas as pd
 from read_roi import read_roi_zip, read_roi_file
 import scipy.ndimage as ndi
 import chromatin_tracing_python.image_processing_functions as ip
-from chromatin_tracing_python.gaussfit import fitSymmetricGaussian3D
+from chromatin_tracing_python.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
 from skimage.measure import regionprops_table
 import h5py
 import tifffile as tiff
@@ -19,16 +19,20 @@ from dask import delayed
 from dask.distributed import Client
 
 class Tracer:
-    def __init__(self, config_path):
+    def __init__(self, config_path, dc_path):
         '''
         Initialize Tracer class with config read in from YAML file.
     '''
         self.config_path = config_path
         self.config = ip.load_config(config_path)
-        self.drift_table = pd.read_csv(self.config['output_folder']+os.sep+self.config['output_file_prefix']+'drift_correction.csv')
-        self.images, self.pos_list = ip.svih5_to_dask(self.config['input_folder'], self.config['image_filetype']+self.config['image_template'])
+        self.drift_table = pd.read_csv(dc_path)
+        self.images, self.pos_list = ip.images_to_dask(self.config['input_folder'], self.config['image_filetype']+self.config['image_template'])
         self.images_shape = self.images.shape
+        print('Loaded images of shape ', self.images_shape)
+        print('Found positions ', self.pos_list)
         self.client = Client()
+        self.fit_funcs = {'LS': fitSymmetricGaussian3D, 'MLE': fitSymmetricGaussian3DMLE}
+        self.fit_func = self.fit_funcs[self.config['fit_func']]
 
     '''
     def extract_nuc_ilastik(self):
@@ -61,7 +65,7 @@ class Tracer:
         for position in self.pos_list:
             print(f'Detecting spots in position {position}.')
             pos_index = self.pos_list.index(position)
-            img = self.images[pos_index, ref_slice, trace_ch, 0]
+            img = self.images[pos_index, ref_slice, trace_ch]
             spot_img, num_spots = ndi.label(ndi.binary_dilation(img>spot_threshold, iterations = 5))
             spot_props=pd.DataFrame(regionprops_table(spot_img, 
                                                 properties=('label',
@@ -129,7 +133,7 @@ class Tracer:
 
     def trace_single_roi_frame(self, img):
         max_ind=list(np.unravel_index(np.argmax(img, axis=None), img.shape))
-        fit_results=delayed(fitSymmetricGaussian3D)(img,1,max_ind)
+        fit_results=delayed(self.fit_func)(img,1,max_ind)
         return fit_results
 
     def tracing_3d(self):
@@ -147,7 +151,7 @@ class Tracer:
         trace_ch = self.config['trace_ch']
         roi_image_size = self.config['roi_image_size']
         roi_table = self.roi_table[self.roi_table['position'].isin(self.pos_list)]
-
+        
         #Setup loop over each timepoint.
         trace_index = []
         trace_res = []
@@ -169,8 +173,7 @@ class Tracer:
                 roi_slice, pad, good = self.slice_for_roi(roi, drift_table_row)
                 roi_image = np.array(self.images[pos_index, 
                                                 frame, 
-                                                trace_ch, 
-                                                0, 
+                                                trace_ch,
                                                 roi_slice[0], 
                                                 roi_slice[1],
                                                 roi_slice[2]])
