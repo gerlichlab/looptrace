@@ -75,6 +75,6 @@ def fitSymmetricGaussian3DMLE(data, sigma, center):
     params = [numpy.min(data),
               numpy.max(data)]
     params += center
-    params += [2.0 * sigma,
-              2.0 * sigma]
+    params += [sigma,
+               sigma]
     return fitAFunctionMLE(data, params, symmetricGaussian3D)

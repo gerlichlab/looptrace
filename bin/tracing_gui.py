@@ -29,6 +29,8 @@ def main():
         [sg.Button('Run drift correction', key='-RUN_DC-'),
         sg.Button('Apply drift correction', key='-APPLY_DC-')],
         [sg.Text('_'*50)],
+        [sg.Text('Choose drift correction file:')],
+        [sg.InputText('Drift correction file', key='-DC_PATH-'), sg.FileBrowse()],
         [sg.Button('Initialize images for tracing', key='-TRACER-'),
         sg.Button('View images for tracing', key='-VIEW_IMAGES-', disabled=True),
         sg.Button('Reload config', key='-RELOAD-', disabled=True)],
@@ -65,7 +67,7 @@ def main():
             dc_thread = threading.Thread(target = D.apply_drift_corr_mypic)
             dc_thread.start()
         elif event == '-TRACER-':
-            T = Tracer(values['-CONFIG_PATH-'])
+            T = Tracer(values['-CONFIG_PATH-'], values['-DC_PATH-'])
             window['-VIEW_IMAGES-'].update(disabled = False)
             window['-RELOAD-'].update(disabled = False)
         elif event == '-VIEW_IMAGES-':
