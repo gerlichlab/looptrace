@@ -1,9 +1,0 @@
-#Settings for SR analysis
-const_gauss_sigma: 20
-cam_px: 512
-cam_nm: 103
-clip: 2
-grid_px_size: 10
-output_res: 4096
-dbscan_eps: 200
-dbscan_mins: 100

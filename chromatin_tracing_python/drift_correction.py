@@ -13,7 +13,7 @@ import chromatin_tracing_python.image_processing_functions as ip
 from joblib import Parallel, delayed
 import yaml
 import tifffile as tiff
-
+import re
 def drift_corr_cc(t_img, o_img, upsampling=1, downsampling=1):
     '''
     Performs drift correction by cross-correlation.
@@ -181,7 +181,10 @@ def drift_corr_image_list(file_list, output_folder, course_ch, fine_ch):
     metadata = ip.read_czi_meta(template_path, tags)
     metadata['SizeT']=str(len(file_list))
     metadata['Drift_correction'] = 'Cross correlation'
-    filename=metadata['Title'][4:-11]
+    
+    filename=re.split('_T[0-9]{4}', os.path.basename(file_list[0]))[0]
+    
+    # filename=metadata['Title'][4:-11]
     print(output_folder+os.sep+filename+'_dc.tif')
     #Save metadata and image file in specified output folder.
     with open(output_folder+os.sep+filename+'_dc.yaml', 'w') as file:

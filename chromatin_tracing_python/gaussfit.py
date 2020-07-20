@@ -21,7 +21,7 @@ def fitAFunctionLS(data, params, fn):
     err = errorfunction(result)
     err = scipy.sum(err * err)
     if (success < 1) or (success > 4):
-        print("Fitting problem!", success, mesg)
+        #print("Fitting problem!", success, mesg)
         good = False
     return [result, good]
 
@@ -41,7 +41,7 @@ def fitAFunctionMLE(data, params, fn):
     except:
         warnflag = 1
     if (warnflag != 0):
-        print("Fitting problem!")
+        #print("Fitting problem!")
         good = False
     return [result, good]
 
@@ -75,6 +75,6 @@ def fitSymmetricGaussian3DMLE(data, sigma, center):
     params = [numpy.min(data),
               numpy.max(data)]
     params += center
-    params += [sigma,
-               sigma]
+    params += [2.0 * sigma,
+              2.0 * sigma]
     return fitAFunctionMLE(data, params, symmetricGaussian3D)

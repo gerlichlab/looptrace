@@ -1,0 +1,39 @@
+input_folder: M:\ChromatinTeam\Images_processing\2020-06-30_Exp334_KSB_Elyra_tracing_myc_D1-10_TSA_Ibidi_2B\01_DECON
+output_folder: M:\ChromatinTeam\Images_processing\2020-06-30_Exp334_KSB_Elyra_tracing_myc_D1-10_TSA_Ibidi_2B\03_Analysis
+dc_image_folder: M:\ChromatinTeam\Images_processing\2020-06-30_Exp334_KSB_Elyra_tracing_myc_D1-10_TSA_Ibidi_2B\02_DC
+output_file_prefix: 2020-06-30_Exp334_KSB_Elyra_tracing_myc_D1-10_TSA_Ibidi_2B_
+
+image_filetype: 
+    - '.h5'
+image_template: 
+    - 'DE_2'
+dc_image_scaling: 0.5
+
+#Camera properties
+xy_nm: 97
+z_nm: 200
+
+#Fiducial parameters (NB! 0-based, also the timepoints):
+bead_ch: 0
+bead_reference_timepoint : 11
+bead_threshold: 5000
+min_bead_intensity: 10000
+bead_points: 20
+
+#Tracing parameters (NB! 0-based, also the timepoints):
+trace_ch: 1
+ref_slice: 11
+spot_threshold: 12000
+
+roi_image_size:
+    - 16
+    - 32
+    - 32
+    
+A_to_BG: 5
+sigma_xy_max: 120
+sigma_z_max: 300
+man_qc_frame:
+    - 0
+max_qc_trace_id:
+    - -1
