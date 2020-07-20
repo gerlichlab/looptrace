@@ -1,0 +1,42 @@
+#General settings
+output_folder: M:\ChromatinTeam\Images_processing\2020-06-15-Exp333_KSB_Elyra_DAPI_TADs_SIM_temp_brdu\Comparison\6C
+output_name: 333_6C
+filetype:
+    - '.czi'
+tags:
+    - 'Title'
+    - 'SizeX'
+    - 'SizeY'
+    - 'SizeZ'
+    - 'SizeC'
+    - 'SizeS'
+    - 'Model'
+    - 'System'
+    - 'ScalingX'
+    - 'ScalingY'
+    - 'ScalingZ'
+
+
+#Settings for nuclear segmentation.   
+nuc_ch: 1
+min_nuc_vol: 100000
+nuc_exp_bb:
+    - 51
+    - 600
+    - 600
+
+#Settings for comparison functions
+threshold_comparison: 0
+comp_folder_1: M:\ChromatinTeam\Images_processing\2020-06-15-Exp333_KSB_Elyra_DAPI_TADs_SIM_temp_brdu\Before_FISH\6C
+comp_folder_2: M:\ChromatinTeam\Images_processing\2020-06-15-Exp333_KSB_Elyra_DAPI_TADs_SIM_temp_brdu\After_FISH\6C
+template_comp_1: 
+    - 'DE_2'
+template_comp_2: 
+    - 'DE_2'
+analysis_channels:
+    - 0
+    - 1
+plot_ssim: 0
+#For merging and drift correcting whole image, not used for single nuclei comparison.
+drift_correction_channel: 1
+
