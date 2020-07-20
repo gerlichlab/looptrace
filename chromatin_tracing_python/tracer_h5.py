@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Created on Thu Apr 23 09:26:44 2020
 
@@ -8,28 +7,28 @@ import os
 import yaml
 import numpy as np
 import pandas as pd
-from gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
+from chromatin_tracing_python.gaussfit import fitSymmetricGaussian3D
 from read_roi import read_roi_zip, read_roi_file
-from skimage.filters import gaussian
-from scipy.stats import mode
+#from skimage.filters import gaussian
+#from scipy.stats import mode
 import scipy.ndimage as ndi
-import image_processing_functions as ip
-import tracing_functions as tr
-import h5py
+from scipy import stats
+import chromatin_tracing_python.image_processing_functions as ip
+#import tracing_functions as tr
+#import h5py
 import tifffile as tiff
-from joblib import Parallel, delayed
+#from joblib import Parallel, delayed
 
-class Tracer:
+class Tracer_decon:
     def __init__(self, config_path):
         '''
         Initialize Tracer class with config read in from YAML file.
         '''
-    
         self.config = ip.load_config(config_path)
-        self.config_path = config_path
+        self.drift_table = pd.read_csv(self.config['drift_table'])
         self.trace_id = 0
     
-    def tracing_multi(self):
+    def tracing_multi_decon(self):
         '''
         Perfors maxima tracing of all images at matching ROIs in folders.
     
@@ -54,9 +53,12 @@ class Tracer:
         roi_template = self.config['roi_template']
         image_list = ip.all_matching_files_in_subfolders(image_folder,image_template)
         roi_list = ip.all_matching_files_in_subfolders(roi_folder,roi_template)
-        image_list = ip.match_file_lists(roi_list, image_list)        
+        image_list = [ip.match_file_lists_decon([roi], image_list) for
+                      roi in roi_list]
+        
         # res is a list of tuples, each with a list of lists for each image/roi set
-        res = [self.tracing_3d(image_path, roi_path) for image_path, roi_path in zip(image_list, roi_list)]
+        res = [self.tracing_3d_decon(image_paths, roi_path) for 
+               image_paths, roi_path in zip(image_list, roi_list)]
         
         #Unpack res into traces and images
         traces, imgs = list(zip(*res))
@@ -67,7 +69,7 @@ class Tracer:
         
         return traces, imgs
 
-    def tracing_3d(self, image_path, roi_path):
+    def tracing_3d_decon(self, image_paths, roi_path):
         '''
         Fits gaussian maxima over time in list of ROIs in a given image.
     
@@ -83,42 +85,15 @@ class Tracer:
     
         '''
         #Read parameters from config.
-        min_nuc_size=self.config['min_nuc_size']
-        nuc_ch=self.config['nuc_ch']
-        nuc_frame=self.config['nuc_frame']
-        
-        bead_ch = self.config['bead_ch']
-        bead_thresh = self.config['bead_threshold']       
-        min_bead_int = self.config['min_bead_intensity']
-        bead_points = self.config['bead_points']
-        
+                
         trace_ch=self.config['trace_ch']
         crop_z = self.config['crop_z']
         roi_image_size = self.config['roi_image_size']
-        man_qc = self.config['man_qc']
-        
-        # Read in tif image from with course drift correction, and
-        # reorganize from imageJ TZCYX to Python TCZYX format.
-        image=ip.read_tif_image(image_path)
-        image=np.moveaxis(image, 1, 2)
-        print('Loaded image ', image_path)
-        
-        #Define image name and final image size for stacking.
-        image_name=image_path.split('\\')[-1].split('.')[0]
-        exp_shape=[image.shape[0]]+roi_image_size
-        
-        #Detect nuclei and data about nuclei.
-        nuc_labels, nuc_props = ip.detect_nuclei(image[nuc_frame,nuc_ch], min_nuc_size)
-        print('Nuclei detection completed.')
-        #Detect subpixel drift correction from fiducials.
-        drift = Parallel(n_jobs=-2)(delayed(ip.drift_corr_multipoint_cc)(image[0],
-                                             image[i],
-                                             bead_ch,
-                                             bead_thresh,
-                                             min_bead_int,
-                                             points=bead_points)
-                 for i in range(image.shape[0]))
-        print('Drift correction completed. Drift: ', drift)
+        roi_scale = self.config['dc_scale_factor']
+        drift_table = self.drift_table
+        image_name=roi_path.split('\\')[-1].split('__')[0]
+        print('Tracing image ', image_name)
+
         #Read ImageJ ROIs from .roi or .zip file.
         if roi_path[-3:] == 'roi':
             rois=read_roi_file(roi_path)
@@ -136,47 +111,64 @@ class Tracer:
             #Expand roi to even numbers for consistency.
             roi['height']=roi['height']+roi['height']%2
             roi['width']=roi['width']+roi['width']%2
-            
-            # Generate cropped image and expand with zeros from ROI and config specification
-            crop_pos=(0, max(0,roi['position']['slice']-8), roi['top'], roi['left'])
-            crop_size=(image.shape[0], crop_z, roi['height'], roi['width'])
-            crop_img=ip.crop_at_pos(image[:,trace_ch,:,:,:], crop_pos, crop_size)
-            
+                        
             # Find transposition coordinates to transpose fit to 
             # correct place in ROI.
-            transp_z=(exp_shape[1]-crop_z)/2
-            transp_y=(exp_shape[2]-roi['height'])/2
-            transp_x=(exp_shape[3]-roi['width'])/2
-            
-            #Find out which nucleus the ROI belongs to.
-            nuc_roi=ip.crop_at_pos(nuc_labels, crop_pos[1:], crop_size[1:])
-            try:
-                nuc_id=mode(nuc_roi[nuc_roi>0], axis=None)[0][0]
-            except IndexError:
-                nuc_id = 0
+            transp_z=(roi_image_size[0]-crop_z)/2
+            transp_y=(roi_image_size[1]-roi['height']//roi_scale)/2
+            transp_x=(roi_image_size[2]-roi['width']//roi_scale)/2
             
             #Prepare loop over each timepoint/exchange.
             roi_coords=[]
             trace_id=self.trace_id
-            
-            for t in range(image.shape[0]):
-                # Select image and optionally filter, 
-                # find max index of DoG of image to initialize LS gaussian.
-                img=crop_img[t]
-                if self.config['pre_filter']==1:
-                    img=ndi.median_filter(img,2)
-                dog=gaussian(img,1)-gaussian(img,10)
-                max_ind=list(np.unravel_index(np.argmax(dog, axis=None), dog.shape))
-                roi_coords.append([trace_id, image_name, roi_id, nuc_id, t]+
+            t_img=[]
+            for image_path in image_paths:
+                # Determine image name.
+                image_name=image_path.split('\\')[-1]
+                
+                #Read drift from drift table.
+                drift_table_row = drift_table.loc[drift_table['filename'] == image_name]
+                t = int(drift_table_row['frame'])
+                z_drift_course = int(drift_table_row['z_px_course'])
+                y_drift_course = int(drift_table_row['y_px_course'])
+                x_drift_course = int(drift_table_row['x_px_course'])
+                z_drift_fine = float(drift_table_row['z_px_fine'])
+                y_drift_fine = float(drift_table_row['y_px_fine'])
+                x_drift_fine = float(drift_table_row['x_px_fine'])
+                
+                #Determine ROI box from ImageJ ROI, set to 0-index, account for drift.
+                z_min = int(roi['position']['slice']-1-crop_z//2-z_drift_course)
+                z_max = int(roi['position']['slice']-1-z_drift_course+crop_z//2)
+                y_min = int((roi['top']-1)/roi_scale-y_drift_course)
+                y_max = int(y_min + roi['height']/roi_scale)
+                x_min = int((roi['left']-1)/roi_scale-x_drift_course)
+                x_max = int(x_min + roi['width']/roi_scale)
+                
+                sz=slice(max(0,z_min), z_max)
+                sy=slice(y_min, y_max)
+                sx=slice(x_min, x_max)
+                print('Tracing at ', sz, sy, sx)
+                img=ip.image_from_svih5(image_path, ch=trace_ch, index=(sz,sy,sx))
+                
+                if z_min < 0:
+                    print('Found low image, padding from shape ', img.shape)
+                    img=np.pad(img,((-z_min,0),(0,0),(0,0)), mode='edge')
+                    print('Padded image to', img.shape)
+                
+                max_ind=list(np.unravel_index(np.argmax(img, axis=None), img.shape))
+                roi_coords.append([trace_id, image_name, roi_id, t]+
                                   [*fitSymmetricGaussian3D(img,1,max_ind)[0]]+
                                   [transp_z, transp_y, transp_x]+
-                                  [*drift[t]])
-            
+                                  [z_drift_fine, y_drift_fine, x_drift_fine])
+                
+                img = ip.pad_to_shape(img, roi_image_size)
+
+                img = ndi.shift(img, (z_drift_fine, y_drift_fine, x_drift_fine))
+                t_img.append(img)
             # Add parameters to a list of pd DataFrames and images to list of images.
             all_coords.append(pd.DataFrame(roi_coords, columns=["trace_ID",
                                                                 "img_name",
                                                                 "roi_ID",
-                                                                "cell_ID",
                                                                 "frame",
                                                                 "BG", 
                                                                 "A", 
@@ -192,13 +184,8 @@ class Tracer:
                                                                 'drift_y',
                                                                 'drift_x']))
             
-            # Pad and drift correct the spot image.
-            
-            crop_img=ip.pad_to_shape(crop_img, exp_shape)
-            crop_img=np.stack([ndi.shift(crop_img[i], s) for 
-                               i, s in enumerate(drift)])
-            
-            all_imgs.append(crop_img)
+           
+            all_imgs.append(np.stack(t_img, axis=0))
             roi_id+=1
             self.trace_id+=1
             print('ROI {} of {} finished tracing.'.format(roi_id,num_rois))
@@ -214,7 +201,7 @@ class Tracer:
         traces['x']=traces['x_px']*self.config['xy_nm']
         traces['sigma_z']=traces['sigma_z']*self.config['z_nm']
         traces['sigma_xy']=traces['sigma_xy']*self.config['xy_nm']
-        traces=traces.set_index(['trace_ID', 'img_name', 'roi_ID', 'cell_ID', 'frame'])
+        traces=traces.set_index(['trace_ID'])
         
         #Stack list of trace images to single array.
         imgs=np.stack(all_imgs)
@@ -235,7 +222,7 @@ class Tracer:
             return 0
         elif row['sigma_xy'] > sigma_xy_max or row['sigma_z'] > sigma_z_max:
             return 0
-        elif row.name[4] in man_qc:
+        elif row['frame'] in man_qc:
             return 0
         elif row['x_px']<0 or row['y_px'] < 0 or row['z_px']<0:
             return 0
@@ -251,14 +238,19 @@ class Tracer:
         number of nm away from group mean each point can be.
         Preserves original QC, can only change 1 to 0.
         '''
-        
-        min_groups=groups-1000
-        max_groups=groups+1000
-        if max_groups.iloc[row.name[0]]['z']>row['z']<min_groups.iloc[row.name[0]]['z']:
+        #print(groups.iloc[row.name]['z'])
+        #min_groups=groups-self.config['max_dist_qc']
+        #max_groups=groups+self.config['max_dist_qc']
+        max_dist = self.config['max_dist_qc']
+        z_mean=groups.iloc[row.name]['z']
+        y_mean=groups.iloc[row.name]['y']
+        x_mean=groups.iloc[row.name]['x']
+
+        if row['z']>(z_mean+max_dist) or row['z']<(z_mean-max_dist):
             return 0
-        if max_groups.iloc[row.name[0]]['y']>row['y']<min_groups.iloc[row.name[0]]['y']:
+        if row['y']>(y_mean+max_dist) or row['y']<(y_mean-max_dist):
             return 0
-        if max_groups.iloc[row.name[0]]['x']>row['x']<min_groups.iloc[row.name[0]]['x']:
+        if row['x']>(x_mean+max_dist) or row['x']<(x_mean-max_dist):
             return 0
         if row['QC'] == 0:
             return 0
@@ -267,7 +259,7 @@ class Tracer:
         
     def reapply_QC(self,traces):
         traces['QC']=traces.apply(self.tracing_qc,axis=1)
-        group_means=traces.query('QC==1').groupby(level=0).mean()
+        group_means=traces[traces['frame']==self.config['search_frame']]
         traces['QC']=traces.apply(self.group_mean_qc, args=(group_means,), axis=1)
         return traces
     
@@ -281,7 +273,7 @@ class Tracer:
         if pwds is not None:
             np.save(output_file+'_pwds'+suffix+'.npy',pwds)
         if imgs is not None:
-            imgs=np.moveaxis(imgs,1,2)
+            imgs=np.moveaxis(imgs,0,2)
             tiff.imsave(output_file+'_imgs'+suffix+'.tiff', imgs, imagej=True)
         if pairs is not None:
             pairs.to_hdf(output_file+'_pairs'+suffix+'.h5', key='pairs', mode='w')

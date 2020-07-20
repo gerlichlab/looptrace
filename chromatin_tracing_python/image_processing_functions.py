@@ -10,154 +10,9 @@ import yaml
 import czifile as cz
 import tifffile as tiff
 import os
-import re
 import numpy as np
-import pandas as pd
 from xml.etree import cElementTree as ElementTree
 import h5py
-import dask
-import dask.array as da
-import itertools
-from read_roi import read_roi_zip, read_roi_file
-
-def images_to_dask(folder, template):
-    if '.h5' in template:
-        x, groups = svih5_to_dask(folder, template)
-    elif '.czi' in template or '.tif' in template or '.tiff' in template:
-        x, groups = czi_tif_to_dask(folder, template)
-    return x, groups
-
-def svih5_to_dask(folder, template):
-    all_files = all_matching_files_in_subfolders(folder, template)
-    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
-
-    pos_stack=[]
-    with h5py.File(all_files[0], mode='r') as f:
-        shape = f[list(f.keys())[0]]['ImageData']['Image'].shape
-
-    for g in grouped_files:
-        dask_arrays = []
-        for fn in g:
-            f = h5py.File(fn, mode='r')
-            d = f[list(f.keys())[0]]['ImageData']['Image']
-            array = da.from_array(d, chunks=(1, 1, 1, shape[-2], shape[-1]))
-            dask_arrays.append(array)
-        pos_stack.append(da.stack(dask_arrays, axis=0))
-    x = da.stack(pos_stack, axis=0)[...,0,:,:,:]
-    print('Loaded images, final shape ', x.shape)
-    return x, groups
-
-def czi_tif_to_dask(folder, template):
-    all_files = all_matching_files_in_subfolders(folder, template)
-    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
-    #print(groups, pos_list)
-    
-    if '.czi' in template:
-        sample = read_czi_image(all_files[0])
-    elif '.tif' in template or '.tiff' in template:
-        sample = read_tif_image(all_files[0])
-    else:
-        raise TypeError('Input filetype not yet implemented.')
-
-    pos_stack=[]
-    for g in grouped_files:
-        dask_arrays = []
-        for fn in g:
-            if '.czi' in template:
-                d = dask.delayed(read_czi_image)(fn)
-            elif '.tif' in template or '.tiff' in template:
-                d = dask.delayed(read_tif_image)(fn)
-            array = da.from_delayed(d, shape=sample.shape, dtype=sample.dtype)
-            dask_arrays.append(array)
-        pos_stack.append(da.stack(dask_arrays, axis=0))
-    x = da.stack(pos_stack, axis=0)
-    
-    return x, groups
-
-'''
-# WORK IN PROGRESS:
-
-def czi_to_dask(folder, template):
-    all_files = all_matching_files_in_subfolders(folder, template)
-    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
-    sample= cz.CziFile(all_files[0])
-    (_,_,C,_,Z,Y,X,_) = sample.shape
-    block = sample.subblock_directory[0].data_segment().data()
-    group_array=[]
-    for g in grouped_files:
-        pos_stack = []
-        for fn in g:
-            print('Adding file ', fn)
-            img = cz.CziFile(fn)
-            ch_stack = []
-            for c in range(C):
-                z_stack = []
-                for block in img.subblock_directory[c::C]:
-                    d = dask.delayed(block.data_segment().data)()
-                    single_slice = da.from_delayed(d,
-                                                    dtype=block.dtype, 
-                                                    shape=block.shape)
-                    z_stack.append(single_slice)
-                z_stack = da.concatenate(z_stack, axis=4)
-                ch_stack.append(z_stack)
-            ch_stack = da.concatenate(ch_stack, axis=3)
-            pos_stack.append(ch_stack)
-        pos_stack = da.concatenate(pos_stack, axis=2)
-        group_array.append(pos_stack)
-    x = da.concatenate(group_array, axis=1)
-
-    return x[0,...,0], groups
-'''
-
-def rois_from_csv(path):
-    rois = pd.read_csv(path)
-    print('Loaded existing ROIs from ', path)
-    return rois
-
-def rois_from_imagej(roi_folder_path, template = '.zip', crop_size_z = 16, roi_scale = 1):
-    roi_files = all_matching_files_in_subfolders(roi_folder_path, template)
-    all_roi_coords = []
-    for file_id, roi_path in enumerate(roi_files):
-        position = re.search('W[0-9]*', roi_path).group(0)
-        rois=read_roi_zip(roi_path)
-        rois=[rois[k] for k in list(rois)]
-        for roi_id, roi in enumerate(rois):
-            z_min = int(roi['position']['slice']-1-crop_size_z//2)
-            z_max = int(roi['position']['slice']-1+crop_size_z//2)
-            y_min = int((roi['top']-1)/roi_scale)
-            y_max = int(y_min + roi['height']/roi_scale)
-            x_min = int((roi['left']-1)/roi_scale)
-            x_max = int(x_min + roi['width']/roi_scale)
-            all_roi_coords.append([file_id, roi_path, position, roi_id, z_min, z_max, y_min, y_max, x_min, x_max])
-    roi_table = pd.DataFrame(all_roi_coords, columns=[   'file_id',
-                                                            'roi_path',
-                                                            'position', 
-                                                            'roi_id',
-                                                            'z_min',
-                                                            'z_max',
-                                                            'y_min',
-                                                            'y_max',
-                                                            'x_min',
-                                                            'x_max',
-                                                            ])
-    print('Loaded ImageJ ROIs from ', roi_folder_path)
-    return roi_table
-
-def roi_to_napari_shape(roi_table, position):
-    rois_at_pos = roi_table[roi_table['position']==position]
-    roi_shapes = []
-    for i, roi in rois_at_pos.iterrows():
-        roi_shape = np.array([[roi['y_min'], roi['x_min']],[roi['y_max'], roi['x_max']]])
-        roi_shapes.append(roi_shape)
-    roi_props = {'roi_id': rois_at_pos['roi_id'].values}
-    return roi_shapes, roi_props
-
-def update_roi_shapes(shape_layer, roi_table, position):
-    rois = roi_table.copy()
-    new_rois = rois[rois['roi_id'].isin(shape_layer.properties['roi_id'])]
-    rois[rois['position']==position] = new_rois
-    rois = rois.dropna()
-    return rois
 
 def load_config(config_file):
     '''
@@ -175,7 +30,7 @@ def read_czi_image(image_path):
     Reads czi files as arrays using czifile package. Returns only CZYX image.
     '''
     with cz.CziFile(image_path) as czi:
-        image=czi.asarray()[0,0,:,0,:,::-1,:,0]
+        image=czi.asarray()[0,0,:,0,:,:,:,0]
     return image
 
 
@@ -270,11 +125,6 @@ def crop_at_pos(arr, tl_pos, size):
     return arr[s]
                    
 def all_matching_files_in_subfolders(path, template):
-    '''
-    Generates a sorted list of all files with the template in the 
-    filename in directory and subdirectories.
-    '''
-
     files = []
     # r=root, d=directories, f = files
     for r, d, f in os.walk(path):
@@ -282,21 +132,6 @@ def all_matching_files_in_subfolders(path, template):
             if all([s in file for s in template]):
                 files.append(os.path.join(r, file))
     return sorted(files)
-
-def group_filelist(input_list, re_phrase):
-    '''
-    Takes a list of strings (typically filepaths) and groups them according
-    to a given element given by its position after splitting the string at split_char.
-    E.g.for '..._WXXXX_PXXXX_TXXXX.ext' format this will by split_char='_' and element = -3.
-    Returns a list of the , and 
-    '''
-    grouped_list = []
-    groups=[]
-    for k, g in itertools.groupby(sorted(input_list),
-                                  lambda x: re.search(re_phrase, x).group(0)):
-        grouped_list.append(list(g))
-        groups.append(k)
-    return grouped_list, groups
 
 def match_file_lists(t_list,o_list):
     t_list_match = [item.split('__')[0][-5:] for item in t_list]
