@@ -548,6 +548,7 @@ def mat_corr_pcc(mat1,mat2):
     
     return pcc
 
+
 def radius_of_gyration(point_set):
     #Only include points passing QC:
     qc_idx = point_set[:,3] != 0
@@ -594,18 +595,22 @@ def plot_traces(traces, trace_id):
     labels=list(df['frame_name'])
     print(labels)
     fig = px.scatter_3d(df, x='x', y='y', z='z',
-              color=labels)
+              color=labels, color_discrete_sequence = px.colors.sequential.thermal[2:])
     for i in trace_id:
         df_i = df[df['trace_ID'] == i]
-        interp=spline_interp([df_i['z'].values,
-                         df_i['y'].values,
-                         df_i['x'].values])
-        fig.add_trace(go.Scatter3d(x=interp[2], 
-                                   y=interp[1], 
-                                   z=interp[0],
+        z_f, y_f, x_f=spline_interp([df_i['z'].values,
+                                    df_i['y'].values,
+                                    df_i['x'].values])
+        fig.add_trace(go.Scatter3d(x=x_f, 
+                                   y=y_f, 
+                                   z=z_f,
                                   mode ='lines',
-                                  showlegend=False))
+                                  showlegend=False,
+                                  line=dict(color='rgba(31, 119, 180, 0.8)',
+                                               width=5)))
+    fig.update_layout(template='plotly_white', showlegend= False)
     iplot(fig)
+    
     return fig
 
 def plot_aligned_traces(traces, idx):
@@ -614,24 +619,30 @@ def plot_aligned_traces(traces, idx):
     all_points_aligned = [template]+[rigid_transform_3D(offset, template) for 
                           offset in all_points]
     scatters = []
-    cmap = px.colors.qualitative.Light24
+    cmap = px.colors.sequential.thermal[2:]
     for point_id, point_set in enumerate(all_points_aligned):
         idx=np.arange(point_set.shape[0])
         qc_idx = point_set[:,3] != 0
         idx=idx[qc_idx]
         labels=['E'+str(i) for i in idx]
-        cmap_points = [cmap[i%24] for i in idx]
-        point_set_plot = point_set[qc_idx, 0:3]
-        scatters.append(go.Scatter3d(x=point_set_plot[:,2], y=point_set_plot[:,1], z=point_set_plot[:,0], 
-                                     mode='markers+lines', 
+        cmap_points = [cmap[i%10] for i in idx]
+        z,y,x = point_set[qc_idx, 0], point_set[qc_idx, 1], point_set[qc_idx, 2]
+        z_f, y_f, x_f=spline_interp([z,y,x])
+        scatters.append(go.Scatter3d(x=x, y=y, z=z, 
+                                     mode='markers', 
                                      marker_color=cmap_points,
                                      marker_size=9,
                                      opacity=1,
-                                     name='Trace '+str(point_id),
-                                     line=dict(color='#1f77b4',
-                                               width=1)))
-
+                                     name='Trace '+str(point_id)))
+        scatters.append(go.Scatter3d(x=x_f, 
+                            y=y_f, 
+                            z=z_f,
+                            mode ='lines',
+                            showlegend=False,
+                            line=dict(color=px.colors.qualitative.Plotly[point_id],
+                                        width=5)))
     fig = go.Figure(data=scatters)
+    fig.update_layout(template='plotly_white', showlegend= False)
     iplot(fig)
     return fig
     
@@ -673,55 +684,60 @@ def plot_paired_traces(traces, trace_ids):
 def plot_gpa_output(aligned_points, mean_points, cluster_members):
     
     scatters = []
-    cmap = px.colors.qualitative.Light24
+    cmap = px.colors.sequential.thermal
     for point_id, point_set in enumerate(aligned_points):
         idx=np.arange(point_set.shape[0])
         qc_idx = point_set[:,3] != 0
         idx=idx[qc_idx]
         labels=['E'+str(i) for i in idx]
         
-        cmap_points = [cmap[i%24] for i in idx]
+        cmap_points = [cmap[i%12] for i in idx]
         
-        point_set_plot = point_set[qc_idx, 0:3]
-        scatters.append(go.Scatter3d(x=point_set_plot[:,2], y=point_set_plot[:,1], z=point_set_plot[:,0], 
-                                     mode='markers+lines', 
+        z,y,x = point_set[qc_idx, 0], point_set[qc_idx, 1], point_set[qc_idx, 2]
+
+        scatters.append(go.Scatter3d(x=x, y=y, z=z, 
+                                     mode='markers', 
                                      marker_color=cmap_points,
-                                     marker_size=5,
+                                     marker_size=4,
                                      opacity=0.3,
                                      name='Trace '+str(cluster_members[point_id]),
-                                     line=dict(color='#1f77b4',
-                                               width=1)))
+                                     ))
+        scatters.append(go.Scatter3d(x=x,y=y,z=z, 
+                                       mode='lines',
+                                       line=dict(color='rgba(15, 60, 90, 0.2)',
+                                               width=3)))
     
     mean_idx=np.arange(mean_points.shape[0])
     mean_qc = mean_points[:,3] != 0
     mean_idx=mean_idx[mean_qc]
     print(mean_idx)
     #mean_labels=['E'+str(i) for i in mean_idx]
-    mean_cmap = [cmap[i%10] for i in mean_idx]
-    mean_points_plot = mean_points[mean_idx, 0:3]
-
-    mean_fig = scatters.append(go.Scatter3d(x=mean_points_plot[:,2], y=mean_points_plot[:,1], z=mean_points_plot[:,0], 
+    mean_cmap = [cmap[i%12] for i in mean_idx]
+    z_m, y_m, x_m = mean_points[mean_idx, 0], mean_points[mean_idx, 1], mean_points[mean_idx, 2]
+    
+    mean_fig = scatters.append(go.Scatter3d(x=x_m, y=y_m, z=z_m, 
                                             mode='markers+lines', 
                                             marker_color=mean_cmap,
                                             name='Mean',
                                             line=dict(color='#ff7f0e', 
                                                       width=5)))
     
+
     fig = go.Figure(data=scatters)
-    
+    fig.update_layout(template='plotly_dark', showlegend= False)
     iplot(fig)
     return fig
     
 def plot_multi_points(list_of_points, names = None):
     scatters = []
-    cmap = px.colors.qualitative.Light24
+    cmap = px.colors.sequential.thermal
     for point_id, point_set in enumerate(list_of_points):
         idx=np.arange(point_set.shape[0])
         qc_idx = point_set[:,3] != 0
         idx=idx[qc_idx]
         labels=['E'+str(i) for i in idx]
         
-        cmap_points = [cmap[i%24] for i in idx]
+        cmap_points = [cmap[i%12] for i in idx]
         if names is not None:
             name = names[point_id]
         else:
