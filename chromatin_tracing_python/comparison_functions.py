@@ -13,12 +13,29 @@ from scipy.stats import skew, kurtosis
 from skimage.filters import threshold_otsu, gaussian
 
 def kullback_leibler_divergence(p, q):
+    '''
+    Used to score histogram differences, 0 is identical.
+    
+    Parameters
+    ------------
+    p, q: Any numerical list of corresponding values, typically histograms.
+
+    Returns
+    ------------
+    The KLD score.
+
+    '''
+
     p = np.asarray(p)
     q = np.asarray(q)
     filt = np.logical_and(p != 0, q != 0)
     return np.sum(p[filt] * np.log2(p[filt] / q[filt]))
 
 def comp_lbp(img1, img2):
+    '''
+    Comparison of the central 2D slice of a 3D image stack by local binary patterns.
+    Uses Kullback Leibler Divergence to score the similarity of the LBP histograms.
+    '''
     max_z = np.argmax(np.sum(img1, axis=((1,2))))
 
     lbp1 = local_binary_pattern(img1[max_z], 16, 2)
@@ -31,16 +48,28 @@ def comp_lbp(img1, img2):
     return score
 
 def comp_var(img1, img2):
+    '''
+    Ratio of variances of two images.
+    '''
+
     var1 = np.var(img1, axis=None)
     var2 = np.var(img2, axis=None)
     return var2/var1
 
 def comp_skew(img1, img2):
+    '''
+    Ratios of the skews of two images.
+    '''
+
     s1 = skew(img1, axis=None)
     s2 = skew(img2, axis=None)
     return s2/s1
 
 def comp_kurtosis(img1, img2):
+    '''
+    Ratio of the curtiosis of the images.
+    '''
+
     k1 = kurtosis(img1, axis=None)
     k2 = kurtosis(img2, axis=None)
     return k2/k1
@@ -49,24 +78,17 @@ def comp_ssim(img1, img2):
     '''
     Calculates structrual similarity index
     '''
-    #shift_int=np.abs((shift/2).astype(np.int))
-    #s=[slice(shift_int[0],-shift_int[0]),slice(shift_int[1],-shift_int[1]),slice(shift_int[2],-shift_int[2])]       
-    #ssim_out, ssim_image = ssim(img1[s[0],s[1],s[2]],shifted_img[s[0],s[1],s[2]],full=True)
-    #if thresh:
-    #    thresh = threshold_otsu(img1)
-    #    img1 = img1*(img1>thresh)
-    #    img2 = img2*(img2>thresh)
+
     ssim_out, ssim_image = ssim(img1,img2, full=True,  gaussian_weights=True)
-    #if plot:
-    #    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, sharex=True, sharey=True)
-    #    ax1.imshow(img1[15],cmap='gray')
-    #    ax2.imshow(img2[15],cmap='gray')
-    #    ax3.imshow(ssim_image[15],cmap='gist_heat')
 
     return ssim_out, ssim_image
     
 def comp_pcc_man_coloc(img1,img2):
-    
+    '''
+    Pixel-by-pixel colocalization of two images by Pearson's correlation coefficient
+    and Mander's coefficient.
+    '''
+
     #if thresh==True:
     #    thresh = threshold_otsu(img1)
     #    img1 = img1*(img1>thresh)
@@ -85,6 +107,11 @@ def comp_pcc_man_coloc(img1,img2):
     return pcc,mac   
     
 def comp_orb_ratio(img1, img2):
+    '''
+    Detects ORB keypoint features of two images, and calculates distance between all features.
+    Returns the ratio of the median distance as a metric of image distortion.
+    '''
+
     if img2.ndim > 2:
         z_max=np.argmax(np.sum(img1,axis=(1,2)))
         img1=img1[z_max,:,:]
@@ -106,6 +133,11 @@ def comp_orb_ratio(img1, img2):
     return ratio
     
 def comp_area_iou(img1, img2):
+    '''
+    Calculates the integrated pixel area and  
+    intersection over union of area in two images over an Otsu threshold.
+    '''
+
     img1=gaussian(img1,sigma=3)
     img2=gaussian(img2,sigma=3)
     try:

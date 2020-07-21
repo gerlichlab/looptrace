@@ -27,6 +27,7 @@ def tracing_qc(row, qc_dict):
     '''
     Function to set QC value of each fit based on 
     settings from config file.
+    Used with pandas.DataFrame.apply()
     '''
     
     A_to_BG = qc_dict['A_to_BG']
@@ -74,6 +75,11 @@ def view_context(all_images,
                  contrast= ((0,50000),(0,10000),(0,3000)),
                  trace_id = None, 
                  rois = None):
+    '''
+    Convenvience function to view a given ROI in context in napari.
+    If not trace_ID or ROIs given the whole image stack divided by channel is shown.
+    '''
+    
     colors = ['magenta', 'green', 'blue', 'gray']
     with napari.gui_qt():
         viewer = napari.Viewer()
@@ -104,6 +110,10 @@ def view_context(all_images,
 
 
 def view_fits(traces, imgs, rois, config, mode='2D', contrast=(100,10000)):
+    '''
+    Convenience function to view 3d guassian fits on top of 2D (max z-projection) or 3D spot data.
+    '''
+
     points = points_for_overlay(traces, rois, config)
     if mode == '2D':
         imgs=np.max(imgs, axis=2)
@@ -116,6 +126,10 @@ def view_fits(traces, imgs, rois, config, mode='2D', contrast=(100,10000)):
             viewer.add_points(points[:,(0,1,2,3,4)], size=[0,0,3,1,1], face_color='blue', symbol='cross', n_dimensional=True)
 
 def points_for_overlay(traces, rois, config):
+    '''
+    Generate the fits in a format convenient to display as a marker in napari.
+    '''
+
     roi_image_size = config['roi_image_size']
     points_df = traces.copy()
     for i, roi in rois.iterrows():
@@ -196,6 +210,11 @@ def trace_analysis(traces, pwds):
     return output
 
 def single_trace_analysis(traces, pwds, idx1, idx2, idx_p1, idx_p2):
+    '''
+    Perform pairwise analysis of two single traces according to MSE and PCC metrics
+    of their aligned points and their distance matrices.
+    '''
+
     #Get points by their trace indices.
     points_A, points_B = points_from_traces(traces, [idx1,idx2])
     #Align the point sets, note rigid_transform include matching.
@@ -220,6 +239,7 @@ def trace_clustering(paired, metric='pwd_pcc', method='single', color_threshold=
     paired : Paired analysis DataFrame, output of trace_analysis
     metric : One of the similarity metrics from trace_analysis:
             - 'aligned_mse'
+            - 'aligned_pcc'
             - 'pwd_mse'
             - 'pwd_pcc'
     method : see scipy.cluster.hierarchy.linkage documentation
@@ -256,6 +276,11 @@ def trace_clustering(paired, metric='pwd_pcc', method='single', color_threshold=
     '''
 
 def run_gpa_all_clusters(traces, cluster_df, min_cluster = 1):
+    '''
+    Running function to perform GPA analysis on all clusters identified in trace_clustering()
+    with number of members above min_cluster.
+    '''
+
     #Find unique cluster IDs from clustering table.
     cluster_ids=set(cluster_df['cluster'])
     
@@ -266,7 +291,6 @@ def run_gpa_all_clusters(traces, cluster_df, min_cluster = 1):
         if len(cluster_members)>=min_cluster:
             all_cluster_members.append(cluster_members)
 
-    print(all_cluster_members)
     #Perform GPA analysis on each of the clusters seperately.
     all_mean_points = [general_procrustes_analysis(traces, cluster_members)[1]
                         for cluster_members in all_cluster_members]
@@ -277,24 +301,36 @@ def run_gpa_all_clusters(traces, cluster_df, min_cluster = 1):
                             mean_points in all_mean_points]
     #Readd the template to the output.
     aligned_mean_points += [template]
+
     return aligned_mean_points
 
 def general_procrustes_analysis(traces, trace_ids, crit=0.01):
-    
+    '''
+    General procrustes analysis is performed as described in ...
+    Runs until procrustes distance is less than crit.
+
+    Returns all the aligned traces, the mean trace and the std of all the aligned traces.
+    '''
+
     trace_ids=list(trace_ids)
     
     # Make list of all points of selected traces
     all_points = points_from_traces(traces, trace_ids)
+
     # Select a random template for initial loop
     #np.random.seed(1)
     t_idx = np.random.randint(0,len(all_points))
     template = all_points[t_idx]
+
+    #The initial distance before alignment.
     prev_dist = np.sum([procrustes_distance(template, points) for 
                    points in all_points])
     print('Initial distance is', prev_dist)
     
+    #Run the first alignment step:
     all_points, points_mean, dist = general_procrustes_loop(all_points, template)
     
+    #Run the remaining alignment steps until crit is reached:
     n_cycles = 0
     while np.abs(prev_dist-dist) > crit:
         prev_dist = dist
@@ -303,18 +339,21 @@ def general_procrustes_analysis(traces, trace_ids, crit=0.01):
         
     print('GPA converged after {} cycles with distance {}'.format(n_cycles, dist))
     
-    all_points_aligned = np.stack([rigid_transform_3D(offset, points_mean) for 
-                          offset in all_points])
-    points_std = np.nanstd(all_points_aligned, axis = 0)
+    #Calculate standard deviation of all points:
+    points_std = np.nanstd(np.stack(all_points), axis = 0)
 
     return all_points, points_mean, points_std
         
 def general_procrustes_loop(all_points, template):
-    # Align all to template
+    '''
+    A single cycle in the general procrustes analysis.
+    Returns the points in all_points aligned to template,
+    the mean points and the procrustes distance to the mean.
+    '''
+    # Align all point sets to mean template
     all_points_aligned = [rigid_transform_3D(offset, template) for 
                           offset in all_points]
     
-
     #Set values that do not pass QC to nan in new list.
     all_points_aligned_qc=[]
     for points in all_points_aligned:
@@ -331,6 +370,10 @@ def general_procrustes_loop(all_points, template):
     return all_points_aligned, points_mean, dist
     
 def procrustes_distance(points_A, points_B):
+    '''
+    Procrustes distance (identical to RMSE) between two point sets.
+    '''
+
     points_A, points_B = match_two_pointsets(points_A, points_B)    
     dist = np.sqrt(np.mean((points_A-points_B)**2))
     return dist
@@ -435,7 +478,6 @@ def match_two_pointsets(points_A, points_B):
     points_A_matched, points_B_matched : Nx3 (ZYX) numpy ndarrays.
 
     '''
-
 
     match_idx = points_A[:,3] * points_B[:,3] != 0
     points_A_matched = points_A[match_idx,0:3]
@@ -550,17 +592,25 @@ def mat_corr_pcc(mat1,mat2):
 
 
 def radius_of_gyration(point_set):
+    '''
+    Calculate ROG: R = sqrt(1/N * sum((r_k - r_mean)^2) for k points in structure.) 
+    Source: https://en.wikipedia.org/wiki/Radius_of_gyration
+    '''
+
     #Only include points passing QC:
     qc_idx = point_set[:,3] != 0
     point_set_qc = point_set[qc_idx, 0:3]
 
-    # Calculate ROG: R = sqrt(1/N * sum((r_k - r_mean)^2) for k points in structure.) 
-    # Source: https://en.wikipedia.org/wiki/Radius_of_gyration
     points_mean=np.mean(point_set_qc, axis=0)
     rog = np.sqrt(1/points_mean.shape[0] * np.sum((point_set_qc - points_mean)**2))
     return rog
 
 def elongation(point_set):
+    '''
+    Elongation in this case is defined as the ratio between the two primary
+    eigenvalues of the point set.
+    '''
+
     #Only include points passing QC:
     qc_idx = point_set[:,3] != 0
     point_set_qc = point_set[qc_idx, 0:3]
@@ -586,7 +636,11 @@ def plot_traces(traces, trace_id):
     Parameters
     ----------
     traces : pd DataFrame with trace data.
-    idx : Int or list of ints with trace_ID of traces to plot.     
+    trace_id : Int or list of ints with trace_ID of traces to plot.     
+
+    Returns
+    ----------
+    Fig object for saving or further manipulation.
     '''
 
     if type(trace_id) == int:
@@ -614,6 +668,22 @@ def plot_traces(traces, trace_id):
     return fig
 
 def plot_aligned_traces(traces, idx):
+    '''
+    Helper function for plotting one or several aligned traces in one figure.
+    Also plots spline interpolation between points for visualization.
+    
+    Parameters
+    ----------
+    traces : pd DataFrame with trace data.
+    trace_id : Int or list of ints with trace_ID of traces to plot. 
+
+    Returns
+    ----------
+    Fig object for saving or further manipulation.
+
+    '''
+
+
     all_points = points_from_traces(traces, idx)
     template = all_points.pop(0)
     all_points_aligned = [template]+[rigid_transform_3D(offset, template) for 
@@ -646,42 +716,21 @@ def plot_aligned_traces(traces, idx):
     iplot(fig)
     return fig
     
-def plot_paired_traces(traces, trace_ids):
+def plot_gpa_output(aligned_points, mean_points, cluster_members):
     '''
-    Helper function for plotting two aligned traces in one figure.
-    Also plots spline interpolation between points for visualization.
+    Helper function for plotting the results of a GPA analysis.
     
     Parameters
     ----------
-    pair_df : pd DataFrame with paired trace analysis, output of trace_analysis.
-    idx : Int, index of pair from paired dataframe. 
+    aligned_points : List of aligned point sets
+    mean_points: Nx4 array of mean points
+    cluster_members: List of trace_IDs of the aligned points, typically from trace_clustering output
+
+    Returns
+    ----------
+    Fig object for saving or further manipulation.
+
     '''
-    
-    points_A, points_B = points_from_traces(traces, trace_ids)
-    points_B = rigid_transform_3D(points_B, points_A)
-    
-    z_fine1,y_fine1,x_fine1=spline_interp([z1,y1,x1])
-    z_fine2,y_fine2,x_fine2=spline_interp([z2,y2,x2])
-    cmap = px.colors.qualitative.Light24
-    cmap1 = [cmap[i%10] for i in idx1]
-    cmap2 = [cmap[i%10] for i in idx2]
-    labels1=['E'+str(i) for i in idx1]
-    labels2=['E'+str(i) for i in idx2]
-    fig = go.Figure(data=[go.Scatter3d(x=x1, y=y1, z=z1,
-                                       mode='markers+text', 
-                                       marker_color=cmap1),
-                          go.Scatter3d(x=x_fine1,y=y_fine1,z=z_fine1, 
-                                       mode='lines'),
-                          go.Scatter3d(x=x2, y=y2, z=z2,
-                                       mode='markers+text', 
-                                       marker_color=cmap2),
-                          go.Scatter3d(x=x_fine2,y=y_fine2,z=z_fine2, 
-                                       mode='lines')])
-    
-    iplot(fig)
-    return fig
-    
-def plot_gpa_output(aligned_points, mean_points, cluster_members):
     
     scatters = []
     cmap = px.colors.sequential.thermal
@@ -729,6 +778,21 @@ def plot_gpa_output(aligned_points, mean_points, cluster_members):
     return fig
     
 def plot_multi_points(list_of_points, names = None):
+    '''
+    Helper function for plotting, typically used to plot the results of a GPA analysis 
+    for all clusters.
+    
+    Parameters
+    ----------
+    list_of_points : List of Nx4 ndarray (zyx+QC) point sets
+    names: Optinal list of length equals to list_of_points with names of point sets.
+
+    Returns
+    ----------
+    Fig object for saving or further manipulation.
+
+    '''
+    
     scatters = []
     cmap = px.colors.sequential.thermal
     for point_id, point_set in enumerate(list_of_points):

@@ -41,24 +41,42 @@ class Tracer:
         print('Config reloaded. Note images are not reloaded.')
 
     def rois_from_spots(self):
+        '''
+        Autodetect ROIs from spot images using a manual threshold defined in config.
+        
+        Returns
+        ---------
+        A pandas DataFrame with the bounding boxes and identifyer of the detected ROIs.
+        '''
+
+        #Read parameters from config.
         trace_ch = self.config['trace_ch']
         ref_slice = self.config['ref_slice']
         spot_threshold = self.config['spot_threshold']
-        all_rois = []
 
+        #Loop through the imaging positions.
+        all_rois = []
         for position in self.pos_list:
+            #Read correct image
             print(f'Detecting spots in position {position}.')
             pos_index = self.pos_list.index(position)
             img = self.images[pos_index, ref_slice, trace_ch]
+
+            #Threshold, dilate and label image
             spot_img, num_spots = ndi.label(ndi.binary_dilation(img>spot_threshold, iterations = 5))
+            
+            #Make a DataFrame with the ROI info
             spot_props=pd.DataFrame(regionprops_table(spot_img, 
                                                 properties=('label',
                                                             'bbox',
                                                             'centroid'
                                                             )))
-            print(f'Found {num_spots} spots.')
             spot_props['position'] = position
             all_rois.append(spot_props)
+
+            print(f'Found {num_spots} spots.')
+            
+        #Cleanup and saving of the DataFrame
         output = pd.concat(all_rois)
         output=output.reset_index().rename(columns={'bbox-0':'z_min', 
                                                 'bbox-1':'y_min', 
@@ -67,29 +85,46 @@ class Tracer:
                                                 'bbox-4':'y_max', 
                                                 'bbox-5':'x_max',
                                                 'index':'roi_id'})
-        #spot_props[['bbox-0','bbox-1', 'bbox-2', 'bbox-3', 'bbox-4', 'bbox-5']].to_numpy().tolist()
         self.roi_table = output
         self.save_data(rois = self.roi_table)
         return output
 
     def man_qc_rois(self):
+        '''
+        Function to visualize detected ROIs on the image data using napari to verify accuracy.
+        Can modify ROIs if necessary.
+        TODO: Only deleting ROIs implemented so far, moving and adding should be implemented.
+        '''
+        
+        # only visualize on position at the time
         for position in self.pos_list:
             pos_index = self.pos_list.index(position)
+            
+            # Plot the roi as a napari shape and add to napari viewer with image:
             roi_shapes, roi_props = ip.roi_to_napari_shape(rois, position)
             with napari.gui_qt():
                 viewer = napari.view_image(self.images[pos_index], contrast_limits=(0,10000))
                 shape_layer = viewer.add_shapes(roi_shapes, face_color = [0]*4, edge_color='red', edge_width=2, properties=roi_props)
+            
+            # Update the roi_table with any changes made in the viewer
             self.roi_table = update_roi_shapes(shape_layer, self.roi_table, position)
         return self.roi_table
 
 
     def slice_for_roi(self, roi, drift_table_row):
-        Z, Y, X = self.images_shape[-3:]
+        '''
+        Calculate the correct slice object based on a given ROI and drift table
+        '''
 
+        #Find size of image
+        Z, Y, X = self.images_shape[-3:]
+        
+        #Read values from drift table
         z_drift_course = int(drift_table_row['z_px_course'])
         y_drift_course = int(drift_table_row['y_px_course'])
         x_drift_course = int(drift_table_row['x_px_course'])
         
+        #Course drift correct of the ROI: 
         z_min = int(roi['z_min'])-z_drift_course
         z_max = int(roi['z_max'])-z_drift_course
         y_min = int(roi['y_min'])-y_drift_course
@@ -97,6 +132,7 @@ class Tracer:
         x_min = int(roi['x_min'])-x_drift_course
         x_max = int(roi['x_max'])-x_drift_course
 
+        #Handling case of ROI extending beyond image edge after drift correction:
         pad = ((abs(min(0,z_min)),abs(max(0,z_max-Z))),
                (abs(min(0,y_min)),abs(max(0,y_max-Y))),
                (abs(min(0,x_min)),abs(max(0,x_max-X))))
@@ -105,10 +141,12 @@ class Tracer:
         sy = (max(0,y_min),min(Y,y_max))
         sx = (max(0,x_min),min(X,x_max))
 
+        #If drift correction has failed completely this checks if empty ROIs are generated:
         good = True
         if any([a == b for (a,b) in (sz, sy, sx)]):
             good = False
 
+        #Create slice object after above corrections:
         s = (slice(sz[0],sz[1]), 
              slice(sy[0],sy[1]), 
              slice(sx[0],sx[1]))
@@ -116,6 +154,11 @@ class Tracer:
         return s, pad, good
 
     def trace_single_roi_frame(self, img):
+        '''
+        Fit an image, typically with a 3D gaussian function, but any function defined in 
+        fit_func will do that takes similar parameters. Initialized fit at brightest point of image.
+        '''
+
         max_ind=list(np.unravel_index(np.argmax(img, axis=None), img.shape))
         fit_results=delayed(self.fit_func)(img,1,max_ind)
         return fit_results
@@ -161,8 +204,8 @@ class Tracer:
                                                 roi_slice[0], 
                                                 roi_slice[1],
                                                 roi_slice[2]])
+                                                
                 #If microscope drifted, ROI could be outside image. Correct for this:
-                #TODO: Implement for all possibilities.
                 if not good:
                     print('Bad image.')
                     roi_image=np.zeros((10,10,10), dtype=np.float32)

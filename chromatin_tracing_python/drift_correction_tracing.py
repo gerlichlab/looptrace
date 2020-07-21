@@ -28,7 +28,7 @@ class Drifter():
 
     def drift_svih5(self, t_path, o_path):
         '''
-        Calculates dcourse and fine 
+        Calculates course and fine 
         drift between two svih5 images by phase cross correlation.
 
         Parameters
@@ -253,6 +253,8 @@ class Drifter():
             pos_img=np.moveaxis(pos_img,1,2)
             tiff.imsave(dc_image_folder+os.sep+output_prefix+group_ind+'__dc.tif', pos_img, imagej=True)
             print('Saved image '+output_prefix+group_ind+'__dc.tif')
+
+            # In case H5 files want to be used could replace above with this:
             #with h5py.File(output_folder+os.sep+group_ind+'__dc.h5', 'w') as file:
             #    dset=file.create_dataset('Image', data=pos_img)
             #    dset.attrs['element_size_um'] = (0.2, 0.1/scale, 0.1/scale)

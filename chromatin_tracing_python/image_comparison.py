@@ -40,6 +40,8 @@ class Compare:
         self.config = ip.load_config(config_file=self.config_path)
     
     def gen_image_paths(self):
+        #TODO Deprecate this function, gen_comp_image_paths has superseeded this.
+
         config=self.config
         input_folders=config['folders']
         n_dirs = len(input_folders)
@@ -166,11 +168,12 @@ class Compare:
                                        i, row in nuc_props.iterrows()]
                 nuc_masks = [ip.pad_to_shape(img, exp_shape) for img in nuc_masks]
                 nuc_masks = [dilation(img, [square(20)]*10) for img in nuc_masks]
-                imgs1 = [img*mask for img,mask in zip(imgs1,nuc_masks)]
-                imgs2 = [img*mask for img,mask in zip(imgs2,nuc_masks)]
+                imgs1 = [(img*mask).astype(np.float32) for img,mask in zip(imgs1,nuc_masks)]
+                imgs2 = [(img*mask).astype(np.float32) for img,mask in zip(imgs2,nuc_masks)]
             
             #Calculate and set the comparison metrics in output dataframe.
             ssim_out, ssim_images = list(zip(*[comp.comp_ssim(img[0], img[1]) for img in zip(imgs1,imgs2)]))
+            del ssim_images
             pcc, mac = list(zip(*[comp.comp_pcc_man_coloc(img[0], img[1]) for img in zip(imgs1,imgs2)])) 
             orb_ratio = [comp.comp_orb_ratio(img[0], img[1]) for img in zip(imgs1,imgs2)]
             area_ratio, iou = list(zip(*[comp.comp_area_iou(img[0], img[1]) for img in zip(imgs1,imgs2)]))

@@ -21,6 +21,17 @@ import itertools
 from read_roi import read_roi_zip, read_roi_file
 
 def images_to_dask(folder, template):
+    '''Wrapper function to generate dask arrays from image folder.
+
+    Args:
+        folder (string): path to folder
+        template (list of strings): templates files in folder should match.
+
+    Returns:
+        dask array
+        list of groups identified, currectly hardcoded to re_phrase='W[0-9]{4}'
+    '''        
+
     if '.h5' in template:
         x, groups = svih5_to_dask(folder, template)
     elif '.czi' in template or '.tif' in template or '.tiff' in template:
