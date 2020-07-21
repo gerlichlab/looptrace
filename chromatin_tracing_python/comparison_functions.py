@@ -6,10 +6,44 @@ Created on Wed Jun 10 06:23:05 2020
 """
 
 import numpy as np
-from skimage.feature import ORB
+from skimage.feature import ORB, local_binary_pattern
 from skimage.metrics import structural_similarity as ssim
 from scipy.spatial.distance import pdist
+from scipy.stats import skew, kurtosis
 from skimage.filters import threshold_otsu, gaussian
+
+def kullback_leibler_divergence(p, q):
+    p = np.asarray(p)
+    q = np.asarray(q)
+    filt = np.logical_and(p != 0, q != 0)
+    return np.sum(p[filt] * np.log2(p[filt] / q[filt]))
+
+def comp_lbp(img1, img2):
+    max_z = np.argmax(np.sum(img1, axis=((1,2))))
+
+    lbp1 = local_binary_pattern(img1[max_z], 16, 2)
+    lbp2 = local_binary_pattern(img2[max_z], 16, 2)
+    
+    n_bins = 100
+    hist1, _ = np.histogram(lbp1, density=True, bins=n_bins, range=(0, n_bins))
+    hist2, _ = np.histogram(lbp2, density=True, bins=n_bins, range=(0, n_bins))
+    score = kullback_leibler_divergence(hist1, hist2)
+    return score
+
+def comp_var(img1, img2):
+    var1 = np.var(img1, axis=None)
+    var2 = np.var(img2, axis=None)
+    return var2/var1
+
+def comp_skew(img1, img2):
+    s1 = skew(img1, axis=None)
+    s2 = skew(img2, axis=None)
+    return s2/s1
+
+def comp_kurtosis(img1, img2):
+    k1 = kurtosis(img1, axis=None)
+    k2 = kurtosis(img2, axis=None)
+    return k2/k1
 
 def comp_ssim(img1, img2):
     '''

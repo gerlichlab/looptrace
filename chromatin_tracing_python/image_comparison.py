@@ -34,6 +34,7 @@ class Compare:
         
         self.config = ip.load_config(config_path)
         self.config_path = config_path
+        self.save_images = bool(int(self.config['save_comparison_image']))
         
     def reload_config(self):
         self.config = ip.load_config(config_file=self.config_path)
@@ -173,6 +174,10 @@ class Compare:
             pcc, mac = list(zip(*[comp.comp_pcc_man_coloc(img[0], img[1]) for img in zip(imgs1,imgs2)])) 
             orb_ratio = [comp.comp_orb_ratio(img[0], img[1]) for img in zip(imgs1,imgs2)]
             area_ratio, iou = list(zip(*[comp.comp_area_iou(img[0], img[1]) for img in zip(imgs1,imgs2)]))
+            lbp_score = [comp.comp_lbp(img[0], img[1]) for img in zip(imgs1,imgs2)]
+            variance = [comp.comp_var(img[0], img[1]) for img in zip(imgs1,imgs2)]
+            skew = [comp.comp_skew(img[0], img[1]) for img in zip(imgs1,imgs2)]
+            kurtosis = [comp.comp_kurtosis(img[0], img[1]) for img in zip(imgs1,imgs2)]
             
             nuc_props['Channel']=[ch+1]*len(imgs1)
             nuc_props['Title1']=[metadata[0]['Title']]*len(imgs1)
@@ -183,6 +188,10 @@ class Compare:
             nuc_props['ORB_ratio'] = orb_ratio
             nuc_props['Area_ratio']= area_ratio
             nuc_props['IOU'] = iou
+            nuc_props['LBP score'] = lbp_score
+            nuc_props['Variance ratio'] = variance
+            nuc_props['Skew ratio'] = skew
+            nuc_props['Kurtosis ratio'] = kurtosis
             
             nucs.append(nuc_props.copy())
             #Add filtered, drift corrected, optionally thresholded images
@@ -191,11 +200,12 @@ class Compare:
             print('Properties calculated.')
         #Return full dataframes and images containing all individual nuclei.
         del images
-        final_img=np.concatenate(final_img, axis=0)
-        print('Final image shape', final_img.shape)
-        final_img=np.moveaxis(final_img, 0, 2)
-        tiff.imsave(output_folder+os.sep+output_name+'_nucs_comp.tiff',final_img,imagej=True)
-        print('Saved ', output_folder+os.sep+output_name+'_nucs_comp.tiff')
+        if self.save_images:
+            final_img=np.concatenate(final_img, axis=0)
+            print('Final image shape', final_img.shape)
+            final_img=np.moveaxis(final_img, 0, 2)
+            tiff.imsave(output_folder+os.sep+output_name+'_nucs_comp.tiff',final_img,imagej=True)
+            print('Saved ', output_folder+os.sep+output_name+'_nucs_comp.tiff')
         print('Processing done on:', path_set)
         return pd.concat(nucs)
     
