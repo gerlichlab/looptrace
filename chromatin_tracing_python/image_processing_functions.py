@@ -20,6 +20,14 @@ import dask.array as da
 import itertools
 from read_roi import read_roi_zip, read_roi_file
 
+def images_to_dask(folder, template):
+    if '.h5' in template:
+        x, groups = svih5_to_dask(folder, template)
+    elif '.czi' in template or '.tif' in template or '.tiff' in template:
+        x, groups = czi_tif_to_dask(folder, template)
+    return x, groups
+
+
 def svih5_to_dask(folder, template):
     all_files = all_matching_files_in_subfolders(folder, template)
     grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
@@ -36,7 +44,7 @@ def svih5_to_dask(folder, template):
             array = da.from_array(d, chunks=(1, 1, 1, shape[-2], shape[-1]))
             dask_arrays.append(array)
         pos_stack.append(da.stack(dask_arrays, axis=0))
-    x = da.stack(pos_stack, axis=0)
+    x = da.stack(pos_stack, axis=0)[...,0,:,:,:]
     print('Loaded images, final shape ', x.shape)
     return x, groups
 
@@ -168,7 +176,7 @@ def read_czi_image(image_path):
     Reads czi files as arrays using czifile package. Returns only CZYX image.
     '''
     with cz.CziFile(image_path) as czi:
-        image=czi.asarray()[0,0,:,0,:,:,:,0]
+        image=czi.asarray()[0,0,:,0,:,::-1,:,0]
     return image
 
 
