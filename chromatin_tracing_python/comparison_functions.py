@@ -67,7 +67,7 @@ def comp_skew(img1, img2):
 
 def comp_kurtosis(img1, img2):
     '''
-    Ratio of the curtiosis of the images.
+    Ratio of the kurtosis of the images.
     '''
 
     k1 = kurtosis(img1, axis=None)

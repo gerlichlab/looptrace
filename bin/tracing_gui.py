@@ -3,9 +3,9 @@ import os
 import threading
 import napari
 from chromatin_tracing_python.tracer import Tracer
-from chromatin_tracing_python.drift_correction_tracing import Drifter
+from chromatin_tracing_python.drift_correction_tracing_dask import Drifter
 import chromatin_tracing_python.image_processing_functions as ip
-
+from dask.distributed import Client
 
 sg.theme('Dark Blue 3')  # please make your windows colorful
 
@@ -97,8 +97,10 @@ def main():
             trace_thread = threading.Thread(target=T.tracing_3d)
             trace_thread.start()
         elif event in  (None, 'Exit'):
+            client.close()
             break
     window.close()
 
 if __name__ == '__main__':
+    client = Client()
     main()

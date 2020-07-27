@@ -13,9 +13,9 @@ import pandas as pd
 from skimage.registration import phase_cross_correlation
 from skimage.transform import resize
 from scipy.stats import trim_mean
-from joblib import Parallel, delayed
 import tifffile as tiff
 from chromatin_tracing_python import image_processing_functions as ip
+from joblib import Parallel, delayed
 
 class Drifter():
 
@@ -24,9 +24,10 @@ class Drifter():
         Initialize Drifter class with config read in from YAML file.
         '''
         self.config = ip.load_config(config_path)
+        self.images, self.pos_list = ip.images_to_dask(self.config['input_folder'], self.config['image_filetype']+self.config['image_template'])
         self.dc_file_path = self.config['output_folder']+os.sep+self.config['output_file_prefix']+'drift_correction.csv'
 
-    def drift_svih5(self, t_path, o_path):
+    def drift_svih5(self, group_index, template_slice, offset_slice):
         '''
         Calculates course and fine 
         drift between two svih5 images by phase cross correlation.
@@ -46,8 +47,8 @@ class Drifter():
         ch = self.config['bead_ch']
         
         #Load single channel images from paths
-        t_img=ip.image_from_svih5(t_path, ch)
-        o_img=ip.image_from_svih5(o_path, ch)
+        t_img=np.array(self.images[group_index, template_slice, ch])
+        o_img=np.array(self.images[group_index, offset_slice, ch])
         
         #Calculate course drift
         course_drift=phase_cross_correlation(t_img, o_img, return_error=False)
@@ -133,35 +134,20 @@ class Drifter():
         '''
         #List all files in top folder and group according to WXXXX position assuming format
         # *_WXXXX_PXXXX_TXXXX_*.h5
-        input_folder = self.config['input_folder']
-        filetypes = self.config['image_filetype']
-        template = self.config['image_template']
-        t_index = self.config['bead_reference_timepoint']
-
-        template_list = filetypes + template
-        all_files = ip.all_matching_files_in_subfolders(input_folder, 
-                                                        template_list)
-        groups = []
-        pos_list=[]
-        for k, g in itertools.groupby(sorted(all_files),
-                                    lambda x: x.split('_')[-4]):
-            groups.append(list(g))
-            pos_list.append(k)
-        print('Found positions:', pos_list)
+        template_slice = self.config['bead_reference_timepoint']
+        t_all = range(self.images.shape[1])
         
         #Run drift correction based on drift_sv5 for each group and save results in table.
         all_drifts=[]
-        for i, image_paths in enumerate(groups):
-            print('Running drift correction for position {}'.format(pos_list[i]))
-            t_path = image_paths[t_index]
-            drifts=Parallel(n_jobs=-2)(delayed(self.drift_svih5)(t_path, o_path) for 
-                                                            o_path in image_paths)
-            drifts=pd.DataFrame(drifts)
-            drifts['pos_id'] = pos_list[i]
-            drifts['filename'] = [path.split('\\')[-1] for path in image_paths]
+        for i, group in enumerate(self.pos_list):
+            print(f'Running drift correction for position {group}')
+            drifts_delayed=Parallel(n_jobs=-2)(delayed(self.drift_svih5)(i, template_slice, offset_slice) for 
+                                                            offset_slice in t_all)
+            drifts=pd.DataFrame(drifts_delayed)
+            drifts['pos_id'] = group
             drifts.index.name = 'frame'
             all_drifts.append(drifts)
-            print('Finished drift correction for position ', pos_list[i])
+            print('Finished drift correction for position ', group)
         
         all_drifts=pd.concat(all_drifts).reset_index()
         
@@ -260,8 +246,3 @@ class Drifter():
             #    dset.attrs['element_size_um'] = (0.2, 0.1/scale, 0.1/scale)
             #    dset.attrs['scaling_xy'] = scale
             #    print('Saved file', file)
-            
-                
-        
-        
-        

@@ -16,7 +16,7 @@ import h5py
 import tifffile as tiff
 import dask
 from dask import delayed
-from dask.distributed import Client
+
 
 class Tracer:
     def __init__(self, config_path, dc_path):
@@ -28,7 +28,7 @@ class Tracer:
         self.drift_table = pd.read_csv(dc_path)
         self.images, self.pos_list = ip.images_to_dask(self.config['input_folder'], self.config['image_filetype']+self.config['image_template'])
         self.images_shape = self.images.shape
-        self.client = Client()
+        
 
         print('Loaded images of shape ', self.images_shape)
         print('Found positions ', self.pos_list)
