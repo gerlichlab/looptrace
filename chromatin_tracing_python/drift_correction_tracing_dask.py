@@ -161,8 +161,7 @@ class Drifter():
                             'z_px_fine_std',
                             'y_px_fine_std',
                             'x_px_fine_std',
-                            'pos_id',
-                            'filename']
+                            'pos_id']
         all_drifts.to_csv(self.dc_file_path)
         print('Drift correction complete.')
         return all_drifts
