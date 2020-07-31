@@ -86,7 +86,7 @@ def czi_tif_to_dask(folder, template):
     
     return x, groups
 
-'''
+
 # WORK IN PROGRESS:
 
 def czi_to_dask(folder, template):
@@ -119,7 +119,7 @@ def czi_to_dask(folder, template):
     x = da.concatenate(group_array, axis=1)
 
     return x[0,...,0], groups
-'''
+
 
 def rois_from_csv(path):
     rois = pd.read_csv(path)

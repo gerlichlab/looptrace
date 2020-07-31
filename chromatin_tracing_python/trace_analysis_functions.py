@@ -662,7 +662,7 @@ def plot_traces(traces, trace_id):
                                   showlegend=False,
                                   line=dict(color='rgba(31, 119, 180, 0.8)',
                                                width=5)))
-    fig.update_layout(template='plotly_white', showlegend= False)
+    fig.update_layout(template='plotly_dark', showlegend= False)
     iplot(fig)
     
     return fig
@@ -712,7 +712,7 @@ def plot_aligned_traces(traces, idx):
                             line=dict(color=px.colors.qualitative.Plotly[point_id],
                                         width=5)))
     fig = go.Figure(data=scatters)
-    fig.update_layout(template='plotly_white', showlegend= False)
+    fig.update_layout(template='plotly_dark', showlegend= False)
     iplot(fig)
     return fig
     
