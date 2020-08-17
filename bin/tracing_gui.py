@@ -79,7 +79,7 @@ def main():
                 roi_thread = threading.Thread(target=T.rois_from_spots)
                 roi_thread.start()
             elif values['-IJ_ROI-']:
-                T.roi_table = ip.rois_from_imagej(values['-IJ_ROI_PATH-'])
+                T.roi_table = ip.rois_from_imagej(values['-IJ_ROI_PATH-']) # Oeyvind added ", '.zip', 0.5" to read scaled images but it did not work
             elif values['-EXISTING_ROI-']:
                 T.roi_table = ip.rois_from_csv(values['-ROI_FILE_PATH-'])
             window['-VIEW_ROI-'].update(disabled = False)
