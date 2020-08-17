@@ -89,7 +89,7 @@ def czi_tif_to_dask(folder, template):
 
 # WORK IN PROGRESS:
 
-def czi_to_dask(folder, template):
+def czi_lazy_to_dask(folder, template):
     all_files = all_matching_files_in_subfolders(folder, template)
     grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
     sample= cz.CziFile(all_files[0])
