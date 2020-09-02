@@ -16,6 +16,7 @@ from scipy.stats import trim_mean
 import tifffile as tiff
 from chromatin_tracing_python import image_processing_functions as ip
 from joblib import Parallel, delayed
+#import dask
 
 class Drifter():
 
@@ -24,10 +25,9 @@ class Drifter():
         Initialize Drifter class with config read in from YAML file.
         '''
         self.config = ip.load_config(config_path)
-        self.images, self.pos_list = ip.images_to_dask(self.config['input_folder'], self.config['image_filetype']+self.config['image_template'])
         self.dc_file_path = self.config['output_folder']+os.sep+self.config['output_file_prefix']+'drift_correction.csv'
 
-    def drift_svih5(self, group_index, template_slice, offset_slice):
+    def drift_svih5(self, t_img, o_img):
         '''
         Calculates course and fine 
         drift between two svih5 images by phase cross correlation.
@@ -42,23 +42,17 @@ class Drifter():
         -------
         A list of zyx course drifts and fine drifts (compared to course)
 
-        '''
-
-        ch = self.config['bead_ch']
-        
-        #Load single channel images from paths
-        t_img=np.array(self.images[group_index, template_slice, ch])
-        o_img=np.array(self.images[group_index, offset_slice, ch])
-        
+        '''        
+        print('Starting DC')
         #Calculate course drift
         course_drift=phase_cross_correlation(t_img, o_img, return_error=False)
-        
+        print('Course DC done')
         #Shift image for fine drift correction
         o_img=ndi.shift(o_img,course_drift,order=0)
-        
+        print('Shift done')
         #Calculate fine drift
         fine_drift, fine_drift_std = self.drift_corr_multipoint_cc(t_img, o_img)
-        
+        print('Fine DC done')
         return [*course_drift, *fine_drift, *fine_drift_std]
 
     def drift_corr_multipoint_cc(self, t_img, o_img, upsampling=100):
@@ -132,17 +126,32 @@ class Drifter():
         all_drifts : Table of all drifts. Also saves this as csv in output folder.
 
         '''
+        images, pos_list = ip.images_to_dask(self.config['input_folder'], self.config['image_filetype']+self.config['image_template'])
         #List all files in top folder and group according to WXXXX position assuming format
         # *_WXXXX_PXXXX_TXXXX_*.h5
-        template_slice = self.config['bead_reference_timepoint']
-        t_all = range(self.images.shape[1])
+        t_slice = self.config['bead_reference_timepoint']
+        t_all = range(images.shape[1])
+        ch = self.config['bead_ch']
         
         #Run drift correction based on drift_sv5 for each group and save results in table.
         all_drifts=[]
-        for i, group in enumerate(self.pos_list):
+        for i, group in enumerate(pos_list):
             print(f'Running drift correction for position {group}')
-            drifts_delayed=Parallel(n_jobs=-2)(delayed(self.drift_svih5)(i, template_slice, offset_slice) for 
-                                                            offset_slice in t_all)
+            #drifts_delayed=Parallel(n_jobs=-2)(delayed(self.drift_svih5)(i, template_slice, offset_slice) for 
+            #                                                offset_slice in t_all) 
+            drifts_delayed = []
+            t_img=np.array(images[i, t_slice, ch])
+            print(type(t_img))
+            o_imgs = [np.array(images[i, o_slice, ch]) for o_slice in t_all]
+            print(type(o_imgs[0]))
+            drifts_delayed = Parallel(n_jobs=-2)(delayed(self.drift_svih5)(t_img, o_img) for o_img in o_imgs)
+            '''
+            for offset_slice in t_all:
+                #Load single channel images from paths
+                o_img=np.array(self.images[i, offset_slice, ch])
+                print('Offset image loaded: ', o_img.shape, o_img.dtype)
+                drifts_delayed.append(self.drift_svih5(t_img, o_img))
+            '''
             drifts=pd.DataFrame(drifts_delayed)
             drifts['pos_id'] = group
             drifts.index.name = 'frame'
