@@ -88,6 +88,9 @@ def main():
                 print('Checking ROIs in position ', position)
                 pos_index = T.pos_list.index(position)
                 roi_shapes, roi_props = ip.roi_to_napari_shape(T.roi_table, position = position)
+                if roi_shapes == []:
+                    print('No ROIs found, skipping position.')
+                    continue
                 shape_layer = napari_view(T.images[pos_index], shape = roi_shapes, shape_props = roi_props)
                 new_roi_table = ip.update_roi_shapes(shape_layer, T.roi_table, position=position)
                 T.roi_table = new_roi_table.copy()

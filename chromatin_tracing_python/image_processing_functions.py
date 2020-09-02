@@ -126,7 +126,7 @@ def rois_from_csv(path):
     print('Loaded existing ROIs from ', path)
     return rois
 
-def rois_from_imagej(roi_folder_path, template = '.zip', crop_size_z = 16, roi_scale = 1):
+def rois_from_imagej(roi_folder_path, template = '.zip', crop_size_z = 16, roi_scale = 0.5):
     roi_files = all_matching_files_in_subfolders(roi_folder_path, template)
     all_roi_coords = []
     for file_id, roi_path in enumerate(roi_files):

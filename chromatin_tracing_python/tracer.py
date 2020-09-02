@@ -89,28 +89,6 @@ class Tracer:
         self.save_data(rois = self.roi_table)
         return output
 
-    def man_qc_rois(self):
-        '''
-        Function to visualize detected ROIs on the image data using napari to verify accuracy.
-        Can modify ROIs if necessary.
-        TODO: Only deleting ROIs implemented so far, moving and adding should be implemented.
-        '''
-        
-        # only visualize on position at the time
-        for position in self.pos_list:
-            pos_index = self.pos_list.index(position)
-            
-            # Plot the roi as a napari shape and add to napari viewer with image:
-            roi_shapes, roi_props = ip.roi_to_napari_shape(rois, position)
-            with napari.gui_qt():
-                viewer = napari.view_image(self.images[pos_index], contrast_limits=(0,10000))
-                shape_layer = viewer.add_shapes(roi_shapes, face_color = [0]*4, edge_color='red', edge_width=2, properties=roi_props)
-            
-            # Update the roi_table with any changes made in the viewer
-            self.roi_table = update_roi_shapes(shape_layer, self.roi_table, position)
-        return self.roi_table
-
-
     def slice_for_roi(self, roi, drift_table_row):
         '''
         Calculate the correct slice object based on a given ROI and drift table
