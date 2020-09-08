@@ -248,7 +248,7 @@ def trace_clustering(paired, metric='pwd_pcc', method='single', color_threshold=
     Z : Clustering matrix based on hierarchial clustering (see scipy.cluster.hierarchy.single docs)
     '''
     
-    labels=np.unique(np.concatenate((paired['idx1'],paired['idx2'])))
+    labels=list(np.unique(np.concatenate((paired['idx1'],paired['idx2']))))
     if metric == 'aligned_mse' or metric == 'pwd_mse':
         Z=linkage(paired[metric], method=method)
     elif metric == 'aligned_pcc' or metric == 'pwd_pcc':

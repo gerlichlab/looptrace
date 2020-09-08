@@ -141,9 +141,7 @@ class Drifter():
             #                                                offset_slice in t_all) 
             drifts_delayed = []
             t_img=np.array(images[i, t_slice, ch])
-            print(type(t_img))
             o_imgs = [np.array(images[i, o_slice, ch]) for o_slice in t_all]
-            print(type(o_imgs[0]))
             drifts_delayed = Parallel(n_jobs=-2)(delayed(self.drift_svih5)(t_img, o_img) for o_img in o_imgs)
             '''
             for offset_slice in t_all:
