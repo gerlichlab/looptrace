@@ -80,6 +80,7 @@ def main():
                 roi_thread.start()
             elif values['-IJ_ROI-']:
                 T.roi_table = ip.rois_from_imagej(values['-IJ_ROI_PATH-'], '.zip', 16 , float(T.config['dc_image_scaling']))
+                T.save_data(rois=T.roi_table)
             elif values['-EXISTING_ROI-']:
                 T.roi_table = ip.rois_from_csv(values['-ROI_FILE_PATH-'])
             window['-VIEW_ROI-'].update(disabled = False)
