@@ -4,111 +4,55 @@ Created on Thu Apr 23 09:26:44 2020
 @author: ellenberg
 """
 import os
-import yaml
 import numpy as np
 import pandas as pd
-from read_roi import read_roi_zip, read_roi_file
 import scipy.ndimage as ndi
 import chromatin_tracing_python.image_processing_functions as ip
 from chromatin_tracing_python.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
-from skimage.measure import regionprops_table
-import h5py
-import tifffile as tiff
 import dask
 from dask import delayed
 
 
 class Tracer:
-    def __init__(self, config_path, dc_path):
+    def __init__(self, image_handler):
         '''
         Initialize Tracer class with config read in from YAML file.
     '''
-        self.config_path = config_path
-        self.config = ip.load_config(config_path)
-        self.drift_table = pd.read_csv(dc_path)
-        self.images, self.pos_list = ip.images_to_dask(self.config['input_folder'], self.config['image_filetype']+self.config['image_template'])
+        self.image_handler = image_handler
+        self.config_path = image_handler.config_path
+        self.config = image_handler.config
+        self.images, self.pos_list = image_handler.images, image_handler.pos_list
         self.images_shape = self.images.shape
-        
-
-        print('Loaded images of shape ', self.images_shape)
-        print('Found positions ', self.pos_list)
+        self.drift_table = image_handler.drift_table
+        self.roi_table = image_handler.roi_table
 
         self.fit_funcs = {'LS': fitSymmetricGaussian3D, 'MLE': fitSymmetricGaussian3DMLE}
         self.fit_func = self.fit_funcs[self.config['fit_func']]
-
-    def reload_config(self):
-        self.config = ip.load_config(self.config_path)
-        print('Config reloaded. Note images are not reloaded.')
-
-    def rois_from_spots(self):
-        '''
-        Autodetect ROIs from spot images using a manual threshold defined in config.
-        
-        Returns
-        ---------
-        A pandas DataFrame with the bounding boxes and identifyer of the detected ROIs.
-        '''
-
-        #Read parameters from config.
-        trace_ch = self.config['trace_ch']
-        ref_slice = self.config['ref_slice']
-        spot_threshold = self.config['spot_threshold']
-
-        #Loop through the imaging positions.
-        all_rois = []
-        for position in self.pos_list:
-            #Read correct image
-            print(f'Detecting spots in position {position}.')
-            pos_index = self.pos_list.index(position)
-            img = self.images[pos_index, ref_slice, trace_ch]
-
-            #Threshold, dilate and label image
-            spot_img, num_spots = ndi.label(ndi.binary_dilation(img>spot_threshold, iterations = 5))
-            
-            #Make a DataFrame with the ROI info
-            spot_props=pd.DataFrame(regionprops_table(spot_img, 
-                                                properties=('label',
-                                                            'bbox',
-                                                            'centroid'
-                                                            )))
-            spot_props['position'] = position
-            all_rois.append(spot_props)
-
-            print(f'Found {num_spots} spots.')
-            
-        #Cleanup and saving of the DataFrame
-        output = pd.concat(all_rois)
-        output=output.reset_index().rename(columns={'bbox-0':'z_min', 
-                                                'bbox-1':'y_min', 
-                                                'bbox-2':'x_min', 
-                                                'bbox-3':'z_max', 
-                                                'bbox-4':'y_max', 
-                                                'bbox-5':'x_max',
-                                                'index':'roi_id'})
-        self.roi_table = output
-        self.save_data(rois = self.roi_table)
-        return output
 
     def slice_for_roi(self, roi, drift_table_row):
         '''
         Calculate the correct slice object based on a given ROI and drift table
         '''
 
-        #Find size of image
+        #Find size of image, and desired ROI size:
         Z, Y, X = self.images_shape[-3:]
-        
+        roi_size = self.config['roi_image_size']
         #Read values from drift table
         z_drift_course = int(drift_table_row['z_px_course'])
         y_drift_course = int(drift_table_row['y_px_course'])
         x_drift_course = int(drift_table_row['x_px_course'])
         
         #Course drift correct of the ROI: 
-        z_min = int(roi['z_min'])-z_drift_course
-        z_max = int(roi['z_max'])-z_drift_course
-        y_min = int(roi['y_min'])-y_drift_course
-        y_max = int(roi['y_max'])-y_drift_course
-        x_min = int(roi['x_min'])-x_drift_course
-        x_max = int(roi['x_max'])-x_drift_course
+        zc = int(roi['zc'])-z_drift_course
+        yc = int(roi['yc'])-y_drift_course
+        xc = int(roi['xc'])-x_drift_course
+
+        z_min = zc - roi_size[0]//2
+        z_max = zc + roi_size[0]//2
+        y_min = yc - roi_size[1]//2
+        y_max = yc + roi_size[1]//2
+        x_min = xc - roi_size[2]//2
+        x_max = xc + roi_size[2]//2
 
         #Handling case of ROI extending beyond image edge after drift correction:
         pad = ((abs(min(0,z_min)),abs(max(0,z_max-Z))),
@@ -137,8 +81,8 @@ class Tracer:
         fit_func will do that takes similar parameters. Initialized fit at brightest point of image.
         '''
 
-        max_ind=list(np.unravel_index(np.argmax(img, axis=None), img.shape))
-        fit_results=delayed(self.fit_func)(img,1,max_ind)
+        #max_ind=list(np.unravel_index(np.argmax(img, axis=None), img.shape))
+        fit_results=delayed(self.fit_func)(img,1)
         return fit_results
 
     def tracing_3d(self):
@@ -154,6 +98,9 @@ class Tracer:
         #Extract parameters from config and predefined roi table.
         num_frames = self.images.shape[1]
         trace_ch = self.config['trace_ch']
+        decon = self.config['deconvolve']
+        if decon != 0:
+            algo, kernel = ip.decon_RL_setup()
         roi_image_size = self.config['roi_image_size']
         roi_table = self.roi_table[self.roi_table['position'].isin(self.pos_list)]
 
@@ -182,7 +129,7 @@ class Tracer:
                                                 roi_slice[0], 
                                                 roi_slice[1],
                                                 roi_slice[2]])
-                                                
+
                 #If microscope drifted, ROI could be outside image. Correct for this:
                 if not good:
                     print('Bad image.')
@@ -194,6 +141,8 @@ class Tracer:
                     except ValueError:
                         roi_image = np.zeros((10,10,10), dtype=np.float32)
                 
+                if decon != 0:
+                    roi_image =ip.decon_RL(roi_image, kernel, algo, decon)
                 #Perform 3D gaussian fit
                 frame_result.append(self.trace_single_roi_frame(roi_image)[0])
                 #Expand the image to a standard size for hyperstack.
@@ -205,7 +154,8 @@ class Tracer:
                 roi_image_shifted = delayed(ndi.shift)(roi_image_exp, (dz, dy, dx))
                 roi_images.append(roi_image_shifted)
                 #Add some parameters for tracing table
-                frame_index.append([roi.name, frame, roi['position'], roi['roi_id'], dz, dy, dx])
+                frame_index.append([roi.name, frame, roi['position'], roi['index'], dz, dy, dx])
+
             #Add all the results per timepoint, compute on delayed dask objects.
             trace_res.append(dask.compute(*frame_result))
             trace_index.append(frame_index)
@@ -244,28 +194,7 @@ class Tracer:
         traces = traces.set_index(['trace_ID'])
         #Make final hyperstack of images, will typically be in TPZYX order.
         all_images = np.stack(all_images)
-        self.save_data(traces=traces, imgs=all_images)
+        
+        self.image_handler.save_data(traces=traces, imgs=all_images)
         return traces, all_images
-    
-    def save_data(self, traces=None, imgs=None, rois=None, pwds=None, pairs=None, config=None, suffix=''):
-        output_folder=self.config['output_folder']
-        output_filename=self.config['output_file_prefix']
-        output_file=output_folder+os.sep+output_filename
-        
-        if traces is not None:
-            traces.to_csv(output_file+'traces.csv')
-        if pwds is not None:
-            np.save(output_file+'pwds.npy',pwds)
-        if rois is not None:
-            rois.to_csv(output_file+'rois.csv')
-        if imgs is not None:
-            imgs=np.moveaxis(imgs,0,2)
-            tiff.imsave(output_file+'imgs.tif', imgs, imagej=True)
-        if pairs is not None:
-            pairs.to_csv(output_file+'pairs.csv')
-        if config is not None:
-            with open(output_file+'config.yaml', 'w') as myfile:
-                yaml.safe_dump(config, myfile)
-        
-        print('Data saved')
         

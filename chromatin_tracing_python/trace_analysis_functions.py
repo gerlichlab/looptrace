@@ -38,6 +38,8 @@ def tracing_qc(row, qc_dict):
         return 0
     elif row['sigma_xy'] > sigma_xy_max or row['sigma_z'] > sigma_z_max:
         return 0
+    elif row['sigma_xy'] < 0 or row['sigma_z'] < 0:
+        return 0
     elif row['x_px']<0 or row['y_px'] < 0 or row['z_px']<0:
         return 0
     elif row['x_px']>100 or row['y_px'] > 100 or row['z_px'] > 100:
@@ -72,8 +74,9 @@ def group_mean_qc(row, groups):
         return 1
 
 def view_context(all_images,
-                 contrast= ((0,50000),(0,10000),(0,3000)),
+                 contrast= ((0,5000),(0,2000),(0,5000)),
                  trace_id = None, 
+                 ref_slice = None,
                  rois = None):
     '''
     Convenvience function to view a given ROI in context in napari.
@@ -84,10 +87,9 @@ def view_context(all_images,
     with napari.gui_qt():
         viewer = napari.Viewer()
         if trace_id is not None:
-            roi = rois.iloc[trace_id]
-            pos_index = int(roi['position'][-4:])-1 #Get pos_index from W00XX format
-            shape = [np.array([[roi['y_min'], roi['x_min']],
-                              [roi['y_max'], roi['x_max']]])]
+            point = np.array(rois.iloc[trace_id][['zc', 'yc', 'xc']])
+            positions = list(rois['position'].unique())
+            pos_index = int(positions.index(rois.iloc[trace_id]['position'])) #Get pos_index from W00XX format
 
             for ch in range(all_images.shape[2]):
                 viewer.add_image(all_images[pos_index,:,ch],
@@ -95,19 +97,17 @@ def view_context(all_images,
                                  blending='additive', 
                                  colormap=colors[ch])
 
-            shape_layer = viewer.add_shapes(shape,
-                                       shape_type = 'rectangle', 
-                                       edge_color='red', 
-                                       edge_width=2,
-                                       face_color='transparent')
-        else:
-            for ch in range(all_images.shape[2]):
-                viewer.add_image(all_images[:,:,ch], 
-                                 contrast_limits=contrast[ch], 
-                                 blending='additive', 
-                                 colormap=colors[ch])
-        
+            point_layer = viewer.add_points(point,
+                                            size=8,
+                                            edge_width=3,
+                                            edge_color='red',
+                                            face_color='transparent',
+                                            n_dimensional=True)
+            sel_dim = np.concatenate([[int(ref_slice)], point.astype(int)])
 
+            for dim in range(len(sel_dim)):
+                viewer.dims.set_current_step(dim, sel_dim[dim])
+    return viewer
 
 def view_fits(traces, imgs, rois, config, mode='2D', contrast=(100,10000), axis=2):
     '''
@@ -133,13 +133,13 @@ def points_for_overlay(traces, rois, config):
     roi_image_size = config['roi_image_size']
     points_df = traces.copy()
     for i, roi in rois.iterrows():
-        transp_z=(roi_image_size[0]-(roi['z_max']-roi['z_min']))//2
-        transp_y=(roi_image_size[1]-(roi['y_max']-roi['y_min']))//2
-        transp_x=(roi_image_size[2]-(roi['x_max']-roi['x_min']))//2
+        #transp_z=(roi_image_size[0]-(roi['z_max']-roi['z_min']))//2
+        #transp_y=(roi_image_size[1]-(roi['y_max']-roi['y_min']))//2
+        #transp_x=(roi_image_size[2]-(roi['x_max']-roi['x_min']))//2
         idx = traces['trace_ID'] == roi.name
-        points_df[idx] = points_df[idx].assign(z_px = traces[idx]['z_px'] + transp_z,
-                                               y_px = traces[idx]['y_px'] + transp_y,
-                                               x_px = traces[idx]['x_px'] + transp_x)
+        points_df[idx] = points_df[idx].assign(z_px = traces[idx]['z_px'],
+                                               y_px = traces[idx]['y_px'],
+                                               x_px = traces[idx]['x_px'])
 
     #points_df[['y_px','x_px']]=points_df[['y_px','x_px']].clip(lower=0, upper=64)
     #points_df[['z_px']]=points_df[['z_px']].clip(lower=0, upper=16)

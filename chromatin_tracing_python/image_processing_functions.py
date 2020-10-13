@@ -5,20 +5,37 @@ Created on Wed Apr  8 09:37:00 2020
 @author: ellenberg
 """
 
+import sys
 import io
 import yaml
+import aicsimageio as aio
 import czifile as cz
-import tifffile as tiff
 import os
 import re
 import numpy as np
 import pandas as pd
+import napari
 from xml.etree import cElementTree as ElementTree
+from skimage.filters import gaussian
+from skimage.registration import phase_cross_correlation
+from skimage.transform import resize
+from scipy.stats import trim_mean
+from skimage.measure import regionprops_table
+import scipy.ndimage as ndi
 import h5py
 import dask
 import dask.array as da
 import itertools
+import tifffile as tiff
 from read_roi import read_roi_zip, read_roi_file
+from flowdec import data as fd_data
+from flowdec import restoration as fd_restoration
+from flowdec import psf as fd_psf
+
+def status_bar(n):
+    for i in range(n):
+        sys.stdout.write("\r[{:{}}] {:.1f}%".format("="*i, n-1, (100/(n-1)*i)))
+        yield
 
 def images_to_dask(folder, template):
     '''Wrapper function to generate dask arrays from image folder.
@@ -31,18 +48,20 @@ def images_to_dask(folder, template):
         dask array
         list of groups identified, currectly hardcoded to re_phrase='W[0-9]{4}'
     '''        
-
+    print("Loading files to dask array: ")
     if '.h5' in template:
         x, groups = svih5_to_dask(folder, template)
     elif '.czi' in template or '.tif' in template or '.tiff' in template:
-        x, groups = czi_tif_to_dask(folder, template)
+        x, groups = czi_lazy_to_dask(folder, template)
+    print('\n Loaded images of shape: ', x.shape)
+    print('Found positions ', groups)
     return x, groups
 
 
 def svih5_to_dask(folder, template):
     all_files = all_matching_files_in_subfolders(folder, template)
     grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
-
+    progress = status_bar(len(all_files))
     pos_stack=[]
     with h5py.File(all_files[0], mode='r') as f:
         shape = f[list(f.keys())[0]]['ImageData']['Image'].shape
@@ -50,6 +69,7 @@ def svih5_to_dask(folder, template):
     for g in grouped_files:
         dask_arrays = []
         for fn in g:
+            next(progress)
             f = h5py.File(fn, mode='r')
             d = f[list(f.keys())[0]]['ImageData']['Image']
             array = da.from_array(d, chunks=(1, 1, 1, shape[-2], shape[-1]))
@@ -86,41 +106,50 @@ def czi_tif_to_dask(folder, template):
     
     return x, groups
 
-
-# WORK IN PROGRESS:
-
 def czi_lazy_to_dask(folder, template):
     all_files = all_matching_files_in_subfolders(folder, template)
     grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
-    sample= cz.CziFile(all_files[0])
-    (_,_,C,_,Z,Y,X,_) = sample.shape
-    block = sample.subblock_directory[0].data_segment().data()
+    progress = status_bar(len(all_files))
     group_array=[]
     for g in grouped_files:
         pos_stack = []
         for fn in g:
-            print('Adding file ', fn)
-            img = cz.CziFile(fn)
-            ch_stack = []
-            for c in range(C):
-                z_stack = []
-                for block in img.subblock_directory[c::C]:
-                    d = dask.delayed(block.data_segment().data)()
-                    single_slice = da.from_delayed(d,
-                                                    dtype=block.dtype, 
-                                                    shape=block.shape)
-                    z_stack.append(single_slice)
-                z_stack = da.concatenate(z_stack, axis=4)
-                ch_stack.append(z_stack)
-            ch_stack = da.concatenate(ch_stack, axis=3)
-            pos_stack.append(ch_stack)
-        pos_stack = da.concatenate(pos_stack, axis=2)
+            next(progress)
+            img = aio.AICSImage(fn, chunk_by_dims=["Y", "X"])
+            pos_stack.append(img.get_image_dask_data("CZYX", S=0, T=0, B=0, V=0))
+        pos_stack = da.stack(pos_stack)
         group_array.append(pos_stack)
-    x = da.concatenate(group_array, axis=1)
+    x = da.stack(group_array)
 
-    return x[0,...,0], groups
+    return x, groups
+'''
+### Does not works so well ###
+def czi_lazy_to_dask_czifile(folder, template):
+    all_files = all_matching_files_in_subfolders(folder, template)
+    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
+    progress = status_bar(len(all_files))
+    group_array=[]
+    sample = cz.CziFile(all_files[0])
+    sample_shape = sample.subblock_directory[0].data_segment().data().shape
+    sample_dtype = sample.dtype
+    print('Loading images: ', sample_shape)
+    for g in grouped_files:
+        pos_stack = []
+        for fn in g:
+            next(progress)
+            img = cz.CziFile(fn)
+            single_stack = []
+            for seg in img.subblock_directory:
+                d = da.from_delayed(dask.delayed(seg.data_segment().data)(),
+                shape=sample_shape, dtype=sample_dtype)
+                single_stack.append(d[0,0,0,0,0,:,:,0])
+            pos_stack.append(da.stack(single_stack))
+        pos_stack = da.stack(pos_stack)
+        group_array.append(pos_stack)
+    x = da.stack(group_array)
 
-
+    return x, groups
+    '''
 def rois_from_csv(path):
     rois = pd.read_csv(path)
     print('Loaded existing ROIs from ', path)
@@ -164,12 +193,31 @@ def roi_to_napari_shape(roi_table, position):
     roi_props = {'roi_id': rois_at_pos['roi_id'].values}
     return roi_shapes, roi_props
 
-def update_roi_shapes(shape_layer, roi_table, position):
+def roi_to_napari_points(roi_table, position):
+    rois_at_pos = roi_table[roi_table['position']==position]
+    roi_shapes = []
+    for i, roi in rois_at_pos.iterrows():
+        roi_shape = [roi['zc'], roi['yc'], roi['xc']]
+        roi_shapes.append(roi_shape)
+    roi_shapes = np.array(roi_shapes)
+    roi_props = {'roi_id': rois_at_pos['index'].values}
+    return roi_shapes, roi_props
+
+def update_roi_shapes(shapes_layer, roi_table, position):
     rois = roi_table.copy()
-    new_rois = rois[rois['roi_id'].isin(shape_layer.properties['roi_id'])]
+    new_rois = rois[rois['roi_id'].isin(points_layer.properties['roi_id'])]
     rois[rois['position']==position] = new_rois
     rois = rois.dropna()
     return rois
+
+def update_roi_points(point_layer, roi_table, position, downscale):
+    rois = roi_table.copy()
+    new_rois = pd.DataFrame(point_layer.data*downscale, columns=['zc','yc', 'xc'])
+    new_rois.index.name = 'roi_id'
+    new_rois = new_rois.reset_index()
+    new_rois['position'] = position
+    rois = rois.drop(rois[rois['position']==position].index)
+    return pd.concat([rois, new_rois]).sort_values('position')
 
 def load_config(config_file):
     '''
@@ -348,4 +396,131 @@ def image_from_svih5(path,ch=None,index=(slice(None),
     return img
 
     
+def detect_spots(img, spot_threshold):
+    #Threshold, dilate and label image
+    dog = gaussian(img, 1) - gaussian(img, 3)
+    grad = np.sum(np.abs(np.gradient(img)), axis=0)
+    img = img*dog*grad
+    spot_img, num_spots = ndi.label(img>spot_threshold)
     
+    #Make a DataFrame with the ROI info
+    spot_props=pd.DataFrame(regionprops_table(spot_img, 
+                                        properties=('label','centroid')))
+    
+    spot_props.drop(['label'], axis=1, inplace=True)
+    spot_props.rename(columns={'centroid-0': 'zc',
+                                        'centroid-1': 'yc',
+                                        'centroid-2': 'xc',
+                                        'index':'roi_id'},
+                        inplace = True)
+    print(f'Found {num_spots} spots.')
+    return spot_props
+    #Cleanup and saving of the DataFrame
+        
+def drift_corr_course(t_img, o_img, downsample=2):
+    '''
+    Calculates course and fine 
+    drift between two svih5 images by phase cross correlation.
+
+    Parameters
+    ----------
+    t_path : Path to template image in svih5 format.
+    o_path : Path to offset image in svih5 format.
+    ch : Which channel to use for drift correction.
+
+    Returns
+    -------
+    A list of zyx course drifts and fine drifts (compared to course)
+
+    '''        
+    #Calculate course drift
+    s = tuple(slice(None, None, downsample) for i in t_img.shape)
+    course_drift=phase_cross_correlation(t_img[s], o_img[s], return_error=False) * downsample
+    #Shift image for fine drift correction
+    #o_img=ndi.shift(o_img,course_drift,order=0)
+    return course_drift.tolist()
+
+def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int, n_points=50, upsampling=100):
+    '''
+    Function for fine scale drift correction. 
+
+    Parameters
+    ----------
+    t_img : Template image, 2D or 3D ndarray.
+    o_img : Offset image, 2D or 3D ndarray.
+    threshold : Int, threshold to segment fiducials.
+    min_bead_int : Int, minimal value for maxima of fiducials 
+    n_points : Int, number of fiducials to use for drift correction. The default is 5.
+    upsampling : Int, upsampling grid for subpixel correlation. The default is 100.
+
+    Returns
+    -------
+    A trimmed mean (default 20% on each side) of the drift for each fiducial.
+
+    '''
+
+    #Label fiducial candidates and find maxima.
+    t_img_label,num_labels=ndi.label(t_img>threshold)
+    t_img_maxima=np.array(ndi.measurements.maximum_position(t_img, 
+                                                labels=t_img_label, 
+                                                index=range(num_labels)))
+    
+    #Filter maxima so not too close to edge and bright enough.
+    t_img_maxima=np.array([m for m in t_img_maxima 
+                            if min_bead_int<t_img[tuple(m)]
+                            and all(m>8)])
+    
+    #Select random fiducial candidates. Seeded for reproducibility.
+    np.random.seed(1)
+    rand_points = t_img_maxima[np.random.choice(t_img_maxima.shape[0], size=n_points), :]
+    
+    #Initialize array to store shifts for all selected fiducials.
+    shifts=np.empty_like(rand_points, dtype=np.float32)
+    
+    #Calculate fine scale drift for all selected fiducials.
+    
+    for i, point in enumerate(rand_points):
+        print(point, course_drift)
+        s_t = tuple([slice(ind-8, ind+8) for ind in point])
+        s_o = tuple([slice(ind-int(shift)-8, ind-int(shift)+8) for (ind, shift) in zip(point, course_drift)])
+        try:
+            shift = phase_cross_correlation(t_img[s_t], 
+                                        o_img[s_o], 
+                                        upsample_factor=upsampling,
+                                        return_error=False)
+        except ValueError: #In case point is too close to edge of image.
+            shifts[i] = [0 for p in point]
+        else:
+            shifts[i] = shift
+        
+    #Return the 60% central mean to avoid outliers.
+    return trim_mean(shifts, proportiontocut=0.2, axis=0)#, np.std(shifts, axis=0)
+
+def napari_view(img, flat = True, points=None, downscale=2, trace_ch=0, ref_slice=0):
+    with napari.gui_qt():
+        viewer = napari.view_image(img[...,::downscale,::downscale,::downscale], contrast_limits=(0,2000))
+        if points is not None:
+            point_layer = viewer.add_points(points/downscale, 
+                                                    size=8,
+                                                    edge_width=3,
+                                                    edge_color='red',
+                                                    face_color='transparent',
+                                                    n_dimensional=True)
+            sel_dim = [ref_slice, trace_ch] + list(points[0,:]/downscale)
+            for dim in range(len(sel_dim)):
+                viewer.dims.set_current_step(dim, sel_dim[dim])
+
+    if points is not None:
+        return point_layer
+
+def decon_RL_setup():
+    algo = fd_restoration.RichardsonLucyDeconvolver(3).initialize()
+    kernel = fd_psf.GibsonLanni(
+            size_x=16, size_y=16, size_z=16, pz=0., wavelength=.610,
+            na=1.46, res_lateral=.1, res_axial=.15
+        ).generate()
+    return algo, kernel
+
+def decon_RL(img, kernel, algo, niter=30):
+    res = algo.run(fd_data.Acquisition(data=img, kernel=kernel), niter=niter).data
+    return res
