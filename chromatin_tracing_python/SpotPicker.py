@@ -34,7 +34,7 @@ class SpotPicker:
             print(f'Detecting spots in position {position}.')
             pos_index = self.pos_list.index(position)
             img = self.images[pos_index, ref_slice, trace_ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
-            spot_props = ip.detect_spots(img, spot_threshold)
+            spot_props, _ = ip.detect_spots(img, spot_threshold)
             spot_props[['zc', 'yc', 'xc']] = spot_props[['zc', 'yc', 'xc']]*spot_ds
             spot_props['position'] = position
             all_rois.append(spot_props)

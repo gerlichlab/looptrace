@@ -98,7 +98,7 @@ def view_context(all_images,
                                  colormap=colors[ch])
 
             point_layer = viewer.add_points(point,
-                                            size=8,
+                                            size=10,
                                             edge_width=3,
                                             edge_color='red',
                                             face_color='transparent',
@@ -782,12 +782,12 @@ def plot_gpa_output(aligned_points, mean_points, cluster_members):
                                      mode='markers', 
                                      marker_color=cmap_points,
                                      marker_size=4,
-                                     opacity=0.8,
+                                     opacity=0.5,
                                      name='Trace '+str(cluster_members[point_id]),
                                      ))
         scatters.append(go.Scatter3d(x=x,y=y,z=z, 
                                        mode='lines',
-                                       line=dict(color='rgba(15, 60, 90, 0.5)',
+                                       line=dict(color='rgba(15, 60, 90, 0.3)',
                                                width=3)))
     
     mean_idx=np.arange(mean_points.shape[0])

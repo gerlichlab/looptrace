@@ -79,7 +79,7 @@ def drift_corr_multipoint_cc(t_img, o_img,
                                      upsample_factor=upsampling,
                                      return_error=False)
         shifts[i] = shift
-    print(shifts)
+    
     return trim_mean(shifts, proportiontocut=0.2, axis=0)
 
 def drift_corr_multipoint_gauss(t_img, o_img, 

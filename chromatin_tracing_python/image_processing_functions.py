@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 import napari
 from xml.etree import cElementTree as ElementTree
-from skimage.filters import gaussian
+from skimage.filters import gaussian, median
 from skimage.registration import phase_cross_correlation
 from skimage.transform import resize
 from scipy.stats import trim_mean
@@ -400,7 +400,7 @@ def detect_spots(img, spot_threshold):
     #Threshold, dilate and label image
     dog = gaussian(img, 1) - gaussian(img, 3)
     grad = np.sum(np.abs(np.gradient(img)), axis=0)
-    img = img*dog*grad
+    img = median(img*dog*grad)
     spot_img, num_spots = ndi.label(img>spot_threshold)
     
     #Make a DataFrame with the ROI info
@@ -414,10 +414,10 @@ def detect_spots(img, spot_threshold):
                                         'index':'roi_id'},
                         inplace = True)
     print(f'Found {num_spots} spots.')
-    return spot_props
+    return spot_props, img
     #Cleanup and saving of the DataFrame
         
-def drift_corr_course(t_img, o_img, downsample=2):
+def drift_corr_course(t_img, o_img, downsample=1):
     '''
     Calculates course and fine 
     drift between two svih5 images by phase cross correlation.
@@ -472,7 +472,10 @@ def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int
     
     #Select random fiducial candidates. Seeded for reproducibility.
     np.random.seed(1)
-    rand_points = t_img_maxima[np.random.choice(t_img_maxima.shape[0], size=n_points), :]
+    try:
+        rand_points = t_img_maxima[np.random.choice(t_img_maxima.shape[0], size=n_points), :]
+    except ValueError: #If no maxima are found just choose one random point:
+        rand_points = [[10,10,10]]
     
     #Initialize array to store shifts for all selected fiducials.
     shifts=np.empty_like(rand_points, dtype=np.float32)
@@ -480,7 +483,6 @@ def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int
     #Calculate fine scale drift for all selected fiducials.
     
     for i, point in enumerate(rand_points):
-        print(point, course_drift)
         s_t = tuple([slice(ind-8, ind+8) for ind in point])
         s_o = tuple([slice(ind-int(shift)-8, ind-int(shift)+8) for (ind, shift) in zip(point, course_drift)])
         try:
@@ -496,7 +498,7 @@ def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int
     #Return the 60% central mean to avoid outliers.
     return trim_mean(shifts, proportiontocut=0.2, axis=0)#, np.std(shifts, axis=0)
 
-def napari_view(img, flat = True, points=None, downscale=2, trace_ch=0, ref_slice=0):
+def napari_view(img, points=None, downscale=2, trace_ch=0, ref_slice=0):
     with napari.gui_qt():
         viewer = napari.view_image(img[...,::downscale,::downscale,::downscale], contrast_limits=(0,2000))
         if points is not None:

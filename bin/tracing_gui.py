@@ -22,6 +22,7 @@ def main():
         [sg.Text('Choose config file:')],
         [sg.InputText('YAML_config_file', key='-CONFIG_PATH-'), sg.FileBrowse()],
         [sg.Button('Initialize', key='-INIT-'),
+        sg.Button('Save to zarr', key='-ZARR-'),
         sg.Button('View images for tracing', key='-VIEW_IMAGES-'),
         sg.Button('Reload config', key='-RELOAD-')],
         [sg.Text('_'*50)],
@@ -30,13 +31,15 @@ def main():
         [sg.Text('_'*50)],
         [sg.Text('Choose drift correction file:')],
         [sg.InputText('Drift correction file', key='-DC_PATH-'), sg.FileBrowse()],
+        [sg.Combo(['Position'], default_value='Position', key='-DC_POSITION-', auto_size_text=True),
+        sg.Button('View DC images', key='-VIEW_DC-')],
         [sg.Text('_'*50)],
         [sg.Radio('Detect new ROIs', "ROI_SEL", default=True, key='-NEW_ROI-')],
         [sg.Radio('Use IJ ROIs', "ROI_SEL", key='-IJ_ROI-'),
         sg.InputText('Folder with ImageJ ROIs', key='-IJ_ROI_PATH-'), sg.FolderBrowse()],
         [sg.Radio('Use ROI file', "ROI_SEL", key='-EXISTING_ROI-'),
         sg.InputText('ROI file', key='-ROI_FILE_PATH-'), sg.FileBrowse()],
-        [sg.Button('Load/detect ROIs', key='-RUN_ROI-'), sg.Button('View ROIs', key='-VIEW_ROI-')],
+        [sg.Button('Load/detect ROIs', key='-RUN_ROI-'), sg.Button('View ROIs', key='-VIEW_ROI-'), sg.Checkbox('Show DC?', key='-DC_IMAGE_ROIS-')],
         [sg.Text('_'*50)],
         [sg.Button('Run tracing', key='-RUN_TRACING-')]
         ]
@@ -48,11 +51,18 @@ def main():
         event, values = window.read(timeout=100)
         if event == '-INIT-':
             H = ImageHandler(values['-CONFIG_PATH-'])
+            window['-DC_POSITION-'].update(values=H.pos_list)
             window['-DC_PATH-'].update(H.dc_file_path)
         elif event == '-VIEW_IMAGES-':
-            ip.napari_view(H.images)
+            ip.napari_view(H.images, downscale=H.config['image_view_downscaling'])
         elif event == '-RELOAD-':
             H.reload_config()
+        elif event == '-ZARR-':
+            if os.path.isdir(H.zarr_path):
+                sg.popup('ZARR file already exis.')
+            else:
+                H.images_to_zarr()
+                H.save_metadata()
         elif event == '-RUN_DC-':
             D = Drifter(H)
             if os.path.exists(D.dc_file_path):
@@ -67,7 +77,15 @@ def main():
             D = Drifter(H)
             dc_thread = threading.Thread(target = D.apply_drift_corr_mypic)
             dc_thread.start()
-        
+        elif event == '-VIEW_DC-':
+            pos_index = H.pos_list.index(values['-DC_POSITION-'])
+            try:
+                ip.napari_view(H.dc_images[pos_index], downscale=H.config['image_view_downscaling']) 
+            except TypeError:
+                H.set_drift_table(path=values['-DC_PATH-'])
+                H.gen_dc_images()
+                ip.napari_view(H.dc_images[pos_index], downscale=H.config['image_view_downscaling'])
+            
         elif event == '-RUN_ROI-':
             if values['-NEW_ROI-']:
                 S = SpotPicker(H)
@@ -80,16 +98,19 @@ def main():
                 H.roi_table = ip.rois_from_csv(values['-ROI_FILE_PATH-'])
 
         elif event == '-VIEW_ROI-':
+            if values['-DC_IMAGE_ROIS-']:
+                img = H.dc_images
+            else:
+                img = H.images
             for position in H.pos_list:
                 print('Checking ROIs in position ', position)
                 pos_index = H.pos_list.index(position)
                 #roi_shapes, roi_props = ip.roi_to_napari_shape(T.roi_table, position = position)
                 roi_points, roi_props = ip.roi_to_napari_points(H.roi_table, position = position)
-                print(roi_points)
-                if roi_points == []:
+                if roi_points.size == 0:
                     print('No ROIs found, skipping position.')
                     continue
-                point_layer = ip.napari_view(H.images[pos_index], 
+                point_layer = ip.napari_view(img[pos_index], 
                                              points = roi_points,
                                              downscale= H.config['image_view_downscaling'],
                                              trace_ch = H.config['trace_ch'],
