@@ -52,7 +52,7 @@ def images_to_dask(folder, template):
     if '.h5' in template:
         x, groups = svih5_to_dask(folder, template)
     elif '.czi' in template or '.tif' in template or '.tiff' in template:
-        x, groups = czi_tif_to_dask(folder, template)
+        x, groups = czi_lazy_to_dask(folder, template)
     print('\n Loaded images of shape: ', x.shape)
     print('Found positions ', groups)
     return x, groups
