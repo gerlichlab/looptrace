@@ -24,6 +24,7 @@ setuptools.setup(
           'numpy',
           'pandas',
           'scikit-image',
+          'aicsimageio',
           'czifile',
           'pyyaml',
           'dask',

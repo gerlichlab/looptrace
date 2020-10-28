@@ -8,7 +8,7 @@ Created on Wed Apr  8 09:37:00 2020
 import sys
 import io
 import yaml
-#import aicsimageio as aio
+import aicsimageio as aio
 import czifile as cz
 import os
 import re
