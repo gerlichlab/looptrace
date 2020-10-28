@@ -42,13 +42,14 @@ class ImageHandler:
     def images_to_zarr(self):
         pbar = ProgressBar()
         pbar.register()
-        self.images.to_zarr(self.zarr_path, compression='blosc', compression_opts=dict(cname='zstd', clevel=5, shuffle=2))
+        zarr_img = da.rechunk(self.images.rechunk, chunks=(1,1,1,1,-1,-1))
+        zarr_img.to_zarr(self.zarr_path, compression='blosc', compression_opts=dict(cname='zstd', clevel=5, shuffle=2))
         pd.DataFrame(self.pos_list).to_csv(self.zarr_path+'_positions.txt', index=None, sep='\n')
         self.images = da.from_zarr(self.zarr_path)
         print('Images saved as zarr.')
     
     def save_metadata(self):
-        first_path = ip.all_matching_files_in_subfolders(self.config['input_folder'], self.config['image_filetype']+self.config['image_template'])
+        first_path = ip.all_matching_files_in_subfolders(self.config['input_folder'], self.config['image_filetype']+self.config['image_template'])[0]
         first_img = czifile.CziFile(first_path)
         out_path = self.config['input_folder']+os.sep+self.config['output_file_prefix']
 

@@ -1,0 +1,16 @@
+# conda env create|update -f environment.yml
+name: tracing_test
+dependencies:
+    - python=3.7
+    - dask
+    - pandas
+    - numpy
+    - scipy
+    - scikit-image
+    - zarr
+    - pip
+    - pip:
+        - napari[all]
+        - pyyaml
+        - czifile
+        - PySimpleGUI

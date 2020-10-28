@@ -8,29 +8,29 @@ Created on Wed Apr  8 09:37:00 2020
 import sys
 import io
 import yaml
-import aicsimageio as aio
+#import aicsimageio as aio
 import czifile as cz
 import os
 import re
 import numpy as np
 import pandas as pd
 import napari
-from xml.etree import cElementTree as ElementTree
+#from xml.etree import cElementTree as ElementTree
 from skimage.filters import gaussian, median
 from skimage.registration import phase_cross_correlation
 from skimage.transform import resize
 from scipy.stats import trim_mean
 from skimage.measure import regionprops_table
 import scipy.ndimage as ndi
-import h5py
+#import h5py
 import dask
 import dask.array as da
 import itertools
 import tifffile as tiff
-from read_roi import read_roi_zip, read_roi_file
-from flowdec import data as fd_data
-from flowdec import restoration as fd_restoration
-from flowdec import psf as fd_psf
+#from read_roi import read_roi_zip, read_roi_file
+#from flowdec import data as fd_data
+#from flowdec import restoration as fd_restoration
+#from flowdec import psf as fd_psf
 
 def status_bar(n):
     for i in range(n):
@@ -52,7 +52,7 @@ def images_to_dask(folder, template):
     if '.h5' in template:
         x, groups = svih5_to_dask(folder, template)
     elif '.czi' in template or '.tif' in template or '.tiff' in template:
-        x, groups = czi_lazy_to_dask(folder, template)
+        x, groups = czi_tif_to_dask(folder, template)
     print('\n Loaded images of shape: ', x.shape)
     print('Found positions ', groups)
     return x, groups

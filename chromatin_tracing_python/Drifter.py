@@ -8,7 +8,8 @@ import os
 import numpy as np
 import pandas as pd
 from chromatin_tracing_python import image_processing_functions as ip
-from joblib import Parallel, delayed
+#from joblib import Parallel, delayed
+from dask import delayed
 import scipy.ndimage as ndi
 import tifffile as tiff
 #import dask
@@ -61,16 +62,16 @@ class Drifter():
             t_img = images[i, t_slice, ch].compute()
             o_imgs = [images[i, o_slice, ch].compute() for o_slice in t_all]
             print('Images loaded.')
-            drifts_course = Parallel(n_jobs=-2)(delayed(ip.drift_corr_course)(t_img, o_img) for o_img in o_imgs)
+            drifts_course = [delayed(ip.drift_corr_course)(t_img, o_img) for o_img in o_imgs]
             print('Course drift correction complete.')
-            drifts_fine = Parallel(n_jobs=-2)(delayed(ip.drift_corr_multipoint_cc)(t_img, 
-                                                                                    o_imgs[i],
-                                                                                    shift, 
-                                                                                    threshold, 
-                                                                                    min_bead_int, 
-                                                                                    n_points) 
-                                                                                    for (i, shift) 
-                                                                                    in zip(t_all, drifts_course))
+            drifts_fine = [delayed(ip.drift_corr_multipoint_cc)(t_img, 
+                                                                o_imgs[i],
+                                                                shift, 
+                                                                threshold, 
+                                                                min_bead_int, 
+                                                                n_points) 
+                                                                for (i, shift) 
+                                                                in zip(t_all, drifts_course)]
         
             print('Fine drift correction complete.')
             drifts = pd.concat([pd.DataFrame(drifts_course), pd.DataFrame(drifts_fine)], axis = 1)
