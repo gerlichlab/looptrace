@@ -42,7 +42,7 @@ class ImageHandler:
     def images_to_zarr(self):
         pbar = ProgressBar()
         pbar.register()
-        zarr_img = da.rechunk(self.images.rechunk, chunks=(1,1,1,1,-1,-1))
+        zarr_img = da.rechunk(self.images, chunks=(1,1,1,1,-1,-1))
         zarr_img.to_zarr(self.zarr_path, compression='blosc', compression_opts=dict(cname='zstd', clevel=5, shuffle=2))
         pd.DataFrame(self.pos_list).to_csv(self.zarr_path+'_positions.txt', index=None, sep='\n')
         self.images = da.from_zarr(self.zarr_path)

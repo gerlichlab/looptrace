@@ -1,7 +1,7 @@
 # conda env create|update -f environment.yml
-name: tracing_test
+name: tracing
 dependencies:
-    - python=3.7
+    - python>=3.7
     - dask
     - pandas
     - numpy
