@@ -1,5 +1,5 @@
 # conda env create|update -f environment.yml
-name: tracing
+name: pychrtrace
 dependencies:
     - python>=3.7
     - dask
@@ -7,7 +7,7 @@ dependencies:
     - numpy
     - scipy
     - scikit-image
-    - zarr
+    - zarr==2.4.0
     - pip
     - pip:
         - napari[all]

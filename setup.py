@@ -4,7 +4,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="chromatin_tracing_python",
+    name="pychrtrace",
     version="0.1",
     author="Kai Sandvold Beckwith",
     author_email="kai.beckwith@embl.de",
