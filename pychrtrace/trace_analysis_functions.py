@@ -20,8 +20,8 @@ import matplotlib.pyplot as plt
 import napari
 from joblib import Parallel, delayed
 import dask.array as da
-from chromatin_tracing_python import image_processing_functions as ip
-import h5py
+from pychrtrace import image_processing_functions as ip
+#import h5py
 
 def tracing_qc(row, qc_dict):
     '''

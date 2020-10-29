@@ -7,8 +7,8 @@ import os
 import numpy as np
 import pandas as pd
 import scipy.ndimage as ndi
-import chromatin_tracing_python.image_processing_functions as ip
-from chromatin_tracing_python.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
+import pychrtrace.image_processing_functions as ip
+from pychrtrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
 import dask
 from dask import delayed
 
