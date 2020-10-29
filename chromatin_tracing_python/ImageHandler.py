@@ -24,6 +24,8 @@ class ImageHandler:
         if os.path.isdir(self.zarr_path):
             self.images = da.from_zarr(self.zarr_path)
             self.pos_list = pd.read_csv(self.zarr_path+'_positions.txt', sep='\n', header=None)[0].to_list()
+            print('Images loaded from ZARR file, shape is ', self.images.shape)
+            print('Positions found: ', self.pos_list)
         else:
             self.images, self.pos_list = ip.images_to_dask(self.config['input_folder'], self.config['image_filetype']+self.config['image_template'])
         self.images_shape = self.images.shape
@@ -44,7 +46,7 @@ class ImageHandler:
         pbar.register()
         zarr_img = da.rechunk(self.images, chunks=(1,1,1,1,-1,-1))
         zarr_img.to_zarr(self.zarr_path, compression='blosc', compression_opts=dict(cname='zstd', clevel=5, shuffle=2))
-        pd.DataFrame(self.pos_list).to_csv(self.zarr_path+'_positions.txt', index=None, sep='\n')
+        pd.DataFrame(self.pos_list).to_csv(self.zarr_path+'_positions.txt', index=None, header=None, sep='\n')
         self.images = da.from_zarr(self.zarr_path)
         print('Images saved as zarr.')
     

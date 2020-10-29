@@ -435,9 +435,10 @@ def drift_corr_course(t_img, o_img, downsample=1):
     '''        
     #Calculate course drift
     s = tuple(slice(None, None, downsample) for i in t_img.shape)
-    course_drift=phase_cross_correlation(t_img[s], o_img[s], return_error=False) * downsample
+    course_drift=phase_cross_correlation(np.array(t_img[s]), np.array(o_img[s]), return_error=False) * downsample
     #Shift image for fine drift correction
     #o_img=ndi.shift(o_img,course_drift,order=0)
+    print('Course drift:', course_drift)
     return course_drift.tolist()
 
 def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int, n_points=50, upsampling=100):
@@ -481,22 +482,31 @@ def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int
     shifts=np.empty_like(rand_points, dtype=np.float32)
     
     #Calculate fine scale drift for all selected fiducials.
-    
+    sub_imgs_t = []
+    sub_imgs_o = []
     for i, point in enumerate(rand_points):
         s_t = tuple([slice(ind-8, ind+8) for ind in point])
         s_o = tuple([slice(ind-int(shift)-8, ind-int(shift)+8) for (ind, shift) in zip(point, course_drift)])
-        try:
-            shift = phase_cross_correlation(t_img[s_t], 
-                                        o_img[s_o], 
+        t = t_img[s_t]
+        o = o_img[s_o]
+        if (t.shape == (16, 16, 16)) and (o.shape == (16,16,16)):
+            sub_imgs_t.append(t)
+            sub_imgs_o.append(o)
+        else:
+            img = np.zeros((16, 16, 16))
+            img[8,8,8] = 1000
+            sub_imgs_t.append(img)
+            sub_imgs_o.append(img)
+
+    shifts = dask.compute([dask.delayed(phase_cross_correlation)(t, 
+                                        o, 
                                         upsample_factor=upsampling,
                                         return_error=False)
-        except ValueError: #In case point is too close to edge of image.
-            shifts[i] = [0 for p in point]
-        else:
-            shifts[i] = shift
-        
+                            for (t,o) in zip(sub_imgs_t, sub_imgs_o)])[0]
+    fine_drift = trim_mean(shifts, proportiontocut=0.2, axis=0)
+    print('Fine drift:', fine_drift)
     #Return the 60% central mean to avoid outliers.
-    return trim_mean(shifts, proportiontocut=0.2, axis=0)#, np.std(shifts, axis=0)
+    return fine_drift#, np.std(shifts, axis=0)
 
 def napari_view(img, points=None, downscale=2, trace_ch=0, ref_slice=0):
     with napari.gui_qt():
