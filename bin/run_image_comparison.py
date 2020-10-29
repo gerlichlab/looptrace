@@ -1,4 +1,4 @@
-from chromatin_tracing_python.image_comparison import Compare
+from pychrtrace.image_comparison import Compare
 from tkinter.filedialog import askopenfilename
 
 def main():

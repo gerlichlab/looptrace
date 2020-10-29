@@ -8,10 +8,10 @@ import os
 import yaml
 import numpy as np
 import pandas as pd
-from chromatin_tracing_python import comparison_functions as comp
-from chromatin_tracing_python import image_processing_functions as ip
-from chromatin_tracing_python import drift_correction as dc
-from chromatin_tracing_python.detect_nuclei import detect_nuclei
+from pychrtrace import comparison_functions as comp
+from pychrtrace import image_processing_functions as ip
+from pychrtrace import drift_correction as dc
+from pychrtrace.detect_nuclei import detect_nuclei
 from joblib import Parallel, delayed
 from scipy import ndimage as ndi
 from skimage.exposure import match_histograms

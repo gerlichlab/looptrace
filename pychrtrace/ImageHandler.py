@@ -3,7 +3,7 @@ Created on Thu Apr 23 09:26:44 2020
 
 @author: ellenberg
 """
-from chromatin_tracing_python import image_processing_functions as ip
+from pychrtrace import image_processing_functions as ip
 import os
 import pandas as pd
 import numpy as np

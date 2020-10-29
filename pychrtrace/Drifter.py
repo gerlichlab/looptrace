@@ -7,7 +7,7 @@ Created on Mon Jun  8 19:30:43 2020
 import os
 import numpy as np
 import pandas as pd
-from chromatin_tracing_python import image_processing_functions as ip
+from pychrtrace import image_processing_functions as ip
 #from joblib import Parallel, delayed
 from dask import delayed, compute
 import scipy.ndimage as ndi

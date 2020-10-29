@@ -2,11 +2,11 @@ import PySimpleGUI as sg
 import os
 import threading
 
-from chromatin_tracing_python.Tracer import Tracer
-from chromatin_tracing_python.Drifter import Drifter
-from chromatin_tracing_python.ImageHandler import ImageHandler
-from chromatin_tracing_python.SpotPicker import SpotPicker
-import chromatin_tracing_python.image_processing_functions as ip
+from pychrtrace.Tracer import Tracer
+from pychrtrace.Drifter import Drifter
+from pychrtrace.ImageHandler import ImageHandler
+from pychrtrace.SpotPicker import SpotPicker
+import pychrtrace.image_processing_functions as ip
 from dask.distributed import Client
 import logging
 

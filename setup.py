@@ -11,7 +11,7 @@ setuptools.setup(
     description="Chromatin tracing in Python",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://git.embl.de/oedegaar/chromatin-team-common-code/-/tree/master/chromatin_tracing_python",
+    url="https://git.embl.de/kbeckwit/pychrtrace",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
