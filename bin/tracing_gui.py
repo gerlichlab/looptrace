@@ -79,9 +79,9 @@ def main():
             dc_thread.start()
         elif event == '-VIEW_DC-':
             pos_index = H.pos_list.index(values['-DC_POSITION-'])
-            try:
+            if H.dc_images is not None:
                 ip.napari_view(H.dc_images[pos_index], downscale=H.config['image_view_downscaling']) 
-            except TypeError:
+            else:
                 H.set_drift_table(path=values['-DC_PATH-'])
                 H.gen_dc_images()
                 ip.napari_view(H.dc_images[pos_index], downscale=H.config['image_view_downscaling'])
@@ -104,6 +104,7 @@ def main():
                     img = H.dc_images
                 else:
                     print('Generating DC images.')
+                    H.set_drift_table(path=values['-DC_PATH-'])
                     H.gen_dc_images()
                     img = H.dc_images
             else:
