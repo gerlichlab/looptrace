@@ -100,8 +100,10 @@ def main():
         elif event == '-VIEW_ROI-':
             if values['-DC_IMAGE_ROIS-']:
                 if hasattr(H, 'dc_images'):
+                    print('Found DC_images.')
                     img = H.dc_images
                 else:
+                    print('Generating DC images.')
                     H.gen_dc_images()
                     img = H.dc_images
             else:
