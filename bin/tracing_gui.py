@@ -99,7 +99,11 @@ def main():
 
         elif event == '-VIEW_ROI-':
             if values['-DC_IMAGE_ROIS-']:
-                img = H.dc_images
+                if hasattr(H, 'dc_images'):
+                    img = H.dc_images
+                else:
+                    H.gen_dc_images()
+                    img = H.dc_images
             else:
                 img = H.images
             for position in H.pos_list:
