@@ -99,7 +99,7 @@ def main():
 
         elif event == '-VIEW_ROI-':
             if values['-DC_IMAGE_ROIS-']:
-                if hasattr(H, 'dc_images'):
+                if H.dc_images is not None:
                     print('Found DC_images.')
                     img = H.dc_images
                 else:
