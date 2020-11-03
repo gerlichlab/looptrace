@@ -4,19 +4,28 @@ Python is a Python library for performing steps of chromatin tracing in Python.
 
 ## Installation
 
-Clone the repository, and install in a terminal:
+The simplest way to install the package and all dependencies is to clone the repository and create a new environment using the 
+environment.yml file. In a terminal (e.g. a miniconda/Anaconda prompt):
 
 ```bash
-python setup.py
+git clone https://git.embl.de/kbeckwit/pychrtrace
+cd pychrtrace
+conda env create -f environment.yml
+python setup.py install
+conda activate pychrtrace
+```
+There is one optional (large) package required if deconvolution will be used in the analysis. This can be installed using:
+```bash
+pip install flowdec[tf_gpu]
 ```
 
-## Usage: Drift correction
-First edit the config YAML file to provide input and output directories and other parameters. An example file is found in example_config/dc_config.yaml.
+## Usage:
+First edit the config YAML file to provide input and output directories and other parameters. An example file is found in example_config/example_config.yaml.
 
-Once edited, navigate to bin directory and execute in a terminal:
+Once edited, to the pychrtrace directory and execute in a terminal:
 
 ```bash
-python run_drift_correction_decon.py
+python bin\tracing_gui.py
 ```
 Follow instructions as required.
 
