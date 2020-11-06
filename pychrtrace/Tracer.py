@@ -75,16 +75,6 @@ class Tracer:
 
         return s, pad, good
 
-    def trace_single_roi_frame(self, img):
-        '''
-        Fit an image, typically with a 3D gaussian function, but any function defined in 
-        fit_func will do that takes similar parameters. Initialized fit at brightest point of image.
-        '''
-
-        #max_ind=list(np.unravel_index(np.argmax(img, axis=None), img.shape))
-        fit_results=delayed(self.fit_func)(img,1)
-        return fit_results
-
     def tracing_3d(self):
         '''
         Fits 3D gaussian to previously detected ROIs in all timeframes.
@@ -100,7 +90,7 @@ class Tracer:
         trace_ch = self.config['trace_ch']
         decon = self.config['deconvolve']
         if decon != 0:
-            algo, kernel = ip.decon_RL_setup()
+            algo, kernel, fd_data = ip.decon_RL_setup()
         roi_image_size = self.config['roi_image_size']
         roi_table = self.roi_table[self.roi_table['position'].isin(self.pos_list)]
 
@@ -142,9 +132,9 @@ class Tracer:
                         roi_image = np.zeros((10,10,10), dtype=np.float32)
                 
                 if decon != 0:
-                    roi_image =ip.decon_RL(roi_image, kernel, algo, decon)
+                    roi_image =ip.decon_RL(roi_image, kernel, algo, fd_data, niter=decon)
                 #Perform 3D gaussian fit
-                frame_result.append(self.trace_single_roi_frame(roi_image)[0])
+                frame_result.append(delayed(self.fit_func)(roi_image, sigma=1, center='max')[0])
                 #Expand the image to a standard size for hyperstack.
                 roi_image_exp = delayed(ip.pad_to_shape)(roi_image, roi_image_size)
                 #Extract fine drift from drift table and shift image for display.
@@ -154,7 +144,7 @@ class Tracer:
                 roi_image_shifted = delayed(ndi.shift)(roi_image_exp, (dz, dy, dx))
                 roi_images.append(roi_image_shifted)
                 #Add some parameters for tracing table
-                frame_index.append([roi.name, frame, roi['position'], roi['index'], dz, dy, dx])
+                frame_index.append([roi.name, frame, roi['position'], roi['roi_id'], roi['nuc_label'], dz, dy, dx])
 
             #Add all the results per timepoint, compute on delayed dask objects.
             trace_res.append(dask.compute(*frame_result))
@@ -175,6 +165,7 @@ class Tracer:
                                                                     "frame",
                                                                     "position",
                                                                     "roi_ID",
+                                                                    "nuc_label",
                                                                     "drift_z",
                                                                     "drift_y",
                                                                     "drift_x"])

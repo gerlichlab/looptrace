@@ -28,9 +28,7 @@ import dask.array as da
 import itertools
 import tifffile as tiff
 #from read_roi import read_roi_zip, read_roi_file
-#from flowdec import data as fd_data
-#from flowdec import restoration as fd_restoration
-#from flowdec import psf as fd_psf
+
 
 def status_bar(n):
     for i in range(n):
@@ -151,7 +149,7 @@ def czi_lazy_to_dask_czifile(folder, template):
     return x, groups
     '''
 def rois_from_csv(path):
-    rois = pd.read_csv(path)
+    rois = pd.read_csv(path, index_col=0)
     print('Loaded existing ROIs from ', path)
     return rois
 
@@ -200,7 +198,7 @@ def roi_to_napari_points(roi_table, position):
         roi_shape = [roi['zc'], roi['yc'], roi['xc']]
         roi_shapes.append(roi_shape)
     roi_shapes = np.array(roi_shapes)
-    roi_props = {'roi_id': rois_at_pos['index'].values}
+    roi_props = {'roi_id': rois_at_pos['roi_id'].values}
     return roi_shapes, roi_props
 
 def update_roi_shapes(shapes_layer, roi_table, position):
@@ -218,6 +216,25 @@ def update_roi_points(point_layer, roi_table, position, downscale):
     new_rois['position'] = position
     rois = rois.drop(rois[rois['position']==position].index)
     return pd.concat([rois, new_rois]).sort_values('position')
+
+def filter_rois_in_nucs(rois, nuc_masks, pos_list):
+    if not nuc_masks:
+        print('No nuclear masks provided, cannot filter.')
+        return rois
+
+    def spot_in_nuc(row, nuc_masks):
+        pos_index = pos_list.index(row['position'])
+        spot_label = nuc_masks[pos_index][int(row['yc']), int(row['xc'])]
+        return spot_label
+    
+    try:
+        rois.drop(columns=['nuc_label'], inplace=True)
+    except KeyError:
+        pass
+
+    rois['nuc_label'] = rois.apply(spot_in_nuc, nuc_masks=nuc_masks, axis=1)
+    print('ROIs filtered.')
+    return rois
 
 def load_config(config_file):
     '''
@@ -508,12 +525,12 @@ def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int
     #Return the 60% central mean to avoid outliers.
     return fine_drift#, np.std(shifts, axis=0)
 
-def napari_view(img, points=None, downscale=2, trace_ch=0, ref_slice=0):
+def napari_view(img, points=None, downscale=2, trace_ch=0, ref_slice=0, contrast_limits=(100,1000)):
     with napari.gui_qt():
-        viewer = napari.view_image(img[...,::downscale,::downscale,::downscale], contrast_limits=(0,2000))
+        viewer = napari.view_image(img[...,::downscale,::downscale,::downscale], contrast_limits=contrast_limits)
         if points is not None:
             point_layer = viewer.add_points(points/downscale, 
-                                                    size=8,
+                                                    size=12,
                                                     edge_width=3,
                                                     edge_color='red',
                                                     face_color='transparent',
@@ -526,13 +543,51 @@ def napari_view(img, points=None, downscale=2, trace_ch=0, ref_slice=0):
         return point_layer
 
 def decon_RL_setup():
+    '''
+    Uses flowdec (https://github.com/hammerlab/flowdec) to perform
+    Richardson Lucy deconvolution, using standard settings.
+    TODO: Define PSF parameters in input.
+
+    Returns:
+        algo: the algorithm for running deconvolution
+        kernel: the PSF for running deconvolution
+        fd_data: the module for running deconvolution
+    '''
+    from flowdec import data as fd_data
+    from flowdec import restoration as fd_restoration
+    from flowdec import psf as fd_psf
     algo = fd_restoration.RichardsonLucyDeconvolver(3).initialize()
     kernel = fd_psf.GibsonLanni(
             size_x=16, size_y=16, size_z=16, pz=0., wavelength=.610,
             na=1.46, res_lateral=.1, res_axial=.15
         ).generate()
-    return algo, kernel
+    return algo, kernel, fd_data
 
-def decon_RL(img, kernel, algo, niter=30):
+def decon_RL(img, kernel, algo, fd_data, niter=10):
+    '''[summary]
+
+    Args:
+        img ([ndarray]): [description]
+        kernel ([type]): [description]
+        algo ([type]): [description]
+        fd_data ([type]): [description]
+        niter (int, optional): [description]. Defaults to 10.
+
+    Returns:
+        [type]: [description]
+    '''
     res = algo.run(fd_data.Acquisition(data=img, kernel=kernel), niter=niter).data
     return res
+
+def nuc_segmentation(nuc_imgs, diameter = 150):
+    '''
+    Runs nuclear segmentation using cellpose trained model (https://github.com/MouseLand/cellpose)
+
+    Args:
+        nuc_imgs (ndarray or list of ndarrays): 2D or 3D images of nuclei, expects single channel
+    '''
+    from cellpose import models, io
+    model = models.Cellpose(gpu=False, model_type='nuclei')
+    channels = [0,0]
+    masks, flows, styles, diams = model.eval(nuc_imgs, diameter=diameter, channels=channels, net_avg=False)
+    return masks

@@ -3,11 +3,14 @@ name: pychrtrace
 dependencies:
     - python>=3.7
     - dask
+    - joblib
     - pandas
     - numpy
     - scipy
     - scikit-image
     - zarr==2.4.0
+    - plotly
+    - nbformat
     - pip
     - pip:
         - napari[all]

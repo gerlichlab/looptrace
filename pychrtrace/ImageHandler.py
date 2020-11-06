@@ -5,12 +5,13 @@ Created on Thu Apr 23 09:26:44 2020
 """
 from pychrtrace import image_processing_functions as ip
 import os
+from pathlib import Path
 import pandas as pd
 import numpy as np
 import yaml
 from dask.diagnostics import ProgressBar
 import dask.array as da
-import tifffile as tiff
+import tifffile
 import czifile
 
 class ImageHandler:
@@ -31,6 +32,11 @@ class ImageHandler:
         self.images_shape = self.images.shape
         self.dc_file_path = self.config['output_folder']+os.sep+self.config['output_file_prefix']+'drift_correction.csv'
         self.dc_images = None
+        self.nucs = None
+        self.nuc_masks = None
+        self.nuc_class = None
+        
+        self.nuc_folder = self.config['output_folder']+os.sep+'nucs'
 
     def reload_config(self):
         self.config = ip.load_config(self.config_path)
@@ -79,6 +85,46 @@ class ImageHandler:
 
         print('DC images generated.')
 
+    def gen_nuc_images(self):
+        imgs = []
+        for pos in self.pos_list:
+            pos_index = self.pos_list.index(pos)
+            img = da.max(self.images[pos_index,self.config['ref_slice'], self.config['nuc_channel']], axis=0).compute()
+            imgs.append(img)
+        self.nucs = imgs
+        self.save_nucs(img_type='raw')
+    
+    def load_nucs(self):
+        print('Loading nucleus images from ', self.nuc_folder)
+        self.nucs = [tifffile.imread(img) for img in Path(self.nuc_folder).glob('nuc_raw_*.tiff')]
+        self.nuc_masks = [tifffile.imread(img) for img in Path(self.nuc_folder).glob('nuc_labels_*.tiff')]
+        self.nuc_class = [np.load(img) for img in Path(self.nuc_folder).glob('nuc_raw_*_Object*.npy')]
+
+        if self.nucs == []:
+            print('No nuclei images found here, please run detect nuclei first.')
+            self.nucs = None
+        if self.nuc_masks == []:
+            print('No nuclei masks found here, please run detect nuclei first.')
+            self.nuc_masks = None
+        if self.nuc_class == []:
+            print('No classification images found, please run classification first if desired.')
+            self.nuc_class = None
+
+    def save_nucs(self, img_type):
+        Path(self.nuc_folder).mkdir(parents=True, exist_ok=True)
+        imgs = []
+        for pos in self.pos_list:
+            pos_index = self.pos_list.index(pos)
+            if img_type=='raw':
+                img = self.nucs[pos_index]
+                tifffile.imsave(self.nuc_folder+os.sep+'nuc_raw_'+pos+'.tiff', data=img)
+            elif img_type=='mask':
+                img = self.nuc_masks[pos_index]
+                tifffile.imsave(self.nuc_folder+os.sep+'nuc_labels_'+pos+'.tiff', data=img)
+            elif img_type=='class':
+                img = self.nuc_class[pos_index]
+                np.save(self.nuc_folder+os.sep+'nuc_raw_'+pos+'_Object Predictions.npy', img)
+
     def save_data(self, traces=None, imgs=None, rois=None, pwds=None, pairs=None, config=None, suffix=''):
         output_folder=self.config['output_folder']
         output_filename=self.config['output_file_prefix']
@@ -89,10 +135,11 @@ class ImageHandler:
         if pwds is not None:
             np.save(output_file+'pwds.npy',pwds)
         if rois is not None:
-            rois.to_csv(output_file+'rois.csv', index=False)
+            rois.reset_index(drop=True, inplace=True)
+            rois.to_csv(output_file+'rois.csv')
         if imgs is not None:
             imgs=np.moveaxis(imgs,0,2)
-            tiff.imsave(output_file+'imgs.tif', imgs, imagej=True)
+            tifffile.imsave(output_file+'imgs.tif', imgs, imagej=True)
         if pairs is not None:
             pairs.to_csv(output_file+'pairs.csv')
         if config is not None:
