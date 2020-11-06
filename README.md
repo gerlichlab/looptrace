@@ -14,9 +14,10 @@ conda env create -f environment.yml
 python setup.py install
 conda activate pychrtrace
 ```
-There is one optional (large) package required if deconvolution will be used in the analysis. This can be installed using:
+There are two optional (large) package required if deconvolution and nuclei segmentation that can be used in the analysis. These can be installed using:
 ```bash
 pip install flowdec[tf_gpu]
+pip install cellpose
 ```
 
 ## Usage:
