@@ -217,7 +217,7 @@ def update_roi_points(point_layer, roi_table, position, downscale):
     rois = rois.drop(rois[rois['position']==position].index)
     return pd.concat([rois, new_rois]).sort_values('position')
 
-def filter_rois_in_nucs(rois, nuc_masks, pos_list):
+def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label'):
     if not nuc_masks:
         print('No nuclear masks provided, cannot filter.')
         return rois
@@ -225,16 +225,18 @@ def filter_rois_in_nucs(rois, nuc_masks, pos_list):
     def spot_in_nuc(row, nuc_masks):
         pos_index = pos_list.index(row['position'])
         spot_label = nuc_masks[pos_index][int(row['yc']), int(row['xc'])]
+        print(spot_label)
         return spot_label
     
     try:
-        rois.drop(columns=['nuc_label'], inplace=True)
+        rois.drop(columns=[new_col], inplace=True)
     except KeyError:
         pass
 
-    rois['nuc_label'] = rois.apply(spot_in_nuc, nuc_masks=nuc_masks, axis=1)
+    rois[new_col] = rois.apply(spot_in_nuc, nuc_masks=nuc_masks, axis=1)
     print('ROIs filtered.')
     return rois
+
 
 def load_config(config_file):
     '''

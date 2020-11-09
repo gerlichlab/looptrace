@@ -22,9 +22,10 @@ class NucDetector:
             self.image_handler.gen_nuc_images()
         nuc_imgs = self.image_handler.nucs
         masks = ip.nuc_segmentation(nuc_imgs, self.config['nuc_diameter'])
+        self.mask_to_binary(masks)
+
         masks = [dilation(mask, disk(self.config['nuc_dilation'])) for mask in masks]
         self.image_handler.nucs = nuc_imgs
-
         self.image_handler.nuc_masks = masks
         self.image_handler.save_nucs(img_type='mask')
     

@@ -648,6 +648,24 @@ def contour_length(point_set):
         dist += np.linalg.norm(point_set_qc[i+1]-point_set_qc[i])
     return dist
 
+def plot_heatmap(traces, trace_id='all', zmax=600):
+    if trace_id != 'all':
+        if type(trace_id) == int:
+            trace_id = [trace_id]
+        pwds = pwd_calc(traces[traces['trace_ID'].isin(trace_id)])
+        pwds_mean = np.nanmedian(pwds, axis=0)
+    else:
+        pwds = pwd_calc(traces)
+        pwds_mean = np.nanmedian(pwds, axis=0)
+    nan_rows = ~np.all(np.isnan(pwds_mean), axis=0)
+    nan_cols = ~np.all(np.isnan(pwds_mean), axis=1)
+    pwds_crop = pwds_mean[nan_rows,:]
+    pwds_crop = pwds_crop[:,nan_cols]
+    print('Number of traces in heatmap: ', pwds.shape[0])
+    fig = px.imshow(pwds_crop, zmin=0, zmax=zmax)
+    fig.show()
+    
+
 def plot_traces(traces, trace_id, split=False):
     '''
     Helper function for plotting one or several traces in one figure.

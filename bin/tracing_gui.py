@@ -153,7 +153,9 @@ def main():
         elif event == '-SPOT_IN_NUC-':
             if not H.nuc_masks:
                 H.load_nucs()
-            H.roi_table = ip.filter_rois_in_nucs(H.roi_table, H.nuc_masks, H.pos_list)
+            H.roi_table = ip.filter_rois_in_nucs(H.roi_table, H.nuc_masks, H.pos_list, new_col='nuc_label')
+            if H.nuc_class:
+                H.roi_table = ip.filter_rois_in_nucs(H.roi_table, H.nuc_class, H.pos_list, new_col='nuc_class')
             H.save_data(rois=H.roi_table)
 
         elif event == '-LOAD_ROI-':
@@ -207,7 +209,7 @@ def main():
 
 if __name__ == '__main__':
     try:
-        client = Client('127.0.0.1:8787') #Check for existing local client
+        client = Client('127.0.0.1:8787') #Check for existing local dask client
     except  OSError:
         client = Client() #If no local client exists, start a new one.
     
