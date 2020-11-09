@@ -89,7 +89,7 @@ class ImageHandler:
         imgs = []
         for pos in self.pos_list:
             pos_index = self.pos_list.index(pos)
-            img = da.max(self.images[pos_index,self.config['ref_slice'], self.config['nuc_channel']], axis=0).compute()
+            img = da.max(self.images[pos_index,self.config['nuc_ref_frame'], self.config['nuc_channel']], axis=0).compute()
             imgs.append(img)
         self.nucs = imgs
         self.save_nucs(img_type='raw')

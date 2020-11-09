@@ -35,7 +35,7 @@ class SpotPicker:
             img = self.images[pos_index, ref_slice, trace_ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
             spot_props, filt_img = ip.detect_spots(img, spot_threshold)
             spot_props['position'] = preview_pos
-            spot_props = spot_props.reset_index()
+            spot_props = spot_props.reset_index().rename(columns={'index':'roi_id'})
             return spot_props, img, filt_img
 
         for position in self.pos_list:

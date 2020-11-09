@@ -123,13 +123,13 @@ class Tracer:
                 #If microscope drifted, ROI could be outside image. Correct for this:
                 if not good:
                     print('Bad image.')
-                    roi_image=np.zeros((10,10,10), dtype=np.float32)
+                    roi_image=np.zeros((16,16,16), dtype=np.float32)
                 elif pad != ((0,0),(0,0),(0,0)):
                     print('Padding ', pad)
                     try:
                         roi_image = np.pad(roi_image, pad, mode='edge')
                     except ValueError:
-                        roi_image = np.zeros((10,10,10), dtype=np.float32)
+                        roi_image = np.zeros((16,16,16), dtype=np.float32)
                 
                 if decon != 0:
                     roi_image =ip.decon_RL(roi_image, kernel, algo, fd_data, niter=decon)

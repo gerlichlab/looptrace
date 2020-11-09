@@ -143,7 +143,7 @@ def main():
             S = SpotPicker(H)
             spots, img, filt_img = S.rois_from_spots(preview_pos=values['-ROI_POSITION-'])
             roi_points, roi_props = ip.roi_to_napari_points(spots, values['-ROI_POSITION-'])
-            ip.napari_view(filt_img, points=roi_points, downscale=H.config['spot_downsample'], contrast_limits=None)
+            ip.napari_view(np.stack([img, filt_img]), points=roi_points, downscale=1, contrast_limits=None)
         
         elif event == '-DET_ROI-':
             print('Detecting spots in all positions.')
