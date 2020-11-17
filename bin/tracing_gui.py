@@ -186,7 +186,7 @@ def main():
                                             points = roi_points,
                                             downscale= H.config['image_view_downscaling'],
                                             trace_ch = H.config['trace_ch'],
-                                            ref_slice= H.config['ref_slice'],
+                                            ref_slice= H.config['bead_reference_frame'],
                                             contrast_limits=(100,5000))
             new_roi_table = ip.update_roi_points(point_layer, H.roi_table, 
                                                 position=position, 

@@ -28,7 +28,10 @@ class ImageHandler:
             print('Images loaded from ZARR file, shape is ', self.images.shape)
             print('Positions found: ', self.pos_list)
         else:
-            self.images, self.pos_list = ip.images_to_dask(self.config['input_folder'], self.config['image_filetype']+self.config['image_template'])
+            try:
+                self.images, self.pos_list = ip.images_to_dask(self.config['input_folder'], self.config['image_filetype']+self.config['image_template'])
+            except ValueError:
+                print('No images found, check configuration.')
         self.images_shape = self.images.shape
         self.dc_file_path = self.config['output_folder']+os.sep+self.config['output_file_prefix']+'drift_correction.csv'
         self.dc_images = None
