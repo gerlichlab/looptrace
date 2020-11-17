@@ -90,7 +90,7 @@ class Tracer:
         trace_ch = self.config['trace_ch']
         decon = self.config['deconvolve']
         if decon != 0:
-            algo, kernel, fd_data = ip.decon_RL_setup()
+            algo, kernel, fd_data = ip.decon_RL_setup(res_lateral=self.config['xy_nm']/1000, res_axial=self.config['z_nm']/1000)
         roi_image_size = self.config['roi_image_size']
         roi_table = self.roi_table[self.roi_table['position'].isin(self.pos_list)]
 
@@ -144,7 +144,7 @@ class Tracer:
                 roi_image_shifted = delayed(ndi.shift)(roi_image_exp, (dz, dy, dx))
                 roi_images.append(roi_image_shifted)
                 #Add some parameters for tracing table
-                frame_index.append([roi.name, frame, roi['position'], roi['roi_id'], roi['nuc_label'], dz, dy, dx])
+                frame_index.append([roi.name, frame, roi['position'], roi['roi_id'], dz, dy, dx])
 
             #Add all the results per timepoint, compute on delayed dask objects.
             trace_res.append(dask.compute(*frame_result))
@@ -165,7 +165,6 @@ class Tracer:
                                                                     "frame",
                                                                     "position",
                                                                     "roi_ID",
-                                                                    "nuc_label",
                                                                     "drift_z",
                                                                     "drift_y",
                                                                     "drift_x"])

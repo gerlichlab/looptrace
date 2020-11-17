@@ -544,7 +544,8 @@ def napari_view(img, points=None, downscale=2, trace_ch=0, ref_slice=0, contrast
     if points is not None:
         return point_layer
 
-def decon_RL_setup():
+def decon_RL_setup(size_x=16, size_y=16, size_z=16, pz=0., wavelength=.610,
+            na=1.46, res_lateral=.1, res_axial=.15):
     '''
     Uses flowdec (https://github.com/hammerlab/flowdec) to perform
     Richardson Lucy deconvolution, using standard settings.
@@ -560,8 +561,8 @@ def decon_RL_setup():
     from flowdec import psf as fd_psf
     algo = fd_restoration.RichardsonLucyDeconvolver(3).initialize()
     kernel = fd_psf.GibsonLanni(
-            size_x=16, size_y=16, size_z=16, pz=0., wavelength=.610,
-            na=1.46, res_lateral=.1, res_axial=.15
+            size_x=size_x, size_y=size_y, size_z=size_z, pz=pz, wavelength=wavelength,
+            na=na, res_lateral=res_lateral, res_axial=res_axial
         ).generate()
     return algo, kernel, fd_data
 

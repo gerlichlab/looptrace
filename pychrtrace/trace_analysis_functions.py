@@ -23,7 +23,7 @@ import dask.array as da
 from pychrtrace import image_processing_functions as ip
 #import h5py
 
-def tracing_qc(row, qc_dict):
+def tracing_qc(row, qc_dict, traces_df=None):
     '''
     Function to set QC value of each fit based on 
     settings from config file.
@@ -33,6 +33,24 @@ def tracing_qc(row, qc_dict):
     A_to_BG = qc_dict['A_to_BG']
     sigma_xy_max = qc_dict['sigma_xy_max']
     sigma_z_max = qc_dict['sigma_z_max']
+    max_dist = qc_dict['max_dist']
+    
+
+    if max_dist:
+        ref_frame = qc_dict['dist_ref_slice']
+        trace_id = row['trace_ID']
+        ref_frame = traces_df.query('trace_ID == @trace_id').iloc[ref_frame]
+        z_c = ref_frame['z']
+        y_c = ref_frame['y']
+        x_c = ref_frame['x']
+        z = row['z']
+        y = row['y']
+        x = row['x']
+
+        dist = ((z-z_c)**2 + (y-y_c)**2 + (x-x_c)**2)**0.5
+
+        if dist > max_dist:
+            return 0
 
     if row['A']<(A_to_BG*row['BG']):
         return 0
@@ -46,32 +64,7 @@ def tracing_qc(row, qc_dict):
         return 0
     else:
         return 1
-    
-def group_mean_qc(row, groups):
-    '''
-    Function to set QC value of each row
-    based on group calculation, in this case 
-    number of nm away from group mean each point can be.
-    Preserves original QC, can only change 1 to 0.
-    '''
-    #print(groups.iloc[row.name]['z'])
-    #min_groups=groups-self.config['max_dist_qc']
-    #max_groups=groups+self.config['max_dist_qc']
-    max_dist = self.config['max_dist_qc']
-    z_mean=groups.iloc[row.name]['z']
-    y_mean=groups.iloc[row.name]['y']
-    x_mean=groups.iloc[row.name]['x']
 
-    if row['z']>(z_mean+max_dist) or row['z']<(z_mean-max_dist):
-        return 0
-    if row['y']>(y_mean+max_dist) or row['y']<(y_mean-max_dist):
-        return 0
-    if row['x']>(x_mean+max_dist) or row['x']<(x_mean-max_dist):
-        return 0
-    if row['QC'] == 0:
-        return 0
-    else:
-        return 1
 
 def view_context(all_images,
                  contrast= ((0,5000),(0,2000),(0,5000)),
@@ -228,11 +221,11 @@ def single_trace_analysis(traces, pwds, idx1, idx2, idx_p1, idx_p2):
     #Get points by their trace indices.
     points_A, points_B = points_from_traces(traces, [idx1,idx2])
     #Align the point sets, note rigid_transform include matching.
-    aligned_points = rigid_transform_3D(points_B, points_A)
+    points_B_reg = rigid_transform_3D(points_B, points_A)
     #Need to match seperately for the mat_corr functions
-    points_A, points_B = match_two_pointsets(points_A, points_B)
-    aligned_mse = mat_corr_rmse(points_A, points_B)
-    aligned_pcc = mat_corr_pcc(points_A, points_B)
+    points_A, points_B_reg = match_two_pointsets(points_A, points_B_reg)
+    aligned_mse = mat_corr_rmse(points_A, points_B_reg)
+    aligned_pcc = mat_corr_pcc(points_A, points_B_reg)
     
     pwd_mse = mat_corr_rmse(pwds[idx_p1],pwds[idx_p2])
     pwd_pcc = mat_corr_pcc(pwds[idx_p1],pwds[idx_p2])
@@ -301,6 +294,7 @@ def run_gpa_all_clusters(traces, cluster_df, min_cluster = 1):
         cluster_members = list(cluster_df[cluster_df['cluster']==cluster_id]['trace_ID'])
         if len(cluster_members)>=min_cluster:
             all_cluster_members.append(cluster_members)
+            print(f'Cluster ID {cluster_id}, members: {cluster_members}.')
 
     #Perform GPA analysis on each of the clusters seperately.
     all_mean_points = [general_procrustes_analysis(traces, cluster_members)[1]
@@ -664,6 +658,7 @@ def plot_heatmap(traces, trace_id='all', zmax=600):
     print('Number of traces in heatmap: ', pwds.shape[0])
     fig = px.imshow(pwds_crop, zmin=0, zmax=zmax)
     fig.show()
+    return pwds_crop, fig
     
 
 def plot_traces(traces, trace_id, split=False):

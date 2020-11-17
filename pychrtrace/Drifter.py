@@ -47,7 +47,7 @@ class Drifter():
 
         images = self.images
         pos_list = self.pos_list
-        t_slice = self.config['bead_reference_timepoint']
+        t_slice = self.config['bead_reference_frame']
         t_all = range(images.shape[1])
         ch = self.config['bead_ch']
         threshold = self.config['bead_threshold']

@@ -15,7 +15,7 @@ import napari
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 logging.getLogger('tensorflow').setLevel(logging.FATAL)
-sg.theme('Dark Blue 3')  # please make your windows colorful
+sg.theme('DarkTeal6')  # please make your windows colorful
 
 
     
@@ -111,18 +111,15 @@ def main():
             except NameError:
                 N = NucDetector(H)
             with napari.gui_qt():
-                try:
+                if H.nucs:
                     nuc_imgs = np.stack(H.nucs)
-                    nuc_labels = np.stack(H.nuc_masks)
                     viewer = napari.view_image(nuc_imgs.copy())
+                if H.nuc_masks:
+                    nuc_labels = np.stack(H.nuc_masks)
                     labels_layer = viewer.add_labels(nuc_labels.copy())
-                except ValueError:
-                    print('Nuc images not found.')
-                try:
+                if H.nuc_class:
                     nuc_class = np.stack(H.nuc_class)
                     classes_layer = viewer.add_labels(nuc_class.copy())
-                except ValueError:
-                    print('Classification images not found.')
             try:             
                 if not np.allclose(labels_layer.data, nuc_labels):
                     print('Labels changed, resaving.')
@@ -136,8 +133,9 @@ def main():
                     nuc_class = [classes_layer.data[i] for i in range(classes_layer.data.shape[0])]
                     H.nuc_class = nuc_class
                     H.save_nucs(img_type='class')
-            except UnboundLocalError:
-                pass
+            except UnboundLocalError: #In case labels or classes do not exist.
+                continue
+
         elif event == '-PREVIEW_ROI-':
             print('Previewing spot detection.')
             S = SpotPicker(H)
@@ -183,13 +181,13 @@ def main():
             #roi_shapes, roi_props = ip.roi_to_napari_shape(T.roi_table, position = position)
             roi_points, roi_props = ip.roi_to_napari_points(H.roi_table, position = position)
             if roi_points.size == 0:
-                print('No ROIs found, skipping position.')
-                continue
+                roi_points = np.empty((0, 3))
             point_layer = ip.napari_view(img[pos_index], 
                                             points = roi_points,
                                             downscale= H.config['image_view_downscaling'],
                                             trace_ch = H.config['trace_ch'],
-                                            ref_slice= H.config['ref_slice'])
+                                            ref_slice= H.config['ref_slice'],
+                                            contrast_limits=(100,5000))
             new_roi_table = ip.update_roi_points(point_layer, H.roi_table, 
                                                 position=position, 
                                                 downscale= H.config['image_view_downscaling'])
