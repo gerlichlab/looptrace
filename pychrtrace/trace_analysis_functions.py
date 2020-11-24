@@ -15,7 +15,7 @@ from scipy import stats
 import scipy.ndimage as ndi
 from scipy.spatial.distance import cdist
 from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
-
+import matplotlib
 import matplotlib.pyplot as plt
 import napari
 from joblib import Parallel, delayed
@@ -37,9 +37,9 @@ def tracing_qc(row, qc_dict, traces_df=None):
     
 
     if max_dist:
-        ref_frame = qc_dict['dist_ref_slice']
+        ref = qc_dict['dist_ref_slice']
         trace_id = row['trace_ID']
-        ref_frame = traces_df.query('trace_ID == @trace_id').iloc[ref_frame]
+        ref_frame = traces_df.query('trace_ID == @trace_id').iloc[ref]
         z_c = ref_frame['z']
         y_c = ref_frame['y']
         x_c = ref_frame['x']
@@ -170,7 +170,6 @@ def tracing_length_qc(traces, min_length=0):
     Parameters
     ----------
     traces : pd DataFrame with trace data.
-    pwds : 3dim np array from pwd_calc.
     min_length : Int, minimum length of trace to pass QC
 
     Returns
@@ -250,7 +249,9 @@ def trace_clustering(paired, metric='pwd_pcc', method='single', color_threshold=
     -------
     Z : Clustering matrix based on hierarchial clustering (see scipy.cluster.hierarchy.single docs)
     '''
-    
+    from scipy.cluster.hierarchy import set_link_color_palette
+    cmap = px.colors.qualitative.Plotly
+    set_link_color_palette(cmap)
     labels=list(np.unique(np.concatenate((paired['idx1'],paired['idx2']))))
     if metric == 'aligned_mse' or metric == 'pwd_mse':
         Z=linkage(paired[metric], method=method)
@@ -259,7 +260,7 @@ def trace_clustering(paired, metric='pwd_pcc', method='single', color_threshold=
     else:
         raise ValueError('Inappropriate metric.')
     plt.figure(figsize=(20,20))
-    dendro=dendrogram(Z, labels=labels, color_threshold=color_threshold, leaf_font_size=12)
+    dendro=dendrogram(Z, labels=labels, color_threshold=color_threshold, leaf_font_size=10)
     if color_threshold is None:
         color_threshold = 0.7*max(Z[:,2])
     clusters=fcluster(Z, color_threshold, criterion='distance')
@@ -642,7 +643,7 @@ def contour_length(point_set):
         dist += np.linalg.norm(point_set_qc[i+1]-point_set_qc[i])
     return dist
 
-def plot_heatmap(traces, trace_id='all', zmax=600):
+def plot_heatmap(traces, trace_id='all', zmax=600, cmap = 'rdbu'):
     if trace_id != 'all':
         if type(trace_id) == int:
             trace_id = [trace_id]
@@ -656,7 +657,7 @@ def plot_heatmap(traces, trace_id='all', zmax=600):
     pwds_crop = pwds_mean[nan_rows,:]
     pwds_crop = pwds_crop[:,nan_cols]
     print('Number of traces in heatmap: ', pwds.shape[0])
-    fig = px.imshow(pwds_crop, zmin=0, zmax=zmax)
+    fig = px.imshow(pwds_crop, zmin=0, zmax=zmax, color_continuous_scale=cmap)
     fig.show()
     return pwds_crop, fig
     
@@ -686,7 +687,7 @@ def plot_traces(traces, trace_id, split=False):
     fig = px.scatter_3d(df, x='x', y='y', z='z', 
                 symbol='keys',
                 color='frame_name', 
-                color_discrete_sequence = px.colors.sequential.thermal[2:],
+                color_discrete_sequence = px.colors.sequential.Inferno,
                 labels={'frame_name' : 'Exchange', 'keys':'Group'})
 
     for i in trace_id:
@@ -704,7 +705,7 @@ def plot_traces(traces, trace_id, split=False):
                                     line=dict(color=np.random.randint(1),
                                                 width=4)))
 
-    fig.update_layout(template='plotly_dark', 
+    fig.update_layout(template='plotly_white', 
                       margin=dict(l=20, r=20, t=20, b=20),
                       showlegend= True,
                         legend=dict(
@@ -736,13 +737,13 @@ def plot_aligned_traces(traces, idx):
     all_points_aligned = [template]+[rigid_transform_3D(offset, template) for 
                           offset in all_points]
     scatters = []
-    cmap = px.colors.sequential.thermal[2:]
+    cmap = px.colors.sequential.Inferno
     for point_id, point_set in enumerate(all_points_aligned):
         idx=np.arange(point_set.shape[0])
         qc_idx = point_set[:,3] != 0
         idx=idx[qc_idx]
         labels=['E'+str(i) for i in idx]
-        cmap_points = [cmap[i%10] for i in idx]
+        cmap_points = [cmap[(i-1)%len(cmap)] for i in idx]
         z,y,x = point_set[qc_idx, 0], point_set[qc_idx, 1], point_set[qc_idx, 2]
         z_f, y_f, x_f=spline_interp([z,y,x])
         scatters.append(go.Scatter3d(x=x, y=y, z=z, 
@@ -759,11 +760,11 @@ def plot_aligned_traces(traces, idx):
                             line=dict(color=px.colors.qualitative.Plotly[point_id],
                                         width=5)))
     fig = go.Figure(data=scatters)
-    fig.update_layout(template='plotly_dark', showlegend= False)
+    fig.update_layout(template='plotly_white', showlegend= False)
     iplot(fig)
     return fig
     
-def plot_gpa_output(aligned_points, mean_points, cluster_members):
+def plot_gpa_output(aligned_points, mean_points, cluster_members, cluster_id=0):
     '''
     Helper function for plotting the results of a GPA analysis.
     
@@ -780,47 +781,58 @@ def plot_gpa_output(aligned_points, mean_points, cluster_members):
     '''
     
     scatters = []
-    cmap = px.colors.sequential.thermal
+    cmap = px.colors.sequential.Inferno
+    cmap_line = px.colors.qualitative.Plotly
     for point_id, point_set in enumerate(aligned_points):
         idx=np.arange(point_set.shape[0])
         qc_idx = point_set[:,3] != 0
         idx=idx[qc_idx]
         labels=['E'+str(i) for i in idx]
         
-        cmap_points = [cmap[i%12] for i in idx]
-        
+        cmap_points = [cmap[(i-1)%len(cmap)] for i in idx]
         z,y,x = point_set[qc_idx, 0], point_set[qc_idx, 1], point_set[qc_idx, 2]
-
+        z_f, y_f, x_f=spline_interp([z,y,x])
+        scatters.append(go.Scatter3d(x=x, 
+                        y=y, 
+                        z=z,
+                        mode ='lines',
+                        showlegend=False,
+                        line=dict(color='rgba(50, 50, 50, 0.0)',
+                                    width=3)))
         scatters.append(go.Scatter3d(x=x, y=y, z=z, 
                                      mode='markers', 
                                      marker_color=cmap_points,
                                      marker_size=4,
-                                     opacity=0.5,
+                                     opacity=0.3,
                                      name='Trace '+str(cluster_members[point_id]),
                                      ))
-        scatters.append(go.Scatter3d(x=x,y=y,z=z, 
-                                       mode='lines',
-                                       line=dict(color='rgba(15, 60, 90, 0.3)',
-                                               width=3)))
-    
+
     mean_idx=np.arange(mean_points.shape[0])
     mean_qc = mean_points[:,3] != 0
     mean_idx=mean_idx[mean_qc]
     print(mean_idx)
     #mean_labels=['E'+str(i) for i in mean_idx]
-    mean_cmap = [cmap[i%12] for i in mean_idx]
+    mean_cmap = [cmap[(i-1)%len(cmap)] for i in mean_idx]
     z_m, y_m, x_m = mean_points[mean_idx, 0], mean_points[mean_idx, 1], mean_points[mean_idx, 2]
-    
-    mean_fig = scatters.append(go.Scatter3d(x=x_m, y=y_m, z=z_m, 
-                                            mode='markers+lines', 
+    z_fm, y_fm, x_fm=spline_interp([z_m,y_m,x_m])
+    scatters.append(go.Scatter3d(x=x_m, y=y_m, z=z_m, 
+                                            mode='markers', 
                                             marker_color=mean_cmap,
-                                            name='Mean',
-                                            line=dict(color='#ff7f0e', 
-                                                      width=6)))
+                                            marker_size=8
+                                            ))
+    
+    scatters.append(go.Scatter3d(x=x_fm, 
+                    y=y_fm, 
+                    z=z_fm,
+                    mode ='lines',
+                    showlegend=False,
+                    name='Mean',
+                    line=dict(color=cmap_line[cluster_id-1],
+                                width=6)))
     
 
     fig = go.Figure(data=scatters)
-    fig.update_layout(template='plotly_dark', showlegend= True)
+    fig.update_layout(template='plotly_white', showlegend= True, height=600)
     iplot(fig)
     return fig
     
@@ -841,29 +853,39 @@ def plot_multi_points(list_of_points, names = None):
     '''
     
     scatters = []
-    cmap = px.colors.sequential.thermal
+    cmap = px.colors.sequential.Inferno
+    cmap_line = px.colors.qualitative.Plotly
     for point_id, point_set in enumerate(list_of_points):
         idx=np.arange(point_set.shape[0])
         qc_idx = point_set[:,3] != 0
         idx=idx[qc_idx]
         labels=['E'+str(i) for i in idx]
         
-        cmap_points = [cmap[i%12] for i in idx]
+        cmap_points = [cmap[(i-1)%len(cmap)] for i in idx]
         if names is not None:
             name = names[point_id]
         else:
-            name = 'Cluster '+str(point_id)
-        point_set_plot = point_set[qc_idx, 0:3]
-        scatters.append(go.Scatter3d(x=point_set_plot[:,2], y=point_set_plot[:,1], z=point_set_plot[:,0], 
-                                     mode='markers+lines', 
+            name = 'Cluster '+str(point_id+1)
+        z,y,x = point_set[qc_idx, 0], point_set[qc_idx, 1], point_set[qc_idx, 2]
+        z_f, y_f, x_f=spline_interp([z,y,x])
+        scatters.append(go.Scatter3d(x=x, y=y, z=z, 
+                                     mode='markers', 
                                      marker_color=cmap_points,
                                      marker_size=6,
                                      opacity=1,
                                      name=name,
-                                     line=dict(color=np.random.randint(1),
+                                     showlegend=True,
+                                     line=dict(color=cmap_line[point_id],
                                                width=4)))
+        scatters.append(go.Scatter3d(x=x_f, 
+                        y=y_f, 
+                        z=z_f,
+                        mode ='lines',
+                        showlegend=False,
+                        line=dict(color=cmap_line[point_id],
+                                    width=4)))
     
     fig = go.Figure(data=scatters)
-    fig.update_layout(template='plotly_dark', showlegend= True, height=600)
+    fig.update_layout(template='plotly_white', showlegend= True, height=600)
     iplot(fig)
     return fig
