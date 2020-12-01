@@ -1,13 +1,22 @@
+# -*- coding: utf-8 -*-
+"""
+Created by:
+
+Kai Sandvold Beckwith
+Ellenberg group
+EMBL Heidelberg
+"""
+
 import PySimpleGUI as sg
 import os
 import threading
 import numpy as np
 
-from pychrtrace.Tracer import Tracer
-from pychrtrace.Drifter import Drifter
-from pychrtrace.ImageHandler import ImageHandler
-from pychrtrace.SpotPicker import SpotPicker
-from pychrtrace.NucDetector import NucDetector
+from pychrtrace import Tracer
+from pychrtrace import Drifter
+from pychrtrace import ImageHandler
+from pychrtrace import SpotPicker
+from pychrtrace import NucDetector
 import pychrtrace.image_processing_functions as ip
 from dask.distributed import Client
 import logging
@@ -17,10 +26,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 logging.getLogger('tensorflow').setLevel(logging.FATAL)
 sg.theme('DarkTeal6')  # please make your windows colorful
 
-
-    
 def main():
-
     layout = [
         [sg.Text('Choose config file:')],
         [sg.InputText('YAML_config_file', key='-CONFIG_PATH-'), sg.FileBrowse()],
@@ -83,10 +89,10 @@ def main():
             if os.path.exists(D.dc_file_path):
                 dc_exists_choice = sg.popup_yes_no('Existing drift correction file found, recalculate?')
                 if dc_exists_choice == 'Yes':
-                    dc_thread = threading.Thread(target=D.drift_corr_mypic)
+                    dc_thread = threading.Thread(target=D.drift_corr)
                     dc_thread.start()
             else:
-                dc_thread = threading.Thread(target=D.drift_corr_mypic)
+                dc_thread = threading.Thread(target=D.drift_corr)
                 dc_thread.start()
         elif event == '-VIEW_DC-':
             pos_index = H.pos_list.index(values['-DC_POSITION-'])

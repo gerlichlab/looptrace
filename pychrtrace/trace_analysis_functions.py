@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Apr 29 09:19:04 2020
+Created by:
 
-@author: ellenberg
+Kai Sandvold Beckwith
+Ellenberg group
+EMBL Heidelberg
 """
+
 import itertools
 import pandas as pd
 import numpy as np
@@ -21,7 +24,6 @@ import napari
 from joblib import Parallel, delayed
 import dask.array as da
 from pychrtrace import image_processing_functions as ip
-#import h5py
 
 def tracing_qc(row, qc_dict, traces_df=None):
     '''
@@ -157,7 +159,7 @@ def pwd_calc(traces):
 
     Returns
     -------
-    pwds : Pair-wise distance matrixes for traces as an 3-dim numpy array.
+    pwds : Pair-wise distance matrixes for traces as an 3D numpy array.
     '''
     
     points = [points_from_df_nan(df)[0] for _, df in traces.groupby('trace_ID')]
@@ -186,18 +188,18 @@ def trace_analysis(traces, pwds):
     '''
     Calculates pairwise trace similarity based on :
         - MSE of points after rigid alignment
+        - PCC of points after rigid alignment
         - MSE of pairwise distance matrices
-        - Pearson's correlation coeff of pwds.
+        - PCC of pwds.
         
     Parameters
     ----------
     traces : pd DataFrame with trace data.
-    pwds : 3dim np array from pwd_calc.
+    pwds : 3D np array from pwd_calc.
 
     Returns
     -------
-    output : pd DataFrame with results, including indexes and point 
-                coordinates of original and aligned traces.
+    output : pd DataFrame with pairwise similarity results, including indexes of traces.
     '''
     
     pairwise_trace_idx = list(itertools.combinations(traces['trace_ID'].unique(),2))
@@ -215,12 +217,27 @@ def single_trace_analysis(traces, pwds, idx1, idx2, idx_p1, idx_p2):
     '''
     Perform pairwise analysis of two single traces according to MSE and PCC metrics
     of their aligned points and their distance matrices.
+    
+    Parameters
+    ----------
+    traces : pd DataFrame with trace data.
+    pwds : 3D np array from pwd_calc.
+    idx1: int, trace_ID of first trace
+    idx2: int, trace_ID of second trace
+    idx_p1: int, index of first trace in pwd matrix
+    idx_p2: int, index of second trace in pwd matrix
+
+    Returns
+    -------
+    output : The input trace_IDs, and the similiarity metrics of the registered traces.
     '''
 
     #Get points by their trace indices.
     points_A, points_B = points_from_traces(traces, [idx1,idx2])
-    #Align the point sets, note rigid_transform include matching.
+
+    #Align the point sets, note rigid_transform includes matching.
     points_B_reg = rigid_transform_3D(points_B, points_A)
+
     #Need to match seperately for the mat_corr functions
     points_A, points_B_reg = match_two_pointsets(points_A, points_B_reg)
     aligned_mse = mat_corr_rmse(points_A, points_B_reg)
@@ -247,7 +264,8 @@ def trace_clustering(paired, metric='pwd_pcc', method='single', color_threshold=
     method : see scipy.cluster.hierarchy.linkage documentation
     Returns
     -------
-    Z : Clustering matrix based on hierarchial clustering (see scipy.cluster.hierarchy.single docs)
+    cluster_df : Dataframe with results of
+                 hierarchial clustering (see scipy.cluster.hierarchy.single docs)
     '''
     from scipy.cluster.hierarchy import set_link_color_palette
     cmap = px.colors.qualitative.Plotly
@@ -260,7 +278,7 @@ def trace_clustering(paired, metric='pwd_pcc', method='single', color_threshold=
     else:
         raise ValueError('Inappropriate metric.')
     plt.figure(figsize=(20,20))
-    dendro=dendrogram(Z, labels=labels, color_threshold=color_threshold, leaf_font_size=10)
+    dendro=dendrogram(Z, labels=labels, color_threshold=color_threshold, leaf_font_size=9)
     if color_threshold is None:
         color_threshold = 0.7*max(Z[:,2])
     clusters=fcluster(Z, color_threshold, criterion='distance')
@@ -268,18 +286,6 @@ def trace_clustering(paired, metric='pwd_pcc', method='single', color_threshold=
     cluster_df.columns=['trace_ID', 'cluster']
     
     return cluster_df
-
-    '''
-    # Get points from input dataframe.
-
-
-    A_orig, A_orig_idx = points_from_df(df_A)
-    B_orig, B_orig_idx = points_from_df(df_B)
-
-    # Ensure only matching points are used.
-    # TODO: This is quite slow, bulk of this whole function. Implementing something faster should be easy.
-    A, idx_A, B, idx_B = matching_points_from_dfs(df_A,df_B)
-    '''
 
 def run_gpa_all_clusters(traces, cluster_df, min_cluster = 1):
     '''
@@ -312,8 +318,9 @@ def run_gpa_all_clusters(traces, cluster_df, min_cluster = 1):
 
 def general_procrustes_analysis(traces, trace_ids, crit=0.01):
     '''
-    General procrustes analysis is performed as described in ...
-    Runs until procrustes distance is less than crit.
+    General procrustes analysis is performed as described in e.g.
+    https://en.wikipedia.org/wiki/Generalized_Procrustes_analysis
+    Runs until change in procrustes distance is less than crit.
 
     Returns all the aligned traces, the mean trace and the std of all the aligned traces.
     '''
@@ -343,7 +350,7 @@ def general_procrustes_analysis(traces, trace_ids, crit=0.01):
         all_points, points_mean, dist = general_procrustes_loop(all_points, points_mean)
         n_cycles += 1
         
-    print('GPA converged after {} cycles with distance {}'.format(n_cycles, dist))
+    print(f'GPA converged after {n_cycles} cycles with distance {dist}.')
     
     #Calculate standard deviation of all points:
     points_std = np.nanstd(np.stack(all_points), axis = 0)
@@ -377,7 +384,8 @@ def general_procrustes_loop(all_points, template):
     
 def procrustes_distance(points_A, points_B):
     '''
-    Procrustes distance (identical to RMSE) between two point sets.
+    Procrustes distance (identical to RMSD) between two point sets.
+    Matches them before calculation.
     '''
 
     points_A, points_B = match_two_pointsets(points_A, points_B)    
@@ -398,7 +406,7 @@ def rigid_transform_3D(points_A, points_B):
 
     Parameters
     ----------
-    points_A, points_B : Nx4 (ZYX + condition) numpy ndarrays.
+    points_A, points_B : Nx4 (ZYX + QC) numpy ndarrays.
 
     Returns
     -------
@@ -446,29 +454,11 @@ def rigid_transform_3D(points_A, points_B):
     # calculate translation.
     t = Bc - np.matmul(R,Ac)
     
-    # Transform the matched points using calculated R and t
-    #A_reg = np.matmul(R,A)+t
-    
-    #Calculate the RMSE of the alignment
-    # rmse = np.sqrt(np.mean(np.sum((A_reg-B)**2)))
-    
     #Transform the original vector with QC values
     points_A_reg = np.copy(points_A)
     points_A_reg[:,:3] = (np.matmul(R, points_A[:,:3].T)+t).T
     
-    return points_A_reg#, rmse
-
-'''
-def scale_rigid_transform_3D(df_A,df_B):
-    A_orig, A_orig_idx = points_from_df(df_A)
-    B_orig, B_orig_idx = points_from_df(df_B)
-    A, idx_A, B, idx_B = matching_points_from_dfs(df_A,df_B)
-    reg = RigidRegistration(**{'X': A, 'Y': B})
-    B_ = reg.transform_point_cloud(B)
-    mse = ((A - B_)**2).mean()
-    B_aligned = reg.transform_point_cloud(B_orig)
-    return B_aligned, B_orig_idx, mse
-'''
+    return points_A_reg
 
 def match_two_pointsets(points_A, points_B):
     '''
@@ -502,7 +492,7 @@ def points_from_traces(traces, trace_ids):
 
     Returns
     -------
-    points : list of  Nx4 np array with trace coordinates and QC value.
+    points_with_qc : list of  Nx4 np array with trace coordinates and QC value.
     '''
     
     if not isinstance(trace_ids, (list, tuple)):
@@ -608,7 +598,7 @@ def radius_of_gyration(point_set):
     point_set_qc = point_set[qc_idx, 0:3]
 
     points_mean=np.mean(point_set_qc, axis=0)
-    rog = np.sqrt(1/points_mean.shape[0] * np.sum((point_set_qc - points_mean)**2))
+    rog = np.sqrt(1/point_set_qc.shape[0] * np.sum((point_set_qc - points_mean)**2))
     return rog
 
 def elongation(point_set):
@@ -635,6 +625,14 @@ def elongation(point_set):
     return elongation
 
 def contour_length(point_set):
+    '''Calculate controur length of a trace.
+
+    Args:
+        point_set ([4d np array]): coordinate points vector with QC
+
+    Returns:
+        [float]: the contour length (sum of next point distances)
+    '''
     #Only include points passing QC:
     qc_idx = point_set[:,3] != 0
     point_set_qc = point_set[qc_idx, 0:3]
@@ -644,6 +642,18 @@ def contour_length(point_set):
     return dist
 
 def plot_heatmap(traces, trace_id='all', zmax=600, cmap = 'rdbu'):
+    '''Helper function to make heatmaps of sets of traces.
+
+    Args:
+        traces ([DataFrame]): trace DataFrame
+        trace_id (str or int or list, optional): trace_IDs in dataframe to use. Defaults to 'all'.
+        zmax (int, optional): Max value of heatmap. Defaults to 600.
+        cmap (str, optional): Color scale for heatmap. Defaults to 'rdbu'.
+
+    Returns:
+        pwds_crop: Numpy array, Data underlying heatmap.
+        fig: Figure object of the heatmap.
+    '''
     if trace_id != 'all':
         if type(trace_id) == int:
             trace_id = [trace_id]
@@ -747,7 +757,7 @@ def plot_aligned_traces(traces, idx):
         z,y,x = point_set[qc_idx, 0], point_set[qc_idx, 1], point_set[qc_idx, 2]
         z_f, y_f, x_f=spline_interp([z,y,x])
         scatters.append(go.Scatter3d(x=x, y=y, z=z, 
-                                     mode='markers', 
+                                     mode='markers  ', 
                                      marker_color=cmap_points,
                                      marker_size=9,
                                      opacity=1,
@@ -756,12 +766,24 @@ def plot_aligned_traces(traces, idx):
                             y=y_f, 
                             z=z_f,
                             mode ='lines',
-                            showlegend=False,
+                            name='Trace '+str(point_id),
                             line=dict(color=px.colors.qualitative.Plotly[point_id],
                                         width=5)))
     fig = go.Figure(data=scatters)
-    fig.update_layout(template='plotly_white', showlegend= False)
-    iplot(fig)
+    fig.update_layout(template='plotly_white', 
+                    showlegend= True,
+                    height=600)
+    layout = {'scene':
+    {
+    'xaxis': {
+        'showgrid': False},
+    'yaxis': {
+        'showgrid': False},
+    'zaxis': {
+    'showgrid': False}
+    }}
+    fig.update_layout(layout)
+    #iplot(fig)
     return fig
     
 def plot_gpa_output(aligned_points, mean_points, cluster_members, cluster_id=0):
@@ -833,7 +855,17 @@ def plot_gpa_output(aligned_points, mean_points, cluster_members, cluster_id=0):
 
     fig = go.Figure(data=scatters)
     fig.update_layout(template='plotly_white', showlegend= True, height=600)
-    iplot(fig)
+    layout = {'scene':
+    {
+    'xaxis': {
+        'showgrid': False},
+    'yaxis': {
+        'showgrid': False},
+    'zaxis': {
+    'showgrid': False}
+    }}
+    fig.update_layout(layout)
+    #iplot(fig)
     return fig
     
 def plot_multi_points(list_of_points, names = None):
@@ -887,5 +919,15 @@ def plot_multi_points(list_of_points, names = None):
     
     fig = go.Figure(data=scatters)
     fig.update_layout(template='plotly_white', showlegend= True, height=600)
-    iplot(fig)
+    layout = {'scene':
+        {
+        'xaxis': {
+            'showgrid': False},
+        'yaxis': {
+            'showgrid': False},
+        'zaxis': {
+        'showgrid': False}
+        }}
+    fig.update_layout(layout)
+    #iplot(fig)
     return fig

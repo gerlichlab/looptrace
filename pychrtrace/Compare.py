@@ -1,0 +1,369 @@
+# -*- coding: utf-8 -*-
+"""
+Created by:
+
+Kai Sandvold Beckwith
+Ellenberg group
+EMBL Heidelberg
+
+Usage:
+    - Update YAML config file.
+    - from pychrtrace import Compare
+    - Initialize comparison object: C = Compare(path_to_yaml_file)
+    - run C.compare_multi_sc()
+"""
+
+import os
+import yaml
+import numpy as np
+import pandas as pd
+from pychrtrace import comparison_functions as comp
+from pychrtrace import image_processing_functions as ip
+from scipy import ndimage as ndi
+from skimage.exposure import match_histograms
+from skimage.registration import phase_cross_correlation
+from skimage.measure import regionprops_table
+from skimage.filters import threshold_otsu
+import tifffile as tiff
+import dask.array as da
+
+class Compare:
+    def __init__(self, config_path):
+        '''
+        Initialize Image Processing class with config read in from YAML file.
+        '''
+        
+        self.config = ip.load_config(config_path)
+        self.config_path = config_path
+        self.images = self.load_comp_images()
+        
+    def reload_config(self):
+        self.config = ip.load_config(config_file=self.config_path)
+    
+    def load_comp_images(self):
+        config=self.config
+        print(config)
+        template1=config['template_comp_1']+config['filetype']
+        template2=config['template_comp_2']+config['filetype']
+        input1=config['comp_folder_1']
+        input2=config['comp_folder_2']
+        
+        images1, pos1 = ip.images_to_dask(input1,template1)
+        images2, pos2 = ip.images_to_dask(input2,template2)
+        images = da.concatenate([images1, images2], axis=1)
+        return images
+
+    def drift_correction(self, ds=2):
+        '''
+        Global 3D drift correction of images to compare.
+
+        Args:
+            ds (int, optional): Downsampling for drift correction. Defaults to 2.
+
+        Returns:
+            [List]: List of global drifts per position found for comparison.
+        '''
+
+        dc_ch = self.config['drift_correction_channel']
+        drifts = []
+        for pos in range(self.images.shape[0]):
+            print(f'Drift correcting position {pos}.')
+            img1 = self.images[pos, 0, dc_ch, ::ds, ::ds, ::ds]
+            img2 = self.images[pos, 1, dc_ch, ::ds, ::ds, ::ds]
+            drift = np.array(phase_cross_correlation(img1, img2, return_error=False))*ds
+            print(f'Found drift {drift}.')
+            drifts.append(drift)
+        self.drifts = drifts
+        return drifts
+
+    def detect_nuclei(self, ds=2):
+        '''
+        Runs nucleus detection from ip for comparison of single nuclei.
+        Makes 2D slices at the central plane of the nucleus for reliable comparison.
+        Drift corrects again to ensure best possible overlap.
+        Ca
+
+        Args:
+            ds (int, optional): Downsampling for detection and comparison. Defaults to 2.
+
+        Returns:
+            nucs [DataFrame]: Bounding boxes for detected nuclei
+            z_img_nucs [np array]: Center slices of detected nuclei. 
+        '''
+
+        nuc_ch = self.config['nuc_ch']
+        nuc_d = self.config['nuc_diameter']
+        drifts = self.drifts
+        nucs = []
+        z_nuc_imgs = []
+        for pos in range(self.images.shape[0]):
+            #Read drifts, scale by downsampling.
+            d_z = drifts[pos][0]//ds
+            d_y = drifts[pos][1]//ds
+            d_x = drifts[pos][2]//ds
+
+            #Read nuclear images.
+            img_t = self.images[pos, 0, nuc_ch, ::ds, ::ds, ::ds].compute()
+            img_o = self.images[pos, 1, nuc_ch, ::ds, ::ds, ::ds]
+
+            #Detect nuclear masks and dilate them a bit before calculating bounding boxes.
+            masks = ip.nuc_segmentation(np.max(img_t, axis=0), self.config['nuc_diameter'])
+            labels, n_nucs = ndi.label(masks)
+            labels = ndi.morphology.grey_dilation(labels, 20)
+            bbox = pd.DataFrame(regionprops_table(labels, properties=('label',
+                                                                    'bbox',
+                                                                    'area')))
+            bbox['position'] = pos
+            bbox['ds'] = ds
+            
+            #Exclude very small nuclei.
+            bbox = bbox[bbox['area'] > 5000]
+            for i, row in bbox.iterrows():
+                #Select single nuclei from larger image.
+                ymin = row['bbox-0']
+                xmin = row['bbox-1']
+                ymax = row['bbox-2']
+                xmax = row['bbox-3']
+
+                nuc_img_t = img_t[:,ymin:ymax, xmin:xmax]
+                zmid = np.argmax(np.sum(nuc_img_t, axis=(1,2))) 
+
+                bbox.loc[i, 'zmid'] = zmid
+                nuc_img_t = nuc_img_t[zmid]
+
+                try:
+                    nuc_img_o = img_o[zmid-d_z, ymin-d_y:ymax-d_y, xmin-d_x:xmax-d_x].compute()
+
+                except IndexError: #In case drift correction pushes roi outside image area.
+                    zmid = np.clip(zmid-d_z, 0, img_o.shape[0]-1)
+                    ymin = np.clip(ymin-d_y, 0, img_o.shape[1]-1)
+                    ymax = np.clip(ymax-d_y, 0, img_o.shape[1]-1)
+                    xmin = np.clip(xmin-d_x, 0, img_o.shape[2]-1)
+                    xmax = np.clip(xmax-d_x, 0, img_o.shape[2]-1)
+                    nuc_img_o = img_o[zmid, ymin:ymax, xmin:xmax].compute()
+
+                #Expand in case drift correction went outside image.
+                nuc_img_o = ip.pad_to_shape(nuc_img_o, nuc_img_t.shape)
+
+                #Calculate new fine scale drift for single nuclei.
+                new_drift = phase_cross_correlation(nuc_img_t, nuc_img_o, upsample_factor=4, return_error=False)
+                bbox.loc[i, 'y_f'] = new_drift[0]
+                bbox.loc[i, 'x_f'] = new_drift[1]
+                
+                #Shift and normalize images for equal comparison.
+                nuc_img_o = ndi.shift(nuc_img_o, new_drift)
+                nuc_img_o = match_histograms(nuc_img_o, nuc_img_t)
+                z_nuc_imgs.append(np.stack([nuc_img_t, nuc_img_o]))
+            nucs.append(bbox)
+            print(f'Detected {n_nucs} nuclei.')
+        nucs = pd.concat(nucs, axis=0).reset_index(drop=True)
+        self.nucs = nucs
+        self.z_nuc_imgs = z_nuc_imgs
+        return nucs, z_nuc_imgs
+
+    def detect_rds(self, ds=2):
+        '''
+        Detect and segment replication domains (or other features) by otsu threshold.
+        Makes maximum projections for more consistent comparison.
+        Align comparison images of features and recalculate fine scale drift.
+
+        Args:
+            ds (int, optional): Downscaling factor for feature images. Defaults to 2.
+
+        Returns:
+            rds [DataFrame]: Bounding boxes of all the detected features.
+            rd_imgs [np array]: Max projection images of detected features.
+        '''
+
+        rd_ch = self.config['rd_ch']
+        drifts = self.drifts
+        rds = []
+        rd_imgs = []
+        for pos in range(self.images.shape[0]):
+            #Load drift correction for image:
+            d_z = drifts[pos][0]//ds
+            d_y = drifts[pos][1]//ds
+            d_x = drifts[pos][2]//ds
+
+            #Read image data:
+            img_t = da.max(self.images[pos, 0, rd_ch, ::ds, ::ds, ::ds], axis=0).compute()
+            img_o = da.max(self.images[pos, 1, rd_ch, ::ds, ::ds, ::ds], axis=0)
+
+            #Calculate thresholds and label features, filtering to avoid noise.
+            thresh = threshold_otsu(img_t)
+            labels, n_rds = ndi.label(ndi.median_filter(img_t>thresh, 4))
+            bbox = pd.DataFrame(regionprops_table(labels, properties=('label', 'bbox', 'area')))
+            bbox['position'] = pos
+            bbox = bbox[bbox['area'] > 100]
+            bbox['ds'] = ds
+            for i, row in bbox.iterrows():
+                #Loop over all features and segment them out.
+                ymin = row['bbox-0']
+                xmin = row['bbox-1']
+                ymax = row['bbox-2']
+                xmax = row['bbox-3']
+                rd_img_t = img_t[ymin:ymax, xmin:xmax]
+                
+                try:
+                    rd_img_o = img_o[ymin-d_y:ymax-d_y, xmin-d_x:xmax-d_x].compute()
+                    
+                except IndexError: #In case drift correction pushes roi outside image area.
+                    ymin = np.clip(ymin-d_y, 0, img_o.shape[1]-1)
+                    ymax = np.clip(ymax-d_y, 0, img_o.shape[1]-1)
+                    xmin = np.clip(xmin-d_x, 0, img_o.shape[2]-1)
+                    xmax = np.clip(xmax-d_x, 0, img_o.shape[2]-1)
+                    rd_img_o = img_o[zmid, ymin:ymax, xmin:xmax].compute()
+
+                #Expand in case drift correction did went outside original image.
+                rd_img_o = ip.pad_to_shape(rd_img_o, rd_img_t.shape)
+                
+                #Calculate new fine scale drift.
+                new_drift = phase_cross_correlation(rd_img_t, rd_img_o, upsample_factor=4, return_error=False)
+                
+                #Shift and normalize images for equal comparison
+                rd_img_o = ndi.shift(rd_img_o, new_drift)
+                rd_img_o = match_histograms(rd_img_o, rd_img_t)
+                rd_imgs.append(np.stack([rd_img_t, rd_img_o]))
+            rds.append(bbox)
+            print(f'Detected {n_rds} replication domains.')
+        rds = pd.concat(rds, axis=0).reset_index(drop=True)
+        self.rds = rds
+        self.rd_imgs = rd_imgs
+        return rds, rd_imgs
+            
+
+    def compare_imgs(self, kind='nucs'):
+        '''
+        Function to compare two (aligned, normalized) image sets according to several metrics.
+        Can choose between running on preidentified nuclei ('nucs') or other features ('rds').
+        
+        Returns
+        -------
+        Pandas dataframe with comparison results for all images.
+        '''
+        
+        props = []
+        if kind == 'nucs':
+            imgs = self.z_nuc_imgs
+        elif kind == 'rds':
+            imgs = self.rd_imgs
+
+        for i, img in enumerate(imgs):
+            nuc_props = {}
+            #Calculate and set the comparison metrics in output dataframe.
+            ssim_out = comp.comp_ssim(img[0], img[1])
+            pcc = comp.comp_pcc_coloc(img[0], img[1])
+            mac = comp.comp_mac_coloc(img[0], img[1])
+            orb_ratio = comp.comp_orb_ratio(img[0], img[1])
+            area_ratio, iou = comp.comp_area_iou(img[0], img[1])
+            lbp_score = comp.comp_lbp(img[0], img[1])
+            variance = comp.comp_var(img[0], img[1])
+            skew = comp.comp_skew(img[0], img[1])
+            kurtosis = comp.comp_kurtosis(img[0], img[1])
+            
+            nuc_props['id']=i
+            nuc_props['MAC'] = mac
+            nuc_props['PCC'] = pcc
+            nuc_props['SSIM'] = ssim_out
+            nuc_props['ORB_ratio'] = orb_ratio
+            nuc_props['Area_ratio']= area_ratio
+            nuc_props['IOU'] = iou
+            nuc_props['LBP score'] = lbp_score
+            nuc_props['Variance ratio'] = variance
+            nuc_props['Skew ratio'] = skew
+            nuc_props['Kurtosis ratio'] = kurtosis
+        
+            props.append(pd.DataFrame(nuc_props, index=[i]))
+            print('Properties calculated.')
+        
+        props = pd.concat(props)
+        if kind == 'nucs':
+            self.nuc_metrics = props
+        elif kind == 'rds':
+            self.rd_metrics = props
+        
+        return props
+    
+    def gen_dc_imgs(self, ds=1):
+        '''
+        Helper function to generate drift corrected images of single nuclei
+        and contained features. Currently only coded to take central plane of nucleus
+        and overlay with max projection of features.
+        #TODO: Make more flexible regarding projections.
+
+        Args:
+            ds (int, optional): Downsampling of drift corrected images. Defaults to 1.
+        '''
+
+        drifts = self.drifts
+        nuc_ch = self.config['nuc_ch']
+        rd_ch = self.config['rd_ch']
+        imgs = []
+        n_rows=len(self.nucs)
+        for i, row in self.nucs.iterrows():
+            #Loop over single nuclei:
+            pos = int(row['position'])
+            d_z = drifts[pos][0]
+            d_y = drifts[pos][1]
+            d_x = drifts[pos][2]
+        
+            ds_row = row['ds']
+            ymin = row['bbox-0']*ds_row
+            xmin = row['bbox-1']*ds_row
+            ymax = row['bbox-2']*ds_row
+            xmax = row['bbox-3']*ds_row
+            zmid = row['zmid']*ds_row
+            
+            #Read image data, drift correct, expand in case boundaries exceed image.
+            nuc_img_t = self.images[pos, 0, nuc_ch, zmid, ymin:ymax:ds, xmin:xmax:ds].compute()
+            nuc_img_o = self.images[pos, 1, nuc_ch, zmid-d_z, ymin-d_y:ymax-d_y:ds, xmin-d_x:xmax-d_x:ds].compute()
+            nuc_img_o = ip.pad_to_shape(nuc_img_o, nuc_img_t.shape)
+            
+            #Calculate fine scale drift, shift and normalize images.
+            new_drift = phase_cross_correlation(nuc_img_t, nuc_img_o, upsample_factor=4, return_error=False)
+            nuc_img_o = ndi.shift(nuc_img_o,new_drift)
+            nuc_img_o = match_histograms(nuc_img_o, nuc_img_t)
+
+            #Repeat for feature image, except using max projection instead of central slice.
+            rd_img_t = da.max(self.images[pos, 0, rd_ch, ::ds, ymin:ymax:ds, xmin:xmax:ds], axis=0).compute()
+            rd_img_o = da.max(self.images[pos, 1, rd_ch, ::ds, ymin-d_y:ymax-d_y:ds, xmin-d_x:xmax-d_x:ds], axis=0).compute()
+            rd_img_o = ip.pad_to_shape(rd_img_o, rd_img_t.shape)
+            new_drift = phase_cross_correlation(rd_img_t, rd_img_o, upsample_factor=4, return_error=False)
+            rd_img_o = ndi.shift(rd_img_o,new_drift)
+            rd_img_o = match_histograms(rd_img_o, rd_img_t)
+
+            img = np.stack([nuc_img_t, nuc_img_o, rd_img_t, rd_img_o])
+            imgs.append(img)
+            print(f'Generating image {i} of {n_rows}.')
+        self.dc_imgs = imgs
+        self.save_dc_imgs()
+
+    def save_dc_imgs(self):
+        '''
+        Convenience function to save drift corrected images.
+        '''
+        out = self.config['output_folder']+os.sep+self.config['output_name']
+        for i, img in enumerate(self.dc_imgs):
+            tiff.imsave(out+'dc_img_'+str(i).zfill(3)+'.tiff', img.astype(np.float32), imagej=True)
+        
+            
+    def compare_multi_sc(self, save_dc=False):
+        '''
+        Running function to calculate similarity metrics on sets of comparison
+        images as defined in the config file, saves the results as csv to output folder.
+        Can optionally save drift corrected images of each nucleus and feature overlay.
+
+        '''
+        self.drift_correction(ds = 4)
+        self.detect_nuclei()
+        self.detect_rds()
+        self.compare_imgs(kind='nucs')
+        self.compare_imgs(kind='rds')
+        
+        out = self.config['output_folder']+os.sep+self.config['output_name']
+        self.rd_metrics.to_csv(out+'rd_metrics.csv')
+        self.nuc_metrics.to_csv(out+'nuc_metrics.csv')
+        if save_dc:
+            self.gen_dc_imgs(ds=1)
+            self.save_dc_imgs()
+

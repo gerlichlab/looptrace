@@ -1,8 +1,12 @@
+# -*- coding: utf-8 -*-
 """
-Created on Thu Apr 23 09:26:44 2020
+Created by:
 
-@author: ellenberg
+Kai Sandvold Beckwith
+Ellenberg group
+EMBL Heidelberg
 """
+
 from pychrtrace import image_processing_functions as ip
 import pandas as pd
 

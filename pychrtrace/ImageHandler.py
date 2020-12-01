@@ -1,8 +1,12 @@
+# -*- coding: utf-8 -*-
 """
-Created on Thu Apr 23 09:26:44 2020
+Created by:
 
-@author: ellenberg
+Kai Sandvold Beckwith
+Ellenberg group
+EMBL Heidelberg
 """
+
 from pychrtrace import image_processing_functions as ip
 import os
 from pathlib import Path
@@ -17,8 +21,14 @@ import czifile
 class ImageHandler:
     def __init__(self, config_path):
         '''
-        Initialize Tracer class with config read in from YAML file.
+        Initialize ImageHandler class with config read in from YAML file.
+        See config file for details on parameters.
+        Will try to use zarr file if present.
+
+        Assumes filenames of format, will import anything AICSimageIO can read:
+        *_WXXXX_PXXXX_TXXXX_*.ext
         '''
+        
         self.config_path = config_path
         self.config = ip.load_config(config_path)
         self.zarr_path = self.config['input_folder']+os.sep+self.config['output_file_prefix']+'zarr.zarr'
@@ -51,6 +61,11 @@ class ImageHandler:
         self.drift_table = pd.read_csv(path, index_col=0)
     
     def images_to_zarr(self):
+        '''
+        Function to save images loaded as a 6D PTCZYX dask array into zarr format.
+        Will chuck into two last dimensions.
+        Also saves a position list of the named positions.
+        '''
         pbar = ProgressBar()
         pbar.register()
         zarr_img = da.rechunk(self.images, chunks=(1,1,1,1,-1,-1))
@@ -60,6 +75,10 @@ class ImageHandler:
         print('Images saved as zarr.')
     
     def save_metadata(self):
+        '''
+        Saves czi metadata from czi input files as part of conversion to zarr.
+        '''
+
         first_path = ip.all_matching_files_in_subfolders(self.config['input_folder'], self.config['image_filetype']+self.config['image_template'])[0]
         first_img = czifile.CziFile(first_path)
         out_path = self.config['input_folder']+os.sep+self.config['output_file_prefix']
@@ -75,6 +94,11 @@ class ImageHandler:
         print('Metadata saved.')
 
     def gen_dc_images(self):
+        '''
+        Makes internal coursly drift corrected images based on precalculated drift
+        correction (see Drifter class for details).
+        '''
+
         chunk_size = self.images.chunksize
         img_dc = []
         for pos in self.pos_list:
@@ -89,6 +113,10 @@ class ImageHandler:
         print('DC images generated.')
 
     def gen_nuc_images(self):
+        '''
+        Saves 2D max projected images of the nuclear channel into analysis folder for later analysis.
+        '''
+
         imgs = []
         for pos in self.pos_list:
             pos_index = self.pos_list.index(pos)
@@ -98,6 +126,10 @@ class ImageHandler:
         self.save_nucs(img_type='raw')
     
     def load_nucs(self):
+        '''
+        Function to load existing nuclear images from nucs folder in analysis folder.
+        '''
+
         print('Loading nucleus images from ', self.nuc_folder)
         self.nucs = [tifffile.imread(img) for img in Path(self.nuc_folder).glob('nuc_raw_*.tiff')]
         self.nuc_masks = [tifffile.imread(img) for img in Path(self.nuc_folder).glob('nuc_labels_*.tiff')]
@@ -114,6 +146,12 @@ class ImageHandler:
             self.nuc_class = None
 
     def save_nucs(self, img_type):
+        '''
+        Function to save nuclear images, either raw or the masks, as tiff files in nucs folder.
+
+        Args:
+            img_type ([str]): Type of images to save, can be 'raw', 'mask' or 'class'.
+        '''
         Path(self.nuc_folder).mkdir(parents=True, exist_ok=True)
         imgs = []
         for pos in self.pos_list:
@@ -129,6 +167,10 @@ class ImageHandler:
                 np.save(self.nuc_folder+os.sep+'nuc_raw_'+pos+'_Object Predictions.npy', img)
 
     def save_data(self, traces=None, imgs=None, rois=None, pwds=None, pairs=None, config=None, suffix=''):
+        '''
+        Helper function to save output data from the various modules into the output folder.
+        '''
+        
         output_folder=self.config['output_folder']
         output_filename=self.config['output_file_prefix']
         output_file=output_folder+os.sep+output_filename

@@ -1,9 +1,12 @@
+# -*- coding: utf-8 -*-
 """
-Created on Thu Apr 23 09:26:44 2020
+Created by:
 
-@author: ellenberg
+Kai Sandvold Beckwith
+Ellenberg group
+EMBL Heidelberg
 """
-import os
+
 import numpy as np
 import pandas as pd
 import scipy.ndimage as ndi
@@ -11,7 +14,6 @@ import pychrtrace.image_processing_functions as ip
 from pychrtrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
 import dask
 from dask import delayed
-
 
 class Tracer:
     def __init__(self, image_handler):
@@ -133,16 +135,20 @@ class Tracer:
                 
                 if decon != 0:
                     roi_image =ip.decon_RL(roi_image, kernel, algo, fd_data, niter=decon)
+
                 #Perform 3D gaussian fit
                 frame_result.append(delayed(self.fit_func)(roi_image, sigma=1, center='max')[0])
+
                 #Expand the image to a standard size for hyperstack.
                 roi_image_exp = delayed(ip.pad_to_shape)(roi_image, roi_image_size)
+
                 #Extract fine drift from drift table and shift image for display.
                 dz = float(drift_table_row['z_px_fine'])
                 dy = float(drift_table_row['y_px_fine'])
                 dx = float(drift_table_row['x_px_fine'])
                 roi_image_shifted = delayed(ndi.shift)(roi_image_exp, (dz, dy, dx))
                 roi_images.append(roi_image_shifted)
+                
                 #Add some parameters for tracing table
                 frame_index.append([roi.name, frame, roi['position'], roi['roi_id'], dz, dy, dx])
 

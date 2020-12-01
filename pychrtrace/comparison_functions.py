@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Jun 10 06:23:05 2020
+Created by:
 
-@author: ellenberg
+Kai Sandvold Beckwith
+Ellenberg group
+EMBL Heidelberg
 """
 
 import numpy as np
@@ -36,10 +38,14 @@ def comp_lbp(img1, img2):
     Comparison of the central 2D slice of a 3D image stack by local binary patterns.
     Uses Kullback Leibler Divergence to score the similarity of the LBP histograms.
     '''
-    max_z = np.argmax(np.sum(img1, axis=((1,2))))
 
-    lbp1 = local_binary_pattern(img1[max_z], 16, 2)
-    lbp2 = local_binary_pattern(img2[max_z], 16, 2)
+    if len(img1.shape) == 3:
+        max_z = np.argmax(np.sum(img1, axis=((1,2))))
+        lbp1 = local_binary_pattern(img1[max_z], 16, 2)
+        lbp2 = local_binary_pattern(img2[max_z], 16, 2)
+    else:
+        lbp1 = local_binary_pattern(img1, 16, 2)
+        lbp2 = local_binary_pattern(img2, 16, 2)
     
     n_bins = 100
     hist1, _ = np.histogram(lbp1, density=True, bins=n_bins, range=(0, n_bins))
@@ -76,23 +82,18 @@ def comp_kurtosis(img1, img2):
 
 def comp_ssim(img1, img2):
     '''
-    Calculates structrual similarity index
+    Calculates structrual similarity index of two images.
     '''
 
-    ssim_out, ssim_image = ssim(img1,img2, full=True,  gaussian_weights=True)
+    ssim_out = ssim(img1,img2, full=False,  win_size=5)
 
-    return ssim_out, ssim_image
+    return ssim_out
     
-def comp_pcc_man_coloc(img1,img2):
+def comp_pcc_coloc(img1,img2):
     '''
-    Pixel-by-pixel colocalization of two images by Pearson's correlation coefficient
-    and Mander's coefficient.
+    Pixel-by-pixel correlation of two images by Pearson's correlation coefficient.
     '''
 
-    #if thresh==True:
-    #    thresh = threshold_otsu(img1)
-    #    img1 = img1*(img1>thresh)
-    #    img2 = img2*(img2>thresh)
     img1=img1.astype(np.float32)
     img2=img2.astype(np.float32)
     img1_bar=np.mean(img1)
@@ -102,9 +103,14 @@ def comp_pcc_man_coloc(img1,img2):
     pcc_denom=np.sqrt(np.sum((img1-img1_bar)**2)*np.sum((img2-img2_bar)**2))
     pcc=pcc_num/pcc_denom
     
-    mac=np.sum(img1*img2)/np.sqrt(np.sum(img1**2)*np.sum(img2**2))
+    return pcc 
 
-    return pcc,mac   
+def comp_mac_coloc(img1, img2):
+    '''
+    Pixel-by-pixel correlation of two images by Mander's correlation coefficient.
+    '''
+    mac=np.sum(img1*img2)/np.sqrt(np.sum(img1**2)*np.sum(img2**2))
+    return mac
     
 def comp_orb_ratio(img1, img2):
     '''
@@ -134,7 +140,7 @@ def comp_orb_ratio(img1, img2):
     
 def comp_area_iou(img1, img2):
     '''
-    Calculates the integrated pixel area and  
+    Calculates the ratio of integrated pixel area and  
     intersection over union of area in two images over an Otsu threshold.
     '''
 
@@ -156,6 +162,11 @@ def comp_area_iou(img1, img2):
     return area_ratio, iou
     
 def comp_area_iou_sr(img1,img2):
+    '''
+    Calculates the ratio of integrated pixel intensity and intersection over union
+    for images with 0 background.
+    '''
+    
     img1=img1>0
     img2=img2>0
     area_ratio = np.sum(img2)/np.sum(img1)
