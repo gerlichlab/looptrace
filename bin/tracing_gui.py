@@ -89,11 +89,9 @@ def main():
             if os.path.exists(D.dc_file_path):
                 dc_exists_choice = sg.popup_yes_no('Existing drift correction file found, recalculate?')
                 if dc_exists_choice == 'Yes':
-                    dc_thread = threading.Thread(target=D.drift_corr)
-                    dc_thread.start()
+                    D.drift_corr()
             else:
-                dc_thread = threading.Thread(target=D.drift_corr)
-                dc_thread.start()
+                D.drift_corr()
         elif event == '-VIEW_DC-':
             pos_index = H.pos_list.index(values['-DC_POSITION-'])
             if H.dc_images is not None:
@@ -203,8 +201,7 @@ def main():
         elif event == '-RUN_TRACING-':
             H.set_drift_table(values['-DC_PATH-'])
             T = Tracer(H)
-            trace_thread = threading.Thread(target=T.tracing_3d)
-            trace_thread.start()
+            T.tracing_3d()
 
         elif event in  (None, 'Exit'):
             client.close()
