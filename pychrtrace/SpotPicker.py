@@ -27,7 +27,8 @@ class SpotPicker:
 
         #Read parameters from config.
         trace_ch = self.config['trace_ch']
-        ref_slice = self.config['ref_slice']
+        spot_frame = self.config['spot_frame']
+        bead_ref = self.config['bead_reference_frame']
         spot_threshold = self.config['spot_threshold']
         spot_ds = self.config['spot_downsample']
 
@@ -36,7 +37,7 @@ class SpotPicker:
         if preview_pos:
             print(f'Preview spot detection in position {preview_pos} with threshold {spot_threshold}.')
             pos_index = self.pos_list.index(preview_pos)
-            img = self.images[pos_index, ref_slice, trace_ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
+            img = self.images[pos_index, spot_frame, trace_ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
             spot_props, filt_img = ip.detect_spots(img, spot_threshold)
             spot_props['position'] = preview_pos
             spot_props = spot_props.reset_index().rename(columns={'index':'roi_id'})
@@ -45,10 +46,18 @@ class SpotPicker:
         for position in self.pos_list:
             #Read correct image
             print(f'Detecting spots in position {position}.')
+            
             pos_index = self.pos_list.index(position)
-            img = self.images[pos_index, ref_slice, trace_ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
+            img = self.images[pos_index, spot_frame, trace_ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
             spot_props, _ = ip.detect_spots(img, spot_threshold)
             spot_props[['zc', 'yc', 'xc']] = spot_props[['zc', 'yc', 'xc']]*spot_ds
+
+            if spot_frame != bead_ref:
+                self.image_handler.set_drift_table()
+                dt = self.image_handler.drift_table
+                shift = list(dt.query('pos_id == @position & frame == @spot_frame')[['z_px_course', 'y_px_course', 'x_px_course']].iloc[0])
+                spot_props[['zc', 'yc', 'xc']] = spot_props[['zc', 'yc', 'xc']] + shift
+            
             spot_props['position'] = position
             all_rois.append(spot_props)
         output = pd.concat(all_rois)

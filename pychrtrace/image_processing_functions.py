@@ -223,8 +223,10 @@ def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label'):
 
     def spot_in_nuc(row, nuc_masks):
         pos_index = pos_list.index(row['position'])
-        spot_label = nuc_masks[pos_index][int(row['yc']), int(row['xc'])]
-        print(spot_label)
+        try:
+            spot_label = nuc_masks[pos_index][int(row['yc']), int(row['xc'])]
+        except IndexError: #If due to drift spot is outside frame.
+            spot_label = 0
         return spot_label
     
     try:
@@ -528,7 +530,12 @@ def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int
 
 def napari_view(img, points=None, downscale=2, trace_ch=0, ref_slice=0, contrast_limits=(100,1000)):
     with napari.gui_qt():
-        viewer = napari.view_image(img[...,::downscale,::downscale,::downscale], contrast_limits=contrast_limits)
+        if not isinstance(img, list):
+            viewer = napari.view_image(img[...,::downscale,::downscale,::downscale], contrast_limits=contrast_limits)
+        else:
+            viewer = napari.view_image(img[0][...,::downscale,::downscale,::downscale], contrast_limits=None)
+            for i in img[1:]:
+                viewer.add_image(i[...,::downscale,::downscale,::downscale], contrast_limits=None)
         if points is not None:
             point_layer = viewer.add_points(points/downscale, 
                                                     size=12,
@@ -588,7 +595,7 @@ def nuc_segmentation(nuc_imgs, diameter = 150):
     Args:
         nuc_imgs (ndarray or list of ndarrays): 2D or 3D images of nuclei, expects single channel
     '''
-    from cellpose import models, io
+    from cellpose import models
     model = models.Cellpose(gpu=False, model_type='nuclei')
     channels = [0,0]
     masks, flows, styles, diams = model.eval(nuc_imgs, diameter=diameter, channels=channels, net_avg=False)

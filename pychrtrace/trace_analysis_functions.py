@@ -141,15 +141,38 @@ def points_for_overlay(traces, rois, config):
     points=points_df[['trace_ID', 'frame', 'z_px', 'y_px', 'x_px']].to_numpy()
     return points
 
-def eucledian_resolution(traces, frame_names):
+def eucledian_dist(traces, frame_names):
     df_sel = traces[traces['frame_name'].isin(frame_names)]
     df_qc = df_sel.groupby(['trace_ID'])[['QC']].sum()
     df_sel = df_sel.groupby(['trace_ID'])[['z','y','x']].diff().dropna().reset_index(drop=True)
-    df_sel['eucledian'] = ((0.5*df_sel['z'])**2 + df_sel['y']**2 + df_sel['x']**2)**0.5
+    df_sel['eucledian'] = ((df_sel['z'])**2 + df_sel['y']**2 + df_sel['x']**2)**0.5
+    df_sel['eucledian_res'] = ((0.5*df_sel['z'])**2 + df_sel['y']**2 + df_sel['x']**2)**0.5
     df_sel['QC'] = df_qc['QC']
+    df_sel['trace_ID'] = traces['trace_ID'].unique()
     df_sel = df_sel[df_sel['QC'] == 2]
     df_sel['id'] = str(frame_names)
     return df_sel
+
+def eucledian_dist_all(traces):
+    frame_names = traces['frame_name'].unique()
+    combos = itertools.combinations(frame_names, 2)
+    df = []
+    for c in combos:
+        df.append(eucledian_dist(traces, c))
+    df = pd.concat(df)
+    return df
+
+def genomic_distance_map(genomic_positions):
+    '''
+    Generate mapping of position combination names to genomic distance
+    from dict of the format {'frame_name':genomic_position}
+    '''
+    combos = itertools.combinations(genomic_positions.keys(), 2)
+    g_dists = {}
+    for c in combos:
+        dist = genomic_positions[c[1]]-genomic_positions[c[0]]
+        g_dists[str(c)] = dist
+    return g_dists
 
 def pwd_calc(traces):
     '''
@@ -824,8 +847,8 @@ def plot_gpa_output(aligned_points, mean_points, cluster_members, cluster_id=0):
         scatters.append(go.Scatter3d(x=x, y=y, z=z, 
                                      mode='markers', 
                                      marker_color=cmap_points,
-                                     marker_size=4,
-                                     opacity=0.3,
+                                     marker_size=3,
+                                     opacity=0.2,
                                      name='Trace '+str(cluster_members[point_id]),
                                      ))
 

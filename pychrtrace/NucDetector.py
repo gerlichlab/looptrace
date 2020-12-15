@@ -54,15 +54,17 @@ class NucDetector:
         '''
 
         print('Running classification of nuclei with Ilastik.')
-        raw_imgs = ' '.join([str(p) for p in Path(self.nuc_folder).glob('nuc_raw_*.tiff')])
-        seg_imgs = ' '.join([str(p) for p in Path(self.nuc_folder).glob('nuc_binary_*.tiff')])
+        raw_imgs = [str(p) for p in Path(self.nuc_folder).glob('nuc_raw_*.tiff')] #' '.join(
+        seg_imgs = [str(p) for p in Path(self.nuc_folder).glob('nuc_binary_*.tiff')]
+        
         ilastik_path = self.config['ilastik_path']
         project_path = self.config['ilastik_project_path']
         params = f' --headless --project=\"{project_path}\" --export_source=\"Object Predictions\" --output_format=numpy '
-        raw_data = f'--raw_data {raw_imgs} '
-        segmentation = f'--segmentation_image {seg_imgs}'
-        command = ilastik_path+params+raw_data+segmentation
-        subprocess.run(command)
+        for raw_img, seg_img in zip(raw_imgs, seg_imgs):
+            raw_data = f'--raw_data {raw_img} '
+            segmentation = f'--segmentation_image {seg_img}'
+            command = ilastik_path+params+raw_data+segmentation
+            subprocess.run(command)
         nuc_class = [np.load(img) for img in Path(self.nuc_folder).glob('nuc_raw_*_Object*.npy')]
         print('Nucleus classification done.')
         self.image_handler.nuc_class = nuc_class
