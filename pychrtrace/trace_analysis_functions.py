@@ -5,25 +5,43 @@ Created by:
 Kai Sandvold Beckwith
 Ellenberg group
 EMBL Heidelberg
-"""
 
+tab:blue : #1f77b4
+tab:orange : #ff7f0e
+tab:green : #2ca02c
+tab:red : #d62728
+tab:purple : #9467bd
+tab:brown : #8c564b
+tab:pink : #e377c2
+tab:gray : #7f7f7f
+tab:olive : #bcbd22
+tab:cyan : #17becf
+"""
+import os
 import itertools
 import pandas as pd
 import numpy as np
+import plotly.colors
+import re
 from plotly.offline import iplot, plot
 import plotly.graph_objs as go
 import plotly.express as px
 from scipy import interpolate
 from scipy import stats
 import scipy.ndimage as ndi
-from scipy.spatial.distance import cdist
+from scipy.spatial.distance import cdist, squareform
 from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
 import matplotlib
 import matplotlib.pyplot as plt
 import napari
+import ipyvolume as ipv
 from joblib import Parallel, delayed
 import dask.array as da
+from numba import jit, njit
 from pychrtrace import image_processing_functions as ip
+from sklearn.manifold import MDS
+from sklearn import cluster
+import seaborn as sns
 
 def tracing_qc(row, qc_dict, traces_df=None):
     '''
@@ -141,16 +159,17 @@ def points_for_overlay(traces, rois, config):
     points=points_df[['trace_ID', 'frame', 'z_px', 'y_px', 'x_px']].to_numpy()
     return points
 
-def eucledian_dist(traces, frame_names):
+def euclidean_dist(traces, frame_names):
     df_sel = traces[traces['frame_name'].isin(frame_names)]
     df_qc = df_sel.groupby(['trace_ID'])[['QC']].sum()
-    df_sel = df_sel.groupby(['trace_ID'])[['z','y','x']].diff().dropna().reset_index(drop=True)
-    df_sel['eucledian'] = ((df_sel['z'])**2 + df_sel['y']**2 + df_sel['x']**2)**0.5
-    df_sel['eucledian_res'] = ((0.5*df_sel['z'])**2 + df_sel['y']**2 + df_sel['x']**2)**0.5
+    df_sel = df_sel.groupby(['trace_ID'])[['z','y','x']].diff().dropna()
+    df_sel['euclidean'] = ((df_sel['z'])**2 + df_sel['y']**2 + df_sel['x']**2)**0.5
+    df_sel['euclidean_res'] = ((0.5*df_sel['z'])**2 + df_sel['y']**2 + df_sel['x']**2)**0.5
+    df_sel.index = df_qc.index
     df_sel['QC'] = df_qc['QC']
-    df_sel['trace_ID'] = traces['trace_ID'].unique()
-    df_sel = df_sel[df_sel['QC'] == 2]
+    df_sel = df_sel[df_qc['QC'] == 2]
     df_sel['id'] = str(frame_names)
+    df_sel=df_sel.reset_index()
     return df_sel
 
 def eucledian_dist_all(traces):
@@ -158,7 +177,7 @@ def eucledian_dist_all(traces):
     combos = itertools.combinations(frame_names, 2)
     df = []
     for c in combos:
-        df.append(eucledian_dist(traces, c))
+        df.append(euclidean_dist(traces, c))
     df = pd.concat(df)
     return df
 
@@ -185,7 +204,7 @@ def pwd_calc(traces):
     pwds : Pair-wise distance matrixes for traces as an 3D numpy array.
     '''
     
-    points = [points_from_df_nan(df)[0] for _, df in traces.groupby('trace_ID')]
+    points = points_from_traces_nan(traces, trace_ids = -1)
     pwds = [cdist(p, p) for p in points]
     pwds = np.stack(pwds)
     return pwds
@@ -224,19 +243,60 @@ def trace_analysis(traces, pwds):
     -------
     output : pd DataFrame with pairwise similarity results, including indexes of traces.
     '''
-    
-    pairwise_trace_idx = list(itertools.combinations(traces['trace_ID'].unique(),2))
-    pairwise_pwd_idx = list(itertools.combinations(range(pwds.shape[0]),2))
-    res = Parallel(n_jobs=-2)(delayed(single_trace_analysis)
-                              (traces, pwds, idx1, idx2, idx_p1, idx_p2) for 
-                              ((idx1, idx2), (idx_p1, idx_p2)) in 
-                              zip(pairwise_trace_idx,pairwise_pwd_idx))
+
+    points = points_from_traces(traces)
+    trace_idx = list(traces.trace_ID.unique())
+    res = trace_analysis_loop(points, pwds, trace_idx)
+    #pairwise_trace_idx = list(itertools.combinations(traces['trace_ID'].unique(),2))
+    #pairwise_pwd_idx = list(itertools.combinations(range(pwds.shape[0]),2))
+    #res = Parallel(n_jobs=-2)(delayed(single_trace_analysis)
+    #                          (traces, pwds, idx1, idx2, idx_p1, idx_p2) for 
+    #                          ((idx1, idx2), (idx_p1, idx_p2)) in 
+    #                          zip(pairwise_trace_idx,pairwise_pwd_idx))
+
+    columns=['idx1', 'idx2', 'aligned_mse', 'aligned_pcc', 'pwd_mse', 'pwd_pcc']
+    output=pd.DataFrame(res,columns=columns)
+    output[['idx1', 'idx2']] = output[['idx1', 'idx2']].astype(int)
+    return output
+
+@jit(parallel=True)
+def trace_analysis_loop(points, pwds, trace_idx):
+    res = []
+    idx = list(range(len(points)))
+    for i in idx[:-1]:
+        a = points[i]
+        d_1 = pwds[i]
+        for j in idx[i+1:]:
+            b = points[j]
+            d_2 = pwds[j]
+            out = list(single_trace_analysis(a,b,d_1,d_2))
+            res.append([trace_idx[i], trace_idx[j]] + out)
+    return res
+
+def compare_trace_analysis(traces1, traces2, pwds1, pwds2):
+    points1 = points_from_traces(traces1)
+    points2 = points_from_traces(traces2)
+    trace_idx1 = list(traces1.trace_ID.unique())
+    trace_idx2 = list(traces2.trace_ID.unique())
+    idx1 = list(range(len(points1)))
+    idx2 = list(range(len(points2)))
+    res = []
+
+    for i in idx1:
+        a = points1[i]
+        d_1 = pwds1[i]
+        for j in idx2:
+            b = points2[j]
+            d_2 = pwds2[j]
+            out = list(single_trace_analysis(a,b,d_1,d_2))
+            res.append([trace_idx1[i], trace_idx2[j]] + out)    
 
     columns=['idx1', 'idx2', 'aligned_mse', 'aligned_pcc', 'pwd_mse', 'pwd_pcc']
     output=pd.DataFrame(res,columns=columns)
     return output
 
-def single_trace_analysis(traces, pwds, idx1, idx2, idx_p1, idx_p2):
+@njit
+def single_trace_analysis(a,b,d_1,d_2):
     '''
     Perform pairwise analysis of two single traces according to MSE and PCC metrics
     of their aligned points and their distance matrices.
@@ -254,24 +314,28 @@ def single_trace_analysis(traces, pwds, idx1, idx2, idx_p1, idx_p2):
     -------
     output : The input trace_IDs, and the similiarity metrics of the registered traces.
     '''
-
     #Get points by their trace indices.
-    points_A, points_B = points_from_traces(traces, [idx1,idx2])
-
-    #Align the point sets, note rigid_transform includes matching.
-    points_B_reg = rigid_transform_3D(points_B, points_A)
-
-    #Need to match seperately for the mat_corr functions
-    points_A, points_B_reg = match_two_pointsets(points_A, points_B_reg)
-    aligned_mse = mat_corr_rmse(points_A, points_B_reg)
-    aligned_pcc = mat_corr_pcc(points_A, points_B_reg)
+    a, b = match_two_pointsets(a, b)
     
-    pwd_mse = mat_corr_rmse(pwds[idx_p1],pwds[idx_p2])
-    pwd_pcc = mat_corr_pcc(pwds[idx_p1],pwds[idx_p2])
+    #Center the pointsand rescale to avoid issues of large numbers for PCC calculation.
+    a = a-numba_mean_axis0(a)
+    b = b-numba_mean_axis0(b)
 
-    return idx1, idx2, aligned_mse, aligned_pcc, pwd_mse, pwd_pcc
+    #Align the point sets
+    b_reg = rigid_transform_3D(b, a, prematch=True)
+
+    #Calculate distances between the point sets
+    aligned_mse = euclidean(a, b_reg)
+    aligned_pcc = 1-mat_corr_pcc(a, b_reg)
     
-def trace_clustering(paired, metric='pwd_pcc', method='single', color_threshold=None):
+    #Calculate distances between the point distance matrices
+    pwd_mse = euclidean(d_1,d_2)
+    #rescale data to avoid issues of large numbers in PCC calculation
+    pwd_pcc = 1-mat_corr_pcc(d_1/1000,d_2/1000)
+
+    return aligned_mse, aligned_pcc, pwd_mse, pwd_pcc
+
+def trace_clustering(pairs, metric='pwd_pcc', dendro_method='single', color_threshold=None):
     '''
     Calculates clusters nased on similarity metrics of 
     pairwise analysis of traces. Also plots dendrogram of clusters.
@@ -291,24 +355,67 @@ def trace_clustering(paired, metric='pwd_pcc', method='single', color_threshold=
                  hierarchial clustering (see scipy.cluster.hierarchy.single docs)
     '''
     from scipy.cluster.hierarchy import set_link_color_palette
-    cmap = px.colors.qualitative.Plotly
+    cmap = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink']#px.colors.qualitative.Plotly
+    #cmap=cmap[5:]
     set_link_color_palette(cmap)
-    labels=list(np.unique(np.concatenate((paired['idx1'],paired['idx2']))))
-    if metric == 'aligned_mse' or metric == 'pwd_mse':
-        Z=linkage(paired[metric], method=method)
-    elif metric == 'aligned_pcc' or metric == 'pwd_pcc':
-        Z=linkage(1-paired[metric], method=method)
-    else:
-        raise ValueError('Inappropriate metric.')
-    plt.figure(figsize=(20,20))
+    labels=list(np.unique(np.concatenate((pairs['idx1'],pairs['idx2']))))
+
+    Z=linkage(pairs[metric], method=dendro_method)
+
+    fig1 = plt.figure(figsize=(20,20))
     dendro=dendrogram(Z, labels=labels, color_threshold=color_threshold, leaf_font_size=9)
     if color_threshold is None:
         color_threshold = 0.7*max(Z[:,2])
     clusters=fcluster(Z, color_threshold, criterion='distance')
     cluster_df=pd.DataFrame([labels, clusters]).T 
-    cluster_df.columns=['trace_ID', 'cluster']
-    
+    cluster_df.columns=['trace_ID', 'dendro']
     return cluster_df
+
+def further_trace_clustering(pairs, cluster_df, metric, n_clusters=5):
+    distances = squareform(pairs[metric])
+    embedding = MDS(n_components=2, dissimilarity='precomputed')
+    pos = embedding.fit_transform(distances)
+
+    affinity_propagation = cluster.AffinityPropagation(damping=0.9, preference=-400)
+    aff = affinity_propagation.fit_predict(distances)
+    cluster_df['affinity'] = aff
+    spectral = cluster.SpectralClustering(n_clusters=n_clusters, eigen_solver='arpack', affinity="precomputed")
+    spec = spectral.fit_predict(1-distances)
+    cluster_df['spectral'] = spec
+    kmeans = cluster.KMeans(n_clusters=n_clusters)
+    km = kmeans.fit_predict(distances)
+    cluster_df['kmeans'] = km
+    ward_model = cluster.AgglomerativeClustering(n_clusters=n_clusters)
+    ward = ward_model.fit_predict(distances)
+    cluster_df['ward'] = ward
+
+    return cluster_df, pos
+
+def cluster_similarity(traces, cluster_df, metric='cluster'):
+    clust_ids = sorted(cluster_df[metric].unique())
+    clust_pairs = list(itertools.combinations(clust_ids,2))
+    res_combo = []
+    for i, j in clust_pairs:
+        clust1 = sorted(cluster_df.query('{0} == {1}'.format(metric, i)).trace_ID.unique())
+        clust2 = sorted(cluster_df.query('{0} == {1}'.format(metric, j)).trace_ID.unique())
+        traces1 = traces[traces['trace_ID'].isin(clust1)]
+        traces2 = traces[traces['trace_ID'].isin(clust2)]
+        pwds1 = pwd_calc(traces1)
+        pwds2 = pwd_calc(traces2)
+
+        pairs_1_2 = compare_trace_analysis(traces1, traces2, pwds1, pwds2)
+        res_combo.append(pairs_1_2.aligned_pcc.mean())
+
+    res_single = []
+    for i in clust_ids:
+        clust_i = sorted(cluster_df.query('{0} == {1}'.format(metric, i)).trace_ID.unique())
+        traces_i = traces[traces['trace_ID'].isin(clust_i)]
+        pwds_i = pwd_calc(traces_i)
+        pairs_i = trace_analysis(traces_i, pwds_i)
+        res_single.append(pairs_i.aligned_pcc.mean())
+    
+    return [np.mean(res_combo), np.mean(res_single)]
+
 
 def run_gpa_all_clusters(traces, cluster_df, min_cluster = 1):
     '''
@@ -348,24 +455,21 @@ def general_procrustes_analysis(traces, trace_ids, crit=0.01):
     Returns all the aligned traces, the mean trace and the std of all the aligned traces.
     '''
 
-    trace_ids=list(trace_ids)
-    
+    trace_ids=list(trace_ids.astype(int))
     # Make list of all points of selected traces
     all_points = points_from_traces(traces, trace_ids)
-
     # Select a random template for initial loop
     #np.random.seed(1)
     t_idx = np.random.randint(0,len(all_points))
     template = all_points[t_idx]
-
+    template = center_points_qc(template)
     #The initial distance before alignment.
-    prev_dist = np.sum([procrustes_distance(template, points) for 
+    prev_dist = np.sum([procrustes_dist(template, points) for 
                    points in all_points])
     print('Initial distance: ', prev_dist)
     print('Number of traces: ', len(all_points))
     #Run the first alignment step:
     all_points, points_mean, dist = general_procrustes_loop(all_points, template)
-    
     #Run the remaining alignment steps until crit is reached:
     n_cycles = 0
     while np.abs(prev_dist-dist) > crit:
@@ -379,7 +483,7 @@ def general_procrustes_analysis(traces, trace_ids, crit=0.01):
     points_std = np.nanstd(np.stack(all_points), axis = 0)
 
     return all_points, points_mean, points_std
-        
+
 def general_procrustes_loop(all_points, template):
     '''
     A single cycle in the general procrustes analysis.
@@ -401,21 +505,36 @@ def general_procrustes_loop(all_points, template):
     #The "QC" for the mean is 1 if at least one element has a QC=1
     points_mean[:,3]=np.ceil(points_mean[:,3])
     # Calculate distance to mean:
-    dist = np.sum([procrustes_distance(points_mean, points) for 
+    dist = np.sum([procrustes_dist(points_mean, points) for 
                    points in all_points_aligned])
     return all_points_aligned, points_mean, dist
-    
-def procrustes_distance(points_A, points_B):
+
+@njit
+def procrustes_dist(a, b):
     '''
     Procrustes distance (identical to RMSD) between two point sets.
     Matches them before calculation.
     '''
-
-    points_A, points_B = match_two_pointsets(points_A, points_B)    
-    dist = np.sqrt(np.mean((points_A-points_B)**2))
+    a, b = match_two_pointsets(a, b)    
+    dist = np.sqrt(np.mean((a-b)**2))
     return dist
-    
-def rigid_transform_3D(points_A, points_B):
+
+@njit
+def procrustes_dist_corr(a, b):
+    '''
+    Correlation (PCC) between two point sets.
+    Matches them before calculation.
+    '''
+    a, b = match_two_pointsets(a, b)    
+    dist = 1-mat_corr_pcc(a,b)
+    return dist
+
+@njit
+def numba_mean_axis0(arr):
+    return np.array([np.mean(arr[:,i]) for i in range(arr.shape[1])])
+
+@njit
+def rigid_transform_3D(A_orig, B_orig, prematch = False):
     '''
     Calculates rigid transformation of two 3d points sets based on:
     Least-squares fitting of two 3-D point sets. IEEE T Pattern Anal 1987
@@ -429,61 +548,51 @@ def rigid_transform_3D(points_A, points_B):
 
     Parameters
     ----------
-    points_A, points_B : Nx4 (ZYX + QC) numpy ndarrays.
+    A, B : Nx4 (ZYX + QC) numpy ndarrays.
 
     Returns
     -------
-    Coordinates of registered and transformed points_A
+    Coordinates of registered and transformed A
     '''
     
     #Ensure matching points
-    #Need column vectors for calculation
-    A, B = match_two_pointsets(points_A, points_B)
-
-    A = A.T
-    B = B.T
-    
-    # Check that we have 3D column vectors
-    num_rows, num_cols = A.shape
-
-    if num_rows != 3:
-        raise Exception("matrix A is not 3xN, it is {}x{}".format(num_rows, num_cols))
-
-    [num_rows, num_cols] = B.shape
-    if num_rows != 3:
-        raise Exception("matrix B is not 3xN, it is {}x{}".format(num_rows, num_cols))
-
-    # find mean column wise and reshape to column vector (centroids)
-    Ac = np.mean(A, axis=1).reshape((3,1))
-    Bc = np.mean(B, axis=1).reshape((3,1))
-
-    # subtract mean
+    if not prematch:
+        A, B = match_two_pointsets(A_orig, B_orig)
+    else:
+        A, B = A_orig, B_orig
+    # Subtract mean
+    # Workaround for lack of "axis" argument support in numba:
+    Ac = numba_mean_axis0(A)
+    Bc = numba_mean_axis0(B)
+    #Ac = np.mean(A, axis=0)
+    #Bc = np.mean(B, axis=0)
     Am = A - Ac
-    Bm = B - Bc
-    
+    Bm = B - Ac
+
     # Calculate covariance matrix
-    H = np.matmul(Am, Bm.T)
-    
+    H = Am.T @ Bm
+
     # Find optimal rotation by SVD of the covariance matrix.
     U, S, Vt = np.linalg.svd(H)
-    R = np.matmul(Vt.T,U.T)
+    R = Vt.T @ U.T 
 
     # Handle case if the rotation matrix is reflected.
     if np.linalg.det(R) < 0:
         #print("det(R) < R, reflection detected!, correcting for it ...\n");
         Vt[2,:] *= -1
-        R = np.matmul(Vt.T,U.T)
+        R = Vt.T @ U.T
 
     # calculate translation.
-    t = Bc - np.matmul(R,Ac)
-    
-    #Transform the original vector with QC values
-    points_A_reg = np.copy(points_A)
-    points_A_reg[:,:3] = (np.matmul(R, points_A[:,:3].T)+t).T
-    
-    return points_A_reg
+    t = Bc - R @ Ac
 
-def match_two_pointsets(points_A, points_B):
+    #Transform the original vector with QC values
+    A_reg = np.copy(A_orig)
+    A_reg[:,:3] = (R @ A_orig[:,:3].T).T+t
+    
+    return A_reg
+
+@jit
+def match_two_pointsets(A, B):
     '''
     Matches two point sets by their QC value to only return points
     passing QC in both sets.
@@ -498,12 +607,12 @@ def match_two_pointsets(points_A, points_B):
 
     '''
 
-    match_idx = points_A[:,3] * points_B[:,3] != 0
-    points_A_matched = points_A[match_idx,0:3]
-    points_B_matched = points_B[match_idx,0:3]
-    return points_A_matched, points_B_matched
+    match_idx = A[:,3] * B[:,3] != 0
+    A_match = A[match_idx,0:3]
+    B_match = B[match_idx,0:3]
+    return A_match, B_match
 
-def points_from_traces(traces, trace_ids):
+def points_from_traces(traces, trace_ids=-1):
     '''
     Helper function to extract point coordinates from trace dataframe.
     Only points passing QC during tracing are returned.
@@ -515,18 +624,21 @@ def points_from_traces(traces, trace_ids):
 
     Returns
     -------
-    points_with_qc : list of  Nx4 np array with trace coordinates and QC value.
+    points_qc : list of  Nx4 np array with trace coordinates and QC value.
     '''
     
-    if not isinstance(trace_ids, (list, tuple)):
-        trace_ids = [trace_ids]
-    points_with_qc=[]
-    for trace_id in trace_ids:
-        idx = traces['trace_ID'] == trace_id
-        points_with_qc.append(traces.loc[idx,['z','y','x','QC']].to_numpy())
-    return points_with_qc
+    arr = traces[['trace_ID', 'z', 'y', 'x', 'QC']].to_numpy()
+    
+    
+    if trace_ids == -1:
+        trace_ids = np.unique(arr[:,0])
 
-def points_from_df_nan(trace_df):
+    elif not isinstance(trace_ids, (list, tuple)):
+        trace_ids = [trace_ids]
+
+    return [arr[arr[:,0] == i][:,1:] for i in trace_ids]
+
+def points_from_traces_nan(traces, trace_ids=-1):
     '''
     Helper function to extract point coordinates from trace dataframe.
     All points are returned, but points not passing QC during tracing 
@@ -541,35 +653,30 @@ def points_from_df_nan(trace_df):
     points : Nx3 np array with trace coordinates.
     idx : List, Original index of trace coordinates.
     '''
-    
-    _traces=trace_df.copy()
-    _traces[_traces['QC']==0] = np.nan
-    points = np.array([_traces['x'].values,_traces['y'].values,_traces['z'].values]).T
-    idx = _traces['frame']
-    return points, idx
 
-def matching_points_from_dfs(df_A,df_B):
-    '''
-    Helper function to find points that are common to two traces.
 
-    Parameters
-    ----------
-    df_A, df_B : pd DataFrames with single trace data.
+    arr = traces[['trace_ID', 'z', 'y', 'x', 'QC']].to_numpy()
+    qc_idx = arr[:,4] == 1
+    arr[~qc_idx,1:4] = np.nan
 
-    Returns
-    -------
-    Coordinates (np array) and indexes (list) of the matching points.
+    if trace_ids == -1:
+        trace_ids = np.unique(arr[:,0])
 
-    '''
-    df_A_idx=df_A[df_A['QC']==1]['frame']
-    df_B_idx=df_B[df_B['QC']==1]['frame']
-    idx=np.intersect1d(df_A_idx, df_B_idx)
-    i = pd.IndexSlice
-    points_A, idx_A = points_from_df(df_A.loc[df_A['frame'].isin(idx)])
-    points_B, idx_B = points_from_df(df_B.loc[df_B['frame'].isin(idx)])
-    return points_A, idx_A, points_B, idx_B
+    elif not isinstance(trace_ids, (list, tuple)):
+        trace_ids = [trace_ids]
 
-def spline_interp(points):
+    return [arr[arr[:,0] == id][:,1:4] for id in trace_ids]
+
+
+def center_points_qc(a):
+    qc = a[:,3] # QC of points
+    ac = a[:,:3]-np.mean(a[qc>0,:3], axis=0) #Subtract mean of QC==1 points
+    ac = ac + np.abs(np.min(ac[qc>0,:3], axis=0)) #Shift so all values positive
+    qc = qc[:,np.newaxis] #Reshape QC to reappend
+    return np.append(ac,qc,axis=1)
+
+
+def spline_interp(points, n_points=100):
     '''
     Performs cubic B-spline interpolation on point coordinates.
 
@@ -585,27 +692,33 @@ def spline_interp(points):
     
     tck, u = interpolate.splprep(points, s=0)
     knots = interpolate.splev(tck[0], tck)
-    u_fine = np.linspace(0,1,num=100)
+    u_fine = np.linspace(0,1,num=n_points)
     fine = interpolate.splev(u_fine, tck)
     return fine
 
-def mat_corr_rmse(mat1, mat2):
+@jit(nopython=True)
+def euclidean(a, b):
+    return np.sqrt(np.nansum((a-b)**2))
+
+@jit(nopython=True)
+def mat_corr_rmse(a, b):
     '''
     Calculate mean squared error of two matrices, ignoring nans.
     '''
-    rmse = np.sqrt(np.nanmean((mat1-mat2)**2))
+    rmse = np.sqrt(np.nanmean((a-b)**2))
     return rmse
 
-def mat_corr_pcc(mat1,mat2):
+@jit(nopython=True)
+def mat_corr_pcc(a,b):
     '''
     Calculate pearson's corr coef of two matrices, ignoring nans.
     '''
-    mat1_bar=np.nanmean(mat1)
-    mat2_bar=np.nanmean(mat2)
+    a_m=np.nanmean(a)
+    b_m=np.nanmean(b)
     
-    pcc_num=np.nansum((mat1-mat1_bar)*(mat2-mat2_bar))
-    pcc_denom=np.sqrt(np.nansum((mat1-mat1_bar)**2)*np.nansum((mat2-mat2_bar)**2))
-    pcc=pcc_num/pcc_denom
+    pcc_num=np.nansum((a-a_m)*(b-b_m))
+    pcc_denom=np.sqrt(np.nansum((a-a_m)**2))*np.sqrt(np.nansum((b-b_m)**2))
+    pcc=np.divide(pcc_num,pcc_denom)
     
     return pcc
 
@@ -664,7 +777,7 @@ def contour_length(point_set):
         dist += np.linalg.norm(point_set_qc[i+1]-point_set_qc[i])
     return dist
 
-def plot_heatmap(traces, trace_id='all', zmax=600, cmap = 'rdbu'):
+def plot_heatmap(traces, trace_id='all', zmin=0, zmax=600, cmap = 'rdbu'):
     '''Helper function to make heatmaps of sets of traces.
 
     Args:
@@ -690,9 +803,10 @@ def plot_heatmap(traces, trace_id='all', zmax=600, cmap = 'rdbu'):
     pwds_crop = pwds_mean[nan_rows,:]
     pwds_crop = pwds_crop[:,nan_cols]
     print('Number of traces in heatmap: ', pwds.shape[0])
-    fig = px.imshow(pwds_crop, zmin=0, zmax=zmax, color_continuous_scale=cmap)
-    fig.show()
-    return pwds_crop, fig
+    fig, ax = plt.subplots(figsize=(5, 5))
+    ax.imshow(pwds_crop, vmin=zmin, vmax=zmax, cmap='RdBu')
+    #fig.show()
+    return pwds_crop, ax
     
 
 def plot_traces(traces, trace_id, split=False):
@@ -767,6 +881,7 @@ def plot_aligned_traces(traces, idx):
 
     all_points = points_from_traces(traces, idx)
     template = all_points.pop(0)
+    template = center_points_qc(template)
     all_points_aligned = [template]+[rigid_transform_3D(offset, template) for 
                           offset in all_points]
     scatters = []
@@ -776,8 +891,9 @@ def plot_aligned_traces(traces, idx):
         qc_idx = point_set[:,3] != 0
         idx=idx[qc_idx]
         labels=['E'+str(i) for i in idx]
-        cmap_points = [cmap[(i-1)%len(cmap)] for i in idx]
+        cmap_points = [cmap[(i)%len(cmap)] for i in idx]
         z,y,x = point_set[qc_idx, 0], point_set[qc_idx, 1], point_set[qc_idx, 2]
+        print(z,y,x)
         z_f, y_f, x_f=spline_interp([z,y,x])
         scatters.append(go.Scatter3d(x=x, y=y, z=z, 
                                      mode='markers  ', 
@@ -793,23 +909,25 @@ def plot_aligned_traces(traces, idx):
                             line=dict(color=px.colors.qualitative.Plotly[point_id],
                                         width=5)))
     fig = go.Figure(data=scatters)
-    fig.update_layout(template='plotly_white', 
-                    showlegend= True,
-                    height=600)
-    layout = {'scene':
-    {
-    'xaxis': {
-        'showgrid': False},
-    'yaxis': {
-        'showgrid': False},
-    'zaxis': {
-    'showgrid': False}
-    }}
-    fig.update_layout(layout)
+    fig.update_layout(
+    font=dict(size=16),
+    template='plotly_white', 
+    showlegend= True,
+    height=600,
+    scene =
+    dict(
+    xaxis=dict(showgrid = True, nticks=5),
+    yaxis=dict(showgrid = True, nticks=5),
+    zaxis=dict(showgrid = True, nticks=5),
+    xaxis_title='X [nm]',
+    yaxis_title='Y [nm]',
+    zaxis_title='Z [nm]'
+    ))
+
     #iplot(fig)
     return fig
     
-def plot_gpa_output(aligned_points, mean_points, cluster_members, cluster_id=0):
+def plot_gpa_output(aligned_points, mean_points, cluster_members, cluster_id=0, mean_color=None):
     '''
     Helper function for plotting the results of a GPA analysis.
     
@@ -828,13 +946,15 @@ def plot_gpa_output(aligned_points, mean_points, cluster_members, cluster_id=0):
     scatters = []
     cmap = px.colors.sequential.Inferno
     cmap_line = px.colors.qualitative.Plotly
+    if mean_color is None:
+        mean_color = cmap_line[cluster_id-1]
     for point_id, point_set in enumerate(aligned_points):
         idx=np.arange(point_set.shape[0])
         qc_idx = point_set[:,3] != 0
         idx=idx[qc_idx]
         labels=['E'+str(i) for i in idx]
         
-        cmap_points = [cmap[(i-1)%len(cmap)] for i in idx]
+        cmap_points = [cmap[(i%len(cmap))] for i in idx]
         z,y,x = point_set[qc_idx, 0], point_set[qc_idx, 1], point_set[qc_idx, 2]
         z_f, y_f, x_f=spline_interp([z,y,x])
         scatters.append(go.Scatter3d(x=x, 
@@ -857,7 +977,7 @@ def plot_gpa_output(aligned_points, mean_points, cluster_members, cluster_id=0):
     mean_idx=mean_idx[mean_qc]
     print(mean_idx)
     #mean_labels=['E'+str(i) for i in mean_idx]
-    mean_cmap = [cmap[(i-1)%len(cmap)] for i in mean_idx]
+    mean_cmap = [cmap[i] for i in mean_idx]
     z_m, y_m, x_m = mean_points[mean_idx, 0], mean_points[mean_idx, 1], mean_points[mean_idx, 2]
     z_fm, y_fm, x_fm=spline_interp([z_m,y_m,x_m])
     scatters.append(go.Scatter3d(x=x_m, y=y_m, z=z_m, 
@@ -872,22 +992,25 @@ def plot_gpa_output(aligned_points, mean_points, cluster_members, cluster_id=0):
                     mode ='lines',
                     showlegend=False,
                     name='Mean',
-                    line=dict(color=cmap_line[cluster_id-1],
+                    line=dict(color=mean_color,
                                 width=6)))
     
 
     fig = go.Figure(data=scatters)
-    fig.update_layout(template='plotly_white', showlegend= True, height=600)
-    layout = {'scene':
-    {
-    'xaxis': {
-        'showgrid': False},
-    'yaxis': {
-        'showgrid': False},
-    'zaxis': {
-    'showgrid': False}
-    }}
-    fig.update_layout(layout)
+    fig.update_layout(
+    font=dict(size=16),
+    template='plotly_white', 
+    showlegend= True,
+    height=600,
+    scene =
+    dict(
+    xaxis=dict(showgrid = False, nticks=0),
+    yaxis=dict(showgrid = False, nticks=0),
+    zaxis=dict(showgrid = False, nticks=0),
+    xaxis_title='X [nm]',
+    yaxis_title='Y [nm]',
+    zaxis_title='Z [nm]'
+    ))
     #iplot(fig)
     return fig
     
@@ -916,41 +1039,214 @@ def plot_multi_points(list_of_points, names = None):
         idx=idx[qc_idx]
         labels=['E'+str(i) for i in idx]
         
-        cmap_points = [cmap[(i-1)%len(cmap)] for i in idx]
+        cmap_points = [cmap[(i)%len(cmap)] for i in idx]
         if names is not None:
             name = names[point_id]
         else:
             name = 'Cluster '+str(point_id+1)
-        z,y,x = point_set[qc_idx, 0], point_set[qc_idx, 1], point_set[qc_idx, 2]
+        p = point_set[qc_idx,:3]
+        p = p-np.mean(p, axis=0)
+        p = p + np.abs(np.min(p, axis=0))
+        z,y,x = p[:,0], p[:,1], p[:,2]
+        
         z_f, y_f, x_f=spline_interp([z,y,x])
+
         scatters.append(go.Scatter3d(x=x, y=y, z=z, 
                                      mode='markers', 
                                      marker_color=cmap_points,
-                                     marker_size=6,
+                                     marker_size=15,
                                      opacity=1,
                                      name=name,
-                                     showlegend=True,
-                                     line=dict(color=cmap_line[point_id],
-                                               width=4)))
+                                     showlegend=True,))
+                                     #line=dict(color=cmap_line[point_id],
+                                               #width=4)))
         scatters.append(go.Scatter3d(x=x_f, 
                         y=y_f, 
                         z=z_f,
                         mode ='lines',
-                        showlegend=False,
-                        line=dict(color=cmap_line[point_id],
-                                    width=4)))
+                        showlegend=True,
+                        line=dict(color='#d62728',#point_id],
+                                    width=12)))
     
     fig = go.Figure(data=scatters)
-    fig.update_layout(template='plotly_white', showlegend= True, height=600)
-    layout = {'scene':
-        {
-        'xaxis': {
-            'showgrid': False},
-        'yaxis': {
-            'showgrid': False},
-        'zaxis': {
-        'showgrid': False}
-        }}
-    fig.update_layout(layout)
+    fig.update_layout(
+    font=dict(size=22),
+    template='plotly_white', 
+    showlegend= True,
+    height=800,
+    width=1000,
+    scene =
+    dict(
+    xaxis=dict(showgrid = True, nticks=5),
+    yaxis=dict(showgrid = True, nticks=5),
+    zaxis=dict(showgrid = True, nticks=5),
+    xaxis_title='',
+    yaxis_title='',
+    zaxis_title=''
+    ))
     #iplot(fig)
     return fig
+
+def plot_mds(cluster_df, pos, cluster_method = 'dendro'):
+    fig = plt.figure(figsize=(15,15))
+    sns.set(font_scale=2)
+    sns.set_palette(sns.color_palette('tab10')[5:])
+    sns.set_style('ticks')
+    hue_order = sorted(cluster_df[cluster_method].unique().astype(str))
+    sns.kdeplot(x=pos[:,0], y=pos[:,1], hue=cluster_df[cluster_method].astype(str),  levels=20, thresh=.1, alpha=0.3, hue_order=hue_order)
+    sns.scatterplot(x=pos[:,0], y=pos[:,1], hue=cluster_df[cluster_method].astype(str), s=200, alpha=1, hue_order=hue_order)
+    
+    return fig
+
+def plot_aligned_traces_animated(aligned_points):
+    frames = []
+    cmap = px.colors.sequential.Inferno
+    for i, points in enumerate(aligned_points):
+        idx=np.arange(points.shape[0])
+        qc_idx = points[:,3] != 0
+        idx=idx[qc_idx]
+        cmap_points = [cmap[(i-1)%len(cmap)] for i in idx]
+        z,y,x = points[qc_idx,0], points[qc_idx,1], points[qc_idx,2]
+        z_f, y_f, x_f=spline_interp([z,y,x])
+        frames.append(go.Frame(data=[go.Scatter3d(
+                                    x=x, 
+                                    y=y,
+                                    z=z,
+                                    mode='markers', 
+                                    name= 'trace_'+str(i),
+                                    marker_color=cmap_points,
+                                    marker_size=6,),
+                                    go.Scatter3d(x=x_f, 
+                                    y=y_f, 
+                                    z=z_f,
+                                    mode ='lines')]))
+
+    fig = go.Figure(frames = frames)
+    fig.add_trace(go.Scatter3d(x=x, y=y, z=z, name='last', marker_color=cmap_points,
+                                    marker_size=6,mode='markers'))
+    fig.add_trace(go.Scatter3d(x=x_f, y=y_f, z=z_f, mode ='lines'))
+
+    def frame_args(duration):
+        return {
+                "frame": {"duration": duration},
+                "mode": "immediate",
+                "fromcurrent": True,
+                "transition": {"duration": duration, "easing": "linear"},
+            }
+
+    sliders = [
+                {
+                    "pad": {"b": 10, "t": 60},
+                    "len": 0.9,
+                    "x": 0.1,
+                    "y": 0,
+                    "steps": [
+                        {
+                            "args": [[f.name], frame_args(0)],
+                            "label": str(k),
+                            "method": "animate",
+                        }
+                        for k, f in enumerate(fig.frames)
+                    ],
+                }
+            ]
+    # Layout
+    fig.update_layout(
+            title='Traces',
+            width=800,
+            height=800,
+            updatemenus = [
+                {
+                    "buttons": [
+                        {
+                            "args": [None, frame_args(500)],
+                            "label": "&#9654;", # play symbol
+                            "method": "animate"},
+                        {
+                            "args": [[None], frame_args(0)],
+                            "label": "&#9724;", # pause symbol
+                            "method": "animate"},
+                    ],
+                    "direction": "left",
+                    "pad": {"r": 10, "t": 70},
+                    "type": "buttons",
+                    "x": 0.1,
+                    "y": 0,
+                }
+            ],
+            sliders=sliders
+    )
+    print(x)
+    fig.show(renderer='notebook')
+
+def animate_trace(clust_aligned, interval=200):
+    x = []
+    y = []
+    z = []
+    for i, points in enumerate(clust_aligned):
+        qc_idx = points[:,3] != 0
+        if np.sum(qc_idx) != 0:
+            x_ = points[qc_idx,2]
+            x_ = x_-np.mean(x_)
+            y_ = points[qc_idx,1]
+            y_ = y_-np.mean(y_)
+            z_ = points[qc_idx,0]
+            z_ = z_-np.mean(z_)
+            x_,y_,z_ = spline_interp([x_,y_,z_], n_points=500)
+            x.append(x_)
+            y.append(y_)
+            z.append(z_)
+    x = np.array(x)
+    y = np.array(y)
+    z = np.array(z)
+    
+    inferno_colors, _ = plotly.colors.convert_colors_to_same_type(plotly.colors.sequential.Inferno)
+    colorscale = plotly.colors.make_colorscale(inferno_colors)
+    colors = np.array([get_continuous_color(colorscale, intermed=i/500) for i in range(0,500,1)]).astype(int)/255
+    fig = ipv.figure()
+    s = ipv.scatter(x,y,z, color=colors, marker='sphere')
+    ipv.animation_control(s, interval=interval) # shows controls for animation controls
+    ipv.save(os.getcwd()+os.sep+'ipv.html')
+
+def get_continuous_color(colorscale, intermed):
+    """
+    Plotly continuous colorscales assign colors to the range [0, 1]. This function computes the intermediate
+    color for any value in that range.
+
+    Plotly doesn't make the colorscales directly accessible in a common format.
+    Some are ready to use:
+    
+        colorscale = plotly.colors.PLOTLY_SCALES["Greens"]
+
+    Others are just swatches that need to be constructed into a colorscale:
+
+        viridis_colors, scale = plotly.colors.convert_colors_to_same_type(plotly.colors.sequential.Viridis)
+        colorscale = plotly.colors.make_colorscale(viridis_colors, scale=scale)
+
+    :param colorscale: A plotly continuous colorscale defined with RGB string colors.
+    :param intermed: value in the range [0, 1]
+    :return: color in rgb string format
+    :rtype: str
+    """
+    if len(colorscale) < 1:
+        raise ValueError("colorscale must have at least one color")
+
+    if intermed <= 0 or len(colorscale) == 1:
+        return re.findall('\d*\.?\d+',colorscale[0][1])
+    if intermed >= 1:
+        return re.findall('\d*\.?\d+',colorscale[-1][1])
+
+    for cutoff, color in colorscale:
+        if intermed > cutoff:
+            low_cutoff, low_color = cutoff, color
+        else:
+            high_cutoff, high_color = cutoff, color
+            break
+
+    # noinspection PyUnboundLocalVariable
+    rgb = plotly.colors.find_intermediate_color(
+        lowcolor=low_color, highcolor=high_color,
+        intermed=((intermed - low_cutoff) / (high_cutoff - low_cutoff)),
+        colortype="rgb")
+    return [int(float(s)) for s in re.findall('\d*\.?\d+',rgb)]
+

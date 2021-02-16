@@ -23,6 +23,7 @@ from skimage.registration import phase_cross_correlation
 from skimage.transform import resize
 from scipy.stats import trim_mean
 from skimage.measure import regionprops_table
+from skimage.morphology import white_tophat, disk
 import scipy.ndimage as ndi
 import dask
 import dask.array as da
@@ -421,6 +422,14 @@ def detect_spots(img, spot_threshold):
     dog = gaussian(img, 1) - gaussian(img, 3)
     grad = np.sum(np.abs(np.gradient(img)), axis=0)
     img = median(img*dog*grad)
+    '''
+    gauss = gaussian(img, 20)
+    str_el = disk(20)
+    img_t = white_tophat(img, selem=str_el)/gauss
+    dog = gaussian(img_t, 1) - gaussian(img_t, 3)
+    log = -ndi.gaussian_laplace(img_t, sigma=2, output=np.float32)
+    img_out = dog*log
+    '''
     spot_img, num_spots = ndi.label(img>spot_threshold)
     
     #Make a DataFrame with the ROI info

@@ -26,6 +26,8 @@ from skimage.measure import regionprops_table
 from skimage.filters import threshold_otsu
 import tifffile as tiff
 import dask.array as da
+import imreg_dft
+
 
 class Compare:
     def __init__(self, config_path):
@@ -91,9 +93,10 @@ class Compare:
             z_img_nucs [np array]: Center slices of detected nuclei. 
         '''
 
-        nuc_ch = self.config['nuc_ch']
-        nuc_d = self.config['nuc_diameter']
-        drifts = self.drifts
+        nuc_ch = self.config['nuc_ch']          #Channel of nucleus.
+        nuc_d = self.config['nuc_diameter']/ds  #Approximate diameter of nucleus in pixels.
+        drifts = self.drifts                    #Precalculated table of 3d image drifts
+        z_o = self.config['z_offset']           #Offset from central z-slice to use (e.g. for top of nucleus)
         nucs = []
         z_nuc_imgs = []
         for pos in range(self.images.shape[0]):
@@ -107,7 +110,7 @@ class Compare:
             img_o = self.images[pos, 1, nuc_ch, ::ds, ::ds, ::ds]
 
             #Detect nuclear masks and dilate them a bit before calculating bounding boxes.
-            masks = ip.nuc_segmentation(np.max(img_t, axis=0), self.config['nuc_diameter'])
+            masks = ip.nuc_segmentation(np.max(img_t, axis=0), nuc_d)
             labels, n_nucs = ndi.label(masks)
             labels = ndi.morphology.grey_dilation(labels, 20)
             bbox = pd.DataFrame(regionprops_table(labels, properties=('label',
@@ -126,7 +129,7 @@ class Compare:
                 xmax = row['bbox-3']
 
                 nuc_img_t = img_t[:,ymin:ymax, xmin:xmax]
-                zmid = np.argmax(np.sum(nuc_img_t, axis=(1,2))) 
+                zmid = min(np.argmax(np.sum(nuc_img_t, axis=(1,2))) + z_o, nuc_img_t.shape[0]-1)
 
                 bbox.loc[i, 'zmid'] = zmid
                 nuc_img_t = nuc_img_t[zmid]
@@ -145,12 +148,19 @@ class Compare:
                 #Expand in case drift correction went outside image.
                 nuc_img_o = ip.pad_to_shape(nuc_img_o, nuc_img_t.shape)
 
-                #Calculate new fine scale drift for single nuclei.
+                #Shift and normalize images for equal comparison
+                #First step calculates pixel-level shift and rotation, second step subpixel shift only.
+                try:
+                    nuc_img_o = imreg_dft.similarity(nuc_img_t, nuc_img_o, numiter=10, constraints=
+                                                                                {'scale':[1,0],
+                                                                                 'angle':[0,10],
+                                                                                 'tx':[0,5],
+                                                                                 'ty':[0,5]})['timg']
+                except IndexError:
+                    continue
                 new_drift = phase_cross_correlation(nuc_img_t, nuc_img_o, upsample_factor=4, return_error=False)
                 bbox.loc[i, 'y_f'] = new_drift[0]
                 bbox.loc[i, 'x_f'] = new_drift[1]
-                
-                #Shift and normalize images for equal comparison.
                 nuc_img_o = ndi.shift(nuc_img_o, new_drift)
                 nuc_img_o = match_histograms(nuc_img_o, nuc_img_t)
                 z_nuc_imgs.append(np.stack([nuc_img_t, nuc_img_o]))
@@ -168,7 +178,7 @@ class Compare:
         Align comparison images of features and recalculate fine scale drift.
 
         Args:
-            ds (int, optional): Downscaling factor for feature images. Defaults to 2.
+            ds (int, optional): Downscaling factor for comparison feature images. Defaults to 2.
 
         Returns:
             rds [DataFrame]: Bounding boxes of all the detected features.
@@ -214,10 +224,18 @@ class Compare:
                     xmax = np.clip(xmax-d_x, 0, img_o.shape[2]-1)
                     rd_img_o = img_o[zmid, ymin:ymax, xmin:xmax].compute()
 
-                #Expand in case drift correction did went outside original image.
+                #Expand in case drift correction went outside original image.
                 rd_img_o = ip.pad_to_shape(rd_img_o, rd_img_t.shape)
                 
                 #Calculate new fine scale drift.
+                try:
+                    rd_img_o = imreg_dft.similarity(rd_img_t, rd_img_o, numiter=10, constraints={
+                                                                                 'scale':[1,0],
+                                                                                 'angle':[0,10],
+                                                                                 'tx':[0,5],
+                                                                                 'ty':[0,5]})['timg']
+                except IndexError:
+                    continue
                 new_drift = phase_cross_correlation(rd_img_t, rd_img_o, upsample_factor=4, return_error=False)
                 
                 #Shift and normalize images for equal comparison
@@ -232,11 +250,16 @@ class Compare:
         return rds, rd_imgs
             
 
-    def compare_imgs(self, kind='nucs'):
+    def compare_imgs(self, kind='nucs', ds=2):
         '''
         Function to compare two (aligned, normalized) image sets according to several metrics.
         Can choose between running on preidentified nuclei ('nucs') or other features ('rds').
-        
+        Assumes the appropriate detection function (detect_nucs or detect_rds has been run first)
+
+        Args
+        -------
+            kind (string, optional): Either 'nucs' or 'rds'.
+
         Returns
         -------
         Pandas dataframe with comparison results for all images.
@@ -316,18 +339,44 @@ class Compare:
             
             #Read image data, drift correct, expand in case boundaries exceed image.
             nuc_img_t = self.images[pos, 0, nuc_ch, zmid, ymin:ymax:ds, xmin:xmax:ds].compute()
-            nuc_img_o = self.images[pos, 1, nuc_ch, zmid-d_z, ymin-d_y:ymax-d_y:ds, xmin-d_x:xmax-d_x:ds].compute()
+            
+            try:
+                nuc_img_o = self.images[pos, 1, nuc_ch, zmid-d_z, ymin-d_y:ymax-d_y:ds, xmin-d_x:xmax-d_x:ds].compute()
+
+            except IndexError: #In case drift correction pushes roi outside image area.
+                continue
+        
             nuc_img_o = ip.pad_to_shape(nuc_img_o, nuc_img_t.shape)
             
             #Calculate fine scale drift, shift and normalize images.
+            try:
+                nuc_img_o = imreg_dft.similarity(nuc_img_t, nuc_img_o, numiter=10, constraints={
+                                                                                 'scale':[1,0],
+                                                                                 'angle':[0,10],
+                                                                                 'tx':[0,5],
+                                                                                 'ty':[0,5]})['timg']
+            except IndexError:
+                continue
             new_drift = phase_cross_correlation(nuc_img_t, nuc_img_o, upsample_factor=4, return_error=False)
             nuc_img_o = ndi.shift(nuc_img_o,new_drift)
             nuc_img_o = match_histograms(nuc_img_o, nuc_img_t)
 
             #Repeat for feature image, except using max projection instead of central slice.
             rd_img_t = da.max(self.images[pos, 0, rd_ch, ::ds, ymin:ymax:ds, xmin:xmax:ds], axis=0).compute()
-            rd_img_o = da.max(self.images[pos, 1, rd_ch, ::ds, ymin-d_y:ymax-d_y:ds, xmin-d_x:xmax-d_x:ds], axis=0).compute()
+            try:
+                rd_img_o = da.max(self.images[pos, 1, rd_ch, ::ds, ymin-d_y:ymax-d_y:ds, xmin-d_x:xmax-d_x:ds], axis=0).compute()
+            except IndexError:
+                continue
+
             rd_img_o = ip.pad_to_shape(rd_img_o, rd_img_t.shape)
+            try:
+                rd_img_o = imreg_dft.similarity(rd_img_t, rd_img_o, numiter=10, constraints={
+                                                                'scale':[1,0],
+                                                                'angle':[0,10],
+                                                                'tx':[0,5],
+                                                                'ty':[0,5]})['timg']
+            except IndexError:
+                continue
             new_drift = phase_cross_correlation(rd_img_t, rd_img_o, upsample_factor=4, return_error=False)
             rd_img_o = ndi.shift(rd_img_o,new_drift)
             rd_img_o = match_histograms(rd_img_o, rd_img_t)
@@ -354,9 +403,10 @@ class Compare:
         Can optionally save drift corrected images of each nucleus and feature overlay.
 
         '''
-        self.drift_correction(ds = 4)
-        self.detect_nuclei()
-        self.detect_rds()
+        
+        self.drift_correction(ds = self.config['comp_ds'])
+        self.detect_nuclei(ds= self.config['comp_ds'])
+        self.detect_rds(ds= self.config['comp_ds'])
         self.compare_imgs(kind='nucs')
         self.compare_imgs(kind='rds')
         
@@ -364,6 +414,6 @@ class Compare:
         self.rd_metrics.to_csv(out+'rd_metrics.csv')
         self.nuc_metrics.to_csv(out+'nuc_metrics.csv')
         if save_dc:
-            self.gen_dc_imgs(ds=1)
+            self.gen_dc_imgs(ds=self.config['dc_ds'])
             self.save_dc_imgs()
 
