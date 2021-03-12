@@ -57,7 +57,7 @@ def tracing_qc(row, qc_dict, traces_df=None):
     
 
     if max_dist:
-        ref = qc_dict['dist_ref_slice']
+        ref = qc_dict['dist_ref_frame']#row['region_id'] #
         trace_id = row['trace_ID']
         ref_frame = traces_df.query('trace_ID == @trace_id').iloc[ref]
         z_c = ref_frame['z']
@@ -417,18 +417,18 @@ def cluster_similarity(traces, cluster_df, metric='cluster'):
     return [np.mean(res_combo), np.mean(res_single)]
 
 
-def run_gpa_all_clusters(traces, cluster_df, min_cluster = 1):
+def run_gpa_all_clusters(traces, cluster_df, metric='dendro', min_cluster = 1):
     '''
     Running function to perform GPA analysis on all clusters identified in trace_clustering()
     with number of members above min_cluster.
     '''
 
     #Find unique cluster IDs from clustering table.
-    cluster_ids=set(cluster_df['cluster'])
+    cluster_ids=set(cluster_df[metric])
     #Generate list of lists of all cluster members over min_cluster length.
     all_cluster_members = []
     for cluster_id in cluster_ids:
-        cluster_members = list(cluster_df[cluster_df['cluster']==cluster_id]['trace_ID'])
+        cluster_members = cluster_df[cluster_df[metric]==cluster_id]['trace_ID'].values
         if len(cluster_members)>=min_cluster:
             all_cluster_members.append(cluster_members)
             print(f'Cluster ID {cluster_id}, members: {cluster_members}.')
@@ -977,7 +977,7 @@ def plot_gpa_output(aligned_points, mean_points, cluster_members, cluster_id=0, 
     mean_idx=mean_idx[mean_qc]
     print(mean_idx)
     #mean_labels=['E'+str(i) for i in mean_idx]
-    mean_cmap = [cmap[i] for i in mean_idx]
+    mean_cmap = [cmap[i%10] for i in mean_idx]
     z_m, y_m, x_m = mean_points[mean_idx, 0], mean_points[mean_idx, 1], mean_points[mean_idx, 2]
     z_fm, y_fm, x_fm=spline_interp([z_m,y_m,x_m])
     scatters.append(go.Scatter3d(x=x_m, y=y_m, z=z_m, 
@@ -1090,7 +1090,7 @@ def plot_multi_points(list_of_points, names = None):
 def plot_mds(cluster_df, pos, cluster_method = 'dendro'):
     fig = plt.figure(figsize=(15,15))
     sns.set(font_scale=2)
-    sns.set_palette(sns.color_palette('tab10')[5:])
+    sns.set_palette(sns.color_palette('tab10')[:])
     sns.set_style('ticks')
     hue_order = sorted(cluster_df[cluster_method].unique().astype(str))
     sns.kdeplot(x=pos[:,0], y=pos[:,1], hue=cluster_df[cluster_method].astype(str),  levels=20, thresh=.1, alpha=0.3, hue_order=hue_order)
@@ -1179,10 +1179,14 @@ def plot_aligned_traces_animated(aligned_points):
     print(x)
     fig.show(renderer='notebook')
 
-def animate_trace(clust_aligned, interval=200):
+def animate_trace(clust_aligned, t_interval=200, n_points=500):
     x = []
     y = []
     z = []
+    xs = []
+    ys = []
+    zs = []
+
     for i, points in enumerate(clust_aligned):
         qc_idx = points[:,3] != 0
         if np.sum(qc_idx) != 0:
@@ -1192,21 +1196,34 @@ def animate_trace(clust_aligned, interval=200):
             y_ = y_-np.mean(y_)
             z_ = points[qc_idx,0]
             z_ = z_-np.mean(z_)
-            x_,y_,z_ = spline_interp([x_,y_,z_], n_points=500)
             x.append(x_)
             y.append(y_)
             z.append(z_)
+            xs_,ys_,zs_ = spline_interp([x_,y_,z_], n_points=n_points)
+            xs.append(xs_)
+            ys.append(ys_)
+            zs.append(zs_)
     x = np.array(x)
     y = np.array(y)
     z = np.array(z)
-    
+    xs = np.array(xs)
+    ys = np.array(ys)
+    zs = np.array(zs)
+
     inferno_colors, _ = plotly.colors.convert_colors_to_same_type(plotly.colors.sequential.Inferno)
     colorscale = plotly.colors.make_colorscale(inferno_colors)
-    colors = np.array([get_continuous_color(colorscale, intermed=i/500) for i in range(0,500,1)]).astype(int)/255
+    colors = np.array([get_continuous_color(colorscale, intermed=i/x.shape[1]) for i in range(0,x.shape[1],1)]).astype(int)/255
+    selected = np.array([1])
     fig = ipv.figure()
-    s = ipv.scatter(x,y,z, color=colors, marker='sphere')
-    ipv.animation_control(s, interval=interval) # shows controls for animation controls
+    ipv.style.axes_off()
+    ipv.style.box_off()
+    #ipv.style.background_color('grey')
+    s1 = ipv.scatter(x,y,z, size = 6, selected=selected, size_selected=6, color_selected='lime', color=colors, marker='sphere')
+    s2 = ipv.scatter(xs,ys,zs, size = 2, color='tab:blue', marker='sphere')
+    ipv.animation_control([s1,s2], interval=t_interval) # shows controls for animation controls
     ipv.save(os.getcwd()+os.sep+'ipv.html')
+    ipv.show()
+    return ipv.gcc()
 
 def get_continuous_color(colorscale, intermed):
     """

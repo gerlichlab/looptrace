@@ -71,8 +71,8 @@ def main():
         event, values = window.read(timeout=100)
         if event == '-INIT-':
             H = ImageHandler(values['-CONFIG_PATH-'])
-            window['-DC_POSITION-'].update(values=H.pos_list)
-            window['-ROI_POSITION-'].update(values=H.pos_list)
+            window['-DC_POSITION-'].update(values=H.pos_list, set_to_index=0)
+            window['-ROI_POSITION-'].update(values=H.pos_list, set_to_index=0)
             window['-DC_PATH-'].update(H.dc_file_path)
         elif event == '-VIEW_IMAGES-':
             ip.napari_view(H.images, downscale=H.config['image_view_downscaling'])

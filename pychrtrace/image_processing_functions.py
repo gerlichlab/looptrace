@@ -23,7 +23,7 @@ from skimage.registration import phase_cross_correlation
 from skimage.transform import resize
 from scipy.stats import trim_mean
 from skimage.measure import regionprops_table
-from skimage.morphology import white_tophat, disk
+from skimage.morphology import white_tophat, disk, ball
 import scipy.ndimage as ndi
 import dask
 import dask.array as da
@@ -419,9 +419,15 @@ def image_from_svih5(path,ch=None,index=(slice(None),
     
 def detect_spots(img, spot_threshold):
     #Threshold, dilate and label image
-    dog = gaussian(img, 1) - gaussian(img, 3)
-    grad = np.sum(np.abs(np.gradient(img)), axis=0)
-    img = median(img*dog*grad)
+    #img = median(img)
+    #str_el = ball(50)
+    #img = white_tophat(img, selem=str_el)
+    img = gaussian(img, 0.8)-gaussian(img,1.3)
+    img = (img-np.mean(img))/np.std(img)
+    #img = -ndi.gaussian_laplace(img, sigma=0.8, output=np.float32)#gaussian(img, 0.5) - gaussian(img, 1)
+    #img = img/np.max(img)
+    #grad = np.sum(np.abs(np.gradient(img)), axis=0)
+    #img = median(img*dog)
     '''
     gauss = gaussian(img, 20)
     str_el = disk(20)
@@ -597,7 +603,7 @@ def decon_RL(img, kernel, algo, fd_data, niter=10):
     res = algo.run(fd_data.Acquisition(data=img, kernel=kernel), niter=niter).data
     return res
 
-def nuc_segmentation(nuc_imgs, diameter = 150):
+def nuc_segmentation(nuc_imgs, diameter = 150, do_3D = False):
     '''
     Runs nuclear segmentation using cellpose trained model (https://github.com/MouseLand/cellpose)
 
@@ -607,7 +613,7 @@ def nuc_segmentation(nuc_imgs, diameter = 150):
     from cellpose import models
     model = models.Cellpose(gpu=False, model_type='nuclei')
     channels = [0,0]
-    masks, flows, styles, diams = model.eval(nuc_imgs, diameter=diameter, channels=channels, net_avg=False)
+    masks, flows, styles, diams = model.eval(nuc_imgs, diameter=diameter, channels=channels, net_avg=False, do_3D=do_3D)
     return masks
 
 def nuc_segmentation_otsu(nuc_image, min_size, exp_bb=-1, clear_edges=True):
