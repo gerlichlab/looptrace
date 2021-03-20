@@ -13,6 +13,7 @@ from skimage.metrics import structural_similarity as ssim
 from scipy.spatial.distance import pdist
 from scipy.stats import skew, kurtosis
 from skimage.filters import threshold_otsu, gaussian
+from numba import njit
 
 def kullback_leibler_divergence(p, q):
     '''
@@ -88,7 +89,8 @@ def comp_ssim(img1, img2):
     ssim_out = ssim(img1,img2, full=False,  win_size=5)
 
     return ssim_out
-    
+
+@njit    
 def comp_pcc_coloc(img1,img2):
     '''
     Pixel-by-pixel correlation of two images by Pearson's correlation coefficient.
@@ -105,6 +107,7 @@ def comp_pcc_coloc(img1,img2):
     
     return pcc 
 
+@njit
 def comp_mac_coloc(img1, img2):
     '''
     Pixel-by-pixel correlation of two images by Mander's correlation coefficient.

@@ -31,6 +31,7 @@ from scipy import stats
 import scipy.ndimage as ndi
 from scipy.spatial.distance import cdist, squareform
 from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
+from scipy.stats import trim_mean
 import matplotlib
 import matplotlib.pyplot as plt
 import napari
@@ -501,9 +502,11 @@ def general_procrustes_loop(all_points, template):
         all_points_aligned_qc.append(points)
     
     #Calculate mean points from QC list ignoring nans.:
-    points_mean = np.nanmean(np.stack(all_points_aligned_qc), axis=0)
+    points_mean = numba_trimmean_axis0(np.stack(all_points_aligned_qc), proportiontocut=0.1)
+    #points_mean = np.nanmean(np.stack(all_points_aligned_qc), axis=0)
+    #points_mean = np.nanmedian(np.stack(all_points_aligned_qc), axis=0)
     #The "QC" for the mean is 1 if at least one element has a QC=1
-    points_mean[:,3]=np.ceil(points_mean[:,3])
+    points_mean[:,3]=1#np.ceil(points_mean[:,3])
     # Calculate distance to mean:
     dist = np.sum([procrustes_dist(points_mean, points) for 
                    points in all_points_aligned])
@@ -532,6 +535,23 @@ def procrustes_dist_corr(a, b):
 @njit
 def numba_mean_axis0(arr):
     return np.array([np.mean(arr[:,i]) for i in range(arr.shape[1])])
+
+@njit
+def numba_trimmean_axis0(arr, proportiontocut=0.1):
+
+    N = arr.shape[1]
+    D = arr.shape[2]
+    res = []
+
+    for i in range(N):
+        for j in range(D):
+            a = arr[:,i,j]
+            a = np.sort(a[~np.isnan(a)])
+            low = np.round(a.size*proportiontocut)
+            high = a.size - low
+            res.append(np.mean(a[low:high]))
+    res = np.array(res).reshape(N,D)
+    return res
 
 @njit
 def rigid_transform_3D(A_orig, B_orig, prematch = False):
@@ -690,8 +710,8 @@ def spline_interp(points, n_points=100):
 
     '''
     
-    tck, u = interpolate.splprep(points, s=0)
-    knots = interpolate.splev(tck[0], tck)
+    tck, u = interpolate.splprep(points, s=0, k=2)
+    #knots = interpolate.splev(tck[0], tck)
     u_fine = np.linspace(0,1,num=n_points)
     fine = interpolate.splev(u_fine, tck)
     return fine
@@ -776,6 +796,30 @@ def contour_length(point_set):
     for i in range(point_set_qc.shape[0]-1):
         dist += np.linalg.norm(point_set_qc[i+1]-point_set_qc[i])
     return dist
+
+def fit_plane_SVD(points):
+    '''
+    From:
+    https://stackoverflow.com/questions/15959411/fit-points-to-a-plane-algorithms-how-to-iterpret-results
+
+    Args:
+        XYZ ([type]): [description]
+
+    Returns:
+        [type]: [description]
+    '''
+
+    [rows,cols] = points.shape
+    # Set up constraint equations of the form  AB = 0,
+    # where B is a column vector of the plane coefficients
+    # in the form b(1)*X + b(2)*Y +b(3)*Z + b(4) = 0.
+    p = (np.ones((rows,1)))
+    AB = np.hstack([points,p])
+    [u, d, v] = np.linalg.svd(AB,0)        
+    B = v[3,:];                    # Solution is last column of v.
+    nn = np.linalg.norm(B[0:3])
+    B = B / nn
+    return B[0:3]
 
 def plot_heatmap(traces, trace_id='all', zmin=0, zmax=600, cmap = 'rdbu'):
     '''Helper function to make heatmaps of sets of traces.
@@ -907,27 +951,28 @@ def plot_aligned_traces(traces, idx):
                             mode ='lines',
                             name='Trace '+str(point_id),
                             line=dict(color=px.colors.qualitative.Plotly[point_id],
-                                        width=5)))
+                                        width=6)))
     fig = go.Figure(data=scatters)
     fig.update_layout(
-    font=dict(size=16),
+    font=dict(size=18),
     template='plotly_white', 
     showlegend= True,
     height=600,
     scene =
     dict(
+    aspectmode='data',
     xaxis=dict(showgrid = True, nticks=5),
     yaxis=dict(showgrid = True, nticks=5),
     zaxis=dict(showgrid = True, nticks=5),
-    xaxis_title='X [nm]',
-    yaxis_title='Y [nm]',
-    zaxis_title='Z [nm]'
+    xaxis_title='x [nm]',
+    yaxis_title='y [nm]',
+    zaxis_title='z [nm]',
     ))
 
     #iplot(fig)
     return fig
     
-def plot_gpa_output(aligned_points, mean_points, cluster_members, cluster_id=0, mean_color=None):
+def plot_gpa_output(aligned_points, mean_points, cluster_members=None, cluster_id=0, mean_color=None):
     '''
     Helper function for plotting the results of a GPA analysis.
     
@@ -942,7 +987,8 @@ def plot_gpa_output(aligned_points, mean_points, cluster_members, cluster_id=0, 
     Fig object for saving or further manipulation.
 
     '''
-    
+    if cluster_members is None:
+        cluster_members = list(range(len(aligned_points)))
     scatters = []
     cmap = px.colors.sequential.Inferno
     cmap_line = px.colors.qualitative.Plotly
@@ -1013,8 +1059,81 @@ def plot_gpa_output(aligned_points, mean_points, cluster_members, cluster_id=0, 
     ))
     #iplot(fig)
     return fig
+
+def plot_gpa_output_std(aligned_points, mean_points, mean_color=None):
+    '''
+    Helper function for plotting the results of a GPA analysis.
     
-def plot_multi_points(list_of_points, names = None):
+    Parameters
+    ----------
+    aligned_points : List of aligned point sets
+    mean_points: Nx4 array of mean points
+    cluster_members: List of trace_IDs of the aligned points, typically from trace_clustering output
+
+    Returns
+    ----------
+    Fig object for saving or further manipulation.
+
+    '''
+    
+    scatters = []
+    cmap = px.colors.sequential.Inferno
+    cmap_line = px.colors.qualitative.Plotly
+    if mean_color is None:
+        mean_color = 'pink'
+
+    mean_idx=np.arange(mean_points.shape[0])
+    mean_qc = mean_points[:,3] != 0
+    mean_idx=mean_idx[mean_qc]
+    print(mean_idx)
+    #mean_labels=['E'+str(i) for i in mean_idx]
+    mean_cmap = [cmap[i%10] for i in mean_idx]
+
+    std_dist = np.nanstd(np.sqrt(np.nansum((np.stack(aligned_points) - mean_points)[:,:,:3]**2, axis=2)), axis=0)
+    z_m, y_m, x_m = mean_points[mean_idx, 0], mean_points[mean_idx, 1], mean_points[mean_idx, 2]
+    z_fm, y_fm, x_fm=spline_interp([z_m,y_m,x_m])
+    scatters.append(go.Scatter3d(x=x_m, y=y_m, z=z_m, 
+                                            mode='markers', 
+                                            marker_color=mean_cmap,
+                                            marker_size = std_dist,
+                                            opacity = 0.5
+                                            ))
+    scatters.append(go.Scatter3d(x=x_m, y=y_m, z=z_m, 
+                                        mode='markers', 
+                                        marker_color=mean_cmap,
+                                        marker_size=10
+                                        ))
+    
+    scatters.append(go.Scatter3d(x=x_fm, 
+                    y=y_fm, 
+                    z=z_fm,
+                    mode ='lines',
+                    showlegend=False,
+                    name='Mean',
+                    line=dict(color=mean_color,
+                                width=8)))
+    
+
+    fig = go.Figure(data=scatters)
+    fig.update_layout(
+    font=dict(size=16),
+    template='plotly_white', 
+    showlegend= True,
+    height=800,
+    width=1000,
+    scene =
+    dict(
+    xaxis=dict(showgrid = False, nticks=3, visible = False),
+    yaxis=dict(showgrid = False, nticks=3, visible = False),
+    zaxis=dict(showgrid = False, nticks=3, visible = False),
+    xaxis_title='',
+    yaxis_title='',
+    zaxis_title=''
+    ))
+    #iplot(fig)
+    return fig
+    
+def plot_multi_points(list_of_points, names = None, line_color='#1f77b4'):
     '''
     Helper function for plotting, typically used to plot the results of a GPA analysis 
     for all clusters.
@@ -1065,26 +1184,194 @@ def plot_multi_points(list_of_points, names = None):
                         z=z_f,
                         mode ='lines',
                         showlegend=True,
-                        line=dict(color='#d62728',#point_id],
+                        line=dict(color=line_color,#point_id],
                                     width=12)))
     
     fig = go.Figure(data=scatters)
     fig.update_layout(
-    font=dict(size=22),
+    font=dict(size=16),
     template='plotly_white', 
     showlegend= True,
     height=800,
     width=1000,
     scene =
     dict(
-    xaxis=dict(showgrid = True, nticks=5),
-    yaxis=dict(showgrid = True, nticks=5),
-    zaxis=dict(showgrid = True, nticks=5),
+    xaxis=dict(showgrid = False, nticks=3),
+    yaxis=dict(showgrid = False, nticks=3),
+    zaxis=dict(showgrid = False, nticks=3),
     xaxis_title='',
     yaxis_title='',
     zaxis_title=''
     ))
     #iplot(fig)
+    return fig
+
+def plot_2d_proj(points, std_points=None, line_color='#1f77b4', plane='best'):
+    '''[summary]
+
+    Args:
+        points ([type]): Nx4 ndarray of 3D points with QC.
+        std_points ([type], optional): N-vector of STD of points. Defaults to None.
+        line_color (str, optional): Provide RGB value or hex of spline fit line. Defaults to '#1f77b4'.
+        plane (str, optional): Choose the desired projection plane, e.g. 'xy', 'yz'. Defaults to 'best',
+                                least squares best fit plane for the 3D data.
+
+    Returns:
+        [type]: Figure object of plotted data.
+    '''
+
+
+    qc = points[:,3] == 1
+
+    if plane != 'best':
+        axis_map = {'z':0, 'y':1, 'x':2}
+        axis_x = axis_map[plane[0]]
+        axis_y = axis_map[plane[1]]
+        x = points[qc,axis_x]
+        y = points[qc,axis_y]
+        x = x-np.mean(x)
+        y = y-np.mean(y)
+        xf, yf = spline_interp(np.array([x,y]), 500)
+    elif plane == 'xz':
+        x = points[qc,2]
+        y = points[qc,1]
+        x = x-np.mean(x)
+        y = y-np.mean(y)
+        xf, yf = spline_interp(np.array([x,y]), 500)
+    
+    else:
+        n = fit_plane_SVD(points[qc,:3])
+        v1 = np.cross(np.array([0,0,1]), n) # Find a random orthogonal vector to n (in the plane)
+        v1 = v1/np.linalg.norm(v1)  # normalize it
+        v2 = np.cross(n, v1) # Find the third orthogonal vector
+
+        x = np.dot(points[qc,:3],v1)
+        y = np.dot(points[qc,:3],v2)
+        x = x-np.mean(x)
+        y = y-np.mean(y)
+        xf, yf = spline_interp(np.array([x,y]), 500)
+    positions = np.array([0,1,2,3,4,5,6,7,8,9])
+    positions = list(positions[qc])
+
+    fig = plt.figure()
+    sns.scatterplot(y,x, hue=positions, palette='inferno', legend=None, alpha=1, s=100, linewidth=0)
+    if std_points is not None:
+        sns.scatterplot(y,x, hue=positions, palette='inferno', legend=None, alpha=0.3, sizes=list((std_points/2)**2), size=positions, linewidth=0)
+    plt.plot(yf,xf, zorder=-10, color=line_color, linewidth=3)
+
+    plt.ylim(-450,450)
+    plt.xlim(-450,450)
+    plt.gca().set_aspect('equal')
+    plt.axis('off')
+    return fig
+
+def plot_2d_proj_kde(mean_points, aligned_points, line_color='#1f77b4'):
+    
+    qc = mean_points[:,3] == 1
+    n = fit_plane_SVD(mean_points[qc,:3])
+    v1 = np.cross(np.array([0,0,1]), n) # Find a random orthogonal vector to n (in the plane)
+    v1 = v1/np.linalg.norm(v1)  # normalize it
+    v2 = np.cross(n, v1) # Find the third orthogonal vector
+
+    positions = np.array([0,1,2,3,4,5,6,7,8,9])
+    
+    x_m = np.dot(mean_points[qc,:3],v1)
+    y_m = np.dot(mean_points[qc,:3],v2)
+    x_c = np.mean(x_m)
+    y_c = np.mean(y_m)
+    x_m = x_m-x_c
+    y_m = y_m-y_c
+
+    xf, yf = spline_interp(np.array([x_m,y_m]), 500)
+
+    x_all = []
+    y_all = []   
+    pos_all = [] 
+
+    for points in aligned_points:
+        qc = points[:,3] == 1
+        qc_pos = positions[qc]
+        x = np.dot(points[qc,:3],v1)
+        y = np.dot(points[qc,:3],v2)
+        x = x-x_c
+        y = y-y_c
+        x_all.append(x)
+        y_all.append(y)
+        pos_all.append(qc_pos)
+
+    x_all = np.hstack(x_all)
+    y_all = np.hstack(y_all)
+    pos_all = np.hstack(pos_all)
+
+    data = pd.DataFrame(np.array([x_all, y_all, pos_all]).T, columns=['x', 'y', 'pos'])
+
+    fig = plt.figure()
+
+    from matplotlib import cm
+    from matplotlib.colors import ListedColormap
+    cmap_inferno = cm.get_cmap('inferno', 10).colors
+
+#    for p in positions:
+#        sel_data = data.query('pos == @p')
+#        N = 256
+#        vals = np.ones((N, 4))
+#        vals[:, 0] = np.linspace(cmap_inferno[p][0], cmap_inferno[p][0], N)
+#        vals[:, 1] = np.linspace(cmap_inferno[p][1], cmap_inferno[p][1], N)
+#        vals[:, 2] = np.linspace(cmap_inferno[p][2], cmap_inferno[p][2], N)
+#        vals[:, 3] = np.linspace(0, 1, N)
+#        newcmp = ListedColormap(vals)
+
+    sns.kdeplot(data=data, x='y', y='x', hue='pos', clip_on=False, palette='inferno', linewidths=0.3, common_norm=False, fill=False, legend=None, levels = 25, thresh=0.75, alpha=0.2)
+    #sns.scatterplot(data=data, x='y', y='x', hue='pos', palette='inferno', s = 6, alpha = 0.3, legend=None)
+
+    plt.plot(yf,xf, zorder=10, color=line_color, linewidth=3, clip_on=False)
+    sns.scatterplot(y_m,x_m, hue=positions, clip_on=False, palette='inferno', legend=None, alpha=1, s=100, edgecolor=None,  zorder=20)
+
+    plt.ylim(-450,450)
+    plt.xlim(-450,450)
+    plt.gca().set_aspect('equal')
+    plt.axis('off')
+    return fig
+
+def plot_single_trace_grid(aligned_points, mean_points, max_n = 50, proj_plane = None, show_mean = False, line_color='#1f77b4'):
+    max_n = min(len(aligned_points), max_n)
+    if proj_plane == 'mean':
+        qc = mean_points[:,3] == 1
+        n = fit_plane_SVD(mean_points[qc,:3])
+        v1 = np.cross(np.array([0,0,1]), n) # Find a random orthogonal vector to n (in the plane)
+        v1 = v1/np.linalg.norm(v1)  # normalize it
+        v2 = np.cross(n, v1) # Find the third orthogonal vector
+
+    n_rows = int(np.sqrt(max_n))
+    fig, axs = plt.subplots(n_rows, n_rows, figsize=(3,2.8), sharex=False, sharey=False)
+    axs = axs.ravel()
+
+    if show_mean:
+        aligned_points = [mean_points] + aligned_points[:n_rows**2-1]
+    else:
+        aligned_points = aligned_points[:n_rows**2]
+
+    for i, points in enumerate(aligned_points):
+        qc = points[:,3] == 1
+        if proj_plane is None:
+            n = fit_plane_SVD(points[qc,:3])
+            v1 = np.cross(np.array([0,0,1]), n)
+            v1 = v1/np.linalg.norm(v1)  # normalize it
+            v2 = np.cross(n, v1)
+        x = np.dot(points[qc,:3],v1)
+        y = np.dot(points[qc,:3],v2)
+        x = x-np.mean(x)
+        y = y-np.mean(y)
+        xf, yf = spline_interp(np.array([x,y]), 500)
+        positions = np.array([0,1,2,3,4,5,6,7,8,9])
+        positions = list(positions[qc])
+        sns.scatterplot(y,x, ax=axs[i], hue=positions, palette='inferno', legend=None, alpha=0.8, s=30, edgecolor=None, clip_on=False)#sizes=sizes, size=positions)
+        axs[i].plot(yf,xf, zorder=-10, color=line_color, clip_on=False)
+        axs[i].set_ylim(-450,450)
+        axs[i].set_xlim(-450,450)
+        axs[i].axis('off')
+        axs[i].set_aspect('equal')
+    plt.subplots_adjust(wspace=0, hspace=0)
     return fig
 
 def plot_mds(cluster_df, pos, cluster_method = 'dendro'):

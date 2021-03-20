@@ -1,20 +1,27 @@
 # conda env create|update -f environment.yml
 name: pychrtrace
 dependencies:
-    - python>=3.7
+    - python=3.8
     - dask
     - joblib
     - pandas
     - numpy
     - scipy
     - scikit-image
-    - zarr==2.4.0
+    - zarr
     - plotly
+    - matplotlib
     - nbformat
+    - ipykernel
+    - nb_conda
     - pip
     - pip:
         - napari[all]
+        - cellpose
         - pyyaml
         - czifile
         - PySimpleGUI
         - aicsimageio
+        - imreg_dft
+        - seaborn
+        - flowdec[tf_gpu]

@@ -112,7 +112,7 @@ class Compare:
             #Detect nuclear masks and dilate them a bit before calculating bounding boxes.
             masks = ip.nuc_segmentation(np.max(img_t, axis=0), nuc_d)
             labels, n_nucs = ndi.label(masks)
-            labels = ndi.morphology.grey_dilation(labels, 20)
+            labels = ndi.morphology.grey_dilation(labels, 20/ds)
             bbox = pd.DataFrame(regionprops_table(labels, properties=('label',
                                                                     'bbox',
                                                                     'area')))
@@ -129,22 +129,51 @@ class Compare:
                 xmax = row['bbox-3']
 
                 nuc_img_t = img_t[:,ymin:ymax, xmin:xmax]
+
+                #Find central plane (plane with max intensity in nucleus)
                 zmid = min(np.argmax(np.sum(nuc_img_t, axis=(1,2))) + z_o, nuc_img_t.shape[0]-1)
 
                 bbox.loc[i, 'zmid'] = zmid
                 nuc_img_t = nuc_img_t[zmid]
 
                 try:
-                    nuc_img_o = img_o[zmid-d_z, ymin-d_y:ymax-d_y, xmin-d_x:xmax-d_x].compute()
+                    #Iterate over potential matching planes in offset image, find closest match.
+                    nuc_imgs_o_temp = []
+                    corrs = []
+                    z_scan_range = list(range(int(zmid-d_z-6/ds), int(zmid-d_z+6/ds)))
+                    for z in z_scan_range:
+                        nuc_img_o_temp = img_o[z, ymin-d_y:ymax-d_y, xmin-d_x:xmax-d_x].compute()
+                        nuc_img_o_temp = ip.pad_to_shape(nuc_img_o_temp, nuc_img_t.shape)
+                        nuc_img_o_temp = imreg_dft.similarity(nuc_img_t, nuc_img_o_temp, numiter=10, constraints=
+                                                            {'scale':[1,0],
+                                                                'angle':[0,10],
+                                                                'tx':[0,5],
+                                                                'ty':[0,5]})['timg']
+                        nuc_imgs_o_temp.append(nuc_img_o_temp)
+                        corrs.append(comp.comp_pcc_coloc(nuc_img_t, nuc_img_o_temp))
+                        
+                    max_corr_index = np.argmax(np.array(corrs))
+                    zmid_o = z_scan_range[max_corr_index]
+                    nuc_img_o = nuc_imgs_o_temp[max_corr_index]
+                    print('Z-stack correlations are:', corrs)
 
                 except IndexError: #In case drift correction pushes roi outside image area.
-                    zmid = np.clip(zmid-d_z, 0, img_o.shape[0]-1)
+                    zmid_o = np.clip(zmid-d_z, 0, img_o.shape[0]-1)
                     ymin = np.clip(ymin-d_y, 0, img_o.shape[1]-1)
                     ymax = np.clip(ymax-d_y, 0, img_o.shape[1]-1)
                     xmin = np.clip(xmin-d_x, 0, img_o.shape[2]-1)
                     xmax = np.clip(xmax-d_x, 0, img_o.shape[2]-1)
-                    nuc_img_o = img_o[zmid, ymin:ymax, xmin:xmax].compute()
+                    nuc_img_o = img_o[zmid_o, ymin:ymax, xmin:xmax].compute()
+                    nuc_img_o = ip.pad_to_shape(nuc_img_o, nuc_img_t.shape)
+                    nuc_img_o = imreg_dft.similarity(nuc_img_t, nuc_img_o, numiter=10, constraints=
+                                                            {'scale':[1,0],
+                                                                'angle':[0,10],
+                                                                'tx':[0,5],
+                                                                'ty':[0,5]})['timg']
+                
+                bbox.loc[i, 'zmid_o'] = zmid_o
 
+                '''
                 #Expand in case drift correction went outside image.
                 nuc_img_o = ip.pad_to_shape(nuc_img_o, nuc_img_t.shape)
 
@@ -158,6 +187,8 @@ class Compare:
                                                                                  'ty':[0,5]})['timg']
                 except IndexError:
                     continue
+                '''
+                #Calculate residual fine-scale drift:
                 new_drift = phase_cross_correlation(nuc_img_t, nuc_img_o, upsample_factor=4, return_error=False)
                 bbox.loc[i, 'y_f'] = new_drift[0]
                 bbox.loc[i, 'x_f'] = new_drift[1]
@@ -191,7 +222,6 @@ class Compare:
         rd_imgs = []
         for pos in range(self.images.shape[0]):
             #Load drift correction for image:
-            d_z = drifts[pos][0]//ds
             d_y = drifts[pos][1]//ds
             d_x = drifts[pos][2]//ds
 
@@ -222,7 +252,7 @@ class Compare:
                     ymax = np.clip(ymax-d_y, 0, img_o.shape[1]-1)
                     xmin = np.clip(xmin-d_x, 0, img_o.shape[2]-1)
                     xmax = np.clip(xmax-d_x, 0, img_o.shape[2]-1)
-                    rd_img_o = img_o[zmid, ymin:ymax, xmin:xmax].compute()
+                    rd_img_o = img_o[ymin:ymax, xmin:xmax].compute()
 
                 #Expand in case drift correction went outside original image.
                 rd_img_o = ip.pad_to_shape(rd_img_o, rd_img_t.shape)
@@ -272,38 +302,38 @@ class Compare:
             imgs = self.rd_imgs
 
         for i, img in enumerate(imgs):
-            nuc_props = {}
+            props = {}
             #Calculate and set the comparison metrics in output dataframe.
             ssim_out = comp.comp_ssim(img[0], img[1])
             pcc = comp.comp_pcc_coloc(img[0], img[1])
             mac = comp.comp_mac_coloc(img[0], img[1])
-            orb_ratio = comp.comp_orb_ratio(img[0], img[1])
-            area_ratio, iou = comp.comp_area_iou(img[0], img[1])
-            lbp_score = comp.comp_lbp(img[0], img[1])
-            variance = comp.comp_var(img[0], img[1])
-            skew = comp.comp_skew(img[0], img[1])
-            kurtosis = comp.comp_kurtosis(img[0], img[1])
+            #orb_ratio = comp.comp_orb_ratio(img[0], img[1])
+            #area_ratio, iou = comp.comp_area_iou(img[0], img[1])
+            #lbp_score = comp.comp_lbp(img[0], img[1])
+            #variance = comp.comp_var(img[0], img[1])
+            #skew = comp.comp_skew(img[0], img[1])
+            #kurtosis = comp.comp_kurtosis(img[0], img[1])
             
-            nuc_props['id']=i
-            nuc_props['MAC'] = mac
-            nuc_props['PCC'] = pcc
-            nuc_props['SSIM'] = ssim_out
-            nuc_props['ORB_ratio'] = orb_ratio
-            nuc_props['Area_ratio']= area_ratio
-            nuc_props['IOU'] = iou
-            nuc_props['LBP score'] = lbp_score
-            nuc_props['Variance ratio'] = variance
-            nuc_props['Skew ratio'] = skew
-            nuc_props['Kurtosis ratio'] = kurtosis
+            props['id']=i
+            props['MAC'] = mac
+            props['PCC'] = pcc
+            props['SSIM'] = ssim_out
+            #props['ORB_ratio'] = orb_ratio
+            #props['Area_ratio']= area_ratio
+            #props['IOU'] = iou
+            #props['LBP score'] = lbp_score
+            #props['Variance ratio'] = variance
+            #props['Skew ratio'] = skew
+            #props['Kurtosis ratio'] = kurtosis
         
-            props.append(pd.DataFrame(nuc_props, index=[i]))
+            props.append(pd.DataFrame(props, index=[i]))
             print('Properties calculated.')
         
         props = pd.concat(props)
         if kind == 'nucs':
-            self.nuc_metrics = props
+            self.nuc_metrics = pd.concat([self.nucs, props], axis=1)
         elif kind == 'rds':
-            self.rd_metrics = props
+            self.rd_metrics =  pd.concat([self.rds, props], axis=1)
         
         return props
     
@@ -332,16 +362,22 @@ class Compare:
         
             ds_row = row['ds']
             ymin = row['bbox-0']*ds_row
+            ymin_o = ymin-d_y
             xmin = row['bbox-1']*ds_row
+            xmin_o = xmin-d_x
             ymax = row['bbox-2']*ds_row
+            ymax_o = ymax-d_y
             xmax = row['bbox-3']*ds_row
+            xmax_o = xmax-d_x
+
             zmid = row['zmid']*ds_row
+            zmid_o = row['zmid_o']*ds_row
             
             #Read image data, drift correct, expand in case boundaries exceed image.
             nuc_img_t = self.images[pos, 0, nuc_ch, zmid, ymin:ymax:ds, xmin:xmax:ds].compute()
             
             try:
-                nuc_img_o = self.images[pos, 1, nuc_ch, zmid-d_z, ymin-d_y:ymax-d_y:ds, xmin-d_x:xmax-d_x:ds].compute()
+                nuc_img_o = self.images[pos, 1, nuc_ch, zmid_o, ymin_o:ymax_o:ds, xmin_o:xmax_o:ds].compute()
 
             except IndexError: #In case drift correction pushes roi outside image area.
                 continue
@@ -392,8 +428,12 @@ class Compare:
         Convenience function to save drift corrected images.
         '''
         out = self.config['output_folder']+os.sep+self.config['output_name']
+        exp_dc_imgs = []
         for i, img in enumerate(self.dc_imgs):
-            tiff.imsave(out+'dc_img_'+str(i).zfill(3)+'.tiff', img.astype(np.float32), imagej=True)
+            #tiff.imsave(out+'dc_img_'+str(i).zfill(3)+'.tiff', img.astype(np.float32), imagej=True)
+            exp_dc_imgs.append(ip.pad_to_shape(img, (img.shape[0], 500, 500)))
+        exp_dc_imgs = np.stack(exp_dc_imgs)
+        tiff.imsave(out+'dc_img_stack.tiff', exp_dc_imgs.astype(np.float32), imagej=True)
         
             
     def compare_multi_sc(self, save_dc=False):
