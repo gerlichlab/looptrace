@@ -50,7 +50,7 @@ def images_to_dask(folder, template):
     if '.h5' in template:
         x, groups = svih5_to_dask(folder, template)
     elif '.czi' in template or '.tif' in template or '.tiff' in template:
-        x, groups = aio_lazy_to_dask(folder, template)
+        x, groups = czi_tif_to_dask(folder, template)
     print('\n Loaded images of shape: ', x.shape)
     print('Found positions ', groups)
     return x, groups
@@ -113,8 +113,8 @@ def aio_lazy_to_dask(folder, template):
         pos_stack = []
         for fn in g:
             next(progress)
-            img = aio.AICSImage(fn, chunk_by_dims=["Y", "X"])
-            pos_stack.append(img.get_image_dask_data("CZYX", S=0, T=0, B=0, V=0))
+            img = aio.AICSImage(fn, chunk_by_dims=["Z", "Y", "X"])
+            pos_stack.append(img.dask_data[0,0])
         pos_stack = da.stack(pos_stack)
         group_array.append(pos_stack)
     x = da.stack(group_array)
@@ -256,7 +256,7 @@ def read_czi_image(image_path):
     Reads czi files as arrays using czifile package. Returns only CZYX image.
     '''
     with cz.CziFile(image_path) as czi:
-        image=czi.asarray()[0,0,:,0,:,::-1,:,0]
+        image=czi.asarray()[0,0,:,0,:,:,:,0]
     return image
 
 
