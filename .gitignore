@@ -141,3 +141,4 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 pychrtrace/.vscode/settings.json
+pychrtrace/.vscode/settings.json

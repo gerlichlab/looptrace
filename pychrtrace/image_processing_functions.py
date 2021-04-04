@@ -10,7 +10,7 @@ EMBL Heidelberg
 import sys
 import io
 import yaml
-import aicsimageio as aio
+#import aicsimageio as aio
 import czifile as cz
 import os
 import re

@@ -157,18 +157,23 @@ class Compare:
                 z_scan_range = list(range(zmin, zmax))
                 nuc_imgs_o_temp = []
                 corrs = []
-                for z in z_scan_range:
-                    nuc_img_o_temp = img_o[z, ymin:ymax, xmin:xmax].compute()
-                    nuc_img_o_temp = ip.pad_to_shape(nuc_img_o_temp, nuc_img_t.shape)
-                    nuc_img_o_temp = imreg_dft.similarity(nuc_img_t, nuc_img_o_temp, numiter=10, constraints=
+                try:
+                    for z in z_scan_range:
+                        nuc_img_o_temp = img_o[z, ymin:ymax, xmin:xmax].compute()
+                    
+                        nuc_img_o_temp = ip.pad_to_shape(nuc_img_o_temp, nuc_img_t.shape)
+                        nuc_img_o_temp = imreg_dft.similarity(nuc_img_t, nuc_img_o_temp, numiter=10, constraints=
                                                         {'scale':[1,0],
                                                             'angle':[0,10],
                                                             'tx':[0,5],
                                                             'ty':[0,5]})['timg']
-                    nuc_imgs_o_temp.append(nuc_img_o_temp)
-                    corrs.append(comp.comp_pcc_coloc(nuc_img_t, nuc_img_o_temp))
-                    
-                max_corr_index = np.argmax(np.array(corrs))
+                        
+                        nuc_imgs_o_temp.append(nuc_img_o_temp)
+                        corrs.append(comp.comp_pcc_coloc(nuc_img_t, nuc_img_o_temp))   
+                    max_corr_index = np.argmax(np.array(corrs))    
+                except (ValueError, IndexError): #In case drift correction has gone horribly wrong.
+                            continue
+
                 zmid_o = z_scan_range[max_corr_index]
                 nuc_img_o = nuc_imgs_o_temp[max_corr_index]
                 print('Z-stack correlations are:', corrs)
@@ -365,7 +370,7 @@ class Compare:
             try:
                 nuc_img_o = self.images[pos, 1, nuc_ch, zmid_o, ymin_o:ymax_o:ds, xmin_o:xmax_o:ds].compute()
 
-            except IndexError: #In case drift correction pushes roi outside image area.
+            except (IndexError,ValueError): #In case drift correction pushes roi outside image area.
                 continue
         
             nuc_img_o = ip.pad_to_shape(nuc_img_o, nuc_img_t.shape)
@@ -447,7 +452,7 @@ class Compare:
         self.compare_imgs(kind='nucs')
         self.compare_imgs(kind='rds')
         
-        out = self.config['output_folder']+os.sep+self.config['output_name']+'z'+str(self.config['z_offset'])
+        out = self.config['output_folder']+os.sep+self.config['output_name']+'z'+str(self.config['z_offset'])+'_'
         self.rd_metrics.to_csv(out+'rd_metrics.csv')
         self.nuc_metrics.to_csv(out+'nuc_metrics.csv')
         if save_dc:

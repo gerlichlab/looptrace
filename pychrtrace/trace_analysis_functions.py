@@ -245,8 +245,8 @@ def trace_analysis(traces, pwds):
     output : pd DataFrame with pairwise similarity results, including indexes of traces.
     '''
 
-    points = points_from_traces(traces)
-    trace_idx = list(traces.trace_ID.unique())
+    points = np.stack(points_from_traces(traces))
+    trace_idx = traces.trace_ID.unique()
     res = trace_analysis_loop(points, pwds, trace_idx)
     #pairwise_trace_idx = list(itertools.combinations(traces['trace_ID'].unique(),2))
     #pairwise_pwd_idx = list(itertools.combinations(range(pwds.shape[0]),2))
@@ -260,7 +260,7 @@ def trace_analysis(traces, pwds):
     output[['idx1', 'idx2']] = output[['idx1', 'idx2']].astype(int)
     return output
 
-@jit(parallel=True)
+@njit
 def trace_analysis_loop(points, pwds, trace_idx):
     res = []
     idx = list(range(len(points)))
@@ -1206,7 +1206,7 @@ def plot_multi_points(list_of_points, names = None, line_color='#1f77b4'):
     #iplot(fig)
     return fig
 
-def plot_2d_proj(points, std_points=None, line_color='#1f77b4', plane='best'):
+def plot_2d_proj(points, std_points=None, line_color='#1f77b4', plane='best', limits=(-450,450)):
     '''[summary]
 
     Args:
@@ -1259,13 +1259,13 @@ def plot_2d_proj(points, std_points=None, line_color='#1f77b4', plane='best'):
         sns.scatterplot(y,x, hue=positions, palette='inferno', legend=None, alpha=0.3, sizes=list((std_points/2)**2), size=positions, linewidth=0)
     plt.plot(yf,xf, zorder=-10, color=line_color, linewidth=3)
 
-    plt.ylim(-450,450)
-    plt.xlim(-450,450)
+    plt.ylim(limits)
+    plt.xlim(limits)
     plt.gca().set_aspect('equal')
     plt.axis('off')
     return fig
 
-def plot_2d_proj_kde(mean_points, aligned_points, line_color='#1f77b4'):
+def plot_2d_proj_kde(mean_points, aligned_points, line_color='#1f77b4', limits=(-450,450)):
     
     qc = mean_points[:,3] == 1
     n = fit_plane_SVD(mean_points[qc,:3])
@@ -1327,8 +1327,8 @@ def plot_2d_proj_kde(mean_points, aligned_points, line_color='#1f77b4'):
     plt.plot(yf,xf, zorder=10, color=line_color, linewidth=3, clip_on=False)
     sns.scatterplot(y_m,x_m, hue=positions, clip_on=False, palette='inferno', legend=None, alpha=1, s=100, edgecolor=None,  zorder=20)
 
-    plt.ylim(-450,450)
-    plt.xlim(-450,450)
+    plt.ylim(limits)
+    plt.xlim(limits)
     plt.gca().set_aspect('equal')
     plt.axis('off')
     return fig
