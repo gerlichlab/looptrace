@@ -20,6 +20,12 @@ pip install flowdec[tf_gpu]
 pip install cellpose
 ```
 
+For controlling a microfluidics system, pyserial is also required:
+```bash
+pip install pyserial
+```
+
+
 ## Usage:
 First edit the config YAML file to provide input and output directories and other parameters. An example file is found in example_config/example_config.yaml.
 
