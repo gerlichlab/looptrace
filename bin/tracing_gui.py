@@ -9,15 +9,9 @@ EMBL Heidelberg
 
 import PySimpleGUI as sg
 import os
-import threading
 import numpy as np
-
-from pychrtrace import Tracer
-from pychrtrace import Drifter
-from pychrtrace import ImageHandler
-from pychrtrace import SpotPicker
-from pychrtrace import NucDetector
-import pychrtrace.image_processing_functions as ip
+from looptrace import Tracer, Drifter, ImageHandler, SpotPicker, NucDetector
+import looptrace.image_processing_functions as ip
 from dask.distributed import Client
 import logging
 import napari
@@ -32,8 +26,10 @@ def main():
         [sg.InputText('YAML_config_file', key='-CONFIG_PATH-'), sg.FileBrowse()],
         [sg.Button('Initialize', key='-INIT-'),
         sg.Button('Save to zarr', key='-ZARR-'),
-        sg.Button('View images for tracing', key='-VIEW_IMAGES-'),
         sg.Button('Reload config', key='-RELOAD-')],
+        [sg.Text('_'*50)],
+        [sg.Combo(['Position'], default_value='Position', key='-IMG_POS-', auto_size_text=True),
+        sg.Button('View images for tracing', key='-VIEW_IMAGES-')],
         [sg.Text('_'*50)],
         [sg.Button('Run drift correction', key='-RUN_DC-')],
         [sg.Text('_'*50)],
@@ -71,11 +67,14 @@ def main():
         event, values = window.read(timeout=100)
         if event == '-INIT-':
             H = ImageHandler(values['-CONFIG_PATH-'])
+            window['-IMG_POS-'].update(values=H.pos_list, set_to_index=0)
             window['-DC_POSITION-'].update(values=H.pos_list, set_to_index=0)
             window['-ROI_POSITION-'].update(values=H.pos_list, set_to_index=0)
             window['-DC_PATH-'].update(H.dc_file_path)
+            window['-ROI_FILE_PATH-'].update(H.roi_file_path)
         elif event == '-VIEW_IMAGES-':
-            ip.napari_view(H.images, downscale=H.config['image_view_downscaling'])
+            pos_index = H.pos_list.index(values['-DC_POSITION-'])
+            ip.napari_view(H.images[pos_index], downscale=int(H.config['image_view_downscaling']))
         elif event == '-RELOAD-':
             H.reload_config()
         elif event == '-ZARR-':
@@ -93,13 +92,9 @@ def main():
             else:
                 D.drift_corr()
         elif event == '-VIEW_DC-':
-            pos_index = H.pos_list.index(values['-DC_POSITION-'])
-            if H.dc_images is not None:
-                ip.napari_view(H.dc_images[pos_index], downscale=H.config['image_view_downscaling']) 
-            else:
                 H.set_drift_table(path=values['-DC_PATH-'])
-                H.gen_dc_images()
-                ip.napari_view(H.dc_images[pos_index], downscale=H.config['image_view_downscaling'])
+                H.gen_dc_images(pos = values['-DC_POSITION-'])
+                ip.napari_view(H.dc_images, downscale=H.config['image_view_downscaling'])
         elif event == '-DET_NUC-':
             N = NucDetector(H)
             N.segment_nuclei()
@@ -145,7 +140,9 @@ def main():
             S = SpotPicker(H)
             spots, img, filt_img = S.rois_from_spots(preview_pos=values['-ROI_POSITION-'])
             roi_points, roi_props = ip.roi_to_napari_points(spots, values['-ROI_POSITION-'])
-            ip.napari_view([img, filt_img], points=roi_points, downscale=1)
+            #roi_points = np.insert(roi_points, 0, 0, axis=1)
+            print(roi_points)
+            ip.napari_view(img, points=roi_points, downscale=1)
         
         elif event == '-DET_ROI-':
             print('Detecting spots in all positions.')
@@ -168,6 +165,13 @@ def main():
                 H.roi_table = ip.rois_from_csv(values['-ROI_FILE_PATH-'])
 
         elif event == '-VIEW_ROI-':
+            if not H.roi_table:
+                try:
+                    H.roi_table = ip.rois_from_csv(values['-ROI_FILE_PATH-'])
+                except FileNotFoundError:
+                    print('Valid ROIs not found.')
+                    pass
+
             if values['-DC_IMAGE_ROIS-']:
                 if H.dc_images is not None:
                     print('Found DC_images.')
@@ -185,12 +189,10 @@ def main():
             #roi_shapes, roi_props = ip.roi_to_napari_shape(T.roi_table, position = position)
             roi_points, roi_props = ip.roi_to_napari_points(H.roi_table, position = position)
             if roi_points.size == 0:
-                roi_points = np.empty((0, 3))
-            point_layer = ip.napari_view(img[pos_index], 
+                roi_points = np.empty((0, 4))
+            point_layer = ip.napari_view(img[pos_index][:,int(H.config['trace_ch']),...], 
                                             points = roi_points,
                                             downscale= H.config['image_view_downscaling'],
-                                            trace_ch = H.config['trace_ch'],
-                                            ref_slice= H.config['bead_reference_frame'],
                                             contrast_limits=(100,5000))
             new_roi_table = ip.update_roi_points(point_layer, H.roi_table, 
                                                 position=position, 

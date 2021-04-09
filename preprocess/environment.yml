@@ -1,0 +1,15 @@
+# conda env create | update -f environment.yml
+name: pychrtrace_preprocess
+dependencies:
+    - python=3.8
+    - scipy
+    - dask
+    - pip
+    - pip:
+        - scikit-image
+        - napari[all]
+        - pyyaml
+        - PySimpleGUI
+        - czifile
+        - zarr
+        
