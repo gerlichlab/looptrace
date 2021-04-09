@@ -8,8 +8,8 @@ The simplest way to install the package and all dependencies is to clone the rep
 environment.yml file. In a terminal (e.g. a miniconda/Anaconda prompt):
 
 ```bash
-git clone https://git.embl.de/kbeckwit/pychrtrace
-cd pychrtrace
+git clone https://git.embl.de/kbeckwit/looptrace
+cd looptrace
 conda env create -f environment.yml
 python setup.py install
 conda activate pychrtrace
@@ -30,8 +30,12 @@ python bin\tracing_gui.py
 ```
 Follow instructions as required.
 
-## Contributing
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+## Authors
+Written and maintained by Kai Sandvold Beckwith (kai.beckwith@embl.de), Ellenberg group, CBB, EMBL Heidelberg.
+See https://www-ellenberg.embl.de/. 
 
 ## License
 [MIT](https://choosealicense.com/licenses/mit/)
+
+## Citation
+Please cite our paper.
