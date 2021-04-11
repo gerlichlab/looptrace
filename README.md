@@ -34,7 +34,7 @@ pip install imreg_dft
 
 For analysis, visualization and plotting of trace data:
 ```bash
-conda install plotly, nbformat, ipykernel, nb_conda
+conda install plotly nbformat ipykernel nb_conda
 pip install seaborn
 ```
 
