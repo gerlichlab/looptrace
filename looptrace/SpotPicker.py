@@ -53,23 +53,24 @@ class SpotPicker:
                 print(f'Detecting spots in position {position}, frame {frame}, ch {ch}.')
                 
                 pos_index = self.pos_list.index(position)
-                img = self.images[pos_index][frame, ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
+                img = self.images[pos_index, frame, ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
                 spot_props, _ = ip.detect_spots(img, spot_threshold)
                 spot_props[['zc', 'yc', 'xc']] = spot_props[['zc', 'yc', 'xc']]*spot_ds
 
-
+                '''
                 if spot_frame != bead_ref:
                     self.image_handler.set_drift_table()
                     dt = self.image_handler.drift_table
                     shift = list(dt.query('pos_id == @position & frame == @spot_frame')[['z_px_course', 'y_px_course', 'x_px_course']].iloc[0])
                     spot_props[['zc', 'yc', 'xc']] = spot_props[['zc', 'yc', 'xc']] + shift
+                '''
                 
                 spot_props['position'] = position
                 spot_props['frame'] = frame
                 spot_props['ch'] = ch
                 all_rois.append(spot_props)
         output = pd.concat(all_rois)
-        output=output.reset_index().rename(columns={'index':'roi_id'})
+        output=output.reset_index().rename(columns={'index':'roi_id_pos'})
         
 
         self.image_handler.roi_table = output

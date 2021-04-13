@@ -29,7 +29,7 @@ class Drifter():
         images = self.images
         pos_list = self.pos_list
         t_slice = self.config['bead_reference_frame']
-        t_all = range(images.shape[1])
+        t_all = range(images[0].shape[0])
         ch = self.config['bead_ch']
         threshold = self.config['bead_threshold']
         min_bead_int = self.config['min_bead_intensity']
@@ -43,9 +43,9 @@ class Drifter():
             drifts_fine = []
             for t in t_all:
                 print('Drift correcting frame', t)
-                t_img = np.array(images[i][t_slice, ch])
-                o_img = np.array(images[i][t, ch])
-                drift_course = ip.drift_corr_course(t_img, o_img, downsample=2)
+                t_img = np.array(images[i, t_slice, ch])
+                o_img = np.array(images[i, t, ch])
+                drift_course = ip.drift_corr_course(t_img, o_img, downsample=1)
                 drifts_course.append(drift_course)
                 drifts_fine.append(ip.drift_corr_multipoint_cc(t_img, 
                                                                 o_img,
@@ -55,7 +55,7 @@ class Drifter():
                                                                 n_points))
             print('Drift correction complete in position.')
             drifts = pd.concat([pd.DataFrame(drifts_course), pd.DataFrame(drifts_fine)], axis = 1)
-            drifts['pos_id'] = pos
+            drifts['position'] = pos
             drifts.index.name = 'frame'
             all_drifts.append(drifts)
             print('Finished drift correction for position ', pos)
@@ -69,7 +69,7 @@ class Drifter():
                             'z_px_fine',
                             'y_px_fine',
                             'x_px_fine',
-                            'pos_id']
+                            'position']
         all_drifts.to_csv(self.dc_file_path)
         print('Drift correction complete.')
         return all_drifts

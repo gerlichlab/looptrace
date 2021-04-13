@@ -32,18 +32,42 @@ from scipy.spatial.distance import cdist, squareform
 from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
 import matplotlib.pyplot as plt
 import napari
-import ipyvolume as ipv
 from numba import jit, njit
-from sklearn.manifold import MDS
-from sklearn import cluster
+
+from numba.core.errors import NumbaPerformanceWarning
+import warnings
+warnings.simplefilter('ignore', category=NumbaPerformanceWarning)
+
 import seaborn as sns
 
+def tracing_qc(traces, qc_config):
+    df = traces.copy()
+    A_to_BG = qc_config['A_to_BG']
+    sigma_xy_max = qc_config['sigma_xy_max']
+    sigma_z_max = qc_config['sigma_z_max']
+    max_dist = qc_config['max_dist']
+
+    qc = np.ones((len(traces)), dtype=bool)
+
+    if max_dist:
+        refs = df[df['frame'] == df['ref_frame']]
+        for dim in ['z','y','x']:
+            refs_map = dict(zip(refs['trace_id'], refs[dim]))
+            df[dim+'_ref'] = df['trace_id'].map(refs_map)
+        ref_dist = np.sqrt((df['z_ref']-df['z'])**2 + (df['y_ref']-df['y'])**2 + (df['x_ref']-df['x'])**2)
+        qc = qc & (ref_dist < max_dist)
+    
+    qc = qc & (df['A'] > (A_to_BG*df['BG']))
+    qc = qc & (df['sigma_xy'] < sigma_xy_max)
+    qc = qc & (df['sigma_z'] < sigma_z_max)
+    qc = qc & df['z_px'].between(0,100)
+    qc = qc & df['y_px'].between(0,100)
+    qc = qc & df['x_px'].between(0,100)
+
+    return qc
+'''
 def tracing_qc(row, qc_dict, traces_df=None):
-    '''
-    Function to set QC value of each fit based on 
-    settings from config file.
-    Used with pandas.DataFrame.apply()
-    '''
+
     
     A_to_BG = qc_dict['A_to_BG']
     sigma_xy_max = qc_dict['sigma_xy_max']
@@ -52,9 +76,9 @@ def tracing_qc(row, qc_dict, traces_df=None):
     
 
     if max_dist:
-        ref = qc_dict['dist_ref_frame']#row['region_id'] #
-        trace_id = row['trace_ID']
-        ref_frame = traces_df.query('trace_ID == @trace_id').iloc[ref]
+        ref_frame = row['ref_frame'] #
+        #trace_id = row['trace_id']
+        #ref_frame = traces_df.query('trace_id == @trace_id').iloc[ref]
         z_c = ref_frame['z']
         y_c = ref_frame['y']
         x_c = ref_frame['x']
@@ -79,7 +103,7 @@ def tracing_qc(row, qc_dict, traces_df=None):
         return 0
     else:
         return 1
-
+'''
 
 def view_context(all_images,
                  contrast= ((0,5000),(0,2000),(0,5000)),
@@ -88,7 +112,7 @@ def view_context(all_images,
                  rois = None):
     '''
     Convenvience function to view a given ROI in context in napari.
-    If not trace_ID or ROIs given the whole image stack divided by channel is shown.
+    If not trace_id or ROIs given the whole image stack divided by channel is shown.
     '''
     
     colors = ['magenta', 'green', 'blue', 'gray']
@@ -117,26 +141,27 @@ def view_context(all_images,
                 viewer.dims.set_current_step(dim, sel_dim[dim])
     return viewer
 
-def view_fits(traces, imgs, rois, config, mode='2D', contrast=(100,10000), axis=2):
+def view_fits(traces, imgs, mode='2D', contrast=(100,10000), axis=2):
     '''
     Convenience function to view 3d guassian fits on top of 2D (max z-projection) or 3D spot data.
     '''
 
-    points = points_for_overlay(traces, rois, config)
+    points = traces[['trace_id', 'frame', 'z_px', 'y_px', 'x_px', 'QC']].to_numpy()
+    points = points[points[:,5].astype(bool),0:5]
+    print
     if mode == '2D':
         imgs=np.max(imgs, axis=axis)
         with napari.gui_qt():
             viewer = napari.view_image(imgs, contrast_limits=contrast)
-            viewer.add_points(points[:,(0,1,3,4)], size=[0,0,1,1], face_color='blue', symbol='cross', n_dimensional=True)
+            viewer.add_points(points[:,(0,1,3,4)], size=[0,0,1,1], face_color='blue', symbol='cross', n_dimensional=False)
     elif mode == '3D':
         with napari.gui_qt():
             viewer = napari.view_image(imgs, contrast_limits=contrast)
-            viewer.add_points(points[:,(0,1,2,3,4)], size=[0,0,3,1,1], face_color='blue', symbol='cross', n_dimensional=True)
+            viewer.add_points(points, size=[0,0,3,1,1], face_color='blue', symbol='cross', n_dimensional=True)
 
 def points_for_overlay(traces, rois, config):
     '''
     Generate the fit coordinates in a format convenient to display as a marker in napari.
-    '''
 
     roi_image_size = config['roi_image_size']
     points_df = traces.copy()
@@ -144,14 +169,16 @@ def points_for_overlay(traces, rois, config):
         #transp_z=(roi_image_size[0]-(roi['z_max']-roi['z_min']))//2
         #transp_y=(roi_image_size[1]-(roi['y_max']-roi['y_min']))//2
         #transp_x=(roi_image_size[2]-(roi['x_max']-roi['x_min']))//2
-        idx = traces['trace_ID'] == roi.name
+        idx = traces['trace_id'] == roi.name
         points_df[idx] = points_df[idx].assign(z_px = traces[idx]['z_px'],
                                                y_px = traces[idx]['y_px'],
                                                x_px = traces[idx]['x_px'])
 
     #points_df[['y_px','x_px']]=points_df[['y_px','x_px']].clip(lower=0, upper=64)
     #points_df[['z_px']]=points_df[['z_px']].clip(lower=0, upper=16)
-    points=points_df[['trace_ID', 'frame', 'z_px', 'y_px', 'x_px']].to_numpy()
+    points=points_df[['trace_id', 'frame', 'z_px', 'y_px', 'x_px']].to_numpy()
+    '''
+    
     return points
 
 def euclidean_dist(traces, frame_names):
@@ -166,8 +193,8 @@ def euclidean_dist(traces, frame_names):
     '''
 
     df_sel = traces[traces['frame_name'].isin(frame_names)]
-    df_qc = df_sel.groupby(['trace_ID'])[['QC']].sum()
-    df_sel = df_sel.groupby(['trace_ID'])[['z','y','x']].diff().dropna()
+    df_qc = df_sel.groupby(['trace_id'])[['QC']].sum()
+    df_sel = df_sel.groupby(['trace_id'])[['z','y','x']].diff().dropna()
     df_sel['euclidean'] = ((df_sel['z'])**2 + df_sel['y']**2 + df_sel['x']**2)**0.5
     df_sel['euclidean_res'] = ((0.5*df_sel['z'])**2 + df_sel['y']**2 + df_sel['x']**2)**0.5
     df_sel.index = df_qc.index
@@ -237,7 +264,7 @@ def tracing_length_qc(traces, min_length=0):
     pwds : 3-dim np array of pwds that passed length QC.
 
     '''
-    grouped=traces.groupby('trace_ID')
+    grouped=traces.groupby('trace_id')
     traces_long=grouped.filter(lambda x : x['QC'].sum()>=min_length)
     return traces_long
 
@@ -260,9 +287,9 @@ def trace_analysis(traces, pwds):
     '''
 
     points = np.stack(points_from_traces(traces))
-    trace_idx = traces.trace_ID.unique()
+    trace_idx = traces.trace_id.unique()
     res = trace_analysis_loop(points, pwds, trace_idx)
-    #pairwise_trace_idx = list(itertools.combinations(traces['trace_ID'].unique(),2))
+    #pairwise_trace_idx = list(itertools.combinations(traces['trace_id'].unique(),2))
     #pairwise_pwd_idx = list(itertools.combinations(range(pwds.shape[0]),2))
     #res = Parallel(n_jobs=-2)(delayed(single_trace_analysis)
     #                          (traces, pwds, idx1, idx2, idx_p1, idx_p2) for 
@@ -291,8 +318,8 @@ def trace_analysis_loop(points, pwds, trace_idx):
 def compare_trace_analysis(traces1, traces2, pwds1, pwds2):
     points1 = points_from_traces(traces1)
     points2 = points_from_traces(traces2)
-    trace_idx1 = list(traces1.trace_ID.unique())
-    trace_idx2 = list(traces2.trace_ID.unique())
+    trace_idx1 = list(traces1.trace_id.unique())
+    trace_idx2 = list(traces2.trace_id.unique())
     idx1 = list(range(len(points1)))
     idx2 = list(range(len(points2)))
     res = []
@@ -320,14 +347,14 @@ def single_trace_analysis(a,b,d_1,d_2):
     ----------
     traces : pd DataFrame with trace data.
     pwds : 3D np array from pwd_calc.
-    idx1: int, trace_ID of first trace
-    idx2: int, trace_ID of second trace
+    idx1: int, trace_id of first trace
+    idx2: int, trace_id of second trace
     idx_p1: int, index of first trace in pwd matrix
     idx_p2: int, index of second trace in pwd matrix
 
     Returns
     -------
-    output : The input trace_IDs, and the similiarity metrics of the registered traces.
+    output : The input trace_ids, and the similiarity metrics of the registered traces.
     '''
     #Get points by their trace indices.
     a, b = match_two_pointsets(a, b)
@@ -383,7 +410,7 @@ def trace_clustering(pairs, metric='pwd_pcc', dendro_method='single', color_thre
         color_threshold = 0.7*max(Z[:,2])
     clusters=fcluster(Z, color_threshold, criterion='distance')
     cluster_df=pd.DataFrame([labels, clusters]).T 
-    cluster_df.columns=['trace_ID', 'dendro']
+    cluster_df.columns=['trace_id', 'dendro']
     return cluster_df
 
 def further_trace_clustering(pairs, cluster_df, metric, n_clusters=5):
@@ -399,6 +426,8 @@ def further_trace_clustering(pairs, cluster_df, metric, n_clusters=5):
         cluster_df (DataFrame): Updated clustering dataframe with additional clustering of all traces
         pos (ndarray): Positions of traces in 2D coordinates generated by MDS. 
     '''
+    from sklearn.manifold import MDS
+    from sklearn import cluster
 
     distances = squareform(pairs[metric])
     embedding = MDS(n_components=2, dissimilarity='precomputed')
@@ -437,10 +466,10 @@ def cluster_similarity(traces, cluster_df, method='cluster', metric='aligned_pcc
     clust_pairs = list(itertools.combinations(clust_ids,2))
     res_combo = []
     for i, j in clust_pairs:
-        clust1 = sorted(cluster_df.query('{0} == {1}'.format(method, i)).trace_ID.unique())
-        clust2 = sorted(cluster_df.query('{0} == {1}'.format(method, j)).trace_ID.unique())
-        traces1 = traces[traces['trace_ID'].isin(clust1)]
-        traces2 = traces[traces['trace_ID'].isin(clust2)]
+        clust1 = sorted(cluster_df.query('{0} == {1}'.format(method, i)).trace_id.unique())
+        clust2 = sorted(cluster_df.query('{0} == {1}'.format(method, j)).trace_id.unique())
+        traces1 = traces[traces['trace_id'].isin(clust1)]
+        traces2 = traces[traces['trace_id'].isin(clust2)]
         pwds1 = pwd_calc(traces1)
         pwds2 = pwd_calc(traces2)
 
@@ -449,8 +478,8 @@ def cluster_similarity(traces, cluster_df, method='cluster', metric='aligned_pcc
 
     res_single = []
     for i in clust_ids:
-        clust_i = sorted(cluster_df.query('{0} == {1}'.format(method, i)).trace_ID.unique())
-        traces_i = traces[traces['trace_ID'].isin(clust_i)]
+        clust_i = sorted(cluster_df.query('{0} == {1}'.format(method, i)).trace_id.unique())
+        traces_i = traces[traces['trace_id'].isin(clust_i)]
         pwds_i = pwd_calc(traces_i)
         pairs_i = trace_analysis(traces_i, pwds_i)
         res_single.append(pairs_i[metric].mean())
@@ -469,7 +498,7 @@ def run_gpa_all_clusters(traces, cluster_df, metric='dendro', min_cluster = 1):
     #Generate list of lists of all cluster members over min_cluster length.
     all_cluster_members = []
     for cluster_id in cluster_ids:
-        cluster_members = cluster_df[cluster_df[metric]==cluster_id]['trace_ID'].values
+        cluster_members = cluster_df[cluster_df[metric]==cluster_id]['trace_id'].values
         if len(cluster_members)>=min_cluster:
             all_cluster_members.append(cluster_members)
             print(f'Cluster ID {cluster_id}, members: {cluster_members}.')
@@ -487,7 +516,7 @@ def run_gpa_all_clusters(traces, cluster_df, metric='dendro', min_cluster = 1):
 
     return aligned_mean_points
 
-def general_procrustes_analysis(traces, trace_ids, crit=0.01):
+def general_procrustes_analysis(traces, trace_ids='all', crit=0.01):
     '''
     General procrustes analysis is performed as described in e.g.
     https://en.wikipedia.org/wiki/Generalized_Procrustes_analysis
@@ -495,8 +524,10 @@ def general_procrustes_analysis(traces, trace_ids, crit=0.01):
 
     Returns all the aligned traces, the mean trace and the std of all the aligned traces.
     '''
-
-    trace_ids=list(trace_ids.astype(int))
+    if trace_ids == 'all':
+        trace_ids = list(traces['trace_id'].unique())
+    else:
+        trace_ids=list(trace_ids.astype(int))
     # Make list of all points of selected traces
     all_points = points_from_traces(traces, trace_ids)
     # Select a random template for initial loop
@@ -542,8 +573,8 @@ def general_procrustes_loop(all_points, template):
         all_points_aligned_qc.append(points)
     
     #Calculate mean points from QC list ignoring nans.:
-    points_mean = numba_trimmean_axis0(np.stack(all_points_aligned_qc), proportiontocut=0.1)
-    #points_mean = np.nanmean(np.stack(all_points_aligned_qc), axis=0)
+    #points_mean = numba_trimmean_axis0(np.stack(all_points_aligned_qc), proportiontocut=0.1)
+    points_mean = np.nanmean(np.stack(all_points_aligned_qc), axis=0)
     #points_mean = np.nanmedian(np.stack(all_points_aligned_qc), axis=0)
     #The "QC" for the mean is 1 if at least one element has a QC=1
     points_mean[:,3]=1#np.ceil(points_mean[:,3])
@@ -687,7 +718,6 @@ def match_two_pointsets(A, B):
 def points_from_traces(traces, trace_ids=-1):
     '''
     Helper function to extract point coordinates from trace dataframe.
-    Only points passing QC during tracing are returned.
 
     Parameters
     ----------
@@ -699,7 +729,7 @@ def points_from_traces(traces, trace_ids=-1):
     points_qc : list of  Nx4 np array with trace coordinates and QC value.
     '''
     
-    arr = traces[['trace_ID', 'z', 'y', 'x', 'QC']].to_numpy()
+    arr = traces[['trace_id', 'z', 'y', 'x', 'QC']].to_numpy()
     
     
     if trace_ids == -1:
@@ -727,7 +757,7 @@ def points_from_traces_nan(traces, trace_ids=-1):
     '''
 
 
-    arr = traces[['trace_ID', 'z', 'y', 'x', 'QC']].to_numpy()
+    arr = traces[['trace_id', 'z', 'y', 'x', 'QC']].to_numpy()
     qc_idx = arr[:,4] == 1
     arr[~qc_idx,1:4] = np.nan
 
@@ -873,12 +903,12 @@ def fit_plane_SVD(points):
     B = B / nn
     return B[0:3]
 
-def plot_heatmap(traces, trace_id='all', zmin=0, zmax=600, cmap = 'rdbu'):
+def plot_heatmap(traces, trace_id='all', zmin=0, zmax=600, cmap = 'RdBu'):
     '''Helper function to make heatmaps of sets of traces.
 
     Args:
         traces ([DataFrame]): trace DataFrame
-        trace_id (str or int or list, optional): trace_IDs in dataframe to use. Defaults to 'all'.
+        trace_id (str or int or list, optional): trace_ids in dataframe to use. Defaults to 'all'.
         zmax (int, optional): Max value of heatmap. Defaults to 600.
         cmap (str, optional): Color scale for heatmap. Defaults to 'rdbu'.
 
@@ -889,7 +919,7 @@ def plot_heatmap(traces, trace_id='all', zmin=0, zmax=600, cmap = 'rdbu'):
     if trace_id != 'all':
         if type(trace_id) == int:
             trace_id = [trace_id]
-        pwds = pwd_calc(traces[traces['trace_ID'].isin(trace_id)])
+        pwds = pwd_calc(traces[traces['trace_id'].isin(trace_id)])
         pwds_mean = np.nanmedian(pwds, axis=0)
     else:
         pwds = pwd_calc(traces)
@@ -900,7 +930,7 @@ def plot_heatmap(traces, trace_id='all', zmin=0, zmax=600, cmap = 'rdbu'):
     pwds_crop = pwds_crop[:,nan_cols]
     print('Number of traces in heatmap: ', pwds.shape[0])
     fig, ax = plt.subplots(figsize=(5, 5))
-    ax.imshow(pwds_crop, vmin=zmin, vmax=zmax, cmap='RdBu')
+    ax.imshow(pwds_crop, vmin=zmin, vmax=zmax, cmap=cmap)
     #fig.show()
     return pwds_crop, ax
     
@@ -913,7 +943,7 @@ def plot_traces(traces, trace_id, split=False):
     Parameters
     ----------
     traces : pd DataFrame with trace data.
-    trace_id : Int or list of ints with trace_ID of traces to plot.     
+    trace_id : Int or list of ints with trace_id of traces to plot.     
 
     Returns
     ----------
@@ -922,7 +952,7 @@ def plot_traces(traces, trace_id, split=False):
 
     if type(trace_id) == int:
         trace_id=[trace_id]
-    df=traces[traces['trace_ID'].isin(trace_id)]
+    df=traces[traces['trace_id'].isin(trace_id)]
     df['keys'] = df['frame_name'].astype(str).str[0]
     labels=list(df['frame_name'])
     print(labels)
@@ -935,7 +965,7 @@ def plot_traces(traces, trace_id, split=False):
 
     for i in trace_id:
         for key in list(df['keys'].unique()):
-            df_i = df[(df['trace_ID'] == i) & (df['keys'] == key)]
+            df_i = df[(df['trace_id'] == i) & (df['keys'] == key)]
             #print(df_i)
             z_f, y_f, x_f=spline_interp([df_i['z'].values,
                                         df_i['y'].values,
@@ -966,7 +996,7 @@ def plot_aligned_traces(traces, idx):
     Parameters
     ----------
     traces : pd DataFrame with trace data.
-    trace_id : Int or list of ints with trace_ID of traces to plot. 
+    trace_id : Int or list of ints with trace_id of traces to plot. 
 
     Returns
     ----------
@@ -1032,7 +1062,7 @@ def plot_gpa_output(aligned_points, mean_points, cluster_members=None, cluster_i
     ----------
     aligned_points : List of aligned point sets
     mean_points: Nx4 array of mean points
-    cluster_members: List of trace_IDs of the aligned points, typically from trace_clustering output
+    cluster_members: List of trace_ids of the aligned points, typically from trace_clustering output
 
     Returns
     ----------
@@ -1120,7 +1150,7 @@ def plot_gpa_output_std(aligned_points, mean_points, mean_color=None):
     ----------
     aligned_points : List of aligned point sets
     mean_points: Nx4 array of mean points
-    cluster_members: List of trace_IDs of the aligned points, typically from trace_clustering output
+    cluster_members: List of trace_ids of the aligned points, typically from trace_clustering output
 
     Returns
     ----------
@@ -1302,7 +1332,7 @@ def plot_2d_proj(points, std_points=None, line_color='#1f77b4', plane='best', li
         x = x-np.mean(x)
         y = y-np.mean(y)
         xf, yf = spline_interp(np.array([x,y]), 500)
-    positions = np.array([0,1,2,3,4,5,6,7,8,9])
+    positions = np.array(range(points.shape[0]))
     positions = list(positions[qc])
 
     fig = plt.figure()
@@ -1325,7 +1355,7 @@ def plot_2d_proj_kde(mean_points, aligned_points, line_color='#1f77b4', limits=(
     v1 = v1/np.linalg.norm(v1)  # normalize it
     v2 = np.cross(n, v1) # Find the third orthogonal vector
 
-    positions = np.array([0,1,2,3,4,5,6,7,8,9])
+    positions = np.array(range(mean_points.shape[0]))
     
     x_m = np.dot(mean_points[qc,:3],v1)
     y_m = np.dot(mean_points[qc,:3],v2)
@@ -1357,7 +1387,7 @@ def plot_2d_proj_kde(mean_points, aligned_points, line_color='#1f77b4', limits=(
 
     data = pd.DataFrame(np.array([x_all, y_all, pos_all]).T, columns=['x', 'y', 'pos'])
 
-    fig = plt.figure()
+    fig = plt.figure(figsize=(8,8))
 
     from matplotlib import cm
     from matplotlib.colors import ListedColormap
@@ -1373,7 +1403,7 @@ def plot_2d_proj_kde(mean_points, aligned_points, line_color='#1f77b4', limits=(
 #        vals[:, 3] = np.linspace(0, 1, N)
 #        newcmp = ListedColormap(vals)
 
-    sns.kdeplot(data=data, x='y', y='x', hue='pos', clip_on=False, palette='inferno', linewidths=0.3, common_norm=False, fill=False, legend=None, levels = 25, thresh=0.75, alpha=0.2)
+    sns.kdeplot(data=data, x='y', y='x', hue='pos', palette='inferno', linewidths=0.3, common_norm=False, fill=False, legend=None, levels = 25, thresh=0.75, alpha=0.2)
     #sns.scatterplot(data=data, x='y', y='x', hue='pos', palette='inferno', s = 6, alpha = 0.3, legend=None)
 
     plt.plot(yf,xf, zorder=10, color=line_color, linewidth=3, clip_on=False)
@@ -1395,7 +1425,7 @@ def plot_single_trace_grid(aligned_points, mean_points, max_n = 50, proj_plane =
         v2 = np.cross(n, v1) # Find the third orthogonal vector
 
     n_rows = int(np.sqrt(max_n))
-    fig, axs = plt.subplots(n_rows, n_rows, figsize=(3,2.8), sharex=False, sharey=False)
+    fig, axs = plt.subplots(n_rows, n_rows, figsize=(10,9), sharex=False, sharey=False)
     axs = axs.ravel()
 
     if show_mean:
@@ -1519,6 +1549,7 @@ def plot_aligned_traces_animated(aligned_points):
     fig.show(renderer='notebook')
 
 def animate_trace(clust_aligned, t_interval=200, n_points=500):
+    import ipyvolume as ipv
     x = []
     y = []
     z = []
@@ -1549,15 +1580,15 @@ def animate_trace(clust_aligned, t_interval=200, n_points=500):
     ys = np.array(ys)
     zs = np.array(zs)
 
-    inferno_colors, _ = plotly.colors.convert_colors_to_same_type(plotly.colors.sequential.Inferno)
-    colorscale = plotly.colors.make_colorscale(inferno_colors)
-    colors = np.array([get_continuous_color(colorscale, intermed=i/x.shape[1]) for i in range(0,x.shape[1],1)]).astype(int)/255
-    selected = np.array([1])
+    #inferno_colors, _ = plotly.colors.convert_colors_to_same_type(plotly.colors.sequential.Inferno)
+    #colorscale = plotly.colors.make_colorscale(inferno_colors)
+    #colors = np.array([get_continuous_color(colorscale, intermed=i/x.shape[1]) for i in range(0,x.shape[1],1)]).astype(int)/255
+    #selected = np.array([1])
     fig = ipv.figure()
     ipv.style.axes_off()
     ipv.style.box_off()
     #ipv.style.background_color('grey')
-    s1 = ipv.scatter(x,y,z, size = 6, selected=selected, size_selected=6, color_selected='lime', color=colors, marker='sphere')
+    s1 = ipv.scatter(x,y,z, size = 6,  size_selected=6,  marker='sphere' )#selected=selected,color_selected='lime', color=colors,
     s2 = ipv.scatter(xs,ys,zs, size = 2, color='tab:blue', marker='sphere')
     ipv.animation_control([s1,s2], interval=t_interval) # shows controls for animation controls
     ipv.save(os.getcwd()+os.sep+'ipv.html')

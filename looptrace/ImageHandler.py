@@ -7,7 +7,6 @@ Ellenberg group
 EMBL Heidelberg
 """
 
-from czifile.czifile import CziFile
 from looptrace import image_processing_functions as ip
 import os
 from pathlib import Path
@@ -32,29 +31,29 @@ class ImageHandler:
         self.config_path = config_path
         self.config = ip.load_config(config_path)
 
-        if self.config['input_zarr_file']:
-            self.zarr_path = self.config['input_zarr_file']
-        else:
-            self.zarr_path = self.config['input_folder']+os.sep+self.config['output_file_prefix']+'zarr'
-
-        try:
-            self.pos_list = pd.read_csv(self.zarr_path+'_positions.txt', sep='\n', header=None)[0].to_list()
-            print('Position list found: ', self.pos_list)
-            self.images_from_zarr()
-        except FileNotFoundError:
-            try:
-                self.images, self.pos_list, self.all_image_files = ip.images_to_dask(self.config['input_folder'], self.config['image_filetype']+self.config['image_template'])
-            except ValueError:
-                print('No images found, check configuration.')
-        self.dc_file_path = self.config['output_folder']+os.sep+self.config['output_file_prefix']+'drift_correction.csv'
-        self.roi_file_path = self.config['output_folder']+os.sep+self.config['output_file_prefix']+'rois.csv'
+        self.input_parser()
+        self.out_path = self.config['output_path']+os.sep+self.config['output_prefix']
+        self.dc_file_path = self.out_path+'drift_correction.csv'
+        self.roi_file_path = self.out_path+'rois.csv'
         self.roi_table = None
         self.dc_images = None
         self.nucs = None
         self.nuc_masks = None
         self.nuc_class = None
         
-        self.nuc_folder = self.config['output_folder']+os.sep+'nucs'
+        self.nuc_folder = self.config['output_path']+os.sep+'nucs'
+
+    def input_parser(self):
+        if self.config['image_filetype'] in ['czi', 'tif']:
+            self.images, self.pos_list, self.all_image_files = ip.images_to_dask(self.config['input_folder'], self.config['image_filetype']+self.config['image_template'])
+       
+        elif self.config['image_filetype'] in ['zip', 'zarr', 'zarrpos']:
+            self.pos_list = pd.read_csv(self.config['input_path']+os.sep+self.config['output_prefix']+'positions.txt', sep='\n', header=None)[0].to_list()
+            print('Position list found: ', self.pos_list)
+            self.images_from_zarr()
+        
+        else:
+            print('Unknown file format, please check config file.')
 
     def reload_config(self):
         self.config = ip.load_config(self.config_path)
@@ -65,27 +64,19 @@ class ImageHandler:
             path = self.dc_file_path
         self.drift_table = pd.read_csv(path, index_col=0)
     
-    def images_to_zarr(self, tif = False):
+    def images_to_zarr(self):
         '''
         Function to save images loaded as a position-list of 5D TCZYX dask array into zarr format.
         Will chuck into two last dimensions.
         Also saves a position list of the named positions.
         '''
 
-        template =  self.config['image_filetype']+self.config['image_template']
-        if tif:
-            for i, pos in enumerate(self.pos_list):
-                #if not os.path.isdir(self.zarr_path):
-                #    os.mkdir(self.zarr_path)
-                print('Saving position ', pos)
-                ip.czi_to_tif(self.config['input_folder'], template, self.zarr_path+os.sep, self.config['output_file_prefix']+'_'+pos)
-        else:
-            with joblib.parallel_backend("threading"):  
-                joblib.Parallel(n_jobs=-3)(joblib.delayed(self.single_pos_to_zarr)(pos) for pos in self.pos_list)
-        
+        with joblib.parallel_backend("threading"):  
+            joblib.Parallel(n_jobs=-2)(joblib.delayed(self.single_pos_to_zarr)(pos) for pos in self.pos_list)
+
         self.images_from_zarr()
         
-        pd.DataFrame(self.pos_list).to_csv(self.zarr_path+'_positions.txt', index=None, header=None, sep='\n')
+        pd.DataFrame(self.pos_list).to_csv(self.config['input_path']+os.sep+self.config['output_prefix']+'positions.txt', index=None, header=None, sep='\n')
         print('Images saved as a zarr store.')
     
     def single_pos_to_zarr(self, pos):
@@ -95,7 +86,7 @@ class ImageHandler:
         
         print('Saving position ', pos)
         
-        z = zarr.open(self.zarr_path+'_'+pos, mode='w', compressor=compressor, shape=s, chunks=chunks)
+        z = zarr.open(self.config['input_path']+os.sep+self.config['output_prefix']+'_zarr_'+pos, mode='w', compressor=compressor, shape=s, chunks=chunks)
         i=0
         for img_path in self.all_image_files:
             if pos in img_path:
@@ -104,29 +95,34 @@ class ImageHandler:
                 i+=1
 
     def images_from_zarr(self):
-        try:
-            self.images = [da.from_zarr(self.zarr_path+'_'+pos) for pos in self.pos_list]
-        except (FileNotFoundError, zarr.errors.ArrayNotFoundError): #Legacy, not split into positions
-            try:
-                if '.zip' in self.zarr_path:
-                    store = zarr.ZipStore(self.zarr_path, mode='r')
-                else:
-                    store = zarr.open(self.zarr_path, mode='r')
-                imgs = da.from_zarr(store)
-                self.images = [imgs[i] for i in range(imgs.shape[0])]
-            except (FileNotFoundError, zarr.errors.ArrayNotFoundError):
-                self.images = ip.tif_store_to_dask(self.zarr_path, self.pos_list[0][0]+'[0-9]{4}')
+        in_path = self.config['input_path']+os.sep+self.config['output_prefix']
+        filetype = self.config['image_filetype']
+
+        if filetype == 'zarrpos':
+            self.images = [da.from_zarr(in_path+'_zarr_'+pos) for pos in self.pos_list]
+            print(f'Images loaded from zarr store, {len(self.images)} positions of shape {self.images[0].shape} found.')
+
+        elif filetype == 'zip':
+            store = zarr.ZipStore(in_path+'.zip', mode='r')
+            self.images = da.from_zarr(zarr.Array(store))
+            #self.images = [imgs[i] for i in range(imgs.shape[0])]
+            print(f'Images loaded from zarr store: ', self.images)
+
+        elif self.config['image_filetype'] == 'zarr':
+            self.images = da.from_zarr(in_path+'.zarr')
+            #self.images = [imgs[i] for i in range(imgs.shape[0])]
+            print(f'Images loaded from zarr store: ', self.images)
             
-        print(f'Images loaded from zarr store, {len(self.images)} positions of shape {self.images[0].shape} found.')
+        
 
     def save_metadata(self):
         '''
         Saves czi metadata from czi input files as part of conversion to zarr.
         '''
 
-        first_path = ip.all_matching_files_in_subfolders(self.config['input_folder'], self.config['image_filetype']+self.config['image_template'])[0]
+        first_path = ip.all_matching_files_in_subfolders(self.config['input_path'], self.config['image_filetype']+self.config['image_template'])[0]
         first_img = czifile.CziFile(first_path)
-        out_path = self.config['input_folder']+os.sep+self.config['output_file_prefix']
+        out_path = self.config['input_path']+os.sep+self.config['output_prefix']
 
         meta = first_img.metadata()
         with open(out_path+'metadata.xml', 'w') as file:
@@ -143,16 +139,13 @@ class ImageHandler:
         Makes internal coursly drift corrected images based on precalculated drift
         correction (see Drifter class for details).
         '''
-
-        chunk_size = self.images[0].chunksize
-        img_dc = []
-        n_t = self.images[0].shape[0]
+        n_t = self.images.shape[1]
         pos_index = self.pos_list.index(pos)
         pos_img = []
         for t in range(n_t):
-            shift = tuple(self.drift_table.query('pos_id == @pos').iloc[t][['z_px_course', 'y_px_course', 'x_px_course']])
-            pos_img.append(da.roll(self.images[pos_index][t], shift = shift, axis = (1,2,3)))
-        self.dc_images = da.stack(pos_img)#.rechunk(chunks=chunk_size)
+            shift = tuple(self.drift_table.query('position == @pos').iloc[t][['z_px_course', 'y_px_course', 'x_px_course']])
+            pos_img.append(da.roll(self.images[pos_index, t], shift = shift, axis = (1,2,3)))
+        self.dc_images = da.stack(pos_img)
 
         print('DC images generated.')
 
@@ -215,19 +208,19 @@ class ImageHandler:
         Helper function to save output data from the various modules into the output folder.
         '''
         
-        output_folder=self.config['output_folder']
-        output_filename=self.config['output_file_prefix']
-        output_file=output_folder+os.sep+output_filename
+        output_path=self.config['output_path']
+        output_filename=self.config['output_prefix']
+        output_file=output_path+os.sep+output_filename
         
         if traces is not None:
-            traces.to_csv(output_file+'traces.csv')
+            traces.to_csv(output_file+'traces.csv', index=None)
         if pwds is not None:
             np.save(output_file+'pwds.npy',pwds)
         if rois is not None:
             rois.reset_index(drop=True, inplace=True)
             rois.to_csv(output_file+'rois.csv')
         if imgs is not None:
-            imgs=np.moveaxis(imgs,0,2)
+            #imgs=np.moveaxis(imgs,0,2)
             tifffile.imsave(output_file+'imgs.tif', imgs, imagej=True)
         if pairs is not None:
             pairs.to_csv(output_file+'pairs.csv')

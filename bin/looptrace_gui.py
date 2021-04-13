@@ -10,9 +10,12 @@ EMBL Heidelberg
 import PySimpleGUI as sg
 import os
 import numpy as np
-from looptrace import Tracer, Drifter, ImageHandler, SpotPicker, NucDetector
+from looptrace import Tracer
+from looptrace import Drifter
+from looptrace import ImageHandler
+from looptrace import SpotPicker
+from looptrace import NucDetector
 import looptrace.image_processing_functions as ip
-from dask.distributed import Client
 import logging
 import napari
 
@@ -60,7 +63,7 @@ def main():
         [sg.Button('Run tracing', key='-RUN_TRACING-')]
         ]
 
-    window = sg.Window('Tracing GUI', layout)
+    window = sg.Window('LoopTrace GUI', layout)
 
     while True:
         # Wake every 100ms and look for work
@@ -165,7 +168,11 @@ def main():
                 H.roi_table = ip.rois_from_csv(values['-ROI_FILE_PATH-'])
 
         elif event == '-VIEW_ROI-':
-            if not H.roi_table:
+            position = values['-ROI_POSITION-']
+            print('Checking ROIs in position ', position)
+            pos_index = H.pos_list.index(position)
+
+            if H.roi_table is not None:
                 try:
                     H.roi_table = ip.rois_from_csv(values['-ROI_FILE_PATH-'])
                 except FileNotFoundError:
@@ -173,27 +180,23 @@ def main():
                     pass
 
             if values['-DC_IMAGE_ROIS-']:
-                if H.dc_images is not None:
-                    print('Found DC_images.')
-                    img = H.dc_images
-                else:
-                    print('Generating DC images.')
-                    H.set_drift_table(path=values['-DC_PATH-'])
-                    H.gen_dc_images()
-                    img = H.dc_images
+                print('Generating DC images.')
+                H.set_drift_table(path=values['-DC_PATH-'])
+                H.gen_dc_images(pos = position)
+                img = H.dc_images
             else:
-                img = H.images
-            position = values['-ROI_POSITION-']
-            print('Checking ROIs in position ', position)
-            pos_index = H.pos_list.index(position)
+                img = H.images[pos_index]
+           
+            
             #roi_shapes, roi_props = ip.roi_to_napari_shape(T.roi_table, position = position)
             roi_points, roi_props = ip.roi_to_napari_points(H.roi_table, position = position)
             if roi_points.size == 0:
                 roi_points = np.empty((0, 4))
-            point_layer = ip.napari_view(img[pos_index][:,int(H.config['trace_ch']),...], 
+            point_layer = ip.napari_view(img[:, int(H.config['trace_ch']),...], 
                                             points = roi_points,
                                             downscale= H.config['image_view_downscaling'],
-                                            contrast_limits=(100,5000))
+                                            contrast_limits=(100,5000),
+                                            point_frame_size=1)
             new_roi_table = ip.update_roi_points(point_layer, H.roi_table, 
                                                 position=position, 
                                                 downscale= H.config['image_view_downscaling'])
@@ -203,17 +206,12 @@ def main():
         elif event == '-RUN_TRACING-':
             H.set_drift_table(values['-DC_PATH-'])
             T = Tracer(H)
+            T.make_dc_rois_all_frames()
             T.tracing_3d()
 
         elif event in  (None, 'Exit'):
-            client.close()
             break
     window.close()
 
 if __name__ == '__main__':
-    try:
-        client = Client('127.0.0.1:8787') #Check for existing local dask client
-    except  OSError:
-        client = Client() #If no local client exists, start a new one.
-    
     main()

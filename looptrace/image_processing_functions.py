@@ -9,7 +9,6 @@ EMBL Heidelberg
 
 import io
 import yaml
-#import aicsimageio as aio
 import czifile
 import os
 import re
@@ -620,7 +619,7 @@ def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int
     #Return the 60% central mean to avoid outliers.
     return fine_drift#, np.std(shifts, axis=0)
 
-def napari_view(img, points=None, downscale=2, contrast_limits=(100,10000)):
+def napari_view(img, points=None, downscale=2, contrast_limits=(100,10000), point_frame_size = 1):
     with napari.gui_qt():
         if not isinstance(img, list):
             viewer = napari.view_image(img[...,::downscale,::downscale,::downscale], contrast_limits=contrast_limits)
@@ -631,7 +630,7 @@ def napari_view(img, points=None, downscale=2, contrast_limits=(100,10000)):
                 viewer.add_image(i[...,::downscale,::downscale,::downscale], contrast_limits=contrast_limits)
         if points is not None:
             point_layer = viewer.add_points(points/downscale, 
-                                                    size=(1,15,15,15),
+                                                    size=(point_frame_size,15,15,15),
                                                     edge_width=3,
                                                     edge_color='red',
                                                     face_color='transparent',
