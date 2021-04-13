@@ -78,4 +78,4 @@ See https://www-ellenberg.embl.de/.
 [MIT](https://choosealicense.com/licenses/mit/)
 
 ## Citation
-Please cite our paper.
+Please cite our paper: https://www.biorxiv.org/content/10.1101/2021.04.12.439407v1
