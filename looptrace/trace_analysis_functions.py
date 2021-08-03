@@ -193,15 +193,16 @@ def euclidean_dist(traces, frame_names):
     '''
 
     df_sel = traces[traces['frame_name'].isin(frame_names)]
-    df_qc = df_sel.groupby(['trace_id'])[['QC']].sum()
+    trace_ids = df_sel['trace_id'].unique()
+    qc = df_sel.groupby(['trace_id'])[['QC']].sum()['QC'].values
     df_sel = df_sel.groupby(['trace_id'])[['z','y','x']].diff().dropna()
     df_sel['euclidean'] = ((df_sel['z'])**2 + df_sel['y']**2 + df_sel['x']**2)**0.5
     df_sel['euclidean_res'] = ((0.5*df_sel['z'])**2 + df_sel['y']**2 + df_sel['x']**2)**0.5
-    df_sel.index = df_qc.index
-    df_sel['QC'] = df_qc['QC']
-    df_sel = df_sel[df_qc['QC'] == 2]
+    df_sel['QC'] = qc
+    df_sel['trace_id'] = trace_ids
     df_sel['id'] = str(frame_names)
-    df_sel=df_sel.reset_index()
+    df_sel = df_sel[df_sel['QC'] == 2]
+    df_sel=df_sel.reset_index(drop=True)
     return df_sel
 
 def eucledian_dist_all(traces):
@@ -577,7 +578,7 @@ def general_procrustes_loop(all_points, template):
     points_mean = np.nanmean(np.stack(all_points_aligned_qc), axis=0)
     #points_mean = np.nanmedian(np.stack(all_points_aligned_qc), axis=0)
     #The "QC" for the mean is 1 if at least one element has a QC=1
-    points_mean[:,3]=1#np.ceil(points_mean[:,3])
+    points_mean[:,3]=np.ceil(points_mean[:,3])
     # Calculate distance to mean:
     dist = np.sum([procrustes_dist(points_mean, points) for 
                    points in all_points_aligned])
@@ -929,10 +930,10 @@ def plot_heatmap(traces, trace_id='all', zmin=0, zmax=600, cmap = 'RdBu'):
     pwds_crop = pwds_mean[nan_rows,:]
     pwds_crop = pwds_crop[:,nan_cols]
     print('Number of traces in heatmap: ', pwds.shape[0])
-    fig, ax = plt.subplots(figsize=(5, 5))
-    ax.imshow(pwds_crop, vmin=zmin, vmax=zmax, cmap=cmap)
+    fig = plt.figure(figsize=(5, 5))
+    plt.imshow(pwds_crop, vmin=zmin, vmax=zmax, cmap=cmap)
     #fig.show()
-    return pwds_crop, ax
+    return pwds_crop, fig
     
 
 def plot_traces(traces, trace_id, split=False):
@@ -1580,16 +1581,16 @@ def animate_trace(clust_aligned, t_interval=200, n_points=500):
     ys = np.array(ys)
     zs = np.array(zs)
 
-    #inferno_colors, _ = plotly.colors.convert_colors_to_same_type(plotly.colors.sequential.Inferno)
-    #colorscale = plotly.colors.make_colorscale(inferno_colors)
-    #colors = np.array([get_continuous_color(colorscale, intermed=i/x.shape[1]) for i in range(0,x.shape[1],1)]).astype(int)/255
-    #selected = np.array([1])
+    inferno_colors, _ = plotly.colors.convert_colors_to_same_type(plotly.colors.sequential.Inferno)
+    colorscale = plotly.colors.make_colorscale(inferno_colors)
+    colors = np.array([get_continuous_color(colorscale, intermed=i/x.shape[1]) for i in range(0,x.shape[1],1)]).astype(int)/255
+    selected = np.array([1])
     fig = ipv.figure()
     ipv.style.axes_off()
     ipv.style.box_off()
     #ipv.style.background_color('grey')
-    s1 = ipv.scatter(x,y,z, size = 6,  size_selected=6,  marker='sphere' )#selected=selected,color_selected='lime', color=colors,
-    s2 = ipv.scatter(xs,ys,zs, size = 2, color='tab:blue', marker='sphere')
+    s1 = ipv.scatter(x,y,z, size = 6,  size_selected=8,  marker='sphere', selected=selected,color_selected='lime', color=colors)
+    s2 = ipv.scatter(xs,ys,zs, size = 2, color='grey', marker='sphere')
     ipv.animation_control([s1,s2], interval=t_interval) # shows controls for animation controls
     ipv.save(os.getcwd()+os.sep+'ipv.html')
     ipv.show()

@@ -258,7 +258,7 @@ def roi_to_napari_points(roi_table, position):
             roi_shape = [0, roi['zc'], roi['yc'], roi['xc']]
         roi_shapes.append(roi_shape)
     roi_shapes = np.array(roi_shapes)
-    roi_props = {'roi_id': rois_at_pos['roi_id'].values}
+    roi_props = {'roi_id': rois_at_pos['roi_id_pos'].values}
     return roi_shapes, roi_props
 
 def update_roi_points(point_layer, roi_table, position, downscale):

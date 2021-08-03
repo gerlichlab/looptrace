@@ -7,7 +7,7 @@ import PySimpleGUI as sg
 import os
 import logging
 import threading
-from mw_pump_functions_bartels import Robot
+from mw_pump_functions import Robot
 from datetime import date
 from io import StringIO
 
@@ -81,7 +81,7 @@ def main():
 
         elif event == '-PUMP-':
             try:
-                R.bartels_cycle(int(values['-PUMP_TIME-']))
+                R.pump.pump_cycle(int(values['-PUMP_TIME-']))
             except (UnboundLocalError, AttributeError):
                 logging.info('Robot or pump not initialized.')
 
@@ -90,7 +90,7 @@ def main():
             pos = {key:val for key, val in pos.items() if val != ''}
             logging.info('Moving to ' + str(pos))
             try:
-                R.move_stage(pos)
+                R.stage.move_stage(pos)
             except (UnboundLocalError, AttributeError):
                 logging.info('Robot or stage not initialized.')
 
@@ -98,7 +98,7 @@ def main():
             pos = {'x': 0, 'y': 0, 'z': 0}
             logging.info('Moving to ' + str(pos))
             try:
-                R.move_stage(pos)
+                R.stage.move_stage(pos)
             except (UnboundLocalError, AttributeError):
                 logging.info('Robot or stage not initialized.')
 
@@ -107,7 +107,7 @@ def main():
             window['-Y-'].update('0')
             window['-Z-'].update('0')
             try:
-                R.zero_stage()
+                R.stage.zero_stage()
             except (UnboundLocalError, AttributeError):
                 logging.info('Robot or stage not initialized.')
 
@@ -115,7 +115,7 @@ def main():
             pos=R.config['positions'][values['-POSITION-']]
             logging.info('Moving to '+values['-POSITION-'] + ' '+str(pos))
             try:
-                R.move_stage(pos)
+                R.stage.move_stage(pos)
             except (UnboundLocalError, AttributeError):
                 logging.info('Robot or stage not initialized.')
 

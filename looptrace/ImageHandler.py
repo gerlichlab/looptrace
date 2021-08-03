@@ -48,9 +48,13 @@ class ImageHandler:
             self.images, self.pos_list, self.all_image_files = ip.images_to_dask(self.config['input_folder'], self.config['image_filetype']+self.config['image_template'])
        
         elif self.config['image_filetype'] in ['zip', 'zarr', 'zarrpos']:
-            self.pos_list = pd.read_csv(self.config['input_path']+os.sep+self.config['output_prefix']+'positions.txt', sep='\n', header=None)[0].to_list()
-            print('Position list found: ', self.pos_list)
-            self.images_from_zarr()
+            try:
+                self.pos_list = pd.read_csv(self.config['input_path']+os.sep+self.config['output_prefix']+'positions.txt', sep='\n', header=None)[0].to_list()
+                print('Position list found: ', self.pos_list)
+                self.images_from_zarr()
+            except FileNotFoundError:
+                self.images_from_zarr()
+                self.pos_list = ['P'+str(i).zfill(4) for i in range(1,self.images.shape[0]+1)]
         
         else:
             print('Unknown file format, please check config file.')

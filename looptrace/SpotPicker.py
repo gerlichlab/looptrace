@@ -34,6 +34,8 @@ class SpotPicker:
 
         bead_ref = self.config['bead_reference_frame']
         spot_threshold = self.config['spot_threshold']
+        if not isinstance(spot_threshold, list):
+            spot_threshold = [spot_threshold]
         spot_ds = self.config['spot_downsample']
 
         #Loop through the imaging positions.
@@ -42,19 +44,19 @@ class SpotPicker:
             print(f'Preview spot detection in position {preview_pos} with threshold {spot_threshold}.')
             pos_index = self.pos_list.index(preview_pos)
             img = self.images[pos_index][spot_frame[0], ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
-            spot_props, filt_img = ip.detect_spots(img, spot_threshold)
+            spot_props, filt_img = ip.detect_spots(img, spot_threshold[0])
             spot_props['position'] = preview_pos
             spot_props = spot_props.reset_index().rename(columns={'index':'roi_id'})
             return spot_props, img, filt_img
         
-        for frame in spot_frame:
+        for i, frame in enumerate(spot_frame):
             for position in self.pos_list:
                 #Read correct image
                 print(f'Detecting spots in position {position}, frame {frame}, ch {ch}.')
                 
                 pos_index = self.pos_list.index(position)
                 img = self.images[pos_index, frame, ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
-                spot_props, _ = ip.detect_spots(img, spot_threshold)
+                spot_props, _ = ip.detect_spots(img, spot_threshold[i])
                 spot_props[['zc', 'yc', 'xc']] = spot_props[['zc', 'yc', 'xc']]*spot_ds
 
                 '''
