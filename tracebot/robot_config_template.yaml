@@ -1,0 +1,67 @@
+#COM ports for pump and stage:
+pump_port: COM3
+stage_port: COM4
+
+#Pump settings:
+pump_type: CPP #Can be 'CPP' or 'bartels'
+bartels_freq: 130
+bartels_voltage: 120
+CPP_speed: 500 #1-999
+
+#Well plate setup, coordinates in mm compared to A1 well:
+well_plate:
+    bottom_right:
+      x: 108
+      y: 72
+    top_left:
+      x: 0
+      y: 0
+    columns: 12
+    rows: 8
+    first_probe: A1   #First well position in sequence
+    last_probe: A3      # Last well position in sequence
+    well_spacing: 9
+    z_base: -39       #Depth probe goes into well from zero position in mm.
+
+#Custom positions outside of well plate, coordinates in mm compared to A1 position.
+positions:
+    SSC_DAPI:
+      x: 20
+      y: 102
+      z: -39
+    strip:
+      x: 20
+      y: 118
+      z: -39
+    wash:
+      x: 20
+      y: 137
+      z: -39
+
+#The sequence to follow. 
+#Possible actions and parameters are:
+# - probe: wp or custom position named as listed above 
+# - pump: time for pumping in seconds
+# - pause: pause/wait time in seconds
+# - image: 1, sets the status to "image" and waits for the status to change to "robot" again before proceeding.
+sequence:
+    - probe: wp
+    - pause: 2
+    - pump: 5
+    - pause: 5
+    - probe: wash
+    - pause: 1
+    - pump: 5
+    - pause: 1
+    - probe: SSC_DAPI
+    - pause: 1
+    - pump: 5
+    - pause: 5
+    - image: 1
+    - probe: strip
+    - pause: 1
+    - pump: 5
+    - pause: 5
+    - probe: wash
+    - pause: 1
+    - pump: 5

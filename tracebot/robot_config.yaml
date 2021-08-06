@@ -3,6 +3,7 @@ pump_port: COM3
 stage_port: COM6
 
 #Pump settings:
+pump_type: CPP #Can be 'CPP' or 'bartels'
 bartels_freq: 130
 bartels_voltage: 120
 CPP_speed: 500

@@ -66,6 +66,11 @@ class Robot():
 
     def refresh_config(self):
         self.config = self.load_config()
+        if hasattr(self, 'stage'):
+            self.stage.config = self.config
+        if hasattr(self, 'pump'):
+            self.pump.config = self.config
+
         self.all_coords, self.sel_coords = self.wp_coord_list()
         logging.info('Config refreshed.')
 
@@ -373,7 +378,7 @@ class CPP_pump():
         time.sleep(run_time)
         self.bartels_stop()
 
-class Stage():
+class Stage(Robot):
 
     def __init__(self, config):
         self.config = config
