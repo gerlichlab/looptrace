@@ -255,6 +255,7 @@ class Robot():
                     wells_seq += 1
         wells=len(sel_coords.keys())
         num_cycles=wells//wells_seq
+        print('Calculated number of cycles is ', num_cycles)
         return num_cycles
 
     def wp_cycle(self, restart=True):
@@ -266,7 +267,10 @@ class Robot():
         '''
         
         config=self.config
-        num_cycles=self.calc_num_cycles()
+        if self.config['n_cycles'] == 'all':
+            num_cycles=self.calc_num_cycles()
+        else:
+            num_cycles = self.config['n_cycles']
         self.set_command('robot')
         if restart:
             self.set_well(config['well_plate']['first_probe'])
