@@ -35,15 +35,13 @@ class Robot():
         self.all_coords, self.sel_coords = self.wp_coord_list()
 
         self.stage = Stage(self.config)
-
+        
         if self.config['pump_type'] == 'bartels':
             self.pump = Bartels(self.config)
         elif self.config['pump_type'] == 'CPP':
             self.pump = CPP_pump(self.config)
         else:
             logging.error('Unknown pump type.')
-
-        self.start_socket_server()
 
     def close_connections(self):
         try:
@@ -98,9 +96,8 @@ class Robot():
 
     def set_command(self, command):
         #Convenience function for setting current command status with a string.
-        #self.update_status({'command':command})
-        self.command = command
-
+        self.update_status({'command':command})
+            
     def pause(self, sleep_time):
         #Set and run a pause step, and log.
         time.sleep(int(sleep_time))
@@ -223,14 +220,19 @@ class Robot():
                     raise SystemExit
                 self.set_command('image')
                 logging.info('Starting imaging.')
-
+                status_mod_time_old = os.stat('status.json').st_mtime
                 time.sleep(2)
                 while True:
-                    if self.command == 'robot':
-                        logging.info('Imaging complete.')
-                        break
-                    else:
+                    status_mod_time_new = os.stat('status.json').st_mtime
+                    if status_mod_time_new == status_mod_time_old:
                         time.sleep(5)
+                    else:
+                        command_status=self.read_status()['command']
+                        if command_status=='image' or command_status=='imaging':
+                            time.sleep(5)
+                        else:
+                            logging.info('Imaging complete.')
+                            break
             else:
                 logging.error('Unrecognized sequence command')       
 
@@ -311,11 +313,11 @@ class Robot():
                     conn.sendall(bytes(self.command))
 
                 elif data.strip() == b'set_imaging':
-                    self.set_command('imaging')
+                    status = self.set_command('imaging')
                     conn.sendall(bytes('Imaging started.'))
 
                 elif data.strip() == b'set_robot':
-                    self.set_command('robot')
+                    status = self.set_command('robot')
                     conn.sendall(bytes('Robot set.'))
 
                     

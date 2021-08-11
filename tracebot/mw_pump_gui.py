@@ -45,7 +45,9 @@ def main():
     window = sg.Window('Robot control', layout)
 
     #Initialize logging system, and print messages to console as well
-    logging.basicConfig(level=logging.DEBUG, filename='logging'+os.sep+str(date.today())+'_robot_log.log', 
+    if not os.path.isdir('logging'):
+        os.mkdir('logging')
+    logging.basicConfig(level=logging.DEBUG, filename='logging'+os.sep+str(date.today())+'_robot.log', 
                         filemode="a+",
                         format="%(asctime)-15s %(levelname)-8s %(message)s")
     if len(logging.getLogger().handlers) < 2:
@@ -141,6 +143,7 @@ def main():
         elif event in  (None, 'Exit'):
             try:
                 R.close_connections()
+                R.stop_socket_server()
             except (UnboundLocalError, AttributeError):
                 pass
 
