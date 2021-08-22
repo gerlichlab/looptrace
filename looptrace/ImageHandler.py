@@ -17,8 +17,11 @@ import dask.array as da
 from numcodecs import Blosc
 import zarr
 import tifffile
+import tqdm
+import json
 import czifile
 import joblib
+from scipy import ndimage as ndi
 
 class ImageHandler:
     def __init__(self, config_path):
@@ -42,19 +45,24 @@ class ImageHandler:
         self.nuc_class = None
         
         self.nuc_folder = self.config['output_path']+os.sep+'nucs'
+        self.maxz_dc_folder = self.config['output_path']+os.sep+'maxz_dc'
 
     def input_parser(self):
-        if self.config['image_filetype'] in ['czi', 'tif']:
-            self.images, self.pos_list, self.all_image_files = ip.images_to_dask(self.config['input_folder'], self.config['image_filetype']+self.config['image_template'])
+        ft = self.config['image_filetype']
+        if ft in ['czi', 'tif']:
+            self.images, self.pos_list, self.all_image_files = ip.images_to_dask(self.config['input_path'], self.config['image_filetype']+self.config['image_template'])
        
-        elif self.config['image_filetype'] in ['zip', 'zarr', 'zarrpos']:
+        elif ft in ['zip', 'zarr']:
             try:
                 self.pos_list = pd.read_csv(self.config['input_path']+os.sep+self.config['output_prefix']+'positions.txt', sep='\n', header=None)[0].to_list()
                 print('Position list found: ', self.pos_list)
                 self.images_from_zarr()
             except FileNotFoundError:
-                self.images_from_zarr()
                 self.pos_list = ['P'+str(i).zfill(4) for i in range(1,self.images.shape[0]+1)]
+                self.images_from_zarr()
+        elif ft == 'ome-zarr':
+            self.pos_list = [p.name for p in os.scandir(self.config['input_path']) if os.path.isdir(p)]
+            self.images_from_zarr()
         
         else:
             print('Unknown file format, please check config file.')
@@ -67,44 +75,14 @@ class ImageHandler:
         if not path:
             path = self.dc_file_path
         self.drift_table = pd.read_csv(path, index_col=0)
-    
-    def images_to_zarr(self):
-        '''
-        Function to save images loaded as a position-list of 5D TCZYX dask array into zarr format.
-        Will chuck into two last dimensions.
-        Also saves a position list of the named positions.
-        '''
-
-        with joblib.parallel_backend("threading"):  
-            joblib.Parallel(n_jobs=-2)(joblib.delayed(self.single_pos_to_zarr)(pos) for pos in self.pos_list)
-
-        self.images_from_zarr()
-        
-        pd.DataFrame(self.pos_list).to_csv(self.config['input_path']+os.sep+self.config['output_prefix']+'positions.txt', index=None, header=None, sep='\n')
-        print('Images saved as a zarr store.')
-    
-    def single_pos_to_zarr(self, pos):
-        compressor = Blosc(cname='zstd', clevel=5, shuffle=Blosc.BITSHUFFLE)
-        s = self.images[0].shape
-        chunks = (1,1,1,s[-2],s[-1])
-        
-        print('Saving position ', pos)
-        
-        z = zarr.open(self.config['input_path']+os.sep+self.config['output_prefix']+'_zarr_'+pos, mode='w', compressor=compressor, shape=s, chunks=chunks)
-        i=0
-        for img_path in self.all_image_files:
-            if pos in img_path:
-                img = ip.read_czi_image(img_path)
-                z[i] = img
-                i+=1
 
     def images_from_zarr(self):
         in_path = self.config['input_path']+os.sep+self.config['output_prefix']
         filetype = self.config['image_filetype']
 
-        if filetype == 'zarrpos':
-            self.images = [da.from_zarr(in_path+'_zarr_'+pos) for pos in self.pos_list]
-            print(f'Images loaded from zarr store, {len(self.images)} positions of shape {self.images[0].shape} found.')
+        if filetype == 'ome-zarr':
+            self.images = da.stack([da.from_zarr(self.config['input_path']+os.sep+pos+os.sep+'0') for pos in self.pos_list])
+            print(f'Images loaded from zarr store: ', self.images)
 
         elif filetype == 'zip':
             store = zarr.ZipStore(in_path+'.zip', mode='r')
@@ -118,26 +96,6 @@ class ImageHandler:
             print(f'Images loaded from zarr store: ', self.images)
             
         
-
-    def save_metadata(self):
-        '''
-        Saves czi metadata from czi input files as part of conversion to zarr.
-        '''
-
-        first_path = ip.all_matching_files_in_subfolders(self.config['input_path'], self.config['image_filetype']+self.config['image_template'])[0]
-        first_img = czifile.CziFile(first_path)
-        out_path = self.config['input_path']+os.sep+self.config['output_prefix']
-
-        meta = first_img.metadata()
-        with open(out_path+'metadata.xml', 'w') as file:
-            file.writelines(meta)
-        
-        metadict = first_img.metadata(raw=False)
-        with open(out_path+'metadata.yaml', 'w') as file:
-            yaml.safe_dump(metadict, file)
-        
-        print('Metadata saved.')
-
     def gen_dc_images(self, pos):
         '''
         Makes internal coursly drift corrected images based on precalculated drift
@@ -152,6 +110,47 @@ class ImageHandler:
         self.dc_images = da.stack(pos_img)
 
         print('DC images generated.')
+
+    def save_proj_dc_images(self):
+        '''
+        Makes internal coursly drift corrected images based on precalculated drift
+        correction (see Drifter class for details).
+        '''
+        P, T, C, Z, Y, X = self.images.shape
+        compressor = Blosc(cname='zstd', clevel=5, shuffle=Blosc.BITSHUFFLE)
+        chunks = (1,1,1,Y,X)
+        
+        if not os.path.isdir(self.maxz_dc_folder):
+            os.mkdir(self.maxz_dc_folder)
+
+        for pos in tqdm.tqdm(self.pos_list):
+            pos_img = []
+            pos_index = self.pos_list.index(pos)
+            for t in tqdm.tqdm(range(T)):
+                shift = self.drift_table.query('position == @pos').iloc[t][['y_px_course', 'x_px_course', 'y_px_fine', 'x_px_fine']]
+                shift = (shift[0]+shift[2], shift[1]+shift[3])
+                proj_img = da.max(self.images[pos_index, t], axis=1).compute()
+                proj_img = ndi.shift(proj_img, shift=(0,)+shift, order = 1)
+                pos_img.append(proj_img)
+            pos_img = np.stack(pos_img)
+            pos_img = pos_img[:,:,np.newaxis, :, :]
+
+            store = zarr.DirectoryStore(self.maxz_dc_folder+os.sep+pos)
+            root = zarr.group(store=store, overwrite=True)
+
+            with open(r"C:\Git\looptrace_dev\preprocess\multiscales_template.json") as f:
+                root.attrs['multiscale'] = json.load(f)
+
+            multiscale_level = root.create_dataset(name = str(0), compressor=compressor, shape=pos_img.shape, chunks=chunks)
+            multiscale_level[:] = pos_img
+        
+        print('DC images generated.')
+
+    def load_proj_dc_images(self):
+        try:
+            self.maxz_dc_images = ip.multi_ome_zarr_to_dask(self.maxz_dc_folder)
+        except FileNotFoundError:
+            print('Could not find maxz_dc images, generate first.')
 
     def gen_nuc_images(self):
         '''
@@ -217,15 +216,16 @@ class ImageHandler:
         output_file=output_path+os.sep+output_filename
         
         if traces is not None:
-            traces.to_csv(output_file+'traces.csv', index=None)
+            traces.to_csv(output_file+'traces'+suffix+'.csv', index=None)
         if pwds is not None:
             np.save(output_file+'pwds.npy',pwds)
         if rois is not None:
             rois.reset_index(drop=True, inplace=True)
-            rois.to_csv(output_file+'rois.csv')
+            rois.to_csv(output_file+'rois'+suffix+'.csv')
         if imgs is not None:
             #imgs=np.moveaxis(imgs,0,2)
-            tifffile.imsave(output_file+'imgs.tif', imgs, imagej=True)
+            print(imgs.shape)
+            tifffile.imsave(output_file+'imgs'+suffix+'.tif', imgs, imagej=True)
         if pairs is not None:
             pairs.to_csv(output_file+'pairs.csv')
         if config is not None:

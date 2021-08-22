@@ -19,7 +19,7 @@ from skimage.segmentation import clear_border
 from skimage.filters import gaussian, threshold_otsu
 from skimage.registration import phase_cross_correlation
 from scipy.stats import trim_mean
-from skimage.measure import regionprops_table
+from skimage.measure import regionprops_table, regionprops
 import scipy.ndimage as ndi
 import dask
 import dask.array as da
@@ -496,6 +496,11 @@ def image_from_svih5(path,ch=None,index=(slice(None),
         
     return img
 
+def multi_ome_zarr_to_dask(folder: str):
+    image_folders = [p.name for p in os.scandir(folder) if os.path.isdir(p)]
+    out = da.stack([da.from_zarr(folder+os.sep+image+os.sep+'0') for image in image_folders])
+    print('Loaded ', out)
+    return out
     
 def detect_spots(img, spot_threshold=20):
     '''Spot detection by difference of gaussian filter
@@ -550,7 +555,7 @@ def drift_corr_course(t_img, o_img, downsample=1):
     #Shift image for fine drift correction
     #o_img=ndi.shift(o_img,course_drift,order=0)
     print('Course drift:', course_drift)
-    return course_drift.tolist()
+    return course_drift
 
 def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int, n_points=50, upsampling=100):
     '''
@@ -570,74 +575,70 @@ def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int
     A trimmed mean (default 20% on each side) of the drift for each fiducial.
 
     '''
-
+    import datetime
     #Label fiducial candidates and find maxima.
     t_img_label,num_labels=ndi.label(t_img>threshold)
-    t_img_maxima=np.array(ndi.measurements.maximum_position(t_img, 
-                                                labels=t_img_label, 
-                                                index=range(num_labels)))
+    #t_img_maxima=np.array(ndi.measurements.maximum_position(t_img, 
+    #                                            labels=t_img_label, 
+    #                                            index=np.random.choice(np.arange(1,num_labels), size=n_points*2)))
     
+    t_img_maxima = pd.DataFrame(regionprops_table(t_img_label, t_img, properties=('label', 'centroid', 'max_intensity')))
+    t_img_maxima = t_img_maxima.query('max_intensity > @min_bead_int').sample(n=n_points, random_state=1)[['centroid-0', 'centroid-1', 'centroid-2']].to_numpy()
+    t_img_maxima = np.round(t_img_maxima).astype(int)
+
     #Filter maxima so not too close to edge and bright enough.
-    t_img_maxima=np.array([m for m in t_img_maxima 
-                            if min_bead_int<t_img[tuple(m)]
-                            and all(m>8)])
     
     #Select random fiducial candidates. Seeded for reproducibility.
-    np.random.seed(1)
-    try:
-        rand_points = t_img_maxima[np.random.choice(t_img_maxima.shape[0], size=n_points), :]
-    except ValueError: #If no maxima are found just choose one random point:
-        rand_points = [[10,10,10]]
-    
+    #np.random.seed(1)
+    #try:
+    #    rand_points = t_img_maxima[np.random.choice(t_img_maxima.shape[0], size=n_points), :]
+    #except ValueError: #If no maxima are found just choose one random point:
+    #    rand_points = [[10,10,10]]
+    #print(datetime.datetime.now().time())
     #Initialize array to store shifts for all selected fiducials.
-    shifts=np.empty_like(rand_points, dtype=np.float32)
+    #shifts=np.empty_like(rand_points, dtype=np.float32)
     
-    #Calculate fine scale drift for all selected fiducials.
-    sub_imgs_t = []
-    sub_imgs_o = []
-    for i, point in enumerate(rand_points):
+    def extract_and_correlate(point, t_img, o_img, upsampling):
+
+        #Calculate fine scale drift for all selected fiducials.
         s_t = tuple([slice(ind-8, ind+8) for ind in point])
         s_o = tuple([slice(ind-int(shift)-8, ind-int(shift)+8) for (ind, shift) in zip(point, course_drift)])
         t = t_img[s_t]
         o = o_img[s_o]
-        if (t.shape == (16, 16, 16)) and (o.shape == (16,16,16)):
-            sub_imgs_t.append(t)
-            sub_imgs_o.append(o)
-        else:
-            img = np.zeros((16, 16, 16))
-            img[8,8,8] = 1000
-            sub_imgs_t.append(img)
-            sub_imgs_o.append(img)
+        
+        try:
+            shift = phase_cross_correlation(t, o, upsample_factor=upsampling, return_error=False)
+        except (ValueError, AttributeError):
+            shift = np.array([0,0,0])
+        return shift
 
-    shifts = dask.compute([dask.delayed(phase_cross_correlation)(t, 
-                                        o, 
-                                        upsample_factor=upsampling,
-                                        return_error=False)
-                            for (t,o) in zip(sub_imgs_t, sub_imgs_o)])[0]
+    shifts = joblib.Parallel(n_jobs=-1, prefer='threads')(joblib.delayed(extract_and_correlate)(point, t_img, o_img, upsampling) for point in t_img_maxima)
+    shifts = np.array(shifts)
+
     fine_drift = trim_mean(shifts, proportiontocut=0.2, axis=0)
-    print('Fine drift:', fine_drift)
+    print(f'Fine drift: {fine_drift} with untrimmed STD of {np.std(shifts, axis=0)} .')
     #Return the 60% central mean to avoid outliers.
     return fine_drift#, np.std(shifts, axis=0)
 
-def napari_view(img, points=None, downscale=2, contrast_limits=(100,10000), point_frame_size = 1):
-    with napari.gui_qt():
-        if not isinstance(img, list):
-            viewer = napari.view_image(img[...,::downscale,::downscale,::downscale], contrast_limits=contrast_limits)
-        else:
-            viewer = napari.view_image(img[0][...,::downscale,::downscale,::downscale], contrast_limits=contrast_limits)
-            colors = ['green', 'magenta', 'grey']
-            for i in img[1:]:
-                viewer.add_image(i[...,::downscale,::downscale,::downscale], contrast_limits=contrast_limits)
-        if points is not None:
-            point_layer = viewer.add_points(points/downscale, 
-                                                    size=(point_frame_size,15,15,15),
-                                                    edge_width=3,
-                                                    edge_color='red',
-                                                    face_color='transparent',
-                                                    n_dimensional=True)
-            sel_dim = list(points[0,:]/downscale)
-            for dim in range(len(sel_dim)):
-                viewer.dims.set_current_step(dim, sel_dim[dim])
+def napari_view(img, points=None, downscale=2, contrast_limits=(100,5000), point_frame_size = 1):
+    if not isinstance(img, list):
+        viewer = napari.view_image(img[...,::downscale,::downscale,::downscale], contrast_limits=contrast_limits)
+    else:
+        viewer = napari.view_image(img[0][...,::downscale,::downscale,::downscale], contrast_limits=contrast_limits)
+        colors = ['green', 'magenta', 'grey']
+        for i in img[1:]:
+            viewer.add_image(i[...,::downscale,::downscale,::downscale], contrast_limits=contrast_limits)
+    if points is not None:
+        point_layer = viewer.add_points(points/downscale, 
+                                                size=(point_frame_size,15,15,15),
+                                                edge_width=3,
+                                                edge_color='red',
+                                                face_color='transparent',
+                                                n_dimensional=True)
+        sel_dim = list(points[0,:]/downscale)
+        for dim in range(len(sel_dim)):
+            viewer.dims.set_current_step(dim, sel_dim[dim])
+    napari.run()
 
     if points is not None:
         return point_layer

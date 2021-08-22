@@ -7,8 +7,11 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+from scipy import ndimage as ndi
 from looptrace import image_processing_functions as ip
 import pandas as pd
+import random
+from skimage.measure import regionprops_table
 
 class SpotPicker:
     def __init__(self, image_handler):
@@ -49,9 +52,9 @@ class SpotPicker:
             spot_props = spot_props.reset_index().rename(columns={'index':'roi_id'})
             return spot_props, img, filt_img
         
-        for i, frame in enumerate(spot_frame):
-            for position in self.pos_list:
-                #Read correct image
+        for position in self.pos_list:
+            for i, frame in enumerate(spot_frame):
+            
                 print(f'Detecting spots in position {position}, frame {frame}, ch {ch}.')
                 
                 pos_index = self.pos_list.index(position)
@@ -90,4 +93,42 @@ class SpotPicker:
                 self.image_handler.save_data(rois=filt_rois)
 
         print(f'Found {len(output)} spots.')
+        return output
+
+    def rois_from_beads(self):
+        all_rois = []
+        n_fields = self.config['bead_trace_fields']
+        n_beads = self.config['bead_trace_number']
+        for pos in random.sample(self.pos_list, k=n_fields):
+            pos_index = self.pos_list.index(pos)
+            ref_frame = self.config['bead_reference_frame']
+            ref_ch = self.config['bead_ch']
+            threshold = self.config['bead_threshold']
+            min_bead_int = self.config['min_bead_intensity']
+
+            t_img = self.images[pos_index, ref_frame, ref_ch].compute()
+            t_img_label,num_labels = ndi.label(t_img>threshold)
+            #t_img_maxima=np.array(ndi.measurements.maximum_position(t_img, 
+            #                                            labels=t_img_label, 
+            #                                            index=np.random.choice(np.arange(1,num_labels), size=n_points*2)))
+            
+            spot_props = pd.DataFrame(regionprops_table(t_img_label, t_img, properties=('label', 'centroid', 'max_intensity')))
+            spot_props = spot_props.query('max_intensity > @min_bead_int').sample(n=n_beads, random_state=1)
+            
+            spot_props.drop(['label'], axis=1, inplace=True)
+            spot_props.rename(columns={'centroid-0': 'zc',
+                                        'centroid-1': 'yc',
+                                        'centroid-2': 'xc',
+                                        'index':'roi_id'},
+                                        inplace = True)
+                
+            spot_props['position'] = pos
+            spot_props['frame'] = ref_frame
+            spot_props['ch'] = ref_ch
+            all_rois.append(spot_props)
+        
+        output = pd.concat(all_rois)
+        output=output.reset_index().rename(columns={'index':'roi_id_pos'})
+        self.image_handler.bead_rois = output
+        self.image_handler.save_data(rois=output, suffix = '_beads')
         return output

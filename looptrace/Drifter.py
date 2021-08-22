@@ -38,14 +38,14 @@ class Drifter():
         #Run drift correction for each position and save results in table.
         all_drifts=[]
         for i, pos in enumerate(pos_list):
-            print(f'Running drift correction for position {pos}')
+            print(f'Running drift correction for position {pos}.')
             drifts_course = []
             drifts_fine = []
+            t_img = np.array(images[i, t_slice, ch])
             for t in t_all:
                 print('Drift correcting frame', t)
-                t_img = np.array(images[i, t_slice, ch])
                 o_img = np.array(images[i, t, ch])
-                drift_course = ip.drift_corr_course(t_img, o_img, downsample=1)
+                drift_course = ip.drift_corr_course(t_img, o_img, downsample=2)
                 drifts_course.append(drift_course)
                 drifts_fine.append(ip.drift_corr_multipoint_cc(t_img, 
                                                                 o_img,

@@ -28,7 +28,6 @@ def main():
         [sg.Text('Choose config file:')],
         [sg.InputText('YAML_config_file', key='-CONFIG_PATH-'), sg.FileBrowse()],
         [sg.Button('Initialize', key='-INIT-'),
-        sg.Button('Save to zarr', key='-ZARR-'),
         sg.Button('Reload config', key='-RELOAD-')],
         [sg.Text('_'*50)],
         [sg.Combo(['Position'], default_value='Position', key='-IMG_POS-', auto_size_text=True),
@@ -40,6 +39,9 @@ def main():
         [sg.InputText('Drift correction file', key='-DC_PATH-'), sg.FileBrowse()],
         [sg.Combo(['Position'], default_value='Position', key='-DC_POSITION-', auto_size_text=True),
         sg.Button('View DC images', key='-VIEW_DC-')],
+        [sg.Text('Drift-corrected maximum z-pojection:')],
+        [sg.Button('Generate images', key='-GEN_PROJ_DC-'),
+        sg.Button('View images', key='-VIEW_PROJ_DC-')],
         [sg.Text('_'*50)],
         [sg.Button('Detect nuclei', key='-DET_NUC-'),
         sg.Button('Classify nuclei', key='-CLASS_NUC-'),
@@ -60,7 +62,8 @@ def main():
         sg.Checkbox('Show DC?', key='-DC_IMAGE_ROIS-'), 
         sg.Button('View ROIs', key='-VIEW_ROI-')],
         [sg.Text('_'*50)],
-        [sg.Button('Run tracing', key='-RUN_TRACING-')]
+        [sg.Button('Run tracing', key='-RUN_TRACING-'),
+        sg.Button('Tracing beads', key='-BEAD_TRACING-')]
         ]
 
     window = sg.Window('LoopTrace GUI', layout)
@@ -80,12 +83,6 @@ def main():
             ip.napari_view(H.images[pos_index], downscale=int(H.config['image_view_downscaling']))
         elif event == '-RELOAD-':
             H.reload_config()
-        elif event == '-ZARR-':
-            if os.path.isdir(H.zarr_path):
-                sg.popup('ZARR file already exis.')
-            else:
-                H.images_to_zarr()
-                H.save_metadata()
         elif event == '-RUN_DC-':
             D = Drifter(H)
             if os.path.exists(D.dc_file_path):
@@ -95,9 +92,15 @@ def main():
             else:
                 D.drift_corr()
         elif event == '-VIEW_DC-':
-                H.set_drift_table(path=values['-DC_PATH-'])
-                H.gen_dc_images(pos = values['-DC_POSITION-'])
-                ip.napari_view(H.dc_images, downscale=H.config['image_view_downscaling'])
+            H.set_drift_table(path=values['-DC_PATH-'])
+            H.gen_dc_images(pos = values['-DC_POSITION-'])
+            ip.napari_view(H.dc_images, downscale=H.config['image_view_downscaling'])
+        elif event == '-GEN_PROJ_DC-':
+            H.set_drift_table(path=values['-DC_PATH-'])
+            H.save_proj_dc_images()
+        elif event == '-VIEW_PROJ_DC-':
+            H.load_proj_dc_images()
+            ip.napari_view(H.maxz_dc_images)
         elif event == '-DET_NUC-':
             N = NucDetector(H)
             N.segment_nuclei()
@@ -206,6 +209,14 @@ def main():
         elif event == '-RUN_TRACING-':
             H.set_drift_table(values['-DC_PATH-'])
             T = Tracer(H)
+            T.make_dc_rois_all_frames()
+            T.tracing_3d()
+        
+        elif event == '-BEAD_TRACING-':
+            H.set_drift_table(values['-DC_PATH-'])
+            S = SpotPicker(H)
+            S.rois_from_beads()
+            T = Tracer(H, trace_beads=True)
             T.make_dc_rois_all_frames()
             T.tracing_3d()
 

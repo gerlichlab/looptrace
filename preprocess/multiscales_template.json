@@ -1,0 +1,11 @@
+{
+    "multiscales": [
+        {
+            "version": "0.2",
+            "name": "dataset",
+            "datasets": [
+                {"path": "0"}
+            ]
+		}
+    ]
+}

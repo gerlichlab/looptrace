@@ -18,7 +18,7 @@ from tqdm import tqdm
 from joblib import Parallel, delayed
 
 class Tracer:
-    def __init__(self, image_handler):
+    def __init__(self, image_handler, trace_beads = False):
         '''
         Initialize Tracer class with config read in from YAML file.
     '''
@@ -28,55 +28,58 @@ class Tracer:
         self.images, self.pos_list = image_handler.images, image_handler.pos_list
         self.images_shape = self.images.shape
         self.drift_table = image_handler.drift_table
-        self.roi_table = image_handler.roi_table
+        self.trace_beads = trace_beads
+        if trace_beads:
+            self.roi_table = image_handler.bead_rois
+        else:
+            self.roi_table = image_handler.roi_table
 
         self.fit_funcs = {'LS': fitSymmetricGaussian3D, 'MLE': fitSymmetricGaussian3DMLE}
         self.fit_func = self.fit_funcs[self.config['fit_func']]
 
     def make_dc_rois_all_frames(self):
-        print('Generating list of all ROIs for tracing.')
+        print('Generating list of all ROIs for tracing:')
         Z, Y, X = self.images_shape[-3:]
         roi_size = self.config['roi_image_size']
 
         all_rois = []
-        for pos in tqdm(self.pos_list):
+        for i, roi in tqdm(self.roi_table.iterrows()):
+            pos = roi['position']
             pos_index = self.pos_list.index(pos)
-            sel_rois = self.roi_table.query('position == @pos')
             sel_dc = self.drift_table.query('position == @pos')
-            for i, roi in sel_rois.iterrows():
-                ref_frame = roi['frame']
-                ref_offset = sel_dc.query('frame == @ref_frame')
-                for j, dc_frame in sel_dc.iterrows():
-                    z_drift_course = int(dc_frame['z_px_course']) - int(ref_offset['z_px_course'])
-                    y_drift_course = int(dc_frame['y_px_course']) - int(ref_offset['y_px_course'])
-                    x_drift_course = int(dc_frame['x_px_course']) - int(ref_offset['x_px_course'])
-                    zc = int(roi['zc'])-z_drift_course
-                    yc = int(roi['yc'])-y_drift_course
-                    xc = int(roi['xc'])-x_drift_course
-                        
-                    z_min = zc - roi_size[0]//2
-                    z_max = zc + roi_size[0]//2
-                    y_min = yc - roi_size[1]//2
-                    y_max = yc + roi_size[1]//2
-                    x_min = xc - roi_size[2]//2
-                    x_max = xc + roi_size[2]//2
+            ref_frame = roi['frame']
+            ref_offset = sel_dc.query('frame == @ref_frame')
+            for j, dc_frame in sel_dc.iterrows():
+                z_drift_course = int(dc_frame['z_px_course']) - int(ref_offset['z_px_course'])
+                y_drift_course = int(dc_frame['y_px_course']) - int(ref_offset['y_px_course'])
+                x_drift_course = int(dc_frame['x_px_course']) - int(ref_offset['x_px_course'])
+                zc = int(roi['zc'])-z_drift_course
+                yc = int(roi['yc'])-y_drift_course
+                xc = int(roi['xc'])-x_drift_course
+                    
+                z_min = zc - roi_size[0]//2
+                z_max = zc + roi_size[0]//2
+                y_min = yc - roi_size[1]//2
+                y_max = yc + roi_size[1]//2
+                x_min = xc - roi_size[2]//2
+                x_max = xc + roi_size[2]//2
 
-                    #Handling case of ROI extending beyond image edge after drift correction:
-                    pad = ((abs(min(0,z_min)),abs(max(0,z_max-Z))),
-                            (abs(min(0,y_min)),abs(max(0,y_max-Y))),
-                            (abs(min(0,x_min)),abs(max(0,x_max-X))))
+                #Handling case of ROI extending beyond image edge after drift correction:
+                pad = ((abs(min(0,z_min)),abs(max(0,z_max-Z))),
+                        (abs(min(0,y_min)),abs(max(0,y_max-Y))),
+                        (abs(min(0,x_min)),abs(max(0,x_max-X))))
 
-                    sz = (max(0,z_min),min(Z,z_max))
-                    sy = (max(0,y_min),min(Y,y_max))
-                    sx = (max(0,x_min),min(X,x_max))
+                sz = (max(0,z_min),min(Z,z_max))
+                sy = (max(0,y_min),min(Y,y_max))
+                sx = (max(0,x_min),min(X,x_max))
 
-                    #Create slice object after above corrections:
-                    s = (slice(sz[0],sz[1]), 
-                        slice(sy[0],sy[1]), 
-                        slice(sx[0],sx[1]))
+                #Create slice object after above corrections:
+                s = (slice(sz[0],sz[1]), 
+                    slice(sy[0],sy[1]), 
+                    slice(sx[0],sx[1]))
 
-                    all_rois.append([pos, pos_index, roi.name, dc_frame['frame'], ref_frame, s, pad, z_drift_course, y_drift_course, x_drift_course, 
-                                                                                          dc_frame['z_px_fine'], dc_frame['y_px_fine'], dc_frame['x_px_fine']])
+                all_rois.append([pos, pos_index, roi.name, dc_frame['frame'], ref_frame, s, pad, z_drift_course, y_drift_course, x_drift_course, 
+                                                                                        dc_frame['z_px_fine'], dc_frame['y_px_fine'], dc_frame['x_px_fine']])
         self.all_rois = pd.DataFrame(all_rois, columns=['position', 'pos_index', 'roi_id', 'frame', 'ref_frame', 'roi_slice', 'pad', 'z_px_course', 'y_px_course', 'x_px_course', 
                                                                                                   'z_px_fine', 'y_px_fine', 'x_px_fine'])
 
@@ -157,7 +160,7 @@ class Tracer:
         all_images = []
 
 
-
+        print('Tracing ROIs in all frames:')
         out = Parallel(n_jobs=-1, prefer='threads')(delayed(self.trace_single_frame)(roi, decon_params) for i, roi in tqdm(self.all_rois.iterrows(), total=self.all_rois.shape[0]))
         '''
         for i, roi in tqdm(self.all_rois.iterrows(), total=self.all_rois.shape[0]):
@@ -236,7 +239,7 @@ class Tracer:
         traces['sigma_z']=traces['sigma_z']*self.config['z_nm']
         traces['sigma_xy']=traces['sigma_xy']*self.config['xy_nm']
         traces = traces.sort_values(['trace_id', 'frame'])
-        self.image_handler.save_data(traces=traces)
+
         #Make final hyperstack of images in PTZYX order.
         #roi_image_size = tuple(self.config['roi_image_size'])
         #all_images = np.reshape(np.stack(all_images), 
@@ -244,6 +247,13 @@ class Tracer:
         #                        roi_image_size[0], roi_image_size[1], roi_image_size[2]))
         
         all_images = np.stack(roi_imgs)
-        self.image_handler.save_data(imgs=all_images)
+        T = self.images_shape[1]
+        all_images = np.reshape(all_images, (all_images.shape[0]//T, T, all_images.shape[1], all_images.shape[2], all_images.shape[3]))
+        if self.trace_beads: 
+            suffix = '_beads'
+        else:
+            suffix = ''
+        self.image_handler.save_data(traces=traces, suffix=suffix)
+        self.image_handler.save_data(imgs=all_images, suffix=suffix)
         return traces, all_images
         
