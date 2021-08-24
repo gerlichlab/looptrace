@@ -79,7 +79,8 @@ def main():
             window['-DC_PATH-'].update(H.dc_file_path)
             window['-ROI_FILE_PATH-'].update(H.roi_file_path)
         elif event == '-VIEW_IMAGES-':
-            pos_index = H.pos_list.index(values['-DC_POSITION-'])
+            pos_index = H.pos_list.index(values['-IMG_POS-'])
+            print('Viewing position ', values['-IMG_POS-'])
             ip.napari_view(H.images[pos_index], downscale=int(H.config['image_view_downscaling']))
         elif event == '-RELOAD-':
             H.reload_config()

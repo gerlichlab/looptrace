@@ -581,7 +581,7 @@ def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int
     #t_img_maxima=np.array(ndi.measurements.maximum_position(t_img, 
     #                                            labels=t_img_label, 
     #                                            index=np.random.choice(np.arange(1,num_labels), size=n_points*2)))
-    
+    print('Number of unfiltered beads found: ', num_labels)
     t_img_maxima = pd.DataFrame(regionprops_table(t_img_label, t_img, properties=('label', 'centroid', 'max_intensity')))
     t_img_maxima = t_img_maxima.query('max_intensity > @min_bead_int').sample(n=n_points, random_state=1)[['centroid-0', 'centroid-1', 'centroid-2']].to_numpy()
     t_img_maxima = np.round(t_img_maxima).astype(int)

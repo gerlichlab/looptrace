@@ -179,7 +179,7 @@ def multipos_nd2_to_zarr(folder_path, out_path):
                 multiscale_level[j] = images[i]
 
 
-def single_nd2_to_zarr(file_path, out_path):
+def single_nd2_to_zarr(file_path, out_path, continue_from = None):
     
     compressor = Blosc(cname='zstd', clevel=5, shuffle=Blosc.BITSHUFFLE)
     with ND2Reader(file_path) as images:
@@ -190,22 +190,29 @@ def single_nd2_to_zarr(file_path, out_path):
         C = sample_shape['c']
         T = sample_shape['t']
         P = sample_shape['v']
-        s = (T, C, Z, Y, X)
+        s = (P, T, C, Z, Y, X)
 
         meta = json.loads(json.dumps(images.metadata, default = datetime_to_str))
 
-        pos_list = ['P'+str(p).zfill(4) for p in range(P)]
+        pos_list = ['P'+str(p+1).zfill(4) for p in range(P)]
         print('Found files of shape:', s)
-        chunks = (1,1,1,s[-2],s[-1])
+        chunks = (1,1,1,Y,X)
 
         for i, pos in enumerate(tqdm.tqdm(pos_list)):
+
+            if continue_from is not None: 
+                continue_from_index = pos_list.index(continue_from)
+                if (i < continue_from_index):
+                    print(continue_from_index, i)
+                    continue
+
             store = zarr.DirectoryStore(out_path+os.sep+pos+'.zarr')
             root = zarr.group(store=store, overwrite=True)
             root.attrs['omero'] = meta
-            with open(r"C:\Git\looptrace_dev\preprocess\multiscales_template.json") as f:
-                root.attrs['multiscale'] = json.load(f)
-            multiscale_level = root.create_dataset(name = str(0), compressor=compressor, shape=s, chunks=chunks)
+            #with open(r"C:\Git\looptrace_dev\preprocess\multiscales_template.json") as f:
+            #    root.attrs['multiscale'] = json.load(f)
+            multiscale_level = root.create_dataset(name = str(0), compressor=compressor, shape=s[1:], chunks=chunks)
             for t in tqdm.tqdm(range(T)):
                 images.bundle_axes = 'czyx'
                 images.iter_axes = 'vt'
-                multiscale_level[t] = images[(i*P)+t]
+                multiscale_level[t] = images[(i*T)+t]
