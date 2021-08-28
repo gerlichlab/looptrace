@@ -77,6 +77,12 @@ def tif_store_to_dask(folder, re_search = 'P[0-9]{4}'):
             imgs.append(da.from_array(zarr.open(store, mode='r'), chunks =  (1,1,1,1,-1,-1))[0])
     return imgs
         
+def nikon_tiff_to_dask(folder):
+    image_sequence = tifffile.TiffSequence(folder+os.sep+'*.tiff', pattern='(Time)(\d+)_(Point)(\d+)_(ZStack)(\d+)')
+    with image_sequence.aszarr() as store:
+        z = zarr.open(store, mode='r')
+        images = da.transpose(da.from_zarr(z), (1,0,3,2,4,5))
+    return images
 
 def images_to_dask(folder, template):
     '''Wrapper function to generate dask arrays from image folder.

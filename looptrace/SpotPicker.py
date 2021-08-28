@@ -12,6 +12,7 @@ from looptrace import image_processing_functions as ip
 import pandas as pd
 import random
 from skimage.measure import regionprops_table
+import tqdm
 
 class SpotPicker:
     def __init__(self, image_handler):
@@ -96,10 +97,11 @@ class SpotPicker:
         return output
 
     def rois_from_beads(self):
+        print('Detecting bead ROIs for tracing.')
         all_rois = []
         n_fields = self.config['bead_trace_fields']
         n_beads = self.config['bead_trace_number']
-        for pos in random.sample(self.pos_list, k=n_fields):
+        for pos in tqdm.tqdm(random.sample(self.pos_list, k=n_fields)):
             pos_index = self.pos_list.index(pos)
             ref_frame = self.config['bead_reference_frame']
             ref_ch = self.config['bead_ch']

@@ -7,6 +7,7 @@ import PySimpleGUI as sg
 import os
 import logging
 import threading
+import time
 from mw_pump_functions import Robot
 from datetime import date
 from io import StringIO
@@ -152,7 +153,8 @@ def main():
         log = log_stream.getvalue().splitlines()
         if old_log != len(log):
             msg = str(log[old_log:])
-            window['-LOG-'].update(msg+'\n', append=True)
+            now = time.strftime("%x, %X", time.localtime())
+            window['-LOG-'].update(now+msg+'\n', append=True)
             old_log=len(log)
 
     window.close()

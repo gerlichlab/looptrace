@@ -88,8 +88,13 @@ class Robot():
 
     def read_status(self):
         #Read out the status.json file.
-        with open(self.status_file,'r') as f:
-            status=json.load(f)
+        try:
+            with open(self.status_file,'r') as f:
+                status=json.load(f)
+        except json.decoder.JSONDecodeError:
+            time.sleep(2)
+            with open(self.status_file,'r') as f:
+                status=json.load(f)
         return status
 
     def set_well(self, well):

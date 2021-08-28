@@ -49,7 +49,7 @@ class ImageHandler:
 
     def input_parser(self):
         ft = self.config['image_filetype']
-        if ft in ['czi', 'tif']:
+        if ft in ['czi']:
             self.images, self.pos_list, self.all_image_files = ip.images_to_dask(self.config['input_path'], self.config['image_filetype']+self.config['image_template'])
        
         elif ft in ['zip', 'zarr']:
@@ -58,11 +58,15 @@ class ImageHandler:
                 print('Position list found: ', self.pos_list)
                 self.images_from_zarr()
             except FileNotFoundError:
-                self.pos_list = ['P'+str(i).zfill(4) for i in range(1,self.images.shape[0]+1)]
                 self.images_from_zarr()
+                self.pos_list = ['P'+str(i).zfill(4) for i in range(1,self.images.shape[0]+1)]
         elif ft == 'ome-zarr':
             self.pos_list = [p.name for p in os.scandir(self.config['input_path']) if os.path.isdir(p)]
             self.images_from_zarr()
+
+        elif ft in ['nikon_tiff', 'nikon_tiff_multifolder']:
+            self.images_from_zarr()
+            self.pos_list = ['P'+str(i).zfill(4) for i in range(1,self.images.shape[0]+1)]
         
         else:
             print('Unknown file format, please check config file.')
@@ -77,23 +81,38 @@ class ImageHandler:
         self.drift_table = pd.read_csv(path, index_col=0)
 
     def images_from_zarr(self):
-        in_path = self.config['input_path']+os.sep+self.config['output_prefix']
+        in_path = self.config['input_path']
         filetype = self.config['image_filetype']
 
         if filetype == 'ome-zarr':
-            self.images = da.stack([da.from_zarr(self.config['input_path']+os.sep+pos+os.sep+'0') for pos in self.pos_list])
+            self.images = da.stack([da.from_zarr(in_path+os.sep+pos+os.sep+'0') for pos in self.pos_list])
             print(f'Images loaded from zarr store: ', self.images)
 
         elif filetype == 'zip':
-            store = zarr.ZipStore(in_path+'.zip', mode='r')
+            store = zarr.ZipStore(in_path, mode='r')
             self.images = da.from_zarr(zarr.Array(store))
             #self.images = [imgs[i] for i in range(imgs.shape[0])]
             print(f'Images loaded from zarr store: ', self.images)
 
-        elif self.config['image_filetype'] == 'zarr':
-            self.images = da.from_zarr(in_path+'.zarr')
+        elif filetype == 'zarr':
+            self.images = da.from_zarr(in_path)
             #self.images = [imgs[i] for i in range(imgs.shape[0])]
             print(f'Images loaded from zarr store: ', self.images)
+        
+        elif filetype == 'nikon_tiff':
+            self.images = ip.nikon_tiff_to_dask(in_path)
+            print(f'Images loaded from tiff folder: ', self.images)
+
+        elif filetype == 'nikon_tiff_multifolder':
+            images = []
+            for path in os.listdir(in_path):
+                try:
+                    images.append(ip.nikon_tiff_to_dask(in_path+os.sep+path))
+                except ValueError:
+                    continue
+            self.images = da.concatenate(images, axis = 1)
+            print(f'Images loaded from multiple tiff folders: ', self.images)
+
             
         
     def gen_dc_images(self, pos):

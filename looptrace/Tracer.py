@@ -246,9 +246,10 @@ class Tracer:
         #                        (max(traces.trace_id)+1,max(traces.frame)+1, 
         #                        roi_image_size[0], roi_image_size[1], roi_image_size[2]))
         
-        all_images = np.stack(roi_imgs)
         T = self.images_shape[1]
-        all_images = np.reshape(all_images, (all_images.shape[0]//T, T, all_images.shape[1], all_images.shape[2], all_images.shape[3]))
+        all_images = np.stack(roi_imgs)
+        all_images = np.reshape(all_images, (all_images.shape[0]//T, T, all_images.shape[1], all_images.shape[2], all_images.shape[3])).astype(np.uint16)
+        
         if self.trace_beads: 
             suffix = '_beads'
         else:
