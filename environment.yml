@@ -2,9 +2,9 @@
 name: looptrace
 dependencies:
     - python=3.8
+    - numba
     - scipy
     - dask
-    - numba
     - joblib
     - plotly 
     - nbformat 
