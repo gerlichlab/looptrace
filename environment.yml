@@ -2,7 +2,8 @@
 name: looptrace
 dependencies:
     - python=3.8
-    - numba
+    - numba::numba
+    - numba::llvmlite
     - scipy
     - dask
     - joblib
