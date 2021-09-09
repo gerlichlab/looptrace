@@ -39,7 +39,13 @@ class NucDetector:
             print('Generating nuclei images.')
             self.image_handler.gen_nuc_images()
         nuc_imgs = self.image_handler.nucs
-        masks = ip.nuc_segmentation(nuc_imgs, self.config['nuc_diameter'])
+        diameter = self.config['nuc_diameter']
+        try:
+            model = self.config['nuc_model']
+        except KeyError:
+            model = 'nuclei'
+        print(f'Running nuclear segmentation with CellPose using {model} model and diameter {diameter}.')
+        masks = ip.nuc_segmentation(nuc_imgs, diameter=diameter, model=model)
         self.mask_to_binary(masks)
 
         masks = [dilation(mask, disk(self.config['nuc_dilation'])) for mask in masks]

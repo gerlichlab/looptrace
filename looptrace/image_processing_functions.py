@@ -19,6 +19,7 @@ from skimage.segmentation import clear_border
 from skimage.filters import gaussian, threshold_otsu
 from skimage.registration import phase_cross_correlation
 from scipy.stats import trim_mean
+from scipy.spatial.distance import squareform, pdist
 from skimage.measure import regionprops_table, regionprops
 import scipy.ndimage as ndi
 import dask
@@ -282,7 +283,7 @@ def update_roi_points(point_layer, roi_table, position, downscale):
 
     rois = roi_table.copy()
     new_rois = pd.DataFrame(point_layer.data*downscale, columns=['frame','zc','yc', 'xc'])
-    new_rois.index.name = 'roi_id'
+    new_rois.index.name = 'roi_id_pos'
     new_rois = new_rois.reset_index()
     new_rois['position'] = position
     new_rois['ch'] = rois['ch'].loc[0]
@@ -290,7 +291,7 @@ def update_roi_points(point_layer, roi_table, position, downscale):
     rois = rois.drop(rois[rois['position']==position].index)
     return pd.concat([rois, new_rois]).sort_values('position')
 
-def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label'):
+def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label', drifts = None, target_frame = None):
     '''Check if a spot is in inside a segmented nucleus.
 
     Args:
@@ -303,27 +304,47 @@ def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label'):
         rois (DataFrame): Updated ROI table indicating if ROI is inside nucleus or not.
     '''
 
-
-    if not nuc_masks:
-        print('No nuclear masks provided, cannot filter.')
-        return rois
-
     def spot_in_nuc(row, nuc_masks):
         pos_index = pos_list.index(row['position'])
         try:
             spot_label = nuc_masks[pos_index][int(row['yc']), int(row['xc'])]
         except IndexError: #If due to drift spot is outside frame.
             spot_label = 0
+        #print(spot_label)
         return spot_label
-    
+
+    if not nuc_masks:
+        print('No nuclear masks provided, cannot filter.')
+        return rois
+
     try:
         rois.drop(columns=[new_col], inplace=True)
     except KeyError:
         pass
 
-    rois[new_col] = rois.apply(spot_in_nuc, nuc_masks=nuc_masks, axis=1)
-    print('ROIs filtered.')
+    if drifts is not None:
+        rois_shifted = rois.copy()
+        shifts = []
+        for i, row in rois_shifted.iterrows():
+            drift_roi = drifts[(drifts['position'] == row['position']) & (drifts['frame'] == row['frame'])][['z_px_course', 'y_px_course', 'x_px_course']].to_numpy()
+            drift_target = drifts[(drifts['position'] == row['position']) & (drifts['frame'] == target_frame)][['z_px_course', 'y_px_course', 'x_px_course']].to_numpy()
+            shift = drift_target - drift_roi
+            shifts.append(shift[0])
+        shifts = pd.DataFrame(shifts, columns=['z','y','x'])
+        rois_shifted[['zc', 'yc', 'xc']] = rois_shifted[['zc', 'yc', 'xc']].to_numpy() - shifts[['z','y','x']].to_numpy()
+
+        rois[new_col] = rois_shifted.apply(spot_in_nuc, nuc_masks=nuc_masks, axis=1)
+    
+    else:
+        rois[new_col] = rois.apply(spot_in_nuc, nuc_masks=nuc_masks, axis=1)
+
     return rois
+
+def subtract_crosstalk(source, bleed, threshold=0):
+    mask = source > threshold
+    ratio=np.average(bleed[mask]/source[mask])
+    out = np.clip(bleed - (ratio * source), a_min=0, a_max=None)
+    return out, bleed
 
 
 def load_config(config_file):
@@ -508,7 +529,7 @@ def multi_ome_zarr_to_dask(folder: str):
     print('Loaded ', out)
     return out
     
-def detect_spots(img, spot_threshold=20):
+def detect_spots(img, spot_threshold=20, min_dist=None):
     '''Spot detection by difference of gaussian filter
     #TODO: Do not use hard-coded sigma values
 
@@ -532,10 +553,19 @@ def detect_spots(img, spot_threshold=20):
     spot_props.drop(['label'], axis=1, inplace=True)
     spot_props.rename(columns={'centroid-0': 'zc',
                                         'centroid-1': 'yc',
-                                        'centroid-2': 'xc',
-                                        'index':'roi_id'},
+                                        'centroid-2': 'xc'},
                         inplace = True)
-    print(f'Found {num_spots} spots.')
+
+    if min_dist:
+        dists = squareform(pdist(spot_props[['zc', 'yc', 'xc']].to_numpy(), metric='euclidean'))
+        idx = np.nonzero(np.triu(dists < min_dist, k=1))[1]
+        spot_props = spot_props.drop(idx)
+        spot_props = spot_props.reset_index(drop=True)
+
+    spot_props.rename(columns={'index':'roi_id'},
+                                inplace = True)
+
+    print(f'Found {len(spot_props)} spots.')
     return spot_props, img
     #Cleanup and saving of the DataFrame
         
@@ -626,14 +656,19 @@ def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int
     #Return the 60% central mean to avoid outliers.
     return fine_drift#, np.std(shifts, axis=0)
 
-def napari_view(img, points=None, downscale=2, contrast_limits=(100,5000), point_frame_size = 1):
-    if not isinstance(img, list):
-        viewer = napari.view_image(img[...,::downscale,::downscale,::downscale], contrast_limits=contrast_limits)
+def napari_view(img, points=None, downscale=2, axes = 'PTCZYX', point_frame_size = 1, name=None, contrast_limits=(100,10000)):
+    
+    try:
+        channel_axis = axes.index('C')
+    except ValueError:
+        channel_axis = None
+    
+    if 'ZYX' in axes:
+        img = img[...,::downscale,::downscale,::downscale]
     else:
-        viewer = napari.view_image(img[0][...,::downscale,::downscale,::downscale], contrast_limits=contrast_limits)
-        colors = ['green', 'magenta', 'grey']
-        for i in img[1:]:
-            viewer.add_image(i[...,::downscale,::downscale,::downscale], contrast_limits=contrast_limits)
+        img = img[...,::downscale,::downscale]
+
+    viewer = napari.view_image(img, channel_axis = channel_axis, name=name)
     if points is not None:
         point_layer = viewer.add_points(points/downscale, 
                                                 size=(point_frame_size,15,15,15),
@@ -687,7 +722,7 @@ def decon_RL(img, kernel, algo, fd_data, niter=10):
     res = algo.run(fd_data.Acquisition(data=img, kernel=kernel), niter=niter).data
     return res
 
-def nuc_segmentation(nuc_imgs, diameter = 150, do_3D = False):
+def nuc_segmentation(nuc_imgs, diameter = 150, model = 'nuclei', do_3D = False):
     '''
     Runs nuclear segmentation using cellpose trained model (https://github.com/MouseLand/cellpose)
 
@@ -695,7 +730,7 @@ def nuc_segmentation(nuc_imgs, diameter = 150, do_3D = False):
         nuc_imgs (ndarray or list of ndarrays): 2D or 3D images of nuclei, expects single channel
     '''
     from cellpose import models
-    model = models.Cellpose(gpu=False, model_type='nuclei')
+    model = models.Cellpose(gpu=False, model_type=model)
     channels = [0,0]
     masks, flows, styles, diams = model.eval(nuc_imgs, diameter=diameter, channels=channels, net_avg=False, do_3D=do_3D)
     return masks

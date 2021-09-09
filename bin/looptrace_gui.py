@@ -28,10 +28,8 @@ def main():
         [sg.Text('Choose config file:')],
         [sg.InputText('YAML_config_file', key='-CONFIG_PATH-'), sg.FileBrowse()],
         [sg.Button('Initialize', key='-INIT-'),
-        sg.Button('Reload config', key='-RELOAD-')],
-        [sg.Text('_'*50)],
-        [sg.Combo(['Position'], default_value='Position', key='-IMG_POS-', auto_size_text=True),
-        sg.Button('View images for tracing', key='-VIEW_IMAGES-')],
+        sg.Button('Reload config', key='-RELOAD-'),
+        sg.Button('View images', key='-VIEW_IMAGES-')],
         [sg.Text('_'*50)],
         [sg.Button('Run drift correction', key='-RUN_DC-')],
         [sg.Text('_'*50)],
@@ -73,15 +71,14 @@ def main():
         event, values = window.read(timeout=100)
         if event == '-INIT-':
             H = ImageHandler(values['-CONFIG_PATH-'])
-            window['-IMG_POS-'].update(values=H.pos_list, set_to_index=0)
             window['-DC_POSITION-'].update(values=H.pos_list, set_to_index=0)
             window['-ROI_POSITION-'].update(values=H.pos_list, set_to_index=0)
             window['-DC_PATH-'].update(H.dc_file_path)
             window['-ROI_FILE_PATH-'].update(H.roi_file_path)
         elif event == '-VIEW_IMAGES-':
-            pos_index = H.pos_list.index(values['-IMG_POS-'])
-            print('Viewing position ', values['-IMG_POS-'])
-            ip.napari_view(H.images[pos_index], downscale=int(H.config['image_view_downscaling']))
+            #pos_index = H.pos_list.index(values['-IMG_POS-'])
+            #print('Viewing position ', values['-IMG_POS-'])
+            ip.napari_view(H.images, downscale=int(H.config['image_view_downscaling']))
         elif event == '-RELOAD-':
             H.reload_config()
         elif event == '-RUN_DC-':
@@ -116,16 +113,16 @@ def main():
                 N
             except NameError:
                 N = NucDetector(H)
-            with napari.gui_qt():
-                if H.nucs:
-                    nuc_imgs = np.stack(H.nucs)
-                    viewer = napari.view_image(nuc_imgs.copy())
-                if H.nuc_masks:
-                    nuc_labels = np.stack(H.nuc_masks)
-                    labels_layer = viewer.add_labels(nuc_labels.copy())
-                if H.nuc_class:
-                    nuc_class = np.stack(H.nuc_class)
-                    classes_layer = viewer.add_labels(nuc_class.copy())
+            if H.nucs:
+                nuc_imgs = np.stack(H.nucs)
+                viewer = napari.view_image(nuc_imgs.copy())
+            if H.nuc_masks:
+                nuc_labels = np.stack(H.nuc_masks)
+                labels_layer = viewer.add_labels(nuc_labels.copy())
+            if H.nuc_class:
+                nuc_class = np.stack(H.nuc_class)
+                classes_layer = viewer.add_labels(nuc_class.copy())
+            napari.run()
             try:             
                 if not np.allclose(labels_layer.data, nuc_labels):
                     print('Labels changed, resaving.')
@@ -145,23 +142,22 @@ def main():
         elif event == '-PREVIEW_ROI-':
             print('Previewing spot detection.')
             S = SpotPicker(H)
-            spots, img, filt_img = S.rois_from_spots(preview_pos=values['-ROI_POSITION-'])
-            roi_points, roi_props = ip.roi_to_napari_points(spots, values['-ROI_POSITION-'])
-            #roi_points = np.insert(roi_points, 0, 0, axis=1)
-            print(roi_points)
-            ip.napari_view(img, points=roi_points, downscale=1)
+            S.rois_from_spots(preview_pos=values['-ROI_POSITION-'])
         
         elif event == '-DET_ROI-':
             print('Detecting spots in all positions.')
+            H.set_drift_table(path=values['-DC_PATH-'])
             S = SpotPicker(H)
             S.rois_from_spots(filter_nucs=H.config['spot_in_nuc'])
 
         elif event == '-SPOT_IN_NUC-':
+            H.set_drift_table(path=values['-DC_PATH-'])
             if not H.nuc_masks:
                 H.load_nucs()
-            H.roi_table = ip.filter_rois_in_nucs(H.roi_table, H.nuc_masks, H.pos_list, new_col='nuc_label')
+            H.roi_table = ip.filter_rois_in_nucs(H.roi_table, H.nuc_masks, H.pos_list, new_col='nuc_label', drifts = H.drift_table, target_frame=H.config['nuc_ref_frame'])
             if H.nuc_class:
-                H.roi_table = ip.filter_rois_in_nucs(H.roi_table, H.nuc_class, H.pos_list, new_col='nuc_class')
+                H.roi_table = ip.filter_rois_in_nucs(H.roi_table, H.nuc_class, H.pos_list, new_col='nuc_class', drifts = H.drift_table, target_frame=H.config['nuc_ref_frame'])
+            print('ROIs (re)assigned to nuclei.')
             H.save_data(rois=H.roi_table)
 
         elif event == '-LOAD_ROI-':
@@ -193,10 +189,11 @@ def main():
            
             
             #roi_shapes, roi_props = ip.roi_to_napari_shape(T.roi_table, position = position)
-            roi_points, roi_props = ip.roi_to_napari_points(H.roi_table, position = position)
+            roi_points, _ = ip.roi_to_napari_points(H.roi_table, position = position)
             if roi_points.size == 0:
                 roi_points = np.empty((0, 4))
-            point_layer = ip.napari_view(img[:, int(H.config['trace_ch']),...], 
+            point_layer = ip.napari_view(img,
+                                            axes = 'TCZYX', 
                                             points = roi_points,
                                             downscale= H.config['image_view_downscaling'],
                                             contrast_limits=(100,5000),
