@@ -162,7 +162,7 @@ class Tracer:
         all_images = []
 
 
-        print(f'Tracing {len(all_rois)} ROIs in all frames:')
+        print(f'Tracing {len(self.all_rois)} ROIs in all frames:')
         out = Parallel(n_jobs=-1, prefer='threads')(delayed(self.trace_single_frame)(roi, decon_params) for i, roi in tqdm(self.all_rois.iterrows(), total=self.all_rois.shape[0]))
         '''
         for i, roi in tqdm(self.all_rois.iterrows(), total=self.all_rois.shape[0]):
