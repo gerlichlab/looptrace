@@ -19,8 +19,7 @@ import zarr
 import tifffile
 import tqdm
 import json
-import czifile
-import joblib
+from joblib import Parallel, delayed
 from scipy import ndimage as ndi
 
 class ImageHandler:
@@ -70,6 +69,17 @@ class ImageHandler:
         
         else:
             print('Unknown file format, please check config file.')
+
+        try:
+            crop = self.config['crop_xy']
+            Y = self.images.shape[-2]
+            X = self.images.shape[-1]
+            newY = int(Y  * (1 - crop) / 2)
+            newX = int(X  * (1 - crop) / 2)
+            self.images = self.images[..., newY:(Y-newY), newX:(X-newX)]
+            print('Images cropped to ', self.images.shape)
+        except KeyError: #Crop attribute not set.
+            pass
 
     def reload_config(self):
         self.config = ip.load_config(self.config_path)
@@ -129,6 +139,39 @@ class ImageHandler:
         self.dc_images = da.stack(pos_img)
 
         print('DC images generated.')
+
+    def dask_to_ome_zarr(self):
+        '''
+        Makes internal coursly drift corrected images based on precalculated drift
+        correction (see Drifter class for details).
+        '''
+
+        def single_image_to_zarr(z, idx, img):
+            z[idx] = img
+        
+        P, T, C, Z, Y, X = self.images.shape
+        compressor = Blosc(cname='zstd', clevel=5, shuffle=Blosc.BITSHUFFLE)
+        chunks = (1,1,1,Y,X)
+        
+        image_path = self.config['input_path']+os.sep+'zarr_images'
+
+        if not os.path.isdir(image_path):
+            os.mkdir(image_path)
+
+        for pos in tqdm.tqdm(self.pos_list):
+            pos_index = self.pos_list.index(pos)
+
+            store = zarr.DirectoryStore(image_path+os.sep+pos)
+            root = zarr.group(store=store, overwrite=True)
+
+            with open(r"C:\Git\looptrace_dev\preprocess\multiscales_template.json") as f:
+                root.attrs['multiscale'] = json.load(f)
+
+            multiscale_level = root.create_dataset(name = str(0), compressor=compressor, shape=(T, C, Z, Y, X), chunks=chunks)
+
+            Parallel(n_jobs=-1, prefer='threads', verbose=10)(delayed(single_image_to_zarr)(multiscale_level, t, self.images[pos_index, t]) for t in range(T))
+
+        print('OME ZARR images generated.')
 
     def save_proj_dc_images(self):
         '''

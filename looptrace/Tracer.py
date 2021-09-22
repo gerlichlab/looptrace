@@ -48,6 +48,7 @@ class Tracer:
             pos_index = self.pos_list.index(pos)
             sel_dc = self.drift_table.query('position == @pos')
             ref_frame = roi['frame']
+            ch = roi['ch']
             ref_offset = sel_dc.query('frame == @ref_frame')
             for j, dc_frame in sel_dc.iterrows():
                 z_drift_course = int(dc_frame['z_px_course']) - int(ref_offset['z_px_course'])
@@ -78,15 +79,16 @@ class Tracer:
                     slice(sy[0],sy[1]), 
                     slice(sx[0],sx[1]))
 
-                all_rois.append([pos, pos_index, roi.name, dc_frame['frame'], ref_frame, s, pad, z_drift_course, y_drift_course, x_drift_course, 
+                all_rois.append([pos, pos_index, roi.name, dc_frame['frame'], ref_frame, ch, s, pad, z_drift_course, y_drift_course, x_drift_course, 
                                                                                         dc_frame['z_px_fine'], dc_frame['y_px_fine'], dc_frame['x_px_fine']])
-        self.all_rois = pd.DataFrame(all_rois, columns=['position', 'pos_index', 'roi_id', 'frame', 'ref_frame', 'roi_slice', 'pad', 'z_px_course', 'y_px_course', 'x_px_course', 
+
+        self.all_rois = pd.DataFrame(all_rois, columns=['position', 'pos_index', 'roi_id', 'frame', 'ref_frame', 'ch', 'roi_slice', 'pad', 'z_px_course', 'y_px_course', 'x_px_course', 
                                                                                                   'z_px_fine', 'y_px_fine', 'x_px_fine'])
 
 
 
     def trace_single_frame(self, roi, decon_params):
-        trace_ch = self.config['trace_ch']
+        #trace_ch = self.config['trace_ch']
         roi_image_size = tuple(self.config['roi_image_size'])
 
         roi_slice = roi['roi_slice']
@@ -95,7 +97,7 @@ class Tracer:
         try:
             roi_image = np.array(self.images[roi['pos_index'],
                                             roi['frame'], 
-                                            trace_ch,
+                                            roi['ch'],
                                             roi_slice[0], 
                                             roi_slice[1],
                                             roi_slice[2]])
@@ -118,7 +120,7 @@ class Tracer:
         
         #roi_image_exp = delayed(ip.pad_to_shape)(roi_image, roi_image_size)
         if roi_image.shape != roi_image_size:
-            print(roi_image.shape)
+            #print(roi_image.shape)
             roi_image = ip.pad_to_shape(roi_image, roi_image_size)
 
         #Extract fine drift from drift table and shift image for display.

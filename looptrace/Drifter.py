@@ -19,6 +19,9 @@ from skimage.measure import regionprops_table
 from scipy import ndimage as ndi
 from scipy.stats import trim_mean
 from joblib import Parallel, delayed
+import tifffile
+import os
+import tqdm
 
 class Drifter():
 
@@ -29,24 +32,35 @@ class Drifter():
         self.config = image_handler.config
         self.dc_file_path = image_handler.dc_file_path
         self.images, self.pos_list = image_handler.images, image_handler.pos_list
+        try:
+            self.bead_roi_px = self.config['bead_roi_size']
+        except KeyError: #Legacy config
+            self.bead_roi_px = 16
 
     def generate_bead_rois(self, t_img, threshold, min_bead_int, n_points):
+        roi_px = self.bead_roi_px//2
         t_img_label,num_labels=ndi.label(t_img>threshold)
         print('Number of unfiltered beads found: ', num_labels)
         t_img_maxima = pd.DataFrame(regionprops_table(t_img_label, t_img, properties=('label', 'centroid', 'max_intensity')))
-        try:
-            t_img_maxima = t_img_maxima.query('max_intensity > @min_bead_int').sample(n=n_points, random_state=1)[['centroid-0', 'centroid-1', 'centroid-2']].to_numpy()
-        except ValueError: #Not enough beads found, make up bead to continue (usually imaging error resulting in no beads).
-            t_img_maxima = np.array([10,100,100])
+        #try:
+        t_img_maxima = t_img_maxima[(t_img_maxima['centroid-0'] > roi_px) & (t_img_maxima['centroid-1'] > roi_px) & (t_img_maxima['centroid-2'] > roi_px)].query('max_intensity > @min_bead_int')
+        if len(t_img_maxima) > n_points:
+            t_img_maxima = t_img_maxima.sample(n=n_points, random_state=1)[['centroid-0', 'centroid-1', 'centroid-2']].to_numpy()
+        else:
+            t_img_maxima = t_img_maxima.sample(n=len(t_img_maxima), random_state=1)[['centroid-0', 'centroid-1', 'centroid-2']].to_numpy()
+        #except ValueError: #Not enough beads found, make up bead to continue (usually imaging error resulting in no beads).
+        #    t_img_maxima = np.array([10,100,100])
         t_img_maxima = np.round(t_img_maxima).astype(int)
+        #print(t_img_maxima)
         return t_img_maxima
 
     def extract_single_bead(self, point, img, course_drift=None):
         #Calculate fine scale drift for all selected fiducials.
+        roi_px = self.bead_roi_px//2
         if course_drift is not None:
-            s = tuple([slice(ind-int(shift)-8, ind-int(shift)+8) for (ind, shift) in zip(point, course_drift)])
+            s = tuple([slice(ind-int(shift)-roi_px, ind-int(shift)+roi_px) for (ind, shift) in zip(point, course_drift)])
         else:
-            s = tuple([slice(ind-8, ind+8) for ind in point])
+            s = tuple([slice(ind-roi_px, ind+roi_px) for ind in point])
         bead = img[s]
         return bead
 
@@ -79,6 +93,8 @@ class Drifter():
         threshold = self.config['bead_threshold']
         min_bead_int = self.config['min_bead_intensity']
         n_points= self.config['bead_points']
+        dc_bead_img_path = self.config['output_path']+os.sep+'dc_bead_images'
+        roi_px = self.bead_roi_px
 
         #Run drift correction for each position and save results in table.
         all_drifts=[]
@@ -90,8 +106,7 @@ class Drifter():
             t_img = np.array(images[i, t_slice, ch])
             bead_rois = self.generate_bead_rois(t_img, threshold, min_bead_int, n_points)
             t_bead_imgs =  Parallel(n_jobs=-1, prefer='threads')(delayed(self.extract_single_bead)(point, t_img) for point in bead_rois)
-            for t in t_all:
-                print('Drift correcting frame', t)
+            for t in tqdm.tqdm(t_all):
                 o_img = np.array(images[i, t, ch])
                 drift_course = ip.drift_corr_course(t_img, o_img, downsample=2)
                 drifts_course.append(drift_course)
@@ -100,16 +115,22 @@ class Drifter():
                                                                     for t_bead, o_bead in zip(t_bead_imgs, o_bead_imgs))
                 drift_fine = np.array(drift_fine)
                 drift_fine = trim_mean(drift_fine, proportiontocut=0.2, axis=0)
-                
-                print(f'Fine drift: {drift_fine}.')  
-                drifts_fine.append(drift_fine) 
 
-            print('Drift correction complete in position.')
+                drifts_fine.append(drift_fine) 
+                
+                if not os.path.isdir(dc_bead_img_path):
+                    os.mkdir(dc_bead_img_path)
+                t_bead_imgs = np.stack([ip.pad_to_shape(img, (roi_px, roi_px, roi_px)) for img in t_bead_imgs])
+                o_bead_imgs = np.stack([ip.pad_to_shape(img, (roi_px, roi_px, roi_px)) for img in o_bead_imgs])
+                out_imgs = np.stack([t_bead_imgs, o_bead_imgs])
+                tifffile.imsave(dc_bead_img_path+os.sep+pos+'_T'+str(t).zfill(4)+'.tif', out_imgs)
+
             drifts = pd.concat([pd.DataFrame(drifts_course), pd.DataFrame(drifts_fine)], axis = 1)
             drifts['position'] = pos
             drifts.index.name = 'frame'
             all_drifts.append(drifts)
             print('Finished drift correction for position ', pos)
+            print('Drifts:', drifts)
         
         all_drifts=pd.concat(all_drifts).reset_index()
         

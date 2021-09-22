@@ -18,6 +18,7 @@ import napari
 from skimage.segmentation import clear_border
 from skimage.filters import gaussian, threshold_otsu
 from skimage.registration import phase_cross_correlation
+from skimage.morphology import white_tophat, ball
 from scipy.stats import trim_mean
 from scipy.spatial.distance import squareform, pdist
 from skimage.measure import regionprops_table, regionprops
@@ -529,7 +530,7 @@ def multi_ome_zarr_to_dask(folder: str):
     print('Loaded ', out)
     return out
     
-def detect_spots(img, spot_threshold=20, min_dist=None):
+def detect_spots(input_img, spot_threshold=20, min_dist=None):
     '''Spot detection by difference of gaussian filter
     #TODO: Do not use hard-coded sigma values
 
@@ -541,8 +542,9 @@ def detect_spots(img, spot_threshold=20, min_dist=None):
         spot_props (DataFrame): The centroids and roi_IDs of the spots found. 
         img (ndarray): The DoG filtered image used for spot detection.
     '''
-
+    img = white_tophat(image=input_img, selem=ball(2))
     img = gaussian(img, 0.8)-gaussian(img,1.3)
+    img = img/gaussian(input_img, 3)
     img = (img-np.mean(img))/np.std(img)
     spot_img, num_spots = ndi.label(img>spot_threshold)
     

@@ -50,7 +50,7 @@ class SpotPicker:
 
         spot_threshold = self.config['spot_threshold']
         if not isinstance(spot_threshold, list):
-            spot_threshold = [spot_threshold]
+            spot_threshold = [spot_threshold]*len(spot_frame)
         spot_ds = self.config['spot_downsample']
 
         #Loop through the imaging positions.

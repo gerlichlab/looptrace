@@ -64,7 +64,7 @@ def main():
         sg.Button('Tracing beads', key='-BEAD_TRACING-')]
         ]
 
-    window = sg.Window('LoopTrace GUI', layout)
+    window = sg.Window('LoopTrace GUI', layout, resizable=True, auto_size_text = True, auto_size_buttons = True)
 
     while True:
         # Wake every 100ms and look for work
