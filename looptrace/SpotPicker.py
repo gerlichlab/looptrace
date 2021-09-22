@@ -147,6 +147,7 @@ class SpotPicker:
             spot_props['position'] = pos
             spot_props['frame'] = ref_frame
             spot_props['ch'] = ref_ch
+            print('Detected beads in position', pos, spot_props)
             all_rois.append(spot_props)
         
         output = pd.concat(all_rois)
