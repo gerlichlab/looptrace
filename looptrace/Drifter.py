@@ -14,6 +14,7 @@ from joblib.parallel import Parallel
 import numpy as np
 import pandas as pd
 from looptrace import image_processing_functions as ip
+from looptrace.gaussfit import fitSymmetricGaussian3D, symmetricGaussian3D
 from skimage.registration import phase_cross_correlation
 from skimage.measure import regionprops_table
 from scipy import ndimage as ndi
@@ -64,6 +65,15 @@ class Drifter():
         bead = img[s]
         return bead
 
+    def fit_shift_single_bead(self, t_bead, o_bead):
+        try:
+            t_fit = np.array(fitSymmetricGaussian3D(t_bead, sigma=1, center=None)[0])
+            o_fit = np.array(fitSymmetricGaussian3D(o_bead, sigma=1, center=None)[0])
+            shift = t_fit[2:5] - o_fit[2:5]
+        except (ValueError, AttributeError):
+            shift = np.array([0,0,0])
+        return shift
+
     def correlate_single_bead(self, t_bead, o_bead, upsampling):
         try:
             shift = phase_cross_correlation(t_bead, o_bead, upsample_factor=upsampling, return_error=False)
@@ -78,7 +88,7 @@ class Drifter():
         shifts = np.array(shifts)
 
         fine_drift = trim_mean(shifts, proportiontocut=0.2, axis=0)
-        print(f'Fine drift: {fine_drift} with untrimmed STD of {np.std(shifts, axis=0)} .')  
+        #print(f'Fine drift: {fine_drift} with untrimmed STD of {np.std(shifts, axis=0)} .')  
 
     def drift_corr(self):
         '''
@@ -95,35 +105,47 @@ class Drifter():
         n_points= self.config['bead_points']
         dc_bead_img_path = self.config['output_path']+os.sep+'dc_bead_images'
         roi_px = self.bead_roi_px
+        ds = self.config['course_drift_downsample']
 
         #Run drift correction for each position and save results in table.
         all_drifts=[]
-        import datetime
+        from datetime import datetime
         for i, pos in enumerate(pos_list):
             print(f'Running drift correction for position {pos}.')
             drifts_course = []
             drifts_fine = []
+            print('Starting', datetime.now().time())
             t_img = np.array(images[i, t_slice, ch])
+            print('Loading t_imgs', datetime.now().time())
             bead_rois = self.generate_bead_rois(t_img, threshold, min_bead_int, n_points)
+            print('Generate bead rois', datetime.now().time())
             t_bead_imgs =  Parallel(n_jobs=-1, prefer='threads')(delayed(self.extract_single_bead)(point, t_img) for point in bead_rois)
+            print('Extracted single beads', datetime.now().time())
             for t in tqdm.tqdm(t_all):
                 o_img = np.array(images[i, t, ch])
-                drift_course = ip.drift_corr_course(t_img, o_img, downsample=2)
+                print('Loaded o_img', datetime.now().time())
+                drift_course = ip.drift_corr_course(t_img, o_img, downsample=ds)
+                print('Did course dc', datetime.now().time())
                 drifts_course.append(drift_course)
                 o_bead_imgs = Parallel(n_jobs=-1, prefer='threads')(delayed(self.extract_single_bead)(point, o_img, drift_course) for point in bead_rois)
-                drift_fine = Parallel(n_jobs=-1, prefer='threads')(delayed(self.correlate_single_bead)(t_bead, o_bead, 100) 
-                                                                    for t_bead, o_bead in zip(t_bead_imgs, o_bead_imgs))
+                print('Got o_bead_imgs', datetime.now().time())
+                #drift_fine = Parallel(n_jobs=-1, prefer='threads')(delayed(self.correlate_single_bead)(t_bead, o_bead, 100) 
+                #                                                    for t_bead, o_bead in zip(t_bead_imgs, o_bead_imgs))
+                drift_fine = Parallel(n_jobs=len(o_bead_imgs), prefer='threads')(delayed(self.fit_shift_single_bead)(t_bead, o_bead) 
+                                                                    for t_bead, o_bead in zip(t_bead_imgs, o_bead_imgs))                                                    
                 drift_fine = np.array(drift_fine)
                 drift_fine = trim_mean(drift_fine, proportiontocut=0.2, axis=0)
 
                 drifts_fine.append(drift_fine) 
-                
+                print('Calculated fine drift', datetime.now().time())
                 if not os.path.isdir(dc_bead_img_path):
                     os.mkdir(dc_bead_img_path)
                 t_bead_imgs = np.stack([ip.pad_to_shape(img, (roi_px, roi_px, roi_px)) for img in t_bead_imgs])
                 o_bead_imgs = np.stack([ip.pad_to_shape(img, (roi_px, roi_px, roi_px)) for img in o_bead_imgs])
                 out_imgs = np.stack([t_bead_imgs, o_bead_imgs])
+                print('Made out images', datetime.now().time())
                 tifffile.imsave(dc_bead_img_path+os.sep+pos+'_T'+str(t).zfill(4)+'.tif', out_imgs)
+                print('Saved out images', datetime.now().time())
 
             drifts = pd.concat([pd.DataFrame(drifts_course), pd.DataFrame(drifts_fine)], axis = 1)
             drifts['position'] = pos

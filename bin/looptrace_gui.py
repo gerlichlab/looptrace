@@ -28,6 +28,7 @@ def main():
         [sg.Text('Choose config file:')],
         [sg.InputText('YAML_config_file', key='-CONFIG_PATH-'), sg.FileBrowse()],
         [sg.Button('Initialize', key='-INIT-'),
+        sg.Button('Save to OME-ZARR', key='-SAVE-'),
         sg.Button('Reload config', key='-RELOAD-'),
         sg.Button('View images', key='-VIEW_IMAGES-')],
         [sg.Text('_'*50)],
@@ -75,6 +76,8 @@ def main():
             window['-ROI_POSITION-'].update(values=H.pos_list, set_to_index=0)
             window['-DC_PATH-'].update(H.dc_file_path)
             window['-ROI_FILE_PATH-'].update(H.roi_file_path)
+        elif event == '-SAVE-':
+            H.dask_to_ome_zarr()
         elif event == '-VIEW_IMAGES-':
             #pos_index = H.pos_list.index(values['-IMG_POS-'])
             #print('Viewing position ', values['-IMG_POS-'])

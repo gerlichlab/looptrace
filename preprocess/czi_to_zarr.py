@@ -11,6 +11,7 @@ import yaml
 import shutil
 import glob
 import tqdm
+import time
 from nd2reader import ND2Reader
 
 def all_matching_files_in_subfolders(path, template = ['DE_2','.czi']):
@@ -73,12 +74,17 @@ def read_czi_image(image_path: str, flip_dapi: bool = False):
          
 def single_czi_to_zarr(index, z, path, flip_ch_idx):
     img = read_czi_image(path)
-    if index in flip_ch_idx:
-        img = img[1:, :, :, :]
-        img = img[::-1, :, :, :]
-    z[index] = img
+    #if index in flip_ch_idx:
+        #img = img[1:, :, :, :]
+    #    img = img[::-1, :, :, :]
+    for i in range(3):
+        try:
+            z[index] = img
+            break
+        except OSError: #Network drive fail
+            time.sleep(1)
 
-def czi_to_omezarr_folder(input_folders: list, out_path: str, flip_ch_idx: tuple = (), continue_from = None):
+def czi_to_omezarr_folder(input_folders: list, out_path: str, flip_ch_idx: tuple = (-1,), continue_from = None):
     '''[summary]
 
     Args:

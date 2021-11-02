@@ -142,8 +142,7 @@ class ImageHandler:
 
     def dask_to_ome_zarr(self):
         '''
-        Makes internal coursly drift corrected images based on precalculated drift
-        correction (see Drifter class for details).
+        Saves a Dask array to ome-zarr format (kinda, metadata still needs work)
         '''
 
         def single_image_to_zarr(z, idx, img):
@@ -192,7 +191,7 @@ class ImageHandler:
                 shift = self.drift_table.query('position == @pos').iloc[t][['y_px_course', 'x_px_course', 'y_px_fine', 'x_px_fine']]
                 shift = (shift[0]+shift[2], shift[1]+shift[3])
                 proj_img = da.max(self.images[pos_index, t], axis=1).compute()
-                proj_img = ndi.shift(proj_img, shift=(0,)+shift, order = 1)
+                proj_img = ndi.shift(proj_img, shift=(0,)+shift, order = 3)
                 pos_img.append(proj_img)
             pos_img = np.stack(pos_img)
             pos_img = pos_img[:,:,np.newaxis, :, :]

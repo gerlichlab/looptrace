@@ -26,7 +26,7 @@ from skimage.measure import regionprops_table
 from skimage.filters import threshold_otsu
 import tifffile as tiff
 import dask.array as da
-import imreg_dft
+
 
 
 class Compare:
@@ -100,6 +100,7 @@ class Compare:
             nucs [DataFrame]: Bounding boxes for detected nuclei
             z_img_nucs [np array]: Center slices of detected nuclei. 
         '''
+        import imreg_dft
 
         nuc_ch = self.config['nuc_ch']          #Channel of nucleus.
         nuc_d = self.config['nuc_diameter']/ds  #Approximate diameter of nucleus in pixels.

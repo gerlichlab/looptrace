@@ -46,12 +46,20 @@ class NucDetector:
             model = 'nuclei'
         print(f'Running nuclear segmentation with CellPose using {model} model and diameter {diameter}.')
         masks = ip.nuc_segmentation(nuc_imgs, diameter=diameter, model=model)
-        self.mask_to_binary(masks)
+        masks, mitotic_idx = zip(*[ip.mitotic_cell_extra_seg(nuc_imgs[i], masks[i]) for i in range(len(nuc_images))])
+        nuc_class = []
+        for i, mask in enumerate(masks):
+            class_1 = ((mask > 0) & (mask < mitotic_idx[i])).astype(int)
+            class_2 = (mask >= mitotic_idx[i]).astype(int)
+            nuc_class.append(class_1 + class_2*2)
+        #self.mask_to_binary(masks)
 
         masks = [dilation(mask, disk(self.config['nuc_dilation'])) for mask in masks]
         self.image_handler.nucs = nuc_imgs
         self.image_handler.nuc_masks = masks
         self.image_handler.save_nucs(img_type='mask')
+        self.image_handler.nuc_class = nuc_class
+        self.image_handler.save_nucs(img_type='class')
     
     def classify_nuclei(self):
         '''

@@ -592,7 +592,7 @@ def drift_corr_course(t_img, o_img, downsample=1):
     course_drift=phase_cross_correlation(np.array(t_img[s]), np.array(o_img[s]), return_error=False) * downsample
     #Shift image for fine drift correction
     #o_img=ndi.shift(o_img,course_drift,order=0)
-    print('Course drift:', course_drift)
+    #print('Course drift:', course_drift)
     return course_drift
 
 def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int, n_points=50, upsampling=100):
@@ -736,6 +736,29 @@ def nuc_segmentation(nuc_imgs, diameter = 150, model = 'nuclei', do_3D = False):
     channels = [0,0]
     masks, flows, styles, diams = model.eval(nuc_imgs, diameter=diameter, channels=channels, net_avg=False, do_3D=do_3D)
     return masks
+
+def mitotic_cell_extra_seg(nuc_image, nuc_mask):
+    '''Performs additional mitotic cell segmentation on top of an interphase segmentation (e.g. from CellPose).
+    Assumes mitotic cells are brighter, unsegmented objects in the image.
+
+    Args:
+        nuc_image ([2D numpy array]): nuclei image
+        nuc_mask ([2D numpy array]): labeled nuclei from nuclei image
+
+    Returns:
+        nuc_mask ([2D numpy array]): labeled nuclei with mitotic cells added
+        mito_index+1 (int): the first index of the mitotic cells in the returned nuc_mask
+
+    '''
+    from skimage.morphology import label, remove_small_objects
+    nuc_int = np.mean(nuc_image[nuc_mask>0])
+    mito_nuc = (nuc_image * (nuc_mask == 0)) > 1.5*nuc_int
+    mito_nuc = remove_small_objects(mito_nuc, min_size=1000)
+    mito_nuc = label(mito_nuc)
+    mito_index = np.max(nuc_mask)
+    mito_nuc[mito_nuc>0] += mito_index
+    nuc_mask = nuc_mask + mito_nuc
+    return nuc_mask, mito_index+1
 
 def nuc_segmentation_otsu(nuc_image, min_size, exp_bb=-1, clear_edges=True):
     '''
