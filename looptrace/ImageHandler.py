@@ -163,8 +163,7 @@ class ImageHandler:
             store = zarr.DirectoryStore(image_path+os.sep+pos)
             root = zarr.group(store=store, overwrite=True)
 
-            with open(r"C:\Git\looptrace_dev\preprocess\multiscales_template.json") as f:
-                root.attrs['multiscale'] = json.load(f)
+            root.attrs['multiscale'] = {'multiscales': [{'version': '0.2', 'name': 'dataset', 'datasets': [{'path': '0'}]}]}
 
             multiscale_level = root.create_dataset(name = str(0), compressor=compressor, shape=(T, C, Z, Y, X), chunks=chunks)
 
