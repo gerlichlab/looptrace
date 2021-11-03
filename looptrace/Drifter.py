@@ -63,7 +63,11 @@ class Drifter():
         else:
             s = tuple([slice(ind-roi_px, ind+roi_px) for ind in point])
         bead = img[s]
-        return bead
+
+        if bead.shape != (2*roi_px, 2*roi_px, 2*roi_px):
+            return np.zeros((2*roi_px, 2*roi_px, 2*roi_px))
+        else:
+            return bead
 
     def fit_shift_single_bead(self, t_bead, o_bead):
         try:
@@ -106,6 +110,31 @@ class Drifter():
         dc_bead_img_path = self.config['output_path']+os.sep+'dc_bead_images'
         roi_px = self.bead_roi_px
         ds = self.config['course_drift_downsample']
+        try:
+            dc_method = self.config['dc_method']
+        except KeyError:
+            dc_method = 'cc'
+
+        try:
+            save_dc_beads = self.config['save_dc_beads']
+        except KeyError:
+            save_dc_beads = False
+
+        decon_params = []
+        try:
+            decon_params.append(self.config['deconvolve_dc'])
+        except KeyError:
+            decon_params.append(0)
+        
+
+        if decon_params[0] > 0:
+            algo, kernel, fd_data = ip.decon_RL_setup(res_lateral=self.config['xy_nm']/1000, 
+                                                        res_axial=self.config['z_nm']/1000, 
+                                                        wavelength=self.config['dc_spot_wavelength']/1000,
+                                                        na=self.config['objective_na'])
+            decon_params.append(algo)
+            decon_params.append(kernel)
+            decon_params.append(fd_data)
 
         #Run drift correction for each position and save results in table.
         all_drifts=[]
@@ -114,38 +143,51 @@ class Drifter():
             print(f'Running drift correction for position {pos}.')
             drifts_course = []
             drifts_fine = []
-            print('Starting', datetime.now().time())
+            #print('Starting', datetime.now().time())
             t_img = np.array(images[i, t_slice, ch])
-            print('Loading t_imgs', datetime.now().time())
+            #print('Loading t_imgs', datetime.now().time())
             bead_rois = self.generate_bead_rois(t_img, threshold, min_bead_int, n_points)
-            print('Generate bead rois', datetime.now().time())
+            #print('Generate bead rois', datetime.now().time())
             t_bead_imgs =  Parallel(n_jobs=-1, prefer='threads')(delayed(self.extract_single_bead)(point, t_img) for point in bead_rois)
-            print('Extracted single beads', datetime.now().time())
+            #print('Extracted single beads', datetime.now().time())
+            if decon_params[0] > 0:
+                t_bead_imgs = Parallel(n_jobs=-1, prefer='threads')(delayed(ip.decon_RL)(t_img, decon_params[2], decon_params[1], decon_params[3], niter=decon_params[0]) for t_img in t_bead_imgs)
+                #print('Deconvolved single t beads', datetime.now().time())
             for t in tqdm.tqdm(t_all):
                 o_img = np.array(images[i, t, ch])
-                print('Loaded o_img', datetime.now().time())
+                #print('Loaded o_img', datetime.now().time())
                 drift_course = ip.drift_corr_course(t_img, o_img, downsample=ds)
-                print('Did course dc', datetime.now().time())
+                #print('Did course dc', datetime.now().time())
                 drifts_course.append(drift_course)
                 o_bead_imgs = Parallel(n_jobs=-1, prefer='threads')(delayed(self.extract_single_bead)(point, o_img, drift_course) for point in bead_rois)
-                print('Got o_bead_imgs', datetime.now().time())
-                #drift_fine = Parallel(n_jobs=-1, prefer='threads')(delayed(self.correlate_single_bead)(t_bead, o_bead, 100) 
-                #                                                    for t_bead, o_bead in zip(t_bead_imgs, o_bead_imgs))
-                drift_fine = Parallel(n_jobs=len(o_bead_imgs), prefer='threads')(delayed(self.fit_shift_single_bead)(t_bead, o_bead) 
-                                                                    for t_bead, o_bead in zip(t_bead_imgs, o_bead_imgs))                                                    
+                #print('Got o_bead_imgs', datetime.now().time())
+                if decon_params[0] > 0:
+                    o_bead_imgs = Parallel(n_jobs=-1, prefer='threads')(delayed(ip.decon_RL)(o_img, decon_params[2], decon_params[1], decon_params[3], niter=decon_params[0]) for o_img in o_bead_imgs)
+                    #print('Deconvolved single o beads', datetime.now().time())
+
+                if dc_method == 'cc':
+                    drift_fine = Parallel(n_jobs=-1, prefer='threads')(delayed(self.correlate_single_bead)(t_bead, o_bead, 100) 
+                                                                        for t_bead, o_bead in zip(t_bead_imgs, o_bead_imgs))
+                elif dc_method == 'fit':
+                    drift_fine = Parallel(n_jobs=len(o_bead_imgs), prefer='threads')(delayed(self.fit_shift_single_bead)(t_bead, o_bead) 
+                                                                    for t_bead, o_bead in zip(t_bead_imgs, o_bead_imgs))
+                else:
+                    raise NotImplementedError('Unknown dc method.')       
+
                 drift_fine = np.array(drift_fine)
                 drift_fine = trim_mean(drift_fine, proportiontocut=0.2, axis=0)
 
                 drifts_fine.append(drift_fine) 
-                print('Calculated fine drift', datetime.now().time())
-                if not os.path.isdir(dc_bead_img_path):
-                    os.mkdir(dc_bead_img_path)
-                t_bead_imgs = np.stack([ip.pad_to_shape(img, (roi_px, roi_px, roi_px)) for img in t_bead_imgs])
-                o_bead_imgs = np.stack([ip.pad_to_shape(img, (roi_px, roi_px, roi_px)) for img in o_bead_imgs])
-                out_imgs = np.stack([t_bead_imgs, o_bead_imgs])
-                print('Made out images', datetime.now().time())
-                tifffile.imsave(dc_bead_img_path+os.sep+pos+'_T'+str(t).zfill(4)+'.tif', out_imgs)
-                print('Saved out images', datetime.now().time())
+                #print('Calculated fine drift', datetime.now().time())
+                if save_dc_beads:
+                    if not os.path.isdir(dc_bead_img_path):
+                        os.mkdir(dc_bead_img_path)
+                    t_bead_imgs = np.stack([ip.pad_to_shape(img, (roi_px, roi_px, roi_px)) for img in t_bead_imgs])
+                    o_bead_imgs = np.stack([ip.pad_to_shape(img, (roi_px, roi_px, roi_px)) for img in o_bead_imgs])
+                    out_imgs = np.stack([t_bead_imgs, o_bead_imgs])
+                    #print('Made out images', datetime.now().time())
+                    tifffile.imsave(dc_bead_img_path+os.sep+pos+'_T'+str(t).zfill(4)+'.tif', out_imgs)
+                    #print('Saved out images', datetime.now().time())
 
             drifts = pd.concat([pd.DataFrame(drifts_course), pd.DataFrame(drifts_fine)], axis = 1)
             drifts['position'] = pos
