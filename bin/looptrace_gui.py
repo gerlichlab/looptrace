@@ -76,6 +76,8 @@ def main():
             window['-ROI_POSITION-'].update(values=H.pos_list, set_to_index=0)
             window['-DC_PATH-'].update(H.dc_file_path)
             window['-ROI_FILE_PATH-'].update(H.roi_file_path)
+            if H.config['image_filetype'] in ['zip','zarr','ome-zarr']:
+                window['-SAVE-'].update(disabled=True)
         elif event == '-SAVE-':
             H.dask_to_ome_zarr()
         elif event == '-VIEW_IMAGES-':

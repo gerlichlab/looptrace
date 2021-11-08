@@ -80,7 +80,7 @@ def tracing_qc(traces, qc_config):
     qc = qc & df['y_px'].between(0,100)
     qc = qc & df['x_px'].between(0,100)
 
-    return qc
+    return qc.astype(int)
 '''
 def tracing_qc(row, qc_dict, traces_df=None):
 
@@ -406,7 +406,7 @@ def align_two_traces(a,b):
     b_reg = rigid_transform_3D(b, a, prematch=True)
     return a, b_reg
 
-def pwd_clustering(traces, metric='pcc', embedding='umap', clust_method='kmeans_emb', n_clusters = 3, extra_column = None, traces_rw=None):
+def pwd_clustering(traces, metric='pcc', embedding='umap', clust_method='kmeans_emb', n_clusters = 3, diagonal = 2, extra_column = None, traces_rw=None):
     from sklearn.manifold import MDS, TSNE, SpectralEmbedding
     from sklearn.mixture import GaussianMixture
     from sklearn import cluster
@@ -425,25 +425,37 @@ def pwd_clustering(traces, metric='pcc', embedding='umap', clust_method='kmeans_
         dist_func = pcc_dist
 
     elif metric == 'contact_dist':
-        ind = np.triu_indices(points[0].shape[0], k=2)
+        ind = np.triu_indices(points[0].shape[0], k=diagonal)
         features = np.stack([np.ravel(cdist(arr, arr)[ind]) for arr in points])
         dist_func = contact_dist
     
-    if metric == 'pcc_sq':
-        ind = np.triu_indices(points[0].shape[0], k=2)
+    elif metric == 'pcc_sq':
+        ind = np.triu_indices(points[0].shape[0], k=diagonal)
         features = np.stack([np.ravel(cdist(arr, arr)[ind]) for arr in points])
         features = 1000/features**2
         dist_func = pcc_dist
         #features = features/np.max(features)
-    if metric == 'pcc_rw':
-        ind = np.triu_indices(points[0].shape[0], k=3)
+    elif metric == 'pcc_rw':
+        ind = np.triu_indices(points[0].shape[0], k=diagonal)
         features = np.stack([np.ravel(cdist(arr, arr)[ind]) for arr in points])
         dist_rw = np.ravel(np.nanmean(pwd_calc(traces_rw), axis=0)[ind])
         features = 1/(features**2/dist_rw)
         dist_func = pcc_dist
-        
-    #if metric == 'pcc_sqrt':
-    #    features = np.nansqrt(features)
+    elif metric == 'tda':
+        import gudhi as gd
+        import gudhi.representations
+        all_points = points_from_traces(traces)
+        res = []
+        for points in all_points:
+            qc = points[:,3] == 1
+            points = points[qc,:3]
+            acX = gd.AlphaComplex(points=points).create_simplex_tree()
+            dgmX = acX.persistence()
+            LS = gd.representations.Landscape(resolution=100)
+            L = LS.fit_transform([acX.persistence_intervals_in_dimension(1)])
+            res.append(L[0])
+        features = np.stack(res)
+        dist_func = 'euclidean'
     
     features = SimpleImputer(missing_values=np.nan, strategy='constant', fill_value=0).fit_transform(features)
     
@@ -479,13 +491,16 @@ def pwd_clustering(traces, metric='pcc', embedding='umap', clust_method='kmeans_
         model = cluster.KMeans(n_clusters=n_clusters)
         features = pos
     elif clust_method == 'dbscan_emb':
-        model = cluster.DBSCAN(eps=1, min_samples=5)
+        model = cluster.DBSCAN(eps=0.2, min_samples=10)
+        features = pos
+    elif clust_method == 'optics_emb':
+        model = cluster.OPTICS(metric='euclidean')
         features = pos
     elif clust_method == 'meanshift_emb':
         model = cluster.MeanShift(bandwidth=0.8)
         features = pos
     elif clust_method == 'gmm_emb':
-        model = GaussianMixture(n_components=n_clusters)
+        model = GaussianMixture(n_components=n_clusters, init_params='kmeans')
         features = pos
 
     trace_ids = list(traces.trace_id.unique())
@@ -1580,7 +1595,7 @@ def plot_2d_proj_kde(mean_points, aligned_points, line_color='#1f77b4', limits=(
 #        vals[:, 3] = np.linspace(0, 1, N)
 #        newcmp = ListedColormap(vals)
 
-    sns.kdeplot(data=data, x='y', y='x', hue='pos', palette='inferno', linewidths=0.3, common_norm=False, fill=False, legend=None, levels = 25, thresh=0.75, alpha=0.2)
+    sns.kdeplot(data=data, x='y', y='x', hue='pos', palette='inferno', linewidths=0.3, common_norm=False, fill=False, legend=None, levels = 25, thresh=0.75, alpha=0.4)
     #sns.scatterplot(data=data, x='y', y='x', hue='pos', palette='inferno', s = 6, alpha = 0.3, legend=None)
     plt.plot(yf,xf, zorder=10, color=line_color, linewidth=5, clip_on=False)
     #print(y_m, x_m)

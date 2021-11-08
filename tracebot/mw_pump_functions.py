@@ -33,9 +33,16 @@ class Robot():
         self.config = self.load_config()
         self.status_file = 'status.json'
         self.all_coords, self.sel_coords = self.wp_coord_list()
+        self.start_stage()
+        time.sleep(1)
+        self.start_pump()
 
+        #self.start_socket_server()
+
+    def start_stage(self):
         self.stage = Stage(self.config)
 
+    def start_pump(self):
         if self.config['pump_type'] == 'bartels':
             self.pump = Bartels(self.config)
         elif self.config['pump_type'] == 'CPP':
@@ -43,19 +50,19 @@ class Robot():
         else:
             logging.error('Unknown pump type.')
 
-        self.start_socket_server()
-
-    def close_connections(self):
-        try:
-            self.stage.close()
-            logging.info('Closed stage connection.')
-        except AttributeError:
-            logging.info('Stage already closed')
+    def close_pump(self):
         try:
             self.pump.close()
             logging.info('Closed pump connection.')
         except AttributeError:
             logging.info('Pump already closed')
+    
+    def close_stage(self):
+        try:
+            self.stage.close()
+            logging.info('Closed stage connection.')
+        except AttributeError:
+            logging.info('Stage already closed')
 
     def load_config(self):
         #Open config file and return config variable form yaml file

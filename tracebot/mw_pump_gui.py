@@ -21,7 +21,8 @@ def main():
         [sg.InputText('robot_config.yaml', key='-CONFIG_PATH-'), sg.FileBrowse()],
         [sg.Button('Initialize robot', key='-INIT-'), 
         sg.Button('Refresh config', key='-REFRESH-'),
-        sg.Button('Close connections', key='-CLOSE-')],
+        sg.Button('Reconnect pump', key='-REPUMP-'),
+        sg.Button('Reconnect stage', key='-RESTAGE-')],
         [sg.Text('_'*30)],
         [sg.Text('Pump time [s]'), sg.InputText(size=(4, None), key='-PUMP_TIME-', default_text='23'),
         sg.Button('Pump cycle', key='-PUMP-')],
@@ -76,9 +77,19 @@ def main():
             except UnboundLocalError:
                 logging.info('Robot not initialized.')
 
-        elif event == '-CLOSE-':
+        elif event == '-REPUMP-':
             try:
-                R.close_connections()
+                R.close_pump()
+                time.sleep(2)
+                R.start_pump()
+            except (UnboundLocalError, AttributeError):
+                logging.info('Robot, stage or pump not initialized.')
+
+        elif event == '-RESTAGE-':
+            try:
+                R.close_stage()
+                time.sleep(2)
+                R.start_stage()
             except (UnboundLocalError, AttributeError):
                 logging.info('Robot, stage or pump not initialized.')
 
