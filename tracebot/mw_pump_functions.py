@@ -178,74 +178,74 @@ class Robot():
         sel_coords = self.sel_coords
         sel_coord_list=list(sel_coords.keys())
         
-        for seq in config['sequences']:                # Sequences is defined as list of subsequences in config file.
-            for a in seq:                               # Loop through each sequence in turn
-                action=list(a.keys())[0]
-                param=list(a.values())[0]
+        for a in config['sequence']:                # Sequences is defined as list of subsequences in config file.
+        #for a in seq:                               # Loop through each sequence in turn
+            action=list(a.keys())[0]
+            param=list(a.values())[0]
 
-                if action == 'probe' and param == 'wp': # Run for wellplate position defined in status json file.
-                    if self.stop.is_set():
-                        logging.info('Stopping robot.')
-                        raise SystemExit
+            if action == 'probe' and param == 'wp': # Run for wellplate position defined in status json file.
+                if self.stop.is_set():
+                    logging.info('Stopping robot.')
+                    raise SystemExit
 
-                    current_pos=self.read_status()['current_well']
-                    coords=all_coords[current_pos]
+                current_pos=self.read_status()['current_well']
+                coords=all_coords[current_pos]
+                self.stage.move_stage(coords)
+                while self.stage.check_stage() != 'Idl': #Wait until move is done before proceeding.
+                    time.sleep(2)
+                logging.info('Probe at '+str(current_pos))
+                
+                i=sel_coord_list.index(current_pos)
+                try:
+                    next_well=sel_coord_list[i+1]
+                except IndexError:
+                    logging.info('Last well reached')
+                    next_well='Last'
+                self.set_well(next_well)
+                
+            elif action == 'probe' and param != 'wp':   # For all position outside well plates, such as reservoirs.
+                if self.stop.is_set():
+                    logging.info('Stopping robot.')
+                    raise SystemExit
+                try: 
+                    coords=config['positions'][param]
                     self.stage.move_stage(coords)
                     while self.stage.check_stage() != 'Idl': #Wait until move is done before proceeding.
                         time.sleep(2)
-                    logging.info('Probe at '+str(current_pos))
-                    
-                    i=sel_coord_list.index(current_pos)
-                    try:
-                        next_well=sel_coord_list[i+1]
-                    except IndexError:
-                        logging.info('Last well reached')
-                        next_well='Last'
-                    self.set_well(next_well)
-                    
-                elif action == 'probe' and param != 'wp':   # For all position outside well plates, such as reservoirs.
-                    if self.stop.is_set():
-                        logging.info('Stopping robot.')
-                        raise SystemExit
-                    try: 
-                        coords=config['positions'][param]
-                        self.stage.move_stage(coords)
-                        while self.stage.check_stage() != 'Idl': #Wait until move is done before proceeding.
-                            time.sleep(2)
-                        logging.info('probe at '+str(param))
-                    except KeyError:
-                        logging.error('Invalid probe position: '+str(param))
+                    logging.info('probe at '+str(param))
+                except KeyError:
+                    logging.error('Invalid probe position: '+str(param))
 
-                elif action == 'pump':
-                    if self.stop.is_set():
-                        logging.info('Stopping robot.')
-                        raise SystemExit
-                    self.pump.pump_cycle(param)
-                    time.sleep(1)
-                    logging.info('Pump cycle completed for '+str(param))
+            elif action == 'pump':
+                if self.stop.is_set():
+                    logging.info('Stopping robot.')
+                    raise SystemExit
+                self.pump.pump_cycle(param)
+                time.sleep(1)
+                logging.info('Pump cycle completed for '+str(param))
 
-                elif action == 'pause':
-                    if self.stop.is_set():
-                        logging.info('Stopping robot.')
-                        raise SystemExit
-                    self.pause(param)
+            elif action == 'pause':
+                if self.stop.is_set():
+                    logging.info('Stopping robot.')
+                    raise SystemExit
+                self.pause(param)
 
-                elif action == 'image':
-                    if self.stop.is_set():
-                        logging.info('Stopping robot.')
-                        raise SystemExit
-                    self.set_command('image')
-                    logging.info('Starting imaging.')
+            elif action == 'image':
+                if self.stop.is_set():
+                    logging.info('Stopping robot.')
+                    raise SystemExit
+                self.set_command('image')
+                logging.info('Starting imaging.')
 
-                    time.sleep(2)
-                    while True:
-                        if self.command == 'robot':
-                            logging.info('Imaging complete.')
-                            break
-                        else:
-                            time.sleep(5)
-                else:
-                    logging.error('Unrecognized sequence command')       
+                time.sleep(2)
+                while True:
+                    if self.command == 'robot':
+                        logging.info('Imaging complete.')
+                        break
+                    else:
+                        time.sleep(5)
+            else:
+                logging.error('Unrecognized sequence command')       
 
     def calc_num_cycles(self):
         '''
@@ -442,6 +442,7 @@ class CPP_pump():
         d = 0 #Clockwise direction
         if run_time < 0:
             d = 1 #Counterclockwise direction
+            run_time = abs(run_time)
         self.pump.write(('/0S1'+str(self.config['CPP_speed'])+'D'+str(d)+'I1M'+str(run_time*1000)+'I0R\n').encode('utf-8'))
         time.sleep(run_time)
 
