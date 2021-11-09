@@ -236,16 +236,21 @@ class Robot():
                     raise SystemExit
                 self.set_command('image')
                 logging.info('Starting imaging.')
-
+                status_mod_time_old = os.stat('status.json').st_mtime
                 time.sleep(2)
                 while True:
-                    if self.command == 'robot':
-                        logging.info('Imaging complete.')
-                        break
-                    else:
+                    status_mod_time_new = os.stat('status.json').st_mtime
+                    if status_mod_time_new == status_mod_time_old:
                         time.sleep(5)
+                    else:
+                        command_status=self.read_status()['command']
+                        if command_status=='image' or command_status=='imaging':
+                            time.sleep(5)
+                        else:
+                            logging.info('Imaging complete.')
+                            break
             else:
-                logging.error('Unrecognized sequence command')       
+                logging.error('Unrecognized sequence command')  
 
     def calc_num_cycles(self):
         '''
