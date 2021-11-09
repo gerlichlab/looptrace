@@ -110,8 +110,8 @@ class Robot():
 
     def set_command(self, command):
         #Convenience function for setting current command status with a string.
-        #self.update_status({'command':command})
-        self.command = command
+        self.update_status({'command':command})
+        #self.command = command
 
     def pause(self, sleep_time):
         #Set and run a pause step, and log.

@@ -202,7 +202,7 @@ def single_nd2_to_zarr(file_path, out_path, continue_from = None):
 
         pos_list = ['P'+str(p+1).zfill(4) for p in range(P)]
         print('Found files of shape:', s)
-        chunks = (1,1,1,Y,X)
+        chunks = (1,1,1,Y//2,X//2)
 
         for i, pos in enumerate(tqdm.tqdm(pos_list)):
 
@@ -215,8 +215,7 @@ def single_nd2_to_zarr(file_path, out_path, continue_from = None):
             store = zarr.DirectoryStore(out_path+os.sep+pos+'.zarr')
             root = zarr.group(store=store, overwrite=True)
             root.attrs['omero'] = meta
-            #with open(r"C:\Git\looptrace_dev\preprocess\multiscales_template.json") as f:
-            #    root.attrs['multiscale'] = json.load(f)
+            root.attrs['multiscale'] = {'multiscales': [{'version': '0.2', 'name': 'dataset', 'datasets': [{'path': '0'}]}]}
             multiscale_level = root.create_dataset(name = str(0), compressor=compressor, shape=s[1:], chunks=chunks)
             for t in tqdm.tqdm(range(T)):
                 images.bundle_axes = 'czyx'
