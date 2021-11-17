@@ -34,12 +34,63 @@ from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
 import matplotlib.pyplot as plt
 import napari
 from numba import jit, njit
-
+from math import cos, sin, radians
 from numba.core.errors import NumbaPerformanceWarning
 import warnings
 warnings.simplefilter('ignore', category=NumbaPerformanceWarning)
 
 import seaborn as sns
+
+def gen_random_coil(g_dist, s_dist = 24.7, std_scaling = 0.5, deg=360, n_traces = 1000):
+    traces = []
+    for j in range(n_traces):
+        L = [np.random.normal(np.sqrt(d)*s_dist, np.sqrt(d)*s_dist*std_scaling, 1) for d in g_dist]  # Calculate the step lengths, drawn from normal distribution according to paramters set above.
+        N = len(L)+1
+        #N = 1135//step_denom #Number of steps in each random walk
+        #N = np.sum(g_dist).astype(int)//step_denom + 1
+        R = deg*(np.random.rand(N)) #Get the polar angles between. Picks random angle between 0-deg 
+        A = deg*(np.random.rand(N)) #Get the azimethal angels. Picks random angle between 0-deg
+
+        #We need to keep track of the change in angle over subsequent positions so the origin isn't reset at every point.
+        R = np.cumsum(R)
+        A = np.cumsum(A) 
+        
+        #Initialize trace arrays
+        trace_id = np.ones(N) * j
+        frame = np.array(range(N))
+        x = np.zeros(N)
+        y = np.zeros(N)
+        z = np.zeros(N)
+        qc = np.ones(N)
+        
+        for i in range(1,N): #converting spherical coordinates to cartesian.
+            x[i] = x[i-1] + L[i-1]*sin(radians(R[i]))*cos(radians(A[i]))
+            y[i] = y[i-1] + L[i-1]*sin(radians(R[i]))*sin(radians(A[i]))
+            z[i] = z[i-1] + L[i-1]*cos(radians(R[i]))
+        
+        # Create 6xN dataframe in the format (trace_id, frame, x, y, z, QC)
+        traces.append(np.column_stack((trace_id, frame, x, y, z, qc)))
+        #sampling = np.cumsum(np.round([0]+g_dist)).astype(int)//step_denom
+        #xyz_array = xyz_array[sampling,:]
+
+    traces = np.concatenate(traces)
+    traces = pd.DataFrame(traces)#.reset_index(drop=True)
+    traces.columns = ['trace_id','frame','x','y','z','QC']
+    traces = traces.astype({'trace_id': int, 'frame': int, 'QC': int})
+    traces['frame_name']='H'+traces['frame'].astype(str).str.zfill(2)
+
+    return traces
+
+def loop_freq_vs_random(traces,traces_rw):
+    
+    pwds_rw = pwd_calc(traces_rw)
+    pwds = pwd_calc(traces)
+
+    freq_exp = np.nansum(pwds<150, axis=0)/np.nansum(pwds>0, axis=0)
+    freq_rw = np.nansum(pwds_rw<150, axis=0)/np.nansum(pwds_rw>0, axis=0)
+    freq = np.isfinite(freq_exp/freq_rw) & (freq_exp/freq_rw > 1)
+    freq_ss = np.nansum(np.triu((pwds<150) * freq, 1), axis=(1,2))
+    return freq_ss
 
 def pylochrom_coords_to_traces(coords):
     N_traces, N_steps, _ = coords.shape
@@ -503,7 +554,7 @@ def pwd_clustering(traces, metric='pcc', embedding='umap', clust_method='kmeans_
         model = GaussianMixture(n_components=n_clusters, init_params='kmeans')
         features = pos
     elif clust_method == 'bayes_gmm_emb':
-        model = BayesianGaussianMixture(n_components=n_clusters+3)
+        model = BayesianGaussianMixture(n_components=n_clusters)
         features = pos
 
     trace_ids = list(traces.trace_id.unique())
@@ -513,6 +564,8 @@ def pwd_clustering(traces, metric='pcc', embedding='umap', clust_method='kmeans_
     print(data.shape)
     
     res = pd.DataFrame(data, columns=['trace_id', 'cluster', 'pos_x', 'pos_y'])
+    res['trace_id'] = res['trace_id'].astype(int)
+    res['cluster'] = res['cluster'].astype(int)
     if extra_column is not None:
         res[extra_column] = extra_data
 
@@ -674,7 +727,7 @@ def run_gpa_all_clusters(traces, cluster_df, metric='dendro', min_cluster = 1):
 
     return aligned_mean_points
 
-def general_procrustes_analysis(traces, trace_ids='all', crit=0.01):
+def general_procrustes_analysis(traces, trace_ids='all', crit=0.01, template_points = 6):
     '''
     General procrustes analysis is performed as described in e.g.
     https://en.wikipedia.org/wiki/Generalized_Procrustes_analysis
@@ -693,7 +746,7 @@ def general_procrustes_analysis(traces, trace_ids='all', crit=0.01):
     while True:
         t_idx = np.random.randint(0,len(all_points))
         template = all_points[t_idx]
-        if np.sum(template[:,3]) > 6:
+        if np.sum(template[:,3]) > template_points:
             print('Template with more than 6 points found.')
             break
     template = center_points_qc(template)
@@ -1015,7 +1068,7 @@ def contact_dist(a,b):
     a = a[ind]
     b = b[ind]
     
-    score = np.sum((a < 150) & (b < 150))
+    score = np.sum((a < 120) & (b < 120))
     
     return 1-score/ind.size
 
@@ -1098,7 +1151,7 @@ def fit_plane_SVD(points):
     B = B / nn
     return B[0:3]
 
-def plot_heatmap(traces, trace_id='all', zmin=0, zmax=600, cmap = 'RdBu'):
+def plot_heatmap(traces, trace_id='all', ax=None, zmin=0, zmax=600, cmap = 'RdBu', **kwargs):
     '''Helper function to make heatmaps of sets of traces.
 
     Args:
@@ -1124,10 +1177,44 @@ def plot_heatmap(traces, trace_id='all', zmin=0, zmax=600, cmap = 'RdBu'):
     pwds_crop = pwds_mean[nan_rows,:]
     pwds_crop = pwds_crop[:,nan_cols]
     print('Number of traces in heatmap: ', pwds.shape[0])
-    fig = plt.figure(figsize=(5, 5))
-    plt.imshow(pwds_crop, vmin=zmin, vmax=zmax, cmap=cmap)
+    ax = ax or plt.gca()
+    plot = ax.imshow(pwds_crop, vmin=zmin, vmax=zmax, cmap=cmap, **kwargs)
+    ax.axis('off')
     #fig.show()
-    return pwds_crop, fig
+    return pwds_crop, plot
+
+def plot_contacts(traces, trace_id='all', cutoff=150, ax=None, zmin=0, zmax=1, cmap = 'RdBu_r', **kwargs):
+    '''Helper function to make heatmaps of sets of traces.
+
+    Args:
+        traces ([DataFrame]): trace DataFrame
+        trace_id (str or int or list, optional): trace_ids in dataframe to use. Defaults to 'all'.
+        zmax (int, optional): Max value of heatmap. Defaults to 600.
+        cmap (str, optional): Color scale for heatmap. Defaults to 'rdbu'.
+
+    Returns:
+        pwds_crop: Numpy array, Data underlying heatmap.
+        fig: Figure object of the heatmap.
+    '''
+    if trace_id != 'all':
+        if type(trace_id) == int:
+            trace_id = [trace_id]
+        pwds = pwd_calc(traces[traces['trace_id'].isin(trace_id)])
+        dist = np.nansum(pwds<cutoff, axis=0)/np.nansum(pwds>0, axis=0)
+    else:
+        pwds = pwd_calc(traces)
+        dist = np.nansum(pwds<cutoff, axis=0)/np.nansum(pwds>0, axis=0)
+
+    nan_rows = ~np.all(np.isnan(dist), axis=0)
+    nan_cols = ~np.all(np.isnan(dist), axis=1)
+    pwds_crop = dist[nan_rows,:]
+    pwds_crop = dist[:,nan_cols]
+    print('Number of traces in heatmap: ', pwds.shape[0])
+    ax = ax or plt.gca()
+    plot = ax.imshow(pwds_crop, vmin=zmin, vmax=zmax, cmap=cmap, **kwargs)
+    ax.axis('off')
+    #fig.show()
+    return pwds_crop, plot
     
 
 def plot_traces(traces, trace_id, split=False):
@@ -1483,7 +1570,7 @@ def plot_multi_points(list_of_points, names = None, line_color='#1f77b4'):
     #iplot(fig)
     return fig
 
-def plot_2d_proj(points, std_points=None, line_color='#1f77b4', plane='best', limits=(-450,450)):
+def plot_2d_proj(points, std_points=None, plane='best', ax=None, line_color='#1f77b4', limits=(-450,450)):
     '''[summary]
 
     Args:
@@ -1529,20 +1616,19 @@ def plot_2d_proj(points, std_points=None, line_color='#1f77b4', plane='best', li
         xf, yf = spline_interp(np.array([x,y]), 500)
     positions = np.array(range(points.shape[0]))
     positions = list(positions[qc])
-
-    fig = plt.figure()
-    sns.scatterplot(y,x, hue=positions, palette='inferno', legend=None, alpha=1, s=100, linewidth=0)
+    ax = ax or plt.gca()
+    sns.scatterplot(y,x, hue=positions, palette='inferno', legend=None, alpha=1, s=100, linewidth=0, ax=ax)
     if std_points is not None:
-        sns.scatterplot(y,x, hue=positions, palette='inferno', legend=None, alpha=0.3, sizes=list((std_points/2)**2), size=positions, linewidth=0)
-    plt.plot(yf,xf, zorder=-10, color=line_color, linewidth=3)
+        sns.scatterplot(y,x, hue=positions, palette='inferno', legend=None, alpha=0.3, sizes=list((std_points/2)**2), size=positions, linewidth=0, ax=ax)
+    plt.plot(yf,xf, zorder=-10, color=line_color, linewidth=3, ax=ax)
 
-    plt.ylim(limits)
-    plt.xlim(limits)
-    plt.gca().set_aspect('equal')
-    plt.axis('off')
-    return fig
+    ax.set_ylim(limits)
+    ax.set_xlim(limits)
+    ax.set_aspect('equal')
+    ax.axis('off')
+    return ax
 
-def plot_2d_proj_kde(mean_points, aligned_points, line_color='#1f77b4', limits=(-450,450)):
+def plot_2d_proj_kde(mean_points, aligned_points, ax=None, line_color='#1f77b4', limits=(-450,450)):
     
     qc = mean_points[:,3] == 1
     n = fit_plane_SVD(mean_points[qc,:3])
@@ -1597,19 +1683,19 @@ def plot_2d_proj_kde(mean_points, aligned_points, line_color='#1f77b4', limits=(
 #        vals[:, 2] = np.linspace(cmap_inferno[p][2], cmap_inferno[p][2], N)
 #        vals[:, 3] = np.linspace(0, 1, N)
 #        newcmp = ListedColormap(vals)
-
-    sns.kdeplot(data=data, x='y', y='x', hue='pos', palette='inferno', linewidths=0.3, common_norm=False, fill=False, legend=None, levels = 25, thresh=0.75, alpha=0.4)
+    ax = ax or plt.gca()
+    sns.kdeplot(ax=ax, data=data, x='y', y='x', hue='pos', palette='inferno', linewidths=0.3, common_norm=False, fill=False, legend=None, levels = 25, thresh=0.75, alpha=0.4)
     #sns.scatterplot(data=data, x='y', y='x', hue='pos', palette='inferno', s = 6, alpha = 0.3, legend=None)
-    plt.plot(yf,xf, zorder=10, color=line_color, linewidth=5, clip_on=False)
+    ax.plot(yf,xf, zorder=10, color=line_color, linewidth=3, clip_on=False)
     #print(y_m, x_m)
     color_positions = np.array(range(y_m.shape[0]))
-    sns.scatterplot(y_m,x_m, hue=color_positions, clip_on=False, palette='inferno', legend=None, alpha=1, s=300, edgecolor=None,  zorder=20)
+    sns.scatterplot(y_m,x_m, ax=ax, hue=color_positions, clip_on=False, palette='inferno', legend=None, alpha=1, s=100, edgecolor=None,  zorder=20)
 
-    plt.ylim(limits)
-    plt.xlim(limits)
-    plt.gca().set_aspect('equal')
-    plt.axis('off')
-    return fig
+    ax.set_ylim(limits)
+    ax.set_xlim(limits)
+    ax.set_aspect('equal')
+    ax.axis('off')
+    return ax
 
 def plot_single_trace_grid(aligned_points, mean_points, max_n = 50, proj_plane = None, show_mean = False, line_color='#1f77b4'):
     max_n = min(len(aligned_points), max_n)

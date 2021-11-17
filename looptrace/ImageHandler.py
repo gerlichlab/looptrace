@@ -21,6 +21,9 @@ import tqdm
 import json
 from joblib import Parallel, delayed
 from scipy import ndimage as ndi
+from multiprocessing.pool import ThreadPool
+import dask
+dask.config.set(pool=ThreadPool(20))
 
 class ImageHandler:
     def __init__(self, config_path):
