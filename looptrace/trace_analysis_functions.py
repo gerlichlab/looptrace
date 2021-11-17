@@ -408,7 +408,7 @@ def align_two_traces(a,b):
 
 def pwd_clustering(traces, metric='pcc', embedding='umap', clust_method='kmeans_emb', n_clusters = 3, diagonal = 2, extra_column = None, traces_rw=None):
     from sklearn.manifold import MDS, TSNE, SpectralEmbedding
-    from sklearn.mixture import GaussianMixture
+    from sklearn.mixture import GaussianMixture, BayesianGaussianMixture
     from sklearn import cluster
     from sklearn.impute import SimpleImputer
 
@@ -466,7 +466,7 @@ def pwd_clustering(traces, metric='pcc', embedding='umap', clust_method='kmeans_
         emb = TSNE(metric = dist_func, learning_rate = 200, perplexity = 50, square_distances = True, init = 'random', n_jobs=-2)
         pos = emb.fit_transform(features)
     elif embedding == 'umap':
-        emb = umap.UMAP(metric = dist_func, n_neighbors=30, min_dist=0)
+        emb = umap.UMAP(metric = dist_func, n_neighbors=20, min_dist=0)
         pos = emb.fit_transform(features)
     elif embedding == 'umap_train':
         def str_to_num(s):
@@ -501,6 +501,9 @@ def pwd_clustering(traces, metric='pcc', embedding='umap', clust_method='kmeans_
         features = pos
     elif clust_method == 'gmm_emb':
         model = GaussianMixture(n_components=n_clusters, init_params='kmeans')
+        features = pos
+    elif clust_method == 'bayes_gmm_emb':
+        model = BayesianGaussianMixture(n_components=n_clusters+3)
         features = pos
 
     trace_ids = list(traces.trace_id.unique())

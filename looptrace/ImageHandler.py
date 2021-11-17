@@ -150,7 +150,7 @@ class ImageHandler:
         
         P, T, C, Z, Y, X = self.images.shape
         compressor = Blosc(cname='zstd', clevel=5, shuffle=Blosc.BITSHUFFLE)
-        chunks = (1,1,1,Y,X)
+        chunks = (1,1,1,Y//2,X//2)
         
         image_path = self.config['input_path']+os.sep+'zarr_images'
 
