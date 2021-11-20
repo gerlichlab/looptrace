@@ -120,6 +120,7 @@ class ImageHandler:
             images = []
             for path in os.listdir(in_path):
                 try:
+                    print('Reading TIFF files from ', in_path+os.sep+path)
                     images.append(ip.nikon_tiff_to_dask(in_path+os.sep+path))
                 except ValueError:
                     continue
