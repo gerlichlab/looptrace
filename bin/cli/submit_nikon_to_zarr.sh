@@ -1,5 +1,4 @@
 #!/bin/bash
-#SBATCH -A groupname                # group to which you belong
 #SBATCH -N 1                        # number of nodes
 #SBATCH -n 16                       # number of cores
 #SBATCH --mem 16G                    # memory pool for all cores
