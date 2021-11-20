@@ -170,7 +170,7 @@ class ImageHandler:
 
             multiscale_level = root.create_dataset(name = str(0), compressor=compressor, shape=(T, C, Z, Y, X), chunks=chunks)
 
-            Parallel(n_jobs=2, prefer='threads', verbose=10)(delayed(single_image_to_zarr)(multiscale_level, t, self.images[pos_index, t]) for t in range(T))
+            Parallel(n_jobs=-1, prefer='threads', verbose=10)(delayed(single_image_to_zarr)(multiscale_level, t, self.images[pos_index, t]) for t in range(T))
 
         print('OME ZARR images generated.')
 

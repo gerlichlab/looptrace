@@ -747,14 +747,14 @@ def general_procrustes_analysis(traces, trace_ids='all', crit=0.01, template_poi
         t_idx = np.random.randint(0,len(all_points))
         template = all_points[t_idx]
         if np.sum(template[:,3]) > template_points:
-            print('Template with more than 6 points found.')
+            #print('Template with more than 6 points found.')
             break
     template = center_points_qc(template)
     #The initial distance before alignment.
     prev_dist = np.sum([procrustes_dist(template, points) for 
                    points in all_points])
-    print('Initial distance: ', prev_dist)
-    print('Number of traces: ', len(all_points))
+    #print('Initial distance: ', prev_dist)
+    #print('Number of traces: ', len(all_points))
     #Run the first alignment step:
     all_points, points_mean, dist = general_procrustes_loop(all_points, template)
     #Run the remaining alignment steps until crit is reached:
@@ -764,7 +764,7 @@ def general_procrustes_analysis(traces, trace_ids='all', crit=0.01, template_poi
         all_points, points_mean, dist = general_procrustes_loop(all_points, points_mean)
         n_cycles += 1
         
-    print(f'GPA converged after {n_cycles} cycles with distance {dist}.')
+    #print(f'GPA converged after {n_cycles} cycles with distance {dist}.')
     
     #Calculate standard deviation of all points:
     points_std = np.nanstd(np.stack(all_points), axis = 0)
@@ -1697,8 +1697,7 @@ def plot_2d_proj_kde(mean_points, aligned_points, ax=None, line_color='#1f77b4',
     ax.axis('off')
     return ax
 
-def plot_single_trace_grid(aligned_points, mean_points, max_n = 50, proj_plane = None, show_mean = False, line_color='#1f77b4'):
-    max_n = min(len(aligned_points), max_n)
+def plot_single_trace_grid(aligned_points, mean_points, n_rows=2, n_cols=2, proj_plane = None, show_mean = False, line_color='#1f77b4'):
     if proj_plane == 'mean':
         qc = mean_points[:,3] == 1
         n = fit_plane_SVD(mean_points[qc,:3])
@@ -1706,14 +1705,14 @@ def plot_single_trace_grid(aligned_points, mean_points, max_n = 50, proj_plane =
         v1 = v1/np.linalg.norm(v1)  # normalize it
         v2 = np.cross(n, v1) # Find the third orthogonal vector
 
-    n_rows = int(np.sqrt(max_n))
-    fig, axs = plt.subplots(n_rows, n_rows, figsize=(10,9), sharex=False, sharey=False)
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=(10,9), sharex=False, sharey=False)
     axs = axs.ravel()
 
+    import random
+    aligned_points = random.sample(aligned_points, n_rows*n_cols)
+
     if show_mean:
-        aligned_points = [mean_points] + aligned_points[:n_rows**2-1]
-    else:
-        aligned_points = aligned_points[:n_rows**2]
+        aligned_points = [mean_points] + aligned_points[1:]
 
     for i, points in enumerate(aligned_points):
         qc = points[:,3] == 1
@@ -1727,15 +1726,15 @@ def plot_single_trace_grid(aligned_points, mean_points, max_n = 50, proj_plane =
         x = x-np.mean(x)
         y = y-np.mean(y)
         xf, yf = spline_interp(np.array([x,y]), 500)
-        positions = np.array([0,1,2,3,4,5,6,7,8,9])
+        positions = np.arange(points.shape[0])
         positions = list(positions[qc])
-        sns.scatterplot(y,x, ax=axs[i], hue=positions, palette='inferno', legend=None, alpha=0.8, s=30, edgecolor=None, clip_on=False)#sizes=sizes, size=positions)
-        axs[i].plot(yf,xf, zorder=-10, color=line_color, clip_on=False)
-        axs[i].set_ylim(-500,500)
-        axs[i].set_xlim(-500,500)
+        sns.scatterplot(y,x, ax=axs[i], hue=positions, palette='inferno', legend=None, alpha=0.8, s=100, edgecolor=None, clip_on=False)#sizes=sizes, size=positions)
+        axs[i].plot(yf,xf, zorder=-10, color=line_color, linewidth=3, clip_on=False)
+        axs[i].set_ylim(-450,450)
+        axs[i].set_xlim(-450,450)
         axs[i].axis('off')
         axs[i].set_aspect('equal')
-    plt.subplots_adjust(wspace=0, hspace=0)
+    #plt.subplots_adjust(wspace=0, hspace=0)
     return fig
 
 def plot_mds(cluster_df, pos, cluster_method = 'dendro'):
@@ -1830,7 +1829,7 @@ def plot_aligned_traces_animated(aligned_points):
     print(x)
     fig.show(renderer='notebook')
 
-def animate_trace(clust_aligned, t_interval=200, n_points=500):
+def animate_trace(clust_aligned, t_interval=200, n_points=500, out_dir=os.getcwd()):
     import ipyvolume as ipv
     x = []
     y = []
@@ -1865,7 +1864,7 @@ def animate_trace(clust_aligned, t_interval=200, n_points=500):
     inferno_colors, _ = plotly.colors.convert_colors_to_same_type(plotly.colors.sequential.Inferno)
     colorscale = plotly.colors.make_colorscale(inferno_colors)
     colors = np.array([get_continuous_color(colorscale, intermed=i/x.shape[1]) for i in range(0,x.shape[1],1)]).astype(int)/255
-    selected = np.array([1])
+    #selected = np.array([1])
     fig = ipv.figure()
     ipv.style.axes_off()
     ipv.style.box_off()
@@ -1873,11 +1872,11 @@ def animate_trace(clust_aligned, t_interval=200, n_points=500):
     s1 = ipv.scatter(x,y,z, size = 6,  size_selected=8,  marker='sphere', selected=selected,color_selected='lime', color=colors)
     s2 = ipv.scatter(xs,ys,zs, size = 2, color='grey', marker='sphere')
     ipv.animation_control([s1,s2], interval=t_interval) # shows controls for animation controls
-    ipv.save(os.getcwd()+os.sep+'ipv.html')
+    ipv.save(out_dir+os.sep+'ipv.html')
     ipv.show()
     return ipv.gcc()
 
-def animate_trace_color_contact(clust_aligned, t_interval=200, n_points=500, contact_dist=150):
+def animate_trace_color_contact(clust_aligned, t_interval=200, n_points=500, contact_dist=150, out_dir=os.getcwd()):
     import ipyvolume as ipv
     x = []
     y = []
@@ -1926,7 +1925,7 @@ def animate_trace_color_contact(clust_aligned, t_interval=200, n_points=500, con
     for i in range(x.shape[0]):
         for j in range(x.shape[1]):
             if j in contact_indexes[i]:
-                colors[i,j,:] = [0,255,0]
+                colors[i,j,:] = [0,200,0]
             else:
                 colors[i,j,:] = colors_base[j]
     
@@ -1937,10 +1936,10 @@ def animate_trace_color_contact(clust_aligned, t_interval=200, n_points=500, con
     ipv.style.axes_off()
     ipv.style.box_off()
     #ipv.style.background_color('grey')
-    s1 = ipv.scatter(x,y,z, size = 8, marker='sphere', color=colors, opacity=0.5)
-    s2 = ipv.scatter(xs,ys,zs, size = 3, color='grey', marker='sphere')
+    s1 = ipv.scatter(x,y,z, size = 8, marker='sphere', color=colors, opacity=0.4)
+    s2 = ipv.scatter(xs,ys,zs, size = 2, color='grey', marker='sphere')
     ipv.animation_control([s1,s2], interval=t_interval) # shows controls for animation controls
-    ipv.save(os.getcwd()+os.sep+'ipv.html')
+    ipv.save(out_dir+os.sep+'ipv.html')
     ipv.show()
     return ipv.gcc()
 
