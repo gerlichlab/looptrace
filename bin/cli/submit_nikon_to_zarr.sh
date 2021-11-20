@@ -9,5 +9,7 @@
 #SBATCH --mail-user=kbeckwit@embl.de # send-to address
 
 module load Miniconda3/4.5.12
-source activate /home/kbeckwit/env/looptrace/
-python /home/kbeckwit/git/looptrace_dev/bin/cli/nikon_tiff_to_zarr.py /scratch/kbeckwit/2021-11-09_MT002_2C_4x10_nikon/images/ /scratch/kbeckwit/2021-11-09_MT002_2C_4x10_nikon/zarr_images
+source /g/easybuild/x86_64/CentOS/7/haswell/software/Miniconda3/4.5.12/bin/activate /home/kbeckwit/env/looptrace
+which python3
+python3 /home/kbeckwit/git/looptrace_dev/bin/cli/nikon_tiff_to_zarr.py /scratch/kbeckwit/2021-11-09_MT002_2C_4x10_nikon/images/ /scratch/kbeckwit/2021-11-09_MT002_2C_4x10_nikon/zarr_images
+deactivate
