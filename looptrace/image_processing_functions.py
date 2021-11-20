@@ -84,6 +84,7 @@ def nikon_tiff_to_dask(folder):
     print('Found image folder of shape', image_sequence.shape)
     with image_sequence.aszarr() as store:
         z = zarr.open(store, mode='r')
+        print('Zarr shape', z.shape)
         images = da.transpose(da.from_zarr(z), (1,0,3,2,4,5))
     return images
 
