@@ -1620,7 +1620,7 @@ def plot_2d_proj(points, std_points=None, plane='best', ax=None, line_color='#1f
     sns.scatterplot(y,x, hue=positions, palette='inferno', legend=None, alpha=1, s=100, linewidth=0, ax=ax)
     if std_points is not None:
         sns.scatterplot(y,x, hue=positions, palette='inferno', legend=None, alpha=0.3, sizes=list((std_points/2)**2), size=positions, linewidth=0, ax=ax)
-    plt.plot(yf,xf, zorder=-10, color=line_color, linewidth=3, ax=ax)
+    ax.plot(yf,xf, zorder=-10, color=line_color, linewidth=3)
 
     ax.set_ylim(limits)
     ax.set_xlim(limits)

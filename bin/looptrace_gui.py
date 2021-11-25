@@ -95,11 +95,11 @@ def main():
             else:
                 D.drift_corr()
         elif event == '-VIEW_DC-':
-            H.set_drift_table(path=values['-DC_PATH-'])
+            H.load_drift_table(path=values['-DC_PATH-'])
             H.gen_dc_images(pos = values['-DC_POSITION-'])
             ip.napari_view(H.dc_images, downscale=H.config['image_view_downscaling'])
         elif event == '-GEN_PROJ_DC-':
-            H.set_drift_table(path=values['-DC_PATH-'])
+            H.load_drift_table(path=values['-DC_PATH-'])
             H.save_proj_dc_images()
         elif event == '-VIEW_PROJ_DC-':
             H.load_proj_dc_images()
@@ -118,24 +118,27 @@ def main():
                 N
             except NameError:
                 N = NucDetector(H)
-            if H.nucs:
-                nuc_imgs = np.stack(H.nucs)
-                viewer = napari.view_image(nuc_imgs.copy())
-            if H.nuc_masks:
-                nuc_labels = np.stack(H.nuc_masks)
-                labels_layer = viewer.add_labels(nuc_labels.copy())
-            if H.nuc_class:
-                nuc_class = np.stack(H.nuc_class)
-                classes_layer = viewer.add_labels(nuc_class.copy())
+            if 'nuc_images' in H.cell_images:
+                nuc_imgs = H.cell_images['nuc_images']
+                viewer = napari.view_image(nuc_imgs)
+            if 'nuc_masks' in H.cell_images:
+                nuc_labels = H.cell_images['nuc_masks']
+                labels_layer = viewer.add_labels(np.array(nuc_labels))
+            if 'nuc_class' in H.cell_images:
+                nuc_class = H.cell_images['nuc_classes']
+                classes_layer = viewer.add_labels(np.array(nuc_class))
             napari.run()
             try:             
                 if not np.allclose(labels_layer.data, nuc_labels):
                     print('Labels changed, resaving.')
-                    nuc_masks = [labels_layer.data[i] for i in range(labels_layer.data.shape[0])] 
-                    H.nuc_masks = nuc_masks
-                    H.save_nucs(img_type='mask')
-                    N.mask_to_binary(nuc_masks)
-    
+                    nuc_masks = []
+                    for i in range(labels_layer.data.shape[0]):
+                        nuc_masks.append(ip.relabel_nucs(labels_layer.data[i]))
+                    nuc_masks = np.stack(nuc_masks)
+
+                    H.cell_images['nuc_masks'] = nuc_masks
+                    ip.imgs_to_ome_zarr(images = nuc_masks, path=N.nuc_mask_path, name = 'nuc_masks', axes=['p','y','x'])
+                    
                 if not np.allclose(classes_layer.data, nuc_class):
                     print('Class labels changed, resaving.')
                     nuc_class = [classes_layer.data[i] for i in range(classes_layer.data.shape[0])]
@@ -151,12 +154,12 @@ def main():
         
         elif event == '-DET_ROI-':
             print('Detecting spots in all positions.')
-            H.set_drift_table(path=values['-DC_PATH-'])
+            H.load_drift_table(path=values['-DC_PATH-'])
             S = SpotPicker(H)
             S.rois_from_spots(filter_nucs=H.config['spot_in_nuc'])
 
         elif event == '-SPOT_IN_NUC-':
-            H.set_drift_table(path=values['-DC_PATH-'])
+            H.load_drift_table(path=values['-DC_PATH-'])
             if not H.nuc_masks:
                 H.load_nucs()
             H.roi_table = ip.filter_rois_in_nucs(H.roi_table, H.nuc_masks, H.pos_list, new_col='nuc_label', drifts = H.drift_table, target_frame=H.config['nuc_ref_frame'])
@@ -186,7 +189,7 @@ def main():
 
             if values['-DC_IMAGE_ROIS-']:
                 print('Generating DC images.')
-                H.set_drift_table(path=values['-DC_PATH-'])
+                H.load_drift_table(path=values['-DC_PATH-'])
                 H.gen_dc_images(pos = position)
                 img = H.dc_images
             else:
@@ -210,13 +213,13 @@ def main():
             H.save_data(rois=H.roi_table)
             
         elif event == '-RUN_TRACING-':
-            H.set_drift_table(values['-DC_PATH-'])
+            H.load_drift_table(values['-DC_PATH-'])
             T = Tracer(H)
             T.make_dc_rois_all_frames()
             T.tracing_3d()
         
         elif event == '-BEAD_TRACING-':
-            H.set_drift_table(values['-DC_PATH-'])
+            H.load_drift_table(values['-DC_PATH-'])
             S = SpotPicker(H)
             S.rois_from_beads()
             T = Tracer(H, trace_beads=True)

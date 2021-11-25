@@ -95,24 +95,21 @@ class SpotPicker:
                 spot_props['ch'] = ch
                 all_rois.append(spot_props)
         output = pd.concat(all_rois)
-        output=output.reset_index().rename(columns={'index':'roi_id_pos'})
-        
 
-        self.image_handler.roi_table = output
-        self.image_handler.save_data(rois=output)
         print(f'Found {len(output)} spots.')
 
         if filter_nucs:
-            self.image_handler.load_nucs()
-            if not self.image_handler.nuc_masks:
+            if 'nuc_masks' not in self.image_handler.cell_images:
                 print('No nuclei mask images found, cannot filter.')
             else:
                 print('Filtering in nuclei.')
-                filt_rois = ip.filter_rois_in_nucs(output, self.image_handler.nuc_masks, self.image_handler.pos_list, drifts=self.image_handler.drift_table, target_frame=self.config['nuc_ref_frame'])
-                filt_rois = filt_rois[filt_rois['nuc_label'] > 0 ]
-                self.image_handler.roi_table = filt_rois
-                self.image_handler.save_data(rois=filt_rois)
-                print(f'Filtering complete, {len(filt_rois)} ROIs after filtering.')
+                output = ip.filter_rois_in_nucs(output, self.image_handler.cell_images['nuc_masks'], self.image_handler.pos_list, drifts=self.image_handler.drift_table, target_frame=self.config['nuc_ref_frame'])
+                output = output[output['nuc_label'] > 0 ]
+        
+        output=output.reset_index().rename(columns={'index':'roi_id_pos'})
+        self.image_handler.roi_table = output
+        self.image_handler.save_data(rois=output)
+        print(f'Filtering complete, {len(output)} ROIs after filtering.')
         
         return output
 

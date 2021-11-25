@@ -15,7 +15,7 @@ import re
 import numpy as np
 import pandas as pd
 import napari
-from skimage.segmentation import clear_border
+from skimage.segmentation import clear_border, find_boundaries, expand_labels
 from skimage.filters import gaussian, threshold_otsu
 from skimage.registration import phase_cross_correlation
 from skimage.morphology import white_tophat, ball
@@ -26,9 +26,14 @@ import scipy.ndimage as ndi
 import dask
 import dask.array as da
 import zarr
+from numcodecs import Blosc
 import itertools
 import tifffile
 import joblib
+import tqdm
+import glob
+from nd2reader import ND2Reader
+from sklearn import  mixture, preprocessing, cluster
 
 def czi_to_tif(in_folder, template, out_folder, prefix):
     '''Convert CZI files from MyPIC experiment to single YX tif images.
@@ -316,10 +321,6 @@ def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label', drifts =
         #print(spot_label)
         return spot_label
 
-    if not nuc_masks:
-        print('No nuclear masks provided, cannot filter.')
-        return rois
-
     try:
         rois.drop(columns=[new_col], inplace=True)
     except KeyError:
@@ -530,7 +531,54 @@ def multi_ome_zarr_to_dask(folder: str):
     image_folders = [p.name for p in os.scandir(folder) if os.path.isdir(p)]
     out = da.stack([da.from_zarr(folder+os.sep+image+os.sep+'0') for image in image_folders])
     print('Loaded ', out)
-    return out
+    return out, image_folders
+
+def imgs_to_ome_zarr(images: np.ndarray, path: str, name: str, axes=['p','t','c','z','y','x'], dtype=None):
+    '''
+    Saves an array to ome-zarr format (kinda, metadata still needs work)
+    '''
+    if dtype is None:
+        dtype = images.dtype
+        
+    def single_image_to_zarr(z, idx, img):
+        z[idx] = img
+
+    images_shape = images.shape
+    print(images_shape)
+    size = {}
+    default_axes = ['p','t','c','z','y','x']
+    for ax in default_axes:
+        if ax in axes:
+            size[ax] = images_shape[axes.index(ax)]
+        else:
+            size[ax] = 1
+    images = np.reshape(images, tuple(size[ax] for ax in default_axes))
+
+    compressor = Blosc(cname='zstd', clevel=5, shuffle=Blosc.BITSHUFFLE)
+    chunks = (1,1,1,size['y']//2,size['x']//2)
+
+    if not os.path.isdir(path):
+        os.makedirs(path)
+
+    for pos in tqdm.tqdm(range(size['p'])):
+        pos_name = 'P'+str(pos+1).zfill(4)+'.zarr'
+        store = zarr.DirectoryStore(path+os.sep+pos_name)
+        root = zarr.group(store=store, overwrite=True)
+
+        root.attrs['multiscale'] = {'multiscales': [{'version': '0.3', 
+                                                        'name': name+'_'+pos_name, 
+                                                        'datasets': [{'path': '0'}],
+                                                        'axes': ['t','c','z','y','x']}]}
+                            
+
+        multiscale_level = root.create_dataset(name = str(0), compressor=compressor, shape=(size[ax] for ax in default_axes[1:]), chunks=chunks, dtype=dtype)
+        if size['t'] < 4:
+            [single_image_to_zarr(multiscale_level, i, images[pos, i]) for i in range(size['t'])]
+        else:
+            joblib.Parallel(n_jobs=-1, prefer='threads', verbose=10)(joblib.delayed(single_image_to_zarr)
+                                                                (multiscale_level, i, images[pos, i]) for i in range(size['t']))
+
+    print('OME ZARR images generated.')
     
 def detect_spots(input_img, spot_threshold=20, min_dist=None):
     '''Spot detection by difference of gaussian filter
@@ -733,11 +781,28 @@ def nuc_segmentation(nuc_imgs, diameter = 150, model = 'nuclei', do_3D = False):
     Args:
         nuc_imgs (ndarray or list of ndarrays): 2D or 3D images of nuclei, expects single channel
     '''
+    if not isinstance(nuc_imgs, list):
+        if nuc_imgs.ndim > 2:
+            nuc_imgs = [nuc_imgs[i] for i in range(nuc_imgs.shape[0])]
+
     from cellpose import models
     model = models.Cellpose(gpu=False, model_type=model)
     channels = [0,0]
     masks, flows, styles, diams = model.eval(nuc_imgs, diameter=diameter, channels=channels, net_avg=False, do_3D=do_3D)
     return masks
+
+def mask_to_binary(mask):
+    '''Converts masks from nuclear segmentation to masks with 
+    single pixel background between separate, neighbouring features.
+
+    Args:
+        masks ([np array]): Detected nuclear masks (label image)
+
+    Returns:
+        [np array]: Masks with single pixel seperation beteween neighboring features.
+    '''
+    masks_no_bound = np.where(find_boundaries(mask)>0, 0, mask)
+    return masks_no_bound
 
 def mitotic_cell_extra_seg(nuc_image, nuc_mask):
     '''Performs additional mitotic cell segmentation on top of an interphase segmentation (e.g. from CellPose).
@@ -818,3 +883,75 @@ def nuc_segmentation_otsu(nuc_image, min_size, exp_bb=-1, clear_edges=True):
         #                                     slice(row['lbbox-2'],row['lbbox-5'])] for i, row in nuc_props.iterrows()]
     
     return nuc_labels, nuc_props
+
+def nuc_segmentation_watershed(nuc_img, bg_thresh = 800, fg_thresh = 5000):
+
+    from skimage.morphology import label
+    from skimage.filters import sobel
+    from skimage.segmentation import watershed
+
+    edges = sobel(nuc_img)
+    markers = np.zeros_like(nuc_img)
+    foreground, background = 1, 2
+    markers[nuc_img < bg_thresh] = background
+    markers[nuc_img > fg_thresh] = foreground
+    ws = watershed(edges, markers)
+    seg = label(ws == foreground)
+    return seg
+
+def combine_overviews_ND2(input_folder, tidx = 0, align_channels=[1,1], ds = 2):  
+    '''[summary]
+
+    Args:
+        input_folder ([type]): Folder with ND2 overview images. Script assumes format is CYX (no Z-stacks)
+        tidx (int, optional): Index of template image to use. Defaults to 0.
+        align_channels (list, optional): Which channels to align the images. Length must match number of images. Defaults to [1,1].
+        ds (int, optional): Downsampling. Defaults to 2.
+
+    Returns:
+        [type]: [description]
+    '''
+    paths = glob.glob(input_folder+os.sep+'*.nd2')
+    print(paths)
+    imgs = []
+    for path in paths:
+        ND = ND2Reader(path)
+        img = np.stack([ND.get_frame_2D(c=i) for i in range(ND.sizes['c'])])
+        imgs.append(img)
+        
+    Y, X = imgs[tidx][align_channels[tidx]].shape
+    ref_img = imgs[tidx][align_channels[tidx], Y//3:Y*2//3:ds, X//3:X*2//3:ds]
+
+    imgs_reg = [imgs[tidx]]
+    for i, off_img in enumerate(imgs):
+        if i == tidx:
+            continue
+        o_img = off_img[align_channels[i],Y//3:Y*2//3:ds, X//3:X*2//3:ds]
+        shift = phase_cross_correlation(ref_img, o_img, return_error=False)*ds
+        print(shift)
+        off_img_reg = ndi.shift(off_img, (0,shift[0],shift[1]), mode='constant', order=1)
+        off_img_reg = pad_to_shape(off_img_reg, imgs[tidx].shape)
+        imgs_reg.append(off_img_reg)
+
+    imgs = np.concatenate(imgs_reg, axis=0)
+    print(imgs.shape)
+
+    return imgs
+
+def extract_cell_features(nuc_img, int_imgs: list, nuc_bg_int=800, nuc_fg_int=5000):
+
+    nuc_masks = nuc_segmentation_watershed(nuc_img, bg_thresh = nuc_bg_int, fg_thresh = nuc_fg_int)
+    expanded = expand_labels(nuc_masks, distance=5)
+    props = [regionprops_table(expanded, int_img, properties=('mean_intensity',))['mean_intensity'] for int_img in int_imgs]
+    res = np.vstack(props).T
+    scaler = preprocessing.StandardScaler()
+    scaler_model = scaler.fit(res)
+    features = scaler_model.transform(res)
+
+    return features, scaler_model
+
+def relabel_nucs(nuc_image):
+    from skimage.morphology import label
+    out = mask_to_binary(nuc_image)
+    out = label(out)
+    return out.astype(nuc_image.dtype)
