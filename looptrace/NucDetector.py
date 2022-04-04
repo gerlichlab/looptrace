@@ -72,13 +72,8 @@ class NucDetector:
         print(f'Running nuclear segmentation with CellPose using {model} model and diameter {diameter}.')
         masks = ip.nuc_segmentation(nuc_imgs, diameter=diameter, model=model)
         print(f'Detecting mitotic cells on top of CellPose nuclei.')
-        masks, mitotic_idx = zip(*[ip.mitotic_cell_extra_seg(nuc_imgs[i], masks[i]) for i in range(len(nuc_imgs))])
-        nuc_class = []
-        for i, mask in enumerate(masks):
-            class_1 = ((mask > 0) & (mask < mitotic_idx[i])).astype(int)
-            class_2 = (mask >= mitotic_idx[i]).astype(int)
-            nuc_class.append(class_1 + class_2*2)
-        #self.mask_to_binary(masks)
+        masks, mitotic_idx = zip(*[ip.mitotic_cell_extra_seg(np.array(nuc_imgs[i]), masks[i]) for i in range(len(nuc_imgs))])
+
 
         masks = [dilation(mask, disk(self.config['nuc_dilation'])) for mask in masks]
         masks = np.stack(masks).astype(np.uint16)
@@ -86,8 +81,17 @@ class NucDetector:
         print('Saving segmentations.')
         ip.imgs_to_ome_zarr(images = masks, path=self.nuc_mask_path, name = 'nuc_masks', axes=['p','y','x'])
         self.image_handler.cell_images['nuc_masks'] = masks
-    
 
+        nuc_class = []
+        for i, mask in enumerate(masks):
+            class_1 = ((mask > 0) & (mask < mitotic_idx[i])).astype(int)
+            class_2 = (mask >= mitotic_idx[i]).astype(int)
+            nuc_class.append(class_1 + class_2*2)
+        nuc_class = np.stack(nuc_class).astype(np.uint16)
+        print('Saving classifications.')
+        ip.imgs_to_ome_zarr(images = nuc_class, path=self.nuc_class_path, name = 'nuc_classes', axes=['p','y','x'])
+        self.image_handler.cell_images['nuc_classes'] = nuc_class
+      
 
 
     ## Legacy classification with ilastic.

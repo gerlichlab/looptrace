@@ -48,6 +48,19 @@ class SpotPicker:
         except KeyError: #Legacy config.
             min_dist = None
 
+        try:
+            detect_method = self.config['detection_method']
+            if detect_method == 'intensity':
+                detect_func = ip.detect_spots_int
+                print('Using intensity based spot detection.')
+            else:
+                detect_func = ip.detect_spots
+                print('Using DoG based spot detection.')
+        except KeyError: #Legacy config.
+            detect_func = ip.detect_spots
+            detect_method = 'dog'
+            print('Using DoG based spot detection.')
+
         spot_threshold = self.config['spot_threshold']
         if not isinstance(spot_threshold, list):
             spot_threshold = [spot_threshold]*len(spot_frame)
@@ -65,7 +78,7 @@ class SpotPicker:
                     bead_img = self.images[pos_index, frame, bead_ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
                     img, orig = ip.subtract_crosstalk(bead_img, img, threshold=self.config['bead_threshold'])
 
-                spot_props, filt_img = ip.detect_spots(img, spot_threshold[i], min_dist = min_dist)
+                spot_props, filt_img = detect_func(img, spot_threshold[i], min_dist = min_dist)
                 spot_props['position'] = preview_pos
                 spot_props = spot_props.reset_index().rename(columns={'index':'roi_id_pos'})
             
@@ -87,8 +100,8 @@ class SpotPicker:
                 if subtract_beads:
                     bead_img = self.images[pos_index, frame, bead_ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
                     img, _ = ip.subtract_crosstalk(bead_img, img, threshold=self.config['bead_threshold'])
-                spot_props, _ = ip.detect_spots(img, spot_threshold[i], min_dist = min_dist)
-                spot_props[['zc', 'yc', 'xc']] = spot_props[['zc', 'yc', 'xc']]*spot_ds
+                spot_props, _ = detect_func(img, spot_threshold[i], min_dist = min_dist)
+                spot_props[['zmin', 'ymin', 'xmin', 'zmax', 'ymax', 'xmax', 'zc', 'yc', 'xc']] = spot_props[['zmin', 'ymin', 'xmin', 'zmax', 'ymax', 'xmax', 'zc', 'yc', 'xc']]*spot_ds
                 
                 spot_props['position'] = position
                 spot_props['frame'] = frame
@@ -103,15 +116,20 @@ class SpotPicker:
                 print('No nuclei mask images found, cannot filter.')
             else:
                 print('Filtering in nuclei.')
-                output = ip.filter_rois_in_nucs(output, self.image_handler.cell_images['nuc_masks'], self.image_handler.pos_list, drifts=self.image_handler.drift_table, target_frame=self.config['nuc_ref_frame'])
+                output = ip.filter_rois_in_nucs(output, np.array(self.image_handler.cell_images['nuc_masks']), self.image_handler.pos_list, drifts=self.image_handler.drift_table, target_frame=self.config['nuc_ref_frame'])
                 output = output[output['nuc_label'] > 0 ]
         
         output=output.reset_index().rename(columns={'index':'roi_id_pos'})
-        self.image_handler.roi_table = output
-        self.image_handler.save_data(rois=output)
-        print(f'Filtering complete, {len(output)} ROIs after filtering.')
+        if detect_method == 'dog':
+            rois = ip.roi_center_to_bbox(output, roi_size = tuple(self.config['roi_image_size']))
+        else:
+            rois = output
+
+        self.image_handler.roi_table = rois
+        self.image_handler.save_data(rois=rois)
+        print(f'Filtering complete, {len(rois)} ROIs after filtering.')
         
-        return output
+        return rois
 
     def rois_from_beads(self):
         print('Detecting bead ROIs for tracing.')
@@ -140,7 +158,7 @@ class SpotPicker:
                                         'centroid-2': 'xc',
                                         'index':'roi_id_pos'},
                                         inplace = True)
-                
+
             spot_props['position'] = pos
             spot_props['frame'] = ref_frame
             spot_props['ch'] = ref_ch
@@ -149,6 +167,8 @@ class SpotPicker:
         
         output = pd.concat(all_rois)
         output=output.reset_index().rename(columns={'index':'roi_id'})
-        self.image_handler.bead_rois = output
-        self.image_handler.save_data(rois=output, suffix = '_beads')
-        return output
+        rois = ip.roi_center_to_bbox(output, roi_size = tuple(self.config['roi_image_size']))
+
+        self.image_handler.bead_rois = rois
+        self.image_handler.save_data(rois=rois, suffix = '_beads')
+        return rois

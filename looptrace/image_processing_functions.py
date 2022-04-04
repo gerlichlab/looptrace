@@ -14,11 +14,11 @@ import os
 import re
 import numpy as np
 import pandas as pd
-import napari
+
 from skimage.segmentation import clear_border, find_boundaries, expand_labels
 from skimage.filters import gaussian, threshold_otsu
 from skimage.registration import phase_cross_correlation
-from skimage.morphology import white_tophat, ball
+from skimage.morphology import white_tophat, ball, remove_small_objects
 from scipy.stats import trim_mean
 from scipy.spatial.distance import squareform, pdist
 from skimage.measure import regionprops_table, regionprops
@@ -32,7 +32,6 @@ import tifffile
 import joblib
 import tqdm
 import glob
-from nd2reader import ND2Reader
 from sklearn import  mixture, preprocessing, cluster
 
 def czi_to_tif(in_folder, template, out_folder, prefix):
@@ -529,11 +528,17 @@ def image_from_svih5(path,ch=None,index=(slice(None),
 
 def multi_ome_zarr_to_dask(folder: str):
     image_folders = [p.name for p in os.scandir(folder) if os.path.isdir(p)]
-    out = da.stack([da.from_zarr(folder+os.sep+image+os.sep+'0') for image in image_folders])
+    out = []
+    for image in image_folders:
+        z = zarr.open(folder+os.sep+image+os.sep+'0')
+        #s = z.shape
+        #chunks = (1,1,s[-3], s[-2], s[-1])
+        out.append(da.from_zarr(z))#, chunks=chunks))
+    out = da.stack(out)
     print('Loaded ', out)
     return out, image_folders
 
-def imgs_to_ome_zarr(images: np.ndarray, path: str, name: str, axes=['p','t','c','z','y','x'], dtype=None):
+def imgs_to_ome_zarr(images: np.ndarray, path: str, name: str, axes=['p','t','c','z','y','x'], dtype:str = None, metadata:dict = None):
     '''
     Saves an array to ome-zarr format (kinda, metadata still needs work)
     '''
@@ -569,6 +574,8 @@ def imgs_to_ome_zarr(images: np.ndarray, path: str, name: str, axes=['p','t','c'
                                                         'name': name+'_'+pos_name, 
                                                         'datasets': [{'path': '0'}],
                                                         'axes': ['t','c','z','y','x']}]}
+        if metadata:
+            root.attrs['metadata'] = metadata
                             
 
         multiscale_level = root.create_dataset(name = str(0), compressor=compressor, shape=(size[ax] for ax in default_axes[1:]), chunks=chunks, dtype=dtype)
@@ -596,16 +603,18 @@ def detect_spots(input_img, spot_threshold=20, min_dist=None):
     img = gaussian(img, 0.8)-gaussian(img,1.3)
     img = img/gaussian(input_img, 3)
     img = (img-np.mean(img))/np.std(img)
-    spot_img, num_spots = ndi.label(img>spot_threshold)
+    labels, num_spots = ndi.label(img>spot_threshold)
+    labels = expand_labels(labels, 10)
     
     #Make a DataFrame with the ROI info
-    spot_props=pd.DataFrame(regionprops_table(spot_img, 
-                                        properties=('label','centroid')))
+    spot_props=pd.DataFrame(regionprops_table(label_image = labels, 
+                                        intensity_image = input_img,
+                                        properties=('label','centroid_weighted')))
     
     spot_props.drop(['label'], axis=1, inplace=True)
-    spot_props.rename(columns={'centroid-0': 'zc',
-                                        'centroid-1': 'yc',
-                                        'centroid-2': 'xc'},
+    spot_props.rename(columns={'centroid_weighted-0': 'zc',
+                                        'centroid_weighted-1': 'yc',
+                                        'centroid_weighted-2': 'xc'},
                         inplace = True)
 
     if min_dist:
@@ -619,7 +628,56 @@ def detect_spots(input_img, spot_threshold=20, min_dist=None):
 
     print(f'Found {len(spot_props)} spots.')
     return spot_props, img
-    #Cleanup and saving of the DataFrame
+
+def detect_spots_int(input_img, spot_threshold=500, min_dist=None):
+    '''Spot detection by difference of gaussian filter
+    #TODO: Do not use hard-coded sigma values
+
+    Args:
+        img (ndarray): Input 3D image
+        spot_threshold (int): Threshold to use for spots. Defaults to 500.
+
+    Returns:
+        spot_props (DataFrame): The centroids and roi_IDs of the spots found. 
+        img (ndarray): The DoG filtered image used for spot detection.
+    '''
+    labels, _ = ndi.label(input_img > spot_threshold)
+    labels = remove_small_objects(labels, min_size=10)
+    labels = expand_labels(labels, 3)
+    spot_props = regionprops_table(labels, input_img, properties=('label', 'bbox', 'area', 'centroid_weighted'))
+    spot_props = pd.DataFrame(spot_props)
+
+    spot_props.rename(columns={'centroid_weighted-0': 'zc',
+                                        'centroid_weighted-1': 'yc',
+                                        'centroid_weighted-2': 'xc',
+                                        'bbox-0': 'zmin',
+                                        'bbox-1': 'ymin',
+                                        'bbox-2': 'xmin',
+                                        'bbox-3': 'zmax',
+                                        'bbox-4': 'ymax',
+                                        'bbox-5': 'xmax'},
+                        inplace = True)
+    
+    if min_dist:
+        dists = squareform(pdist(spot_props[['zc', 'yc', 'xc']].to_numpy(), metric='euclidean'))
+        idx = np.nonzero(np.triu(dists < min_dist, k=1))[1]
+        spot_props = spot_props.drop(idx)
+        spot_props = spot_props.reset_index(drop=True)
+
+    spot_props.rename(columns={'index':'roi_id'},
+                                inplace = True)
+
+    print(f'Found {len(spot_props)} spots.')
+    return spot_props, labels
+
+def roi_center_to_bbox(rois, roi_size):
+    rois['z_min'] = rois['zc'] - roi_size[0]//2
+    rois['z_max'] = rois['zc'] + roi_size[0]//2
+    rois['y_min'] = rois['yc'] - roi_size[1]//2
+    rois['y_max'] = rois['yc'] + roi_size[1]//2
+    rois['x_min'] = rois['xc'] - roi_size[2]//2
+    rois['x_max'] = rois['xc'] + roi_size[2]//2
+    return rois
         
 def drift_corr_course(t_img, o_img, downsample=1):
     '''
@@ -709,7 +767,7 @@ def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int
     return fine_drift#, np.std(shifts, axis=0)
 
 def napari_view(img, points=None, downscale=2, axes = 'PTCZYX', point_frame_size = 1, name=None, contrast_limits=(100,10000)):
-    
+    import napari
     try:
         channel_axis = axes.index('C')
     except ValueError:
@@ -725,6 +783,7 @@ def napari_view(img, points=None, downscale=2, axes = 'PTCZYX', point_frame_size
         point_layer = viewer.add_points(points/downscale, 
                                                 size=(point_frame_size,15,15,15),
                                                 edge_width=3,
+                                                edge_width_is_relative=False,
                                                 edge_color='red',
                                                 face_color='transparent',
                                                 n_dimensional=True)
@@ -899,7 +958,8 @@ def nuc_segmentation_watershed(nuc_img, bg_thresh = 800, fg_thresh = 5000):
     seg = label(ws == foreground)
     return seg
 
-def combine_overviews_ND2(input_folder, tidx = 0, align_channels=[1,1], ds = 2):  
+def combine_overviews_ND2(input_folder, tidx = 0, align_channels=[1,1], ds = 2):
+    from nd2reader import ND2Reader  
     '''[summary]
 
     Args:
@@ -911,43 +971,46 @@ def combine_overviews_ND2(input_folder, tidx = 0, align_channels=[1,1], ds = 2):
     Returns:
         [type]: [description]
     '''
-    paths = glob.glob(input_folder+os.sep+'*.nd2')
+    paths = sorted(glob.glob(input_folder+os.sep+'*.nd2'))
     print(paths)
     imgs = []
     for path in paths:
         ND = ND2Reader(path)
-        img = np.stack([ND.get_frame_2D(c=i) for i in range(ND.sizes['c'])])
+        img = np.stack([ND.get_frame_2D(c=i) for i in range(ND.sizes['c'])]).astype(np.uint16)
         imgs.append(img)
         
     Y, X = imgs[tidx][align_channels[tidx]].shape
-    ref_img = imgs[tidx][align_channels[tidx], Y//3:Y*2//3:ds, X//3:X*2//3:ds]
+    ref_img = imgs[tidx][align_channels[tidx], Y*3//5:Y*4//5:ds, X*3//5:X*4//5:ds]
 
     imgs_reg = [imgs[tidx]]
     for i, off_img in enumerate(imgs):
         if i == tidx:
             continue
-        o_img = off_img[align_channels[i],Y//3:Y*2//3:ds, X//3:X*2//3:ds]
+        off_img = pad_to_shape(off_img, imgs[tidx].shape)
+        o_img = off_img[align_channels[i],Y*3//5:Y*4//5:ds, X*3//5:X*4//5:ds]
         shift = phase_cross_correlation(ref_img, o_img, return_error=False)*ds
         print(shift)
-        off_img_reg = ndi.shift(off_img, (0,shift[0],shift[1]), mode='constant', order=1)
-        off_img_reg = pad_to_shape(off_img_reg, imgs[tidx].shape)
+        off_img_reg = ndi.shift(off_img, (0, shift[0], shift[1]), mode='constant', order=1).astype(np.uint16)
         imgs_reg.append(off_img_reg)
 
     imgs = np.concatenate(imgs_reg, axis=0)
     print(imgs.shape)
 
-    return imgs
+    return imgs, np.stack([ref_img, o_img])
 
-def extract_cell_features(nuc_img, int_imgs: list, nuc_bg_int=800, nuc_fg_int=5000):
+def extract_cell_features(nuc_img, int_imgs: list, nuc_bg_int=800, nuc_fg_int=5000, scale=True):
 
     nuc_masks = nuc_segmentation_watershed(nuc_img, bg_thresh = nuc_bg_int, fg_thresh = nuc_fg_int)
     expanded = expand_labels(nuc_masks, distance=5)
     props = [regionprops_table(expanded, int_img, properties=('mean_intensity',))['mean_intensity'] for int_img in int_imgs]
     res = np.vstack(props).T
-    scaler = preprocessing.StandardScaler()
-    scaler_model = scaler.fit(res)
-    features = scaler_model.transform(res)
-
+    if scale:
+        scaler = preprocessing.StandardScaler()
+        scaler_model = scaler.fit(res)
+        features = scaler_model.transform(res)
+    else:
+        features = res
+        scaler_model = None
     return features, scaler_model
 
 def relabel_nucs(nuc_image):

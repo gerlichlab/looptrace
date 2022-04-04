@@ -10,11 +10,11 @@ EMBL Heidelberg
 import PySimpleGUI as sg
 import os
 import numpy as np
-from looptrace import Tracer
-from looptrace import Drifter
-from looptrace import ImageHandler
-from looptrace import SpotPicker
-from looptrace import NucDetector
+from looptrace.Tracer import Tracer
+from looptrace.Drifter import Drifter
+from looptrace.ImageHandler import ImageHandler
+from looptrace.SpotPicker import SpotPicker
+from looptrace.NucDetector import NucDetector
 import looptrace.image_processing_functions as ip
 import logging
 import napari
@@ -123,27 +123,27 @@ def main():
                 viewer = napari.view_image(nuc_imgs)
             if 'nuc_masks' in H.cell_images:
                 nuc_labels = H.cell_images['nuc_masks']
-                labels_layer = viewer.add_labels(np.array(nuc_labels))
-            if 'nuc_class' in H.cell_images:
-                nuc_class = H.cell_images['nuc_classes']
-                classes_layer = viewer.add_labels(np.array(nuc_class))
+                masks_layer = viewer.add_labels(np.array(nuc_labels))
+            if 'nuc_classes' in H.cell_images:
+                nuc_classes = H.cell_images['nuc_classes']
+                classes_layer = viewer.add_labels(np.array(nuc_classes))
             napari.run()
             try:             
-                if not np.allclose(labels_layer.data, nuc_labels):
+                if not np.allclose(masks_layer.data, nuc_labels):
                     print('Labels changed, resaving.')
                     nuc_masks = []
-                    for i in range(labels_layer.data.shape[0]):
-                        nuc_masks.append(ip.relabel_nucs(labels_layer.data[i]))
+                    for i in range(masks_layer.data.shape[0]):
+                        nuc_masks.append(ip.relabel_nucs(masks_layer.data[i]))
                     nuc_masks = np.stack(nuc_masks)
 
                     H.cell_images['nuc_masks'] = nuc_masks
                     ip.imgs_to_ome_zarr(images = nuc_masks, path=N.nuc_mask_path, name = 'nuc_masks', axes=['p','y','x'])
                     
-                if not np.allclose(classes_layer.data, nuc_class):
-                    print('Class labels changed, resaving.')
-                    nuc_class = [classes_layer.data[i] for i in range(classes_layer.data.shape[0])]
-                    H.nuc_class = nuc_class
-                    H.save_nucs(img_type='class')
+                if not np.allclose(classes_layer.data, nuc_classes):
+                    print('Labels changed, resaving.')
+                    H.cell_images['nuc_classes'] = classes_layer.data
+                    ip.imgs_to_ome_zarr(images = classes_layer.data, path=N.nuc_class_path, name = 'nuc_classes', axes=['p','y','x'])
+
             except UnboundLocalError: #In case labels or classes do not exist.
                 continue
 
@@ -159,14 +159,19 @@ def main():
             S.rois_from_spots(filter_nucs=H.config['spot_in_nuc'])
 
         elif event == '-SPOT_IN_NUC-':
+            print('(Re)filtering ROIs.')
             H.load_drift_table(path=values['-DC_PATH-'])
-            if not H.nuc_masks:
-                H.load_nucs()
-            H.roi_table = ip.filter_rois_in_nucs(H.roi_table, H.nuc_masks, H.pos_list, new_col='nuc_label', drifts = H.drift_table, target_frame=H.config['nuc_ref_frame'])
-            if H.nuc_class:
-                H.roi_table = ip.filter_rois_in_nucs(H.roi_table, H.nuc_class, H.pos_list, new_col='nuc_class', drifts = H.drift_table, target_frame=H.config['nuc_ref_frame'])
-            print('ROIs (re)assigned to nuclei.')
-            H.save_data(rois=H.roi_table)
+            if 'nuc_images' not in H.cell_images:
+                print('Please generate nuclei images first.')
+            if 'nuc_masks' in H.cell_images:
+                H.roi_table = ip.filter_rois_in_nucs(H.roi_table, np.array(H.cell_images['nuc_masks']), H.pos_list, new_col='nuc_label', drifts = H.drift_table, target_frame=H.config['nuc_ref_frame'])
+                H.save_data(rois=H.roi_table)
+                print('ROIs (re)assigned to nuclei.')
+            if 'nuc_classes' in H.cell_images:
+                H.roi_table = ip.filter_rois_in_nucs(H.roi_table, np.array(H.cell_images['nuc_classes']), H.pos_list, new_col='nuc_class', drifts = H.drift_table, target_frame=H.config['nuc_ref_frame'])
+                H.save_data(rois=H.roi_table)
+                print('ROIs classified.')
+            
 
         elif event == '-LOAD_ROI-':
             if values['-IJ_ROI-']:

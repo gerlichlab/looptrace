@@ -23,7 +23,7 @@ import itertools
 from numpy.core.fromnumeric import shape
 import pandas as pd
 import numpy as np
-import plotly.colors
+
 import re
 #from plotly.offline import iplot
 #import plotly.graph_objs as go
@@ -32,11 +32,13 @@ from scipy import interpolate
 from scipy.spatial.distance import cdist, squareform, pdist
 from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
 import matplotlib.pyplot as plt
+
 import napari
 from numba import jit, njit
 from math import cos, sin, radians
 from numba.core.errors import NumbaPerformanceWarning
 import warnings
+
 warnings.simplefilter('ignore', category=NumbaPerformanceWarning)
 
 import seaborn as sns
@@ -83,14 +85,20 @@ def gen_random_coil(g_dist, s_dist = 24.7, std_scaling = 0.5, deg=360, n_traces 
 
 def loop_freq_vs_random(traces,traces_rw):
     
-    pwds_rw = pwd_calc(traces_rw)
+    
     pwds = pwd_calc(traces)
-
+    pwds_rw = pwd_calc(traces_rw)
+    idx = np.random.choice(np.arange(pwds_rw.shape[0]), pwds.shape[0], replace=False)
+    pwds_rw=pwds_rw[idx, :, :]
+    print(pwds.shape, pwds_rw.shape)
     freq_exp = np.nansum(pwds<150, axis=0)/np.nansum(pwds>0, axis=0)
     freq_rw = np.nansum(pwds_rw<150, axis=0)/np.nansum(pwds_rw>0, axis=0)
     freq = np.isfinite(freq_exp/freq_rw) & (freq_exp/freq_rw > 1)
+    #print(freq)
     freq_ss = np.nansum(np.triu((pwds<150) * freq, 1), axis=(1,2))
-    return freq_ss
+    freq_base = np.nansum(np.triu((pwds<150), 1), axis=(1,2))
+    freq_rw = np.nansum(np.triu((pwds_rw<150) & np.isfinite(pwds), 1), axis=(1,2))
+    return freq_ss, freq_base, freq_rw
 
 def pylochrom_coords_to_traces(coords):
     N_traces, N_steps, _ = coords.shape
@@ -208,23 +216,21 @@ def view_context(all_images,
                 viewer.dims.set_current_step(dim, sel_dim[dim])
     return viewer
 
-def view_fits(traces, imgs, mode='2D', contrast=(100,10000), axis=2):
+def view_fits(traces, imgs, mode='2D', contrast=(100,1000), axis=2):
     '''
     Convenience function to view 3d guassian fits on top of 2D (max z-projection) or 3D spot data.
     '''
 
     points = traces[['trace_id', 'frame', 'z_px', 'y_px', 'x_px', 'QC']].to_numpy()
     points = points[points[:,5].astype(bool),0:5]
-    print
+    print(points)
     if mode == '2D':
         imgs=np.max(imgs, axis=axis)
-        with napari.gui_qt():
-            viewer = napari.view_image(imgs, contrast_limits=contrast)
-            viewer.add_points(points[:,(0,1,3,4)], size=[0,0,1,1], face_color='blue', symbol='cross', n_dimensional=False)
+        viewer = napari.view_image(imgs, contrast_limits=contrast)
+        viewer.add_points(points[:,(0,1,3,4)], size=[0,0,1,1], face_color='blue', edge_color='blue', symbol='cross', n_dimensional=False)
     elif mode == '3D':
-        with napari.gui_qt():
-            viewer = napari.view_image(imgs, contrast_limits=contrast)
-            viewer.add_points(points, size=[0,0,3,1,1], face_color='blue', symbol='cross', n_dimensional=True)
+        viewer = napari.view_image(imgs, contrast_limits=contrast)
+        viewer.add_points(points, size=[0,0,3,1,1], face_color='blue', symbol='cross', n_dimensional=True)
 
 def points_for_overlay(traces, rois, config):
     '''
@@ -798,13 +804,15 @@ def general_procrustes_loop(all_points, template):
                    points in all_points_aligned])
     return all_points_aligned, points_mean, dist
 
-@njit
+@njit(error_model="numpy")
 def procrustes_dist(a, b):
     '''
     Procrustes distance (identical to RMSD) between two point sets.
     Matches them before calculation.
     '''
-    a, b = match_two_pointsets(a, b)    
+    #print(a,b)
+    a, b = match_two_pointsets(a, b)
+    #print(a,b)    
     dist = np.sqrt(np.mean((a-b)**2))
     return dist
 
@@ -1209,6 +1217,7 @@ def plot_contacts(traces, trace_id='all', cutoff=150, ax=None, zmin=0, zmax=1, c
     nan_cols = ~np.all(np.isnan(dist), axis=1)
     pwds_crop = dist[nan_rows,:]
     pwds_crop = dist[:,nan_cols]
+    pwds_crop = np.nan_to_num(pwds_crop, posinf=1)
     print('Number of traces in heatmap: ', pwds.shape[0])
     ax = ax or plt.gca()
     plot = ax.imshow(pwds_crop, vmin=zmin, vmax=zmax, cmap=cmap, **kwargs)
@@ -1570,7 +1579,7 @@ def plot_multi_points(list_of_points, names = None, line_color='#1f77b4'):
     #iplot(fig)
     return fig
 
-def plot_2d_proj(points, std_points=None, plane='best', ax=None, line_color='#1f77b4', limits=(-450,450)):
+def plot_2d_proj(points, std_points=None, plane='best', ax=None, line_color='#1f77b4', limits=(-450,450), scale=True):
     '''[summary]
 
     Args:
@@ -1583,7 +1592,7 @@ def plot_2d_proj(points, std_points=None, plane='best', ax=None, line_color='#1f
     Returns:
         [type]: Figure object of plotted data.
     '''
-
+    
 
     qc = points[:,3] == 1
 
@@ -1617,27 +1626,41 @@ def plot_2d_proj(points, std_points=None, plane='best', ax=None, line_color='#1f
     positions = np.array(range(points.shape[0]))
     positions = list(positions[qc])
     ax = ax or plt.gca()
-    sns.scatterplot(y,x, hue=positions, palette='inferno', legend=None, alpha=1, s=100, linewidth=0, ax=ax)
+    sns.scatterplot(y,x, hue=positions, palette='inferno', legend=None, alpha=1, s=(9000/(-limits[0]+limits[1]))**2, linewidth=0, ax=ax)
     if std_points is not None:
         sns.scatterplot(y,x, hue=positions, palette='inferno', legend=None, alpha=0.3, sizes=list((std_points/2)**2), size=positions, linewidth=0, ax=ax)
-    ax.plot(yf,xf, zorder=-10, color=line_color, linewidth=3)
+    ax.plot(yf,xf, zorder=-10, color=line_color, linewidth=3*900/(-limits[0]+limits[1]))
 
     ax.set_ylim(limits)
     ax.set_xlim(limits)
     ax.set_aspect('equal')
     ax.axis('off')
+
+    if scale:
+        from matplotlib_scalebar.scalebar import ScaleBar
+        scalebar = ScaleBar(1, "nm", fixed_value=100)
+        ax.add_artist(scalebar)
+
     return ax
 
-def plot_2d_proj_kde(mean_points, aligned_points, ax=None, line_color='#1f77b4', limits=(-450,450)):
-    
+def plot_2d_proj_kde(mean_points, aligned_points, ax=None, line_color='#1f77b4', limits=(-450,450), scale=True, subselect = False, kde=True):
+    from matplotlib import cm
+
+    if subselect:
+        cmap = list(cm.get_cmap('inferno', mean_points.shape[0]).colors)[subselect[0]:subselect[1]]
+        mean_points = mean_points[subselect[0]:subselect[1]]
+        aligned_points = [points[subselect[0]:subselect[1]] for points in aligned_points]
+    else:
+        cmap = list(cm.get_cmap('inferno', int(np.sum(mean_points[:,3]))).colors)
+
+    positions = np.array(range(mean_points.shape[0]))
+
     qc = mean_points[:,3] == 1
     n = fit_plane_SVD(mean_points[qc,:3])
     v1 = np.cross(np.array([0,0,1]), n) # Find a random orthogonal vector to n (in the plane)
     v1 = v1/np.linalg.norm(v1)  # normalize it
     v2 = np.cross(n, v1) # Find the third orthogonal vector
 
-    positions = np.array(range(mean_points.shape[0]))
-    
     x_m = np.dot(mean_points[qc,:3],v1)
     y_m = np.dot(mean_points[qc,:3],v2)
     x_c = np.mean(x_m)
@@ -1668,11 +1691,13 @@ def plot_2d_proj_kde(mean_points, aligned_points, ax=None, line_color='#1f77b4',
 
     data = pd.DataFrame(np.array([x_all, y_all, pos_all]).T, columns=['x', 'y', 'pos'])
 
-    fig = plt.figure(figsize=(8,8))
+    #fig = plt.figure(figsize=(8,8))
 
-    from matplotlib import cm
-    from matplotlib.colors import ListedColormap
-    cmap_inferno = cm.get_cmap('inferno', 10).colors
+    
+    #from matplotlib.colors import ListedColormap
+    
+    
+    #inferno_palette = sns.set_palette(sns.color_palette(cmap_inferno))
 
 #    for p in positions:
 #        sel_data = data.query('pos == @p')
@@ -1684,17 +1709,25 @@ def plot_2d_proj_kde(mean_points, aligned_points, ax=None, line_color='#1f77b4',
 #        vals[:, 3] = np.linspace(0, 1, N)
 #        newcmp = ListedColormap(vals)
     ax = ax or plt.gca()
-    sns.kdeplot(ax=ax, data=data, x='y', y='x', hue='pos', palette='inferno', linewidths=0.3, common_norm=False, fill=False, legend=None, levels = 25, thresh=0.75, alpha=0.4)
+    if kde:
+        sns.kdeplot(ax=ax, data=data, x='y', y='x', hue='pos', palette=cmap, linewidths=0.1, common_norm=False, fill=False, legend=None, levels = 25, thresh=0.75, alpha=0.4)
     #sns.scatterplot(data=data, x='y', y='x', hue='pos', palette='inferno', s = 6, alpha = 0.3, legend=None)
-    ax.plot(yf,xf, zorder=10, color=line_color, linewidth=3, clip_on=False)
+    ax.plot(yf,xf, zorder=10, color=line_color, linewidth=1, clip_on=False)
     #print(y_m, x_m)
     color_positions = np.array(range(y_m.shape[0]))
-    sns.scatterplot(y_m,x_m, ax=ax, hue=color_positions, clip_on=False, palette='inferno', legend=None, alpha=1, s=100, edgecolor=None,  zorder=20)
+    marker_size = int(20*np.sqrt(450/limits[1]))
+    sns.scatterplot(y_m,x_m, ax=ax, hue=color_positions, clip_on=False, palette=cmap, legend=None, alpha=1, s=marker_size, edgecolor=None,  zorder=20)
 
     ax.set_ylim(limits)
     ax.set_xlim(limits)
     ax.set_aspect('equal')
     ax.axis('off')
+
+    if scale:
+        from matplotlib_scalebar.scalebar import ScaleBar
+        scalebar = ScaleBar(1, "nm", fixed_value=100, location='lower right', width_fraction=0.02)
+        ax.add_artist(scalebar)
+
     return ax
 
 def plot_single_trace_grid(aligned_points, mean_points, n_rows=2, n_cols=2, proj_plane = None, show_mean = False, line_color='#1f77b4'):
@@ -1830,6 +1863,7 @@ def plot_aligned_traces_animated(aligned_points):
     fig.show(renderer='notebook')
 
 def animate_trace(clust_aligned, t_interval=200, n_points=500, out_dir=os.getcwd()):
+    import plotly.colors
     import ipyvolume as ipv
     x = []
     y = []
@@ -1878,6 +1912,7 @@ def animate_trace(clust_aligned, t_interval=200, n_points=500, out_dir=os.getcwd
 
 def animate_trace_color_contact(clust_aligned, t_interval=200, n_points=500, contact_dist=150, out_dir=os.getcwd()):
     import ipyvolume as ipv
+    import plotly.colors
     x = []
     y = []
     z = []
@@ -1963,6 +1998,7 @@ def get_continuous_color(colorscale, intermed):
     :return: color in rgb string format
     :rtype: str
     """
+    import plotly.colors
     if len(colorscale) < 1:
         raise ValueError("colorscale must have at least one color")
 

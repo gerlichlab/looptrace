@@ -36,7 +36,7 @@ class Drifter():
         try:
             self.bead_roi_px = self.config['bead_roi_size']
         except KeyError: #Legacy config
-            self.bead_roi_px = 16
+            self.bead_roi_px = 20
 
     def generate_bead_rois(self, t_img, threshold, min_bead_int, n_points):
         roi_px = self.bead_roi_px//2
@@ -169,7 +169,7 @@ class Drifter():
                     drift_fine = Parallel(n_jobs=-1, prefer='threads')(delayed(self.correlate_single_bead)(t_bead, o_bead, 100) 
                                                                         for t_bead, o_bead in zip(t_bead_imgs, o_bead_imgs))
                 elif dc_method == 'fit':
-                    drift_fine = Parallel(n_jobs=len(o_bead_imgs), prefer='threads')(delayed(self.fit_shift_single_bead)(t_bead, o_bead) 
+                    drift_fine = Parallel(n_jobs=-1, prefer='threads')(delayed(self.fit_shift_single_bead)(t_bead, o_bead) 
                                                                     for t_bead, o_bead in zip(t_bead_imgs, o_bead_imgs))
                 else:
                     raise NotImplementedError('Unknown dc method.')       

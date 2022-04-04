@@ -50,6 +50,8 @@ class ImageHandler:
         self.dc_images = None
         self.cell_images_path = self.config['input_path'] + os.sep + 'cell_images' 
         self.load_cell_images()
+        self.spot_images_path = self.config['input_path'] + os.sep + 'spot_images' 
+        self.load_spot_images()
         self.maxz_dc_folder = self.config['input_path']+os.sep+'maxz_dc'
         
 
@@ -67,7 +69,7 @@ class ImageHandler:
                 self.images_from_zarr()
                 self.pos_list = ['P'+str(i).zfill(4) for i in range(1,self.images.shape[0]+1)]
         elif ft == 'ome-zarr':
-            self.pos_list = [p.name for p in os.scandir(self.config['input_path']) if os.path.isdir(p)]
+            self.pos_list = sorted([p.name for p in os.scandir(self.config['input_path']) if os.path.isdir(p)])
             self.images_from_zarr()
 
         elif ft in ['nikon_tiff', 'nikon_tiff_multifolder']:
@@ -107,8 +109,11 @@ class ImageHandler:
         filetype = self.config['image_filetype']
 
         if filetype == 'ome-zarr':
-            self.images, self.pos_list = ip.multi_ome_zarr_to_dask(self.images_path)
-            print(f'Images loaded from zarr store: ', self.images)
+            if os.path.isdir(self.images_path):
+                self.images, self.pos_list = ip.multi_ome_zarr_to_dask(self.images_path)
+                print(f'Images loaded from zarr store: ', self.images)
+            else:
+                print('No seq images found.')
 
         elif filetype == 'zip':
             store = zarr.ZipStore(in_path, mode='r')
@@ -127,7 +132,7 @@ class ImageHandler:
 
         elif filetype == 'nikon_tiff_multifolder':
             images = []
-            for path in os.listdir(in_path):
+            for path in sorted(os.listdir(in_path)):
                 try:
                     print('Reading TIFF files from ', in_path+os.sep+path)
                     images.append(ip.nikon_tiff_to_dask(in_path+os.sep+path))
@@ -135,20 +140,48 @@ class ImageHandler:
                     continue
             self.images = da.concatenate(images, axis = 1)
             print(f'Images loaded from multiple tiff folders: ', self.images)
+        try:
+            self.images = self.images.astype(np.uint16)
+        except AttributeError:
+            pass
 
     def load_cell_images(self):
         '''
         Function to load existing nuclear images from nucs folder in analysis folder.
         '''
-        image_folders = [(p.name, p.path) for p in os.scandir(self.cell_images_path) if os.path.isdir(p)]
         self.cell_images = {}
+        try:
+            image_folders = sorted([(p.name, p.path) for p in os.scandir(self.cell_images_path) if os.path.isdir(p)])
+            for name, path in image_folders:
 
-        for name, path in image_folders:
-            try:
                 self.cell_images[name], image_names = ip.multi_ome_zarr_to_dask(path)
                 self.cell_images[name] = self.cell_images[name][:,0,0,0,:,:]
+                print('Loaded cell images: ', name)
+                
+        except FileNotFoundError:
+            print('Could not find any cell images.')
+
+    def load_spot_images(self):
+        '''
+        Function to load existing nuclear images from nucs folder in analysis folder.
+        '''
+        self.spot_images = {}
+
+        if os.path.isdir(self.spot_images_path):
+            try:
+                image_folders = sorted([(p.name, p.path) for p in os.scandir(self.spot_images_path)])
+                for name, path in image_folders:
+                    name = os.path.splitext(name)[0]
+                    try:
+                        self.spot_images[name] = np.load(path, mmap_mode='r')
+                    except ValueError:
+                        self.spot_images[name] = np.load(path, allow_pickle=True)
+                    print('Loaded spot images: ', name)
+                    
             except FileNotFoundError:
-                print('Could not find any cell images.')
+                print('Could not find any spot images.')
+        else:
+            os.makedirs(self.spot_images_path)
     
     def gen_dc_images(self, pos):
         '''

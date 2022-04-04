@@ -1,6 +1,6 @@
-from looptrace import ImageHandler, Drifter
+from looptrace.ImageHandler import ImageHandler
+from looptrace.Drifter import Drifter
 import sys
-
 
 if __name__ == '__main__':
 
