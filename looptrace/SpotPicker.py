@@ -19,7 +19,8 @@ class SpotPicker:
     def __init__(self, image_handler):
         self.image_handler = image_handler
         self.config = image_handler.config
-        self.images, self.pos_list = image_handler.images, image_handler.pos_list
+        self.images = self.image_handler.images['seq_images']
+        self.pos_list = self.image_handler.image_lists['seq_images']
         
     def rois_from_spots(self, preview_pos=None, filter_nucs = False):
         '''
@@ -72,10 +73,10 @@ class SpotPicker:
             for i, frame in enumerate(spot_frame):
                 print(f'Preview spot detection in position {preview_pos}, frame {frame} with threshold {spot_threshold[i]}.')
                 pos_index = self.pos_list.index(preview_pos) 
-                img = self.images[pos_index, frame, ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
+                img = self.images[pos_index][frame, ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
 
                 if subtract_beads:
-                    bead_img = self.images[pos_index, frame, bead_ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
+                    bead_img = self.images[pos_index][frame, bead_ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
                     img, orig = ip.subtract_crosstalk(bead_img, img, threshold=self.config['bead_threshold'])
 
                 spot_props, filt_img = detect_func(img, spot_threshold[i], min_dist = min_dist)
@@ -96,12 +97,16 @@ class SpotPicker:
                 print(f'Detecting spots in position {position}, frame {frame}, ch {ch}.')
                 
                 pos_index = self.pos_list.index(position)
-                img = self.images[pos_index, frame, ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
+                img = self.images[pos_index][frame, ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
                 if subtract_beads:
-                    bead_img = self.images[pos_index, frame, bead_ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
+                    bead_img = self.images[pos_index][frame, bead_ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
                     img, _ = ip.subtract_crosstalk(bead_img, img, threshold=self.config['bead_threshold'])
                 spot_props, _ = detect_func(img, spot_threshold[i], min_dist = min_dist)
-                spot_props[['zmin', 'ymin', 'xmin', 'zmax', 'ymax', 'xmax', 'zc', 'yc', 'xc']] = spot_props[['zmin', 'ymin', 'xmin', 'zmax', 'ymax', 'xmax', 'zc', 'yc', 'xc']]*spot_ds
+
+                if self.config['detection_method'] != 'intensity':
+                    spot_props = ip.roi_center_to_bbox(spot_props, np.array(self.config['roi_image_size'])//spot_ds)
+
+                spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] = spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']]*spot_ds
                 
                 spot_props['position'] = position
                 spot_props['frame'] = frame
@@ -112,11 +117,11 @@ class SpotPicker:
         print(f'Found {len(output)} spots.')
 
         if filter_nucs:
-            if 'nuc_masks' not in self.image_handler.cell_images:
+            if 'nuc_masks' not in self.image_handler.images:
                 print('No nuclei mask images found, cannot filter.')
             else:
                 print('Filtering in nuclei.')
-                output = ip.filter_rois_in_nucs(output, np.array(self.image_handler.cell_images['nuc_masks']), self.image_handler.pos_list, drifts=self.image_handler.drift_table, target_frame=self.config['nuc_ref_frame'])
+                output = ip.filter_rois_in_nucs(output, np.array(self.image_handler.images['nuc_masks']), self.pos_list, drifts=self.image_handler.drift_table, target_frame=self.config['nuc_ref_frame'])
                 output = output[output['nuc_label'] > 0 ]
         
         output=output.reset_index().rename(columns={'index':'roi_id_pos'})
@@ -126,7 +131,7 @@ class SpotPicker:
             rois = output
 
         self.image_handler.roi_table = rois
-        self.image_handler.save_data(rois=rois)
+        rois.to_csv(self.image_handler.roi_file_path)
         print(f'Filtering complete, {len(rois)} ROIs after filtering.')
         
         return rois
@@ -143,7 +148,7 @@ class SpotPicker:
             threshold = self.config['bead_threshold']
             min_bead_int = self.config['min_bead_intensity']
 
-            t_img = self.images[pos_index, ref_frame, ref_ch].compute()
+            t_img = self.images[pos_index][ref_frame, ref_ch].compute()
             t_img_label,num_labels = ndi.label(t_img>threshold)
             #t_img_maxima=np.array(ndi.measurements.maximum_position(t_img, 
             #                                            labels=t_img_label, 
@@ -170,5 +175,22 @@ class SpotPicker:
         rois = ip.roi_center_to_bbox(output, roi_size = tuple(self.config['roi_image_size']))
 
         self.image_handler.bead_rois = rois
-        self.image_handler.save_data(rois=rois, suffix = '_beads')
+        rois.to_csv(self.image_handler.roi_file_path+'_beads.csv')
         return rois
+
+    def refilter_rois(self):
+        if self.config['detection_method'] == 'dog':
+            self.image_handler.roi_table = ip.roi_center_to_bbox(self.image_handler.roi_table.copy(), roi_size = tuple(self.config['roi_image_size']))
+        
+        self.image_handler.roi_table[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] = self.image_handler.roi_table[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']].round().astype(int)
+
+        if 'nuc_images' not in self.image_handler.images:
+            print('Please generate nuclei images first.')
+        if 'nuc_masks' in self.image_handler.images:
+            self.image_handler.roi_table = ip.filter_rois_in_nucs(self.image_handler.roi_table.copy(), np.array(self.image_handler.images['nuc_masks']), self.pos_list, new_col='nuc_label', drifts = self.image_handler.drift_table, target_frame=self.config['nuc_ref_frame'])
+            
+        if 'nuc_classes' in self.image_handler.images:
+            self.image_handler.roi_table = ip.filter_rois_in_nucs(self.image_handler.roi_table.copy(), np.array(self.image_handler.images['nuc_classes']), self.pos_list, new_col='nuc_class', drifts = self.image_handler.drift_table, target_frame=self.config['nuc_ref_frame'])
+
+        print('ROIs (re)assigned to nuclei.')
+        self.image_handler.roi_table.to_csv(self.image_handler.roi_file_path)

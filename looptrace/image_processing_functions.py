@@ -7,6 +7,7 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+import chunk
 import io
 import yaml
 import czifile
@@ -23,7 +24,7 @@ from scipy.stats import trim_mean
 from scipy.spatial.distance import squareform, pdist
 from skimage.measure import regionprops_table, regionprops
 import scipy.ndimage as ndi
-import dask
+
 import dask.array as da
 import zarr
 from numcodecs import Blosc
@@ -34,189 +35,7 @@ import tqdm
 import glob
 from sklearn import  mixture, preprocessing, cluster
 
-def czi_to_tif(in_folder, template, out_folder, prefix):
-    '''Convert CZI files from MyPIC experiment to single YX tif images.
 
-    Args:
-        in_folder (str): Top level folder path to find czi files
-        template (list): Template to match files to
-        out_folder (str): Output folder to save tif images
-        prefix (str): Prefix of output files, prepended to axis info
-    '''
-
-    all_files = all_matching_files_in_subfolders(in_folder, template)
-    sample = czifile.CziFile(all_files[0])
-    n_c = sample.shape[-6]
-    n_z = sample.shape[-4]
-
-    def save_single_tif(n_c, n_z, path, out_folder):
-        pos = re.search('W[0-9]{4}',path)[0]
-        pos = 'P'+pos[1:]
-        t = re.search('T[0-9]{4}',path)[0]
-        img = czifile.imread(path)[0,0,:,0,:,:,:,0] 
-        for c in range(n_c):
-            for z in range(n_z):
-                fn = out_folder + prefix + pos + '_' + t + '_C' + str(c).zfill(4)+ '_Z' + str(z).zfill(4)+'.tif'
-                if not os.path.isfile(fn):
-                    tifffile.imwrite(fn, img[c,z], compression='deflate', metadata={'axes': 'YX'})
-
-    joblib.Parallel(n_jobs=-2)(joblib.delayed(save_single_tif)(n_c, n_z, path, out_folder) for path in all_files)
-
-def tif_store_to_dask(folder, re_search = 'P[0-9]{4}'):
-    '''Read a series of tif files as a zarr array from a single folder using tifffile sequence reader, 
-    then assemble the sequences to a dask array.
-
-    Args:
-        folder (str): Path to folder with tif files
-        prefix (str): Prefix of tif files in folder before axes info
-
-    Returns:
-        Dask array: Dask array with all the matching tif files form the folder
-    '''
-    imgs = []
-    all_files = all_matching_files_in_subfolders(folder, ['.tif'])
-    groups, positions = group_filelist(all_files, re_search)
-    for i, group in enumerate(groups):
-        print('Loading images for position ', positions[i])
-        seq = tifffile.TiffSequence(group, pattern='axes')
-        with seq.aszarr() as store:
-            imgs.append(da.from_array(zarr.open(store, mode='r'), chunks =  (1,1,1,1,-1,-1))[0])
-    return imgs
-        
-def nikon_tiff_to_dask(folder):
-    image_sequence = tifffile.TiffSequence(folder+os.sep+'*.tiff', pattern='(Time)(\d+)_(Point)(\d+)_(ZStack)(\d+)')
-    print('Found image folder of shape', image_sequence.shape)
-    with image_sequence.aszarr() as store:
-        z = zarr.open(store, mode='r')
-        print('Zarr shape: ', z.shape)
-        images = da.transpose(da.from_zarr(z), (1,0,3,2,4,5))
-    return images
-
-def images_to_dask(folder, template):
-    '''Wrapper function to generate dask arrays from image folder.
-
-    Args:
-        folder (string): path to folder
-        template (list of strings): templates files in folder should match.
-
-    Returns:
-        x: dask array
-        groups : list of groups identified, currectly hardcoded to re_phrase='W[0-9]{4}'
-    '''        
-    print("Loading files to dask array: ")
-    #if '.h5' in template:
-    #    x, groups = svih5_to_dask(folder, template)
-    if '.czi' in template or '.tif' in template or '.tiff' in template:
-        x, groups, all_files = czi_tif_to_dask(folder, template)
-    print('\n Loaded images of shape: ', x[0])
-    print('Found positions ', groups)
-    return x, groups, all_files
-
-def czi_tif_to_dask(folder, template):
-    ''' Read a series of tif or czi files into a virtual Dask array.
-    Args:
-        folder (string): path to folder with files (also in subfolders)
-        template (list of strings): templates files in folder should match.
-
-    Returns:
-        pos_stack (list): list of dask arrays, one per position
-        groups (list): list of groups identified, currectly hardcoded to re_phrase='W[0-9]{4}'
-        all_files (list): list of all file paths read
-    '''
-
-    all_files = all_matching_files_in_subfolders(folder, template)
-    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
-    #print(groups, pos_list)
-    
-    if '.czi' in template:
-        sample = read_czi_image(all_files[0])
-    elif '.tif' in template or '.tiff' in template:
-        sample = read_tif_image(all_files[0])
-    else:
-        raise TypeError('Input filetype not yet implemented.')
-
-    pos_stack=[]
-    for g in grouped_files:
-        dask_arrays = []
-        for fn in g:
-            if '.czi' in template:
-                d = dask.delayed(read_czi_image)(fn)
-            elif '.tif' in template or '.tiff' in template:
-                d = dask.delayed(read_tif_image)(fn)
-            array = da.from_delayed(d, shape=sample.shape, dtype=sample.dtype)
-            dask_arrays.append(array)
-        pos_stack.append(da.stack(dask_arrays, axis=0))
-    #x = da.stack(pos_stack, axis=0)
-    
-    return pos_stack, groups, all_files
-
-'''
-
-def svih5_to_dask(folder, template):
-    all_files = all_matching_files_in_subfolders(folder, template)
-    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
-    progress = status_bar(len(all_files))
-    pos_stack=[]
-    with h5py.File(all_files[0], mode='r') as f:
-        shape = f[list(f.keys())[0]]['ImageData']['Image'].shape
-
-    for g in grouped_files:
-        dask_arrays = []
-        for fn in g:
-            next(progress)
-            f = h5py.File(fn, mode='r')
-            d = f[list(f.keys())[0]]['ImageData']['Image']
-            array = da.from_array(d, chunks=(1, 1, 1, shape[-2], shape[-1]))
-            dask_arrays.append(array)
-        pos_stack.append(da.stack(dask_arrays, axis=0))
-    x = da.stack(pos_stack, axis=0)[...,0,:,:,:]
-    print('Loaded images, final shape ', x.shape)
-    return x, groups
-
-def aio_lazy_to_dask(folder, template):
-    all_files = all_matching_files_in_subfolders(folder, template)
-    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
-    progress = status_bar(len(all_files))
-    group_array=[]
-    for g in grouped_files:
-        pos_stack = []
-        for fn in g:
-            next(progress)
-            img = aio.AICSImage(fn, chunk_by_dims=["Z", "Y", "X"])
-            pos_stack.append(img.dask_data[0,0])
-        pos_stack = da.stack(pos_stack)
-        group_array.append(pos_stack)
-    x = da.stack(group_array)
-
-    return x, groups
-
-### Does not works so well ###
-def czi_lazy_to_dask_czifile(folder, template):
-    all_files = all_matching_files_in_subfolders(folder, template)
-    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
-    progress = status_bar(len(all_files))
-    group_array=[]
-    sample = czifile.CziFile(all_files[0])
-    sample_shape = sample.subblock_directory[0].data_segment().data().shape
-    sample_dtype = sample.dtype
-    print('Loading images: ', sample_shape)
-    for g in grouped_files:
-        pos_stack = []
-        for fn in g:
-            next(progress)
-            img = czifile.CziFile(fn)
-            single_stack = []
-            for seg in img.subblock_directory:
-                d = da.from_delayed(dask.delayed(seg.data_segment().data)(),
-                shape=sample_shape, dtype=sample_dtype)
-                single_stack.append(d[0,0,0,0,0,:,:,0])
-            pos_stack.append(da.stack(single_stack))
-        pos_stack = da.stack(pos_stack)
-        group_array.append(pos_stack)
-    x = da.stack(group_array)
-
-    return x, groups
-    '''
 def rois_from_csv(path):
     rois = pd.read_csv(path, index_col=0)
     print('Loaded existing ROIs from ', path)
@@ -289,14 +108,14 @@ def update_roi_points(point_layer, roi_table, position, downscale):
     '''
 
     rois = roi_table.copy()
-    new_rois = pd.DataFrame(point_layer.data*downscale, columns=['frame','zc','yc', 'xc'])
+    new_rois = pd.DataFrame(point_layer.data*downscale, columns=['frame','zc','yc','xc'])
     new_rois.index.name = 'roi_id_pos'
     new_rois = new_rois.reset_index()
     new_rois['position'] = position
-    new_rois['ch'] = rois['ch'].loc[0]
+    new_rois['ch'] = rois.iloc[0]['ch']
 
     rois = rois.drop(rois[rois['position']==position].index)
-    return pd.concat([rois, new_rois]).sort_values('position')
+    return pd.concat([rois, new_rois]).sort_values('position').reset_index(drop=True)
 
 def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label', drifts = None, target_frame = None):
     '''Check if a spot is in inside a segmented nucleus.
@@ -348,61 +167,6 @@ def subtract_crosstalk(source, bleed, threshold=0):
     ratio=np.average(bleed[mask]/source[mask])
     out = np.clip(bleed - (ratio * source), a_min=0, a_max=None)
     return out, bleed
-
-
-def load_config(config_file):
-    '''
-    Open config file and return config variable form yaml file.
-    '''
-    with open(config_file, 'r') as stream:
-        try:
-            config=yaml.safe_load(stream)
-        except yaml.YAMLError as exc:
-            print(exc)
-    return config
-
-def read_czi_image(image_path):
-    '''
-    Reads czi files as arrays using czifile package. Returns only CZYX image.
-    '''
-    with czifile.CziFile(image_path) as czi:
-        image=czi.asarray()[0,0,:,0,:,:,:,0]
-    return image
-
-
-def read_tif_image(image_path):
-    with tifffile.TiffFile(image_path) as tif:
-        image=tif.asarray()
-    return image
-
-def read_czi_meta(image_path, tags, save_meta=False):
-    '''
-    Function to read metadata and image data for CZI files.
-    Define the information to be extracted from the xml tags dict in config file.
-    Optionally a YAML file with the metadata can be saved in the same path as the image.
-    Return a dictionary with the extracted metadata.
-    '''
-    def parser(data, tags):
-        tree = ElementTree.iterparse(data, events=('start',))
-        _, root = next(tree)
-    
-        for event, node in tree:
-            if node.tag in tags:
-                yield node.tag, node.text
-            root.clear()
-    
-    with czifile.CziFile(image_path) as czi:
-        meta=czi.metadata()
-    
-    with io.StringIO(meta) as f:
-        results = parser(f, tags)
-        metadict={} 
-        for tag, text in results:
-            metadict[tag]=text
-    if save_meta:
-        with open(image_path[:-4]+'_meta.yaml', 'w') as myfile:
-            yaml.safe_dump(metadict, myfile)
-    return metadict
     
 def pad_to_shape(arr, shape, mode='constant'):
     '''
@@ -459,133 +223,6 @@ def crop_at_pos(arr, tl_pos, size):
     s=tuple([slice(int(pos),int(pos+si)) for pos,si in zip(tl_pos,size)])
 
     return arr[s]
-
-def all_matching_files_in_subfolders(path, template):
-    '''
-    Generates a sorted list of all files with the template in the 
-    filename in directory and subdirectories.
-    '''
-
-    files = []
-    # r=root, d=directories, f = files
-    for r, d, f in os.walk(path):
-        for file in f:
-            if all([s in file for s in template]):
-                files.append(os.path.join(r, file))
-    return sorted(files)
-
-def group_filelist(input_list, re_phrase):
-    '''
-    Takes a list of strings (typically filepaths) and groups them according
-    to a given element given by its position after splitting the string at split_char.
-    E.g.for '..._WXXXX_PXXXX_TXXXX.ext' format this will by split_char='_' and element = -3.
-    Returns a list of the , and 
-    '''
-    grouped_list = []
-    groups=[]
-    for k, g in itertools.groupby(sorted(input_list),
-                                  lambda x: re.search(re_phrase, x).group(0)):
-        grouped_list.append(list(g))
-        groups.append(k)
-    return grouped_list, groups
-
-def match_file_lists(t_list,o_list):
-    t_list_match = [item.split('__')[0][-5:] for item in t_list]
-    o_list_match = [item for item in o_list if item.split('__')[0][-5:] in t_list_match]
-    return o_list_match
-
-def match_file_lists_decon(t_list,o_list):
-    t_list_match = [item.split('\\')[-1].split('__')[0][-5:] for item in t_list]
-
-    o_list_match = [item for item in o_list if 
-                    item.split('\\')[-1].split('_P0001_')[0][-5:] in t_list_match]
-
-    return o_list_match
-
-def image_from_svih5(path,ch=None,index=(slice(None),
-                                    slice(None),
-                                    slice(None))):
-    '''
-    Parameters
-    ----------
-    path : String with file path to h5 file.
-    index : Tuple with slice indexes of h5 file. Assumed CTZYX order.
-            Default is all slices.
-    
-    Returns
-    -------
-    Image as numpy array.
-    '''    
-    with h5py.File(path, 'r') as f:
-        if ch is not None:
-            index=(slice(ch,ch+1),slice(None),)+index
-            img=f[list(f.keys())[0]]['ImageData']['Image'][index][()][0,0]
-        else:
-            index=(slice(None),slice(None))+index
-            img=f[list(f.keys())[0]]['ImageData']['Image'][index][()][:,0]
-        
-    return img
-
-def multi_ome_zarr_to_dask(folder: str):
-    image_folders = [p.name for p in os.scandir(folder) if os.path.isdir(p)]
-    out = []
-    for image in image_folders:
-        z = zarr.open(folder+os.sep+image+os.sep+'0')
-        #s = z.shape
-        #chunks = (1,1,s[-3], s[-2], s[-1])
-        out.append(da.from_zarr(z))#, chunks=chunks))
-    out = da.stack(out)
-    print('Loaded ', out)
-    return out, image_folders
-
-def imgs_to_ome_zarr(images: np.ndarray, path: str, name: str, axes=['p','t','c','z','y','x'], dtype:str = None, metadata:dict = None):
-    '''
-    Saves an array to ome-zarr format (kinda, metadata still needs work)
-    '''
-    if dtype is None:
-        dtype = images.dtype
-        
-    def single_image_to_zarr(z, idx, img):
-        z[idx] = img
-
-    images_shape = images.shape
-    print(images_shape)
-    size = {}
-    default_axes = ['p','t','c','z','y','x']
-    for ax in default_axes:
-        if ax in axes:
-            size[ax] = images_shape[axes.index(ax)]
-        else:
-            size[ax] = 1
-    images = np.reshape(images, tuple(size[ax] for ax in default_axes))
-
-    compressor = Blosc(cname='zstd', clevel=5, shuffle=Blosc.BITSHUFFLE)
-    chunks = (1,1,1,size['y']//2,size['x']//2)
-
-    if not os.path.isdir(path):
-        os.makedirs(path)
-
-    for pos in tqdm.tqdm(range(size['p'])):
-        pos_name = 'P'+str(pos+1).zfill(4)+'.zarr'
-        store = zarr.DirectoryStore(path+os.sep+pos_name)
-        root = zarr.group(store=store, overwrite=True)
-
-        root.attrs['multiscale'] = {'multiscales': [{'version': '0.3', 
-                                                        'name': name+'_'+pos_name, 
-                                                        'datasets': [{'path': '0'}],
-                                                        'axes': ['t','c','z','y','x']}]}
-        if metadata:
-            root.attrs['metadata'] = metadata
-                            
-
-        multiscale_level = root.create_dataset(name = str(0), compressor=compressor, shape=(size[ax] for ax in default_axes[1:]), chunks=chunks, dtype=dtype)
-        if size['t'] < 4:
-            [single_image_to_zarr(multiscale_level, i, images[pos, i]) for i in range(size['t'])]
-        else:
-            joblib.Parallel(n_jobs=-1, prefer='threads', verbose=10)(joblib.delayed(single_image_to_zarr)
-                                                                (multiscale_level, i, images[pos, i]) for i in range(size['t']))
-
-    print('OME ZARR images generated.')
     
 def detect_spots(input_img, spot_threshold=20, min_dist=None):
     '''Spot detection by difference of gaussian filter
@@ -599,7 +236,7 @@ def detect_spots(input_img, spot_threshold=20, min_dist=None):
         spot_props (DataFrame): The centroids and roi_IDs of the spots found. 
         img (ndarray): The DoG filtered image used for spot detection.
     '''
-    img = white_tophat(image=input_img, selem=ball(2))
+    img = white_tophat(image=input_img, footprint=ball(2))
     img = gaussian(img, 0.8)-gaussian(img,1.3)
     img = img/gaussian(input_img, 3)
     img = (img-np.mean(img))/np.std(img)
@@ -833,7 +470,7 @@ def decon_RL(img, kernel, algo, fd_data, niter=10):
     res = algo.run(fd_data.Acquisition(data=img, kernel=kernel), niter=niter).data
     return res
 
-def nuc_segmentation(nuc_imgs, diameter = 150, model = 'nuclei', do_3D = False):
+def nuc_segmentation_cellpose_2d(nuc_imgs, diameter = 150, model_type = 'nuclei'):
     '''
     Runs nuclear segmentation using cellpose trained model (https://github.com/MouseLand/cellpose)
 
@@ -845,9 +482,21 @@ def nuc_segmentation(nuc_imgs, diameter = 150, model = 'nuclei', do_3D = False):
             nuc_imgs = [nuc_imgs[i] for i in range(nuc_imgs.shape[0])]
 
     from cellpose import models
-    model = models.Cellpose(gpu=False, model_type=model)
-    channels = [0,0]
-    masks, flows, styles, diams = model.eval(nuc_imgs, diameter=diameter, channels=channels, net_avg=False, do_3D=do_3D)
+    model = models.Cellpose(gpu=False, model_type=model_type)
+    masks = model.eval(nuc_imgs, diameter=diameter, channels=[0,0], net_avg=False, do_3D = False)[0]
+    return masks
+
+def nuc_segmentation_cellpose_3d(nuc_imgs, diameter = 150, model_type = 'nuclei'):
+    '''
+    Runs nuclear segmentation using cellpose trained model (https://github.com/MouseLand/cellpose)
+
+    Args:
+        nuc_imgs (ndarray or list of ndarrays): 2D or 3D images of nuclei, expects single channel
+    '''
+
+    from cellpose import models
+    model = models.Cellpose(gpu=False, model_type='nuclei', net_avg=False)
+    masks = model.eval(nuc_imgs, diameter=diameter, channels=[0,0], z_axis = 0, anisotropy = 2, do_3D=True)[0]
     return masks
 
 def mask_to_binary(mask):
@@ -868,11 +517,11 @@ def mitotic_cell_extra_seg(nuc_image, nuc_mask):
     Assumes mitotic cells are brighter, unsegmented objects in the image.
 
     Args:
-        nuc_image ([2D numpy array]): nuclei image
-        nuc_mask ([2D numpy array]): labeled nuclei from nuclei image
+        nuc_image ([nD numpy array]): nuclei image
+        nuc_mask ([nD numpy array]): labeled nuclei from nuclei image
 
     Returns:
-        nuc_mask ([2D numpy array]): labeled nuclei with mitotic cells added
+        nuc_mask ([nD numpy array]): labeled nuclei with mitotic cells added
         mito_index+1 (int): the first index of the mitotic cells in the returned nuc_mask
 
     '''
@@ -1018,3 +667,74 @@ def relabel_nucs(nuc_image):
     out = mask_to_binary(nuc_image)
     out = label(out)
     return out.astype(nuc_image.dtype)
+
+
+
+
+'''
+
+def svih5_to_dask(folder, template):
+    all_files = all_matching_files_in_subfolders(folder, template)
+    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
+    progress = status_bar(len(all_files))
+    pos_stack=[]
+    with h5py.File(all_files[0], mode='r') as f:
+        shape = f[list(f.keys())[0]]['ImageData']['Image'].shape
+
+    for g in grouped_files:
+        dask_arrays = []
+        for fn in g:
+            next(progress)
+            f = h5py.File(fn, mode='r')
+            d = f[list(f.keys())[0]]['ImageData']['Image']
+            array = da.from_array(d, chunks=(1, 1, 1, shape[-2], shape[-1]))
+            dask_arrays.append(array)
+        pos_stack.append(da.stack(dask_arrays, axis=0))
+    x = da.stack(pos_stack, axis=0)[...,0,:,:,:]
+    print('Loaded images, final shape ', x.shape)
+    return x, groups
+
+def aio_lazy_to_dask(folder, template):
+    all_files = all_matching_files_in_subfolders(folder, template)
+    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
+    progress = status_bar(len(all_files))
+    group_array=[]
+    for g in grouped_files:
+        pos_stack = []
+        for fn in g:
+            next(progress)
+            img = aio.AICSImage(fn, chunk_by_dims=["Z", "Y", "X"])
+            pos_stack.append(img.dask_data[0,0])
+        pos_stack = da.stack(pos_stack)
+        group_array.append(pos_stack)
+    x = da.stack(group_array)
+
+    return x, groups
+
+### Does not works so well ###
+def czi_lazy_to_dask_czifile(folder, template):
+    all_files = all_matching_files_in_subfolders(folder, template)
+    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
+    progress = status_bar(len(all_files))
+    group_array=[]
+    sample = czifile.CziFile(all_files[0])
+    sample_shape = sample.subblock_directory[0].data_segment().data().shape
+    sample_dtype = sample.dtype
+    print('Loading images: ', sample_shape)
+    for g in grouped_files:
+        pos_stack = []
+        for fn in g:
+            next(progress)
+            img = czifile.CziFile(fn)
+            single_stack = []
+            for seg in img.subblock_directory:
+                d = da.from_delayed(dask.delayed(seg.data_segment().data)(),
+                shape=sample_shape, dtype=sample_dtype)
+                single_stack.append(d[0,0,0,0,0,:,:,0])
+            pos_stack.append(da.stack(single_stack))
+        pos_stack = da.stack(pos_stack)
+        group_array.append(pos_stack)
+    x = da.stack(group_array)
+
+    return x, groups
+    '''

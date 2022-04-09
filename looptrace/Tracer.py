@@ -15,7 +15,7 @@ from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
 #import dask
 #from dask import delayed
 from tqdm import tqdm
-from joblib import Parallel, delayed
+#from joblib import Parallel, delayed
 import os
 
 class Tracer:
@@ -27,6 +27,7 @@ class Tracer:
         self.config_path = image_handler.config_path
         self.config = image_handler.config
         self.drift_table = image_handler.drift_table
+        self.images = self.image_handler.images['seq_images']
         self.trace_beads = trace_beads
         if trace_beads:
             self.roi_table = image_handler.bead_rois
@@ -37,8 +38,8 @@ class Tracer:
         self.fit_func = self.fit_funcs[self.config['fit_func']]
 
     def make_dc_rois_all_frames(self):
+        #Precalculate all ROIs for extracting spot images, based on identified ROIs and precalculated drifts between time frames.
         print('Generating list of all ROIs for tracing:')
-        Z, Y, X = self.image_handler.images.shape[-3:]
         positions = sorted(list(self.roi_table.position.unique()))
 
         all_rois = []
@@ -49,17 +50,18 @@ class Tracer:
             ref_frame = roi['frame']
             ch = roi['ch']
             ref_offset = sel_dc.query('frame == @ref_frame')
+            Z, Y, X = self.images[pos_index][0,ch].shape[-3:]
             for j, dc_frame in sel_dc.iterrows():
                 z_drift_course = int(dc_frame['z_px_course']) - int(ref_offset['z_px_course'])
                 y_drift_course = int(dc_frame['y_px_course']) - int(ref_offset['y_px_course'])
                 x_drift_course = int(dc_frame['x_px_course']) - int(ref_offset['x_px_course'])
 
-                z_min = roi['zmin'] - z_drift_course
-                z_max = roi['zmax'] - z_drift_course
-                y_min = roi['ymin'] - y_drift_course
-                y_max = roi['ymax'] - y_drift_course
-                x_min = roi['xmin'] - x_drift_course
-                x_max = roi['xmax'] - x_drift_course
+                z_min = roi['z_min'] - z_drift_course
+                z_max = roi['z_max'] - z_drift_course
+                y_min = roi['y_min'] - y_drift_course
+                y_max = roi['y_max'] - y_drift_course
+                x_min = roi['x_min'] - x_drift_course
+                x_max = roi['x_max'] - x_drift_course
 
                 #Handling case of ROI extending beyond image edge after drift correction:
                 pad = ((abs(min(0,z_min)),abs(max(0,z_max-Z))),
@@ -82,6 +84,8 @@ class Tracer:
                                                                                                   'z_px_fine', 'y_px_fine', 'x_px_fine'])
 
     def extract_single_roi_img(self, single_roi):
+        #Function to extract single ROI lazily without loading entire stack in RAM.
+        #Depending on chunking of original data can be more or less performant.
 
         roi_image_size = tuple(self.config['roi_image_size'])
         p = single_roi['pos_index']
@@ -91,7 +95,7 @@ class Tracer:
         pad = single_roi['pad']
 
         try:
-            roi_img = np.array(self.image_handler.images[p, t, c, z, y, x])
+            roi_img = np.array(self.images[p][t, c, z, y, x])
 
             #If microscope drifted, ROI could be outside image. Correct for this:
             if pad != ((0,0),(0,0),(0,0)):
@@ -105,6 +109,7 @@ class Tracer:
         return roi_img  #{'p':p, 't':t, 'c':c, 'z':z, 'y':y, 'x':x, 'img':roi_img}
 
     def extract_single_roi_img_inmem(self, single_roi, images):
+        # Function for extracting a single cropped region defined by ROI from a larger 3D image.
 
         roi_image_size = tuple(self.config['roi_image_size'])
         z, y, x = single_roi['roi_slice']
@@ -125,6 +130,10 @@ class Tracer:
         return roi_img  #{'p':p, 't':t, 'c':c, 'z':z, 'y':y, 'x':x, 'img':roi_img}
 
     def gen_roi_imgs_inmem(self):
+        # Load full stacks into memory to extract spots.
+        # Not the most elegant, but depending on the chunking of the original data it is often more performant than loading segments from zarr.
+
+
         #roi_imgs = Parallel(n_jobs=-1, verbose=0, prefer='threads')(delayed(self.extract_single_roi_img)(single_roi) for i, single_roi in tqdm(test.iterrows(), total=len(test)))#tqdm(self.all_rois.iterrows()))
         #roi_imgs = [self.extract_single_roi_img(single_roi) for i, single_roi in tqdm(test.iterrows())]#tqdm(self.all_rois.iterrows()))
         #roi_image_size = tuple(self.config['roi_image_size'])
@@ -140,7 +149,7 @@ class Tracer:
                     rois_stack = rois.query('pos_index == @pos & frame == @frame')
                     #print(rois_stack)
                     roi_ch = int(rois['ch'].unique())
-                    image_stack = np.array(self.image_handler.images[pos, frame, roi_ch])
+                    image_stack = np.array(self.images[pos][frame, roi_ch])
                     #print(image_stack.shape)
                     for j, single_roi in rois_stack.iterrows():
                         id = single_roi['roi_id']
@@ -151,11 +160,11 @@ class Tracer:
         
         #print(roi_array.keys())
         
-        pos_rois = np.empty(max(rois.roi_id)+1, object)
+        pos_rois = []
       
         for roi_id in rois.roi_id.unique():
             try:
-                pos_rois[roi_id] = np.stack([roi_array[(roi_id, frame)] for frame in range(T)])
+                pos_rois.append(np.stack([roi_array[(roi_id, frame)] for frame in range(T)]))
             except KeyError:
                 break
         
@@ -163,12 +172,14 @@ class Tracer:
         #roi_array_padded = np.stack(roi_array_padded)
 
         print('ROIs generated.')
-        self.image_handler.spot_images['spot_images'] = pos_rois
+        self.image_handler.images['spot_images'] = pos_rois
         #self.image_handler.spot_images['spot_images_padded'] = roi_array_padded
-        np.save(self.image_handler.spot_images_path+os.sep+'spot_images.npy', pos_rois)
+        np.savez_compressed(self.config['image_path']+os.sep+'spot_images.npz', *pos_rois)
         #np.save(self.image_handler.spot_images_path+os.sep+'spot_images_padded.npy', roi_array_padded)
     
     def decon_roi_imgs(self):
+        # Run deconvolution using generated or experimental PSF usign Flowdec.
+
         decon_iter = self.config['deconvolve']
         if decon_iter != 0:
             algo, kernel, fd_data = ip.decon_RL_setup(  res_lateral=self.config['xy_nm']/1000, 
@@ -176,12 +187,12 @@ class Tracer:
                                                         wavelength=self.config['spot_wavelength']/1000,
                                                         na=self.config['objective_na'])
             
-            if 'exp_psf' in self.image_handler.spot_images:
-                kernel = self.image_handler.spot_images['exp_psf']
+            if 'exp_psf' in self.image_handler.images:
+                kernel = self.image_handler.images['exp_psf']
         
-            imgs = self.image_handler.spot_images['spot_images']
-            roi_array_decon = np.empty(len(imgs), object)
-            for i, frame_stack in enumerate(imgs):
+            imgs = self.image_handler.images['spot_images']
+            roi_array_decon = []
+            for i, frame_stack in tqdm(enumerate(imgs), total=len(imgs)):
                 roi_stack_decon = []
                 for roi_stack in frame_stack:
                     if np.any(roi_stack):
@@ -198,18 +209,19 @@ class Tracer:
 
                         roi_stack_decon.append(ip.decon_RL(roi_stack, kernel=kernel_crop, algo = algo, fd_data=fd_data, niter=decon_iter))
                         
-                roi_array_decon[i] = np.stack(roi_stack_decon)
+                roi_array_decon.append(np.stack(roi_stack_decon))
 
                         #print(p,t)
             #roi_array_decon = np.array(roi_array_decon, dtype='object')
             #ip.imgs_to_ome_zarr(images = roi_array, path=self.config['input_path']+os.sep+'spot_images', name = 'spot_imgs', axes=['p','t','z','y','x'])
-            self.image_handler.spot_images['spot_images_decon'] = roi_array_decon
-            np.save(self.image_handler.spot_images_path+os.sep+'spot_images_decon.npy', roi_array_decon)
+            self.image_handler.images['spot_images_decon'] = roi_array_decon
+            #self.image_handler.spot_images['spot_images_padded'] = roi_array_padded
+            np.savez_compressed(self.config['image_path']+os.sep+'spot_images_decon.npz', *roi_array_decon)
             print('Images deconvolved')
         
 
     def fine_dc_single_roi_img(self, roi_img, roi):
-        
+        #Shift a single image according to precalculated drifts.
         dz = float(roi['z_px_fine'])
         dy = float(roi['y_px_fine'])
         dx = float(roi['x_px_fine'])
@@ -218,30 +230,38 @@ class Tracer:
         return roi_img
 
     def gen_fine_dc_roi_imgs(self):
+        #Apply fine scale drift correction to spot images, used mainly for visualizing fits (these images are not used for fitting)
+
         if self.config['deconvolve'] != 0:
-            imgs = self.image_handler.spot_images['spot_images_decon']
+            imgs = self.image_handler.images['spot_images_decon']
         else:
-            imgs = self.image_handler.spot_images['spot_images']
+            imgs = self.image_handler.images['spot_images']
         
         rois = self.all_rois
 
         i = 0
-        roi_array_fine = np.empty(len(imgs), object)
+        roi_array_fine = []
         for j, frame_stack in enumerate(imgs):
             roi_stack_fine = []
             for roi_stack in frame_stack:
                 roi_stack_fine.append(self.fine_dc_single_roi_img(roi_stack, rois.iloc[i]))
                 i += 1
-            roi_array_fine[j] = np.stack(roi_stack_fine)
+            roi_array_fine.append(np.stack(roi_stack_fine))
+
         #roi_imgs_fine = Parallel(n_jobs=-1, verbose=1, prefer='threads')(delayed(self.fine_dc_single_roi_img)(roi_imgs[i], rois.iloc[i]) for i in tqdm(range(roi_imgs.shape[0])))
         #roi_imgs_fine = np.stack(roi_array_fine)
         #roi_array_fine = np.array(roi_array_fine, dtype='object')
         
-        self.image_handler.spot_images['spot_images_fine'] = roi_array_fine
-        np.save(self.image_handler.spot_images_path+os.sep+'spot_images_fine.npy', roi_array_fine)
+        self.image_handler.images['spot_images_fine'] = roi_array_fine
+        np.savez_compressed(self.config['image_path']+os.sep+'spot_images_decon.npz', *roi_array_fine)
 
 
     def trace_single_roi(self, roi_img, mask = None):
+        
+        #Fit a single roi with 3D gaussian (MLE or LS as defined in config).
+        #Masking by intensity or label image can be used to improve fitting correct spot (set in config)
+
+
         if np.any(roi_img): #Check if empty due to error
             if mask is None:
                 fit = self.fit_func(roi_img, sigma=1, center='max')[0]
@@ -255,22 +275,16 @@ class Tracer:
             return fit
         
 
-
     def trace_all_rois(self):
         '''
-        Fits 3D gaussian to previously detected ROIs in all timeframes.
-       
-        Returns
-        -------
-        res : Pandas dataframe containing trace data
-        imgs : Hyperstack image with raw image data of each ROI.
+        Fits 3D gaussian to previously detected ROIs across positions and timeframes.
     
         '''
 
         if self.config['deconvolve'] != 0:
-            imgs = self.image_handler.spot_images['spot_images_decon']
+            imgs = self.image_handler.images['spot_images_decon']
         else:
-            imgs = self.image_handler.spot_images['spot_images']
+            imgs = self.image_handler.images['spot_images']
         
         rois = self.all_rois
 
@@ -318,181 +332,4 @@ class Tracer:
             suffix = ''
 
         self.image_handler.traces = traces
-        self.image_handler.save_data(traces=traces, suffix=suffix)
-
-"""
-    def trace_single_frame(self, trace_images, roi, decon_params):
-        #trace_ch = self.config['trace_ch']
-        roi_image_size = tuple(self.config['roi_image_size'])
-        roi_slice = roi['roi_slice']
-        pad = roi['pad']
-
-        try:
-            roi_image = np.array(trace_images[roi_slice[0], 
-                                            roi_slice[1],
-                                            roi_slice[2]])
-
-            #If microscope drifted, ROI could be outside image. Correct for this:
-            if pad != ((0,0),(0,0),(0,0)):
-                #print('Padding ', pad)
-                roi_image = np.pad(roi_image, pad, mode='edge')
-
-        except ValueError: # ROI collection failed for some reason
-            roi_image = np.zeros(roi_image_size, dtype=np.float32)
-        
-        if decon_params[0] != 0:
-            roi_image = ip.decon_RL(roi_image, decon_params[2], decon_params[1], decon_params[3], niter=decon_params[0])
-
-        #Perform 3D gaussian fit
-        #trace_res.append(delayed(self.fit_func)(roi_image, sigma=1, center='max')[0])
-        fit = self.fit_func(roi_image, sigma=1, center='max')[0]
-        #Ensure images are compatible size for hyperstack.
-        
-        #roi_image_exp = delayed(ip.pad_to_shape)(roi_image, roi_image_size)
-        if roi_image.shape != roi_image_size:
-            #print(roi_image.shape)
-            roi_image = ip.pad_to_shape(roi_image, roi_image_size)
-
-        #Extract fine drift from drift table and shift image for display.
-        dz = float(roi['z_px_fine'])
-        dy = float(roi['y_px_fine'])
-        dx = float(roi['x_px_fine'])
-        #roi_image_shifted = delayed(ndi.shift)(roi_image_exp, (dz, dy, dx))
-        roi_image = ndi.shift(roi_image, (dz, dy, dx))
-
-        return fit, roi[['roi_id', 'frame', 'ref_frame', 'position', 'z_px_fine', 'y_px_fine', 'x_px_fine']].values, roi_image
-
-    def tracing_3d(self):
-        
-        Fits 3D gaussian to previously detected ROIs in all timeframes.
-       
-        Returns
-        -------
-        res : Pandas dataframe containing trace data
-        imgs : Hyperstack image with raw image data of each ROI.
-    
-
-        #Extract parameters from config and predefined roi table.
-        decon_params = []
-        decon_params.append(self.config['deconvolve'])
-        if decon_params[0] != 0:
-            algo, kernel, fd_data = ip.decon_RL_setup(  res_lateral=self.config['xy_nm']/1000, 
-                                                        res_axial=self.config['z_nm']/1000, 
-                                                        wavelength=self.config['spot_wavelength']/1000,
-                                                        na=self.config['objective_na'])
-            decon_params.append(algo)
-            decon_params.append(kernel)
-            decon_params.append(fd_data)
-        #roi_image_size = self.config['roi_image_size']
-        #roi_table = self.roi_table[self.roi_table['position'].isin(self.pos_list)]
-
-        fits = []
-        fit_rois = []
-        roi_imgs = []
-
-
-        for pos in sorted(list(self.all_rois['position'].unique())):
-            pos_index = self.pos_list.index(pos)
-            for t in sorted(list(self.all_rois['frame'].unique())):
-                for ch in sorted(list(self.all_rois['ch'].unique())):
-
-                    #print('Loading all images in position ', pos)
-                    trace_images = np.array(self.images[pos_index, t, ch]) #self.images[pos_index, t, ch] #
-                    sel_rois = self.all_rois[(self.all_rois['position'] == pos) & (self.all_rois['ch'] == ch) & (self.all_rois['frame'] == t)]
-                    print(f'Tracing {len(sel_rois)} ROIs in position', pos, ', frame ', t, ', channel ', ch)
-                    out = Parallel(n_jobs=-1, prefer='threads')(delayed(self.trace_single_frame)(trace_images, roi, decon_params) for i, roi in tqdm(sel_rois.iterrows(), total=sel_rois.shape[0]))
-                    for sublist in out:
-                        fits.append(sublist[0])
-                        fit_rois.append(sublist[1])
-                        roi_imgs.append(sublist[2])
-        
-
-        for i, roi in tqdm(self.all_rois.iterrows(), total=self.all_rois.shape[0]):
-
-            #Extract position and ROI coordinates, and extract roi image from 
-            #slicable image object (typically a dask array)
-            
-            roi_slice = roi['roi_slice']
-            pad = roi['pad']
-
-            try:
-                roi_image = np.array(self.images[roi['pos_index'],
-                                                roi['frame'], 
-                                                trace_ch,
-                                                roi_slice[0], 
-                                                roi_slice[1],
-                                                roi_slice[2]])
-
-                #If microscope drifted, ROI could be outside image. Correct for this:
-                if pad != ((0,0),(0,0),(0,0)):
-                    #print('Padding ', pad)
-                    roi_image = np.pad(roi_image, pad, mode='edge')
-
-            except ValueError: # ROI collection failed for some reason
-                roi_image = np.zeros(roi_image_size, dtype=np.float32)
-            
-            if decon != 0:
-                roi_image = ip.decon_RL(roi_image, kernel, algo, fd_data, niter=decon)
-
-            #Perform 3D gaussian fit
-            #trace_res.append(delayed(self.fit_func)(roi_image, sigma=1, center='max')[0])
-            trace_res.append(self.fit_func(roi_image, sigma=1, center='max')[0])
-            #Ensure images are compatible size for hyperstack.
-            
-            #roi_image_exp = delayed(ip.pad_to_shape)(roi_image, roi_image_size)
-            if roi_image.shape != roi_image_size:
-                print(roi_image.shape)
-                roi_image = ip.pad_to_shape(roi_image, roi_image_size)
-
-            #Extract fine drift from drift table and shift image for display.
-            dz = float(roi['z_px_fine'])
-            dy = float(roi['y_px_fine'])
-            dx = float(roi['x_px_fine'])
-            #roi_image_shifted = delayed(ndi.shift)(roi_image_exp, (dz, dy, dx))
-            roi_image = ndi.shift(roi_image, (dz, dy, dx))
-            all_images.append(roi_image)
-            
-            #Add some parameters for tracing table
-            trace_index.append([roi['roi_id'], roi['frame'], roi['ref_frame'], roi['position'], dz, dy, dx])
-
-            #Add all the results per timepoint, compute on delayed dask objects.
-        #trace_res = dask.compute(*trace_res)
-        #all_images = np.stack(dask.compute(*all_images))
-        
-
-
-        #Cleanup of results into dataframe format
-        trace_res = pd.DataFrame(fits,columns=["BG","A","z_px","y_px","x_px","sigma_z","sigma_xy"])
-        trace_index = pd.DataFrame(fit_rois, columns=["trace_id", "frame", "ref_frame", "position", "drift_z", "drift_y", "drift_x"])
-        traces = pd.concat([trace_index, trace_res], axis=1)
-
-        #Apply fine scale drift to fits, and physcial units.
-        traces['z_px']=traces['z_px']+traces['drift_z']
-        traces['y_px']=traces['y_px']+traces['drift_y']
-        traces['x_px']=traces['x_px']+traces['drift_x']
-        traces=traces.drop(columns=['drift_z', 'drift_y', 'drift_x'])
-        traces['z']=traces['z_px']*self.config['z_nm']
-        traces['y']=traces['y_px']*self.config['xy_nm']
-        traces['x']=traces['x_px']*self.config['xy_nm']
-        traces['sigma_z']=traces['sigma_z']*self.config['z_nm']
-        traces['sigma_xy']=traces['sigma_xy']*self.config['xy_nm']
-        traces = traces.sort_values(['trace_id', 'frame'])
-
-        #Make final hyperstack of images in PTZYX order.
-        #roi_image_size = tuple(self.config['roi_image_size'])
-        #all_images = np.reshape(np.stack(all_images), 
-        #                        (max(traces.trace_id)+1,max(traces.frame)+1, 
-        #                        roi_image_size[0], roi_image_size[1], roi_image_size[2]))
-        
-        T = self.images_shape[1]
-        all_images = np.stack(roi_imgs)
-        all_images = np.reshape(all_images, (all_images.shape[0]//T, T, all_images.shape[1], all_images.shape[2], all_images.shape[3])).astype(np.uint16)
-        
-        if self.trace_beads: 
-            suffix = '_beads'
-        else:
-            suffix = ''
-        self.image_handler.save_data(traces=traces, suffix=suffix)
-        self.image_handler.save_data(imgs=all_images, suffix=suffix)
-        return traces, all_images
-""" 
+        traces.to_csv(self.image_handler.traces_path)

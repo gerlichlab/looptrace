@@ -28,15 +28,14 @@ def main():
         [sg.Text('Choose config file:')],
         [sg.InputText('YAML_config_file', key='-CONFIG_PATH-'), sg.FileBrowse()],
         [sg.Button('Initialize', key='-INIT-'),
-        sg.Button('Save to OME-ZARR', key='-SAVE-'),
-        sg.Button('Reload config', key='-RELOAD-'),
-        sg.Button('View images', key='-VIEW_IMAGES-')],
+        sg.Button('Reload config', key='-RELOAD-')],
         [sg.Text('_'*50)],
         [sg.Button('Run drift correction', key='-RUN_DC-')],
         [sg.Text('_'*50)],
         [sg.Text('Choose drift correction file:')],
         [sg.InputText('Drift correction file', key='-DC_PATH-'), sg.FileBrowse()],
         [sg.Combo(['Position'], default_value='Position', key='-DC_POSITION-', auto_size_text=True),
+        sg.Button('View images', key='-VIEW_IMAGES-'),
         sg.Button('View DC images', key='-VIEW_DC-')],
         [sg.Text('Drift-corrected maximum z-pojection:')],
         [sg.Button('Generate images', key='-GEN_PROJ_DC-'),
@@ -76,14 +75,14 @@ def main():
             window['-ROI_POSITION-'].update(values=H.pos_list, set_to_index=0)
             window['-DC_PATH-'].update(H.dc_file_path)
             window['-ROI_FILE_PATH-'].update(H.roi_file_path)
-            if H.config['image_filetype'] in ['zip','zarr','ome-zarr']:
-                window['-SAVE-'].update(disabled=True)
+            #if H.config['image_filetype'] in ['zip','zarr','ome-zarr']:
+            #    window['-SAVE-'].update(disabled=True)
         elif event == '-SAVE-':
             H.dask_to_ome_zarr()
         elif event == '-VIEW_IMAGES-':
             #pos_index = H.pos_list.index(values['-IMG_POS-'])
             #print('Viewing position ', values['-IMG_POS-'])
-            ip.napari_view(H.images, downscale=int(H.config['image_view_downscaling']))
+            ip.napari_view(H.images[H.pos_list.index(values['-DC_POSITION-'])], axes=('TCZYX'), downscale=int(H.config['image_view_downscaling']))
         elif event == '-RELOAD-':
             H.reload_config()
         elif event == '-RUN_DC-':

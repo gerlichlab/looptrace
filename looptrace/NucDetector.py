@@ -8,12 +8,13 @@ EMBL Heidelberg
 """
 
 from looptrace import image_processing_functions as ip
-from pathlib import Path
+from looptrace import image_io
 import dask.array as da
 import os
 import numpy as np
-import tifffile
+import pandas as pd
 from skimage.morphology import dilation, disk
+from skimage.measure import regionprops_table
 
 class NucDetector:
     '''
@@ -23,13 +24,11 @@ class NucDetector:
     def __init__(self, image_handler):
         self.image_handler = image_handler
         self.config = image_handler.config
-        self.images, self.pos_list = image_handler.images, image_handler.pos_list
-        self.cell_images_path = self.image_handler.cell_images_path
-        self.cell_images = self.image_handler.cell_images
-        print(self.cell_images)
-        self.nuc_images_path = self.cell_images_path  + os.sep + 'nuc_images'
-        self.nuc_mask_path = self.cell_images_path + os.sep + 'nuc_masks'
-        self.nuc_class_path = self.cell_images_path + os.sep + 'nuc_classes'
+        self.images = self.image_handler.images['seq_images']
+        self.pos_list = self.image_handler.image_lists['seq_images']
+        self.nuc_images_path = self.config['image_path']+os.sep+'nuc_images'
+        self.nuc_masks_path = self.config['image_path']+os.sep+'nuc_masks'
+        self.nuc_classes_path = self.config['image_path']+os.sep+'nuc_classes'
 
     def gen_nuc_images(self):
         '''
@@ -49,8 +48,9 @@ class NucDetector:
                 img = self.images[pos_index][self.config['nuc_ref_frame'], self.config['nuc_channel'], self.config['nuc_slice']].compute()
             imgs.append(img)
         imgs = np.stack(imgs).astype(np.uint16)
-        self.cell_images['nuc_images']= imgs
-        ip.imgs_to_ome_zarr(images = imgs, path=self.nuc_images_path, name = 'nuc_images', axes=['p','y','x'])
+        self.image_handler.images['nuc_images']= imgs
+
+        image_io.images_to_ome_zarr(images=imgs, path=self.nuc_images_path, name='nuc_images', axes=('p','y','x'), chunk_split=(1,1))
 
     def segment_nuclei(self):
         '''
@@ -58,29 +58,43 @@ class NucDetector:
         Dilates a bit and saves images.
         '''
 
-        if 'nuc_images' not in self.cell_images:
+        if 'nuc_images' not in self.image_handler.images:
             print('Generating nuclei images.')
             self.gen_nuc_images()
         
-        nuc_imgs = self.cell_images['nuc_images']
+        nuc_imgs = self.image_handler.images['nuc_images']
 
         diameter = self.config['nuc_diameter']
         try:
-            model = self.config['nuc_model']
+            method = self.config['nuc_method']
         except KeyError:
-            model = 'nuclei'
-        print(f'Running nuclear segmentation with CellPose using {model} model and diameter {diameter}.')
-        masks = ip.nuc_segmentation(nuc_imgs, diameter=diameter, model=model)
+            method = 'nuclei'
+        try:
+            nuc_3d = self.config['nuc_3d']
+        except KeyError:
+            nuc_3d = False
+        
+        print(f'Running nuclear segmentation using CellPose {method} model and diameter {diameter}.')
+
+        if nuc_3d:
+            masks = ip.nuc_segmentation_cellpose_3d(nuc_imgs, diameter = diameter, model_type = method)
+        else:
+            masks = ip.nuc_segmentation_cellpose_2d(nuc_imgs, diameter = diameter, model_type = method)
+            
         print(f'Detecting mitotic cells on top of CellPose nuclei.')
         masks, mitotic_idx = zip(*[ip.mitotic_cell_extra_seg(np.array(nuc_imgs[i]), masks[i]) for i in range(len(nuc_imgs))])
-
 
         masks = [dilation(mask, disk(self.config['nuc_dilation'])) for mask in masks]
         masks = np.stack(masks).astype(np.uint16)
 
         print('Saving segmentations.')
-        ip.imgs_to_ome_zarr(images = masks, path=self.nuc_mask_path, name = 'nuc_masks', axes=['p','y','x'])
-        self.image_handler.cell_images['nuc_masks'] = masks
+
+        self.image_handler.images['nuc_masks']= masks
+
+        if nuc_3d:
+            image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name='nuc_masks', axes=('p','z','y','x'), chunk_split=(1,1))
+        else:
+            image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name='nuc_masks', axes=('p','y','x'), chunk_split=(1,1))
 
         nuc_class = []
         for i, mask in enumerate(masks):
@@ -89,51 +103,63 @@ class NucDetector:
             nuc_class.append(class_1 + class_2*2)
         nuc_class = np.stack(nuc_class).astype(np.uint16)
         print('Saving classifications.')
-        ip.imgs_to_ome_zarr(images = nuc_class, path=self.nuc_class_path, name = 'nuc_classes', axes=['p','y','x'])
-        self.image_handler.cell_images['nuc_classes'] = nuc_class
-      
 
+        self.image_handler.images['nuc_classes'] = nuc_class
+        if nuc_3d:
+            image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name='nuc_classes', axes=('p','z', 'y','x'), chunk_split=(1,1))
+        else:
+            image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name='nuc_classes', axes=('p','y','x'), chunk_split=(1,1))
 
-    ## Legacy classification with ilastic.
-    # def classify_nuclei(self):
-    #     '''
-    #     Runs nucleus classification after detection usign pre-trained ilastik model.
-    #     Saves classified images.
-    #     '''
-
-    #     print('Running classification of nuclei with Ilastik.')
-    #     raw_imgs = [str(p) for p in Path(self.nuc_folder).glob('nuc_raw_*.tiff')] #' '.join(
-    #     seg_imgs = [str(p) for p in Path(self.nuc_folder).glob('nuc_binary_*.tiff')]
+    # def extract_nucs(self):
+    #     nuc_masks = self.image_handler.images['nuc_masks']
         
-    #     ilastik_path = self.config['ilastik_path']
-    #     project_path = self.config['ilastik_project_path']
-    #     params = f' --headless --project=\"{project_path}\" --export_source=\"Object Predictions\" --output_format=numpy '
-    #     for raw_img, seg_img in zip(raw_imgs, seg_imgs):
-    #         raw_data = f'--raw_data {raw_img} '
-    #         segmentation = f'--segmentation_image {seg_img}'
-    #         command = ilastik_path+params+raw_data+segmentation
-    #         subprocess.run(command)
-    #     nuc_class = [np.load(img) for img in Path(self.nuc_folder).glob('nuc_raw_*_Object*.npy')]
-    #     print('Nucleus classification done.')
-    #     self.image_handler.nuc_class = nuc_class
+    #     for i, mask in enumerate(nuc_masks):
+    #         nuc_props = pd.DataFrame(regionprops_table(mask)).rename(columns={'bbox-0':'z_min', 
+    #                                                                         'bbox-1':'y_min', 
+    #                                                                         'bbox-2':'x_min', 
+    #                                                                         'bbox-3':'z_max', 
+    #                                                                         'bbox-4':'y_max', 
+    #                                                                         'bbox-5':'x_max'})
+    #         for j, roi in nuc_masks.iterrows():
+    #             pos = self.image_handler.pos_i
+            
+    #     all_rois = []
+    #     for i, roi in tqdm(self.roi_table.iterrows()):
+    #         pos = roi['position']
+    #         pos_index = positions.index(pos)
+    #         sel_dc = self.drift_table.query('position == @pos')
+    #         ref_frame = roi['frame']
+    #         ch = roi['ch']
+    #         ref_offset = sel_dc.query('frame == @ref_frame')
+    #         Z, Y, X = self.images[pos_index][0,ch].shape[-3:]
+    #         for j, dc_frame in sel_dc.iterrows():
+    #             z_drift_course = int(dc_frame['z_px_course']) - int(ref_offset['z_px_course'])
+    #             y_drift_course = int(dc_frame['y_px_course']) - int(ref_offset['y_px_course'])
+    #             x_drift_course = int(dc_frame['x_px_course']) - int(ref_offset['x_px_course'])
 
-        # def save_nucs(self, img_type):
-    #     '''
-    #     Function to save nuclear images, either raw or the masks, as tiff files in nucs folder.
+    #             z_min = roi['z_min'] - z_drift_course
+    #             z_max = roi['z_max'] - z_drift_course
+    #             y_min = roi['y_min'] - y_drift_course
+    #             y_max = roi['y_max'] - y_drift_course
+    #             x_min = roi['x_min'] - x_drift_course
+    #             x_max = roi['x_max'] - x_drift_course
 
-    #     Args:
-    #         img_type ([str]): Type of images to save, can be 'raw', 'mask' or 'class'.
-    #     '''
-    #     Path(self.nuc_folder).mkdir(parents=True, exist_ok=True)
-    #     imgs = []
-    #     for pos in self.pos_list:
-    #         pos_index = self.pos_list.index(pos)
-    #         if img_type=='raw':
-    #             img = self.nucs[pos_index]
-    #             tifffile.imsave(self.nuc_folder+os.sep+'nuc_raw_'+pos+'.tiff', data=img)
-    #         elif img_type=='mask':
-    #             img = self.nuc_masks[pos_index]
-    #             tifffile.imsave(self.nuc_folder+os.sep+'nuc_labels_'+pos+'.tiff', data=img)
-    #         elif img_type=='class':
-    #             img = self.nuc_class[pos_index]
-    #             np.save(self.nuc_folder+os.sep+'nuc_raw_'+pos+'_Object Predictions.npy', img)
+    #             #Handling case of ROI extending beyond image edge after drift correction:
+    #             pad = ((abs(min(0,z_min)),abs(max(0,z_max-Z))),
+    #                     (abs(min(0,y_min)),abs(max(0,y_max-Y))),
+    #                     (abs(min(0,x_min)),abs(max(0,x_max-X))))
+
+    #             sz = (max(0,z_min),min(Z,z_max))
+    #             sy = (max(0,y_min),min(Y,y_max))
+    #             sx = (max(0,x_min),min(X,x_max))
+
+    #             #Create slice object after above corrections:
+    #             s = (slice(sz[0],sz[1]), 
+    #                 slice(sy[0],sy[1]), 
+    #                 slice(sx[0],sx[1]))
+
+    #             all_rois.append([pos, pos_index, roi.name, dc_frame['frame'], ref_frame, ch, s, pad, z_drift_course, y_drift_course, x_drift_course, 
+    #                                                                                     dc_frame['z_px_fine'], dc_frame['y_px_fine'], dc_frame['x_px_fine']])
+
+    #     self.all_rois = pd.DataFrame(all_rois, columns=['position', 'pos_index', 'roi_id', 'frame', 'ref_frame', 'ch', 'roi_slice', 'pad', 'z_px_course', 'y_px_course', 'x_px_course', 
+    #                                                                                               'z_px_fine', 'y_px_fine', 'x_px_fine'])
