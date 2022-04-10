@@ -15,6 +15,8 @@ import numpy as np
 import pandas as pd
 from skimage.morphology import dilation, disk
 from skimage.measure import regionprops_table
+from skimage.transform import rescale
+from tqdm import tqdm
 
 class NucDetector:
     '''
@@ -50,7 +52,7 @@ class NucDetector:
         imgs = np.stack(imgs).astype(np.uint16)
         self.image_handler.images['nuc_images']= imgs
 
-        image_io.images_to_ome_zarr(images=imgs, path=self.nuc_images_path, name='nuc_images', axes=('p','y','x'), chunk_split=(1,1))
+        image_io.images_to_ome_zarr(images=imgs, path=self.nuc_images_path, name='nuc_images', axes=('p','y','x'), chunk_split=(1,1), dtype = np.uint16)
 
     def segment_nuclei(self):
         '''
@@ -63,8 +65,9 @@ class NucDetector:
             self.gen_nuc_images()
         
         nuc_imgs = self.image_handler.images['nuc_images']
+        nuc_imgs = [np.array(nuc_img)[..., ::4, ::4] for nuc_img in nuc_imgs]
 
-        diameter = self.config['nuc_diameter']
+        diameter = self.config['nuc_diameter']/4
         try:
             method = self.config['nuc_method']
         except KeyError:
@@ -84,7 +87,7 @@ class NucDetector:
         print(f'Detecting mitotic cells on top of CellPose nuclei.')
         masks, mitotic_idx = zip(*[ip.mitotic_cell_extra_seg(np.array(nuc_imgs[i]), masks[i]) for i in range(len(nuc_imgs))])
 
-        masks = [dilation(mask, disk(self.config['nuc_dilation'])) for mask in masks]
+        masks = [dilation(rescale(mask, scale = 4, order = 0), disk(self.config['nuc_dilation'])) for mask in masks]
         masks = np.stack(masks).astype(np.uint16)
 
         print('Saving segmentations.')
@@ -92,9 +95,9 @@ class NucDetector:
         self.image_handler.images['nuc_masks']= masks
 
         if nuc_3d:
-            image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name='nuc_masks', axes=('p','z','y','x'), chunk_split=(1,1))
+            image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name='nuc_masks', axes=('p','z','y','x'), dtype = np.uint16, chunk_split=(1,1))
         else:
-            image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name='nuc_masks', axes=('p','y','x'), chunk_split=(1,1))
+            image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name='nuc_masks', axes=('p','y','x'), dtype = np.uint16, chunk_split=(1,1))
 
         nuc_class = []
         for i, mask in enumerate(masks):
@@ -106,60 +109,108 @@ class NucDetector:
 
         self.image_handler.images['nuc_classes'] = nuc_class
         if nuc_3d:
-            image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name='nuc_classes', axes=('p','z', 'y','x'), chunk_split=(1,1))
+            image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name='nuc_classes', axes=('p','z', 'y','x'), dtype = np.uint16, chunk_split=(1,1))
         else:
-            image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name='nuc_classes', axes=('p','y','x'), chunk_split=(1,1))
+            image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name='nuc_classes', axes=('p','y','x'), dtype = np.uint16, chunk_split=(1,1))
 
-    # def extract_nucs(self):
-    #     nuc_masks = self.image_handler.images['nuc_masks']
+    def gen_nuc_rois(self):
+        nuc_rois = []
+        nuc_masks = self.image_handler.images['nuc_masks']
+        ch = self.config['trace_ch']
+        ref_frame = self.config['bead_reference_frame']
         
-    #     for i, mask in enumerate(nuc_masks):
-    #         nuc_props = pd.DataFrame(regionprops_table(mask)).rename(columns={'bbox-0':'z_min', 
-    #                                                                         'bbox-1':'y_min', 
-    #                                                                         'bbox-2':'x_min', 
-    #                                                                         'bbox-3':'z_max', 
-    #                                                                         'bbox-4':'y_max', 
-    #                                                                         'bbox-5':'x_max'})
-    #         for j, roi in nuc_masks.iterrows():
-    #             pos = self.image_handler.pos_i
-            
-    #     all_rois = []
-    #     for i, roi in tqdm(self.roi_table.iterrows()):
-    #         pos = roi['position']
-    #         pos_index = positions.index(pos)
-    #         sel_dc = self.drift_table.query('position == @pos')
-    #         ref_frame = roi['frame']
-    #         ch = roi['ch']
-    #         ref_offset = sel_dc.query('frame == @ref_frame')
-    #         Z, Y, X = self.images[pos_index][0,ch].shape[-3:]
-    #         for j, dc_frame in sel_dc.iterrows():
-    #             z_drift_course = int(dc_frame['z_px_course']) - int(ref_offset['z_px_course'])
-    #             y_drift_course = int(dc_frame['y_px_course']) - int(ref_offset['y_px_course'])
-    #             x_drift_course = int(dc_frame['x_px_course']) - int(ref_offset['x_px_course'])
+        for i, mask in tqdm(enumerate(nuc_masks), total = len(nuc_masks)):
+            if nuc_masks[0].ndim == 2:
+                nuc_props = pd.DataFrame(regionprops_table(mask)).rename(columns={'bbox-0':'y_min', 
+                                                                                'bbox-1':'x_min', 
+                                                                                'bbox-2':'y_max', 
+                                                                                'bbox-3':'x_max'})
+            else:
+                nuc_props = pd.DataFrame(regionprops_table(mask)).rename(columns={'bbox-0':'z_min', 
+                                                                'bbox-1':'y_min', 
+                                                                'bbox-2':'x_min', 
+                                                                'bbox-3':'z_max', 
+                                                                'bbox-4':'y_max', 
+                                                                'bbox-5':'x_max'})
 
-    #             z_min = roi['z_min'] - z_drift_course
-    #             z_max = roi['z_max'] - z_drift_course
-    #             y_min = roi['y_min'] - y_drift_course
-    #             y_max = roi['y_max'] - y_drift_course
-    #             x_min = roi['x_min'] - x_drift_course
-    #             x_max = roi['x_max'] - x_drift_course
+            for j, roi in nuc_props.iterrows():
+                pos = self.image_handler.image_lists['seq_images'][i]
+                sel_dc = self.image_handler.drift_table.query('position == @pos')
+                ref_offset = sel_dc.query('frame == @ref_frame')
+                Z, Y, X = self.images[i][0,ch].shape[-3:]
+                
+                for j, dc_frame in sel_dc.iterrows():
+                    z_drift_course = int(dc_frame['z_px_course']) - int(ref_offset['z_px_course'])
+                    y_drift_course = int(dc_frame['y_px_course']) - int(ref_offset['y_px_course'])
+                    x_drift_course = int(dc_frame['x_px_course']) - int(ref_offset['x_px_course'])
 
-    #             #Handling case of ROI extending beyond image edge after drift correction:
-    #             pad = ((abs(min(0,z_min)),abs(max(0,z_max-Z))),
-    #                     (abs(min(0,y_min)),abs(max(0,y_max-Y))),
-    #                     (abs(min(0,x_min)),abs(max(0,x_max-X))))
+                    if nuc_masks[0].ndim == 2:
+                        z_min = 0
+                        z_max = Z
+                    else:
+                        z_min = roi['z_min'] - z_drift_course
+                        z_max = roi['z_max'] - z_drift_course
+                    y_min = roi['y_min'] - y_drift_course
+                    y_max = roi['y_max'] - y_drift_course
+                    x_min = roi['x_min'] - x_drift_course
+                    x_max = roi['x_max'] - x_drift_course
 
-    #             sz = (max(0,z_min),min(Z,z_max))
-    #             sy = (max(0,y_min),min(Y,y_max))
-    #             sx = (max(0,x_min),min(X,x_max))
+                    #Handling case of ROI extending beyond image edge after drift correction:
+                    pad = ((abs(min(0,z_min)),abs(max(0,z_max-Z))),
+                            (abs(min(0,y_min)),abs(max(0,y_max-Y))),
+                            (abs(min(0,x_min)),abs(max(0,x_max-X))))
 
-    #             #Create slice object after above corrections:
-    #             s = (slice(sz[0],sz[1]), 
-    #                 slice(sy[0],sy[1]), 
-    #                 slice(sx[0],sx[1]))
+                    sz = (max(0,z_min),min(Z,z_max))
+                    sy = (max(0,y_min),min(Y,y_max))
+                    sx = (max(0,x_min),min(X,x_max))
 
-    #             all_rois.append([pos, pos_index, roi.name, dc_frame['frame'], ref_frame, ch, s, pad, z_drift_course, y_drift_course, x_drift_course, 
-    #                                                                                     dc_frame['z_px_fine'], dc_frame['y_px_fine'], dc_frame['x_px_fine']])
+                    #Create slice object after above corrections:
+                    s = (slice(sz[0],sz[1]), 
+                        slice(sy[0],sy[1]), 
+                        slice(sx[0],sx[1]))
 
-    #     self.all_rois = pd.DataFrame(all_rois, columns=['position', 'pos_index', 'roi_id', 'frame', 'ref_frame', 'ch', 'roi_slice', 'pad', 'z_px_course', 'y_px_course', 'x_px_course', 
-    #                                                                                               'z_px_fine', 'y_px_fine', 'x_px_fine'])
+                    nuc_rois.append([pos, i, roi.name, dc_frame['frame'], ref_frame, ch, s, pad, z_drift_course, y_drift_course, x_drift_course, 
+                                                                                            dc_frame['z_px_fine'], dc_frame['y_px_fine'], dc_frame['x_px_fine']])
+
+            self.nuc_rois = pd.DataFrame(nuc_rois, columns=['position', 'pos_index', 'roi_id', 'frame', 'ref_frame', 'ch', 'roi_slice', 'pad', 'z_px_course', 'y_px_course', 'x_px_course', 
+                                                                                                    'z_px_fine', 'y_px_fine', 'x_px_fine'])
+                
+                
+    def extract_single_roi_img(self, single_roi, images):
+        # Function for extracting a single cropped region defined by ROI from a larger 3D image.
+
+        z, y, x = single_roi['roi_slice']
+        pad = single_roi['pad']
+
+        try:
+            roi_img = np.array(images[z, y, x])
+
+            #If microscope drifted, ROI could be outside image. Correct for this:
+            if pad != ((0,0),(0,0),(0,0)):
+                roi_img = np.pad(roi_img, pad, mode='edge')
+
+        except ValueError: # ROI collection failed for some reason
+            roi_img = np.zeros((z,y,x), dtype=np.float32)
+
+        return roi_img  #{'p':p, 't':t, 'c':c, 'z':z, 'y':y, 'x':x, 'img':roi_img}
+
+    def gen_nuc_roi_imgs_inmem(self):
+        rois = self.nuc_rois#.iloc[0:500]
+        T = max(rois['frame'])+1
+
+        for i, roi in tqdm(rois.iterrows()):
+            extracted_rois = []
+            pos_img = np.array(self.images[roi['pos_index']][:, roi['ch']])
+            for t in range(T):
+                extracted_rois.append(self.extract_single_roi_img(roi, pos_img[t]))
+            extracted_rois = np.stack(extracted_rois)
+            image_io.single_position_to_zarr(images=extracted_rois, 
+                                        path=self.config['image_path']+os.sep+'single_nucs', 
+                                        name='single_nucs',
+                                        pos_name = 'P'+str(i+1).zfill(4), 
+                                        axes=('t','z','y','x'), 
+                                        chunk_axes = ('t','z','y', 'x'),
+                                        dtype = np.uint16, 
+                                        chunk_split=(1,1,1,1))
+
+        print('ROI images generated, please reinitialize to load them.')

@@ -155,7 +155,7 @@ def images_to_ome_zarr(images: np.ndarray or list,
 
     if 'p' in axes:
         for i, pos_img in enumerate(images):
-            pos_name = 'P'+str(i).zfill(4)
+            pos_name = 'P'+str(i+1).zfill(4)
             single_position_to_zarr(pos_img, path, name, pos_name, dtype, axes[1:], chunk_axes, chunk_split, metadata)
     else:
         single_position_to_zarr(images, path, name, pos_name, dtype, axes, chunk_axes, chunk_split, metadata)

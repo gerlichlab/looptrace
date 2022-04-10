@@ -278,21 +278,22 @@ def detect_spots_int(input_img, spot_threshold=500, min_dist=None):
         spot_props (DataFrame): The centroids and roi_IDs of the spots found. 
         img (ndarray): The DoG filtered image used for spot detection.
     '''
-    labels, _ = ndi.label(input_img > spot_threshold)
-    labels = remove_small_objects(labels, min_size=10)
-    labels = expand_labels(labels, 3)
-    spot_props = regionprops_table(labels, input_img, properties=('label', 'bbox', 'area', 'centroid_weighted'))
+    img = white_tophat(image=input_img, footprint=ball(2))
+    labels, _ = ndi.label(img > spot_threshold)
+    labels = remove_small_objects(labels, min_size=5)
+    labels = expand_labels(labels, 1)
+    spot_props = regionprops_table(labels, img, properties=('label', 'bbox', 'area', 'centroid_weighted'))
     spot_props = pd.DataFrame(spot_props)
 
     spot_props.rename(columns={'centroid_weighted-0': 'zc',
                                         'centroid_weighted-1': 'yc',
                                         'centroid_weighted-2': 'xc',
-                                        'bbox-0': 'zmin',
-                                        'bbox-1': 'ymin',
-                                        'bbox-2': 'xmin',
-                                        'bbox-3': 'zmax',
-                                        'bbox-4': 'ymax',
-                                        'bbox-5': 'xmax'},
+                                        'bbox-0': 'z_min',
+                                        'bbox-1': 'y_min',
+                                        'bbox-2': 'x_min',
+                                        'bbox-3': 'z_max',
+                                        'bbox-4': 'y_max',
+                                        'bbox-5': 'x_max'},
                         inplace = True)
     
     if min_dist:
@@ -415,6 +416,9 @@ def napari_view(img, points=None, downscale=2, axes = 'PTCZYX', point_frame_size
     else:
         img = img[...,::downscale,::downscale]
 
+    if isinstance(img, list):
+        img = da.stack(img)
+
     viewer = napari.view_image(img, channel_axis = channel_axis, name=name)
     if points is not None:
         point_layer = viewer.add_points(points/downscale, 
@@ -479,7 +483,7 @@ def nuc_segmentation_cellpose_2d(nuc_imgs, diameter = 150, model_type = 'nuclei'
     '''
     if not isinstance(nuc_imgs, list):
         if nuc_imgs.ndim > 2:
-            nuc_imgs = [nuc_imgs[i] for i in range(nuc_imgs.shape[0])]
+            nuc_imgs = [np.array(nuc_imgs[i]) for i in range(nuc_imgs.shape[0])] #Force array conversion in case of zarr.
 
     from cellpose import models
     model = models.Cellpose(gpu=False, model_type=model_type)
@@ -493,6 +497,10 @@ def nuc_segmentation_cellpose_3d(nuc_imgs, diameter = 150, model_type = 'nuclei'
     Args:
         nuc_imgs (ndarray or list of ndarrays): 2D or 3D images of nuclei, expects single channel
     '''
+
+    if not isinstance(nuc_imgs, list):
+        if nuc_imgs.ndim > 3:
+            nuc_imgs = [np.array(nuc_imgs[i]) for i in range(nuc_imgs.shape[0])] #Force array conversion in case of zarr.
 
     from cellpose import models
     model = models.Cellpose(gpu=False, model_type='nuclei', net_avg=False)
@@ -528,7 +536,7 @@ def mitotic_cell_extra_seg(nuc_image, nuc_mask):
     from skimage.morphology import label, remove_small_objects
     nuc_int = np.mean(nuc_image[nuc_mask>0])
     mito_nuc = (nuc_image * (nuc_mask == 0)) > 1.5*nuc_int
-    mito_nuc = remove_small_objects(mito_nuc, min_size=1000)
+    mito_nuc = remove_small_objects(mito_nuc, min_size=100)
     mito_nuc = label(mito_nuc)
     mito_index = np.max(nuc_mask)
     mito_nuc[mito_nuc>0] += mito_index

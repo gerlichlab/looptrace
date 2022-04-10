@@ -16,6 +16,7 @@ from looptrace.ImageHandler import ImageHandler
 from looptrace.SpotPicker import SpotPicker
 from looptrace.NucDetector import NucDetector
 import looptrace.image_processing_functions as ip
+from looptrace import image_io
 import logging
 import napari
 
@@ -71,18 +72,20 @@ def main():
         event, values = window.read(timeout=100)
         if event == '-INIT-':
             H = ImageHandler(values['-CONFIG_PATH-'])
-            window['-DC_POSITION-'].update(values=H.pos_list, set_to_index=0)
-            window['-ROI_POSITION-'].update(values=H.pos_list, set_to_index=0)
+            window['-DC_POSITION-'].update(values=H.image_lists['seq_images'], set_to_index=0)
+            window['-ROI_POSITION-'].update(values=H.image_lists['seq_images'], set_to_index=0)
             window['-DC_PATH-'].update(H.dc_file_path)
             window['-ROI_FILE_PATH-'].update(H.roi_file_path)
-            #if H.config['image_filetype'] in ['zip','zarr','ome-zarr']:
-            #    window['-SAVE-'].update(disabled=True)
-        elif event == '-SAVE-':
-            H.dask_to_ome_zarr()
+            
+            T = Tracer(H)
+            N = NucDetector(H)
+            D = Drifter(H)
+            S = SpotPicker(H)
+
         elif event == '-VIEW_IMAGES-':
             #pos_index = H.pos_list.index(values['-IMG_POS-'])
             #print('Viewing position ', values['-IMG_POS-'])
-            ip.napari_view(H.images[H.pos_list.index(values['-DC_POSITION-'])], axes=('TCZYX'), downscale=int(H.config['image_view_downscaling']))
+            ip.napari_view(H.images['seq_images'][H.image_lists['seq_images'].index(values['-DC_POSITION-'])], axes=('TCZYX'), downscale=int(H.config['image_view_downscaling']))
         elif event == '-RELOAD-':
             H.reload_config()
         elif event == '-RUN_DC-':
@@ -117,31 +120,31 @@ def main():
                 N
             except NameError:
                 N = NucDetector(H)
-            if 'nuc_images' in H.cell_images:
-                nuc_imgs = H.cell_images['nuc_images']
-                viewer = napari.view_image(nuc_imgs)
-            if 'nuc_masks' in H.cell_images:
-                nuc_labels = H.cell_images['nuc_masks']
-                masks_layer = viewer.add_labels(np.array(nuc_labels))
-            if 'nuc_classes' in H.cell_images:
-                nuc_classes = H.cell_images['nuc_classes']
-                classes_layer = viewer.add_labels(np.array(nuc_classes))
+            if 'nuc_images' in H.images:
+                nuc_imgs = H.images['nuc_images']
+                viewer = napari.view_image(np.stack(np.array(nuc_imgs)))
+            if 'nuc_masks' in H.images:
+                nuc_labels = H.images['nuc_masks']
+                masks_layer = viewer.add_labels(np.stack(np.array(nuc_labels)))
+            if 'nuc_classes' in H.images:
+                nuc_classes = H.images['nuc_classes']
+                classes_layer = viewer.add_labels(np.stack(np.array(nuc_classes)))
             napari.run()
             try:             
                 if not np.allclose(masks_layer.data, nuc_labels):
-                    print('Labels changed, resaving.')
+                    print('Segmentation labels changed, resaving.')
                     nuc_masks = []
                     for i in range(masks_layer.data.shape[0]):
                         nuc_masks.append(ip.relabel_nucs(masks_layer.data[i]))
                     nuc_masks = np.stack(nuc_masks)
 
-                    H.cell_images['nuc_masks'] = nuc_masks
-                    ip.imgs_to_ome_zarr(images = nuc_masks, path=N.nuc_mask_path, name = 'nuc_masks', axes=['p','y','x'])
+                    H.images['nuc_masks'] = nuc_masks.astype(np.uint16)
+                    image_io.images_to_ome_zarr(images = H.images['nuc_masks'], path=N.nuc_masks_path, name = 'nuc_masks', axes=['p','y','x'], dtype=np.uint16, chunk_split=(1,1))
                     
                 if not np.allclose(classes_layer.data, nuc_classes):
-                    print('Labels changed, resaving.')
-                    H.cell_images['nuc_classes'] = classes_layer.data
-                    ip.imgs_to_ome_zarr(images = classes_layer.data, path=N.nuc_class_path, name = 'nuc_classes', axes=['p','y','x'])
+                    print('Class labels changed, resaving.')
+                    H.images['nuc_classes'] = classes_layer.data.astype(np.uint16)
+                    image_io.images_to_ome_zarr(images = H.images['nuc_classes'], path=N.nuc_classes_path, name = 'nuc_classes', axes=['p','y','x'], dtype=np.uint16, chunk_split=(1,1))
 
             except UnboundLocalError: #In case labels or classes do not exist.
                 continue
@@ -159,18 +162,7 @@ def main():
 
         elif event == '-SPOT_IN_NUC-':
             print('(Re)filtering ROIs.')
-            H.load_drift_table(path=values['-DC_PATH-'])
-            if 'nuc_images' not in H.cell_images:
-                print('Please generate nuclei images first.')
-            if 'nuc_masks' in H.cell_images:
-                H.roi_table = ip.filter_rois_in_nucs(H.roi_table, np.array(H.cell_images['nuc_masks']), H.pos_list, new_col='nuc_label', drifts = H.drift_table, target_frame=H.config['nuc_ref_frame'])
-                H.save_data(rois=H.roi_table)
-                print('ROIs (re)assigned to nuclei.')
-            if 'nuc_classes' in H.cell_images:
-                H.roi_table = ip.filter_rois_in_nucs(H.roi_table, np.array(H.cell_images['nuc_classes']), H.pos_list, new_col='nuc_class', drifts = H.drift_table, target_frame=H.config['nuc_ref_frame'])
-                H.save_data(rois=H.roi_table)
-                print('ROIs classified.')
-            
+            S.refilter_rois()
 
         elif event == '-LOAD_ROI-':
             if values['-IJ_ROI-']:
@@ -182,7 +174,7 @@ def main():
         elif event == '-VIEW_ROI-':
             position = values['-ROI_POSITION-']
             print('Checking ROIs in position ', position)
-            pos_index = H.pos_list.index(position)
+            pos_index = H.image_lists['seq_images'].index(position)
 
             if H.roi_table is not None:
                 try:
@@ -197,7 +189,7 @@ def main():
                 H.gen_dc_images(pos = position)
                 img = H.dc_images
             else:
-                img = H.images[pos_index]
+                img = H.images['seq_images'][pos_index]
            
             
             #roi_shapes, roi_props = ip.roi_to_napari_shape(T.roi_table, position = position)
@@ -220,7 +212,9 @@ def main():
             H.load_drift_table(values['-DC_PATH-'])
             T = Tracer(H)
             T.make_dc_rois_all_frames()
-            T.tracing_3d()
+            T.gen_roi_imgs_inmem()
+            T.decon_roi_imgs()
+            T.trace_all_rois()
         
         elif event == '-BEAD_TRACING-':
             H.load_drift_table(values['-DC_PATH-'])
@@ -228,7 +222,9 @@ def main():
             S.rois_from_beads()
             T = Tracer(H, trace_beads=True)
             T.make_dc_rois_all_frames()
-            T.tracing_3d()
+            T.gen_roi_imgs_inmem()
+            T.decon_roi_imgs()
+            T.trace_all_rois()
 
         elif event in  (None, 'Exit'):
             break
