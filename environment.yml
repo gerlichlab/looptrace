@@ -5,13 +5,13 @@ dependencies:
     - scipy
     - pandas
     - dask
-    - joblib
+    - joblib    
     - pip
     - pip:
         - flowdec[tf_gpu]
         - scikit-image
         - scikit-learn
-        - nd2reader
+        - nd2
         - pyyaml
         - seaborn
         - pyserial

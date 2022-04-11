@@ -71,7 +71,7 @@ class ImageHandler:
 
             if os.path.isdir(image_path):
                 print(image_path)
-                self.images[image_name], self.image_lists[image_name] = image_io.multi_ome_zarr_to_dask(image_path)
+                self.images[image_name], self.image_lists[image_name] = image_io.multi_ome_zarr_to_dask(image_path, remove_unused_dims = True)
                 print('Loaded images: ', image_name)
             elif image_name.endswith('.npz'):
                 self.images[os.path.splitext(image_name)[0]] = image_io.NPZ_wrapper(image_path)

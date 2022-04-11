@@ -69,7 +69,7 @@ def load_config(config_file):
             print(exc)
     return config
 
-def multi_ome_zarr_to_dask(folder: str):
+def multi_ome_zarr_to_dask(folder: str, remove_unused_dims = True):
     image_folders = [p.name for p in os.scandir(folder) if os.path.isdir(p)]
     out = []
     for image in image_folders:
@@ -77,8 +77,9 @@ def multi_ome_zarr_to_dask(folder: str):
         arr = da.from_zarr(z)
 
         # Remove unecessary dimensions: #TODO consider if this is wise!
-        new_slice = tuple([0 if i == 1 else slice(None) for i in arr.shape])
-        arr = arr[new_slice]
+        if remove_unused_dims:
+            new_slice = tuple([0 if i == 1 else slice(None) for i in arr.shape])
+            arr = arr[new_slice]
         #chunks = (1,1,s[-3], s[-2], s[-1])
         out.append(arr)#, chunks=chunks))
     #out = da.stack(out) #Removed as not compatible with different shaped
@@ -117,8 +118,8 @@ def single_position_to_zarr(images: np.ndarray or list,
             
 
     shape = tuple([size[ax] for ax in default_axes])
-    print(shape)
-    print(images.size)
+    #print(shape)
+    #print(images.size)
     chunks = tuple([chunk_dict[ax] for ax in default_axes])
     images = np.reshape(images, shape)
 
@@ -132,7 +133,9 @@ def single_position_to_zarr(images: np.ndarray or list,
     compressor = Blosc(cname='zstd', clevel=5, shuffle=Blosc.BITSHUFFLE)
 
     multiscale_level = root.create_dataset(name = str(0), compressor=compressor, shape=shape, chunks=chunks, dtype=dtype)
-    if size['t'] < 4 or images.size < 1e7:
+    if 't' in chunk_axes:
+        multiscale_level[:] = images
+    elif size['t'] < 10 or images.size < 1e9:
         [single_image_to_zarr(multiscale_level, i, images[i]) for i in range(size['t'])]
     else:
         joblib.Parallel(n_jobs=-1, prefer='threads', verbose=10)(joblib.delayed(single_image_to_zarr)

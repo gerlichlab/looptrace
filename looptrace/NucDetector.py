@@ -13,7 +13,7 @@ import dask.array as da
 import os
 import numpy as np
 import pandas as pd
-from skimage.morphology import dilation, disk
+from skimage.segmentation import expand_labels
 from skimage.measure import regionprops_table
 from skimage.transform import rescale
 from tqdm import tqdm
@@ -34,17 +34,25 @@ class NucDetector:
 
     def gen_nuc_images(self):
         '''
-        Saves 2D max projected images of the nuclear channel into image folder for later analysis.
+        Saves 2D/3D (defined in config) images of the nuclear channel into image folder for later analysis.
         '''
         try:
             nuc_slice = self.config['nuc_slice']
         except KeyError: #Legacy config
             nuc_slice = -1
+        try:
+            nuc_3d = self.config['nuc_3d']
+        except KeyError:
+            nuc_3d = False
+        
 
         imgs = []
         for pos in self.pos_list:
             pos_index = self.pos_list.index(pos)
-            if nuc_slice == -1:
+
+            if nuc_3d:
+                img = self.images[pos_index][self.config['nuc_ref_frame'], self.config['nuc_channel']].compute()
+            elif nuc_slice == -1:
                 img = da.max(self.images[pos_index][self.config['nuc_ref_frame'], self.config['nuc_channel']], axis=0).compute()
             else:
                 img = self.images[pos_index][self.config['nuc_ref_frame'], self.config['nuc_channel'], self.config['nuc_slice']].compute()
@@ -52,7 +60,10 @@ class NucDetector:
         imgs = np.stack(imgs).astype(np.uint16)
         self.image_handler.images['nuc_images']= imgs
 
-        image_io.images_to_ome_zarr(images=imgs, path=self.nuc_images_path, name='nuc_images', axes=('p','y','x'), chunk_split=(1,1), dtype = np.uint16)
+        if nuc_3d:
+            image_io.images_to_ome_zarr(images=imgs, path=self.nuc_images_path, name='nuc_images', axes=('p','z','y','x'), chunk_split=(1,1), dtype = np.uint16)
+        else:
+            image_io.images_to_ome_zarr(images=imgs, path=self.nuc_images_path, name='nuc_images', axes=('p','y','x'), chunk_split=(1,1), dtype = np.uint16)
 
     def segment_nuclei(self):
         '''
@@ -63,11 +74,9 @@ class NucDetector:
         if 'nuc_images' not in self.image_handler.images:
             print('Generating nuclei images.')
             self.gen_nuc_images()
-        
-        nuc_imgs = self.image_handler.images['nuc_images']
-        nuc_imgs = [np.array(nuc_img)[..., ::4, ::4] for nuc_img in nuc_imgs]
 
         diameter = self.config['nuc_diameter']/4
+        
         try:
             method = self.config['nuc_method']
         except KeyError:
@@ -76,6 +85,20 @@ class NucDetector:
             nuc_3d = self.config['nuc_3d']
         except KeyError:
             nuc_3d = False
+        
+        
+        nuc_imgs_in = self.image_handler.images['nuc_images']
+        nuc_imgs = []
+
+        #Remove unused dimensions and downscale input images.
+        for img in nuc_imgs_in:        
+            new_slice = tuple([0 if i == 1 else slice(None) for i in img.shape])
+            img = img[new_slice]
+            if nuc_3d:
+                img = np.array(img[::4, ::4, ::4])
+            else:
+                img = np.array(img[::4,::4])
+            nuc_imgs.append(img)
         
         print(f'Running nuclear segmentation using CellPose {method} model and diameter {diameter}.')
 
@@ -87,8 +110,8 @@ class NucDetector:
         print(f'Detecting mitotic cells on top of CellPose nuclei.')
         masks, mitotic_idx = zip(*[ip.mitotic_cell_extra_seg(np.array(nuc_imgs[i]), masks[i]) for i in range(len(nuc_imgs))])
 
-        masks = [dilation(rescale(mask, scale = 4, order = 0), disk(self.config['nuc_dilation'])) for mask in masks]
-        masks = np.stack(masks).astype(np.uint16)
+        masks = [rescale(expand_labels(mask.astype(np.uint16),3), scale = 4, order = 0) for mask in masks]
+        masks = np.stack(masks)
 
         print('Saving segmentations.')
 
@@ -117,7 +140,7 @@ class NucDetector:
         nuc_rois = []
         nuc_masks = self.image_handler.images['nuc_masks']
         ch = self.config['trace_ch']
-        ref_frame = self.config['bead_reference_frame']
+        ref_frame = self.config['nuc_ref_frame']
         
         for i, mask in tqdm(enumerate(nuc_masks), total = len(nuc_masks)):
             if nuc_masks[0].ndim == 2:
@@ -194,23 +217,45 @@ class NucDetector:
 
         return roi_img  #{'p':p, 't':t, 'c':c, 'z':z, 'y':y, 'x':x, 'img':roi_img}
 
-    def gen_nuc_roi_imgs_inmem(self):
+    def gen_single_nuc_images(self):
         rois = self.nuc_rois#.iloc[0:500]
+        P = max(rois['pos_index'])+1
         T = max(rois['frame'])+1
 
-        for i, roi in tqdm(rois.iterrows()):
-            extracted_rois = []
-            pos_img = np.array(self.images[roi['pos_index']][:, roi['ch']])
-            for t in range(T):
-                extracted_rois.append(self.extract_single_roi_img(roi, pos_img[t]))
-            extracted_rois = np.stack(extracted_rois)
-            image_io.single_position_to_zarr(images=extracted_rois, 
-                                        path=self.config['image_path']+os.sep+'single_nucs', 
-                                        name='single_nucs',
-                                        pos_name = 'P'+str(i+1).zfill(4), 
-                                        axes=('t','z','y','x'), 
-                                        chunk_axes = ('t','z','y', 'x'),
-                                        dtype = np.uint16, 
-                                        chunk_split=(1,1,1,1))
+        roi_array = {}
+        for pos in tqdm(range(P), total = P):
+            for frame in range(T):
+                rois_stack = rois.query('pos_index == @pos & frame == @frame')
+                #print(rois_stack)
+                #roi_ch = int(rois['ch'].unique())
+                image_stack = np.array(self.images[pos][frame])
+                #print(image_stack.shape)
+                for j, single_roi in rois_stack.iterrows():
+                    id = single_roi['roi_id']
+                    t = single_roi['frame']
 
-        print('ROI images generated, please reinitialize to load them.')
+                    #TODO: channels hardcoded now, implement as config setting.
+                    roi = np.stack([self.extract_single_roi_img(single_roi, image_stack[c]).astype(np.uint16) for c in (0,1)])
+
+                    roi_array[id, t] = roi
+                    #roi_array_padded.append(ip.pad_to_shape(roi, shape = roi_image_size, mode = 'minimum'))
+        
+        #print(roi_array.keys())
+        
+            #pos_rois = []
+        
+            for roi_id in rois_stack.roi_id.to_list():
+                try:
+                    pos_rois = np.stack([roi_array[(roi_id, frame)] for frame in range(T)])
+                    #print('Made pos roi ', roi_id, pos_rois.shape)
+                except KeyError:
+                    break
+                image_io.single_position_to_zarr(images=pos_rois, 
+                            path=self.config['image_path']+os.sep+'single_nucs', 
+                            name='single_nucs',
+                            pos_name = 'P'+str(pos+1).zfill(4)+'_'+str(roi_id+1).zfill(4), 
+                            axes=('t','c','z','y','x'), 
+                            chunk_axes = ('t','z','y','x'),
+                            dtype = np.uint16, 
+                            chunk_split=(1,1,1,1))
+            print('ROI images generated, please reinitialize to load them.')
