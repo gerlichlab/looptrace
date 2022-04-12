@@ -76,7 +76,7 @@ class Tracer:
                 s = (slice(sz[0],sz[1]), 
                     slice(sy[0],sy[1]), 
                     slice(sx[0],sx[1]))
-
+                #print('Appending ', s)
                 all_rois.append([pos, pos_index, roi.name, dc_frame['frame'], ref_frame, ch, s, pad, z_drift_course, y_drift_course, x_drift_course, 
                                                                                         dc_frame['z_px_fine'], dc_frame['y_px_fine'], dc_frame['x_px_fine']])
 
@@ -145,7 +145,7 @@ class Tracer:
         #roi_array_padded = []
 
         for pos in tqdm(range(P), total = P):
-                for frame in tqdm(range(T), total = T):
+                for frame in range(T):
                     rois_stack = rois.query('pos_index == @pos & frame == @frame')
                     #print(rois_stack)
                     roi_ch = int(rois['ch'].unique())

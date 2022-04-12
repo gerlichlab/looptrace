@@ -676,6 +676,17 @@ def relabel_nucs(nuc_image):
     out = label(out)
     return out.astype(nuc_image.dtype)
 
+def full_frame_dc_to_single_nuc_dc(old_dc_path, new_dc_position_list, new_dc_path):
+    new_drifts = []
+    drifts = pd.read_csv(old_dc_path)
+    for i, p in enumerate(new_dc_position_list):
+        pos_name = p.split('_')[0]
+        pos_drifts = drifts.query('position == @pos_name')
+        for j, d in pos_drifts.iterrows():
+            new_drifts.append(d.values.tolist()+[p])
+    new_drifts = pd.DataFrame(new_drifts, columns = ['old_index','frame','z_px_course','y_px_course','x_px_course','z_px_fine',
+    'y_px_fine','x_px_fine','orig_position', 'position'])
+    new_drifts.to_csv(new_dc_path)
 
 
 
