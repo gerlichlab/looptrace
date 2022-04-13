@@ -49,23 +49,23 @@ class SpotPicker:
         except KeyError: #Legacy config.
             min_dist = None
 
-        try:
-            detect_method = self.config['detection_method']
-            if detect_method == 'intensity':
-                detect_func = ip.detect_spots_int
-                print('Using intensity based spot detection.')
-            else:
-                detect_func = ip.detect_spots
-                print('Using DoG based spot detection.')
-        except KeyError: #Legacy config.
-            detect_func = ip.detect_spots
-            detect_method = 'dog'
-            print('Using DoG based spot detection.')
-
         spot_threshold = self.config['spot_threshold']
         if not isinstance(spot_threshold, list):
             spot_threshold = [spot_threshold]*len(spot_frame)
         spot_ds = self.config['spot_downsample']
+
+        try:
+            detect_method = self.config['detection_method']
+            if detect_method == 'intensity':
+                detect_func = ip.detect_spots_int
+                print('Using intensity based spot detection with threshold ', spot_threshold)
+            else:
+                detect_func = ip.detect_spots
+                print('Using DoG based spot detection with threshold ',  spot_threshold)
+        except KeyError: #Legacy config.
+            detect_func = ip.detect_spots
+            detect_method = 'dog'
+            print('Using DoG based spot detection.')
 
         #Loop through the imaging positions.
         all_rois = []
@@ -91,10 +91,11 @@ class SpotPicker:
 
             return
         
-        for position in self.pos_list:
+        for position in tqdm.tqdm(self.pos_list):
+            
             for i, frame in enumerate(spot_frame):
             
-                print(f'Detecting spots in position {position}, frame {frame}, ch {ch}.')
+                #print(f'Detecting spots in position {position}, frame {frame}, ch {ch}.',  end=' ')
                 
                 pos_index = self.pos_list.index(position)
                 img = self.images[pos_index][frame, ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
@@ -121,7 +122,7 @@ class SpotPicker:
                 print('No nuclei mask images found, cannot filter.')
             else:
                 print('Filtering in nuclei.')
-                output = ip.filter_rois_in_nucs(output, np.array(self.image_handler.images['nuc_masks']), self.pos_list, drifts=self.image_handler.drift_table, target_frame=self.config['nuc_ref_frame'])
+                output = ip.filter_rois_in_nucs(output, np.array(self.image_handler.images['nuc_masks']), self.pos_list, drifts=self.image_handler.tables['drift_correction'], target_frame=self.config['nuc_ref_frame'])
                 output = output[output['nuc_label'] > 0 ]
         
         output=output.reset_index().rename(columns={'index':'roi_id_pos'})
@@ -187,10 +188,10 @@ class SpotPicker:
         if 'nuc_images' not in self.image_handler.images:
             print('Please generate nuclei images first.')
         if 'nuc_masks' in self.image_handler.images:
-            self.image_handler.roi_table = ip.filter_rois_in_nucs(self.image_handler.roi_table.copy(), np.array(self.image_handler.images['nuc_masks']), self.pos_list, new_col='nuc_label', drifts = self.image_handler.drift_table, target_frame=self.config['nuc_ref_frame'])
+            self.image_handler.roi_table = ip.filter_rois_in_nucs(self.image_handler.roi_table.copy(), np.array(self.image_handler.images['nuc_masks']), self.pos_list, new_col='nuc_label', drifts = self.image_handler.tables['drift_correction'], target_frame=self.config['nuc_ref_frame'])
             
         if 'nuc_classes' in self.image_handler.images:
-            self.image_handler.roi_table = ip.filter_rois_in_nucs(self.image_handler.roi_table.copy(), np.array(self.image_handler.images['nuc_classes']), self.pos_list, new_col='nuc_class', drifts = self.image_handler.drift_table, target_frame=self.config['nuc_ref_frame'])
+            self.image_handler.roi_table = ip.filter_rois_in_nucs(self.image_handler.roi_table.copy(), np.array(self.image_handler.images['nuc_classes']), self.pos_list, new_col='nuc_class', drifts = self.image_handler.tables['drift_correction'], target_frame=self.config['nuc_ref_frame'])
 
         print('ROIs (re)assigned to nuclei.')
         self.image_handler.roi_table.to_csv(self.image_handler.roi_file_path)

@@ -21,9 +21,14 @@ class NPZ_wrapper():
 
     def __iter__(self):
         return iter(self.npz[f] for f in self.files)
+
+    def __len__(self):
+        return len(self.files)
         
     def __getitem__(self, i):
-        if isinstance(i, int):
+        if isinstance(i, str):
+            return self.npz[i]
+        elif isinstance(i, int):
             return self.npz[self.files[i]]
         elif isinstance(i, tuple):
             return [a[i[1:]] for a in self.return_npz_slice(i[0])]

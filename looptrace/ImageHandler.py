@@ -28,34 +28,24 @@ class ImageHandler:
         self.dc_file_path = self.out_path+'drift_correction.csv'
         self.roi_file_path = self.out_path+'rois.csv'
         self.traces_path = self.out_path+'traces.csv'
-        
-        try:
-            self.load_drift_table()
-        except FileNotFoundError:
-            self.drift_table = None
-        
-        try:
-            self.load_roi_table()
-        except FileNotFoundError:
-            self.roi_table = None
 
         self.read_images()
+        self.load_tables()
 
     def reload_config(self):
         self.config = image_io.load_config(self.config_path)
         print('Config reloaded. Note images are not reloaded.')
-    
-    def load_drift_table(self, path=None):
-        if not path:
-            path = self.dc_file_path
-        self.drift_table = pd.read_csv(path, index_col=0)
-        print('Loaded existing drifts from ', path)
-    
-    def load_roi_table(self, path = None):
-        if not path:
-            path = self.roi_file_path
-        self.roi_table = pd.read_csv(path, index_col=0)
-        print('Loaded existing ROIs from ', path)
+
+    def load_tables(self):
+        self.tables = {}
+        self.table_paths = {}
+        for f in os.scandir(self.config['output_path']):
+            if f.name.endswith('.csv'):
+                table_name = os.path.splitext(f.name)[0].split(self.config['output_prefix'])[1]
+                print('Loading table ', table_name)
+                table = pd.read_csv(f.path, index_col = 0)
+                self.tables[table_name] = table
+                self.table_paths[table_name] = f.path
 
     def read_images(self):
         '''

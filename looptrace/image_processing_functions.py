@@ -263,10 +263,10 @@ def detect_spots(input_img, spot_threshold=20, min_dist=None):
     spot_props.rename(columns={'index':'roi_id'},
                                 inplace = True)
 
-    print(f'Found {len(spot_props)} spots.')
+    #print(f'Found {len(spot_props)} spots.', end = ' ')
     return spot_props, img
 
-def detect_spots_int(input_img, spot_threshold=500, min_dist=None):
+def detect_spots_int(input_img, spot_threshold=500, expand_px = 2, min_dist=None):
     '''Spot detection by difference of gaussian filter
     #TODO: Do not use hard-coded sigma values
 
@@ -278,11 +278,12 @@ def detect_spots_int(input_img, spot_threshold=500, min_dist=None):
         spot_props (DataFrame): The centroids and roi_IDs of the spots found. 
         img (ndarray): The DoG filtered image used for spot detection.
     '''
-    img = white_tophat(image=input_img, footprint=ball(2))
-    labels, _ = ndi.label(img > spot_threshold)
-    labels = remove_small_objects(labels, min_size=5)
-    labels = expand_labels(labels, 1)
-    spot_props = regionprops_table(labels, img, properties=('label', 'bbox', 'area', 'centroid_weighted'))
+    #img = white_tophat(image=input_img, footprint=ball(2))
+    labels, n_obj = ndi.label(input_img > spot_threshold)
+    if n_obj > 0:
+        labels = remove_small_objects(labels, min_size=5)
+        labels = expand_labels(labels, 4)
+    spot_props = regionprops_table(labels, input_img, properties=('label', 'bbox', 'area', 'centroid_weighted'))
     spot_props = pd.DataFrame(spot_props)
 
     spot_props.rename(columns={'centroid_weighted-0': 'zc',
@@ -305,7 +306,7 @@ def detect_spots_int(input_img, spot_threshold=500, min_dist=None):
     spot_props.rename(columns={'index':'roi_id'},
                                 inplace = True)
 
-    print(f'Found {len(spot_props)} spots.')
+    #print(f'Found {len(spot_props)} spots.', end=' ')
     return spot_props, labels
 
 def roi_center_to_bbox(rois, roi_size):
@@ -686,6 +687,7 @@ def full_frame_dc_to_single_nuc_dc(old_dc_path, new_dc_position_list, new_dc_pat
             new_drifts.append(d.values.tolist()+[p])
     new_drifts = pd.DataFrame(new_drifts, columns = ['old_index','frame','z_px_course','y_px_course','x_px_course','z_px_fine',
     'y_px_fine','x_px_fine','orig_position', 'position'])
+    new_drifts['z_px_course', 'y_px_course', 'x_px_course'] = 0
     new_drifts.to_csv(new_dc_path)
 
 

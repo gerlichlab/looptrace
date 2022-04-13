@@ -125,6 +125,54 @@ def save_data(self, traces=None, imgs=None, rois=None, pwds=None, pairs=None, co
             yaml.safe_dump(config, myfile)
     
     print('Data saved')
+    
+    def gen_nuc_label_class_table(self):
+        nuc_masks = self.image_handler.images['nuc_masks']
+        if 'nuc_classes' in self.image_handler.images:
+            nuc_classes = self.image_handler.images['nuc_classes']
+        else:
+            nuc_classes = [None]*len(nuc_masks)
+
+        nuc_table = []
+        for i, mask in tqdm(enumerate(nuc_masks), total = len(nuc_masks)):
+            mask = np.array(mask)
+            nuc_class = np.array(nuc_classes[i])
+
+            if nuc_masks[0].ndim == 2:
+                nuc_props = pd.DataFrame(regionprops_table(mask, intensity_image=nuc_class, properties=['label', 'bbox', 'intensity_mean'])).rename(columns={'bbox-0':'y_min', 
+                                                                                'bbox-1':'x_min', 
+                                                                                'bbox-2':'y_max', 
+                                                                                'bbox-3':'x_max'})
+            else:
+                nuc_props = pd.DataFrame(regionprops_table(mask), intensity_image=nuc_class, properties=['label', 'bbox', 'intensity_mean']).rename(columns={'bbox-0':'z_min', 
+                                                                'bbox-1':'y_min', 
+                                                                'bbox-2':'x_min', 
+                                                                'bbox-3':'z_max', 
+                                                                'bbox-4':'y_max', 
+                                                                'bbox-5':'x_max'})
+            
+            orig_pos = self.image_handler.image_lists['nuc_masks'][i].split('.')[0]
+            nuc_props['position'] = orig_pos
+            nuc_props['position'] = [orig_pos+'_'+str(j+1).zfill(4) for j in range(len(nuc_props))]
+
+            nuc_table.append(nuc_props)
+        
+        nuc_table = pd.concat(nuc_table, axis=0).reset_index().rename(columns={'index':'roi_id_pos'})
+        nuc_table.to_csv(self.image_handler.out_path+'nuc_table.csv')
+
+
+    def load_drift_table(self, path=None):
+        if not path:
+            path = self.dc_file_path
+        self.drift_table = pd.read_csv(path, index_col=0)
+        print('Loaded existing drifts from ', path)
+    
+    def load_roi_table(self, path = None):
+        if not path:
+            path = self.roi_file_path
+        self.roi_table = pd.read_csv(path, index_col=0)
+        print('Loaded existing ROIs from ', path)
+
 
     ## Legacy classification with ilastic.
     # def classify_nuclei(self):

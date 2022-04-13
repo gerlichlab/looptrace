@@ -26,8 +26,11 @@ class NucDetector:
     def __init__(self, image_handler):
         self.image_handler = image_handler
         self.config = image_handler.config
-        self.images = self.image_handler.images['seq_images']
-        self.pos_list = self.image_handler.image_lists['seq_images']
+        try:
+            self.images = self.image_handler.images['seq_images_full']
+            self.pos_list = self.image_handler.image_lists['seq_images_full']
+        except KeyError:
+            pass
         self.nuc_images_path = self.config['image_path']+os.sep+'nuc_images'
         self.nuc_masks_path = self.config['image_path']+os.sep+'nuc_masks'
         self.nuc_classes_path = self.config['image_path']+os.sep+'nuc_classes'
@@ -141,15 +144,25 @@ class NucDetector:
         nuc_masks = self.image_handler.images['nuc_masks']
         ch = self.config['trace_ch']
         ref_frame = self.config['nuc_ref_frame']
+
+        if 'nuc_classes' in self.image_handler.images:
+            print('Adding classes.')
+            nuc_classes = self.image_handler.images['nuc_classes']
+        else:
+            nuc_classes = [None]*len(nuc_masks)
         
-        for i, mask in tqdm(enumerate(nuc_masks), total = len(nuc_masks)):
-            if nuc_masks[0].ndim == 2:
-                nuc_props = pd.DataFrame(regionprops_table(mask)).rename(columns={'bbox-0':'y_min', 
+        for i in tqdm(range(len(nuc_masks))):
+
+            mask = np.array(nuc_masks[i])
+            nuc_class = np.array(nuc_classes[i])
+
+            if mask.ndim == 2:
+                nuc_props = pd.DataFrame(regionprops_table(mask, intensity_image=nuc_class, properties=['label', 'bbox', 'intensity_mean'])).rename(columns={'bbox-0':'y_min', 
                                                                                 'bbox-1':'x_min', 
                                                                                 'bbox-2':'y_max', 
                                                                                 'bbox-3':'x_max'})
             else:
-                nuc_props = pd.DataFrame(regionprops_table(mask)).rename(columns={'bbox-0':'z_min', 
+                nuc_props = pd.DataFrame(regionprops_table(mask, intensity_image=nuc_class, properties=['label', 'bbox', 'intensity_mean'])).rename(columns={'bbox-0':'z_min', 
                                                                 'bbox-1':'y_min', 
                                                                 'bbox-2':'x_min', 
                                                                 'bbox-3':'z_max', 
@@ -157,12 +170,18 @@ class NucDetector:
                                                                 'bbox-5':'x_max'})
 
             for j, roi in nuc_props.iterrows():
-                pos = self.image_handler.image_lists['seq_images'][i]
-                sel_dc = self.image_handler.drift_table.query('position == @pos')
+                old_pos = 'P'+str(i+1).zfill(4)
+                new_pos = 'P'+str(i+1).zfill(4)+'_'+str(j+1).zfill(4)
+                sel_dc = self.image_handler.tables['drift_correction_full'].query('position == @old_pos')
                 ref_offset = sel_dc.query('frame == @ref_frame')
-                Z, Y, X = self.images[i][0,ch].shape[-3:]
+                try:
+                    Z, Y, X = self.images[i][0,ch].shape[-3:]
+                except AttributeError: #Images not loaded for some reason
+                    Z = 200
+                    Y = nuc_masks[0].shape[-2]
+                    X = nuc_masks[0].shape[-1]
                 
-                for j, dc_frame in sel_dc.iterrows():
+                for k, dc_frame in sel_dc.iterrows():
                     z_drift_course = int(dc_frame['z_px_course']) - int(ref_offset['z_px_course'])
                     y_drift_course = int(dc_frame['y_px_course']) - int(ref_offset['y_px_course'])
                     x_drift_course = int(dc_frame['x_px_course']) - int(ref_offset['x_px_course'])
@@ -192,11 +211,12 @@ class NucDetector:
                         slice(sy[0],sy[1]), 
                         slice(sx[0],sx[1]))
 
-                    nuc_rois.append([pos, i, roi.name, dc_frame['frame'], ref_frame, ch, s, pad, z_drift_course, y_drift_course, x_drift_course, 
-                                                                                            dc_frame['z_px_fine'], dc_frame['y_px_fine'], dc_frame['x_px_fine']])
+                    nuc_rois.append([old_pos, new_pos, i, roi.name, dc_frame['frame'], ref_frame, ch, s, pad, z_drift_course, y_drift_course, x_drift_course, 
+                                                                                            dc_frame['z_px_fine'], dc_frame['y_px_fine'], dc_frame['x_px_fine'], roi['intensity_mean']])
 
-            self.nuc_rois = pd.DataFrame(nuc_rois, columns=['position', 'pos_index', 'roi_id', 'frame', 'ref_frame', 'ch', 'roi_slice', 'pad', 'z_px_course', 'y_px_course', 'x_px_course', 
-                                                                                                    'z_px_fine', 'y_px_fine', 'x_px_fine'])
+        self.nuc_rois = pd.DataFrame(nuc_rois, columns=['orig_position','position', 'orig_pos_index', 'roi_id', 'frame', 'ref_frame', 'ch', 'roi_slice', 'pad', 'z_px_course', 'y_px_course', 'x_px_course', 
+                                                                                                'z_px_fine', 'y_px_fine', 'x_px_fine', 'nuc_class'])
+        self.nuc_rois.to_csv(self.image_handler.out_path+'nuc_table.csv')
                 
                 
     def extract_single_roi_img(self, single_roi, images):
@@ -218,6 +238,8 @@ class NucDetector:
         return roi_img  #{'p':p, 't':t, 'c':c, 'z':z, 'y':y, 'x':x, 'img':roi_img}
 
     def gen_single_nuc_images(self):
+        #Function to extract single nuclei images from full FOVs
+        # A bit convoluted currently to ensure efficient loading of appropriate arrays into RAM for processing.
         rois = self.nuc_rois#.iloc[0:500]
         P = max(rois['pos_index'])+1
         T = max(rois['frame'])+1

@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import scipy.ndimage as ndi
 import looptrace.image_processing_functions as ip
+from looptrace import image_io
 from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
 #import dask
 #from dask import delayed
@@ -26,13 +27,14 @@ class Tracer:
         self.image_handler = image_handler
         self.config_path = image_handler.config_path
         self.config = image_handler.config
-        self.drift_table = image_handler.drift_table
+        self.drift_table = image_handler.tables['drift_correction']
         self.images = self.image_handler.images['seq_images']
+        self.image_lists = self.image_handler.image_lists['seq_images']
         self.trace_beads = trace_beads
         if trace_beads:
-            self.roi_table = image_handler.bead_rois
+            self.roi_table = image_handler.tables['bead_rois']
         else:
-            self.roi_table = image_handler.roi_table
+            self.roi_table = image_handler.tables['rois']
 
         self.fit_funcs = {'LS': fitSymmetricGaussian3D, 'MLE': fitSymmetricGaussian3DMLE}
         self.fit_func = self.fit_funcs[self.config['fit_func']]
@@ -40,12 +42,12 @@ class Tracer:
     def make_dc_rois_all_frames(self):
         #Precalculate all ROIs for extracting spot images, based on identified ROIs and precalculated drifts between time frames.
         print('Generating list of all ROIs for tracing:')
-        positions = sorted(list(self.roi_table.position.unique()))
+        #positions = sorted(list(self.roi_table.position.unique()))
 
         all_rois = []
         for i, roi in tqdm(self.roi_table.iterrows()):
             pos = roi['position']
-            pos_index = positions.index(pos)
+            pos_index = self.image_lists.index(pos)#positions.index(pos)
             sel_dc = self.drift_table.query('position == @pos')
             ref_frame = roi['frame']
             ch = roi['ch']
@@ -167,6 +169,9 @@ class Tracer:
                 pos_rois.append(np.stack([roi_array[(roi_id, frame)] for frame in range(T)]))
             except KeyError:
                 break
+            except ValueError: #Edge case handling for rois very close to the edge, sometimes the intial padding does not work properly due to rounding errors.
+                roi_size = roi_array[(roi_id, T-1)].shape
+                pos_rois.append(np.stack([ip.pad_to_shape(roi_array[(roi_id, frame)], roi_size) for frame in range(T)]))
         
         #self.temp_array = pos_rois
         #roi_array_padded = np.stack(roi_array_padded)
@@ -176,6 +181,28 @@ class Tracer:
         #self.image_handler.spot_images['spot_images_padded'] = roi_array_padded
         np.savez_compressed(self.config['image_path']+os.sep+'spot_images.npz', *pos_rois)
         #np.save(self.image_handler.spot_images_path+os.sep+'spot_images_padded.npy', roi_array_padded)
+
+    def gen_roi_imgs_inmem_coursedc(self):
+        # Use this simplified function if the images that the spots are gathered from are already coursely drift corrected!
+        #rois = self.roi_table#.iloc[0:500]
+        #imgs = self.
+        all_spots = {}
+        for pos, group in tqdm(self.roi_table.groupby('position')):
+            pos_index = self.image_lists.index(pos)
+            full_image = np.array(self.images[pos_index])
+            #print(full_image.shape)
+            for roi in group.to_dict('records'):
+                spot_stack = full_image[:, 
+                                roi['ch'], 
+                                roi['z_min']:roi['z_max'], 
+                                roi['y_min']:roi['y_max'],
+                                roi['x_min']:roi['x_max']].copy()
+                #print(spot_stack.shape)
+                all_spots[pos+'_'+str(roi['frame'])+'_'+str(roi['roi_id_pos']).zfill(2)] = spot_stack
+        #self.image_handler.images['spot_images'] = all_spots
+        np.savez_compressed(self.config['image_path']+os.sep+'spot_images.npz', **all_spots)
+        self.image_handler.images['spot_images'] = image_io.NPZ_wrapper(self.config['image_path']+os.sep+'spot_images.npz')
+        
     
     def decon_roi_imgs(self):
         # Run deconvolution using generated or experimental PSF usign Flowdec.
@@ -231,7 +258,7 @@ class Tracer:
 
     def gen_fine_dc_roi_imgs(self):
         #Apply fine scale drift correction to spot images, used mainly for visualizing fits (these images are not used for fitting)
-
+        print('Making fine drift-corrected spot images.')
         if self.config['deconvolve'] != 0:
             imgs = self.image_handler.images['spot_images_decon']
         else:
@@ -241,7 +268,7 @@ class Tracer:
 
         i = 0
         roi_array_fine = []
-        for j, frame_stack in enumerate(imgs):
+        for j, frame_stack in tqdm(enumerate(imgs)):
             roi_stack_fine = []
             for roi_stack in frame_stack:
                 roi_stack_fine.append(self.fine_dc_single_roi_img(roi_stack, rois.iloc[i]))
@@ -253,7 +280,7 @@ class Tracer:
         #roi_array_fine = np.array(roi_array_fine, dtype='object')
         
         self.image_handler.images['spot_images_fine'] = roi_array_fine
-        np.savez_compressed(self.config['image_path']+os.sep+'spot_images_decon.npz', *roi_array_fine)
+        np.savez_compressed(self.config['image_path']+os.sep+'spot_images_fine.npz', *roi_array_fine)
 
 
     def trace_single_roi(self, roi_img, mask = None):
@@ -271,7 +298,7 @@ class Tracer:
                 fit = self.fit_func(roi_img, sigma=1, center=center)[0]
             return fit
         else:
-            fit = [-1, -1, -1, -1, -1, -1, -1]
+            fit = np.array([-1, -1, -1, -1, -1, -1, -1])
             return fit
         
 
@@ -315,13 +342,13 @@ class Tracer:
         traces.rename(columns={"roi_id": "trace_id"}, inplace=True)
 
         #Apply fine scale drift to fits, and physcial units.
-        traces['z_px']=traces['z_px']+traces['z_px_fine']
-        traces['y_px']=traces['y_px']+traces['y_px_fine']
-        traces['x_px']=traces['x_px']+traces['x_px_fine']
+        traces['z_px_dc']=traces['z_px']+traces['z_px_fine']
+        traces['y_px_dc']=traces['y_px']+traces['y_px_fine']
+        traces['x_px_dc']=traces['x_px']+traces['x_px_fine']
         #traces=traces.drop(columns=['drift_z', 'drift_y', 'drift_x'])
-        traces['z']=traces['z_px']*self.config['z_nm']
-        traces['y']=traces['y_px']*self.config['xy_nm']
-        traces['x']=traces['x_px']*self.config['xy_nm']
+        traces['z']=traces['z_px_dc']*self.config['z_nm']
+        traces['y']=traces['y_px_dc']*self.config['xy_nm']
+        traces['x']=traces['x_px_dc']*self.config['xy_nm']
         traces['sigma_z']=traces['sigma_z']*self.config['z_nm']
         traces['sigma_xy']=traces['sigma_xy']*self.config['xy_nm']
         traces = traces.sort_values(['trace_id', 'frame'])
