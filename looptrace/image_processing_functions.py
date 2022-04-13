@@ -7,10 +7,6 @@ Ellenberg group
 EMBL Heidelberg
 """
 
-import chunk
-import io
-import yaml
-import czifile
 import os
 import re
 import numpy as np
@@ -26,14 +22,10 @@ from skimage.measure import regionprops_table, regionprops
 import scipy.ndimage as ndi
 
 import dask.array as da
-import zarr
 from numcodecs import Blosc
-import itertools
-import tifffile
 import joblib
-import tqdm
 import glob
-from sklearn import  mixture, preprocessing, cluster
+
 
 
 def rois_from_csv(path):
@@ -657,6 +649,7 @@ def combine_overviews_ND2(input_folder, tidx = 0, align_channels=[1,1], ds = 2):
     return imgs, np.stack([ref_img, o_img])
 
 def extract_cell_features(nuc_img, int_imgs: list, nuc_bg_int=800, nuc_fg_int=5000, scale=True):
+    from sklearn import preprocessing
 
     nuc_masks = nuc_segmentation_watershed(nuc_img, bg_thresh = nuc_bg_int, fg_thresh = nuc_fg_int)
     expanded = expand_labels(nuc_masks, distance=5)
