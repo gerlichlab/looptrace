@@ -131,8 +131,9 @@ class SpotPicker:
         else:
             rois = output
 
-        self.image_handler.roi_table = rois
+        rois = rois.sort_values(['position', 'frame'])
         rois.to_csv(self.image_handler.roi_file_path)
+        self.image_handler.load_tables()
         print(f'Filtering complete, {len(rois)} ROIs after filtering.')
         
         return rois
@@ -180,6 +181,7 @@ class SpotPicker:
         return rois
 
     def refilter_rois(self):
+        #TODO needs updating to new table syntax.
         if self.config['detection_method'] == 'dog':
             self.image_handler.roi_table = ip.roi_center_to_bbox(self.image_handler.roi_table.copy(), roi_size = tuple(self.config['roi_image_size']))
         

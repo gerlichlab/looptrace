@@ -186,6 +186,7 @@ class Tracer:
         # Use this simplified function if the images that the spots are gathered from are already coursely drift corrected!
         #rois = self.roi_table#.iloc[0:500]
         #imgs = self.
+        print('Generating single spot image stacks from coursely drift corrected images.')
         all_spots = {}
         for pos, group in tqdm(self.roi_table.groupby('position')):
             pos_index = self.image_lists.index(pos)
@@ -289,11 +290,11 @@ class Tracer:
         #Masking by intensity or label image can be used to improve fitting correct spot (set in config)
 
 
-        if np.any(roi_img): #Check if empty due to error
+        if np.any(roi_img) and np.all([d > 2 for d in roi_img.shape]): #Check if empty or too small for fitting
             if mask is None:
                 fit = self.fit_func(roi_img, sigma=1, center='max')[0]
             else:
-                roi_img_masked = mask/np.max(mask) * roi_img
+                roi_img_masked = (mask/np.max(mask)) * roi_img
                 center = list(np.unravel_index(np.argmax(roi_img_masked, axis=None), roi_img.shape))
                 fit = self.fit_func(roi_img, sigma=1, center=center)[0]
             return fit
@@ -324,15 +325,16 @@ class Tracer:
             mask_fits = False
 
         if mask_fits:
-            for p, pos_imgs in tqdm(enumerate(imgs)):
-                ref_img = pos_imgs[int(rois.query('roi_id == @p').iloc[0]['ref_frame'])]
+            ref_frames = self.roi_table['frame'].to_list()
+            for p, pos_imgs in tqdm(enumerate(imgs), total=len(imgs)):
+                ref_img = pos_imgs[ref_frames[p]]
                 #print(ref_img.shape)
                 for spot_img in pos_imgs:
-                        fits.append(self.trace_single_roi(spot_img, mask = ref_img))
+                    fits.append(self.trace_single_roi(spot_img, mask = ref_img))
                 #Parallel(n_jobs=1, prefer='threads')(delayed(self.trace_single_roi)(imgs[p, t], mask= ref_img) for t in range(imgs.shape[1]))
 
         else:
-            for pos_imgs in tqdm(imgs):
+            for pos_imgs in tqdm(imgs, total=len(imgs)):
                 for spot_img in pos_imgs:
                     fits.append(self.trace_single_roi(spot_img))
 

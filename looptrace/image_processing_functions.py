@@ -258,7 +258,7 @@ def detect_spots(input_img, spot_threshold=20, min_dist=None):
     #print(f'Found {len(spot_props)} spots.', end = ' ')
     return spot_props, img
 
-def detect_spots_int(input_img, spot_threshold=500, expand_px = 2, min_dist=None):
+def detect_spots_int(input_img, spot_threshold=500, expand_px = 0, min_dist=None):
     '''Spot detection by difference of gaussian filter
     #TODO: Do not use hard-coded sigma values
 
@@ -271,35 +271,40 @@ def detect_spots_int(input_img, spot_threshold=500, expand_px = 2, min_dist=None
         img (ndarray): The DoG filtered image used for spot detection.
     '''
     #img = white_tophat(image=input_img, footprint=ball(2))
-    labels, n_obj = ndi.label(input_img > spot_threshold)
-    if n_obj > 0:
+    struct = ndi.generate_binary_structure(input_img.ndim, 2)
+    labels, n_obj = ndi.label(input_img > spot_threshold, structure=struct)
+    if n_obj > 1: #Do not need this with area filtering below.
+        #pass
         labels = remove_small_objects(labels, min_size=5)
-        labels = expand_labels(labels, 4)
-    spot_props = regionprops_table(labels, input_img, properties=('label', 'bbox', 'area', 'centroid_weighted'))
-    spot_props = pd.DataFrame(spot_props)
+    if expand_px > 0:
+        labels = expand_labels(labels, expand_px)
+    if np.all(labels == 0): #If there are no labels anymore:
+        return pd.DataFrame(columns=['label', 'z_min','y_min','x_min','z_max','y_max','x_max','area','zc','yc','xc']), labels
+    else:
+        spot_props = regionprops_table(labels, input_img, properties=('label', 'bbox', 'area', 'centroid_weighted'))
+        spot_props = pd.DataFrame(spot_props)
+        #spot_props = spot_props.query('area > 10')
 
-    spot_props.rename(columns={'centroid_weighted-0': 'zc',
-                                        'centroid_weighted-1': 'yc',
-                                        'centroid_weighted-2': 'xc',
-                                        'bbox-0': 'z_min',
-                                        'bbox-1': 'y_min',
-                                        'bbox-2': 'x_min',
-                                        'bbox-3': 'z_max',
-                                        'bbox-4': 'y_max',
-                                        'bbox-5': 'x_max'},
-                        inplace = True)
-    
-    if min_dist:
-        dists = squareform(pdist(spot_props[['zc', 'yc', 'xc']].to_numpy(), metric='euclidean'))
-        idx = np.nonzero(np.triu(dists < min_dist, k=1))[1]
-        spot_props = spot_props.drop(idx)
+        spot_props = spot_props.rename(columns={'centroid_weighted-0': 'zc',
+                                            'centroid_weighted-1': 'yc',
+                                            'centroid_weighted-2': 'xc',
+                                            'bbox-0': 'z_min',
+                                            'bbox-1': 'y_min',
+                                            'bbox-2': 'x_min',
+                                            'bbox-3': 'z_max',
+                                            'bbox-4': 'y_max',
+                                            'bbox-5': 'x_max'})
+        
+        if min_dist:
+            dists = squareform(pdist(spot_props[['zc', 'yc', 'xc']].to_numpy(), metric='euclidean'))
+            idx = np.nonzero(np.triu(dists < min_dist, k=1))[1]
+            spot_props = spot_props.drop(idx)
+        
         spot_props = spot_props.reset_index(drop=True)
+        spot_props = spot_props.rename(columns={'index':'roi_id'})
 
-    spot_props.rename(columns={'index':'roi_id'},
-                                inplace = True)
-
-    #print(f'Found {len(spot_props)} spots.', end=' ')
-    return spot_props, labels
+        #print(f'Found {len(spot_props)} spots.', end=' ')
+        return spot_props, labels
 
 def roi_center_to_bbox(rois, roi_size):
     rois['z_min'] = rois['zc'] - roi_size[0]//2

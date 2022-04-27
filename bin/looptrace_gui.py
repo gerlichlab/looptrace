@@ -122,13 +122,13 @@ def main():
                 N = NucDetector(H)
             if 'nuc_images' in H.images:
                 nuc_imgs = H.images['nuc_images']
-                viewer = napari.view_image(np.stack(np.array(nuc_imgs)))
+                viewer = napari.view_image(np.array(nuc_imgs))
             if 'nuc_masks' in H.images:
                 nuc_labels = H.images['nuc_masks']
-                masks_layer = viewer.add_labels(np.stack(np.array(nuc_labels)))
+                masks_layer = viewer.add_labels(np.array(nuc_labels))
             if 'nuc_classes' in H.images:
                 nuc_classes = H.images['nuc_classes']
-                classes_layer = viewer.add_labels(np.stack(np.array(nuc_classes)))
+                classes_layer = viewer.add_labels(np.array(nuc_classes))
             napari.run()
             try:             
                 if not np.allclose(masks_layer.data, nuc_labels):
