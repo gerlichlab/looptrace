@@ -26,7 +26,7 @@ def update_status(new_data, filename='status.json'):
         new_data: Dictionary with status commands.
         filename: Path to status json file.
     '''
-    with open(filename,'r') as f:
+    with open(filename,'r', encoding='utf-8') as f:
         data=json.load(f)
     for k,v in new_data.items():
         data[k]=new_data[k]
@@ -39,7 +39,7 @@ def read_status(filename='status.json'):
     Read out the status.json file.
     '''
 
-    with open(filename,'r') as f:
+    with open(filename,'r', encoding='utf-8') as f:
         status=json.load(f)
     return status
 
@@ -65,7 +65,7 @@ def imaging_loop():
     while True:
         status_mod_time_new = os.stat('status.json').st_mtime
         if status_mod_time_new != status_mod_time_old:
-            time.sleep(2)
+            time.sleep(5)
             status = read_status()
             if status['command'] == 'image':
                 logging.info('Image command found, starting imaging.')
@@ -92,7 +92,7 @@ def imaging_loop():
                         logging.info('Imaging cycle done.')
                         break
                     else:    
-                        time.sleep(2)
+                        time.sleep(5)
                     
                 try:
                     pyautogui.click('pause_button.png', button='left')
@@ -106,7 +106,7 @@ def imaging_loop():
                 set_command('robot')
                 status_mod_time_old = os.stat('status.json').st_mtime
         else:
-            time.sleep(3)
+            time.sleep(5)
 
 def read_czi_image(image_path):
     tags = {'Title',
