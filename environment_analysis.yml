@@ -1,0 +1,23 @@
+# conda env create | update -f environment_analysis.yml
+name: looptrace_analysis
+dependencies:
+    - python=3.8
+    - numba::numba
+    - numba::llvmlite
+    - scipy
+    - dask
+    - joblib
+    - nbformat 
+    - ipykernel 
+    - nb_conda
+    - pip
+    - pip:
+        - scikit-image
+        - seaborn
+        - zarr
+        - napari[all]
+        - fsspec>=0.9.0
+        - scikit-learn
+        - umap-learn
+        - hdbscan
+        - ipyvolume

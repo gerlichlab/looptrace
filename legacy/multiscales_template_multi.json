@@ -1,0 +1,20 @@
+{
+    "multiscales": [
+        {
+            "version": "0.2",
+            "name": "example",
+            "datasets": [
+                {"path": "0"},
+                {"path": "1"},
+                {"path": "2"}
+            ],
+            "type": "gaussian",
+            "metadata": {                                       # the fields in metadata depend on the downscaling implementation
+                "method": "skimage.transform.pyramid_gaussian", # here, the paramters passed to the skimage function are given
+                "version": "0.16.1",
+                "args": "[true]",
+                "kwargs": {"multichannel": true}
+            }
+        }
+    ]
+}
