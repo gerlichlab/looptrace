@@ -1,0 +1,133 @@
+#       PARAMETERS FOR IMAGE PROCESSING AND TRACING        #
+# -------------------------------------------------------- #
+
+#Path and file definitions:
+analysis_path: /path/to/output/folder #Analysis folder for data output
+analysis_prefix: date_experiment_          #Prefix for analysis output filenames.
+
+#General imaging properties (used for calibration and deconvolution)
+xy_nm: 110                                           #Camera pixel size [nm]
+z_nm: 200                                           #Z-slice spacing
+
+#Parameters for nucleus analysis
+nuc_input_name: nuc_images_raw                         #
+nuc_channel: 1                                      #The image channel (0-based) where nuclei are imaged.
+nuc_ref_frame: 0                                    #Which image frame nuclei should be detected in.
+nuc_slice: 20                                       #Which slice to use for nucleus. Setting to -1 will use a max projection instead.
+nuc_3d: False                                       #Run nucleus analysis in 3D (True/False)
+nuc_method: nuclei                                 #Model used by CellPose to detect nuclei
+nuc_diameter: 150                                   #Approximate diameter of nuclei in images [px]
+nuc_dilation: 2                                     #How much to dilate nuclear masks after detection [px]
+nuc_anisotropy: 1                                   # Only for 3D, anisotropy between z and xy
+nuc_downscaling_xy: 4                               # Downsampling for xy
+nuc_downscaling_z: 1                                # Only for 3D: downsampling in z
+nuc_mitosis_class: False                            # Extra (crude) classification of mitotic cell
+
+#Decon parameters:
+psf_input_name: seq_images_raw                      #Images to use for PSF extraction
+psf_bead_ch: 0                                      #Channel to use for PSFs
+psf_bead_frame: 0                                   #Frame to use for PSFs
+
+decon_input_name: seq_images_raw                    #Images to deconvolve
+decon_ch: 1                                         #Channel to deconvolve (int or list of ints for multiple channels)
+non_decon_ch: 0                                     #Channels to save into deconvolved images, wihtout doing deconvolution (int or list of ints)
+decon_iter: 60                                      #Number of deconvolution iterations, 0 is off.
+decon_psf: exp                                      #PSF used for decon, can be "exp" for experimental or "gen" for a generated one.
+#Only necessary if generated PSF is used:
+spot_wavelength: 660                                #Approximate emmision wavelength of FISH probe.
+objective_na: 1.40                                  #Numerical aperture of objective
+
+#Registration parameters (NB! 0-based, also the timepoints):
+reg_input_template: seq_images_decon                #Images to use as template for registration
+reg_input_moving: seq_images_decon                  #Images to register to template
+reg_ch_template: 0                                  #The channel of the fiducial beads/marks in template images 
+reg_ch_moving: 0                                    #The channel of the fiducial beads/marks in moving images  
+reg_ref_frame : 10                                  #The frame used as reference of the drift correction
+bead_threshold: 10000                                #Minimum intensity for bead detection
+min_bead_intensity: 15000                            #Minimum intensity for bead segmentation
+bead_roi_size: 16                                     # Size of bead ROI in px.
+bead_points: 200                                    #Maximum number of beads to segment
+course_drift_downsample: 2                          #Factor to downsample course drift correction to speed up calculation.
+dc_method: fit                                      #Choice of drift correction method, can be "course" (only downsampled cc), "fit" (guassian fitting of fiducials) or "cc" (upsampled cross-correlation of fiducials).
+bead_trace_fields: 8                                #Number of fields of view to sample beads from for bead QC tracing.
+bead_trace_number: 15                               #Number of beads per field of view to sample for bead QC tracing.
+deconvolve_dc: 0                                   # Number of iterations to deconvolve drift correction bead
+
+#Spot detection parameters (NB! 0-based, also the timepoints):
+spot_input_name: seq_images_decon
+spot_ch: 1                                         #Which channel(s) to detect spots in
+spot_frame:                                         #(Int or list) Frame(s) where spots are to be detected for segmentation. Tracing is done in all frames.
+    - 34
+    - 35
+    - 36
+    - 37
+    - 38
+    - 39
+detection_method: intensity                           # Algorithm for regional spot detection. Can be intensity (simple threshold, when spots are bright), or dog (difference of gaussian when spots are dimmer)
+spot_threshold: 800                                    #(Int or list). On intensity/DoG image, usually set after previewing in GUI. If list must match length of spot_frame.                                                                                  
+spot_downsample: 2                                  #Downsampling (int) for spot detection (not fitting).
+spot_in_nuc: True                                   #Only filter for spots inside nuclear masks.
+subtract_crosstalk: True                                # Reduce cross-talk from beads for spot detection.
+crosstalk_ch: 0                                     #Ch to subtract crosstalk, if used.
+min_spot_dist: 5                                   # Filter for minimum distance in pixels between detected spots (first one preserved).
+
+#Tracing parameters
+trace_input_name: spot_images                       #Name of images used for tracing
+fit_func: LS                                        #Use LS or MLE solvers for spot fitting.
+mask_fits: True                                     # Weight fitting initialization 
+#substract_background: -1                            #Frame of the background frame to subtract.
+#Size of region segmented around each detected spot for tracing:
+#roi_image_size:
+#    - 16
+#    - 32
+#    - 32
+#    
+#           PARAMETERS FOR ANALYSIS POST TRACING           #
+# -------------------------------------------------------- #
+#Tracing QC parameters, will often need to be empirically determined:
+A_to_BG: 2             #Minimum signal factor above background of gaussian fit to accept
+sigma_xy_max: 150       #Maximum std in xy of gaussian fit [nm]
+sigma_z_max: 400            #Maximum std in z of gaussian fit [nm]
+max_dist: 800           #Maximum 3D distance from reference spot that a detected spot can be [nm]
+
+#List of barcodes/identifiers used in each of the sequential imaging frames:
+frame_name:
+    - pre_image
+    - Dp001
+    - Dp002
+    - Dp003
+    - Dp005
+    - Dp006
+    - Dp007
+    - Dp008
+    - Dp009
+    - Dp010
+    - Dp011
+    - Dp012
+    - Dp013
+    - Dp014
+    - Dp015
+    - Dp016
+    - Dp017
+    - Dp018
+    - Dp019
+    - Dp020
+    - Dp021
+    - Dp024
+    - Dp025
+    - Dp027
+    - Dp028
+    - Dp029
+    - Dp032
+    - Dp033
+    - Dp035
+    - Dp036
+    - Dp038
+    - blank_1
+    - Dp101
+    - Dp102
+    - Dp103
+    - Dp104
+    - Dp105
+    - Dp107
+    - blank_2

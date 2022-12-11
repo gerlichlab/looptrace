@@ -14,7 +14,6 @@ Usage:
 """
 
 import os
-import yaml
 import numpy as np
 import pandas as pd
 from looptrace import comparison_functions as comp

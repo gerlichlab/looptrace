@@ -2,7 +2,7 @@
 """
 Routines for fitting gaussians
 
-Adapted from Hazen Babcock/STORM-Analysis
+Adapted from Hazen Babcock/STORM-Analysis package.
 """
 
 import numpy

@@ -19,13 +19,20 @@ from skimage.segmentation import clear_border
 from skimage.filters import gaussian, threshold_otsu
 from skimage.registration import phase_cross_correlation
 from scipy.stats import trim_mean
+<<<<<<< Updated upstream
+=======
+from scipy.spatial.distance import squareform, pdist
+>>>>>>> Stashed changes
 from skimage.measure import regionprops_table
 import scipy.ndimage as ndi
 import dask
 import dask.array as da
+<<<<<<< Updated upstream
 import zarr
 import itertools
 import tifffile
+=======
+>>>>>>> Stashed changes
 import joblib
 
 def czi_to_tif(in_folder, template, out_folder, prefix):
@@ -284,7 +291,11 @@ def update_roi_points(point_layer, roi_table, position, downscale):
     rois = rois.drop(rois[rois['position']==position].index)
     return pd.concat([rois, new_rois]).sort_values('position')
 
+<<<<<<< Updated upstream
 def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label'):
+=======
+def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label', nuc_drifts = None, nuc_target_frame = None, spot_drifts = None):
+>>>>>>> Stashed changes
     '''Check if a spot is in inside a segmented nucleus.
 
     Args:
@@ -296,18 +307,30 @@ def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label'):
     Returns:
         rois (DataFrame): Updated ROI table indicating if ROI is inside nucleus or not.
     '''
+<<<<<<< Updated upstream
 
 
     if not nuc_masks:
         print('No nuclear masks provided, cannot filter.')
         return rois
 
+=======
+    print(nuc_masks[0].shape)
+>>>>>>> Stashed changes
     def spot_in_nuc(row, nuc_masks):
         pos_index = pos_list.index(row['position'])
         try:
-            spot_label = nuc_masks[pos_index][int(row['yc']), int(row['xc'])]
-        except IndexError: #If due to drift spot is outside frame.
+            if nuc_masks[0].shape[0] == 1:
+                spot_label = int(nuc_masks[pos_index][0, int(row['yc']), int(row['xc'])])
+            else:
+                spot_label = int(nuc_masks[pos_index][int(row['zc']),int(row['yc']), int(row['xc'])])
+        except IndexError as e: #If due to drift spot is outside frame.
             spot_label = 0
+<<<<<<< Updated upstream
+=======
+            print(e)
+        #print(spot_label)
+>>>>>>> Stashed changes
         return spot_label
     
     try:
@@ -315,8 +338,27 @@ def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label'):
     except KeyError:
         pass
 
+<<<<<<< Updated upstream
     rois[new_col] = rois.apply(spot_in_nuc, nuc_masks=nuc_masks, axis=1)
     print('ROIs filtered.')
+=======
+    if nuc_drifts is not None:
+        rois_shifted = rois.copy()
+        shifts = []
+        for i, row in rois_shifted.iterrows():
+            drift_target = nuc_drifts[(nuc_drifts['position'] == row['position']) & (nuc_drifts['frame'] == nuc_target_frame)][['z_px_course', 'y_px_course', 'x_px_course']].to_numpy()
+            drift_roi = spot_drifts[(spot_drifts['position'] == row['position']) & (spot_drifts['frame'] == row['frame'])][['z_px_course', 'y_px_course', 'x_px_course']].to_numpy()
+            shift = drift_target - drift_roi
+            shifts.append(shift[0])
+        shifts = pd.DataFrame(shifts, columns=['z','y','x'])
+        rois_shifted[['zc', 'yc', 'xc']] = rois_shifted[['zc', 'yc', 'xc']].to_numpy() - shifts[['z','y','x']].to_numpy()
+
+        rois[new_col] = rois_shifted.apply(spot_in_nuc, nuc_masks=nuc_masks, axis=1)
+    
+    else:
+        rois[new_col] = rois.apply(spot_in_nuc, nuc_masks=nuc_masks, axis=1)
+
+>>>>>>> Stashed changes
     return rois
 
 
@@ -430,6 +472,7 @@ def crop_at_pos(arr, tl_pos, size):
 
     return arr[s]
 
+<<<<<<< Updated upstream
 def all_matching_files_in_subfolders(path, template):
     '''
     Generates a sorted list of all files with the template in the 
@@ -498,6 +541,35 @@ def image_from_svih5(path,ch=None,index=(slice(None),
 
     
 def detect_spots(img, spot_threshold=20):
+=======
+def crop_to_center(arr, center, size):
+    #Crop array to size centered at center position.
+    s=tuple([slice(min(0,int(c-s//2)),max(int(c+s//2), arr_s)) for c, s, arr_s in zip(center,size,arr.shape)])
+    return arr[s]
+    
+def find_center_of_embryo(embryo_stack):
+    #Find center of embryo:
+    blur = ndi.gaussian_filter(embryo_stack[::4,::4,::4], 5)
+    thresh = np.min(blur)+30
+    binary = blur > thresh
+    labels, n_labels = ndi.label(remove_small_objects(binary, min_size=5000))
+    props = regionprops_table(labels, properties=['bbox', 'centroid'])
+    zc = ((props['bbox-3']-props['bbox-0'])//2+props['bbox-0'])*4
+    yc = ((props['bbox-4']-props['bbox-1'])//2+props['bbox-1'])*4
+    xc = ((props['bbox-5']-props['bbox-2'])//2+props['bbox-2'])*4
+    return (zc, yc, xc)
+
+def center_crop_embryo(embryo_stack, size, center=None):
+    #Find center of embryo and crop image to specific size, padding if needed.
+    if center is None:
+        center = find_center_of_embryo(embryo_stack)
+    out = crop_to_center(embryo_stack, center, size)
+    if out.shape != tuple(size):
+        out = pad_to_shape(out, size)
+    return out
+
+def detect_spots(input_img, spot_threshold=20, min_dist=None):
+>>>>>>> Stashed changes
     '''Spot detection by difference of gaussian filter
     #TODO: Do not use hard-coded sigma values
 
@@ -526,7 +598,109 @@ def detect_spots(img, spot_threshold=20):
                         inplace = True)
     print(f'Found {num_spots} spots.')
     return spot_props, img
+<<<<<<< Updated upstream
     #Cleanup and saving of the DataFrame
+=======
+
+def detect_spots_int(input_img, spot_threshold=500, expand_px = 1, min_dist=None):
+    '''Spot detection by difference of gaussian filter
+    #TODO: Do not use hard-coded sigma values
+
+    Args:
+        img (ndarray): Input 3D image
+        spot_threshold (int): Threshold to use for spots. Defaults to 500.
+
+    Returns:
+        spot_props (DataFrame): The centroids and roi_IDs of the spots found. 
+        img (ndarray): The DoG filtered image used for spot detection.
+    '''
+    #img = white_tophat(image=input_img, footprint=ball(2))
+    struct = ndi.generate_binary_structure(input_img.ndim, 2)
+    labels, n_obj = ndi.label(input_img > spot_threshold, structure=struct)
+    if n_obj > 1: #Do not need this with area filtering below.
+        #pass
+        labels = remove_small_objects(labels, min_size=5)
+    if expand_px > 0:
+        labels = expand_labels(labels, expand_px)
+    if np.all(labels == 0): #If there are no labels anymore:
+        return pd.DataFrame(columns=['label', 'z_min','y_min','x_min','z_max','y_max','x_max','area','zc','yc','xc']), labels
+    else:
+        spot_props = regionprops_table(labels, input_img, properties=('label', 'bbox', 'area', 'centroid_weighted'))
+        spot_props = pd.DataFrame(spot_props)
+        #spot_props = spot_props.query('area > 10')
+
+        spot_props = spot_props.rename(columns={'centroid_weighted-0': 'zc',
+                                            'centroid_weighted-1': 'yc',
+                                            'centroid_weighted-2': 'xc',
+                                            'bbox-0': 'z_min',
+                                            'bbox-1': 'y_min',
+                                            'bbox-2': 'x_min',
+                                            'bbox-3': 'z_max',
+                                            'bbox-4': 'y_max',
+                                            'bbox-5': 'x_max'})
+        
+        if min_dist:
+            dists = squareform(pdist(spot_props[['zc', 'yc', 'xc']].to_numpy(), metric='euclidean'))
+            idx = np.nonzero(np.triu(dists < min_dist, k=1))[1]
+            spot_props = spot_props.drop(idx)
+        
+        spot_props = spot_props.reset_index(drop=True)
+        spot_props = spot_props.rename(columns={'index':'roi_id'})
+
+        #print(f'Found {len(spot_props)} spots.', end=' ')
+        return spot_props, labels
+
+def roi_center_to_bbox(rois, roi_size):
+    rois['z_min'] = rois['zc'] - roi_size[0]//2
+    rois['z_max'] = rois['zc'] + roi_size[0]//2
+    rois['y_min'] = rois['yc'] - roi_size[1]//2
+    rois['y_max'] = rois['yc'] + roi_size[1]//2
+    rois['x_min'] = rois['xc'] - roi_size[2]//2
+    rois['x_max'] = rois['xc'] + roi_size[2]//2
+    return rois
+
+def generate_bead_rois(t_img, threshold, min_bead_int, bead_roi_px=16, n_points=200):
+    '''Function for finding positions of beads in an image based on manually set thresholds in config file.
+
+    Args:
+        t_img (3D ndarray): Image
+        threshold (float): Threshold for initial bead segmentation
+        min_bead_int (float): Secondary filtering of segmented maxima.
+        n_points (int): How many bead positions to return
+
+    Returns:
+        t_img_maxima: 3XN ndarray of 3D bead coordinates in t_img.
+    '''
+    roi_px = bead_roi_px//2
+    t_img_label,num_labels=ndi.label(t_img>threshold)
+    print('Number of unfiltered beads found: ', num_labels)
+    t_img_maxima = pd.DataFrame(regionprops_table(t_img_label, t_img, properties=('label', 'centroid', 'max_intensity')))
+    
+    t_img_maxima = t_img_maxima[(t_img_maxima['centroid-0'] > roi_px) & (t_img_maxima['centroid-1'] > roi_px) & (t_img_maxima['centroid-2'] > roi_px)].query('max_intensity > @min_bead_int')
+    
+    if len(t_img_maxima) > n_points:
+        t_img_maxima = t_img_maxima.sample(n=n_points, random_state=1)[['centroid-0', 'centroid-1', 'centroid-2']].to_numpy()
+    else:
+        t_img_maxima = t_img_maxima.sample(n=len(t_img_maxima), random_state=1)[['centroid-0', 'centroid-1', 'centroid-2']].to_numpy()
+    
+    t_img_maxima = np.round(t_img_maxima).astype(int)
+
+    return t_img_maxima
+
+def extract_single_bead(point, img, bead_roi_px=16, drift_course=None):
+    #Exctract a cropped region of a single fiducial in an image, optionally including a pre-calucalated course drift to shift the cropped region.
+    roi_px = bead_roi_px//2
+    if drift_course is not None:
+        s = tuple([slice(ind-int(shift)-roi_px, ind-int(shift)+roi_px) for (ind, shift) in zip(point, drift_course)])
+    else:
+        s = tuple([slice(ind-roi_px, ind+roi_px) for ind in point])
+    bead = img[s]
+
+    if bead.shape != (2*roi_px, 2*roi_px, 2*roi_px):
+        return np.zeros((2*roi_px, 2*roi_px, 2*roi_px))
+    else:
+        return bead
+>>>>>>> Stashed changes
         
 def drift_corr_course(t_img, o_img, downsample=1):
     '''
@@ -688,11 +862,71 @@ def nuc_segmentation(nuc_imgs, diameter = 150, do_3D = False):
         nuc_imgs (ndarray or list of ndarrays): 2D or 3D images of nuclei, expects single channel
     '''
     from cellpose import models
+<<<<<<< Updated upstream
     model = models.Cellpose(gpu=False, model_type='nuclei')
     channels = [0,0]
     masks, flows, styles, diams = model.eval(nuc_imgs, diameter=diameter, channels=channels, net_avg=False, do_3D=do_3D)
     return masks
 
+=======
+    model = models.CellposeModel(gpu=False, model_type=model_type)
+    masks = model.eval(nuc_imgs, diameter=diameter, channels=[0,0], net_avg=False, do_3D = False)[0]
+    return masks
+
+def nuc_segmentation_cellpose_3d(nuc_imgs, diameter = 150, model_type = 'nuclei', anisotropy = 2):
+    '''
+    Runs nuclear segmentation using cellpose trained model (https://github.com/MouseLand/cellpose)
+
+    Args:
+        nuc_imgs (ndarray or list of ndarrays): 2D or 3D images of nuclei, expects single channel
+    '''
+
+    if not isinstance(nuc_imgs, list):
+        if nuc_imgs.ndim > 3:
+            nuc_imgs = [np.array(nuc_imgs[i]) for i in range(nuc_imgs.shape[0])] #Force array conversion in case of zarr.
+
+    from cellpose import models
+    model = models.CellposeModel(gpu=True, model_type=model_type, net_avg=False)
+    masks = model.eval(nuc_imgs, diameter=diameter, channels=[0,0], z_axis = 0, anisotropy = anisotropy, do_3D=True)[0]
+    return masks
+
+def mask_to_binary(mask):
+    '''Converts masks from nuclear segmentation to masks with 
+    single pixel background between separate, neighbouring features.
+
+    Args:
+        masks ([np array]): Detected nuclear masks (label image)
+
+    Returns:
+        [np array]: Masks with single pixel seperation beteween neighboring features.
+    '''
+    masks_no_bound = np.where(find_boundaries(mask)>0, 0, mask)
+    return masks_no_bound
+
+def mitotic_cell_extra_seg(nuc_image, nuc_mask):
+    '''Performs additional mitotic cell segmentation on top of an interphase segmentation (e.g. from CellPose).
+    Assumes mitotic cells are brighter, unsegmented objects in the image.
+
+    Args:
+        nuc_image ([nD numpy array]): nuclei image
+        nuc_mask ([nD numpy array]): labeled nuclei from nuclei image
+
+    Returns:
+        nuc_mask ([nD numpy array]): labeled nuclei with mitotic cells added
+        mito_index+1 (int): the first index of the mitotic cells in the returned nuc_mask
+
+    '''
+    from skimage.morphology import label, remove_small_objects
+    nuc_int = np.mean(nuc_image[nuc_mask>0])
+    mito_nuc = (nuc_image * (nuc_mask == 0)) > 1.5*nuc_int
+    mito_nuc = remove_small_objects(mito_nuc, min_size=100)
+    mito_nuc = label(mito_nuc)
+    mito_index = np.max(nuc_mask)
+    mito_nuc[mito_nuc>0] += mito_index
+    nuc_mask = nuc_mask + mito_nuc
+    return nuc_mask, mito_index+1
+
+>>>>>>> Stashed changes
 def nuc_segmentation_otsu(nuc_image, min_size, exp_bb=-1, clear_edges=True):
     '''
     Detects nuclei based on otsu threshold, labels them and measures

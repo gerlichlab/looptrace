@@ -1,14 +1,21 @@
 # conda env create | update -f environment.yml
 name: looptrace
 dependencies:
-    - python=3.8
+    - python=3.9
+    - numba::numba
+    - numba::llvmlite
     - scipy
     - dask
+<<<<<<< Updated upstream
     - numba
     - joblib
     - plotly 
     - nbformat 
     - ipykernel 
+=======
+    - joblib
+    - jupyter
+>>>>>>> Stashed changes
     - nb_conda
     - pip
     - pip:
@@ -20,5 +27,15 @@ dependencies:
         - czifile
         - imreg_dft
         - zarr
+<<<<<<< Updated upstream
         - napari[all]
         - fsspec>=0.9.0
+=======
+        - fsspec>=0.9.0
+        - imagecodecs
+        - napari
+        - numcodecs
+        - tqdm
+        - cellpose
+        - nd2
+>>>>>>> Stashed changes

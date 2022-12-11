@@ -11,27 +11,51 @@ import numpy as np
 import pandas as pd
 import scipy.ndimage as ndi
 import looptrace.image_processing_functions as ip
+<<<<<<< Updated upstream
+=======
+#from looptrace import image_io
+>>>>>>> Stashed changes
 from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
-#import dask
-#from dask import delayed
 from tqdm import tqdm
+<<<<<<< Updated upstream
 
 class Tracer:
     def __init__(self, image_handler):
+=======
+#import os
+
+class Tracer:
+    def __init__(self, image_handler, trace_beads = False, array_id = None):
+>>>>>>> Stashed changes
         '''
         Initialize Tracer class with config read in from YAML file.
     '''
         self.image_handler = image_handler
         self.config_path = image_handler.config_path
         self.config = image_handler.config
+<<<<<<< Updated upstream
         self.images, self.pos_list = image_handler.images, image_handler.pos_list
         self.images_shape = self.images.shape
         self.drift_table = image_handler.drift_table
         self.roi_table = image_handler.roi_table
+=======
+        self.drift_table = image_handler.tables[self.config['spot_input_name']+'_drift_correction']
+        self.images = self.image_handler.images[self.config['trace_input_name']]
+            
+        self.pos_list = self.image_handler.image_lists[self.config['spot_input_name']]
+        self.traces_path = self.image_handler.out_path+'traces.csv'
+        self.trace_beads = trace_beads
+        if trace_beads:
+            self.roi_table = image_handler.tables[self.config['spot_input_name']+'_bead_rois']
+        else:
+            self.roi_table = image_handler.tables[self.config['spot_input_name']+'_rois']
+        self.all_rois = image_handler.tables[self.config['spot_input_name']+'_dc_rois']
+>>>>>>> Stashed changes
 
         self.fit_funcs = {'LS': fitSymmetricGaussian3D, 'MLE': fitSymmetricGaussian3DMLE}
         self.fit_func = self.fit_funcs[self.config['fit_func']]
 
+<<<<<<< Updated upstream
     def make_dc_rois_all_frames(self):
         print('Generating list of all ROIs for tracing.')
         Z, Y, X = self.images_shape[-3:]
@@ -115,6 +139,70 @@ class Tracer:
             
             roi_slice = roi['roi_slice']
             pad = roi['pad']
+=======
+        self.array_id = array_id
+        if self.array_id is not None:
+            self.pos_list = [self.pos_list[int(self.array_id)]]
+            self.roi_table = self.roi_table[self.roi_table.position.isin(self.pos_list)]
+            self.all_rois = self.all_rois[self.all_rois.position.isin(self.pos_list)].reset_index(drop=True)
+            self.traces_path = self.image_handler.out_path+'traces.csv'[:-4]+'_'+str(self.array_id).zfill(4)+'.csv'
+            self.images = self.images[self.roi_table.index.to_list()]
+
+
+    def trace_single_roi(self, roi_img, mask = None, background = None):
+        
+        #Fit a single roi with 3D gaussian (MLE or LS as defined in config).
+        #Masking by intensity or label image can be used to improve fitting correct spot (set in config)
+
+        if background is not None:
+            roi_img = roi_img - background
+        if np.any(roi_img) and np.all([d > 2 for d in roi_img.shape]): #Check if empty or too small for fitting
+            if mask is None:
+                fit = self.fit_func(roi_img, sigma=1, center='max')[0]
+            else:
+                roi_img_masked = (mask/np.max(mask)) * roi_img
+                center = list(np.unravel_index(np.argmax(roi_img_masked, axis=None), roi_img.shape))
+                fit = self.fit_func(roi_img, sigma=1, center=center)[0]
+            return fit
+        else:
+            fit = np.array([-1, -1, -1, -1, -1, -1, -1])
+            return fit
+        
+
+    def trace_all_rois(self):
+        '''
+        Fits 3D gaussian to previously detected ROIs across positions and timeframes.
+    
+        '''
+        imgs = self.images
+
+        fits = []
+
+        #fits = Parallel(n_jobs=-1, prefer='threads')(delayed(self.trace_single_roi)(roi_imgs[i]) for i in tqdm(range(roi_imgs.shape[0])))
+        try:
+            mask_fits = self.image_handler.config['mask_fits']
+        except KeyError:
+            mask_fits = False
+
+        try:
+            #This only works for a single position at the time currently
+            background = self.image_handler.config['substract_background']
+            pos_drifts = self.drift_table[self.drift_table.position.isin(self.pos_list)][['z_px_fine', 'y_px_fine', 'x_px_fine']].to_numpy()
+            background_rel_drifts = pos_drifts - pos_drifts[background]
+        except KeyError:
+            background = None
+
+        if mask_fits:
+            ref_frames = self.roi_table['frame'].to_list()
+            for p, pos_imgs in tqdm(enumerate(imgs), total=len(imgs)):
+                ref_img = pos_imgs[ref_frames[p]]
+                #print(ref_img.shape)
+                for t, spot_img in enumerate(pos_imgs):
+                    if background is not None:
+                        spot_img = np.clip(spot_img.astype(np.int16) - ndi.shift(pos_imgs[background], shift = background_rel_drifts[t]), a_min = 0, a_max = None)
+                    fits.append(self.trace_single_roi(spot_img, mask = ref_img))
+                #Parallel(n_jobs=1, prefer='threads')(delayed(self.trace_single_roi)(imgs[p, t], mask= ref_img) for t in range(imgs.shape[1]))
+>>>>>>> Stashed changes
 
             try:
                 roi_image = np.array(self.images[roi['pos_index'],
@@ -135,6 +223,7 @@ class Tracer:
             if decon != 0:
                 roi_image = ip.decon_RL(roi_image, kernel, algo, fd_data, niter=decon)
 
+<<<<<<< Updated upstream
             #Perform 3D gaussian fit
             #trace_res.append(delayed(self.fit_func)(roi_image, sigma=1, center='max')[0])
             trace_res.append(self.fit_func(roi_image, sigma=1, center='max')[0])
@@ -164,6 +253,12 @@ class Tracer:
         trace_res = pd.DataFrame(trace_res,columns=["BG","A","z_px","y_px","x_px","sigma_z","sigma_xy"])
         trace_index = pd.DataFrame(trace_index, columns=["trace_id", "frame", "ref_frame", "position", "drift_z", "drift_y", "drift_x"])
         traces = pd.concat([trace_index, trace_res], axis=1)
+=======
+        trace_res = pd.DataFrame(fits,columns=["BG","A","z_px","y_px","x_px","sigma_z","sigma_xy"])
+        #trace_index = pd.DataFrame(fit_rois, columns=["trace_id", "frame", "ref_frame", "position", "drift_z", "drift_y", "drift_x"])
+        traces = pd.concat([self.all_rois, trace_res], axis=1)
+        traces.rename(columns={"roi_id": "trace_id"}, inplace=True)
+>>>>>>> Stashed changes
 
         #Apply fine scale drift to fits, and physcial units.
         traces['z_px']=traces['z_px']+traces['drift_z']
@@ -176,6 +271,7 @@ class Tracer:
         traces['sigma_z']=traces['sigma_z']*self.config['z_nm']
         traces['sigma_xy']=traces['sigma_xy']*self.config['xy_nm']
         traces = traces.sort_values(['trace_id', 'frame'])
+<<<<<<< Updated upstream
         #Make final hyperstack of images in PTZYX order.
         all_images = np.reshape(np.stack(all_images), 
                                 (max(traces.trace_id)+1,max(traces.frame)+1, 
@@ -184,3 +280,13 @@ class Tracer:
         self.image_handler.save_data(traces=traces, imgs=all_images)
         return traces, all_images
         
+=======
+
+        if self.trace_beads: 
+            suffix = '_beads.csv'
+        else:
+            suffix = ''
+
+        #self.image_handler.traces = traces
+        traces.to_csv(self.traces_path+suffix)
+>>>>>>> Stashed changes

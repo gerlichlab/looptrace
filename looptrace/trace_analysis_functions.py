@@ -20,18 +20,34 @@ tab:cyan : #17becf
 """
 import os
 import itertools
+<<<<<<< Updated upstream
 import pandas as pd
 import numpy as np
 import plotly.colors
+=======
+#from numpy.core.fromnumeric import shape
+import pandas as pd
+import numpy as np
+import tqdm
+>>>>>>> Stashed changes
 import re
 from plotly.offline import iplot
 import plotly.graph_objs as go
 import plotly.express as px
 from scipy import interpolate
+<<<<<<< Updated upstream
 from scipy.spatial.distance import cdist, squareform
 from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
 import matplotlib.pyplot as plt
 import napari
+=======
+from scipy.spatial.distance import cdist, squareform, pdist
+from scipy.spatial import ConvexHull
+from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
+import matplotlib.pyplot as plt
+
+
+>>>>>>> Stashed changes
 from numba import jit, njit
 
 from numba.core.errors import NumbaPerformanceWarning
@@ -40,6 +56,84 @@ warnings.simplefilter('ignore', category=NumbaPerformanceWarning)
 
 import seaborn as sns
 
+<<<<<<< Updated upstream
+=======
+def gen_random_coil(g_dist, s_dist = 24.7, std_scaling = 0.5, deg=360, n_traces = 1000, sigma_noise = 2):
+    traces = []
+    for j in range(n_traces):
+        L = [np.random.normal(np.sqrt(d)*s_dist, np.sqrt(d)*s_dist*std_scaling, 1) for d in g_dist]  # Calculate the step lengths, drawn from normal distribution according to paramters set above.
+        N = len(L)+1
+        #N = 1135//step_denom #Number of steps in each random walk
+        #N = np.sum(g_dist).astype(int)//step_denom + 1
+        R = deg*(np.random.rand(N)) #Get the polar angles between. Picks random angle between 0-deg 
+        A = deg*(np.random.rand(N)) #Get the azimethal angels. Picks random angle between 0-deg
+
+        #We need to keep track of the change in angle over subsequent positions so the origin isn't reset at every point.
+        R = np.cumsum(R)
+        A = np.cumsum(A) 
+        
+        #Initialize trace arrays
+        trace_id = np.ones(N) * j
+        frame = np.array(range(N))+1
+        x = np.zeros(N)
+        y = np.zeros(N)
+        z = np.zeros(N)
+        qc = np.ones(N)
+        
+        for i in range(1,N): #converting spherical coordinates to cartesian.
+            x[i] = x[i-1] + L[i-1]*sin(radians(R[i]))*cos(radians(A[i]))
+            y[i] = y[i-1] + L[i-1]*sin(radians(R[i]))*sin(radians(A[i]))
+            z[i] = z[i-1] + L[i-1]*cos(radians(R[i]))
+        x = x + np.random.normal(0, sigma_noise, size=x.shape)
+        y = y + np.random.normal(0, sigma_noise, size=y.shape)
+        z = z + np.random.normal(0, sigma_noise, size=z.shape)
+
+        # Create 6xN dataframe in the format (trace_id, frame, x, y, z, QC)
+        traces.append(np.column_stack((trace_id, frame, x, y, z, qc)))
+        #sampling = np.cumsum(np.round([0]+g_dist)).astype(int)//step_denom
+        #xyz_array = xyz_array[sampling,:]
+#
+    traces = np.concatenate(traces)
+    traces = pd.DataFrame(traces)#.reset_index(drop=True)
+    traces.columns = ['trace_id','frame','x','y','z','QC']
+    traces = traces.astype({'trace_id': int, 'frame': int, 'QC': int})
+    traces['frame_name']='H'+traces['frame'].astype(str).str.zfill(2)
+
+    return traces
+
+def loop_freq_vs_random(traces,traces_rw):
+    
+    
+    pwds = pwd_calc(traces)
+    pwds_rw = pwd_calc(traces_rw)
+    idx = np.random.choice(np.arange(pwds_rw.shape[0]), pwds.shape[0], replace=False)
+    pwds_rw=pwds_rw[idx, :, :]
+    print(pwds.shape, pwds_rw.shape)
+    freq_exp = np.nansum(pwds<150, axis=0)/np.nansum(pwds>0, axis=0)
+    freq_rw = np.nansum(pwds_rw<150, axis=0)/np.nansum(pwds_rw>0, axis=0)
+    freq = np.isfinite(freq_exp/freq_rw) & (freq_exp/freq_rw > 1)
+    #print(freq)
+    freq_ss = np.nansum(np.triu((pwds<150) * freq, 1), axis=(1,2))
+    freq_base = np.nansum(np.triu((pwds<150), 1), axis=(1,2))
+    freq_rw = np.nansum(np.triu((pwds_rw<150) & np.isfinite(pwds), 1), axis=(1,2))
+    return freq_ss, freq_base, freq_rw
+
+def pylochrom_coords_to_traces(coords):
+    N_traces, N_steps, _ = coords.shape
+    traces = []
+    for i in range(N_traces):
+        trace = {}
+        trace['z'] = coords[i,:,0]
+        trace['y'] = coords[i,:,1]
+        trace['x'] = coords[i,:,2]
+        trace['frame'] = list(range(N_steps))
+        trace['trace_id'] = [i]*N_steps 
+        trace['QC'] = [1]*N_steps
+        #print(pd.DataFrame(trace))
+        traces.append(pd.DataFrame(trace))
+    return pd.concat(traces)
+
+>>>>>>> Stashed changes
 def tracing_qc(traces, qc_config):
     df = traces.copy()
     A_to_BG = qc_config['A_to_BG']
@@ -110,11 +204,12 @@ def view_context(all_images,
                  trace_id = None, 
                  ref_slice = None,
                  rois = None):
+    
     '''
     Convenvience function to view a given ROI in context in napari.
     If not trace_id or ROIs given the whole image stack divided by channel is shown.
     '''
-    
+    import napari
     colors = ['magenta', 'green', 'blue', 'gray']
     with napari.gui_qt():
         viewer = napari.Viewer()
@@ -145,7 +240,7 @@ def view_fits(traces, imgs, mode='2D', contrast=(100,10000), axis=2):
     '''
     Convenience function to view 3d guassian fits on top of 2D (max z-projection) or 3D spot data.
     '''
-
+    import napari
     points = traces[['trace_id', 'frame', 'z_px', 'y_px', 'x_px', 'QC']].to_numpy()
     points = points[points[:,5].astype(bool),0:5]
     print
@@ -181,7 +276,7 @@ def points_for_overlay(traces, rois, config):
     
     return points
 
-def euclidean_dist(traces, frame_names):
+def euclidean_dist(traces, frame_names, column = 'frame_name'):
     '''Calculate the eucledian distances between the positions indicated in all traces.
 
     Args:
@@ -192,8 +287,14 @@ def euclidean_dist(traces, frame_names):
         df_sel (DataFrame): Eucledian distances per trace of the two positions
     '''
 
+<<<<<<< Updated upstream
     df_sel = traces[traces['frame_name'].isin(frame_names)]
     df_qc = df_sel.groupby(['trace_id'])[['QC']].sum()
+=======
+    df_sel = traces[traces[column].isin(frame_names)]
+    trace_ids = df_sel['trace_id'].unique()
+    qc = df_sel.groupby(['trace_id'])[['QC']].sum()['QC'].values
+>>>>>>> Stashed changes
     df_sel = df_sel.groupby(['trace_id'])[['z','y','x']].diff().dropna()
     df_sel['euclidean'] = ((df_sel['z'])**2 + df_sel['y']**2 + df_sel['x']**2)**0.5
     df_sel['euclidean_res'] = ((0.5*df_sel['z'])**2 + df_sel['y']**2 + df_sel['x']**2)**0.5
@@ -524,8 +625,10 @@ def general_procrustes_analysis(traces, trace_ids='all', crit=0.01):
 
     Returns all the aligned traces, the mean trace and the std of all the aligned traces.
     '''
-    if trace_ids == 'all':
+    if isinstance(trace_ids, str):
         trace_ids = list(traces['trace_id'].unique())
+    elif isinstance(trace_ids, list):
+        pass
     else:
         trace_ids=list(trace_ids.astype(int))
     # Make list of all points of selected traces
@@ -556,6 +659,48 @@ def general_procrustes_analysis(traces, trace_ids='all', crit=0.01):
 
     return all_points, points_mean, points_std
 
+def piecewise_gpa(traces, trace_ids='all', crit=0.01, segment_length = 5, overlap = 3):
+    '''
+    General procrustes analysis is performed as described in e.g.
+    https://en.wikipedia.org/wiki/Generalized_Procrustes_analysis
+    Runs until change in procrustes distance is less than crit.
+
+    Returns all the aligned traces, the mean trace and the std of all the aligned traces.
+    '''
+    if trace_ids == 'all':
+        trace_ids = list(traces['trace_id'].unique())
+    else:
+        trace_ids=list(trace_ids.astype(int))
+    # Make list of all points of selected traces
+    hybs = np.sort(traces.query('QC == 1').hyb.unique())
+    segments = [hybs[i*(segment_length-overlap):i*(segment_length-overlap)+segment_length] for i in range(0,len(hybs)//(segment_length-overlap))]
+    segments = [s for s in segments if len(s) == segment_length]
+    print(segments)
+    aligned_segments = []
+    for seg in tqdm.tqdm(segments):
+        a = seg[0]
+        b = seg[-1]
+        traces_seg = traces.query('hyb >= @a & hyb <= @b')
+        aligned_segments.append(general_procrustes_analysis(traces_seg, trace_ids='all', crit=0.01, template_points = segment_length-1)[1])
+    
+    full_trace = np.zeros((len(hybs), 4))
+    full_trace[0:segment_length, :] = aligned_segments[0]
+    for i in np.arange(0,len(aligned_segments)-1):
+        print(i)
+        prev_seg = full_trace[i*(segment_length-overlap):i*(segment_length-overlap) + segment_length].copy()
+        prev_seg[0:overlap-1,3] = 0
+        next_seg = aligned_segments[i+1].copy()
+        next_seg[-overlap+1:,3] = 0
+        reg_segment = rigid_transform_3D(next_seg,prev_seg,prematch=False)
+        new_avg = np.mean([prev_seg[-overlap:,:],reg_segment[:overlap,:]], axis=0)
+        next_seg[:overlap,:] = new_avg
+        next_seg[:,3] = 1
+        full_trace[(i+1)*(segment_length-overlap):(i+1)*(segment_length-overlap)+segment_length, :] = next_seg
+        
+    return full_trace
+        
+
+
 def general_procrustes_loop(all_points, template):
     '''
     A single cycle in the general procrustes analysis.
@@ -565,7 +710,7 @@ def general_procrustes_loop(all_points, template):
     # Align all point sets to mean template
     all_points_aligned = [rigid_transform_3D(offset, template) for 
                           offset in all_points]
-    
+    all_points_aligned = [points for points in all_points_aligned if points.shape[0] >3]#Ensure at least 3 points in traces.
     #Set values that do not pass QC to nan in new list.
     all_points_aligned_qc=[]
     for points in all_points_aligned:
@@ -589,9 +734,20 @@ def procrustes_dist(a, b):
     Procrustes distance (identical to RMSD) between two point sets.
     Matches them before calculation.
     '''
+<<<<<<< Updated upstream
     a, b = match_two_pointsets(a, b)    
     dist = np.sqrt(np.mean((a-b)**2))
     return dist
+=======
+    #print(a,b)
+    a, b = match_two_pointsets(a, b)
+    #print(a,b)
+    if a.shape[0] == 0:
+        return 1e6    
+    else:
+        dist = np.sqrt(np.mean((a-b)**2))
+        return dist
+>>>>>>> Stashed changes
 
 @njit
 def procrustes_dist_corr(a, b):
@@ -663,6 +819,8 @@ def rigid_transform_3D(A_orig, B_orig, prematch = False):
         A, B = match_two_pointsets(A_orig, B_orig)
     else:
         A, B = A_orig, B_orig
+    if A.shape[0] == 0: #No matching points.
+        return A
     # Subtract mean
     # Workaround for lack of "axis" argument support in numba:
     Ac = numba_mean_axis0(A)
@@ -733,12 +891,42 @@ def points_from_traces(traces, trace_ids=-1):
     
     
     if trace_ids == -1:
-        trace_ids = np.unique(arr[:,0])
+        trace_ids, idx = np.unique(arr[:,0], return_index=True)
+        return np.split(arr, idx[1:], axis=0)
 
     elif not isinstance(trace_ids, (list, tuple)):
         trace_ids = [trace_ids]
 
     return [arr[arr[:,0] == i][:,1:] for i in trace_ids]
+
+def points_from_traces_qc_filt(traces, trace_ids=-1):
+    '''
+    Helper function to extract point coordinates from trace dataframe.
+    All points are returned, but points not passing QC during tracing 
+    are not returned.   
+
+    Parameters
+    ----------
+    trace_df : pd DataFrame with trace data.
+
+    Returns
+    -------
+    points : Nx3 np array with trace coordinates.
+    '''
+
+
+    arr = traces[['trace_id', 'z', 'y', 'x', 'QC']].to_numpy()
+    qc_idx = arr[:,4] == 1
+    arr = arr[qc_idx,0:4]
+
+    if trace_ids == -1:
+        trace_ids, idx = np.unique(arr[:,0], return_index=True)
+        return np.split(arr, idx[1:], axis=0)
+
+    else:
+        if not isinstance(trace_ids, (list, tuple)):
+            trace_ids = [trace_ids]
+        return [arr[arr[:,0] == id][:,1:4] for id in trace_ids]
 
 def points_from_traces_nan(traces, trace_ids=-1):
     '''
@@ -752,22 +940,22 @@ def points_from_traces_nan(traces, trace_ids=-1):
 
     Returns
     -------
-    points : Nx3 np array with trace coordinates.
-    idx : List, Original index of trace coordinates.
+    points : Nx3 np array with trace coordinates, NaN row returned if point did not pass QC.
     '''
-
 
     arr = traces[['trace_id', 'z', 'y', 'x', 'QC']].to_numpy()
     qc_idx = arr[:,4] == 1
     arr[~qc_idx,1:4] = np.nan
 
     if trace_ids == -1:
-        trace_ids = np.unique(arr[:,0])
+        trace_ids, idx = np.unique(arr[:,0], return_index=True)
+        return np.split(arr[:,1:4], idx[1:], axis=0)
 
     elif not isinstance(trace_ids, (list, tuple)):
         trace_ids = [trace_ids]
 
     return [arr[arr[:,0] == id][:,1:4] for id in trace_ids]
+
 
 
 def center_points_qc(a):
@@ -784,7 +972,7 @@ def spline_interp(points, n_points=100):
 
     Parameters
     ----------
-    points : n_points X ndim list or array of point coordinates.
+    points : n_points X ndim list of point coordinates.
 
     Returns
     -------
@@ -824,7 +1012,63 @@ def mat_corr_pcc(a,b):
     
     return pcc
 
+<<<<<<< Updated upstream
 
+=======
+@jit(nopython=True)
+def pcc_dist(a,b):
+    '''
+    Calculate pearson's corr coef of two matrices, ignoring nans.
+    '''
+    ind = (a>0) & (b>0)
+
+    a = a[ind]
+    b = b[ind]
+    
+    a_m=np.nanmean(a)
+    b_m=np.nanmean(b)
+    
+    pcc_num=np.nansum((a-a_m)*(b-b_m))
+    pcc_denom=np.sqrt(np.nansum((a-a_m)**2))*np.sqrt(np.nansum((b-b_m)**2))
+    pcc=np.divide(pcc_num,pcc_denom)
+    
+    return np.sqrt(1-pcc)
+
+@jit(nopython=True)
+def pcc_match(a,b):
+    '''
+    Calculate pearson's corr coef of two matrices, ignoring nans.
+    '''
+    ind = (a>0) & (b>0)
+
+    a = a[ind]
+    b = b[ind]
+    
+    a_m=np.nanmean(a)
+    b_m=np.nanmean(b)
+    
+    pcc_num=np.nansum((a-a_m)*(b-b_m))
+    pcc_denom=np.sqrt(np.nansum((a-a_m)**2))*np.sqrt(np.nansum((b-b_m)**2))
+    pcc=np.divide(pcc_num,pcc_denom)
+    
+    return pcc
+
+@jit(nopython=True)
+def contact_dist(a,b):
+    '''
+    Calculate pearson's corr coef of two matrices, ignoring nans.
+    '''
+    ind = (a>0) & (b>0)
+
+    a = a[ind]
+    b = b[ind]
+    
+    score = np.sum((a < 120) & (b < 120))
+    
+    return 1-score/ind.size
+
+@njit
+>>>>>>> Stashed changes
 def radius_of_gyration(point_set):
     '''
     Calculate ROG: R = sqrt(1/N * sum((r_k - r_mean)^2) for k points in structure.) 
@@ -832,11 +1076,11 @@ def radius_of_gyration(point_set):
     '''
 
     #Only include points passing QC:
-    qc_idx = point_set[:,3] != 0
-    point_set_qc = point_set[qc_idx, 0:3]
+    #qc_idx = point_set[:,3] != 0
+    #point_set_qc = point_set[qc_idx, 0:3]
 
-    points_mean=np.mean(point_set_qc, axis=0)
-    rog = np.sqrt(1/point_set_qc.shape[0] * np.sum((point_set_qc - points_mean)**2))
+    points_mean=numba_mean_axis0(point_set)
+    rog = np.sqrt(1/point_set.shape[0] * np.sum((point_set - points_mean)**2))
     return rog
 
 def elongation(point_set):
@@ -846,11 +1090,11 @@ def elongation(point_set):
     '''
 
     #Only include points passing QC:
-    qc_idx = point_set[:,3] != 0
-    point_set_qc = point_set[qc_idx, 0:3]
+    #qc_idx = point_set[:,3] != 0
+    #point_set_qc = point_set[qc_idx, 0:3]
 
     #Center points to 0-mean
-    points_centered = point_set_qc - np.mean(point_set_qc, axis=0)
+    points_centered = point_set - np.mean(point_set, axis=0)
     n, m = points_centered.shape
     #Compute covariance matrix
     cov = np.dot(points_centered.T, points_centered) / (n-1)
@@ -872,12 +1116,128 @@ def contour_length(point_set):
         [float]: the contour length (sum of next point distances)
     '''
     #Only include points passing QC:
-    qc_idx = point_set[:,3] != 0
-    point_set_qc = point_set[qc_idx, 0:3]
+    #qc_idx = point_set[:,3] != 0
+    #point_set_qc = point_set[qc_idx, 0:3]
     dist = 0
-    for i in range(point_set_qc.shape[0]-1):
-        dist += np.linalg.norm(point_set_qc[i+1]-point_set_qc[i])
+    for i in range(point_set.shape[0]-1):
+        dist += np.linalg.norm(point_set[i+1]-point_set[i])
     return dist
+
+def trace_metrics(traces, use_interp = False, diagonal = 0, contact_cutoff = 150, only_small_loops = False):
+    points_nan = points_from_traces_nan(traces)
+    points_qc = points_from_traces_qc_filt(traces)
+    #ind_u = np.triu_indices(points_nan[0].shape[0], k=2)
+    ind_l = np.tril_indices(points_nan[0].shape[0], k=0)
+    trace_ids = traces.trace_id.unique()
+    metrics = []
+    loop_metrics = []
+    for i in tqdm.tqdm(range(len(points_nan))):
+        if use_interp:
+            point_set = np.column_stack(spline_interp([points_qc[i][:,0],points_qc[i][:,1],points_qc[i][:,2]]))
+        else:
+            point_set = points_nan[i]
+        dists = cdist(point_set, point_set)
+        ind_l = np.tril_indices(point_set.shape[0], k=diagonal)
+        dists_diag = dists.copy()
+        dists_diag[ind_l] = np.nan
+        contacts = dists_diag < contact_cutoff
+
+        contact_coords = np.argwhere(contacts)
+        #print(contact_coords)
+        stacked_loops = []
+        for c in contact_coords:
+            first_anchor = contact_coords[np.argwhere(contact_coords[:,0] == c[0]), :]
+            for a in first_anchor:
+                try:
+                    second_anchor = np.all(contact_coords == [a[0,1],c[1]], axis=1)
+                    if np.any(second_anchor):
+                        stacked_loops.append(c)
+                except IndexError:
+                    continue
+        if len(stacked_loops) > 0:
+            small_loops = contact_coords[~(contact_coords[:, None] == stacked_loops).all(-1).any(-1)]
+            #print(small_loops)
+        else:
+            small_loops = []
+
+        #print(contact_coords)
+        #print(stacked_loops)
+        n_contacts = np.sum(contacts)
+        trace_elongation = elongation(points_qc[i])
+        rog = radius_of_gyration(points_qc[i])
+        contour = contour_length(points_qc[i])
+        #hull_volume = ConvexHull(points_qc[i]).volume
+        nn_dist = np.nanmean(np.diagonal(dists, 1))
+        if len(contact_coords) == 0:
+            freq_nested = np.nan
+        else:
+            freq_nested = len(stacked_loops)/len(contact_coords)
+        #print(small_loops)
+        if only_small_loops:
+            all_loops = small_loops
+        else:
+            all_loops = contact_coords
+        loop_contours = []
+        for j, loop_coords in enumerate(all_loops):
+            loop_points = point_set[loop_coords[0]:loop_coords[1]+1]
+            loop_points = loop_points[~np.isnan(loop_points).any(axis=1), :]
+            loop_contour = contour_length(loop_points)
+            #print(loop_coords, stacked_loops)
+            try:
+                stacked = np.any(np.all(np.array(loop_coords) == np.array(stacked_loops), axis=(1)))
+            except np.AxisError:
+                stacked = False
+            loop_metrics.append([trace_ids[i], j, loop_coords[0], loop_coords[1], loop_contour, stacked])
+            loop_contours.append(loop_contour)
+        av_loop_size = np.mean(loop_contours)
+
+        interp_point_set = np.column_stack(spline_interp([points_qc[i][:,0],points_qc[i][:,1],points_qc[i][:,2]]))
+
+        interp_contour = contour_length(interp_point_set)
+        interp_rog = radius_of_gyration(interp_point_set)
+
+        metrics.append([trace_ids[i], n_contacts, trace_elongation, rog, contour, av_loop_size, nn_dist, interp_contour, interp_rog, freq_nested])
+    metrics = pd.DataFrame(metrics, columns=['trace_id', 'n_contacts','elongation', 'rog', 'contour', 'av_loop_size', 'av_nn_dist', 'interp_contour', 'interp_rog', 'freq_nested'])
+    loop_metrics = pd.DataFrame(loop_metrics, columns = ['trace_id', 'loop_id', 'loop_coords_0', 'loop_coords_1','contour', 'stacked'])
+    loop_metrics['loop_coords_dist'] = loop_metrics['loop_coords_1']-loop_metrics['loop_coords_0']
+    loop_metrics['loop_coords'] = loop_metrics['loop_coords_0'].astype(str).str.zfill(2)+'_'+loop_metrics['loop_coords_1'].astype(str).str.zfill(2)
+    return metrics, loop_metrics
+
+def looping_distribution_from_simulated_loops(loop_pos, loop_anchors):
+    '''Calculate types of loops from simulated loop positions compared to given anchors.
+    Types are:
+    1: Overlap with both anchors
+    2: Overlap with one anchor and other base inside second anchor
+    3: Overlap with one anchor and other base outside second anchor
+    4: Small loop inside both anchors
+    5: Large loops outside both anchors
+    6: No loop overlapping with loop anchor region
+
+    Args:
+        loop_pos (nd.array): np.array of shape N loops X M SMCs X 2 anchors
+        loop_anchors (tuple): iterable with the two loop anchors to measure compared to
+    Returns:
+        loop_distribution (list): The fraction of cells with the given type of loop.
+        res (ndarray): The class of loop formed by per cell (rows) by all SMCs 
+    '''
+    res = np.zeros((loop_pos.shape[:2]))
+    for i, cell in enumerate(loop_pos):
+        for j,l in enumerate(cell):
+            #print(l)
+            if (l[0] == loop_anchors[0]) and (l[1] == loop_anchors[1]): #Overlap with both anchors
+                res[i,j] = 1
+            elif (l[0] == loop_anchors[0]) and (l[1] < loop_anchors[1]) or (l[0] > loop_anchors[0]) and (l[1] == loop_anchors[1]): #Overlap with one anchor and small loop
+                res[i,j] = 2
+            elif (l[0] == loop_anchors[0]) and (l[1] > loop_anchors[1]) or (l[0] < loop_anchors[0]) and (l[1] == loop_anchors[1]): #Overlap with one anchor and large loop
+                res[i,j] = 3
+            elif (l[0] > loop_anchors[0]) and (l[1] < loop_anchors[1]): #Small loop inside anchors
+                res[i,j] = 4
+            elif (l[0] < loop_anchors[0]) and (l[1] > loop_anchors[1]): #Large loops outside anchors
+                res[i,j] = 5
+            else:
+                res[i,j] = 0 #No loop
+    loop_distribution = [np.sum(np.all(res == 0, axis = 1))/len(res)] + [np.sum(np.any(res == i, axis = 1))/len(res) for i in range(1,6)]
+    return loop_distribution, res
 
 def fit_plane_SVD(points):
     '''
@@ -903,7 +1263,94 @@ def fit_plane_SVD(points):
     B = B / nn
     return B[0:3]
 
+<<<<<<< Updated upstream
 def plot_heatmap(traces, trace_id='all', zmin=0, zmax=600, cmap = 'RdBu'):
+=======
+def plot_heatmap(traces, trace_ids=None, ax=None, zmin=0, zmax=600, cmap = 'RdBu', crop=True, **kwargs):
+>>>>>>> Stashed changes
+    '''Helper function to make heatmaps of sets of traces.
+
+    Args:
+        traces ([DataFrame]): trace DataFrame
+        trace_id (str or int or list, optional): trace_ids in dataframe to use. Defaults to 'all'.
+        zmax (int, optional): Max value of heatmap. Defaults to 600.
+        cmap (str, optional): Color scale for heatmap. Defaults to 'rdbu'.
+
+    Returns:
+        pwds_crop: Numpy array, Data underlying heatmap.
+        fig: Figure object of the heatmap.
+    '''
+    if trace_ids is None:
+            pwds = pwd_calc(traces)
+            pwds_mean = np.nanmedian(pwds, axis=0)
+    else:
+        if type(trace_ids) == int:
+            trace_ids = [trace_ids]
+        pwds = pwd_calc(traces[traces['trace_id'].isin(trace_ids)])
+        pwds_mean = np.nanmedian(pwds, axis=0)
+
+    if crop:
+        nan_rows = ~np.all(np.isnan(pwds_mean), axis=0)
+        nan_cols = ~np.all(np.isnan(pwds_mean), axis=1)
+        pwds_mean = pwds_mean[nan_rows,:]
+        pwds_mean = pwds_mean[:,nan_cols]
+    print('Number of traces in heatmap: ', pwds.shape[0])
+<<<<<<< Updated upstream
+    fig, ax = plt.subplots(figsize=(5, 5))
+    ax.imshow(pwds_crop, vmin=zmin, vmax=zmax, cmap=cmap)
+    #fig.show()
+    return pwds_crop, ax
+    
+=======
+    ax = ax or plt.gca()
+    _cmap = plt.get_cmap(cmap).copy()
+    _cmap.set_bad('lightgrey')
+    plot = ax.imshow(pwds_mean, vmin=zmin, vmax=zmax, cmap=_cmap, **kwargs)
+    ax.axis('off')
+    #fig.show()
+    return pwds_mean, plot
+
+def plot_contacts(traces, trace_ids=None, cutoff=150, ax=None, zmin=0, zmax=1, cmap = 'RdBu_r', crop=True, **kwargs):
+    '''Helper function to make heatmaps of sets of traces.
+
+    Args:
+        traces ([DataFrame]): trace DataFrame
+        trace_id (str or int or list, optional): trace_ids in dataframe to use. Defaults to 'all'.
+        zmax (int, optional): Max value of heatmap. Defaults to 600.
+        cmap (str, optional): Color scale for heatmap. Defaults to 'rdbu'.
+
+    Returns:
+        pwds_crop: Numpy array, Data underlying heatmap.
+        fig: Figure object of the heatmap.
+    '''
+    if trace_ids is None:
+        pwds = pwd_calc(traces)
+        dist = np.nansum(pwds<cutoff, axis=0)/np.nansum(pwds>0, axis=0)
+
+    else:
+        if type(trace_ids) == int:
+            trace_ids = [trace_ids]
+        pwds = pwd_calc(traces[traces['trace_id'].isin(trace_ids)])
+        dist = np.nansum(pwds<cutoff, axis=0)/np.nansum(pwds>0, axis=0)
+
+
+    if crop:
+        nan_rows = ~np.all(np.isnan(dist), axis=0)
+        nan_cols = ~np.all(np.isnan(dist), axis=1)
+        dist = dist[nan_rows,:]
+        dist = dist[:,nan_cols]
+    dist = np.nan_to_num(dist, posinf=1)
+    print('Number of traces in heatmap: ', pwds.shape[0])
+    ax = ax or plt.gca()
+    _cmap = plt.get_cmap(cmap).copy()
+    _cmap.set_bad('lightgrey')
+    plot = ax.imshow(dist, vmin=zmin, vmax=zmax, cmap=_cmap, **kwargs)
+    ax.axis('off')
+    #fig.show()
+    return dist, plot
+    
+
+def plot_n_positions(traces, trace_id='all', ax=None, zmin=0, zmax=1, cmap = 'viridis', **kwargs):
     '''Helper function to make heatmaps of sets of traces.
 
     Args:
@@ -920,20 +1367,25 @@ def plot_heatmap(traces, trace_id='all', zmin=0, zmax=600, cmap = 'RdBu'):
         if type(trace_id) == int:
             trace_id = [trace_id]
         pwds = pwd_calc(traces[traces['trace_id'].isin(trace_id)])
-        pwds_mean = np.nanmedian(pwds, axis=0)
+        dist = np.nansum(pwds>0, axis=0)
     else:
         pwds = pwd_calc(traces)
-        pwds_mean = np.nanmedian(pwds, axis=0)
-    nan_rows = ~np.all(np.isnan(pwds_mean), axis=0)
-    nan_cols = ~np.all(np.isnan(pwds_mean), axis=1)
-    pwds_crop = pwds_mean[nan_rows,:]
+        dist = np.nansum(pwds>0, axis=0)
+
+    nan_rows = ~np.all(np.isnan(dist), axis=0)
+    nan_cols = ~np.all(np.isnan(dist), axis=1)
+    pwds_crop = dist[nan_rows,:]
     pwds_crop = pwds_crop[:,nan_cols]
+    pwds_crop = np.nan_to_num(pwds_crop, posinf=1)
     print('Number of traces in heatmap: ', pwds.shape[0])
-    fig, ax = plt.subplots(figsize=(5, 5))
-    ax.imshow(pwds_crop, vmin=zmin, vmax=zmax, cmap=cmap)
+    ax = ax or plt.gca()
+    _cmap = plt.get_cmap(cmap).copy()
+    _cmap.set_bad('lightgrey')
+    plot = ax.imshow(pwds_crop, vmin=zmin, vmax=zmax, cmap=_cmap, **kwargs)
+    ax.axis('off')
     #fig.show()
-    return pwds_crop, ax
-    
+    return pwds_crop, plot
+>>>>>>> Stashed changes
 
 def plot_traces(traces, trace_id, split=False):
     '''
@@ -1334,12 +1786,43 @@ def plot_2d_proj(points, std_points=None, line_color='#1f77b4', plane='best', li
         xf, yf = spline_interp(np.array([x,y]), 500)
     positions = np.array(range(points.shape[0]))
     positions = list(positions[qc])
+<<<<<<< Updated upstream
 
     fig = plt.figure()
     sns.scatterplot(y,x, hue=positions, palette='inferno', legend=None, alpha=1, s=100, linewidth=0)
     if std_points is not None:
         sns.scatterplot(y,x, hue=positions, palette='inferno', legend=None, alpha=0.3, sizes=list((std_points/2)**2), size=positions, linewidth=0)
     plt.plot(yf,xf, zorder=-10, color=line_color, linewidth=3)
+=======
+    ax = ax or plt.gca()
+    marker_size =  int(50*np.sqrt(450/limits[1]))
+    sns.scatterplot(x=y,y=x, hue=positions, clip_on=False, palette='gnuplot', legend=None, alpha=1, s=marker_size, edgecolor=None,  zorder=20, ax=ax)
+    if std_points is not None:
+        sns.scatterplot(x=y,y=x, hue=positions, palette='inferno', legend=None, alpha=0.3, sizes=list((std_points/2)**2), size=positions, linewidth=0, ax=ax)
+    ax.plot(yf,xf, zorder=-10, color=line_color, linewidth=2)
+
+    ax.set_ylim(limits)
+    ax.set_xlim(limits)
+    ax.set_aspect('equal')
+    ax.axis('off')
+
+    if scale:
+        from matplotlib_scalebar.scalebar import ScaleBar
+        scalebar = ScaleBar(1, "nm", fixed_value=100)
+        ax.add_artist(scalebar)
+
+    return ax
+
+def plot_2d_proj_kde(mean_points, aligned_points, ax=None, line_color='#1f77b4', limits=(-450,450), scale=True, subselect = False, kde=True):
+    from matplotlib import cm
+
+    if subselect:
+       palette = [cm.get_cmap('gnuplot', mean_points.shape[0])(i) for i in range(mean_points.shape[0])][subselect[0]:subselect[1]]
+       mean_points = mean_points[subselect[0]:subselect[1]]
+       aligned_points = [points[subselect[0]:subselect[1]] for points in aligned_points]
+    else:
+       palette = 'gnuplot'
+>>>>>>> Stashed changes
 
     plt.ylim(limits)
     plt.xlim(limits)
@@ -1402,6 +1885,18 @@ def plot_2d_proj_kde(mean_points, aligned_points, line_color='#1f77b4', limits=(
 #        vals[:, 2] = np.linspace(cmap_inferno[p][2], cmap_inferno[p][2], N)
 #        vals[:, 3] = np.linspace(0, 1, N)
 #        newcmp = ListedColormap(vals)
+<<<<<<< Updated upstream
+=======
+    ax = ax or plt.gca()
+    if kde:
+        sns.kdeplot(ax=ax, data=data, x='y', y='x', hue='pos', palette=palette, linewidths=0.05, common_norm=False, fill=False, legend=None, levels = 25, thresh=0.75, alpha=0.4)
+    #sns.scatterplot(data=data, x='y', y='x', hue='pos', palette='inferno', s = 6, alpha = 0.3, legend=None)
+    ax.plot(yf,xf, zorder=10, color=line_color, linewidth=3, clip_on=False)
+    #print(y_m, x_m)
+    color_positions = np.array(range(y_m.shape[0]))
+    marker_size =  int(50*np.sqrt(450/limits[1]))
+    sns.scatterplot(x=y_m,y=x_m, ax=ax, hue=color_positions, clip_on=False, palette=palette, legend=None, alpha=1, s=marker_size, edgecolor=None,  zorder=20)
+>>>>>>> Stashed changes
 
     sns.kdeplot(data=data, x='y', y='x', hue='pos', palette='inferno', linewidths=0.3, common_norm=False, fill=False, legend=None, levels = 25, thresh=0.75, alpha=0.2)
     #sns.scatterplot(data=data, x='y', y='x', hue='pos', palette='inferno', s = 6, alpha = 0.3, legend=None)
@@ -1637,3 +2132,94 @@ def get_continuous_color(colorscale, intermed):
         colortype="rgb")
     return [int(float(s)) for s in re.findall('\d*\.?\d+',rgb)]
 
+def animate_trace_mayavi(clust_aligned, n_points=500, duration=10, fps=10, out_dir=os.getcwd()):
+    from mayavi import mlab
+    mlab.options.offscreen = True
+    import moviepy.editor as mpy
+
+    x = []
+    y = []
+    z = []
+    xs = []
+    ys = []
+    zs = []
+
+    for i, points in enumerate(clust_aligned):
+        qc_idx = points[:,3] != 0
+        if np.sum(qc_idx) != 0:
+            x_ = points[qc_idx,2]
+            x_ = x_-np.mean(x_)
+            y_ = points[qc_idx,1]
+            y_ = y_-np.mean(y_)
+            z_ = points[qc_idx,0]
+            z_ = z_-np.mean(z_)
+            x.append(x_)
+            y.append(y_)
+            z.append(z_)
+            xs_,ys_,zs_ = spline_interp([x_,y_,z_], n_points=n_points)
+            xs.append(xs_)
+            ys.append(ys_)
+            zs.append(zs_)
+            
+    mlab.figure(1, size=(400, 400), bgcolor=(0, 0, 0))
+    mlab.clf()
+    l = mlab.plot3d(xs[0]/1000, ys[0]/1000, zs[0]/1000, np.arange(xs[0].shape[0]), tube_radius=0.015, opacity = 0.5, colormap='Spectral')
+    l2 = mlab.text(0,0,str(0), width=0.0625)
+    # Now animate the data.
+    ms = l.mlab_source
+
+    def make_frame(i):
+        #mlab.clf()
+        i = int(i*10)
+        x_new = xs[i]/1000
+        y_new = ys[i]/1000
+        z_new = zs[i]/1000
+        ms.trait_set(x=x_new, y=y_new, z=z_new)
+        l2.set(text=str(i))
+        mlab.view(azimuth=360/(i+1), distance=2)
+        return mlab.screenshot(antialiased=True)
+
+    animation = mpy.VideoClip(make_frame, duration=duration)
+    animation.write_gif(r"M:\Kai\tests\test.gif", fps=fps)
+
+def animate_sim_mayavi(point_array, out_path, fps=10, n_points = 100, loops = None):
+    from mayavi import mlab
+    mlab.options.offscreen = True
+    
+    import moviepy.editor as mpy
+
+    if point_array.shape[1] < n_points:
+        x = np.empty(shape=(point_array.shape[0], n_points))
+        y = np.empty(shape=(point_array.shape[0], n_points))
+        z =  np.empty(shape=(point_array.shape[0], n_points))
+        for i, p in enumerate(point_array):
+            x[i], y[i], z[i] = spline_interp([p[:,0], p[:,1], p[:,2]], n_points=n_points)
+    else:
+        x = point_array[:,:,2]
+        y = point_array[:,:,1]
+        z = point_array[:,:,0]
+    
+    mlab.figure(1, size=(400, 400), bgcolor=(1, 1, 1))
+    mlab.clf()
+    l = mlab.plot3d(x[0], y[0], z[0], np.arange(x.shape[1]), tube_radius=0.005, opacity = 0.5, colormap='Spectral')
+    l.scene.light_manager.light_mode = "vtk"
+    l2 = mlab.text(0,0,str(0).zfill(3), width=0.0625, color=(0,0,0))
+    if loops is not None:
+        l3 = mlab.points3d(loops[0,:,2], loops[0,:,1], loops[0,:,0], scale_factor=0.05, opacity= 0.5, color=(0,1,0))
+        ms3 = l3.mlab_source
+    # Now animate the data.
+    ms = l.mlab_source
+
+    def make_frame(i):
+        #mlab.clf()
+        i = int(i*fps)
+        ms.trait_set(x=x[i], y=y[i], z=z[i])
+        l2.set(text=str(i).zfill(3))
+        if loops is not None:
+            ms3.trait_set(x=loops[i,:,2], y=loops[i,:,1], z=loops[i,:,0])
+        #mlab.view(azimuth=360/(i+1), distance=1)
+        mlab.view(azimuth=45, elevation=60, distance=2, focalpoint=(np.mean(x[i]),np.mean(y[i]),np.mean(z[i])))
+        return mlab.screenshot(antialiased=True)
+
+    animation = mpy.VideoClip(make_frame, duration=x.shape[0]//fps)
+    animation.write_gif(out_path, fps=fps)
