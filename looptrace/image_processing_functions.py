@@ -7,209 +7,26 @@ Ellenberg group
 EMBL Heidelberg
 """
 
-import io
-import yaml
-import czifile
 import os
 import re
 import numpy as np
 import pandas as pd
-import napari
-from skimage.segmentation import clear_border
+
+from skimage.segmentation import clear_border, find_boundaries, expand_labels
 from skimage.filters import gaussian, threshold_otsu
 from skimage.registration import phase_cross_correlation
+from skimage.morphology import white_tophat, ball, remove_small_objects
 from scipy.stats import trim_mean
-<<<<<<< Updated upstream
-=======
 from scipy.spatial.distance import squareform, pdist
->>>>>>> Stashed changes
 from skimage.measure import regionprops_table
 import scipy.ndimage as ndi
-import dask
+
 import dask.array as da
-<<<<<<< Updated upstream
-import zarr
-import itertools
-import tifffile
-=======
->>>>>>> Stashed changes
 import joblib
+import glob
 
-def czi_to_tif(in_folder, template, out_folder, prefix):
-    '''Convert CZI files from MyPIC experiment to single YX tif images.
 
-    Args:
-        in_folder (str): Top level folder path to find czi files
-        template (list): Template to match files to
-        out_folder (str): Output folder to save tif images
-        prefix (str): Prefix of output files, prepended to axis info
-    '''
 
-    all_files = all_matching_files_in_subfolders(in_folder, template)
-    sample = czifile.CziFile(all_files[0])
-    n_c = sample.shape[-6]
-    n_z = sample.shape[-4]
-
-    def save_single_tif(n_c, n_z, path, out_folder):
-        pos = re.search('W[0-9]{4}',path)[0]
-        pos = 'P'+pos[1:]
-        t = re.search('T[0-9]{4}',path)[0]
-        img = czifile.imread(path)[0,0,:,0,:,:,:,0] 
-        for c in range(n_c):
-            for z in range(n_z):
-                fn = out_folder + prefix + pos + '_' + t + '_C' + str(c).zfill(4)+ '_Z' + str(z).zfill(4)+'.tif'
-                if not os.path.isfile(fn):
-                    tifffile.imwrite(fn, img[c,z], compression='deflate', metadata={'axes': 'YX'})
-
-    joblib.Parallel(n_jobs=-2)(joblib.delayed(save_single_tif)(n_c, n_z, path, out_folder) for path in all_files)
-
-def tif_store_to_dask(folder, re_search = 'P[0-9]{4}'):
-    '''Read a series of tif files as a zarr array from a single folder using tifffile sequence reader, 
-    then assemble the sequences to a dask array.
-
-    Args:
-        folder (str): Path to folder with tif files
-        prefix (str): Prefix of tif files in folder before axes info
-
-    Returns:
-        Dask array: Dask array with all the matching tif files form the folder
-    '''
-    imgs = []
-    all_files = all_matching_files_in_subfolders(folder, ['.tif'])
-    groups, positions = group_filelist(all_files, re_search)
-    for i, group in enumerate(groups):
-        print('Loading images for position ', positions[i])
-        seq = tifffile.TiffSequence(group, pattern='axes')
-        with seq.aszarr() as store:
-            imgs.append(da.from_array(zarr.open(store, mode='r'), chunks =  (1,1,1,1,-1,-1))[0])
-    return imgs
-        
-
-def images_to_dask(folder, template):
-    '''Wrapper function to generate dask arrays from image folder.
-
-    Args:
-        folder (string): path to folder
-        template (list of strings): templates files in folder should match.
-
-    Returns:
-        x: dask array
-        groups : list of groups identified, currectly hardcoded to re_phrase='W[0-9]{4}'
-    '''        
-    print("Loading files to dask array: ")
-    #if '.h5' in template:
-    #    x, groups = svih5_to_dask(folder, template)
-    if '.czi' in template or '.tif' in template or '.tiff' in template:
-        x, groups, all_files = czi_tif_to_dask(folder, template)
-    print('\n Loaded images of shape: ', x[0])
-    print('Found positions ', groups)
-    return x, groups, all_files
-
-def czi_tif_to_dask(folder, template):
-    ''' Read a series of tif or czi files into a virtual Dask array.
-    Args:
-        folder (string): path to folder with files (also in subfolders)
-        template (list of strings): templates files in folder should match.
-
-    Returns:
-        pos_stack (list): list of dask arrays, one per position
-        groups (list): list of groups identified, currectly hardcoded to re_phrase='W[0-9]{4}'
-        all_files (list): list of all file paths read
-    '''
-
-    all_files = all_matching_files_in_subfolders(folder, template)
-    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
-    #print(groups, pos_list)
-    
-    if '.czi' in template:
-        sample = read_czi_image(all_files[0])
-    elif '.tif' in template or '.tiff' in template:
-        sample = read_tif_image(all_files[0])
-    else:
-        raise TypeError('Input filetype not yet implemented.')
-
-    pos_stack=[]
-    for g in grouped_files:
-        dask_arrays = []
-        for fn in g:
-            if '.czi' in template:
-                d = dask.delayed(read_czi_image)(fn)
-            elif '.tif' in template or '.tiff' in template:
-                d = dask.delayed(read_tif_image)(fn)
-            array = da.from_delayed(d, shape=sample.shape, dtype=sample.dtype)
-            dask_arrays.append(array)
-        pos_stack.append(da.stack(dask_arrays, axis=0))
-    #x = da.stack(pos_stack, axis=0)
-    
-    return pos_stack, groups, all_files
-
-'''
-
-def svih5_to_dask(folder, template):
-    all_files = all_matching_files_in_subfolders(folder, template)
-    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
-    progress = status_bar(len(all_files))
-    pos_stack=[]
-    with h5py.File(all_files[0], mode='r') as f:
-        shape = f[list(f.keys())[0]]['ImageData']['Image'].shape
-
-    for g in grouped_files:
-        dask_arrays = []
-        for fn in g:
-            next(progress)
-            f = h5py.File(fn, mode='r')
-            d = f[list(f.keys())[0]]['ImageData']['Image']
-            array = da.from_array(d, chunks=(1, 1, 1, shape[-2], shape[-1]))
-            dask_arrays.append(array)
-        pos_stack.append(da.stack(dask_arrays, axis=0))
-    x = da.stack(pos_stack, axis=0)[...,0,:,:,:]
-    print('Loaded images, final shape ', x.shape)
-    return x, groups
-
-def aio_lazy_to_dask(folder, template):
-    all_files = all_matching_files_in_subfolders(folder, template)
-    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
-    progress = status_bar(len(all_files))
-    group_array=[]
-    for g in grouped_files:
-        pos_stack = []
-        for fn in g:
-            next(progress)
-            img = aio.AICSImage(fn, chunk_by_dims=["Z", "Y", "X"])
-            pos_stack.append(img.dask_data[0,0])
-        pos_stack = da.stack(pos_stack)
-        group_array.append(pos_stack)
-    x = da.stack(group_array)
-
-    return x, groups
-
-### Does not works so well ###
-def czi_lazy_to_dask_czifile(folder, template):
-    all_files = all_matching_files_in_subfolders(folder, template)
-    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
-    progress = status_bar(len(all_files))
-    group_array=[]
-    sample = czifile.CziFile(all_files[0])
-    sample_shape = sample.subblock_directory[0].data_segment().data().shape
-    sample_dtype = sample.dtype
-    print('Loading images: ', sample_shape)
-    for g in grouped_files:
-        pos_stack = []
-        for fn in g:
-            next(progress)
-            img = czifile.CziFile(fn)
-            single_stack = []
-            for seg in img.subblock_directory:
-                d = da.from_delayed(dask.delayed(seg.data_segment().data)(),
-                shape=sample_shape, dtype=sample_dtype)
-                single_stack.append(d[0,0,0,0,0,:,:,0])
-            pos_stack.append(da.stack(single_stack))
-        pos_stack = da.stack(pos_stack)
-        group_array.append(pos_stack)
-    x = da.stack(group_array)
-
-    return x, groups
-    '''
 def rois_from_csv(path):
     rois = pd.read_csv(path, index_col=0)
     print('Loaded existing ROIs from ', path)
@@ -265,7 +82,7 @@ def roi_to_napari_points(roi_table, position):
             roi_shape = [0, roi['zc'], roi['yc'], roi['xc']]
         roi_shapes.append(roi_shape)
     roi_shapes = np.array(roi_shapes)
-    roi_props = {'roi_id': rois_at_pos['roi_id'].values}
+    roi_props = {'roi_id': rois_at_pos['roi_id_pos'].values}
     return roi_shapes, roi_props
 
 def update_roi_points(point_layer, roi_table, position, downscale):
@@ -282,20 +99,16 @@ def update_roi_points(point_layer, roi_table, position, downscale):
     '''
 
     rois = roi_table.copy()
-    new_rois = pd.DataFrame(point_layer.data*downscale, columns=['frame','zc','yc', 'xc'])
-    new_rois.index.name = 'roi_id'
+    new_rois = pd.DataFrame(point_layer.data*downscale, columns=['frame','zc','yc','xc'])
+    new_rois.index.name = 'roi_id_pos'
     new_rois = new_rois.reset_index()
     new_rois['position'] = position
-    new_rois['ch'] = rois['ch'].loc[0]
+    new_rois['ch'] = rois.iloc[0]['ch']
 
     rois = rois.drop(rois[rois['position']==position].index)
-    return pd.concat([rois, new_rois]).sort_values('position')
+    return pd.concat([rois, new_rois]).sort_values('position').reset_index(drop=True)
 
-<<<<<<< Updated upstream
-def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label'):
-=======
 def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label', nuc_drifts = None, nuc_target_frame = None, spot_drifts = None):
->>>>>>> Stashed changes
     '''Check if a spot is in inside a segmented nucleus.
 
     Args:
@@ -307,16 +120,7 @@ def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label', nuc_drif
     Returns:
         rois (DataFrame): Updated ROI table indicating if ROI is inside nucleus or not.
     '''
-<<<<<<< Updated upstream
-
-
-    if not nuc_masks:
-        print('No nuclear masks provided, cannot filter.')
-        return rois
-
-=======
     print(nuc_masks[0].shape)
->>>>>>> Stashed changes
     def spot_in_nuc(row, nuc_masks):
         pos_index = pos_list.index(row['position'])
         try:
@@ -326,22 +130,15 @@ def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label', nuc_drif
                 spot_label = int(nuc_masks[pos_index][int(row['zc']),int(row['yc']), int(row['xc'])])
         except IndexError as e: #If due to drift spot is outside frame.
             spot_label = 0
-<<<<<<< Updated upstream
-=======
             print(e)
         #print(spot_label)
->>>>>>> Stashed changes
         return spot_label
-    
+
     try:
         rois.drop(columns=[new_col], inplace=True)
     except KeyError:
         pass
 
-<<<<<<< Updated upstream
-    rois[new_col] = rois.apply(spot_in_nuc, nuc_masks=nuc_masks, axis=1)
-    print('ROIs filtered.')
-=======
     if nuc_drifts is not None:
         rois_shifted = rois.copy()
         shifts = []
@@ -358,63 +155,13 @@ def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label', nuc_drif
     else:
         rois[new_col] = rois.apply(spot_in_nuc, nuc_masks=nuc_masks, axis=1)
 
->>>>>>> Stashed changes
     return rois
 
-
-def load_config(config_file):
-    '''
-    Open config file and return config variable form yaml file.
-    '''
-    with open(config_file, 'r') as stream:
-        try:
-            config=yaml.safe_load(stream)
-        except yaml.YAMLError as exc:
-            print(exc)
-    return config
-
-def read_czi_image(image_path):
-    '''
-    Reads czi files as arrays using czifile package. Returns only CZYX image.
-    '''
-    with czifile.CziFile(image_path) as czi:
-        image=czi.asarray()[0,0,:,0,:,:,:,0]
-    return image
-
-
-def read_tif_image(image_path):
-    with tifffile.TiffFile(image_path) as tif:
-        image=tif.asarray()
-    return image
-
-def read_czi_meta(image_path, tags, save_meta=False):
-    '''
-    Function to read metadata and image data for CZI files.
-    Define the information to be extracted from the xml tags dict in config file.
-    Optionally a YAML file with the metadata can be saved in the same path as the image.
-    Return a dictionary with the extracted metadata.
-    '''
-    def parser(data, tags):
-        tree = ElementTree.iterparse(data, events=('start',))
-        _, root = next(tree)
-    
-        for event, node in tree:
-            if node.tag in tags:
-                yield node.tag, node.text
-            root.clear()
-    
-    with czifile.CziFile(image_path) as czi:
-        meta=czi.metadata()
-    
-    with io.StringIO(meta) as f:
-        results = parser(f, tags)
-        metadict={} 
-        for tag, text in results:
-            metadict[tag]=text
-    if save_meta:
-        with open(image_path[:-4]+'_meta.yaml', 'w') as myfile:
-            yaml.safe_dump(metadict, myfile)
-    return metadict
+def subtract_crosstalk(source, bleed, threshold=0):
+    mask = source > threshold
+    ratio=np.average(bleed[mask]/source[mask])
+    out = np.clip(bleed - (ratio * source), a_min=0, a_max=None)
+    return out, bleed
     
 def pad_to_shape(arr, shape, mode='constant'):
     '''
@@ -472,76 +219,6 @@ def crop_at_pos(arr, tl_pos, size):
 
     return arr[s]
 
-<<<<<<< Updated upstream
-def all_matching_files_in_subfolders(path, template):
-    '''
-    Generates a sorted list of all files with the template in the 
-    filename in directory and subdirectories.
-    '''
-
-    files = []
-    # r=root, d=directories, f = files
-    for r, d, f in os.walk(path):
-        for file in f:
-            if all([s in file for s in template]):
-                files.append(os.path.join(r, file))
-    return sorted(files)
-
-def group_filelist(input_list, re_phrase):
-    '''
-    Takes a list of strings (typically filepaths) and groups them according
-    to a given element given by its position after splitting the string at split_char.
-    E.g.for '..._WXXXX_PXXXX_TXXXX.ext' format this will by split_char='_' and element = -3.
-    Returns a list of the , and 
-    '''
-    grouped_list = []
-    groups=[]
-    for k, g in itertools.groupby(sorted(input_list),
-                                  lambda x: re.search(re_phrase, x).group(0)):
-        grouped_list.append(list(g))
-        groups.append(k)
-    return grouped_list, groups
-
-def match_file_lists(t_list,o_list):
-    t_list_match = [item.split('__')[0][-5:] for item in t_list]
-    o_list_match = [item for item in o_list if item.split('__')[0][-5:] in t_list_match]
-    return o_list_match
-
-def match_file_lists_decon(t_list,o_list):
-    t_list_match = [item.split('\\')[-1].split('__')[0][-5:] for item in t_list]
-
-    o_list_match = [item for item in o_list if 
-                    item.split('\\')[-1].split('_P0001_')[0][-5:] in t_list_match]
-
-    return o_list_match
-
-def image_from_svih5(path,ch=None,index=(slice(None),
-                                    slice(None),
-                                    slice(None))):
-    '''
-    Parameters
-    ----------
-    path : String with file path to h5 file.
-    index : Tuple with slice indexes of h5 file. Assumed CTZYX order.
-            Default is all slices.
-    
-    Returns
-    -------
-    Image as numpy array.
-    '''    
-    with h5py.File(path, 'r') as f:
-        if ch is not None:
-            index=(slice(ch,ch+1),slice(None),)+index
-            img=f[list(f.keys())[0]]['ImageData']['Image'][index][()][0,0]
-        else:
-            index=(slice(None),slice(None))+index
-            img=f[list(f.keys())[0]]['ImageData']['Image'][index][()][:,0]
-        
-    return img
-
-    
-def detect_spots(img, spot_threshold=20):
-=======
 def crop_to_center(arr, center, size):
     #Crop array to size centered at center position.
     s=tuple([slice(min(0,int(c-s//2)),max(int(c+s//2), arr_s)) for c, s, arr_s in zip(center,size,arr.shape)])
@@ -569,7 +246,6 @@ def center_crop_embryo(embryo_stack, size, center=None):
     return out
 
 def detect_spots(input_img, spot_threshold=20, min_dist=None):
->>>>>>> Stashed changes
     '''Spot detection by difference of gaussian filter
     #TODO: Do not use hard-coded sigma values
 
@@ -581,26 +257,35 @@ def detect_spots(input_img, spot_threshold=20, min_dist=None):
         spot_props (DataFrame): The centroids and roi_IDs of the spots found. 
         img (ndarray): The DoG filtered image used for spot detection.
     '''
-
+    img = white_tophat(image=input_img, footprint=ball(2))
     img = gaussian(img, 0.8)-gaussian(img,1.3)
+    img = img/gaussian(input_img, 3)
     img = (img-np.mean(img))/np.std(img)
-    spot_img, num_spots = ndi.label(img>spot_threshold)
+    labels, num_spots = ndi.label(img>spot_threshold)
+    labels = expand_labels(labels, 10)
     
     #Make a DataFrame with the ROI info
-    spot_props=pd.DataFrame(regionprops_table(spot_img, 
-                                        properties=('label','centroid')))
+    spot_props=pd.DataFrame(regionprops_table(label_image = labels, 
+                                        intensity_image = input_img,
+                                        properties=('label','centroid_weighted')))
     
     spot_props.drop(['label'], axis=1, inplace=True)
-    spot_props.rename(columns={'centroid-0': 'zc',
-                                        'centroid-1': 'yc',
-                                        'centroid-2': 'xc',
-                                        'index':'roi_id'},
+    spot_props.rename(columns={'centroid_weighted-0': 'zc',
+                                        'centroid_weighted-1': 'yc',
+                                        'centroid_weighted-2': 'xc'},
                         inplace = True)
-    print(f'Found {num_spots} spots.')
+
+    if min_dist:
+        dists = squareform(pdist(spot_props[['zc', 'yc', 'xc']].to_numpy(), metric='euclidean'))
+        idx = np.nonzero(np.triu(dists < min_dist, k=1))[1]
+        spot_props = spot_props.drop(idx)
+        spot_props = spot_props.reset_index(drop=True)
+
+    spot_props.rename(columns={'index':'roi_id'},
+                                inplace = True)
+
+    #print(f'Found {len(spot_props)} spots.', end = ' ')
     return spot_props, img
-<<<<<<< Updated upstream
-    #Cleanup and saving of the DataFrame
-=======
 
 def detect_spots_int(input_img, spot_threshold=500, expand_px = 1, min_dist=None):
     '''Spot detection by difference of gaussian filter
@@ -700,7 +385,6 @@ def extract_single_bead(point, img, bead_roi_px=16, drift_course=None):
         return np.zeros((2*roi_px, 2*roi_px, 2*roi_px))
     else:
         return bead
->>>>>>> Stashed changes
         
 def drift_corr_course(t_img, o_img, downsample=1):
     '''
@@ -723,8 +407,8 @@ def drift_corr_course(t_img, o_img, downsample=1):
     course_drift=phase_cross_correlation(np.array(t_img[s]), np.array(o_img[s]), return_error=False) * downsample
     #Shift image for fine drift correction
     #o_img=ndi.shift(o_img,course_drift,order=0)
-    print('Course drift:', course_drift)
-    return course_drift.tolist()
+    #print('Course drift:', course_drift)
+    return course_drift
 
 def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int, n_points=50, upsampling=100):
     '''
@@ -744,74 +428,79 @@ def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int
     A trimmed mean (default 20% on each side) of the drift for each fiducial.
 
     '''
-
+    import datetime
     #Label fiducial candidates and find maxima.
     t_img_label,num_labels=ndi.label(t_img>threshold)
-    t_img_maxima=np.array(ndi.measurements.maximum_position(t_img, 
-                                                labels=t_img_label, 
-                                                index=range(num_labels)))
-    
+    #t_img_maxima=np.array(ndi.measurements.maximum_position(t_img, 
+    #                                            labels=t_img_label, 
+    #                                            index=np.random.choice(np.arange(1,num_labels), size=n_points*2)))
+    print('Number of unfiltered beads found: ', num_labels)
+    t_img_maxima = pd.DataFrame(regionprops_table(t_img_label, t_img, properties=('label', 'centroid', 'max_intensity')))
+    t_img_maxima = t_img_maxima.query('max_intensity > @min_bead_int').sample(n=n_points, random_state=1)[['centroid-0', 'centroid-1', 'centroid-2']].to_numpy()
+    t_img_maxima = np.round(t_img_maxima).astype(int)
+
     #Filter maxima so not too close to edge and bright enough.
-    t_img_maxima=np.array([m for m in t_img_maxima 
-                            if min_bead_int<t_img[tuple(m)]
-                            and all(m>8)])
     
     #Select random fiducial candidates. Seeded for reproducibility.
-    np.random.seed(1)
-    try:
-        rand_points = t_img_maxima[np.random.choice(t_img_maxima.shape[0], size=n_points), :]
-    except ValueError: #If no maxima are found just choose one random point:
-        rand_points = [[10,10,10]]
-    
+    #np.random.seed(1)
+    #try:
+    #    rand_points = t_img_maxima[np.random.choice(t_img_maxima.shape[0], size=n_points), :]
+    #except ValueError: #If no maxima are found just choose one random point:
+    #    rand_points = [[10,10,10]]
+    #print(datetime.datetime.now().time())
     #Initialize array to store shifts for all selected fiducials.
-    shifts=np.empty_like(rand_points, dtype=np.float32)
+    #shifts=np.empty_like(rand_points, dtype=np.float32)
     
-    #Calculate fine scale drift for all selected fiducials.
-    sub_imgs_t = []
-    sub_imgs_o = []
-    for i, point in enumerate(rand_points):
+    def extract_and_correlate(point, t_img, o_img, upsampling):
+
+        #Calculate fine scale drift for all selected fiducials.
         s_t = tuple([slice(ind-8, ind+8) for ind in point])
         s_o = tuple([slice(ind-int(shift)-8, ind-int(shift)+8) for (ind, shift) in zip(point, course_drift)])
         t = t_img[s_t]
         o = o_img[s_o]
-        if (t.shape == (16, 16, 16)) and (o.shape == (16,16,16)):
-            sub_imgs_t.append(t)
-            sub_imgs_o.append(o)
-        else:
-            img = np.zeros((16, 16, 16))
-            img[8,8,8] = 1000
-            sub_imgs_t.append(img)
-            sub_imgs_o.append(img)
+        
+        try:
+            shift = phase_cross_correlation(t, o, upsample_factor=upsampling, return_error=False)
+        except (ValueError, AttributeError):
+            shift = np.array([0,0,0])
+        return shift
 
-    shifts = dask.compute([dask.delayed(phase_cross_correlation)(t, 
-                                        o, 
-                                        upsample_factor=upsampling,
-                                        return_error=False)
-                            for (t,o) in zip(sub_imgs_t, sub_imgs_o)])[0]
+    shifts = joblib.Parallel(n_jobs=-1, prefer='threads')(joblib.delayed(extract_and_correlate)(point, t_img, o_img, upsampling) for point in t_img_maxima)
+    shifts = np.array(shifts)
+
     fine_drift = trim_mean(shifts, proportiontocut=0.2, axis=0)
-    print('Fine drift:', fine_drift)
+    print(f'Fine drift: {fine_drift} with untrimmed STD of {np.std(shifts, axis=0)} .')
     #Return the 60% central mean to avoid outliers.
     return fine_drift#, np.std(shifts, axis=0)
 
-def napari_view(img, points=None, downscale=2, contrast_limits=(100,10000), point_frame_size = 1):
-    with napari.gui_qt():
-        if not isinstance(img, list):
-            viewer = napari.view_image(img[...,::downscale,::downscale,::downscale], contrast_limits=contrast_limits)
-        else:
-            viewer = napari.view_image(img[0][...,::downscale,::downscale,::downscale], contrast_limits=contrast_limits)
-            colors = ['green', 'magenta', 'grey']
-            for i in img[1:]:
-                viewer.add_image(i[...,::downscale,::downscale,::downscale], contrast_limits=contrast_limits)
-        if points is not None:
-            point_layer = viewer.add_points(points/downscale, 
-                                                    size=(point_frame_size,15,15,15),
-                                                    edge_width=3,
-                                                    edge_color='red',
-                                                    face_color='transparent',
-                                                    n_dimensional=True)
-            sel_dim = list(points[0,:]/downscale)
-            for dim in range(len(sel_dim)):
-                viewer.dims.set_current_step(dim, sel_dim[dim])
+def napari_view(img, points=None, downscale=2, axes = 'PTCZYX', point_frame_size = 1, name=None, contrast_limits=(100,10000)):
+    import napari
+    try:
+        channel_axis = axes.index('C')
+    except ValueError:
+        channel_axis = None
+    
+    if 'ZYX' in axes:
+        img = img[...,::downscale,::downscale,::downscale]
+    else:
+        img = img[...,::downscale,::downscale]
+
+    if isinstance(img, list):
+        img = da.stack(img)
+
+    viewer = napari.view_image(img, channel_axis = channel_axis, name=name)
+    if points is not None:
+        point_layer = viewer.add_points(points/downscale, 
+                                                size=(point_frame_size,15,15,15),
+                                                edge_width=3,
+                                                edge_width_is_relative=False,
+                                                edge_color='red',
+                                                face_color='transparent',
+                                                n_dimensional=True)
+        sel_dim = list(points[0,:]/downscale)
+        for dim in range(len(sel_dim)):
+            viewer.dims.set_current_step(dim, sel_dim[dim])
+    napari.run()
 
     if points is not None:
         return point_layer
@@ -854,21 +543,18 @@ def decon_RL(img, kernel, algo, fd_data, niter=10):
     res = algo.run(fd_data.Acquisition(data=img, kernel=kernel), niter=niter).data
     return res
 
-def nuc_segmentation(nuc_imgs, diameter = 150, do_3D = False):
+def nuc_segmentation_cellpose_2d(nuc_imgs, diameter = 150, model_type = 'nuclei'):
     '''
     Runs nuclear segmentation using cellpose trained model (https://github.com/MouseLand/cellpose)
 
     Args:
         nuc_imgs (ndarray or list of ndarrays): 2D or 3D images of nuclei, expects single channel
     '''
-    from cellpose import models
-<<<<<<< Updated upstream
-    model = models.Cellpose(gpu=False, model_type='nuclei')
-    channels = [0,0]
-    masks, flows, styles, diams = model.eval(nuc_imgs, diameter=diameter, channels=channels, net_avg=False, do_3D=do_3D)
-    return masks
+    if not isinstance(nuc_imgs, list):
+        if nuc_imgs.ndim > 2:
+            nuc_imgs = [np.array(nuc_imgs[i]) for i in range(nuc_imgs.shape[0])] #Force array conversion in case of zarr.
 
-=======
+    from cellpose import models
     model = models.CellposeModel(gpu=False, model_type=model_type)
     masks = model.eval(nuc_imgs, diameter=diameter, channels=[0,0], net_avg=False, do_3D = False)[0]
     return masks
@@ -926,7 +612,6 @@ def mitotic_cell_extra_seg(nuc_image, nuc_mask):
     nuc_mask = nuc_mask + mito_nuc
     return nuc_mask, mito_index+1
 
->>>>>>> Stashed changes
 def nuc_segmentation_otsu(nuc_image, min_size, exp_bb=-1, clear_edges=True):
     '''
     Detects nuclei based on otsu threshold, labels them and measures
@@ -983,3 +668,163 @@ def nuc_segmentation_otsu(nuc_image, min_size, exp_bb=-1, clear_edges=True):
         #                                     slice(row['lbbox-2'],row['lbbox-5'])] for i, row in nuc_props.iterrows()]
     
     return nuc_labels, nuc_props
+
+def nuc_segmentation_watershed(nuc_img, bg_thresh = 800, fg_thresh = 5000):
+
+    from skimage.morphology import label
+    from skimage.filters import sobel
+    from skimage.segmentation import watershed
+
+    edges = sobel(nuc_img)
+    markers = np.zeros_like(nuc_img)
+    foreground, background = 1, 2
+    markers[nuc_img < bg_thresh] = background
+    markers[nuc_img > fg_thresh] = foreground
+    ws = watershed(edges, markers)
+    seg = label(ws == foreground)
+    return seg
+
+def combine_overviews_ND2(input_folder, tidx = 0, align_channels=[1,1], ds = 2):
+    from nd2reader import ND2Reader  
+    '''[summary]
+
+    Args:
+        input_folder ([type]): Folder with ND2 overview images. Script assumes format is CYX (no Z-stacks)
+        tidx (int, optional): Index of template image to use. Defaults to 0.
+        align_channels (list, optional): Which channels to align the images. Length must match number of images. Defaults to [1,1].
+        ds (int, optional): Downsampling. Defaults to 2.
+
+    Returns:
+        [type]: [description]
+    '''
+    paths = sorted(glob.glob(input_folder+os.sep+'*.nd2'))
+    print(paths)
+    imgs = []
+    for path in paths:
+        ND = ND2Reader(path)
+        img = np.stack([ND.get_frame_2D(c=i) for i in range(ND.sizes['c'])]).astype(np.uint16)
+        imgs.append(img)
+        
+    Y, X = imgs[tidx][align_channels[tidx]].shape
+    ref_img = imgs[tidx][align_channels[tidx], Y*3//5:Y*4//5:ds, X*3//5:X*4//5:ds]
+
+    imgs_reg = [imgs[tidx]]
+    for i, off_img in enumerate(imgs):
+        if i == tidx:
+            continue
+        off_img = pad_to_shape(off_img, imgs[tidx].shape)
+        o_img = off_img[align_channels[i],Y*3//5:Y*4//5:ds, X*3//5:X*4//5:ds]
+        shift = phase_cross_correlation(ref_img, o_img, return_error=False)*ds
+        print(shift)
+        off_img_reg = ndi.shift(off_img, (0, shift[0], shift[1]), mode='constant', order=1).astype(np.uint16)
+        imgs_reg.append(off_img_reg)
+
+    imgs = np.concatenate(imgs_reg, axis=0)
+    print(imgs.shape)
+
+    return imgs, np.stack([ref_img, o_img])
+
+def extract_cell_features(nuc_img, int_imgs: list, nuc_bg_int=800, nuc_fg_int=5000, scale=True):
+    from sklearn import preprocessing
+
+    nuc_masks = nuc_segmentation_watershed(nuc_img, bg_thresh = nuc_bg_int, fg_thresh = nuc_fg_int)
+    expanded = expand_labels(nuc_masks, distance=5)
+    props = [regionprops_table(expanded, int_img, properties=('mean_intensity',))['mean_intensity'] for int_img in int_imgs]
+    res = np.vstack(props).T
+    if scale:
+        scaler = preprocessing.StandardScaler()
+        scaler_model = scaler.fit(res)
+        features = scaler_model.transform(res)
+    else:
+        features = res
+        scaler_model = None
+    return features, scaler_model
+
+def relabel_nucs(nuc_image):
+    from skimage.morphology import label
+    out = mask_to_binary(nuc_image)
+    out = label(out)
+    return out.astype(nuc_image.dtype)
+
+def full_frame_dc_to_single_nuc_dc(old_dc_path, new_dc_position_list, new_dc_path):
+    new_drifts = []
+    drifts = pd.read_csv(old_dc_path)
+    for i, p in enumerate(new_dc_position_list):
+        pos_name = p.split('_')[0]
+        pos_drifts = drifts.query('position == @pos_name')
+        for j, d in pos_drifts.iterrows():
+            new_drifts.append(d.values.tolist()+[p])
+    new_drifts = pd.DataFrame(new_drifts, columns = ['old_index','frame','z_px_course','y_px_course','x_px_course','z_px_fine',
+    'y_px_fine','x_px_fine','orig_position', 'position'])
+    new_drifts['z_px_course', 'y_px_course', 'x_px_course'] = 0
+    new_drifts.to_csv(new_dc_path)
+
+
+
+'''
+
+def svih5_to_dask(folder, template):
+    all_files = all_matching_files_in_subfolders(folder, template)
+    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
+    progress = status_bar(len(all_files))
+    pos_stack=[]
+    with h5py.File(all_files[0], mode='r') as f:
+        shape = f[list(f.keys())[0]]['ImageData']['Image'].shape
+
+    for g in grouped_files:
+        dask_arrays = []
+        for fn in g:
+            next(progress)
+            f = h5py.File(fn, mode='r')
+            d = f[list(f.keys())[0]]['ImageData']['Image']
+            array = da.from_array(d, chunks=(1, 1, 1, shape[-2], shape[-1]))
+            dask_arrays.append(array)
+        pos_stack.append(da.stack(dask_arrays, axis=0))
+    x = da.stack(pos_stack, axis=0)[...,0,:,:,:]
+    print('Loaded images, final shape ', x.shape)
+    return x, groups
+
+def aio_lazy_to_dask(folder, template):
+    all_files = all_matching_files_in_subfolders(folder, template)
+    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
+    progress = status_bar(len(all_files))
+    group_array=[]
+    for g in grouped_files:
+        pos_stack = []
+        for fn in g:
+            next(progress)
+            img = aio.AICSImage(fn, chunk_by_dims=["Z", "Y", "X"])
+            pos_stack.append(img.dask_data[0,0])
+        pos_stack = da.stack(pos_stack)
+        group_array.append(pos_stack)
+    x = da.stack(group_array)
+
+    return x, groups
+
+### Does not works so well ###
+def czi_lazy_to_dask_czifile(folder, template):
+    all_files = all_matching_files_in_subfolders(folder, template)
+    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
+    progress = status_bar(len(all_files))
+    group_array=[]
+    sample = czifile.CziFile(all_files[0])
+    sample_shape = sample.subblock_directory[0].data_segment().data().shape
+    sample_dtype = sample.dtype
+    print('Loading images: ', sample_shape)
+    for g in grouped_files:
+        pos_stack = []
+        for fn in g:
+            next(progress)
+            img = czifile.CziFile(fn)
+            single_stack = []
+            for seg in img.subblock_directory:
+                d = da.from_delayed(dask.delayed(seg.data_segment().data)(),
+                shape=sample_shape, dtype=sample_dtype)
+                single_stack.append(d[0,0,0,0,0,:,:,0])
+            pos_stack.append(da.stack(single_stack))
+        pos_stack = da.stack(pos_stack)
+        group_array.append(pos_stack)
+    x = da.stack(group_array)
+
+    return x, groups
+    '''

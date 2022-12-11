@@ -8,23 +8,16 @@ EMBL Heidelberg
 """
 
 from looptrace import image_processing_functions as ip
-from pathlib import Path
-import subprocess
+from looptrace import image_io
+import dask.array as da
 import os
 import numpy as np
-<<<<<<< Updated upstream
-import tifffile
-from skimage.segmentation import find_boundaries
-from skimage.morphology import dilation, disk
-import dask.array as da
-=======
 import pandas as pd
 from skimage.segmentation import expand_labels, relabel_sequential
 from skimage.measure import regionprops_table
 from skimage.transform import rescale
 from skimage.morphology import remove_small_objects
 import tqdm
->>>>>>> Stashed changes
 
 class NucDetector:
     '''
@@ -34,11 +27,6 @@ class NucDetector:
     def __init__(self, image_handler, array_id = None):
         self.image_handler = image_handler
         self.config = image_handler.config
-<<<<<<< Updated upstream
-        self.images, self.pos_list = image_handler.images, image_handler.pos_list
-        self.nuc_folder = self.image_handler.nuc_folder
-        self.image_handler.load_nucs()
-=======
         try:
             self.images = self.image_handler.images[self.config['nuc_input_name']]
             self.pos_list = self.image_handler.image_lists[self.config['nuc_input_name']]
@@ -83,65 +71,12 @@ class NucDetector:
             image_io.images_to_ome_zarr(images=imgs, path=self.nuc_images_path, name='nuc_images', axes=('p','y','x'), chunk_split=(1,1), dtype = np.uint16)
         
         del imgs #Cleanup RAM
->>>>>>> Stashed changes
 
     def segment_nuclei(self):
         '''
         Runs nucleus segmentation using nucleus segmentation algorithm defined in ip functions.
         Dilates a bit and saves images.
         '''
-<<<<<<< Updated upstream
-
-        if not self.image_handler.nucs:
-            print('Generating nuclei images.')
-            self.image_handler.gen_nuc_images()
-        nuc_imgs = self.image_handler.nucs
-        masks = ip.nuc_segmentation(nuc_imgs, self.config['nuc_diameter'])
-        self.mask_to_binary(masks)
-
-        masks = [dilation(mask, disk(self.config['nuc_dilation'])) for mask in masks]
-        self.image_handler.nucs = nuc_imgs
-        self.image_handler.nuc_masks = masks
-        self.image_handler.save_nucs(img_type='mask')
-    
-    def classify_nuclei(self):
-        '''
-        Runs nucleus classification after detection usign pre-trained ilastik model.
-        Saves classified images.
-        '''
-
-        print('Running classification of nuclei with Ilastik.')
-        raw_imgs = [str(p) for p in Path(self.nuc_folder).glob('nuc_raw_*.tiff')] #' '.join(
-        seg_imgs = [str(p) for p in Path(self.nuc_folder).glob('nuc_binary_*.tiff')]
-        
-        ilastik_path = self.config['ilastik_path']
-        project_path = self.config['ilastik_project_path']
-        params = f' --headless --project=\"{project_path}\" --export_source=\"Object Predictions\" --output_format=numpy '
-        for raw_img, seg_img in zip(raw_imgs, seg_imgs):
-            raw_data = f'--raw_data {raw_img} '
-            segmentation = f'--segmentation_image {seg_img}'
-            command = ilastik_path+params+raw_data+segmentation
-            subprocess.run(command)
-        nuc_class = [np.load(img) for img in Path(self.nuc_folder).glob('nuc_raw_*_Object*.npy')]
-        print('Nucleus classification done.')
-        self.image_handler.nuc_class = nuc_class
-    
-    def mask_to_binary(self, masks):
-        '''Converts masks from nuclear segmentation to masks with 
-        single pixel background between separate, neighbouring features.
-        Saves binary version of the masks as tiff.
-
-        Args:
-            masks ([np array]): Detected nuclear masks (label image)
-
-        Returns:
-            [np array]: Masks with single pixel seperation beteween neighboring features.
-        '''
-        masks_no_bound = [np.where(find_boundaries(mask)>0, 0, mask) for mask in masks]
-        for i, img in enumerate(masks_no_bound):
-            tifffile.imsave(self.nuc_folder+os.sep+'nuc_binary_'+self.pos_list[i]+'.tiff', data=((img>0)*255).astype(np.uint8))
-        return masks_no_bound
-=======
         
         if 'nuc_images' not in self.image_handler.images:
             self.gen_nuc_images()
@@ -419,4 +354,3 @@ class NucDetector:
                             dtype = np.uint16, 
                             chunk_split=(1,1,1,1))
         print('ROI images generated, please reinitialize to load them.')
->>>>>>> Stashed changes

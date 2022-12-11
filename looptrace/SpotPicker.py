@@ -7,27 +7,20 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+from scipy import ndimage as ndi
 from looptrace import image_processing_functions as ip
 from looptrace import image_io
 import pandas as pd
-<<<<<<< Updated upstream
-=======
 import numpy as np
 import random
 from skimage.measure import regionprops_table
 import tqdm
 import os
->>>>>>> Stashed changes
 
 class SpotPicker:
     def __init__(self, image_handler, array_id = None):
         self.image_handler = image_handler
         self.config = image_handler.config
-<<<<<<< Updated upstream
-        self.images, self.pos_list = image_handler.images, image_handler.pos_list
-        
-    def rois_from_spots(self, preview_pos=False, filter_nucs = False):
-=======
         self.images = self.image_handler.images[self.config['spot_input_name']]
         self.pos_list = self.image_handler.image_lists[self.config['spot_input_name']]
         self.roi_path = self.image_handler.out_path+self.config['spot_input_name']+'_rois.csv'
@@ -38,7 +31,6 @@ class SpotPicker:
             self.roi_path = self.image_handler.out_path+self.config['spot_input_name']+'_rois.csv'[:-4]+'_'+str(self.array_id).zfill(4)+'.csv'
         
     def rois_from_spots(self, preview_pos=None):
->>>>>>> Stashed changes
         '''
         Autodetect ROIs from spot images using a manual threshold defined in config.
         
@@ -55,10 +47,6 @@ class SpotPicker:
         spot_frame = self.config['spot_frame']
         if not isinstance(spot_frame, list):
             spot_frame = [spot_frame]
-<<<<<<< Updated upstream
-
-        bead_ref = self.config['bead_reference_frame']
-=======
         
         try:
             subtract_beads = self.config['subtract_crosstalk']
@@ -85,45 +73,26 @@ class SpotPicker:
             filter_nucs = False
         
 
->>>>>>> Stashed changes
         spot_threshold = self.config['spot_threshold']
+        if not isinstance(spot_threshold, list):
+            spot_threshold = [spot_threshold]*len(spot_frame)
         spot_ds = self.config['spot_downsample']
+
+        try:
+            detect_method = self.config['detection_method']
+            if detect_method == 'intensity':
+                detect_func = ip.detect_spots_int
+                print('Using intensity based spot detection with threshold ', spot_threshold)
+            else:
+                detect_func = ip.detect_spots
+                print('Using DoG based spot detection with threshold ',  spot_threshold)
+        except KeyError: #Legacy config.
+            detect_func = ip.detect_spots
+            detect_method = 'dog'
+            print('Using DoG based spot detection.')
 
         #Loop through the imaging positions.
         all_rois = []
-<<<<<<< Updated upstream
-        if preview_pos:
-            print(f'Preview spot detection in position {preview_pos} with threshold {spot_threshold}.')
-            pos_index = self.pos_list.index(preview_pos)
-            img = self.images[pos_index][spot_frame[0], ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
-            spot_props, filt_img = ip.detect_spots(img, spot_threshold)
-            spot_props['position'] = preview_pos
-            spot_props = spot_props.reset_index().rename(columns={'index':'roi_id'})
-            return spot_props, img, filt_img
-        
-        for frame in spot_frame:
-            for position in self.pos_list:
-                #Read correct image
-                print(f'Detecting spots in position {position}, frame {frame}, ch {ch}.')
-                
-                pos_index = self.pos_list.index(position)
-                img = self.images[pos_index, frame, ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
-                spot_props, _ = ip.detect_spots(img, spot_threshold)
-                spot_props[['zc', 'yc', 'xc']] = spot_props[['zc', 'yc', 'xc']]*spot_ds
-
-                '''
-                if spot_frame != bead_ref:
-                    self.image_handler.set_drift_table()
-                    dt = self.image_handler.drift_table
-                    shift = list(dt.query('pos_id == @position & frame == @spot_frame')[['z_px_course', 'y_px_course', 'x_px_course']].iloc[0])
-                    spot_props[['zc', 'yc', 'xc']] = spot_props[['zc', 'yc', 'xc']] + shift
-                '''
-                
-                spot_props['position'] = position
-                spot_props['frame'] = frame
-                spot_props['ch'] = ch
-                all_rois.append(spot_props)
-=======
         if preview_pos is not None:
             for i, frame in enumerate(spot_frame):
                 for j, ch in enumerate(spot_ch):
@@ -170,29 +139,15 @@ class SpotPicker:
                     spot_props['frame'] = frame
                     spot_props['ch'] = ch
                     all_rois.append(spot_props)
->>>>>>> Stashed changes
         output = pd.concat(all_rois)
-        output=output.reset_index().rename(columns={'index':'roi_id_pos'})
-        
 
-        self.image_handler.roi_table = output
-        self.image_handler.save_data(rois=output)
+        print(f'Found {len(output)} spots.')
 
         if filter_nucs:
-            self.image_handler.load_nucs()
-            if not self.image_handler.nuc_masks:
+            if 'nuc_masks' not in self.image_handler.images:
                 print('No nuclei mask images found, cannot filter.')
             else:
                 print('Filtering in nuclei.')
-<<<<<<< Updated upstream
-                filt_rois = ip.filter_rois_in_nucs(output, self.image_handler.nuc_masks, self.image_handler.pos_list)
-                filt_rois = filt_rois[filt_rois['nuc_label'] > 0 ]
-                self.image_handler.roi_table = filt_rois
-                self.image_handler.save_data(rois=filt_rois)
-
-        print(f'Found {len(output)} spots.')
-        return output
-=======
                 if self.array_id is None:
                     nuc_masks = [a[0,0] for a in self.image_handler.images['nuc_masks']]
                 else:
@@ -520,4 +475,3 @@ class SpotPicker:
         
         self.image_handler.images['spot_images_fine'] = roi_array_fine
         np.savez_compressed(self.image_handler.image_save_path+os.sep+'spot_images_fine.npz', *roi_array_fine)
->>>>>>> Stashed changes
