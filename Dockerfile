@@ -9,17 +9,11 @@ RUN apt-get update -y &&\
     apt-get install -y gcc g++ make libz-dev &&\
     apt-get clean
 
-# Install mamba and the Python environment.
-RUN conda install mamba -n base -c conda-forge
-
-# Get the looptrace code.
+# Get and setup looptrace code in a dedicated conda environment
 RUN git clone https://github.com/gerlichlab/looptrace.git
-
-# Set up looptrace.
-RUN cd looptrace &&\
-    mamba env update -n base --f environment.yml &&\
-    mamba activate base &&\
-    python setup.py install
+RUN cd looptrace && conda env create -f environment.yml
+SHELL ["conda", "run", "-n", "looptrace", "/bin/bash", "-c"]
+RUN cd looptrace && python setup.py install
 
 # Reset working directory
 WORKDIR /home

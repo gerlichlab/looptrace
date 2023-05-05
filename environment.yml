@@ -1,9 +1,13 @@
 # conda env create | update -f environment.yml
 name: looptrace
+channels:
+    - conda-forge
+    - defaults
+    - numba
 dependencies:
-    - python=3.9
-    - numba::numba
-    - numba::llvmlite
+    - python = 3.9
+    - numba
+    - llvmlite
     - scipy
     - pandas
     - dask
@@ -15,10 +19,11 @@ dependencies:
         - scikit-image
         - pyyaml
         - zarr
-        - fsspec>=0.9.0
+        - fsspec >= 0.9.0
         - imagecodecs
         - napari
         - numcodecs
         - tqdm
         - cellpose
         - nd2
+
