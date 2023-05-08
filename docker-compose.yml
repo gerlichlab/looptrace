@@ -2,7 +2,7 @@ version: "1"
 
 services:
     jupyter:
-        container_name: looptraceenv
+        container_name: looptrace
         volumes:  
             - ${CODE_DIR}:/code
             - ${CONFIG_DIR}:/config
@@ -10,7 +10,7 @@ services:
             - JUPYTER_CONFIG_DIR=/config
         ports:
             - "9999:9999"
-        image: gerlichlab/looptraceenv
+        image: gerlichlab/looptrace
         entrypoint: "/bin/bash"
         command: -c "jupyter notebook --ip=0.0.0.0 --no-browser --port 9999 --allow-root"
 
