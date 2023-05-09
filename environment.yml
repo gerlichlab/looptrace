@@ -12,10 +12,11 @@ dependencies:
     - pandas
     - dask
     - joblib
-    - jupyter
+    - jupyterlab
     - nb_conda
     - pip
     - pip:
+        - batchspawner==1.0.1
         - scikit-image
         - pyyaml
         - zarr
