@@ -1,10 +1,11 @@
-# conda env create | update -f environment.yml
+# conda env create | update -f environment.yaml
 name: looptrace
 channels:
     - conda-forge
     - defaults
     - numba
 dependencies:
+    - pandas
     - python = 3.9
     - numba
     - llvmlite
@@ -12,11 +13,11 @@ dependencies:
     - pandas
     - dask
     - joblib
-    - jupyterlab
+    - jupyter
     - nb_conda
     - pip
     - pip:
-        - batchspawner==1.0.1
+        - batchspawner == 1.0.1
         - scikit-image
         - pyyaml
         - zarr
@@ -27,4 +28,3 @@ dependencies:
         - tqdm
         - cellpose
         - nd2
-

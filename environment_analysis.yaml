@@ -1,4 +1,4 @@
-# conda env create | update -f environment_analysis.yml
+# conda env create | update -f environment_analysis.yaml
 name: looptrace_analysis
 dependencies:
     - python=3.9
