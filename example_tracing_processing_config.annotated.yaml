@@ -1,0 +1,121 @@
+#       PARAMETERS FOR IMAGE PROCESSING AND TRACING        #
+# -------------------------------------------------------- #
+
+#Path and file definitions:
+analysis_path: /Desktop/Tracing analysis #Analysis folder for data output
+analysis_prefix: Trial1_          #Prefix for analysis output filenames.
+
+#General imaging properties (used for calibration and deconvolution)
+xy_nm: 107,326078090454419                          #Camera pixel size [nm] #This value is determined by the camera mounted on the microscope and won't change as long as I use the same microscope, camera, and lens.
+z_nm: 400                                           #Z-slice spacing #This value is chosen by me during image acquisition. For now it is 400 nm to reduce file size and imaging time, but in the future it will be changed to 200 nm.
+
+#Parameters for nucleus analysis
+nuc_input_name: nuc_images_raw             #TODO: UNCLEAR, I am not entirely sure about how he named his files - I assume this is the prefix followed by the same Time/Point/Channel/Seq format as my data (the same microscope was used for acquisition). Once we decompressed their Zarr-formatted raw data, we should be able to figure this out. The same issue arises further down when we need to specify the experimental data files.
+nuc_channel: 1                                      #The image channel (0-based) where nuclei are imaged. #DAPI was used as DNA stain, it is imaged in Channel2 (=1), Channel1 (=0) was used for the fiducial beads.
+nuc_ref_frame: 0                                    #Which image frame nuclei should be detected in. # Frame seems to be synonymous with Timepoint. There is only 1 Frame where DAPI was imaged (Frame 0)
+nuc_slice: -1                                       #Which slice to use for nucleus. Setting to -1 will use a max projection instead. # In a maximum projection the brightest signal of every pixel (throughout the z-stack) is projected onto a single slice. If segmentation does not work, changing this to a single central slice might help.
+nuc_3d: False                                       #Run nucleus analysis in 3D (True/False) #According to Kai, 2D segmentation works better. I also don't think that the 3D mask would be necessary, as we anyway dialate the nuclear mask afterwards (see below).
+nuc_method: nuclei                                  #Model used by CellPose to detect nuclei #This will never change.
+nuc_diameter: 170                                   #Approximate diameter of nuclei in images [px]. #If the nuclear segmentation struggles with the selection of nuclei, adjusting this parameter might help.
+nuc_dilation: 2                                     #How much to dilate nuclear masks after detection [px]
+nuc_anisotropy: 1                                   # Only for 3D, anisotropy between z and xy #Won't be needed.
+nuc_downscaling_xy: 4                               # Downsampling for xy #Will reduce computing time and will potentially lead to smoother nuclear masks.
+nuc_downscaling_z: 1                                # Only for 3D: downsampling in z #Won't be needed.
+nuc_mitosis_class: False                            # Extra (crude) classification of mitotic cell #Most cells should be in G2. Depending on wether mitotic cells are already excluded by the current settings, this could otherwise help with excluding mitotic cells.
+
+#Decon parameters:
+psf_input_name: seq_images_raw                      #Images to use for PSF extraction #TODO: UNCLEAR how to specify data name. If I remember correctly, they are using the red beads for the deconvolution of the far red channel, which is not ideal but may be good enough. We can try to generate a seperate sample with fiducial far red beads and compare how this changes the deconvolution.
+psf_bead_ch: 0                                      #Channel to use for PSFs #This is the image channel (Channel1=0) which contains the fiducial beads.
+psf_bead_frame: 0                                   #Frame to use for PSFs #First timepoint (=0) is used as this should not change over time.
+
+decon_input_name: seq_images_raw                    #Images to deconvolve #TODO: UNCLEAR how to specify data name.
+decon_ch: 1                                         #Channel to deconvolve (int or list of ints for multiple channels) #This will only be the FISH channel (Channel2=1). It causes a slight decrease in the precision, but drastically increases the SNR and therefore the spot detection.
+non_decon_ch: 0                                     #Channels to save into deconvolved images, wihtout doing deconvolution (int or list of ints) #This is the beads channel, which does not need to be deconvolved.
+decon_iter: 60                                      #Number of deconvolution iterations, 0 is off. #This descibes how often the algorithm is trying to guess the original image. The more iterations, the better the guess (but the more computing power is necessary). 60 repeats was used in the paper.
+decon_psf: exp                                      #PSF used for decon, can be "exp" for experimental or "gen" for a generated one.
+#Only necessary if generated PSF is used:
+spot_wavelength: 660                                #Approximate emmision wavelength of FISH probe. #We will use an experimentally determined PSF, so this won't be needed.
+objective_na: 1.40                                  #Numerical aperture of objective #We will use an experimentally determined PSF, so this won't be needed.
+
+#Registration parameters (NB! 0-based, also the timepoints):
+reg_input_template: seq_images_decon                #Images to use as template for registration #The images, where the beads Channel1 (=0) was saved in their original form together with the deconvolved FISH signal in Channel2 (=1).
+reg_input_moving: seq_images_decon                  #Images to register to template. #All images are registered with themselves, so I assume that reg_input_template and reg_input_moving are the same files.
+reg_ch_template: 0                                  #The channel of the fiducial beads/marks in template images #The beads are in Channel1 (=0).
+reg_ch_moving: 0                                    #The channel of the fiducial beads/marks in moving images   #The (same) beads are in Channel1 (=0).
+reg_ref_frame : 10                                  #The frame used as reference of the drift correction #This number was randomly chosen. In this frame/timepoint the beads will stay untouched and all other frames will be aligned to this frame.
+bead_threshold: 10000                               #Minimum intensity for bead detection #Will be empirically determined, but I assume it will be rather easy to select a clear threshold as beads have a good SNR.
+min_bead_intensity: 15000                           #Minimum intensity for bead segmentation #I assume this means that only the brighter ones of the detected spots are used. We can test this once the analysis pipeline is working.
+bead_roi_size: 16                                   #Size of bead ROI in px. #The ROI nicely contains the bead and some background. I assume that this small ROI is sufficient and won't need to be changed.
+bead_points: 200                                    #Maximum number of beads to segment #TODO: 200 was selected in the paper. We might have less beads in our images depending on the experiment. As far as I know, these beads are randomly chosen.
+course_drift_downsample: 2                          #Factor to downsample course drift correction to speed up calculation. #TODO: Not sure how the course drift is defined in the registration script.
+dc_method: fit                                      #Choice of drift correction method, can be "course" (only downsampled cc), "fit" (guassian fitting of fiducials) or "cc" (upsampled cross-correlation of fiducials). #We will use "fit" as this gives the best result when fiducial beads are used.
+bead_trace_fields: 8                                #Number of fields of view to sample beads from for bead QC tracing. #We can try different values. #TODO: Does this just give us the registration precision or does this information feed into the regsitration itself?
+bead_trace_number: 15                               #Number of beads per field of view to sample for bead QC tracing. #TODO: Does this just give us the registration precision or does this information feed into the regsitration itself?
+deconvolve_dc: 0                                    #Number of iterations to deconvolve drift correction bead #We don't deconvolve the beads.
+
+#Spot detection parameters (NB! 0-based, also the timepoints):
+spot_input_name: seq_images_decon
+spot_ch: 1                                         #Which channel(s) to detect spots in #This will only be done in Channel2 (=1), which contains the FISH signal.
+spot_frame:                                        #(Int or list) Frame(s) where spots are to be detected for segmentation. Tracing is done in all frames. #It is not clear to me how these numbers 34-39 related to the list with frame names on the bottom. In general, all Dp10X are used as regional markers. We can easily test if we selceted the correct images. 
+    - 34
+    - 35
+    - 36
+    - 37
+    - 38
+    - 39
+detection_method: intensity                           # Algorithm for regional spot detection. Can be intensity (simple threshold, when spots are bright), or dog (difference of gaussian when spots are dimmer) #We have super bright spots, so intensity will be sufficient.
+spot_threshold: 800                                    #(Int or list). On intensity/DoG image, usually set after previewing in GUI. If list must match length of spot_frame.                                                                                  
+spot_downsample: 2                                  #Downsampling (int) for spot detection (not fitting).
+spot_in_nuc: True                                   #Only filter for spots inside nuclear masks. #This will ignore bright spots of signal outside of our previously determined nuclear masks.
+subtract_crosstalk: True                            # Reduce cross-talk from beads for spot detection. #TODO: Not sure how this is done. There is in general some bleadthrough (leakage of signal) from the bead channel into the FISH channel. It might take the brightest spots in the beads channels and subtract this from the FISH channel. Or (and I think this makes more sense) the empty FISH channel before the intitial hybridisation of fluorescent probes can be used for background subtraction (as this image already contains the fiducial beads)
+crosstalk_ch: 0                                     #Ch to subtract crosstalk, if used. #TODO: Not sure how this is done. 
+min_spot_dist: 5                                    #Filter for minimum distance in pixels between detected spots (first one preserved). #If two loci are too close to each other in a cell, they cannot be resolved as identical barcodes are used for locus-specific FISH (Dp1-...) at multiple regions.
+
+#Tracing parameters
+trace_input_name: spot_images                       #Name of images used for tracing
+fit_func: LS                                        #Use LS or MLE solvers for spot fitting.
+mask_fits: True                                     # Weight fitting initialization 
+#substract_background: -1                            #Frame of the background frame to subtract.
+#Size of region segmented around each detected spot for tracing:
+#roi_image_size:
+#    - 16
+#    - 32
+#    - 32
+#    
+#           PARAMETERS FOR ANALYSIS POST TRACING           #
+# -------------------------------------------------------- #
+#Tracing QC parameters, will often need to be empirically determined:
+A_to_BG: 2             #Minimum signal factor above background of gaussian fit to accept
+sigma_xy_max: 150       #Maximum std in xy of gaussian fit [nm]
+sigma_z_max: 400            #Maximum std in z of gaussian fit [nm]
+max_dist: 800           #Maximum 3D distance from reference spot that a detected spot can be [nm]
+
+#List of barcodes/identifiers used in each of the sequential imaging frames:
+frame_name:
+    - pre_image
+    - Dp001
+    - Dp002
+    - Dp003
+    - Dp006
+    - Dp007
+    - Dp008
+    - Dp009
+    - Dp010
+    - Dp011
+    - Dp012
+    - Dp013
+    - Dp014
+    - Dp015
+    - Dp016
+    - Dp017
+    - Dp018
+    - Dp019
+    - Dp020
+    - Dp021
+    - Dp025
+    - blank_1
+    - Dp101
+    - Dp102
+    - Dp103
+    - Dp104
+    - blank_2
