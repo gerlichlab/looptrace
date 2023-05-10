@@ -13,8 +13,9 @@ dependencies:
     - pandas
     - dask
     - joblib
-    - jupyterlab
-    - jupyterlab=3.2.2
+    - jupyterlab=3.4.0    
+      # due to https://github.com/jupyterhub/jupyterhub/pull/4039
+    - jupyterhub-singleuser = 2.3.0
     - nb_conda
     - pip
     - pip:
