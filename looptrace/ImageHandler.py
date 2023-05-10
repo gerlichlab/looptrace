@@ -9,12 +9,14 @@ EMBL Heidelberg
 
 from looptrace import image_io
 import os
-import pandas as pd
+from pathlib import Path
+from typing import *
 import numpy as np
+import pandas as pd
 
 
 class ImageHandler:
-    def __init__(self, config_path, image_path = None, image_save_path = None):
+    def __init__(self, config_path: Union[str, Path], image_path = None, image_save_path = None):
         '''
         Initialize ImageHandler class with config read in from YAML file.
         See config file for details on parameters.
@@ -65,35 +67,36 @@ class ImageHandler:
         Standardized to either folders with OME-ZARR, single NPY files or NPZ collections.
         More can be added as needed.
         '''
-        self.images = {}
-        self.image_lists = {}
-        image_paths = [(p.name, p.path) for p in os.scandir(self.image_path)]
-        for image_name, image_path in image_paths:
-            if image_name.startswith('_') or image_name == 'spot_images_dir':
-                continue
-            else:
-                if os.path.isdir(image_path):
-                    if len(os.listdir(image_path)) == 0:
-                        continue
-                    else:
-                        sample_file = os.listdir(image_path)[0]
-                        print(image_path)
-                        if sample_file.endswith('.nd2'):
-                            self.images[image_name], self.image_lists[image_name] = image_io.stack_nd2_to_dask(image_path)
-                            print('Loaded images: ', image_name)
-                        elif sample_file.endswith('.tiff') or sample_file.endswith('.tif'):
-                            self.images[image_name], self.image_lists[image_name] = image_io.stack_tif_to_dask(image_path)
-                            print('Loaded images: ', image_name)
-                        else:
-                            self.images[image_name], self.image_lists[image_name] = image_io.multi_ome_zarr_to_dask(image_path, remove_unused_dims = False)
-                            print('Loaded images: ', image_name)
+        self.images, self.image_lists = read_images(os.scandir(self.image_path))
 
-                elif image_name.endswith('.npz'):
-                    self.images[os.path.splitext(image_name)[0]] = image_io.NPZ_wrapper(image_path)
+
+def read_images(image_paths: Iterable[Path]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    images, image_lists = {}, {}
+    for image_name, image_path in ((p.name, p.path) for p in image_paths):
+        if image_name.startswith('_') or image_name == 'spot_images_dir':
+            continue
+        else:
+            if os.path.isdir(image_path):
+                if len(os.listdir(image_path)) == 0:
+                    continue
+                else:
+                    sample_file = os.listdir(image_path)[0]
+                    print(image_path)
+                    if sample_file.endswith('.nd2'):
+                        parse = image_io.stack_nd2_to_dask
+                    elif sample_file.endswith('.tiff') or sample_file.endswith('.tif'):
+                        parse = image_io.stack_tif_to_dask
+                    else:
+                        parse = image_io.multi_ome_zarr_to_dask
+                    images[image_name], image_lists[image_name] = parse(image_path)
                     print('Loaded images: ', image_name)
-                elif image_name.endswith('.npy'):
-                    try:
-                        self.images[os.path.splitext(image_name)[0]] = np.load(image_path, mmap_mode = 'r')
-                    except ValueError: #This is for legacy datasets, will be removed after dataset cleanup!
-                        self.images[os.path.splitext(image_name)[0]] = np.load(image_path, allow_pickle = True)
-                    print('Loaded images: ', image_name)
+            elif image_name.endswith('.npz'):
+                images[os.path.splitext(image_name)[0]] = image_io.NPZ_wrapper(image_path)
+                print('Loaded images: ', image_name)
+            elif image_name.endswith('.npy'):
+                try:
+                    images[os.path.splitext(image_name)[0]] = np.load(image_path, mmap_mode = 'r')
+                except ValueError: #This is for legacy datasets, will be removed after dataset cleanup!
+                    images[os.path.splitext(image_name)[0]] = np.load(image_path, allow_pickle = True)
+                print('Loaded images: ', image_name)
+    return images, image_lists
