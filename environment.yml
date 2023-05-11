@@ -1,13 +1,20 @@
 # conda env create | update -f environment.yml
 name: looptrace
+channels:
+    - conda-forge
+    - defaults
 dependencies:
     - python=3.8
     - scipy
     - pandas
     - dask
-    - joblib    
+    - joblib
+    - jupyterlab=3.4.0    
+      # due to https://github.com/jupyterhub/jupyterhub/pull/4039
+    - jupyterhub-singleuser = 2.3.0
     - pip
     - pip:
+        - batchspawner == 1.0.1
         - scikit-image
         - pyyaml
         - zarr
