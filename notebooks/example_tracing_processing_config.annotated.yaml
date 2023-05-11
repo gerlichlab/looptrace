@@ -2,8 +2,8 @@
 # -------------------------------------------------------- #
 
 #Path and file definitions:
-analysis_path: /groups/gerlich/experiments/Experiments_005800/005826/looptrace_processing_output #Analysis folder for data output
-analysis_prefix: Test_Trial_          #Prefix for analysis output filenames.
+analysis_path: /groups/gerlich/experiments/Experiments_005800/005826/RPE1_myc_100kb_rep2_analysis #Analysis folder for data output
+analysis_prefix: RPE1_myc_100kb_rep2_          #Prefix for analysis output filenames.
 
 #General imaging properties (used for calibration and deconvolution)
 xy_nm: 107,326078090454419                          #Camera pixel size [nm] #This value is determined by the camera mounted on the microscope and won't change as long as I use the same microscope, camera, and lens.
