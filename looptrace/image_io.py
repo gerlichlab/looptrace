@@ -624,7 +624,7 @@ class ImageParseException(Exception):
     def __init__(self, errors: Dict[str, Exception]) -> None:
         if len(errors) == 0:
             raise ValueError("Errors must be nonempty to create an exception.")
-        msg = f"{len(errors)} error(s) during image parsing: {}"
+        msg = f"{len(errors)} error(s) during image parsing: {errors}"
         super().__init__(msg)
         self._errors = errors
     
