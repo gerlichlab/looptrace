@@ -12,6 +12,8 @@ dependencies:
     - scipy
     - pandas
     - dask
+      # NB: just for exploration, not actually needed; remove later
+    - xarray
     - joblib
     - jupyterlab=3.4.0    
       # due to https://github.com/jupyterhub/jupyterhub/pull/4039
