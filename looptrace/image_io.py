@@ -189,9 +189,10 @@ def stack_tif_to_dask(folder: str):
     image_files = sorted([p.path for p in os.scandir(folder) if (p.name.endswith('.tiff') or p.name.endswith('.tif'))])
     try:
         image_times = sorted(list(set([re.findall('.+(Time\d+)', s)[0] for s in image_files])))
-        time_dim = True
     except IndexError:
         time_dim = False
+    else:
+        time_dim = True
     image_points = sorted(list(set([re.findall('.+(Point\d+)', s)[0] for s in image_files])))
     #print(image_folders)
     out = []
