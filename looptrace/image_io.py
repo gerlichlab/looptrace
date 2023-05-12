@@ -6,20 +6,21 @@ Ellenberg group
 EMBL Heidelberg
 """
 
-import os
-import dask.array as da
-import dask
-import zarr
-from numcodecs import Blosc
-import numpy as np
-import joblib
 import itertools
+import os
+from pathlib import Path
 import re
+from typing import *
+import zipfile
+
+import dask
+import dask.array as da
+import joblib
+import numpy as np
+from numcodecs import Blosc
+import zarr
 import yaml
 import tqdm
-import zipfile
-from pathlib import Path
-from typing import *
 
 
 _TIFF_EXTENSIONS = [".tif", ".tiff"]
