@@ -77,17 +77,16 @@ def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[
         if os.path.isdir(image_path):
             if len(os.listdir(image_path)) == 0:
                 continue
+            sample_file = os.listdir(image_path)[0]
+            print(image_path)
+            if sample_file.endswith('.nd2'):
+                parse = image_io.stack_nd2_to_dask
+            elif sample_file.endswith('.tiff') or sample_file.endswith('.tif'):
+                parse = image_io.stack_tif_to_dask
             else:
-                sample_file = os.listdir(image_path)[0]
-                print(image_path)
-                if sample_file.endswith('.nd2'):
-                    parse = image_io.stack_nd2_to_dask
-                elif sample_file.endswith('.tiff') or sample_file.endswith('.tif'):
-                    parse = image_io.stack_tif_to_dask
-                else:
-                    parse = image_io.multi_ome_zarr_to_dask
-                images[image_name], image_lists[image_name] = parse(image_path)
-                print('Loaded images: ', image_name)
+                parse = image_io.multi_ome_zarr_to_dask
+            images[image_name], image_lists[image_name] = parse(image_path)
+            print('Loaded images: ', image_name)
         elif image_name.endswith('.npz'):
             images[os.path.splitext(image_name)[0]] = image_io.NPZ_wrapper(image_path)
             print('Loaded images: ', image_name)
