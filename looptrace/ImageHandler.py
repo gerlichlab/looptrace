@@ -67,36 +67,34 @@ class ImageHandler:
         Standardized to either folders with OME-ZARR, single NPY files or NPZ collections.
         More can be added as needed.
         '''
-        self.images, self.image_lists = read_images(os.scandir(self.image_path))
+        image_paths = ((p.name, p.path) for p in os.scandir(self.image_path) if p.name != "spot_images_dir" and not p.starswith("_"))
+        self.images, self.image_lists = read_images(image_paths)
 
 
-def read_images(image_paths: Iterable[Path]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     images, image_lists = {}, {}
-    for image_name, image_path in ((p.name, p.path) for p in image_paths):
-        if image_name.startswith('_') or image_name == 'spot_images_dir':
-            continue
-        else:
-            if os.path.isdir(image_path):
-                if len(os.listdir(image_path)) == 0:
-                    continue
+    for image_name, image_path in image_name_path_pairs:
+        if os.path.isdir(image_path):
+            if len(os.listdir(image_path)) == 0:
+                continue
+            else:
+                sample_file = os.listdir(image_path)[0]
+                print(image_path)
+                if sample_file.endswith('.nd2'):
+                    parse = image_io.stack_nd2_to_dask
+                elif sample_file.endswith('.tiff') or sample_file.endswith('.tif'):
+                    parse = image_io.stack_tif_to_dask
                 else:
-                    sample_file = os.listdir(image_path)[0]
-                    print(image_path)
-                    if sample_file.endswith('.nd2'):
-                        parse = image_io.stack_nd2_to_dask
-                    elif sample_file.endswith('.tiff') or sample_file.endswith('.tif'):
-                        parse = image_io.stack_tif_to_dask
-                    else:
-                        parse = image_io.multi_ome_zarr_to_dask
-                    images[image_name], image_lists[image_name] = parse(image_path)
-                    print('Loaded images: ', image_name)
-            elif image_name.endswith('.npz'):
-                images[os.path.splitext(image_name)[0]] = image_io.NPZ_wrapper(image_path)
+                    parse = image_io.multi_ome_zarr_to_dask
+                images[image_name], image_lists[image_name] = parse(image_path)
                 print('Loaded images: ', image_name)
-            elif image_name.endswith('.npy'):
-                try:
-                    images[os.path.splitext(image_name)[0]] = np.load(image_path, mmap_mode = 'r')
-                except ValueError: #This is for legacy datasets, will be removed after dataset cleanup!
-                    images[os.path.splitext(image_name)[0]] = np.load(image_path, allow_pickle = True)
-                print('Loaded images: ', image_name)
+        elif image_name.endswith('.npz'):
+            images[os.path.splitext(image_name)[0]] = image_io.NPZ_wrapper(image_path)
+            print('Loaded images: ', image_name)
+        elif image_name.endswith('.npy'):
+            try:
+                images[os.path.splitext(image_name)[0]] = np.load(image_path, mmap_mode = 'r')
+            except ValueError: #This is for legacy datasets, will be removed after dataset cleanup!
+                images[os.path.splitext(image_name)[0]] = np.load(image_path, allow_pickle = True)
+            print('Loaded images: ', image_name)
     return images, image_lists
