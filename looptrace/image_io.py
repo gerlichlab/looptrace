@@ -147,7 +147,12 @@ def multipos_nd2_to_dask(folder: str):
     #print('Loaded nd2 arrays of shape ', out.shape)
     return out
 
-def stack_nd2_to_dask(folder: Union[str, Path], position_id: Optional[int] = None) -> Tuple[List[Any], List[str]]:
+
+def stack_nd2_to_dask(
+    folder: Union[str, Path], 
+    position_id: Optional[int] = None, 
+    handle_error: Callable[["ImageParseException"], None] = lambda e: print(f"WARNING: {e}")
+) -> Tuple[List[Any], List[str]]:
     '''The function takes a folder path and returns a list of dask arrays and a 
     list of image folders by reading multiple nd2 images where each represents a 3D stack (split by position and time) in a single folder.
 
@@ -164,32 +169,34 @@ def stack_nd2_to_dask(folder: Union[str, Path], position_id: Optional[int] = Non
     
     pos_stack = []
     errors = {}
+    arr = None
     for p in tqdm.tqdm(image_points):
         t_stack = []
         for t in image_times:
             # TODO: need to check exactly 1 matching path here.
             path = list(filter(lambda s: (p in s) and (t in s), image_files))[0]
+            print(f"Reading: {path}")
             try:
-                arr = nd2.ND2File(path, validate_frames = False).to_dask()
+                with nd2.ND2File(path, validate_frames = False) as imgdat:
+                    arr = imgdat.to_dask()
             except OSError as e:
                 print(f"Error reading file {path}: {e}")
-                print(f"Adding a zeros-like array for point {p}, time {t}")
-                try:
-                    arr = da.zeros_like(pos_stack[0][0])
-                except IndexError:
-                    print("Failed to add zeros-like array")
-                    errors[path] = e
+                print(f"Adding a zeros-like array for ({p}, {t})")
+                errors[path] = e
+                # TODO: handle case where error is before any path has succeeded.
+                arr = da.zeros_like(arr)
             t_stack.append(arr)
         pos_stack.append(da.stack(t_stack))
     
     if errors:
-        raise ImageParseException(errors)
+        handle_error(ImageParseException(errors))
     
     out = da.stack(pos_stack)
     out = da.moveaxis(out, 2, 3)
     print('Loaded nd2 arrays of shape ', out.shape)
     pos_names = ["P"+str(i+1).zfill(4) for i in range(out.shape[0])]
     return out, pos_names
+
 
 def stack_tif_to_dask(folder: str):
     '''The function takes a folder path and returns a list of dask arrays and a 
@@ -631,7 +638,6 @@ class ImageParseException(Exception):
     @property
     def errors(self):
         return copy.deepcopy(self._errors)
-
 
 
 def _has_tiff_extension(p: Union[str, Path]) -> bool:
