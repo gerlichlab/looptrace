@@ -18,6 +18,12 @@ import re
 import yaml
 import tqdm
 import zipfile
+from pathlib import Path
+from typing import *
+
+
+_TIFF_EXTENSIONS = [".tif", ".tiff"]
+
 
 class NPZ_wrapper():
     '''
@@ -186,7 +192,7 @@ def stack_tif_to_dask(folder: str):
         list: list of dask arrays of the images
     '''
     import tifffile
-    image_files = sorted([p.path for p in os.scandir(folder) if (p.name.endswith('.tiff') or p.name.endswith('.tif'))])
+    image_files = sorted([p.path for p in os.scandir(folder) if _has_tiff_extension(p)])
     try:
         image_times = sorted(list(set([re.findall('.+(Time\d+)', s)[0] for s in image_files])))
     except IndexError:
@@ -559,7 +565,7 @@ def images_to_dask(folder, template):
     print("Loading files to dask array: ")
     #if '.h5' in template:
     #    x, groups = svih5_to_dask(folder, template)
-    if '.czi' in template or '.tif' in template or '.tiff' in template:
+    if '.czi' in template or _template_matches_tiff(template):
         x, groups, all_files = czi_tif_to_dask(folder, template)
     print('\n Loaded images of shape: ', x[0])
     print('Found positions ', groups)
@@ -583,7 +589,7 @@ def czi_tif_to_dask(folder, template):
     
     if '.czi' in template:
         sample = read_czi_image(all_files[0])
-    elif '.tif' in template or '.tiff' in template:
+    elif _template_matches_tiff(template):
         sample = read_tif_image(all_files[0])
     else:
         raise TypeError('Input filetype not yet implemented.')
@@ -594,7 +600,7 @@ def czi_tif_to_dask(folder, template):
         for fn in g:
             if '.czi' in template:
                 d = dask.delayed(read_czi_image)(fn)
-            elif '.tif' in template or '.tiff' in template:
+            elif _template_matches_tiff(template):
                 d = dask.delayed(read_tif_image)(fn)
             array = da.from_delayed(d, shape=sample.shape, dtype=sample.dtype)
             dask_arrays.append(array)
@@ -602,3 +608,12 @@ def czi_tif_to_dask(folder, template):
     #x = da.stack(pos_stack, axis=0)
     
     return pos_stack, groups, all_files
+
+
+def _has_tiff_extension(p: Union[str, Path]) -> bool:
+    _, ext = os.path.splitext(p)
+    return ext in _TIFF_EXTENSIONS
+
+
+def _template_matches_tiff(template: str) -> bool:
+    return any(ext in template for ext in _TIFF_EXTENSIONS)
