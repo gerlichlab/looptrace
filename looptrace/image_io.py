@@ -6,6 +6,7 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+import copy
 import itertools
 import os
 from pathlib import Path
@@ -146,12 +147,9 @@ def multipos_nd2_to_dask(folder: str):
     #print('Loaded nd2 arrays of shape ', out.shape)
     return out
 
-def stack_nd2_to_dask(folder: str, position_id: int = None):
+def stack_nd2_to_dask(folder: Union[str, Path], position_id: Optional[int] = None) -> Tuple[List[Any], List[str]]:
     '''The function takes a folder path and returns a list of dask arrays and a 
     list of image folders by reading multiple nd2 images where each represents a 3D stack (split by position and time) in a single folder.
-
-    Args:
-        folder (str): Input folder path
 
     Returns:
         list: list of dask arrays of the images
@@ -161,20 +159,31 @@ def stack_nd2_to_dask(folder: str, position_id: int = None):
     image_files = sorted([p.path for p in os.scandir(folder) if (p.name.endswith('.nd2') and not p.name.startswith('_'))])
     image_times = sorted(list(set([re.findall('.+(Time\d+)', s)[0] for s in image_files])))
     image_points = sorted(list(set([re.findall('.+(Point\d+)', s)[0] for s in image_files])))
-    pos_stack = []
     if position_id is not None:
         image_points = [image_points[position_id]]
+    
+    pos_stack = []
+    errors = {}
     for p in tqdm.tqdm(image_points):
         t_stack = []
         for t in image_times:
+            # TODO: need to check exactly 1 matching path here.
             path = list(filter(lambda s: (p in s) and (t in s), image_files))[0]
             try:
                 arr = nd2.ND2File(path, validate_frames = False).to_dask()
-            except OSError:
-                print(f"Error reading file {path}")
-                arr = da.zeros_like(pos_stack[0][0])
+            except OSError as e:
+                print(f"Error reading file {path}: {e}")
+                print(f"Adding a zeros-like array for point {p}, time {t}")
+                try:
+                    arr = da.zeros_like(pos_stack[0][0])
+                except IndexError:
+                    print("Failed to add zeros-like array")
+                    errors[path] = e
             t_stack.append(arr)
         pos_stack.append(da.stack(t_stack))
+    
+    if errors:
+        raise ImageParseException(errors)
     
     out = da.stack(pos_stack)
     out = da.moveaxis(out, 2, 3)
@@ -607,6 +616,22 @@ def czi_tif_to_dask(folder, template):
     #x = da.stack(pos_stack, axis=0)
     
     return pos_stack, groups, all_files
+
+
+class ImageParseException(Exception):
+    """Error subtype for when at least one error occurs during image """
+    
+    def __init__(self, errors: Dict[str, Exception]) -> None:
+        if len(errors) == 0:
+            raise ValueError("Errors must be nonempty to create an exception.")
+        msg = f"{len(errors)} error(s) during image parsing: {}"
+        super().__init__(msg)
+        self._errors = errors
+    
+    @property
+    def errors(self):
+        return copy.deepcopy(self._errors)
+
 
 
 def _has_tiff_extension(p: Union[str, Path]) -> bool:
