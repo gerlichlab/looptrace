@@ -10,6 +10,7 @@ import itertools
 import os
 from pathlib import Path
 import re
+import shutil
 from typing import *
 import zipfile
 
@@ -160,7 +161,6 @@ def stack_nd2_to_dask(folder: str, position_id: int = None):
     image_files = sorted([p.path for p in os.scandir(folder) if (p.name.endswith('.nd2') and not p.name.startswith('_'))])
     image_times = sorted(list(set([re.findall('.+(Time\d+)', s)[0] for s in image_files])))
     image_points = sorted(list(set([re.findall('.+(Point\d+)', s)[0] for s in image_files])))
-    #print(image_folders)
     pos_stack = []
     if position_id is not None:
         image_points = [image_points[position_id]]
@@ -171,7 +171,7 @@ def stack_nd2_to_dask(folder: str, position_id: int = None):
             try:
                 arr = nd2.ND2File(path, validate_frames = False).to_dask()
             except OSError:
-                print('File issue:', path)
+                print(f"Error reading file {path}")
                 arr = da.zeros_like(pos_stack[0][0])
             t_stack.append(arr)
         pos_stack.append(da.stack(t_stack))
@@ -371,9 +371,7 @@ def zip_folder(folder, out_file, compression = zipfile.ZIP_STORED, remove_folder
         for f, fn in tqdm.tqdm(zip(filelist, filenamelist), total=len(filelist)):
             zfile.write(f, arcname=os.path.splitext(fn)[0])
     if remove_folder:
-        import shutil
         shutil.rmtree(folder)
-    return
 
 def image_from_svih5(path,ch=None,index=(slice(None),
                                     slice(None),
