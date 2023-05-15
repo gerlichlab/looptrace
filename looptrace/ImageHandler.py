@@ -31,17 +31,11 @@ class ImageHandler:
         if self.image_path is not None:
             self.read_images()
 
-        if image_save_path is not None:
-            self.image_save_path = image_save_path
-        else:
-            self.image_save_path = self.image_path
+        self.image_save_path = image_save_path if image_save_path is not None else self.image_path
         
-        self.out_path = self.config['analysis_path']+os.sep+self.config['analysis_prefix']
+        self.out_path = os.path.join(self.config['analysis_path'], self.config['analysis_prefix'])
 
         self.load_tables()
-
-    def reload_config(self):
-        self.config = image_io.load_config(self.config_path)
 
     def load_tables(self):
         self.tables = {}
@@ -60,15 +54,18 @@ class ImageHandler:
                 self.tables[table_name] = table
                 self.table_paths[table_name] = f.path
 
-    def read_images(self):
+    def read_images(self, ia_eligbile: Callable[[str], bool] = lambda path_name: path_name != "spot_images_dir" and not path_name.startswith("_")):
         '''
         Function to load existing images from the input folder, and them into a dictionary (self.images{}),
         with folder name or image name (without extensions) as keys, images as values.
         Standardized to either folders with OME-ZARR, single NPY files or NPZ collections.
         More can be added as needed.
         '''
-        image_paths = ((p.name, p.path) for p in os.scandir(self.image_path) if p.name != "spot_images_dir" and not p.starswith("_"))
+        image_paths = ((p.name, p.path) for p in os.scandir(self.image_path) if self.is_eligible_to_read(p.name))
         self.images, self.image_lists = read_images(image_paths)
+
+    def reload_config(self):
+        self.config = image_io.load_config(self.config_path)
 
 
 def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
