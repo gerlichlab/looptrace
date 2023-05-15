@@ -75,13 +75,15 @@ def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[
     images, image_lists = {}, {}
     for image_name, image_path in image_name_path_pairs:
         if os.path.isdir(image_path):
-            if len(os.listdir(image_path)) == 0:
+            ext_histogram = Counter(os.path.splitext(fn)[1] for fn in os.listdir(image_path))
+            if len(ext_histogram) == 0:
                 continue
-            sample_file = os.listdir(image_path)[0]
-            print(image_path)
-            if sample_file.endswith('.nd2'):
+            if len(ext_histogram) != 1:
+                print(f"WARNING -- multiple ({len(ext_histogram)}) extensions found in folder {image_path}: {', '.join(ext_histogram)}")
+            sample_ext = next(ext_histogram.keys())
+            if sample_ext == '.nd2':
                 parse = image_io.stack_nd2_to_dask
-            elif sample_file.endswith('.tiff') or sample_file.endswith('.tif'):
+            elif sample_ext in image_io.TIFF_EXTENSIONS:
                 parse = image_io.stack_tif_to_dask
             else:
                 parse = image_io.multi_ome_zarr_to_dask
@@ -96,4 +98,6 @@ def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[
             except ValueError: #This is for legacy datasets, will be removed after dataset cleanup!
                 images[os.path.splitext(image_name)[0]] = np.load(image_path, allow_pickle = True)
             print('Loaded images: ', image_name)
+        else:
+            print(f"WARNING -- cannot process image path: {image_path}")
     return images, image_lists

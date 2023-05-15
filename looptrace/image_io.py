@@ -25,7 +25,7 @@ import yaml
 import tqdm
 
 
-_TIFF_EXTENSIONS = [".tif", ".tiff"]
+TIFF_EXTENSIONS = [".tif", ".tiff"]
 
 
 class NPZ_wrapper():
@@ -642,8 +642,8 @@ class ImageParseException(Exception):
 
 def _has_tiff_extension(p: Union[str, Path]) -> bool:
     _, ext = os.path.splitext(p)
-    return ext in _TIFF_EXTENSIONS
+    return ext in TIFF_EXTENSIONS
 
 
 def _template_matches_tiff(template: str) -> bool:
-    return any(ext in template for ext in _TIFF_EXTENSIONS)
+    return any(ext in template for ext in TIFF_EXTENSIONS)
