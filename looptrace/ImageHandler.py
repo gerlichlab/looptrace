@@ -7,13 +7,13 @@ Ellenberg group
 EMBL Heidelberg
 """
 
-from looptrace import image_io
 import os
 from pathlib import Path
 from typing import *
 import numpy as np
 import pandas as pd
 import yaml
+from looptrace.image_io import NPZ_wrapper, TIFF_EXTENSIONS, multi_ome_zarr_to_dask, stack_nd2_to_dask, stack_tif_to_dask
 
 
 class ImageHandler:
@@ -74,22 +74,22 @@ def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[
     images, image_lists = {}, {}
     for image_name, image_path in image_name_path_pairs:
         if os.path.isdir(image_path):
-            ext_histogram = Counter(os.path.splitext(fn)[1] for fn in os.listdir(image_path))
-            if len(ext_histogram) == 0:
+            exts = set(os.path.splitext(fn)[1] for fn in os.listdir(image_path))
+            if len(exts) == 0:
                 continue
-            if len(ext_histogram) != 1:
-                print(f"WARNING -- multiple ({len(ext_histogram)}) extensions found in folder {image_path}: {', '.join(ext_histogram)}")
-            sample_ext = next(ext_histogram.keys())
+            if len(exts) != 1:
+                print(f"WARNING -- multiple ({len(exts)}) extensions found in folder {image_path}: {', '.join(exts)}")
+            sample_ext = list(exts)[0]
             if sample_ext == '.nd2':
-                parse = image_io.stack_nd2_to_dask
-            elif sample_ext in image_io.TIFF_EXTENSIONS:
-                parse = image_io.stack_tif_to_dask
+                parse = stack_nd2_to_dask
+            elif sample_ext in TIFF_EXTENSIONS:
+                parse = stack_tif_to_dask
             else:
-                parse = image_io.multi_ome_zarr_to_dask
+                parse = multi_ome_zarr_to_dask
             images[image_name], image_lists[image_name] = parse(image_path)
             print('Loaded images: ', image_name)
         elif image_name.endswith('.npz'):
-            images[os.path.splitext(image_name)[0]] = image_io.NPZ_wrapper(image_path)
+            images[os.path.splitext(image_name)[0]] = NPZ_wrapper(image_path)
             print('Loaded images: ', image_name)
         elif image_name.endswith('.npy'):
             try:
