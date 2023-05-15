@@ -16,6 +16,7 @@ Usage:
 import os
 import numpy as np
 import pandas as pd
+import yaml
 from looptrace import comparison_functions as comp
 from looptrace import image_processing_functions as ip
 from scipy import ndimage as ndi
@@ -34,7 +35,8 @@ class Compare:
         Initialize Image Processing class with config read in from YAML file.
         '''
         
-        self.config = ip.load_config(config_path)
+        with open(config_path, 'r') as fh:
+            self.config = yaml.load(fh)
         self.config_path = config_path
         self.zarr_path = self.config['output_folder']+os.sep+self.config['output_name']+'.zarr'
         if os.path.isdir(self.zarr_path):
@@ -45,7 +47,8 @@ class Compare:
             self.images = da.from_zarr(self.zarr_path)
         
     def reload_config(self):
-        self.config = ip.load_config(config_file=self.config_path)
+        with open(self.config_path, 'r') as fh:
+            self.config = yaml.load(fh)
     
     def load_comp_images(self):
         config=self.config

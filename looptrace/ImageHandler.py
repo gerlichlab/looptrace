@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import *
 import numpy as np
 import pandas as pd
+import yaml
 
 
 class ImageHandler:
@@ -54,18 +55,19 @@ class ImageHandler:
                 self.tables[table_name] = table
                 self.table_paths[table_name] = f.path
 
-    def read_images(self, ia_eligbile: Callable[[str], bool] = lambda path_name: path_name != "spot_images_dir" and not path_name.startswith("_")):
+    def read_images(self, is_eligible: Callable[[str], bool] = lambda path_name: path_name != "spot_images_dir" and not path_name.startswith("_")):
         '''
         Function to load existing images from the input folder, and them into a dictionary (self.images{}),
         with folder name or image name (without extensions) as keys, images as values.
         Standardized to either folders with OME-ZARR, single NPY files or NPZ collections.
         More can be added as needed.
         '''
-        image_paths = ((p.name, p.path) for p in os.scandir(self.image_path) if self.is_eligible_to_read(p.name))
+        image_paths = ((p.name, p.path) for p in os.scandir(self.image_path) if is_eligible(p.name))
         self.images, self.image_lists = read_images(image_paths)
 
     def reload_config(self):
-        self.config = image_io.load_config(self.config_path)
+        with open(self.config_path, 'r') as fh:
+            self.config = yaml.safe_load(fh)
 
 
 def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[str, Any], Dict[str, Any]]:

@@ -84,17 +84,6 @@ class NPZ_wrapper():
 #         return [self.arr[j] for j in list(range(len(self.arr)+1)[s])]
 
 
-def load_config(config_file):
-    '''
-    Open config file and return config variable form yaml file.
-    '''
-    with open(config_file, 'r') as stream:
-        try:
-            config=yaml.safe_load(stream)
-        except yaml.YAMLError as exc:
-            print(exc)
-    return config
-
 def multi_ome_zarr_to_dask(folder: str, remove_unused_dims = True):
     '''The multi_ome_zarr_to_dask function takes a folder path and returns a list of dask arrays and a list of image folders by reading multiple dask images in a single folder.
         If the remove_unused_dims flag is set to True, the function will also remove unnecessary dimensions from the dask array.
