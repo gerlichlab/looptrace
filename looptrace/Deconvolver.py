@@ -83,6 +83,8 @@ class Deconvolver:
             print("Iterations set to 0.")
             return
 
+        # TODO: better error handling for type-like errors, e.g. if comma is used for decimal 
+        #       and as a result the value for a distance is parsed as string rather than number
         algo, psf, fd_data = ip.decon_RL_setup(size_x=15, size_y=15, size_z=15, pz=0., wavelength=self.config['spot_wavelength']/1000,
             na=self.config['objective_na'], res_lateral=self.config['xy_nm']/1000, res_axial=self.config['z_nm']/1000)
 
