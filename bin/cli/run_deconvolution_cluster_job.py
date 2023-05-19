@@ -12,22 +12,23 @@ import subprocess
 import argparse
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Run cluster deconvolution job.')
-    parser.add_argument("--job_path", help="Folder to save cluster job files.", default=None)
+    parser = argparse.ArgumentParser(description='Run deconvolution step on a computing cluster')
+    parser.add_argument("--job_path", help="Folder to save cluster job files.")
     parser.add_argument('--job_name', help='Job name.', default='cluster_job')
     parser.add_argument('--time', help="Time for cluster job.", default = '0-0:30')
     parser.add_argument('--cpus_per_task', help='Number of cores.', default='4')
     parser.add_argument('--mem_per_cpu', help='Memory per CPU core', default='4G')
     parser.add_argument('--array', help="Number of jobs to spawn in an array for cluster job.", default = '0')
     parser.add_argument('--partition', help="Partion for cluster job.", default='htc-el8')
-    parser.add_argument('--gres', help="Extra requests (usually GPU) for cluster job.", default=None)
-    parser.add_argument('--module', help='Name of module to load', default=None)
+    parser.add_argument('--gres', help="Extra requests (usually GPU) for cluster job.")
+    parser.add_argument('--module', help='Name of module to load')
     parser.add_argument('--env', help='Path to conda env to use')
     parser.add_argument('--bin_path', help='Path to python file to run.')
     parser.add_argument("--config_path", help="Config file path")
-    parser.add_argument("--image_path", help="Path to folder with images to read.", default=None)
-    parser.add_argument("--image_save_path", help="(Optional): Path to folder to save images to.", default=None)
-    parser.add_argument('--additional_options', help = 'Additional options to script.', default=None)
+    parser.add_argument("--image_path", help="Path to folder with images to read.")
+    parser.add_argument("--image_save_path", help="(Optional): Path to folder to save images to.")
+    parser.add_argument('--additional_options', help = 'Additional options to script.')
+    parser.add_
     parser.add_argument('--run', help='Run the cluster job in addition to making the sbatch file.', action='store_true')
     args = parser.parse_args()
 
