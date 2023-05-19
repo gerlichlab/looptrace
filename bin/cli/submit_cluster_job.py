@@ -8,41 +8,10 @@ EMBL Heidelberg
 """
 
 from argparse import ArgumentParser
-from dataclasses import dataclass
 import os
-from pathlib import Path
 import subprocess
 from typing import *
 
-
-@dataclass
-class CondaEnvironmentName:
-    get: str
-
-    def get_value(self):
-        return self.get
-
-
-@dataclass
-class CondaEnvironmentPrefix:
-    get: Path
-
-    @property
-    def get_value(self):
-        return str(self.get)
-
-
-def get_conda_run_command(env: Union["CondaEnvironmentName", "CondaEnvironmentPrefix"]) -> str:
-    base = "conda run"
-    if isinstance(env, CondaEnvironmentName):
-        opt = "-n"
-    elif isinstance(env, CondaEnvironmentPrefix):
-        opt = "-p"
-    else:
-        # no environment to specify
-        opt = None
-    return f"{base} {opt} {env}" if opt else base
-    
 
 if __name__ == '__main__':
     
@@ -97,7 +66,14 @@ if __name__ == '__main__':
             fh.writelines('module load '+args.module+'\n')
         fh.writelines("which python3\n")
 
-        command_base = f"{get_conda_run_command(args.env)} python3 {args.bin_path} {args.config_path}"
+        if args.conda_env_name:
+            env_spec = ["-n", args.conda_env_name]
+        elif args.conda_env_prefix:
+            env_spec = ["-p", args.conda_env_prefix]
+        else:
+            # no environment to specify
+            env_spec = []
+        command_base = ["conda", "run"] + env_spec + ["python3", args.bin_path, args.config_path]
 
         if args.additional_options is not None:
             command_extras = [args.image_path, args.additional_options]
@@ -105,7 +81,7 @@ if __name__ == '__main__':
             command_extas = [args.image_path]
         else:
             command_extras = []
-        fh.writelines(' '.join([command_base] + command_extras))
+        fh.writelines(' '.join(command_base + command_extras))
         if args.image_save_path:
             fh.writelines(' '.join([' --image_save_path', args.image_save_path]))
     
