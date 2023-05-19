@@ -13,6 +13,10 @@ import subprocess
 from typing import *
 
 
+def test_path(path: str, test: Callable[[str], bool]) -> bool:
+    return test(os.path.expanduser(os.path.expandvars(path)))
+
+
 if __name__ == '__main__':
     
     parser = ArgumentParser(description='Run (or prepare a run of) a step of the processing pipeline on a computing cluster')
@@ -43,7 +47,7 @@ if __name__ == '__main__':
 
 
     # Make top level directories
-    if not os.path.exists(args.job_path):
+    if not test_path(test=os.path.exists, path=args.job_path):
         os.makedirs(args.job_path)
 
     job_file = os.path.join(args.job_path, args.job_name + '.sh')
@@ -69,6 +73,8 @@ if __name__ == '__main__':
         if args.conda_env_name:
             env_spec = ["-n", args.conda_env_name]
         elif args.conda_env_prefix:
+            if not test_path(test=os.path.isdir, path=args.conda_env_prefix):
+                raise FileNotFoundError(args.conda_env_prefix)
             env_spec = ["-p", args.conda_env_prefix]
         else:
             # no environment to specify
