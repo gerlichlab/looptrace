@@ -7,12 +7,47 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+from argparse import ArgumentParser
+from dataclasses import dataclass
 import os
+from pathlib import Path
 import subprocess
-import argparse
+from typing import *
+
+
+@dataclass
+class CondaEnvironmentName:
+    get: str
+
+    def get_value(self):
+        return self.get
+
+
+@dataclass
+class CondaEnvironmentPrefix:
+    get: Path
+
+    @property
+    def get_value(self):
+        return str(self.get)
+
+
+def get_conda_run_command(env: Union["CondaEnvironmentName", "CondaEnvironmentPrefix"]) -> str:
+    base = "conda run"
+    if isinstance(env, CondaEnvironmentName):
+        opt = "-n"
+    elif isinstance(env, CondaEnvironmentPrefix):
+        opt = "-p"
+    else:
+        # no environment to specify
+        opt = None
+    return f"{base} {opt} {env}" if opt else base
+    
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Run deconvolution step on a computing cluster')
+    
+    parser = ArgumentParser(description='Run (or prepare a run of) a step of the processing pipeline on a computing cluster')
+    
     parser.add_argument("--job_path", help="Folder to save cluster job files.")
     parser.add_argument('--job_name', help='Job name.', default='cluster_job')
     parser.add_argument('--time', help="Time for cluster job.", default = '0-0:30')
@@ -22,14 +57,19 @@ if __name__ == '__main__':
     parser.add_argument('--partition', help="Partion for cluster job.", default='htc-el8')
     parser.add_argument('--gres', help="Extra requests (usually GPU) for cluster job.")
     parser.add_argument('--module', help='Name of module to load')
-    parser.add_argument('--env', help='Path to conda env to use')
+
+    conda_env = parser.add_mutually_exclusive_group()
+    conda_env.add_argument('--conda-env-name', help="Name of conda environment to use (should just be a simple name)")
+    conda_env.add_argument('--conda-env-prefix', help="Prefix of conda environment to use (should be a path to the root folder of an extant conda environment)")
+    
     parser.add_argument('--bin_path', help='Path to python file to run.')
     parser.add_argument("--config_path", help="Config file path")
     parser.add_argument("--image_path", help="Path to folder with images to read.")
     parser.add_argument("--image_save_path", help="(Optional): Path to folder to save images to.")
     parser.add_argument('--additional_options', help = 'Additional options to script.')
-    parser.add_
-    parser.add_argument('--run', help='Run the cluster job in addition to making the sbatch file.', action='store_true')
+    
+    parser.add_argument('--run', action="store_true", help='Run the cluster job in addition to making the sbatch file.')
+    
     args = parser.parse_args()
 
 
@@ -37,7 +77,7 @@ if __name__ == '__main__':
     if not os.path.exists(args.job_path):
         os.makedirs(args.job_path)
 
-    job_file = args.job_path+os.sep+args.job_name+'.sh'
+    job_file = os.path.join(args.job_path, args.job_name + '.sh')
 
     with open(job_file, 'w') as fh:
         fh.writelines("#!/bin/bash\n")
@@ -53,21 +93,19 @@ if __name__ == '__main__':
             fh.writelines("#SBATCH --gres="+args.gres+'\n')
         fh.writelines("#SBATCH --mail-type=END,FAIL\n")
         fh.writelines('#SBATCH --mail-user='+os.environ.get('USER')+'.'.join(os.environ.get('HOSTNAME').split('.')[-2:])+'\n\n')
-        #fh.writelines("eval \"$(conda shell.bash hook)\"\n")
         if args.module is not None:
             fh.writelines('module load '+args.module+'\n')
         fh.writelines("which python3\n")
-        if args.env is not None:
-            fh.writelines("source ~/miniconda3/etc/profile.d/conda.sh\n")
-            fh.writelines("conda deactivate\n")
-            #fh.writelines('cosnda activate '+args.env+'\n')
-            #fh.writelines('which python3\n')
+
+        command_base = f"{get_conda_run_command(args.env)} python3 {args.bin_path} {args.config_path}"
+
         if args.additional_options is not None:
-            fh.writelines(' '.join(['conda run -p', args.env, 'python3', args.bin_path, args.config_path, args.image_path, args.additional_options]))
+            command_extras = [args.image_path, args.additional_options]
         elif args.image_path is not None:
-            fh.writelines(' '.join(['conda run -p', args.env, 'python3', args.bin_path, args.config_path, args.image_path]))
+            command_extas = [args.image_path]
         else:
-            fh.writelines(' '.join(['conda run -p', args.env, 'python3', args.bin_path, args.config_path]))
+            command_extras = []
+        fh.writelines(' '.join([command_base] + command_extras))
         if args.image_save_path:
             fh.writelines(' '.join([' --image_save_path', args.image_save_path]))
     
