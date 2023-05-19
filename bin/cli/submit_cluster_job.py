@@ -78,7 +78,7 @@ if __name__ == '__main__':
         if args.additional_options is not None:
             command_extras = [args.image_path, args.additional_options]
         elif args.image_path is not None:
-            command_extas = [args.image_path]
+            command_extras = [args.image_path]
         else:
             command_extras = []
         fh.writelines(' '.join(command_base + command_extras))
