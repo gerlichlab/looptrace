@@ -19,7 +19,7 @@ dependencies:
     - nb_conda
     - pip
     - pip:
-        - batchspawner == 1.0.1
+        - batchspawner == 1.1.0
         - scikit-image
         - pyyaml
         - zarr
