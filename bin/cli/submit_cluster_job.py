@@ -67,7 +67,7 @@ if __name__ == '__main__':
         fh.writelines("#SBATCH --mail-type=END,FAIL\n")
         fh.writelines('#SBATCH --mail-user='+os.environ.get('USER')+'.'.join(os.environ.get('HOSTNAME').split('.')[-2:])+'\n\n')
         if args.module:
-            fh.writelines(f"module load {', '.join(args.module)}\n")
+            fh.writelines(f"module load {' '.join(args.module)}\n")
         fh.writelines("which python3\n")
 
         if args.conda_env_name:
