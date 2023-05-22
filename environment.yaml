@@ -24,7 +24,7 @@ dependencies:
         - pyyaml
         - zarr
           # for deconvolution
-        - flowdec[tf]
+        - flowdec
         - fsspec >= 0.9.0
         - imagecodecs
         - napari
