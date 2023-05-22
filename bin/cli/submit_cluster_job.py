@@ -29,7 +29,7 @@ if __name__ == '__main__':
     parser.add_argument('--array', help="Number of jobs to spawn in an array for cluster job.", default = '0')
     parser.add_argument('--partition', help="Partion for cluster job.", default='htc-el8')
     parser.add_argument('--gres', help="Extra requests (usually GPU) for cluster job.")
-    parser.add_argument('--module', help='Name of module to load')
+    parser.add_argument('--module', nargs='*', help="Name(s) of module(s) to load on SLURM, e.g. 'module load mymod'")
 
     conda_env = parser.add_mutually_exclusive_group()
     conda_env.add_argument('--conda-env-name', help="Name of conda environment to use (should just be a simple name)")
@@ -66,8 +66,8 @@ if __name__ == '__main__':
             fh.writelines("#SBATCH --gres="+args.gres+'\n')
         fh.writelines("#SBATCH --mail-type=END,FAIL\n")
         fh.writelines('#SBATCH --mail-user='+os.environ.get('USER')+'.'.join(os.environ.get('HOSTNAME').split('.')[-2:])+'\n\n')
-        if args.module is not None:
-            fh.writelines('module load '+args.module+'\n')
+        if args.module:
+            fh.writelines(f"module load {', '.join(args.module)}\n")
         fh.writelines("which python3\n")
 
         if args.conda_env_name:
