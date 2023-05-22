@@ -17,6 +17,7 @@ RUN apt-get update -y && \
 ## The Python 3.8 version of the installer is needed as this is what the base container uses.
 RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-py38_23.3.1-0-Linux-x86_64.sh -O ~/miniconda.sh && \
     /bin/bash ~/miniconda.sh -b
+ENV PATH=/opt/conda/bin:${PATH}
 
 # Copy this repo's code.
 RUN cd /opt && mkdir looptrace
@@ -49,7 +50,6 @@ USER jovian
 
 # Make relevant software available on the pertinent paths.
 ## Ensure that Python and conda are available.
-ENV PATH=/opt/conda/bin:${PATH}
 ## Add the result of callig module load build-env/f2022 (on which CUDA 11.8.0 depends on our SLURM) and module load cuda/11.8.0.
 #ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/software/f2022/software/cuda/11.8.0/nvvm/lib64:/software/f2022/software/cuda/11.8.0/extras/CUPTI/lib64:/software/f2022/software/cuda/11.8.0/
 
