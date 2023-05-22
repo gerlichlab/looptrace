@@ -1,5 +1,5 @@
 buildRepo2Docker([
   imageName: 'jupyter-looptrace-gerlich',
   pushRegistryNamespace: 'gerlichlab',
-  pushBranches: ['main', 'dev', 'initruns']
+  pushBranches: ['main', 'dev', 'NVIDIAcotainer']
 ])
