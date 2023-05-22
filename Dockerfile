@@ -15,10 +15,8 @@ RUN apt-get update -y && \
 ## The installation home should be /opt/conda; if not, we need -p /path/to/install/home
 ## The -b option to the Miniconda installer provides "say yes" mechanism like -y for apt-get.
 ## The Python 3.8 version of the installer is needed as this is what the base container uses.
-ENV CONDA_SCRIPT_LOCAL ~/miniconda.sh
-ENV CONDA_SCRIPT_REMOTE https://repo.anaconda.com/miniconda/Miniconda3-py38_23.3.1-0-Linux-x86_64.sh
-RUN wget --quiet $CONDA_SCRIPT_REMOTE -O $CONDA_SCRIPT_LOCAL && \
-    /bin/bash $CONDA_SCRIPT_LOCAL -b
+RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-py38_23.3.1-0-Linux-x86_64.sh -O ~/miniconda.sh && \
+    /bin/bash ~/miniconda.sh -b
 
 # Copy this repo's code.
 RUN cd /opt && mkdir looptrace
