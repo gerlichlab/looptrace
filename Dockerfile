@@ -15,10 +15,8 @@ RUN apt-get update -y && \
 ## The installation home should be /opt/conda; if not, we need -p /path/to/install/home
 ## The -b option to the Miniconda installer provides "say yes" mechanism like -y for apt-get.
 ## The Python 3.8 version of the installer is needed as this is what the base container uses.
-RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-py38_23.3.1-0-Linux-x86_64.sh -O ~/miniconda.sh
-RUN /bin/bash ~/miniconda.sh -b -p /opt/conda && \
-    echo "which conda 1" && \
-    which conda
+RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-py38_23.3.1-0-Linux-x86_64.sh -O ~/miniconda.sh &&\
+    /bin/bash ~/miniconda.sh -b -p /opt/conda
 
 ENV PATH=/opt/conda/bin:${PATH}
 
