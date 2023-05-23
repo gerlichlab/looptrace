@@ -35,6 +35,7 @@ COPY . .
 # NB: The mamba default env name is evidently base.
 RUN conda install mamba -n base -c conda-forge && \
     mamba env update -n base --file environment.yaml && \
+    source activate base &&\
     python setup.py install && \
     mamba list > software_versions_conda.txt
 
