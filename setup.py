@@ -19,13 +19,5 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.8',
-    install_requires=[
-          'scipy',
-          'numpy',
-          'pandas',
-          'scikit-image',
-          'pyyaml',
-          'dask',
-          'zarr'
-      ]
+    install_requires=[]
 )

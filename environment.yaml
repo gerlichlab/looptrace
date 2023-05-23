@@ -10,6 +10,7 @@ dependencies:
     - numba
     - llvmlite
     - scipy
+    - numpy
     - pandas
     - dask
     - joblib
