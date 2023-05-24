@@ -6,7 +6,7 @@ channels:
     - numba
 dependencies:
     - pandas
-    - python
+    - python == 3.10
     - numba
     - llvmlite
     - scipy
@@ -20,7 +20,7 @@ dependencies:
     - nb_conda
     - pip
     - pip:
-        - tensorflow
+        - tensorflow == 2.11.1
         - batchspawner == 1.1.0
         - scikit-image
         - pyyaml
