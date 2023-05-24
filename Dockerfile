@@ -5,7 +5,8 @@ ENV LC_ALL C.UTF-8
 
 RUN apt-get update -y && \
     apt-get upgrade -y && \
-    apt-get dist-upgrade -y
+    apt-get dist-upgrade -y && \
+    apt-get install build-essential software-properties-common -y
  
 # Install other build dependencies git and wget and zlib.
 RUN apt-get install git wget libz-dev libbz2-dev liblzma-dev -y
