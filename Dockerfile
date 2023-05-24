@@ -1,33 +1,35 @@
-FROM nvcr.io/nvidia/tensorflow:23.04-tf2-py3
-#FROM continuumio/miniconda3:latest
+FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu20.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG C.UTF-8  
 ENV LC_ALL C.UTF-8
 
-# Update the base image.
 RUN apt-get update -y && \
-    apt-get install -y build-essential && \
-    apt-get install -y wget && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get upgrade -y && \
+    apt-get dist-upgrade -y && \
+    apt-get install build-essential software-properties-common -y && \
+    add-apt-repository ppa:ubuntu-toolchain-r/test -y && \
+    apt-get update -y && \
+    apt-get install gcc-9 g++-9 -y && \
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 60 --slave /usr/bin/g++ g++ /usr/bin/g++-9 && \
+    update-alternatives --config gcc
+
+# Install other build dependencies git and wget and zlib.
+RUN apt-get install git wget libz-dev libbz2-dev liblzma-dev -y
+
+# Clone repo.
+RUN cd / && mkdir looptrace && cd /looptrace
+WORKDIR /looptrace
+COPY . .
 
 # Install miniconda.
 ## The installation home should be /opt/conda; if not, we need -p /path/to/install/home
-## The -b option to the Miniconda installer provides "say yes" mechanism like -y for apt-get.
-## The Python 3.8 version of the installer is needed as this is what the base container uses.
-RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-py38_23.3.1-0-Linux-x86_64.sh -O ~/miniconda.sh &&\
+RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh && \
     /bin/bash ~/miniconda.sh -b -p /opt/conda
 
 ENV PATH=/opt/conda/bin:${PATH}
 
 RUN echo "which conda 2" && \
     which conda
-
-
-# Copy this repo's code.
-RUN cd /opt && mkdir looptrace
-WORKDIR /opt/looptrace
-COPY . .
 
 # Create conda env and install mamba, matching environment 
 # name to that in the config file to be used. 
