@@ -1,18 +1,12 @@
-FROM nvidia/cuda:11.4.3-runtime-ubuntu20.04
+FROM tensorflow/tensorflow:2.11.1-gpu
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG C.UTF-8  
 ENV LC_ALL C.UTF-8
 
 RUN apt-get update -y && \
     apt-get upgrade -y && \
-    apt-get dist-upgrade -y && \
-    apt-get install build-essential software-properties-common -y && \
-    add-apt-repository ppa:ubuntu-toolchain-r/test -y && \
-    apt-get update -y && \
-    apt-get install gcc-9 g++-9 -y && \
-    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 60 --slave /usr/bin/g++ g++ /usr/bin/g++-9 && \
-    update-alternatives --config gcc
-
+    apt-get dist-upgrade -y
+ 
 # Install other build dependencies git and wget and zlib.
 RUN apt-get install git wget libz-dev libbz2-dev liblzma-dev -y
 
