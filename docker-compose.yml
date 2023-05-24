@@ -1,4 +1,4 @@
-version: "1"
+version: "3"
 
 services:
     jupyter:
@@ -10,7 +10,7 @@ services:
             - JUPYTER_CONFIG_DIR=/config
         ports:
             - "9999:9999"
-        image: gerlichlab/looptrace:init-proc-runs
+        image: looptrace:CUDAcontainer
         entrypoint: "/bin/bash"
         command: -c "jupyter notebook --ip=0.0.0.0 --no-browser --port 9999 --allow-root"
 
