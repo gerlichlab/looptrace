@@ -37,7 +37,6 @@ RUN echo "which conda 2" && \
 # NB: The mamba default env name is evidently base.
 RUN conda install mamba -n base -c conda-forge && \
     mamba env update -n base --file environment.yaml && \
-    source activate base &&\
     python setup.py install && \
     mamba list > software_versions_conda.txt
 
@@ -61,5 +60,3 @@ USER jovian
 ## Add the result of callig module load build-env/f2022 (on which CUDA 11.8.0 depends on our SLURM) and module load cuda/11.8.0.
 #ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/software/f2022/software/cuda/11.8.0/nvvm/lib64:/software/f2022/software/cuda/11.8.0/extras/CUPTI/lib64:/software/f2022/software/cuda/11.8.0/
 
-# Start bash.
-CMD ["/bin/bash"]
