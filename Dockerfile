@@ -21,7 +21,7 @@ COPY . .
 RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh && \
     /bin/bash ~/miniconda.sh -b -p /opt/conda
 
-ENV PATH=/opt/conda/bin:${PATH}
+ENV PATH=/opt/conda/bin:/usr/local/lib/python3.8/dist-packages:${PATH}
 
 RUN echo "which conda 2" && \
     which conda
