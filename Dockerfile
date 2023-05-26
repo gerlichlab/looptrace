@@ -60,3 +60,5 @@ USER jovian
 ## Add the result of callig module load build-env/f2022 (on which CUDA 11.8.0 depends on our SLURM) and module load cuda/11.8.0.
 #ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/software/f2022/software/cuda/11.8.0/nvvm/lib64:/software/f2022/software/cuda/11.8.0/extras/CUPTI/lib64:/software/f2022/software/cuda/11.8.0/
 
+CMD ["/bin/bash"]
+
