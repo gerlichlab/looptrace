@@ -16,6 +16,7 @@ dependencies:
     - joblib
     - pip
     - pip:
+        - tensorrt
         - scikit-image
         - pyyaml
         - zarr

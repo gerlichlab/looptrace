@@ -35,6 +35,14 @@ RUN conda install mamba -n base -c conda-forge && \
     python setup.py install && \
     mamba list > software_versions_conda.txt
 
+RUN cd /opt/conda/lib/python3.8/site-packages/tensorrt_libs && \
+    ln -s libnvinfer.so.8 libnvinfer.so.7 && \
+    ln -s libnvinfer_plugin.so.8 libnvinfer_plugin.so.7
+
+# Make relevant software available on the pertinent paths.
+ENV PYTHONPATH=${PYTHONPATH}:/usr/local/lib/python3.8/dist-packages
+ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/opt/conda/lib/python3.8/site-packages/tensorrt_libs
+
 # Reset working directory
 WORKDIR /home
 
@@ -49,9 +57,4 @@ RUN adduser --disabled-password \
 
 # Set a notebook user.
 USER jovian
-
-# Make relevant software available on the pertinent paths.
-## Ensure that Python and conda are available.
-## Add the result of callig module load build-env/f2022 (on which CUDA 11.8.0 depends on our SLURM) and module load cuda/11.8.0.
-#ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/software/f2022/software/cuda/11.8.0/nvvm/lib64:/software/f2022/software/cuda/11.8.0/extras/CUPTI/lib64:/software/f2022/software/cuda/11.8.0/
 
