@@ -6,7 +6,7 @@ channels:
     - numba
 dependencies:
     - pandas
-    - python == 3.10
+    - python ~= 3.10
     - numba
     - llvmlite
     - scipy
@@ -14,10 +14,10 @@ dependencies:
     - pandas
     - dask
     - joblib
-    - nb_conda
     - pip
     - pip:
         - tensorrt
+          # for CUDA-based container, we ned to install tensorflow.
         - tensorflow == 2.11.1
         - scikit-image
         - pyyaml
