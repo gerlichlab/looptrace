@@ -40,6 +40,10 @@ RUN conda install mamba -n base -c conda-forge && \
     python setup.py install && \
     mamba list > software_versions_conda.txt
 
+RUN cd /opt/conda/lib/python3.10/site-packages/tensorrt_libs && \
+    ln -s libnvinfer.so.8 libnvinfer.so.7 && \
+    ln -s libnvinfer_plugin.so.8 libnvinfer_plugin.so.7
+
 # Reset working directory
 WORKDIR /home
 
