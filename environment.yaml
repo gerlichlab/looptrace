@@ -20,6 +20,7 @@ dependencies:
     - nb_conda
     - pip
     - pip:
+        - tensorrt
         - batchspawner == 1.1.0
         - scikit-image
         - pyyaml
