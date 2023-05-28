@@ -6,7 +6,7 @@ channels:
     - numba
 dependencies:
     - pandas
-    - python ~= 3.10
+    - python == 3.10.11
     - numba
     - llvmlite
     - scipy
