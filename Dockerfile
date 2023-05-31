@@ -11,7 +11,12 @@ RUN apt-get update -y && \
     apt-get update -y && \
     apt-get install gcc-9 g++-9 -y && \
     update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 60 --slave /usr/bin/g++ g++ /usr/bin/g++-9 && \
-    update-alternatives --config gcc
+    update-alternatives --config gcc && \
+    # needed for napari, through vispy dependency
+    # see: https://github.com/gerlichlab/looptrace/issues/7
+    # see: https://github.com/vispy/vispy/issues/1556#issuecomment-1379480239
+    apt-get install -y fontconfig libglfw3-dev libgles2-mesa-dev
+
 
 # Install other build dependencies git and wget and zlib.
 RUN apt-get install git wget libz-dev libbz2-dev liblzma-dev -y
