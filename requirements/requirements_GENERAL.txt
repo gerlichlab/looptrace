@@ -1,0 +1,9 @@
+dask
+numcodecs
+numpy
+pandas
+scipy
+scikit-image
+tqdm
+pyyaml
+zarr
