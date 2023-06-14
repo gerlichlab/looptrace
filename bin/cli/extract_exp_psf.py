@@ -6,9 +6,10 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+import argparse
 from looptrace.ImageHandler import ImageHandler
 from looptrace.Deconvolver import Deconvolver
-import argparse
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Extract experimental PSF from bead images.')

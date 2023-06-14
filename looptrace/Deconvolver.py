@@ -7,14 +7,9 @@ Ellenberg group
 EMBL Heidelberg
 """
 
-from looptrace.gaussfit import fitSymmetricGaussian3DMLE
-from scipy.ndimage import shift
-from looptrace import image_processing_functions as ip
-from looptrace import image_io
 import os
 import numpy as np
-import tqdm
-import dask.array as da
+
 
 class Deconvolver:
     '''
@@ -37,6 +32,9 @@ class Deconvolver:
         fits the centers, registers and overlays the beads, calculates an average and normalizes the signal.
         Saves as a .npy ndarray, image is a centered PSF useful for deconvolution.
         '''
+        from scipy.ndimage import shift as shift_image
+        from looptrace.gaussfit import fitSymmetricGaussian3DMLE
+        from looptrace.image_processing_functions import extract_single_bead, generate_bead_rois
 
         t_slice = self.config['psf_bead_frame']
         ch = self.config['psf_bead_ch']
@@ -51,8 +49,8 @@ class Deconvolver:
             bead_r = 8
 
         bead_img = self.image_handler.images[self.config['psf_input_name']][0][t_slice, ch].compute()
-        bead_pos = ip.generate_bead_rois(bead_img, threshold, min_bead_int, bead_d, n_beads)
-        beads = [ip.extract_single_bead(point, bead_img) for point in bead_pos]
+        bead_pos = generate_bead_rois(bead_img, threshold, min_bead_int, bead_d, n_beads)
+        beads = [extract_single_bead(point, bead_img) for point in bead_pos]
         bead_ints = np.sum(np.array(beads),axis = (1,2,3))
         perc_high = np.percentile(bead_ints, 40)
         perc_low = np.percentile(bead_ints, 5)
@@ -61,7 +59,7 @@ class Deconvolver:
         fits = [fitSymmetricGaussian3DMLE(b, 3, [bead_r,bead_r,bead_r]) for b in beads]
 
         drifts = [np.array([bead_r, bead_r, bead_r])-fit[0][2:5] for fit in fits]
-        beads_c = [shift(b, d, mode='wrap') for b,d in zip(beads, drifts)]
+        beads_c = [shift_image(b, d, mode='wrap') for b,d in zip(beads, drifts)]
         exp_psf = np.mean(np.stack(beads_c), axis=0)[1:,1:,1:]
         exp_psf = exp_psf/np.max(exp_psf)
         np.save(self.image_handler.image_path+os.sep+'exp_psf.npy', exp_psf)
@@ -71,6 +69,10 @@ class Deconvolver:
 
     def decon_seq_images(self):
         #Decovolve images using Flowdec.
+        import dask.array as da
+        import tqdm
+        from looptrace.image_io import create_zarr_store
+        from looptrace.image_processing_functions import decon_RL_setup
 
         decon_ch = self.config['decon_ch']
         if not isinstance(decon_ch, list):
@@ -85,7 +87,7 @@ class Deconvolver:
 
         # TODO: better error handling for type-like errors, e.g. if comma is used for decimal 
         #       and as a result the value for a distance is parsed as string rather than number
-        algo, psf, fd_data = ip.decon_RL_setup(size_x=15, size_y=15, size_z=15, pz=0., wavelength=self.config['spot_wavelength']/1000,
+        algo, psf, fd_data = decon_RL_setup(size_x=15, size_y=15, size_z=15, pz=0., wavelength=self.config['spot_wavelength']/1000,
             na=self.config['objective_na'], res_lateral=self.config['xy_nm']/1000, res_axial=self.config['z_nm']/1000)
 
         try: 
@@ -109,7 +111,7 @@ class Deconvolver:
         for pos in tqdm.tqdm(self.pos_list):
             pos_index = self.image_handler.image_lists[self.config['decon_input_name']].index(pos)
             pos_img = self.image_handler.images[self.config['decon_input_name']][pos_index]
-            z = image_io.create_zarr_store(path=self.image_handler.image_save_path+os.sep+self.config['decon_input_name']+'_decon',
+            z = create_zarr_store(path=self.image_handler.image_save_path+os.sep+self.config['decon_input_name']+'_decon',
                     name = self.config['decon_input_name']+'_decon', 
                     pos_name = pos+'.zarr',
                     shape = (pos_img.shape[0],len(decon_ch)+len(non_decon_ch),)+pos_img.shape[-3:], 

@@ -13,7 +13,7 @@ from typing import *
 import numpy as np
 import pandas as pd
 import yaml
-from looptrace.image_io import NPZ_wrapper, TIFF_EXTENSIONS, multi_ome_zarr_to_dask, stack_nd2_to_dask, stack_tif_to_dask
+from looptrace.image_io import NPZ_wrapper, TIFF_EXTENSIONS
 
 
 class ImageHandler:
@@ -90,10 +90,13 @@ def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[
                 print(f"WARNING -- multiple ({len(exts)}) extensions found in folder {image_path}: {', '.join(exts)}")
             sample_ext = list(exts)[0]
             if sample_ext == '.nd2':
+                from .image_io import stack_nd2_to_dask
                 parse = stack_nd2_to_dask
             elif sample_ext in TIFF_EXTENSIONS:
+                from .image_io import stack_tif_to_dask
                 parse = stack_tif_to_dask
             else:
+                from .image_io import multi_ome_zarr_to_dask
                 parse = multi_ome_zarr_to_dask
             images[image_name], image_lists[image_name] = parse(image_path)
             print('Loaded images: ', image_name)

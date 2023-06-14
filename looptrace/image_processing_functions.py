@@ -7,24 +7,20 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+import glob
 import os
 import re
 import numpy as np
 import pandas as pd
 
+import scipy.ndimage as ndi
+from scipy.spatial.distance import squareform, pdist
+from scipy.stats import trim_mean
 from skimage.segmentation import clear_border, find_boundaries, expand_labels
 from skimage.filters import gaussian, threshold_otsu
 from skimage.registration import phase_cross_correlation
 from skimage.morphology import white_tophat, ball, remove_small_objects
-from scipy.stats import trim_mean
-from scipy.spatial.distance import squareform, pdist
 from skimage.measure import regionprops_table
-import scipy.ndimage as ndi
-
-import dask.array as da
-import joblib
-import glob
-
 
 
 def rois_from_csv(path):
@@ -33,6 +29,8 @@ def rois_from_csv(path):
     return rois
 
 def rois_from_imagej(roi_folder_path, template = '.zip', crop_size_z = 16, roi_scale = 0.5):
+    from .image_io import all_matching_files_in_subfolders
+
     roi_files = all_matching_files_in_subfolders(roi_folder_path, template)
     all_roi_coords = []
     for file_id, roi_path in enumerate(roi_files):
@@ -429,6 +427,8 @@ def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int
 
     '''
     import datetime
+    import joblib
+
     #Label fiducial candidates and find maxima.
     t_img_label,num_labels=ndi.label(t_img>threshold)
     #t_img_maxima=np.array(ndi.measurements.maximum_position(t_img, 
@@ -474,7 +474,9 @@ def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int
     return fine_drift#, np.std(shifts, axis=0)
 
 def napari_view(img, points=None, downscale=2, axes = 'PTCZYX', point_frame_size = 1, name=None, contrast_limits=(100,10000)):
+    import dask.array as da
     import napari
+
     try:
         channel_axis = axes.index('C')
     except ValueError:
@@ -566,12 +568,12 @@ def nuc_segmentation_cellpose_3d(nuc_imgs, diameter = 150, model_type = 'nuclei'
     Args:
         nuc_imgs (ndarray or list of ndarrays): 2D or 3D images of nuclei, expects single channel
     '''
+    from cellpose import models
 
     if not isinstance(nuc_imgs, list):
         if nuc_imgs.ndim > 3:
             nuc_imgs = [np.array(nuc_imgs[i]) for i in range(nuc_imgs.shape[0])] #Force array conversion in case of zarr.
 
-    from cellpose import models
     model = models.CellposeModel(gpu=True, model_type=model_type, net_avg=False)
     masks = model.eval(nuc_imgs, diameter=diameter, channels=[0,0], z_axis = 0, anisotropy = anisotropy, do_3D=True)[0]
     return masks
@@ -758,73 +760,3 @@ def full_frame_dc_to_single_nuc_dc(old_dc_path, new_dc_position_list, new_dc_pat
     'y_px_fine','x_px_fine','orig_position', 'position'])
     new_drifts['z_px_course', 'y_px_course', 'x_px_course'] = 0
     new_drifts.to_csv(new_dc_path)
-
-
-
-'''
-
-def svih5_to_dask(folder, template):
-    all_files = all_matching_files_in_subfolders(folder, template)
-    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
-    progress = status_bar(len(all_files))
-    pos_stack=[]
-    with h5py.File(all_files[0], mode='r') as f:
-        shape = f[list(f.keys())[0]]['ImageData']['Image'].shape
-
-    for g in grouped_files:
-        dask_arrays = []
-        for fn in g:
-            next(progress)
-            f = h5py.File(fn, mode='r')
-            d = f[list(f.keys())[0]]['ImageData']['Image']
-            array = da.from_array(d, chunks=(1, 1, 1, shape[-2], shape[-1]))
-            dask_arrays.append(array)
-        pos_stack.append(da.stack(dask_arrays, axis=0))
-    x = da.stack(pos_stack, axis=0)[...,0,:,:,:]
-    print('Loaded images, final shape ', x.shape)
-    return x, groups
-
-def aio_lazy_to_dask(folder, template):
-    all_files = all_matching_files_in_subfolders(folder, template)
-    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
-    progress = status_bar(len(all_files))
-    group_array=[]
-    for g in grouped_files:
-        pos_stack = []
-        for fn in g:
-            next(progress)
-            img = aio.AICSImage(fn, chunk_by_dims=["Z", "Y", "X"])
-            pos_stack.append(img.dask_data[0,0])
-        pos_stack = da.stack(pos_stack)
-        group_array.append(pos_stack)
-    x = da.stack(group_array)
-
-    return x, groups
-
-### Does not works so well ###
-def czi_lazy_to_dask_czifile(folder, template):
-    all_files = all_matching_files_in_subfolders(folder, template)
-    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
-    progress = status_bar(len(all_files))
-    group_array=[]
-    sample = czifile.CziFile(all_files[0])
-    sample_shape = sample.subblock_directory[0].data_segment().data().shape
-    sample_dtype = sample.dtype
-    print('Loading images: ', sample_shape)
-    for g in grouped_files:
-        pos_stack = []
-        for fn in g:
-            next(progress)
-            img = czifile.CziFile(fn)
-            single_stack = []
-            for seg in img.subblock_directory:
-                d = da.from_delayed(dask.delayed(seg.data_segment().data)(),
-                shape=sample_shape, dtype=sample_dtype)
-                single_stack.append(d[0,0,0,0,0,:,:,0])
-            pos_stack.append(da.stack(single_stack))
-        pos_stack = da.stack(pos_stack)
-        group_array.append(pos_stack)
-    x = da.stack(group_array)
-
-    return x, groups
-    '''
