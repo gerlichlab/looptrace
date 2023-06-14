@@ -2,11 +2,11 @@
 # -------------------------------------------------------- #
 
 #Path and file definitions:
-analysis_path: /groups/gerlich/experiments/Experiments_005800/005826/RPE1_myc_100kb_rep2_analysis #Analysis folder for data output
-analysis_prefix: RPE1_myc_100kb_rep2_          #Prefix for analysis output filenames.
+analysis_path: /groups/gerlich/experiments/Experiments_005800/005826/Tracing7__oPool2_02_analysis  #Analysis folder for data output
+analysis_prefix: Tracing7__oPool2_02_          #Prefix for analysis output filenames.
 
 #General imaging properties (used for calibration and deconvolution)
-xy_nm: 107,326078090454419                          #Camera pixel size [nm] #This value is determined by the camera mounted on the microscope and won't change as long as I use the same microscope, camera, and lens.
+xy_nm: 107.326078090454419                          #Camera pixel size [nm] #This value is determined by the camera mounted on the microscope and won't change as long as I use the same microscope, camera, and lens.
 z_nm: 400                                           #Z-slice spacing #This value is chosen by me during image acquisition. For now it is 400 nm to reduce file size and imaging time, but in the future it will be changed to 200 nm.
 
 #Parameters for nucleus analysis
@@ -57,12 +57,10 @@ deconvolve_dc: 0                                    #Number of iterations to dec
 spot_input_name: seq_images_decon
 spot_ch: 1                                         #Which channel(s) to detect spots in #This will only be done in Channel2 (=1), which contains the FISH signal.
 spot_frame:                                        #(Int or list) Frame(s) where spots are to be detected for segmentation. Tracing is done in all frames. #It is not clear to me how these numbers 34-39 related to the list with frame names on the bottom. In general, all Dp10X are used as regional markers. We can easily test if we selceted the correct images. 
-    - 34
-    - 35
-    - 36
-    - 37
-    - 38
-    - 39
+    - 22
+    - 23
+    - 24
+    - 25
 detection_method: intensity                           # Algorithm for regional spot detection. Can be intensity (simple threshold, when spots are bright), or dog (difference of gaussian when spots are dimmer) #We have super bright spots, so intensity will be sufficient.
 spot_threshold: 800                                    #(Int or list). On intensity/DoG image, usually set after previewing in GUI. If list must match length of spot_frame.                                                                                  
 spot_downsample: 2                                  #Downsampling (int) for spot detection (not fitting).
