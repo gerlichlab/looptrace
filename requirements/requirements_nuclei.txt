@@ -1,0 +1,9 @@
+cellpose
+dask
+zarr
+numpy
+pandas
+numcodecs
+skimage
+tqdm
+
