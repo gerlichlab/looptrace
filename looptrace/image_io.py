@@ -17,12 +17,9 @@ import zipfile
 
 import dask
 import dask.array as da
-import joblib
 import numpy as np
-from numcodecs import Blosc
-import zarr
-import yaml
 import tqdm
+import zarr
 
 
 TIFF_EXTENSIONS = [".tif", ".tiff"]
@@ -150,6 +147,7 @@ def stack_nd2_to_dask(
     '''
 
     import nd2
+
     image_files = sorted([p.path for p in os.scandir(folder) if (p.name.endswith('.nd2') and not p.name.startswith('_'))])
     image_times = sorted(list(set([re.findall('.+(Time\d+)', s)[0] for s in image_files])))
     image_points = sorted(list(set([re.findall('.+(Point\d+)', s)[0] for s in image_files])))
@@ -198,6 +196,7 @@ def stack_tif_to_dask(folder: str):
         list: list of dask arrays of the images
     '''
     import tifffile
+    
     image_files = sorted([p.path for p in os.scandir(folder) if _has_tiff_extension(p)])
     try:
         image_times = sorted(list(set([re.findall('.+(Time\d+)', s)[0] for s in image_files])))
@@ -268,6 +267,7 @@ def single_position_to_zarr(images: np.ndarray or list,
     '''
     Function to write a single position image with optional amount of additional dimensions to zarr.
     '''
+    from numcodecs import Blosc
 
     def single_image_to_zarr(z: zarr.DirectoryStore, idx: str, img: np.ndarray):
         '''Small helper function.
@@ -316,6 +316,7 @@ def single_position_to_zarr(images: np.ndarray or list,
     elif size['t'] < 10 or images.size < 1e9:
         [single_image_to_zarr(multiscale_level, i, images[i]) for i in range(size['t'])]
     else:
+        import joblib
         joblib.Parallel(n_jobs=-1, prefer='threads', verbose=10)(joblib.delayed(single_image_to_zarr)
                                                             (multiscale_level, i, images[i]) for i in range(size['t']))
 
@@ -351,6 +352,8 @@ def create_zarr_store(  path: str,
                         dtype:str,  
                         chunks:tuple,   
                         metadata:dict = None):
+    
+    from numcodecs import Blosc
 
     store = zarr.DirectoryStore(path+os.sep+pos_name)
     root = zarr.group(store=store, overwrite=True)
@@ -470,7 +473,9 @@ def read_czi_meta(image_path, tags, save_meta=False):
     Return a dictionary with the extracted metadata.
     '''
     import czifile
-    from xml import Ele
+    import yaml
+    from xml import ElementTree
+
     def parser(data, tags):
         tree = ElementTree.iterparse(data, events=('start',))
         _, root = next(tree)
@@ -494,8 +499,6 @@ def read_czi_meta(image_path, tags, save_meta=False):
     return metadict
 
 def czi_to_tif(in_folder, template, out_folder, prefix):
-    import tifffile
-    import czifile
     '''Convert CZI files from MyPIC experiment to single YX tif images.
 
     Args:
@@ -504,6 +507,9 @@ def czi_to_tif(in_folder, template, out_folder, prefix):
         out_folder (str): Output folder to save tif images
         prefix (str): Prefix of output files, prepended to axis info
     '''
+    import czifile
+    import joblib
+    import tifffile
 
     all_files = all_matching_files_in_subfolders(in_folder, template)
     sample = czifile.CziFile(all_files[0])
