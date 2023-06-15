@@ -41,7 +41,6 @@ class ImageHandler:
     def load_tables(self):
         get_table_name = lambda f: os.path.splitext(f.name)[0].split(self.config['analysis_prefix'])[1]
         is_eligible = lambda fp: not os.path.split(fp)[1].startswith('_')
-        is_pkl = lambda fp: os.path.splitext(fp)
         analysis_folder = self.config['analysis_path']
         try:
             table_files = os.scandir(analysis_folder)
@@ -63,6 +62,7 @@ class ImageHandler:
                 continue
             print(f"Loading table '{tn}': {fp}")
             self.tables[tn] = parse(fp)
+            print(f"Loaded: {tn}")
 
     def read_images(self, is_eligible: Callable[[str], bool] = lambda path_name: path_name != "spot_images_dir" and not path_name.startswith("_")):
         '''
