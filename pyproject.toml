@@ -1,0 +1,43 @@
+[tool.poetry]
+name = "looptrace"
+version = "0.3dev"
+description = "Library and programs for tracing chromatin loops from microscopy images"
+authors = [
+    "Kai Sandvold Beckwith",
+    "Vince Reuter <vince.reuter@gmail.com>",
+]
+readme = "README.md"
+license = "MIT"
+repository = "https://github.com/gerlichlab/looptrace"
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Utilities",
+    "Typing :: Typed",
+]
+
+[tool.poetry.dependencies]
+# These are the main runtime dependencies.
+python = ">= 3.10.0, < 3.12"
+dask = "^2023.5.1"
+numcodecs = "^0.11.0"
+numpy = "^1.24.2"
+pandas = "^1.5.3"
+scipy = "^1.10.1"
+scikit-image = "^0.20.0"
+tqdm = "^4.65.0"
+pyyaml = "^6.0"
+zarr = "^2.4.12"
+
+[tool.poetry.group.dev]
+optional = true
+[tool.poetry.group.dev.dependencies]
+nd2 = "^0.5.3"
+tifffile = "^2023.4.12"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
