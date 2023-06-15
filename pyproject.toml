@@ -31,6 +31,16 @@ tqdm = "^4.65.0"
 pyyaml = "^6.0"
 zarr = "^2.4.12"
 
+[tool.poetry.group.deconvolution]
+optional = true
+
+[tool.poetry.group.deconvolution.dependencies]
+# NB: for deconvolution, TENSORFLOW and CUDA environment are needed.
+# Deconvolution requires flowdec in addition to base runtime depdencies.
+flowdec = "^1.1.0"
+tensorflow = "2.11.1"
+#tensorrt = "^8.5.3.1"
+
 [tool.poetry.group.dev]
 optional = true
 [tool.poetry.group.dev.dependencies]
