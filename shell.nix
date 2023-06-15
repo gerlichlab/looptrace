@@ -9,7 +9,7 @@ let py310 = pkgs.python310.withPackages (ps: with ps; [ numpy pandas ]);
     py311 = pkgs.python311.withPackages (ps: with ps; [ numpy pandas ]);
 in
 pkgs.mkShell {
-  name = "tracebot-env";
+  name = "looptrace-env";
   buildInputs = [
     pkgs.poetry
     py310
