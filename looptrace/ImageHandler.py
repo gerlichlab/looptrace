@@ -39,21 +39,30 @@ class ImageHandler:
         self.load_tables()
 
     def load_tables(self):
+        get_table_name = lambda f: os.path.splitext(f.name)[0].split(self.config['analysis_prefix'])[1]
+        is_eligible = lambda fp: not os.path.split(fp)[1].startswith('_')
+        is_pkl = lambda fp: os.path.splitext(fp)
+        analysis_folder = self.config['analysis_path']
+        try:
+            table_files = os.scandir(analysis_folder)
+        except FileNotFoundError:
+            print(f"Declared analysis folder doesn't yet exist: {self.config['analysis_path']}")
+            raise
+        self.table_paths = {get_table_name(f): f.path for f in table_files}
         self.tables = {}
-        self.table_paths = {}
-        for f in os.scandir(self.config['analysis_path']):
-            if f.name.endswith('.csv') and not f.name.startswith('_'):
-                table_name = os.path.splitext(f.name)[0].split(self.config['analysis_prefix'])[1]
-                print('Loading table ', table_name)
-                table = pd.read_csv(f.path, index_col = 0)
-                self.tables[table_name] = table
-                self.table_paths[table_name] = f.path
-            elif f.name.endswith('.pkl') and not f.name.startswith('_'):
-                table_name = os.path.splitext(f.name)[0].split(self.config['analysis_prefix'])[1]
-                print('Loading table ', table_name)
-                table = pd.read_pickle(f.path)
-                self.tables[table_name] = table
-                self.table_paths[table_name] = f.path
+        for tn, fp in self.table_paths.items():
+            if not is_eligible(fp):
+                continue
+            _, ext = os.path.splitext(fp)
+            if ext == '.csv':
+                parse = lambda f: pd.read_csv(f, index_col=0)
+            elif ext == '.pkl':
+                parse = pd.read_pickle
+            else:
+                print(f"Cannot load as table: {fp}")
+                continue
+            print(f"Loading table '{tn}': {fp}")
+            self.tables[tn] = parse(fp)
 
     def read_images(self, is_eligible: Callable[[str], bool] = lambda path_name: path_name != "spot_images_dir" and not path_name.startswith("_")):
         '''
