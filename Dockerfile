@@ -46,7 +46,7 @@ RUN cd /opt/conda/lib/python3.10/site-packages/tensorrt_libs && \
     ln -s libnvinfer_plugin.so.8 libnvinfer_plugin.so.7
 
 # For the CUDA-based container, we only need to add the tensorrt libraries path.
-ENV LD_LIBRARY_PATH=/opt/conda/lib/python3.10/site-packages/tensorrt_libs:${LD_LIBRARY_PATH}
+ENV LD_LIBRARY_PATH=/opt/conda/lib/python3.10/site-packages/tensorrt_libs:/usr/local/cuda-11.4/compat:${LD_LIBRARY_PATH}
 
 # Reset working directory
 WORKDIR /home
