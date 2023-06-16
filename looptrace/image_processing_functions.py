@@ -141,7 +141,7 @@ def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label', nuc_drif
     if nuc_drifts is not None:
         rois_shifted = rois.copy()
         shifts = []
-        for i, row in rois_shifted.iterrows():
+        for _, row in rois_shifted.iterrows():
             drift_target = nuc_drifts[(nuc_drifts['position'] == row['position']) & (nuc_drifts['frame'] == nuc_target_frame)][['z_px_course', 'y_px_course', 'x_px_course']].to_numpy()
             drift_roi = spot_drifts[(spot_drifts['position'] == row['position']) & (spot_drifts['frame'] == row['frame'])][['z_px_course', 'y_px_course', 'x_px_course']].to_numpy()
             shift = drift_target - drift_roi
