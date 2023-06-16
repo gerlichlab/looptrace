@@ -7,15 +7,16 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+import os
+import random
 from scipy import ndimage as ndi
+from skimage.measure import regionprops_table
 from looptrace import image_processing_functions as ip
 from looptrace import image_io
-import pandas as pd
 import numpy as np
-import random
-from skimage.measure import regionprops_table
+import pandas as pd
 import tqdm
-import os
+
 
 class SpotPicker:
     def __init__(self, image_handler, array_id = None):
@@ -55,17 +56,14 @@ class SpotPicker:
         except KeyError: #Legacy config.
             subtract_beads = False
 
-        try:
-            min_dist = self.config['min_spot_dist']
-        except KeyError: #Legacy config.
-            min_dist = None
-
+        min_dist = self.config.get('min_spot_dist')
+        
         try:
             filter_nucs = self.config['spot_in_nuc']
             if 'nuc_images_drift_correction' in self.image_handler.tables:
-                nuc_drifts = self.image_handler.tables[self.config['nuc_input_name']+'_drift_correction']
+                nuc_drifts = self.image_handler.tables[self.config['nuc_input_name'] + '_drift_correction']
                 nuc_target_frame = self.config['nuc_ref_frame']
-                spot_drifts = self.image_handler.tables[self.config['spot_input_name']+'_drift_correction']
+                spot_drifts = self.image_handler.tables[self.config['spot_input_name'] + '_drift_correction']
             else:
                 nuc_drifts = None
                 nuc_target_frame = None
@@ -73,29 +71,25 @@ class SpotPicker:
         except KeyError: #Legacy config.
             filter_nucs = False
         
-
+        # Determine the detection method and threshold.
         spot_threshold = self.config['spot_threshold']
         if not isinstance(spot_threshold, list):
             spot_threshold = [spot_threshold]*len(spot_frame)
         spot_ds = self.config['spot_downsample']
         
-        try:
-            detect_method = self.config['detection_method']
-            if detect_method == 'intensity':
-                detect_func = ip.detect_spots_int
-                print('Using intensity based spot detection with threshold ', spot_threshold)
-            else:
-                detect_func = ip.detect_spots
-                print('Using DoG based spot detection with threshold ',  spot_threshold)
-        except KeyError: #Legacy config.
+        method_key = 'detection_method'
+        detect_method = self.config.get(method_key, 'dog')
+        if detect_method == 'intensity':
+            detect_func = ip.detect_spots_int
+        elif detect_method == 'dog':
             detect_func = ip.detect_spots
-            detect_method = 'dog'
-            print('Using DoG based spot detection.')
-
+        else:
+            raise ValueError(f"Illegal value for '{method_key}' in config: {detect_method}")
+        print(f"Using '{detect_method}' for spot detection, threshold : {spot_threshold}")
+        
         center_spots = (lambda df: ip.roi_center_to_bbox(df, roi_size = np.array(self.config['roi_image_size']) // spot_ds)) if detect_method != 'intensity' else (lambda df: df)
         
-        #Loop through the imaging positions.
-        all_rois = []
+        # previewing
         if preview_pos is not None:
             for i, frame in enumerate(spot_frame):
                 for j, ch in enumerate(spot_ch):
@@ -121,6 +115,8 @@ class SpotPicker:
 
             return
         
+        # Loop through the imaging positions to collect all regions of interest (ROIs).
+        all_rois = []
         for position in tqdm.tqdm(self.pos_list):
             pos_index = self.image_handler.image_lists[self.config['spot_input_name']].index(position)
             for i, frame in tqdm.tqdm(enumerate(spot_frame)):
@@ -152,7 +148,7 @@ class SpotPicker:
             if 'nuc_masks' not in self.image_handler.images:
                 print('No nuclei mask images found, cannot filter.')
             else:
-                print('Filtering in nuclei.')
+                print('Filtering for spots in nuclei.')
                 if self.array_id is None:
                     nuc_masks = [a[0,0] for a in self.image_handler.images['nuc_masks']]
                 else:
@@ -168,17 +164,14 @@ class SpotPicker:
                 else:
                     nuc_classes = [self.image_handler.images['nuc_classes'][pos_index][0,0]]
                 output = ip.filter_rois_in_nucs(output, nuc_classes, self.pos_list, new_col='nuc_class', nuc_drifts=nuc_drifts, nuc_target_frame=nuc_target_frame, spot_drifts = spot_drifts)
+            print(f'Filtering complete, {len(output)} ROIs after filtering.')
 
-        output=output.reset_index().rename(columns={'index':'roi_id_pos'})
-        if detect_method == 'dog':
-            rois = ip.roi_center_to_bbox(output, roi_size = tuple(self.config['roi_image_size']))
-        else:
-            rois = output
-
+        output = output.reset_index().rename(columns={'index':'roi_id_pos'})
+        rois = ip.roi_center_to_bbox(output, roi_size = tuple(self.config['roi_image_size'])) if detect_method == 'dog' else output
+        
         rois = rois.sort_values(['position', 'frame'])
         rois.to_csv(self.roi_path)
         self.image_handler.load_tables()
-        print(f'Filtering complete, {len(rois)} ROIs after filtering.')
         
         return rois
 
