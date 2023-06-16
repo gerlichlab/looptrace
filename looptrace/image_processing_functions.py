@@ -257,10 +257,10 @@ def detect_spots(input_img, spot_threshold=20, min_dist=None):
         img (ndarray): The DoG filtered image used for spot detection.
     '''
     img = white_tophat(image=input_img, footprint=ball(2))
-    img = gaussian(img, 0.8)-gaussian(img,1.3)
-    img = img/gaussian(input_img, 3)
-    img = (img-np.mean(img))/np.std(img)
-    labels, num_spots = ndi.label(img>spot_threshold)
+    img = gaussian(img, 0.8) - gaussian(img, 1.3)
+    img = img / gaussian(input_img, 3)
+    img = (img - np.mean(img)) / np.std(img)
+    labels, num_spots = ndi.label(img > spot_threshold)
     labels = expand_labels(labels, 10)
     
     #Make a DataFrame with the ROI info
