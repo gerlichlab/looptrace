@@ -36,7 +36,8 @@ class SpotPicker:
         
         Returns
         ---------
-        A pandas DataFrame with the bounding boxes and identifyer of the detected ROIs.
+        A pandas DataFrame with the bounding boxes and identifyer of the detected ROIs. 
+        NB: Null (None) returned if no spots are found.
         '''
 
         #Read parameters from config.
@@ -141,7 +142,11 @@ class SpotPicker:
                     all_rois.append(spot_props)
         output = pd.concat(all_rois)
 
+        n_spots_init = len(output)
         print(f'Found {len(output)} spots.')
+        if n_spots_init == 0:
+            print("WARNING -- Since no spots were found, no spots file(s) will be written.")
+            return
 
         if filter_nucs:
             if 'nuc_masks' not in self.image_handler.images:
