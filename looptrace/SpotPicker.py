@@ -77,7 +77,7 @@ class SpotPicker:
         if not isinstance(spot_threshold, list):
             spot_threshold = [spot_threshold]*len(spot_frame)
         spot_ds = self.config['spot_downsample']
-
+        
         try:
             detect_method = self.config['detection_method']
             if detect_method == 'intensity':
@@ -91,6 +91,8 @@ class SpotPicker:
             detect_method = 'dog'
             print('Using DoG based spot detection.')
 
+        center_spots = (lambda df: ip.roi_center_to_bbox(df, roi_size = np.array(self.config['roi_image_size']) // spot_ds)) if detect_method != 'intensity' else (lambda df: df)
+        
         #Loop through the imaging positions.
         all_rois = []
         if preview_pos is not None:
@@ -108,9 +110,8 @@ class SpotPicker:
                     spot_props['position'] = preview_pos
                     spot_props = spot_props.reset_index().rename(columns={'index':'roi_id_pos'})
 
-                    if self.config['detection_method'] != 'intensity':
-                        spot_props = ip.roi_center_to_bbox(spot_props, np.array(self.config['roi_image_size'])//spot_ds)
-                
+                    spot_props = center_spots(spot_props)
+                    
                     roi_points, _ = ip.roi_to_napari_points(spot_props, position=preview_pos)
                     try:
                         ip.napari_view(np.stack([filt_img, img, orig]), axes = 'CZYX', points=roi_points, downscale=1, name = ['DoG', 'Subtracted', 'Original'])
@@ -130,9 +131,8 @@ class SpotPicker:
                         img, _ = ip.subtract_crosstalk(bead_img, img, threshold=self.config['bead_threshold'])
                     spot_props, _ = detect_func(img, spot_threshold[i], min_dist = min_dist)
 
-                    if self.config['detection_method'] != 'intensity':
-                        spot_props = ip.roi_center_to_bbox(spot_props, np.array(self.config['roi_image_size'])//spot_ds)
-
+                    spot_props = center_spots(spot_props)
+                    
                     spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] = spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']]*spot_ds
                     
                     spot_props['position'] = position
