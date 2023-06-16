@@ -10,6 +10,7 @@ EMBL Heidelberg
 import glob
 import os
 import re
+from typing import *
 import numpy as np
 import pandas as pd
 
@@ -333,7 +334,8 @@ def detect_spots_int(input_img, spot_threshold=500, expand_px = 1, min_dist=None
         #print(f'Found {len(spot_props)} spots.', end=' ')
         return spot_props, labels
 
-def roi_center_to_bbox(rois, roi_size):
+def roi_center_to_bbox(rois: pd.DataFrame, roi_size: Union[np.ndarray, Tuple[int, int, int]]):
+    """Make bounding box coordinates around centers of regions of interest, based on box dimensions."""
     rois['z_min'] = rois['zc'] - roi_size[0]//2
     rois['z_max'] = rois['zc'] + roi_size[0]//2
     rois['y_min'] = rois['yc'] - roi_size[1]//2
