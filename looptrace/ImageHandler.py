@@ -13,11 +13,15 @@ from typing import *
 import numpy as np
 import pandas as pd
 import yaml
+
 from looptrace.image_io import NPZ_wrapper, TIFF_EXTENSIONS
+from looptrace.pathtools import ExtantFile, ExtantFolder
+
+__all__ = ["ImageHandler", "handler_from_cli", "read_images"]
 
 
 class ImageHandler:
-    def __init__(self, config_path: Union[str, Path], image_path = None, image_save_path = None):
+    def __init__(self, config_path: Union[str, Path], image_path: Optional[str] = None, image_save_path: Optional[str] = None):
         '''
         Initialize ImageHandler class with config read in from YAML file.
         See config file for details on parameters.
@@ -77,6 +81,12 @@ class ImageHandler:
     def reload_config(self):
         with open(self.config_path, 'r') as fh:
             self.config = yaml.safe_load(fh)
+
+
+def handler_from_cli(config_file: ExtantFile, images_folder: Optional[ExtantFolder], image_save_path: Optional[ExtantFolder] = None) -> ImageHandler:
+    image_path = None if images_folder is None else images_folder.as_string()
+    image_save_path = None if image_save_path is None else image_save_path.as_string()
+    return ImageHandler(config_path=config_file.as_string(), image_path=image_path, image_save_path=image_save_path)
 
 
 def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[str, Any], Dict[str, Any]]:

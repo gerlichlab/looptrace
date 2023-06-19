@@ -68,7 +68,7 @@ class Tracer:
             return fit
         
 
-    def trace_all_rois(self):
+    def trace_all_rois(self) -> str:
         '''
         Fits 3D gaussian to previously detected ROIs across positions and timeframes.
     
@@ -130,4 +130,6 @@ class Tracer:
             suffix = ''
 
         #self.image_handler.traces = traces
-        traces.to_csv(self.traces_path+suffix)
+        outfile = self.traces_path + suffix
+        traces.to_csv(outfile)
+        return outfile
