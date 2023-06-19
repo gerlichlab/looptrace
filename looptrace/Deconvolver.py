@@ -8,6 +8,8 @@ EMBL Heidelberg
 """
 
 import os
+from pathlib import Path
+from typing import *
 import numpy as np
 
 
@@ -24,7 +26,7 @@ class Deconvolver:
         if array_id is not None:
             self.pos_list = [self.pos_list[int(array_id)]]
 
-    def extract_exp_psf(self):
+    def extract_exp_psf(self) -> Path:
         '''
         Extract an experimental PDF from a bead image.
         Parameters read from config to segment same beads as used for drift correction.
@@ -41,13 +43,9 @@ class Deconvolver:
         threshold = self.config['bead_threshold']
         min_bead_int = self.config['min_bead_intensity']
         n_beads = 500
-        try:
-            bead_d = self.config['bead_roi_size']
-            bead_r = bead_d//2
-        except KeyError: #Legacy config
-            bead_d = 16
-            bead_r = 8
-
+        bead_d = self.config.get('bead_roi_size', 16)
+        bead_r = bead_d // 2
+        
         bead_img = self.image_handler.images[self.config['psf_input_name']][0][t_slice, ch].compute()
         bead_pos = generate_bead_rois(bead_img, threshold, min_bead_int, bead_d, n_beads)
         beads = [extract_single_bead(point, bead_img) for point in bead_pos]
@@ -58,16 +56,18 @@ class Deconvolver:
 
         fits = [fitSymmetricGaussian3DMLE(b, 3, [bead_r,bead_r,bead_r]) for b in beads]
 
-        drifts = [np.array([bead_r, bead_r, bead_r])-fit[0][2:5] for fit in fits]
-        beads_c = [shift_image(b, d, mode='wrap') for b,d in zip(beads, drifts)]
-        exp_psf = np.mean(np.stack(beads_c), axis=0)[1:,1:,1:]
-        exp_psf = exp_psf/np.max(exp_psf)
-        np.save(self.image_handler.image_path+os.sep+'exp_psf.npy', exp_psf)
+        drifts = [np.array([bead_r, bead_r, bead_r]) - fit[0][2:5] for fit in fits]
+        beads_c = [shift_image(b, d, mode='wrap') for b, d in zip(beads, drifts)]
+        exp_psf = np.mean(np.stack(beads_c), axis=0)[1:, 1:, 1:]
+        exp_psf = exp_psf / np.max(exp_psf)
+        outfile = Path(self.image_handler.image_path) / "exp_psf.npy"
+        print(f"Saving empirical point-spread function: {outfile}")
+        np.save(str(outfile), exp_psf)
+        print('Empirical PSF saved.')
         self.image_handler.images['exp_psf'] = exp_psf
-        print('Experimental PSF generated.')
+        return outfile
 
-
-    def decon_seq_images(self):
+    def decon_seq_images(self) -> List[str]:
         #Decovolve images using Flowdec.
         import dask.array as da
         import tqdm
@@ -108,15 +108,17 @@ class Deconvolver:
             return algo.run(fd_data.Acquisition(data=data, kernel=psf), niter=n_iter).data.astype(np.uint16)
         decon_chunk = lambda chunk: run_decon(data=chunk, algo=algo, fd_data=fd_data, psf=psf, n_iter=n_iter)
 
+        array_paths = []
+        
         for pos in tqdm.tqdm(self.pos_list):
             pos_index = self.image_handler.image_lists[self.config['decon_input_name']].index(pos)
             pos_img = self.image_handler.images[self.config['decon_input_name']][pos_index]
             z = create_zarr_store(path=self.image_handler.image_save_path+os.sep+self.config['decon_input_name']+'_decon',
                     name = self.config['decon_input_name']+'_decon', 
                     pos_name = pos+'.zarr',
-                    shape = (pos_img.shape[0],len(decon_ch)+len(non_decon_ch),)+pos_img.shape[-3:], 
-                    dtype = np.uint16,  
-                    chunks = (1,1,1,pos_img.shape[-2], pos_img.shape[-1]))
+                    shape = (pos_img.shape[0], len(decon_ch) + len(non_decon_ch),) + pos_img.shape[-3:], 
+                    dtype = np.uint16, 
+                    chunks = (1, 1, 1, pos_img.shape[-2], pos_img.shape[-1]))
 
             for i, t_img_full in tqdm.tqdm(enumerate(pos_img)):
                 for ch in decon_ch:
@@ -141,4 +143,6 @@ class Deconvolver:
                 for ch in non_decon_ch:
                     z[i, ch] = np.array(t_img_full[ch])
             
-    
+            array_paths.append(z.store.path)
+
+        return array_paths

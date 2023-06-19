@@ -10,21 +10,24 @@ EMBL Heidelberg
 #from distutils.command.config import config
 #from tkinter import image_names
 
-from dask.delayed import delayed
-from joblib.parallel import Parallel
+import os
+from typing import *
+
 import numpy as np
 import pandas as pd
+import dask.array as da
+from dask.delayed import delayed
+from joblib import Parallel, delayed
+from scipy import ndimage as ndi
+from scipy.stats import trim_mean
+from skimage.measure import regionprops_table
+from skimage.registration import phase_cross_correlation
+import tqdm
+
 from looptrace import image_processing_functions as ip
 from looptrace import image_io
 from looptrace.gaussfit import fitSymmetricGaussian3D
-from skimage.registration import phase_cross_correlation
-from skimage.measure import regionprops_table
-from scipy import ndimage as ndi
-from scipy.stats import trim_mean
-from joblib import Parallel, delayed
-import os
-import tqdm
-import dask.array as da
+
 
 class Drifter():
 
@@ -68,7 +71,7 @@ class Drifter():
             shift = np.array([0,0,0])
         return shift
 
-    def drift_corr(self):
+    def drift_corr(self) -> Optional[str]:
         '''
         Running function for drift correction along T-axis of 6D (PTCZYX) images/arrays.
         Settings set in config file.
@@ -85,10 +88,7 @@ class Drifter():
         roi_px = self.bead_roi_px
         ds = self.config['course_drift_downsample']
 
-        try:
-            dc_method = self.config['dc_method']
-        except KeyError:
-            dc_method = 'cc'
+        dc_method = self.config.get('dc_method', 'cc')
 
         #try:
         #    save_dc_beads = self.config['save_dc_beads']
@@ -96,7 +96,7 @@ class Drifter():
         #    save_dc_beads = False
 
         if dc_method == 'course':
-            all_drifts=[]
+            all_drifts = []
             #out_imgs = []
             for pos in self.pos_list:
                 i = self.full_pos_list.index(pos)
@@ -182,9 +182,11 @@ class Drifter():
                                                     'x_px_fine',
                                                     ])
         
-        all_drifts.to_csv(self.dc_file_path)
+        outfile = self.dc_file_path
+        all_drifts.to_csv(outfile)
         print('Drift correction complete.')
         self.image_handler.drift_table = all_drifts
+        return outfile
 
     def gen_dc_images(self, pos):
         '''

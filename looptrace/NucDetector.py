@@ -72,7 +72,7 @@ class NucDetector:
         
         del imgs #Cleanup RAM
 
-    def segment_nuclei(self):
+    def segment_nuclei(self) -> str:
         '''
         Runs nucleus segmentation using nucleus segmentation algorithm defined in ip functions.
         Dilates a bit and saves images.
@@ -83,10 +83,8 @@ class NucDetector:
             self.image_handler.read_images()
         print('Segmenting nuclei.')
         
-        try:
-            method = self.config['nuc_method']
-        except KeyError:
-            method = 'nuclei'
+        method = self.config.get('nuc_method', 'nuclei')
+        
         try:
             nuc_3d = self.config['nuc_3d']
             ds_xy = self.config['nuc_downscaling_xy']
@@ -115,18 +113,19 @@ class NucDetector:
         for img in nuc_imgs_in:        
             new_slice = tuple([0 if i == 1 else slice(None) for i in img.shape])
             img = img[new_slice]
-            if nuc_3d:
-                img = np.array(img[::ds_z, ::ds_xy, ::ds_xy])
-            else:
-                img = np.array(img[::ds_xy,::ds_xy])
+            img = np.array(img[::ds_z, ::ds_xy, ::ds_xy]) if nuc_3d else np.array(img[::ds_xy,::ds_xy]) 
             nuc_imgs.append(img)
         
         print(f'Running nuclear segmentation using CellPose {method} model and diameter {diameter}.')
 
         if nuc_3d:
             masks = ip.nuc_segmentation_cellpose_3d(nuc_imgs, diameter = diameter, model_type = method, anisotropy=anisotropy)
+            scaling = (ds_z, ds_xy, ds_xy)
+            axes_for_zarr = ('p', 'z', 'y', 'x')
         else:
             masks = ip.nuc_segmentation_cellpose_2d(nuc_imgs, diameter = diameter, model_type = method)
+            scaling = (ds_xy, ds_xy)
+            axes_for_zarr = ('p', 'y', 'x')
 
         #Remove under-segmented nuclei and clean up:
         masks = [remove_small_objects(arr, min_size=nuc_min_size) for arr in masks]
@@ -136,21 +135,15 @@ class NucDetector:
             print(f'Detecting mitotic cells on top of CellPose nuclei.')
             masks, mitotic_idx = zip(*[ip.mitotic_cell_extra_seg(np.array(nuc_imgs[i]), masks[i]) for i in range(len(nuc_imgs))])
 
-        if nuc_3d:
-            masks = [rescale(expand_labels(mask.astype(np.uint16),3), scale = (ds_z, ds_xy, ds_xy), order = 0) for mask in masks]
-        else:
-            masks = [rescale(expand_labels(mask.astype(np.uint16),3), scale = (ds_xy, ds_xy), order = 0) for mask in masks]
+        masks = [rescale(expand_labels(mask.astype(np.uint16), 3), scale=scaling, order=0) for mask in masks]
         #masks = np.stack(masks)
 
         print('Saving segmentations.')
 
-        self.image_handler.images['nuc_masks']= masks
+        self.image_handler.images['nuc_masks'] = masks
 
-        if nuc_3d:
-            image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name='nuc_masks', axes=('p','z','y','x'), dtype = np.uint16, chunk_split=(1,1))
-        else:
-            image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name='nuc_masks', axes=('p','y','x'), dtype = np.uint16, chunk_split=(1,1))
-
+        image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name='nuc_masks', axes=axes_for_zarr, dtype = np.uint16, chunk_split=(1,1))
+        
         if mitosis_class:
             nuc_class = []
             for i, mask in enumerate(masks):
@@ -161,11 +154,10 @@ class NucDetector:
             print('Saving classifications.')
 
             self.image_handler.images['nuc_classes'] = nuc_class
-            if nuc_3d:
-                image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name='nuc_classes', axes=('p','z', 'y','x'), dtype = np.uint16, chunk_split=(1,1))
-            else:
-                image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name='nuc_classes', axes=('p','y','x'), dtype = np.uint16, chunk_split=(1,1))
+            image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name='nuc_classes', axes=axes_for_zarr, dtype = np.uint16, chunk_split=(1,1))
 
+        return self.nuc_masks_path
+            
     def update_masks_after_qc(self, new_mask, original_mask, mask_name, position):
 
         try:
