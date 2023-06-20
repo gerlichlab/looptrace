@@ -7,6 +7,10 @@ EMBL Heidelberg
 """
 
 import argparse
+import copy
+from dataclasses import dataclass
+from enum import Enum
+import json
 import os
 from typing import *
 
@@ -14,13 +18,70 @@ from looptrace.ImageHandler import handler_from_cli
 from looptrace.SpotPicker import SpotPicker
 from looptrace.pathtools import ExtantFile, ExtantFolder
 
+__author__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 
-def workflow(config_file: ExtantFile, images_folder: ExtantFolder, image_save_path: Optional[ExtantFolder]) -> str:
+
+class Method(Enum):
+    INTENSITY = 'intensity'
+    DIFFERENCE_OF_GAUSSIANS = 'dog'
+
+    @classmethod
+    def parse(cls, name: str) -> "Method":
+        try:
+            return next(m for m in cls if m.value.lower() == name.lower())
+        except StopIteration:
+            raise ValueError(f"Unknown detection method: {name}")
+
+
+@dataclass
+class Parameters:
+    frames: List[int]
+    method: Method
+    threshold: int
+    downsampling: int
+    only_in_nuclei: bool
+    subtract_crosstalk: bool
+    minimum_spot_separation: int
+
+    # TODO: refinement typed for the case class members
+
+    def to_dict(self) -> Dict[str, Union[str, List[int], Method, int, bool]]:
+        return {
+            "spot_frame": self.frames, 
+            "detection_method": self.method.value, 
+            "spot_threshold": self.threshold, 
+            "spot_downsample": self.downsampling, 
+            "spot_in_nuc": self.only_in_nuclei, 
+            "subtract_crosstalk": self.subtract_crosstalk, 
+            "min_spot_dist": self.minimum_spot_separation,
+        }
+    
+    def update(self, other: Dict[str, Any]) -> Dict[str, Any]:
+        result = copy.deepcopy(other)
+        result.update(self.to_dict())
+        return result
+
+
+def workflow(
+        config_file: ExtantFile, 
+        images_folder: ExtantFolder, 
+        image_save_path: Optional[ExtantFolder], 
+        params_update: Optional[Parameters] = None, 
+        outfile: Optional[str] = None, 
+        write_config_path: Optional[str] = None, 
+        ) -> str:
     image_handler = handler_from_cli(config_file=config_file, images_folder=images_folder, image_save_path=image_save_path)
+    if params_update is not None:
+        image_handler.config = image_handler.config.update(Parameters.to_dict())
+    if write_config_path:
+        print(f"Writing config JSON: {write_config_path}")
+        with open(write_config_path, 'w') as fh:
+            json.dump(image_handler.config, fh)
     array_id = os.environ.get("SLURM_ARRAY_TASK_ID")
     S = SpotPicker(image_handler=image_handler, array_id=None if array_id is None else int(array_id))
-    S.rois_from_spots() # Execute for effect.
-    return S.roi_path # This is the output file written in the effectful step.
+    outfile = outfile or S.roi_path
+    S.rois_from_spots(roi_outfile=outfile) # Execute for effect.
+    return outfile # This is the output file written in the effectful step.
 
 
 if __name__ == '__main__':
@@ -29,4 +90,4 @@ if __name__ == '__main__':
     parser.add_argument("image_path", type=ExtantFolder, help="Path to folder with images to read.")
     parser.add_argument("--image_save_path", type=ExtantFolder, help="(Optional): Path to folder to save images to.")
     args = parser.parse_args()
-    workflow(config_file=args.config_path, images_folder=args.image_path, image_save_path=args.image_save_path)
+    workflow(config_file=args.config_path, images_folder=args.image_path, image_save_path=args.image_save_path, method=args.method, intensity_threshold=args.threshold)

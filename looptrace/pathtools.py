@@ -28,3 +28,12 @@ class ExtantFolder:
         
     def as_string(self) -> str:
         return str(self.path)
+
+
+@dataclass
+class NonExtantPath:
+    path: Path
+
+    def __post_init__(self):
+        if self.path.exists():
+            raise ValueError(f"Path already exists: {self.path}")
