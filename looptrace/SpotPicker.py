@@ -9,13 +9,15 @@ EMBL Heidelberg
 
 import os
 import random
-from scipy import ndimage as ndi
-from skimage.measure import regionprops_table
-from looptrace import image_processing_functions as ip
-from looptrace import image_io
+from typing import *
 import numpy as np
 import pandas as pd
+from scipy import ndimage as ndi
+from skimage.measure import regionprops_table
 import tqdm
+
+from looptrace import image_processing_functions as ip
+from looptrace import image_io
 
 
 class SpotPicker:
@@ -24,14 +26,14 @@ class SpotPicker:
         self.config = image_handler.config
         self.images = self.image_handler.images[self.config['spot_input_name']]
         self.pos_list = self.image_handler.image_lists[self.config['spot_input_name']]
-        self.roi_path = self.image_handler.out_path+self.config['spot_input_name']+'_rois.csv'
-        self.dc_roi_path = self.image_handler.out_path+self.config['spot_input_name']+'_dc_rois.csv'
+        self.roi_path = self.image_handler.out_path + self.config['spot_input_name'] + '_rois.csv'
+        self.dc_roi_path = self.image_handler.out_path + self.config['spot_input_name'] + '_dc_rois.csv'
         self.array_id = array_id
         if self.array_id is not None:
             self.pos_list = [self.pos_list[int(self.array_id)]]
-            self.roi_path = self.image_handler.out_path+self.config['spot_input_name']+'_rois.csv'[:-4]+'_'+str(self.array_id).zfill(4)+'.csv'
+            self.roi_path = self.image_handler.out_path + self.config['spot_input_name'] + '_rois.csv'[:-4] + '_' + str(self.array_id).zfill(4) + '.csv'
         
-    def rois_from_spots(self, preview_pos=None):
+    def rois_from_spots(self, preview_pos=None, roi_outfile: Optional[str] = None):
         '''
         Autodetect ROIs from spot images using a manual threshold defined in config.
         
@@ -170,7 +172,7 @@ class SpotPicker:
         rois = ip.roi_center_to_bbox(output, roi_size = tuple(self.config['roi_image_size'])) if detect_method == 'dog' else output
         
         rois = rois.sort_values(['position', 'frame'])
-        outfile = self.roi_path
+        outfile = roi_outfile or self.roi_path
         print(f"Writing ROIs: {outfile}")
         rois.to_csv(outfile)
         self.image_handler.load_tables()
@@ -216,7 +218,7 @@ class SpotPicker:
         rois = ip.roi_center_to_bbox(output, roi_size = tuple(self.config['roi_image_size']))
 
         self.image_handler.bead_rois = rois
-        rois.to_csv(self.roi_path+'_beads.csv')
+        rois.to_csv(self.roi_path + '_beads.csv')
         self.image_handler.load_tables()
         return rois
     '''
