@@ -1,13 +1,15 @@
 """Run spot detection over a grid of parameterizations."""
 
 import argparse
-import itertools
-import copy
 from dataclasses import dataclass
+import itertools
 import json
+import multiprocessing as mp
 import os
 import sys
 from typing import *
+
+import logmuse
 
 from looptrace.pathtools import ExtantFile, ExtantFolder, NonExtantPath
 from .detect_spots import Method, Parameters, workflow as run_spot_detection
@@ -15,16 +17,12 @@ from .detect_spots import Method, Parameters, workflow as run_spot_detection
 __author__ = ["Vince Reuter"]
 
 
-FRAME_SETS = [(22, 23, 24, 25), (2, 8, 11, 13)]
-METHOD_INTENSITY_PAIRS = [(m, i) for m, intensities in [(Method.INTENSITY, [400, 200, 100]), (Method.DIFFERENCE_OF_GAUSSIANS, [5, 4, 3, 2, 1])] for i in intensities]
-DOWNSAMPLE = [2, 1]
-ONLY_IN_NUCLEI = [False, True]
-SUBTRACT_CROSSTALK = [False, True]
+logger = None # to be built and configured during main control flow
 
 
 @dataclass
 class FrameSet:
-    frames: List[str]
+    frames: List[int]
 
 
 @dataclass
@@ -64,27 +62,54 @@ def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
     parser.add_argument("image_path", type=ExtantFolder, help="Path to folder with images to read.")
     parser.add_argument("--parameters-grid-file", required=True, type=ExtantFile, help="Path to file which declares the gridsearch parameters")
     parser.add_argument("-O", "--output-folder", type=NonExtantPath, required=True, help="Path to root folder for output")
+    parser.add_argument("--cores", type=int, default=1, help="Number of processing cores to use")
+    parser = logmuse.add_logging_options(parser)
     return parser.parse_args(cmdl)
 
 
-def workflow(config_file: ExtantFile, images_folder: ExtantFolder, params_file: ExtantFile, output_folder: ExtantFolder):
+def run_one_detection(params: Parameters, config_file: ExtantFile, images_folder: ExtantFolder, output_file: NonExtantPath, updated_config_file: NonExtantPath):
+    return run_spot_detection(
+        config_file=config_file, 
+        images_folder=images_folder, 
+        image_save_path=None, 
+        params_update=params, 
+        outfile=str(output_file.path), 
+        write_config_path=str(updated_config_file.path), 
+        )
+
+
+
+def workflow(config_file: ExtantFile, images_folder: ExtantFolder, params_file: ExtantFile, output_folder: ExtantFolder, cores: Optional[int] = None):
     parameterizations = read_params_file(params_file=params_file)
-    for param_index, params in enumerate(parameterizations):
-        output_path = output_folder.path / f"rois.{param_index}.csv"
-        new_config_path = output_folder.path / f"config.{param_index}.json"
-        run_spot_detection(
-            config_file=config_file, 
-            images_folder=images_folder, 
-            image_save_path=None, 
-            params_update=params, 
-            outfile=str(output_path), 
-            write_config_path=str(new_config_path), 
-            )
+    logger.info(f"Parameterizations count: {len(parameterizations)}")
+    cores = cores or 1
+    argument_bundles = ((
+        params, 
+        config_file, 
+        images_folder, 
+        NonExtantPath(output_folder.path / f"rois.{param_index}.csv"), 
+        NonExtantPath(output_folder.path / f"config.{param_index}.json")
+        )  for param_index, params in enumerate(parameterizations))
+    if cores == 1:
+        logger.info("Using a single core")
+        for args in argument_bundles:
+            run_one_detection(*args)
+    else:
+        logger.info(f"Using {cores} cores")
+        with mp.Pool(cores) as work_pool:
+            work_pool.starmap_async(func=run_one_detection, iterable=argument_bundles)
 
 
 def main(cmdl: List[str]) -> None:
     opts = parse_cmdl(cmdl)
+    
+    global logger
+    logger = logmuse.logger_from_cli(opts)
+
+    logger.debug(f"Establishing output folder: {opts.output_folder}")
     os.makedirs(opts.output_folder, exist_ok=False)
+
+    logger.info(f"Starting spot detection gridsearch, based on parameters file: {opts.parameters_grid_file}")
     workflow(params_file=opts.parameters_grid_file, output_folder=ExtantFolder(opts.output_folder))
 
 
