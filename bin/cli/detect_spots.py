@@ -48,17 +48,32 @@ class Parameters:
 
     # TODO: refinement typed for the case class members
 
-    def to_dict(self) -> ConfigMapping:
+    @property
+    def _config_keys(self):
         return {
-            "spot_frame": self.frames, 
-            "detection_method": self.method.value, 
-            "spot_threshold": self.threshold, 
-            "spot_downsample": self.downsampling, 
-            "spot_in_nuc": self.only_in_nuclei, 
-            "subtract_crosstalk": self.subtract_crosstalk, 
-            "min_spot_dist": self.minimum_spot_separation,
+            "frames": "spot_frame", 
+            "method": "detection_method", 
+            "threshold": "spot_threshold", 
+            "downsampling": "spot_downsample", 
+            "only_in_nuclei": "spot_in_nuc", 
+            "subtract_crosstalk": "subtract_crosstalk", 
+            "minimum_spot_separation": "min_spot_dist",
         }
-    
+
+    @classmethod
+    def from_dict(cls, src: ConfigMapping) -> "Parameters":
+        data = {k: Method.parse(src[v]) if k == "method" else src[v] for k, v in cls._config_keys.items()}
+        cls(**data)
+
+    @classmethod
+    def from_json_file(cls, fp: ExtantFile) -> "Parameters":
+        with open(fp, 'r') as fh:
+            data = json.load(fh)
+        return cls.from_dict(data)
+
+    def to_dict(self) -> ConfigMapping:
+        return {v: getattr(self, k) for k, v in self._config_keys.items()}
+        
     def update(self, other: Dict[str, Any]) -> Dict[str, Any]:
         result = copy.deepcopy(other)
         result.update(self.to_dict())
