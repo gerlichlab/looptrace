@@ -48,26 +48,24 @@ class Parameters:
 
     # TODO: refinement typed for the case class members
 
-    @property
-    def _config_keys(self):
-        return {
-            "frames": "spot_frame", 
-            "method": "detection_method", 
-            "threshold": "spot_threshold", 
-            "downsampling": "spot_downsample", 
-            "only_in_nuclei": "spot_in_nuc", 
-            "subtract_crosstalk": "subtract_crosstalk", 
-            "minimum_spot_separation": "min_spot_dist",
-        }
+    _config_keys = {
+        "frames": "spot_frame", 
+        "method": "detection_method", 
+        "threshold": "spot_threshold", 
+        "downsampling": "spot_downsample", 
+        "only_in_nuclei": "spot_in_nuc", 
+        "subtract_crosstalk": "subtract_crosstalk", 
+        "minimum_spot_separation": "min_spot_dist",
+    }
 
     @classmethod
     def from_dict(cls, src: ConfigMapping) -> "Parameters":
         data = {k: Method.parse(src[v]) if k == "method" else src[v] for k, v in cls._config_keys.items()}
-        cls(**data)
+        return cls(**data)
 
     @classmethod
     def from_json_file(cls, fp: ExtantFile) -> "Parameters":
-        with open(fp, 'r') as fh:
+        with open(fp.path, 'r') as fh:
             data = json.load(fh)
         return cls.from_dict(data)
 
