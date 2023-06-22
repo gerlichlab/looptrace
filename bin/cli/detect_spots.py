@@ -72,7 +72,7 @@ def workflow(
         ) -> str:
     image_handler = handler_from_cli(config_file=config_file, images_folder=images_folder, image_save_path=image_save_path)
     if params_update is not None:
-        image_handler.config = image_handler.config.update(Parameters.to_dict())
+        image_handler.config.update(params_update.to_dict())
     if write_config_path:
         print(f"Writing config JSON: {write_config_path}")
         with open(write_config_path, 'w') as fh:
