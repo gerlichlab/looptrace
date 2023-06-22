@@ -33,6 +33,9 @@ class Method(Enum):
             raise ValueError(f"Unknown detection method: {name}")
 
 
+ConfigMapping = Dict[str, Union[str, List[int], Method, int, bool]]
+
+
 @dataclass
 class Parameters:
     frames: List[int]
@@ -45,7 +48,7 @@ class Parameters:
 
     # TODO: refinement typed for the case class members
 
-    def to_dict(self) -> Dict[str, Union[str, List[int], Method, int, bool]]:
+    def to_dict(self) -> ConfigMapping:
         return {
             "spot_frame": self.frames, 
             "detection_method": self.method.value, 
@@ -62,17 +65,21 @@ class Parameters:
         return result
 
 
+ParamPatch = Union[Parameters, ConfigMapping]
+
+
 def workflow(
         config_file: ExtantFile, 
         images_folder: ExtantFolder, 
         image_save_path: Optional[ExtantFolder], 
-        params_update: Optional[Parameters] = None, 
+        params_update: Optional[Union[Parameters, ConfigMapping]] = None, 
         outfile: Optional[str] = None, 
         write_config_path: Optional[str] = None, 
         ) -> str:
     image_handler = handler_from_cli(config_file=config_file, images_folder=images_folder, image_save_path=image_save_path)
     if params_update is not None:
-        image_handler.config.update(params_update.to_dict())
+        update_data = params_update if isinstance(params_update, dict) else params_update.to_dict()
+        image_handler.config.update(update_data)
     if write_config_path:
         print(f"Writing config JSON: {write_config_path}")
         with open(write_config_path, 'w') as fh:
