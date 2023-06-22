@@ -84,9 +84,9 @@ class ImageHandler:
 
 
 def handler_from_cli(config_file: ExtantFile, images_folder: Optional[ExtantFolder], image_save_path: Optional[ExtantFolder] = None) -> ImageHandler:
-    image_path = None if images_folder is None else images_folder.as_string()
-    image_save_path = None if image_save_path is None else image_save_path.as_string()
-    return ImageHandler(config_path=config_file.as_string(), image_path=image_path, image_save_path=image_save_path)
+    image_path = None if images_folder is None else images_folder.to_string()
+    image_save_path = None if image_save_path is None else image_save_path.to_string()
+    return ImageHandler(config_path=config_file.to_string(), image_path=image_path, image_save_path=image_save_path)
 
 
 def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[str, Any], Dict[str, Any]]:

@@ -12,7 +12,7 @@ from typing import *
 import logmuse
 
 from looptrace.pathtools import ExtantFile, ExtantFolder, NonExtantPath
-from .detect_spots import Method, Parameters, workflow as run_spot_detection
+from detect_spots import Method, Parameters, workflow as run_spot_detection
 
 __author__ = ["Vince Reuter"]
 
@@ -58,10 +58,10 @@ def read_params_file(params_file: ExtantFile) -> Iterable[Parameters]:
 
 def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run spot detection over a range of parameters.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("config_path", type=ExtantFile, help="Config file path")
-    parser.add_argument("image_path", type=ExtantFolder, help="Path to folder with images to read.")
-    parser.add_argument("--parameters-grid-file", required=True, type=ExtantFile, help="Path to file which declares the gridsearch parameters")
-    parser.add_argument("-O", "--output-folder", type=NonExtantPath, required=True, help="Path to root folder for output")
+    parser.add_argument("config_path", type=ExtantFile.from_string, help="Config file path")
+    parser.add_argument("image_path", type=ExtantFolder.from_string, help="Path to folder with images to read.")
+    parser.add_argument("--parameters-grid-file", required=True, type=ExtantFile.from_string, help="Path to file which declares the gridsearch parameters")
+    parser.add_argument("-O", "--output-folder", type=NonExtantPath.from_string, required=True, help="Path to root folder for output")
     parser.add_argument("--cores", type=int, default=1, help="Number of processing cores to use")
     parser = logmuse.add_logging_options(parser)
     return parser.parse_args(cmdl)
@@ -91,26 +91,32 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder, params_file: 
         NonExtantPath(output_folder.path / f"config.{param_index}.json")
         )  for param_index, params in enumerate(parameterizations))
     if cores == 1:
-        logger.info("Using a single core")
-        for args in argument_bundles:
-            run_one_detection(*args)
+        logger.info("Using a single core")    
+        outfiles = [run_one_detection(*args) for args in argument_bundles]
     else:
         logger.info(f"Using {cores} cores")
         with mp.Pool(cores) as work_pool:
-            work_pool.starmap_async(func=run_one_detection, iterable=argument_bundles)
+            outfiles = work_pool.starmap(func=run_one_detection, iterable=argument_bundles)
+    return outfiles
 
 
 def main(cmdl: List[str]) -> None:
     opts = parse_cmdl(cmdl)
     
     global logger
-    logger = logmuse.logger_from_cli(opts)
+    logger = logmuse.logger_via_cli(opts)
 
     logger.debug(f"Establishing output folder: {opts.output_folder}")
-    os.makedirs(opts.output_folder, exist_ok=False)
+    os.makedirs(opts.output_folder.path, exist_ok=False)
 
     logger.info(f"Starting spot detection gridsearch, based on parameters file: {opts.parameters_grid_file}")
-    workflow(params_file=opts.parameters_grid_file, output_folder=ExtantFolder(opts.output_folder))
+    workflow(
+        config_file=opts.config_path, 
+        images_folder=opts.image_path, 
+        params_file=opts.parameters_grid_file, 
+        output_folder=ExtantFolder(opts.output_folder.path), 
+        cores=opts.cores
+    )
 
 
 if __name__ == "__main__":
