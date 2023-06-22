@@ -77,7 +77,8 @@ def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
     # Control flow customisation
     parser.add_argument("--cores", type=int, default=1, help="Number of processing cores to use")
     parser.add_argument("--overwrite", action="store_true", help="Overwrite existing results file(s)")
-    
+    parser.add_argument("--index-range", type=IndexRange, nargs="*", help="Ranges of parameter indices to use, only when running through written configs code path")
+
     # Logging
     parser = logmuse.add_logging_options(parser)
     
@@ -176,7 +177,25 @@ class ParamIndex:
     @classmethod
     def unsafe_from_roi_filename(cls, fn: str) -> "ParamIndex":
         return cls._unsafe_from_filename(fn=fn, exp_prefix=ROI_PREFIX, exp_filetype=ROI_FILETYPE, filetype_meaning="ROI")
-        
+
+
+@dataclass
+class IndexRange:
+    lo: int
+    hi: int
+
+    def __post_init__(self):
+        if not isinstance(self.lo, int) or not isinstance(self.hi, int):
+            raise TypeError(f"Lower and upper limit must both be integers. Got {type(self.lo).__name__} and {type(self.hi).__name__}")
+
+    @classmethod
+    def from_string(cls, s: str) -> "IndexRange":
+        lo, hi = s.split("-")
+        return cls(int(lo), int(hi))
+    
+    def __iter__(self):
+        return map(ParamIndex, range(self.lo, self.hi + 1))
+
 
 def main(cmdl: List[str]) -> None:
     opts = parse_cmdl(cmdl)
@@ -200,6 +219,9 @@ def main(cmdl: List[str]) -> None:
         logger.debug(f"Found {len(configs)} config file(s)")
         logger.debug(f"Found {len(results)} result file(s)")
         param_indices_to_use = configs - (set() if opts.overwrite else results)
+        if opts.index_range:
+            include_filter = set(index for index_range in opts.index_range for index in index_range.render())
+            param_indices_to_use = param_indices_to_use & include_filter
         params_outfile_pairs = []
         for idx in param_indices_to_use:
             conf_path = opts.output_folder / idx.to_config_filename()
