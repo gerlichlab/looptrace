@@ -25,6 +25,9 @@ class Method(Enum):
     INTENSITY = 'intensity'
     DIFFERENCE_OF_GAUSSIANS = 'dog'
 
+    def encode(self) -> str:
+        return self.value
+
     @classmethod
     def parse(cls, name: str) -> "Method":
         try:
@@ -71,11 +74,6 @@ class Parameters:
 
     def to_dict(self) -> ConfigMapping:
         return {v: getattr(self, k) for k, v in self._config_keys.items()}
-        
-    def update(self, other: Dict[str, Any]) -> Dict[str, Any]:
-        result = copy.deepcopy(other)
-        result.update(self.to_dict())
-        return result
 
 
 ParamPatch = Union[Parameters, ConfigMapping]
@@ -96,7 +94,7 @@ def workflow(
     if write_config_path:
         print(f"Writing config JSON: {write_config_path}")
         with open(write_config_path, 'w') as fh:
-            json.dump(image_handler.config, fh)
+            json.dump(image_handler.config, fh, default=lambda obj: obj.encode())
     array_id = os.environ.get("SLURM_ARRAY_TASK_ID")
     S = SpotPicker(image_handler=image_handler, array_id=None if array_id is None else int(array_id))
     outfile = outfile or S.roi_path
