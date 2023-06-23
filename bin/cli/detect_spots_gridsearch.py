@@ -77,7 +77,7 @@ def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
     # Control flow customisation
     parser.add_argument("--cores", type=int, default=1, help="Number of processing cores to use")
     parser.add_argument("--overwrite", action="store_true", help="Overwrite existing results file(s)")
-    parser.add_argument("--index-range", type=IndexRange, nargs="*", help="Ranges of parameter indices to use, only when running through written configs code path")
+    parser.add_argument("--index-range", type=IndexRange.from_string, nargs="*", help="Ranges of parameter indices to use, only when running through written configs code path")
 
     # Logging
     parser = logmuse.add_logging_options(parser)
