@@ -25,9 +25,6 @@ class Method(Enum):
     INTENSITY = 'intensity'
     DIFFERENCE_OF_GAUSSIANS = 'dog'
 
-    def encode(self) -> str:
-        return self.value
-
     @classmethod
     def parse(cls, name: str) -> "Method":
         try:
@@ -72,8 +69,12 @@ class Parameters:
             data = json.load(fh)
         return cls.from_dict(data)
 
-    def to_dict(self) -> ConfigMapping:
-        return {v: getattr(self, k) for k, v in self._config_keys.items()}
+    def to_dict_for_json(self) -> ConfigMapping:
+        result = {}
+        for member_key, config_key in self._config_keys.items():
+            rawval = getattr(self, member_key)
+            result[config_key] = rawval.value if member_key == "method" else rawval
+        return result
 
 
 ParamPatch = Union[Parameters, ConfigMapping]
@@ -89,12 +90,12 @@ def workflow(
         ) -> str:
     image_handler = handler_from_cli(config_file=config_file, images_folder=images_folder, image_save_path=image_save_path)
     if params_update is not None:
-        update_data = params_update if isinstance(params_update, dict) else params_update.to_dict()
+        update_data = params_update if isinstance(params_update, dict) else params_update.to_dict_for_json()
         image_handler.config.update(update_data)
     if write_config_path:
         print(f"Writing config JSON: {write_config_path}")
         with open(write_config_path, 'w') as fh:
-            json.dump(image_handler.config, fh, default=lambda obj: obj.encode())
+            json.dump(obj=image_handler.config, fp=fh)
     array_id = os.environ.get("SLURM_ARRAY_TASK_ID")
     S = SpotPicker(image_handler=image_handler, array_id=None if array_id is None else int(array_id))
     outfile = outfile or S.roi_path
