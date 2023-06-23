@@ -85,13 +85,13 @@ def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
     return parser.parse_args(cmdl)
 
 
-def run_one_detection(params: ParamPatch, config_file: ExtantFile, images_folder: ExtantFolder, output_file: NonExtantPath, updated_config_file: Optional[NonExtantPath]):
+def run_one_detection(params: ParamPatch, config_file: ExtantFile, images_folder: ExtantFolder, output_file: Union[NonExtantPath, Path], updated_config_file: Optional[NonExtantPath]):
     return run_spot_detection(
         config_file=config_file, 
         images_folder=images_folder, 
         image_save_path=None, 
         params_update=params, 
-        outfile=str(output_file.path), 
+        outfile=str(output_file.path if isinstance(output_file, NonExtantPath) else output_file), 
         write_config_path=None if updated_config_file is None else str(updated_config_file.path), 
         )
 
@@ -141,6 +141,10 @@ def execute(argument_bundles, cores) -> Iterable[str]:
     return outfiles
 
 
+def _have_same_type(a: Any, b: Any) -> bool:
+    return type(a) == type(b)
+
+
 @dataclass
 class ParamIndex:
     value: int
@@ -156,6 +160,23 @@ class ParamIndex:
 
     def __hash__(self):
         return hash(self.value)
+
+    def __lt__(self, other):
+        if not isinstance(other, type(self)):
+            raise TypeError(f"Cannot compare {type(self).__name__} and {type(other).__name__}")
+        return self.value < other.value
+
+    def __lteq__(self, other):
+        return self.__lt__(other) or self.__eq__(other)
+
+    def __gt__(self, other):
+        return not self.__lteq__(other)
+
+    def __gteq__(self, other):
+        return not self.__lt__(other)
+
+    def __str__(self):
+        return str(self.value)
 
     def to_config_filename(self) -> str:
         return f"{CONFIG_PREFIX}.{self.value}.{CONFIG_FILETYPE}"
@@ -219,13 +240,17 @@ def main(cmdl: List[str]) -> None:
         logger.debug(f"Found {len(configs)} config file(s)")
         logger.debug(f"Found {len(results)} result file(s)")
         param_indices_to_use = configs - (set() if opts.overwrite else results)
+        logger.debug(f"Preliminary indices to use: {', '.join(map(str, sorted(param_indices_to_use)))}")
         if opts.index_range:
-            include_filter = set(index for index_range in opts.index_range for index in index_range.render())
+            include_filter = set(index for indices in opts.index_range for index in indices)
+            logger.debug(f"Including only from among these indices: {', '.join(map(str, sorted(include_filter)))}")
             param_indices_to_use = param_indices_to_use & include_filter
+        logger.debug(f"Count of parameterisation to use: {len(param_indices_to_use)}")
         params_outfile_pairs = []
+        finalize_result_path = (lambda p: p) if opts.overwrite else (lambda p: NonExtantPath(p).path)
         for idx in param_indices_to_use:
             conf_path = opts.output_folder / idx.to_config_filename()
-            result_path = NonExtantPath(opts.output_folder / idx.to_roi_filename())
+            result_path = finalize_result_path(opts.output_folder / idx.to_roi_filename())
             logger.info(f"Reading config: {conf_path}")
             with open(conf_path, 'r') as fh:
                 conf_data = json.load(fh)
