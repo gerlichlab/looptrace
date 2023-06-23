@@ -107,8 +107,8 @@ def workflow_new_configs(config_file: ExtantFile, images_folder: ExtantFolder, p
             params, 
             config_file, 
             images_folder, 
-            NonExtantPath(output_folder.path / idx.to_roi_filename), 
-            NonExtantPath(output_folder.path / idx.to_config_filename), 
+            NonExtantPath(output_folder.path / idx.to_roi_filename()), 
+            NonExtantPath(output_folder.path / idx.to_config_filename()), 
             )
         argument_bundles.append(args)
     return execute(argument_bundles=argument_bundles, cores=cores)
@@ -260,13 +260,13 @@ def main(cmdl: List[str]) -> None:
         if opts.output_folder.exists():
             raise FileExistsError(f"Output folder already exists: {opts.output_folder}")
         logger.debug(f"Establishing output folder: {opts.output_folder}")
-        os.makedirs(opts.output_folder.path, exist_ok=False)
+        os.makedirs(opts.output_folder, exist_ok=False)
         logger.info(f"Starting spot detection gridsearch, based on parameters file: {opts.parameters_grid_file}")
         workflow_new_configs(
             config_file=opts.config_path, 
             images_folder=opts.image_path, 
             params_file=opts.parameters_grid_file, 
-            output_folder=ExtantFolder(opts.output_folder.path), 
+            output_folder=ExtantFolder(opts.output_folder), 
             cores=opts.cores
         )
 
