@@ -145,18 +145,18 @@ def execute(argument_bundles, cores) -> Iterable[str]:
 class ParamIndex:
     value: int
 
-    def __eq__(self, other):
-        return type(self) == type(other) and self.value == other.value
-
-    def __hash__(self):
-        return hash(self.value)
-
     def __post_init__(self) -> None:
         if not isinstance(self.value, int):
             raise TypeError(f"Parameter index must be integer, not {type(self.value).__name__}")
         if self.value < 0:
             raise ValueError(f"Illegal index (must be nonnegative): {self.value}")
     
+    def __eq__(self, other):
+        return type(self) == type(other) and self.value == other.value
+
+    def __hash__(self):
+        return hash(self.value)
+
     def to_config_filename(self) -> str:
         return f"{CONFIG_PREFIX}.{self.value}.{CONFIG_FILETYPE}"
 
