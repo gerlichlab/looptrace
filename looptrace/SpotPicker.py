@@ -33,7 +33,7 @@ class SpotPicker:
             self.pos_list = [self.pos_list[int(self.array_id)]]
             self.roi_path = self.image_handler.out_path + self.config['spot_input_name'] + '_rois.csv'[:-4] + '_' + str(self.array_id).zfill(4) + '.csv'
         
-    def rois_from_spots(self, preview_pos=None, roi_outfile: Optional[str] = None):
+    def rois_from_spots(self, preview_pos=None, roi_outfile: Optional[str] = None, do_not_write_empty: bool = False):
         '''
         Autodetect ROIs from spot images using a manual threshold defined in config.
         
@@ -142,9 +142,6 @@ class SpotPicker:
 
         n_spots_init = len(output)
         print(f'Found {len(output)} spots.')
-        if n_spots_init == 0:
-            print("WARNING -- Since no spots were found, no spots file(s) will be written.")
-            return
 
         if filter_nucs:
             if 'nuc_masks' not in self.image_handler.images:
@@ -168,6 +165,10 @@ class SpotPicker:
                 output = ip.filter_rois_in_nucs(output, nuc_classes, self.pos_list, new_col='nuc_class', nuc_drifts=nuc_drifts, nuc_target_frame=nuc_target_frame, spot_drifts = spot_drifts)
             print(f'Filtering complete, {len(output)} ROIs after filtering.')
 
+        if do_not_write_empty and len(output) == 0:
+            print("WARNING -- Since there are no spots, no spots file(s) will be written.")
+            return
+        
         output = output.reset_index().rename(columns={'index':'roi_id_pos'})
         rois = ip.roi_center_to_bbox(output, roi_size = tuple(self.config['roi_image_size'])) if detect_method == 'dog' else output
         
