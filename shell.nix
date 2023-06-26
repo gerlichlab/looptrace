@@ -3,20 +3,26 @@
     url = "https://github.com/NixOS/nixpkgs/";
     ref = "nixos-23.05";
     rev = "4ecab3273592f27479a583fb6d975d4aba3486fe";
-  }) {}
+  }) {}, 
+  pipeline ? true,
+  analysis ? false
 }:
-let py310 = pkgs.python310.withPackages (ps: with ps; [ numpy pandas ]);
+let baseBuildInputs = with pkgs; [ zlib stdenv.cc.cc.lib ];
+    py310 = pkgs.python310.withPackages (ps: with ps; [ numpy pandas ]);
     py311 = pkgs.python311.withPackages (ps: with ps; [ numpy pandas ]);
+    R-analysis = pkgs.rWrapper.override{ packages = with pkgs.rPackages; [ data_table ggplot2 ]; };
 in
 pkgs.mkShell {
   name = "looptrace-env";
-  buildInputs = [
-    pkgs.poetry
-    py310
-    py311
-    pkgs.zlib
-    pkgs.stdenv.cc.cc.lib
-  ];
+  buildInputs = baseBuildInputs ++ 
+    (if pipeline then [
+      pkgs.poetry
+      py310
+      py311
+      pkgs.zlib
+      pkgs.stdenv.cc.cc.lib
+    ] else []) ++ 
+    (if analysis then [ R-analysis ] else []);
   shellHook = ''
     poetry env use "${py310}/bin/python"
     export LD_LIBRARY_PATH="${pkgs.zlib}/lib:${pkgs.stdenv.cc.cc.lib}/lib"
