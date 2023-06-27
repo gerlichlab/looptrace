@@ -76,14 +76,14 @@ def count_spots(fp: Path) -> int:
 
 
 
-def get_spot_counts(folder: Path, fns: Iterable[str]) -> List[Union[int, pd.NA]]:
+def get_spot_counts(folder: Path, fns: Iterable[str]) -> List[Optional[int]]:
     result = []
     for fn in fns:
         fp = folder / fn
         try:
             n_spots = count_spots(fp)
         except FileNotFoundError:
-            n_spots = pd.NA
+            n_spots = None
         print(f"{fn}: {n_spots}")
         result.append(n_spots)
     return result
@@ -99,3 +99,6 @@ def add_spot_counts_to_table(df: pd.DataFrame, folder: Path, param_index_column:
 
 
 mytab2 = add_spot_counts_to_table(df=mytab, folder=my_gridsearch_folder.path)
+
+mytab2.to_csv(my_gridsearch_folder.path.parent / "gridsearch2.2.csv", index=False)
+
