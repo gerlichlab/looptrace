@@ -321,9 +321,12 @@ class SpotPicker:
 
     def extract_single_roi_img_inmem(self, single_roi, images):
         # Function for extracting a single cropped region defined by ROI from a larger 3D image.
-        z = slice(single_roi['z_min'], single_roi['z_max'])
-        y = slice(single_roi['y_min'], single_roi['y_max'])
-        x = slice(single_roi['x_min'], single_roi['x_max'])
+        from math import ceil, floor
+        down = lambda x: int(floor(x))
+        up = lambda x: int(ceil(x))
+        z = slice(down(single_roi['z_min']), up(single_roi['z_max']))
+        y = slice(down(single_roi['y_min']), up(single_roi['y_max']))
+        x = slice(down(single_roi['x_min']), up(single_roi['x_max']))
         pad = ( (single_roi['pad_z_min'], single_roi['pad_z_max']),
                 (single_roi['pad_y_min'], single_roi['pad_y_max']),
                 (single_roi['pad_x_min'], single_roi['pad_x_max']))
