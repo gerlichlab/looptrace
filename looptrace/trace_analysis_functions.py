@@ -20,11 +20,17 @@ tab:cyan : #17becf
 """
 import os
 import itertools
+import logging
+from math import cos, sin, radians
+import re
+from typing import *
+import warnings
+
+from numba import jit, njit
+from numba.core.errors import NumbaPerformanceWarning
+import numpy as np
 #from numpy.core.fromnumeric import shape
 import pandas as pd
-import numpy as np
-import tqdm
-import re
 #from plotly.offline import iplot
 #import plotly.graph_objs as go
 #import plotly.express as px
@@ -33,16 +39,19 @@ from scipy.spatial.distance import cdist, squareform, pdist
 from scipy.spatial import ConvexHull
 from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
 import matplotlib.pyplot as plt
+import seaborn as sns
+import tqdm
 
-
-from numba import jit, njit
-from math import cos, sin, radians
-from numba.core.errors import NumbaPerformanceWarning
-import warnings
+from pathtools import ExtantFolder
 
 warnings.simplefilter('ignore', category=NumbaPerformanceWarning)
 
-import seaborn as sns
+
+logger = logging.getLogger()
+
+FRAME_INDEX_KEY = "frame"
+FRAME_NAMES_KEY = "frame_name"
+
 
 def gen_random_coil(g_dist, s_dist = 24.7, std_scaling = 0.5, deg=360, n_traces = 1000, sigma_noise = 2):
     traces = []
@@ -118,6 +127,30 @@ def pylochrom_coords_to_traces(coords):
         #print(pd.DataFrame(trace))
         traces.append(pd.DataFrame(trace))
     return pd.concat(traces)
+
+
+def apply_frame_names(traces_file: ExtantFile, frame_names: Sequence[str], **file_parse_kwargs: Any) -> pd.DataFrame:
+    logger.debug(f"Reading traces: {traces_file}")
+    traces = pd.read_csv(traces_file, **file_parse_kwargs)
+    logger.debug(f"Applying frame names to traces")
+    traces[FRAME_NAMES_KEY] = traces.apply(lambda row: frame_names[row[FRAME_INDEX_KEY]], axis=1)
+    return traces
+
+
+def apply_traces_qc(traces_file: ExtantFile, config_file: ExtantFile, min_trace_length: int, **file_parse_kwargs: Any) -> pd.DataFrame:
+    import yaml
+    logger.debug(f"Reading config file: {config_file}")
+    with open(config_file, 'r') as fh:
+        config = yaml.load(fh)
+    frame_names = config[FRAME_NAMES_KEY]
+    logger.debug(f"{len(frame_names)} frame names: {', '.join(frame_names)}")
+    traces = apply_frame_names(traces_file=traces_file, frame_names=frame_names, min_trace_length=min_trace_length, **file_parse_kwargs)
+    logger.info("Applying general trace QC")
+    traces['QC'] = tracing_qc(traces, config).astype(int)
+    logger.info("Applying trace length QC")
+    traces = tracing_length_qc(traces, min_length=min_trace_length)
+    return traces
+
 
 def tracing_qc(traces, qc_config):
     df = traces.copy()
