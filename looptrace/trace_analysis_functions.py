@@ -42,7 +42,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import tqdm
 
-from pathtools import ExtantFolder
+from .pathtools import ExtantFile
 
 warnings.simplefilter('ignore', category=NumbaPerformanceWarning)
 
@@ -129,26 +129,26 @@ def pylochrom_coords_to_traces(coords):
     return pd.concat(traces)
 
 
-def apply_frame_names(traces_file: ExtantFile, frame_names: Sequence[str], **file_parse_kwargs: Any) -> pd.DataFrame:
+def apply_frame_names(traces_file: ExtantFile, frame_names: Sequence[str]) -> pd.DataFrame:
     logger.debug(f"Reading traces: {traces_file}")
-    traces = pd.read_csv(traces_file, **file_parse_kwargs)
+    traces = pd.read_csv(traces_file.path, index_col=0)
     logger.debug(f"Applying frame names to traces")
     traces[FRAME_NAMES_KEY] = traces.apply(lambda row: frame_names[row[FRAME_INDEX_KEY]], axis=1)
     return traces
 
 
-def apply_traces_qc(traces_file: ExtantFile, config_file: ExtantFile, min_trace_length: int, **file_parse_kwargs: Any) -> pd.DataFrame:
+def apply_traces_qc(traces_file: ExtantFile, config_file: ExtantFile, min_trace_length: int, exclusions: Optional[Iterable[str]]) -> pd.DataFrame:
     import yaml
     logger.debug(f"Reading config file: {config_file}")
-    with open(config_file, 'r') as fh:
-        config = yaml.load(fh)
+    with open(config_file.path, 'r') as fh:
+        config = yaml.safe_load(fh)
     frame_names = config[FRAME_NAMES_KEY]
     logger.debug(f"{len(frame_names)} frame names: {', '.join(frame_names)}")
-    traces = apply_frame_names(traces_file=traces_file, frame_names=frame_names, min_trace_length=min_trace_length, **file_parse_kwargs)
+    traces = apply_frame_names(traces_file=traces_file, frame_names=frame_names)
     logger.info("Applying general trace QC")
     traces['QC'] = tracing_qc(traces, config).astype(int)
     logger.info("Applying trace length QC")
-    traces = tracing_length_qc(traces, min_length=min_trace_length)
+    traces = tracing_length_qc(traces[~traces[FRAME_NAMES_KEY].isin(exclusions)] if exclusions else traces, min_length=min_trace_length)
     return traces
 
 
