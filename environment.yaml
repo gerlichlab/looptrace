@@ -20,6 +20,7 @@ dependencies:
     - nb_conda
     - pip
     - pip:
+        - logmuse
         - tensorrt
           # for CUDA-based container, we ned to install tensorflow.
         - tensorflow == 2.11.1

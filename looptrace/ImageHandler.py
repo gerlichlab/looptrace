@@ -7,6 +7,7 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+import logging
 import os
 from pathlib import Path
 from typing import *
@@ -18,6 +19,8 @@ from looptrace.image_io import NPZ_wrapper, TIFF_EXTENSIONS
 from looptrace.pathtools import ExtantFile, ExtantFolder
 
 __all__ = ["ImageHandler", "handler_from_cli", "read_images"]
+
+logger = logging.getLogger()
 
 
 class ImageHandler:
@@ -43,31 +46,36 @@ class ImageHandler:
         self.load_tables()
 
     def load_tables(self):
-        get_table_name = lambda f: os.path.splitext(f.name)[0].split(self.config['analysis_prefix'])[1]
         is_eligible = lambda fp: not os.path.split(fp)[1].startswith('_')
+        parsers = {".csv": lambda f: pd.read_csv(f, index_col=0), ".pkl": pd.read_pickle}
         analysis_folder = self.config['analysis_path']
         try:
             table_files = os.scandir(analysis_folder)
         except FileNotFoundError:
-            print(f"Declared analysis folder doesn't yet exist: {self.config['analysis_path']}")
+            logger.info(f"Declared analysis folder doesn't yet exist: {self.config['analysis_path']}")
             raise
-        self.table_paths = {get_table_name(f): f.path for f in table_files}
+        self.table_paths = {}
         self.tables = {}
-        for tn, fp in self.table_paths.items():
+        for fp in table_files:
+            try:
+                tn = os.path.splitext(fp.name)[0].split(self.config['analysis_prefix'])[1]
+            except IndexError:
+                logger.warning(f"Cannot parse table name from filename: {fp.name}")
+                continue
+            fp = fp.path
             if not is_eligible(fp):
+                logger.debug(f"Not eligible as table: {fp}")
                 continue
-            _, ext = os.path.splitext(fp)
-            if ext == '.csv':
-                parse = lambda f: pd.read_csv(f, index_col=0)
-            elif ext == '.pkl':
-                parse = pd.read_pickle
-            else:
-                print(f"Cannot load as table: {fp}")
+            try:
+                parse = parsers[os.path.splitext(fp)]
+            except KeyError:
+                logger.warning(f"Cannot load as table: {fp}")
                 continue
-            print(f"Loading table '{tn}': {fp}")
+            logger.info(f"Loading table '{tn}': {fp}")
             self.tables[tn] = parse(fp)
-            print(f"Loaded: {tn}")
-
+            logger.info(f"Loaded: {tn}")
+            self.tables_paths[tn] = fp
+    
     def read_images(self, is_eligible: Callable[[str], bool] = lambda path_name: path_name != "spot_images_dir" and not path_name.startswith("_")):
         '''
         Function to load existing images from the input folder, and them into a dictionary (self.images{}),
