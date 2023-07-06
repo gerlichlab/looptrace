@@ -32,6 +32,11 @@ tqdm = "^4.65.0"
 pyyaml = "^6.0"
 zarr = "^2.4.12"
 
+[tool.poetry.group.pipeline]
+optional = true
+[tool.poetry.group.pipeline.dependencies]
+piper = "^0.13.0"
+
 [tool.poetry.group.analysis]
 optional = true
 [tool.poetry.group.analysis.dependencies]
