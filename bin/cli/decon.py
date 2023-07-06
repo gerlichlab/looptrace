@@ -15,7 +15,7 @@ from looptrace.ImageHandler import handler_from_cli
 from looptrace.pathtools import ExtantFile, ExtantFolder
 
 
-def workflow(config_file: ExtantFile, images_folder: ExtantFolder, image_save_path: Optional[ExtantFolder]) -> List[str]:
+def workflow(config_file: ExtantFile, images_folder: ExtantFolder, image_save_path: Optional[ExtantFolder] = None) -> List[str]:
     image_handler = handler_from_cli(config_file=config_file, images_folder=images_folder, image_save_path=image_save_path)
     array_id = os.environ.get("SLURM_ARRAY_TASK_ID")
     decon = Deconvolver(image_handler=image_handler, array_id=(None if array_id is None else int(array_id)))
