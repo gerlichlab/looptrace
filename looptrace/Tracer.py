@@ -11,10 +11,11 @@ import numpy as np
 import pandas as pd
 import scipy.ndimage as ndi
 import looptrace.image_processing_functions as ip
-#from looptrace import image_io
 from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
 from tqdm import tqdm
-#import os
+
+ROI_FIT_COLUMNS = ["BG", "A", "z_px", "y_px", "x_px", "sigma_z", "sigma_xy"]
+
 
 class Tracer:
     def __init__(self, image_handler, trace_beads = False, array_id = None):
@@ -49,23 +50,19 @@ class Tracer:
 
 
     def trace_single_roi(self, roi_img, mask = None, background = None):
-        
         #Fit a single roi with 3D gaussian (MLE or LS as defined in config).
         #Masking by intensity or label image can be used to improve fitting correct spot (set in config)
-
         if background is not None:
             roi_img = roi_img - background
         if np.any(roi_img) and np.all([d > 2 for d in roi_img.shape]): #Check if empty or too small for fitting
             if mask is None:
-                fit = self.fit_func(roi_img, sigma=1, center='max')[0]
+                center = 'max'
             else:
                 roi_img_masked = (mask/np.max(mask)) * roi_img
                 center = list(np.unravel_index(np.argmax(roi_img_masked, axis=None), roi_img.shape))
-                fit = self.fit_func(roi_img, sigma=1, center=center)[0]
-            return fit
+            return self.fit_func(roi_img, sigma=1, center=center)[0]
         else:
-            fit = np.array([-1, -1, -1, -1, -1, -1, -1])
-            return fit
+            return np.array([-1] * len(ROI_FIT_COLUMNS))
         
 
     def trace_all_rois(self) -> str:
@@ -107,7 +104,7 @@ class Tracer:
                 for spot_img in pos_imgs:
                     fits.append(self.trace_single_roi(spot_img))
 
-        trace_res = pd.DataFrame(fits,columns=["BG","A","z_px","y_px","x_px","sigma_z","sigma_xy"])
+        trace_res = pd.DataFrame(fits,columns=ROI_FIT_COLUMNS)
         #trace_index = pd.DataFrame(fit_rois, columns=["trace_id", "frame", "ref_frame", "position", "drift_z", "drift_y", "drift_x"])
         traces = pd.concat([self.all_rois, trace_res], axis=1)
         traces.rename(columns={"roi_id": "trace_id"}, inplace=True)
