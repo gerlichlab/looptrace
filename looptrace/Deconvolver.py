@@ -7,10 +7,13 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+import logging
 import os
 from pathlib import Path
 from typing import *
 import numpy as np
+
+logger = logging.getLogger()
 
 
 class Deconvolver:
@@ -61,9 +64,9 @@ class Deconvolver:
         exp_psf = np.mean(np.stack(beads_c), axis=0)[1:, 1:, 1:]
         exp_psf = exp_psf / np.max(exp_psf)
         outfile = Path(self.image_handler.image_path) / "exp_psf.npy"
-        print(f"Saving empirical point-spread function: {outfile}")
+        logger.info(f"Saving empirical point-spread function: {outfile}")
         np.save(str(outfile), exp_psf)
-        print('Empirical PSF saved.')
+        logger.info('Empirical PSF saved.')
         self.image_handler.images['exp_psf'] = exp_psf
         return outfile
 
@@ -82,7 +85,7 @@ class Deconvolver:
             non_decon_ch = [non_decon_ch]
         n_iter = self.config['decon_iter']
         if n_iter == 0:
-            print("Iterations set to 0.")
+            logger.info("Iterations set to 0.")
             return
 
         # TODO: better error handling for type-like errors, e.g. if comma is used for decimal 
@@ -90,17 +93,14 @@ class Deconvolver:
         algo, psf, fd_data = decon_RL_setup(size_x=15, size_y=15, size_z=15, pz=0., wavelength=self.config['spot_wavelength']/1000,
             na=self.config['objective_na'], res_lateral=self.config['xy_nm']/1000, res_axial=self.config['z_nm']/1000)
 
-        try: 
-            psf_type = self.config['decon_psf']
-        except:
-            psf_type = 'gen'
+        psf_type = self.config.get('decon_psf', 'gen')
 
         if psf_type == 'exp':
+            logger.info('Using experimental psf for deconvolution.')
             try:
                 psf =  self.image_handler.images['exp_psf']
-                print('Using experimental psf for deconvolution.')
             except KeyError:
-                print('Experimental PSF not extracted, extracting now.')
+                logger.info('Experimental PSF not extracted, extracting now...')
                 self.extract_exp_psf()
                 psf = self.image_handler.images['exp_psf']
 
