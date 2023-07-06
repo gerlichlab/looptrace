@@ -32,10 +32,25 @@ tqdm = "^4.65.0"
 pyyaml = "^6.0"
 zarr = "^2.4.12"
 
+[tool.poetry.group.analysis]
+optional = true
+[tool.poetry.group.analysis.dependencies]
+matplotlib = "^3.7.0"
+numba = "^0.57.0"
+seaborn = "^0.12.0"
+
+[tool.poetry.group.polymer]
+optional = true
+[tool.poetry.group.polymer.dependencies]
+numba = "^0.57.0"
+
 [tool.poetry.group.dev]
 optional = true
 [tool.poetry.group.dev.dependencies]
+matplotlib = "^3.7.0"
+numba = "^0.57.0"
 nd2 = "^0.5.3"
+seaborn = "^0.12.0"
 tifffile = "^2023.4.12"
 
 [build-system]
