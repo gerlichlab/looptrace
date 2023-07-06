@@ -38,7 +38,7 @@ RUN echo "which conda 2" && \
 # NB: The mamba default env name is evidently base.
 RUN conda install mamba -n base -c conda-forge && \
     mamba env update -n base --file environment.yaml && \
-    python setup.py install && \
+    pip install . && \
     mamba list > software_versions_conda.txt
 
 RUN cd /opt/conda/lib/python3.10/site-packages/tensorrt_libs && \
