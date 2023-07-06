@@ -136,6 +136,15 @@ def read_traces_and_apply_frame_names(traces_file: Path, frame_names: Sequence[s
     return traces
 
 
+def compute_ref_frame_spatial_information(df: pd.DataFrame) -> pd.DataFrame:
+    """Populate table with coordinates of probe's reference point and distance of each spot to its reference."""
+    refs = df[df['frame'] == df['ref_frame']]
+    for dim in ['z', 'y', 'x']:
+        refs_map = dict(zip(refs['trace_id'], refs[dim]))
+        df[dim + '_ref'] = df['trace_id'].map(refs_map)
+    return np.sqrt((df['z_ref']-df['z'])**2 + (df['y_ref']-df['y'])**2 + (df['x_ref']-df['x'])**2)
+
+
 def read_traces_parse_frame_names_and_apply_traces_qc(
         traces_file: Path, 
         config_file: Path, 
@@ -150,7 +159,7 @@ def read_traces_parse_frame_names_and_apply_traces_qc(
     logger.debug(f"{len(frame_names)} frame names: {', '.join(frame_names)}")
     traces = read_traces_and_apply_frame_names(traces_file=traces_file, frame_names=frame_names)
     logger.info("Applying general trace QC")
-    traces['QC'] = tracing_qc(traces, config).astype(int)
+    traces['QC'] = tracing_qc(df=traces, qc_config=config).astype(int)
     logger.info("Applying trace length QC")
     filter_by_name = lambda df: df[~df[FRAME_NAMES_KEY].isin(exclusions)] if exclusions else df
     filter_by_length = lambda df: tracing_length_qc(traces=df, min_length=min_trace_length) if min_trace_length else df
@@ -158,21 +167,20 @@ def read_traces_parse_frame_names_and_apply_traces_qc(
     return frame_names, traces
 
 
-def tracing_qc(traces, qc_config):
-    df = traces.copy()
+#def tracing_qc(traces, qc_config):
+def tracing_qc(df, qc_config):
+    #df = traces.copy()
     A_to_BG = qc_config['A_to_BG']
     sigma_xy_max = qc_config['sigma_xy_max']
     sigma_z_max = qc_config['sigma_z_max']
-    max_dist = qc_config['max_dist']
+    max_dist = qc_config.get('max_dist', 0)
 
-    qc = np.ones((len(traces)), dtype=bool)
+    #qc = np.ones((len(traces)), dtype=bool)
+    qc = np.ones((len(df)), dtype=bool)
 
-    if max_dist:
-        refs = df[df['frame'] == df['ref_frame']]
-        for dim in ['z','y','x']:
-            refs_map = dict(zip(refs['trace_id'], refs[dim]))
-            df[dim+'_ref'] = df['trace_id'].map(refs_map)
-        ref_dist = np.sqrt((df['z_ref']-df['z'])**2 + (df['y_ref']-df['y'])**2 + (df['x_ref']-df['x'])**2)
+    ref_dist = compute_ref_frame_spatial_information(df=df)
+    df['ref_dist'] = ref_dist
+    if max_dist > 0:
         qc = qc & (ref_dist < max_dist)
     
     qc = qc & (df['A'] > (A_to_BG*df['BG']))
