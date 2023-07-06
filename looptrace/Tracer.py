@@ -75,11 +75,8 @@ class Tracer:
         fits = []
 
         #fits = Parallel(n_jobs=-1, prefer='threads')(delayed(self.trace_single_roi)(roi_imgs[i]) for i in tqdm(range(roi_imgs.shape[0])))
-        try:
-            mask_fits = self.image_handler.config['mask_fits']
-        except KeyError:
-            mask_fits = False
-
+        mask_fits = self.image_handler.config.get('mask_fits', False)
+        
         try:
             #This only works for a single position at the time currently
             background = self.image_handler.config['substract_background']
