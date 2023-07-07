@@ -83,7 +83,7 @@ ParamPatch = Union[Parameters, ConfigMapping]
 def workflow(
         config_file: ExtantFile, 
         images_folder: ExtantFolder, 
-        image_save_path: Optional[ExtantFolder], 
+        image_save_path: Optional[ExtantFolder] = None, 
         params_update: Optional[Union[Parameters, ConfigMapping]] = None, 
         outfile: Optional[str] = None, 
         write_config_path: Optional[str] = None, 
