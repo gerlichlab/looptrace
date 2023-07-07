@@ -24,10 +24,14 @@ class Deconvolver:
     def __init__(self, image_handler, array_id = None):
         self.image_handler = image_handler
         self.config = image_handler.config
-        self.pos_list = self.image_handler.image_lists[self.config['decon_input_name']]
+        self.pos_list = self.image_handler.image_lists[self.input_name]
 
         if array_id is not None:
             self.pos_list = [self.pos_list[int(array_id)]]
+
+    @property
+    def input_name(self):
+        return self.image_handler.config.decon_input_name
 
     def extract_exp_psf(self) -> Path:
         '''
@@ -111,10 +115,11 @@ class Deconvolver:
         array_paths = []
         
         for pos in tqdm.tqdm(self.pos_list):
-            pos_index = self.image_handler.image_lists[self.config['decon_input_name']].index(pos)
-            pos_img = self.image_handler.images[self.config['decon_input_name']][pos_index]
-            z = create_zarr_store(path=self.image_handler.image_save_path+os.sep+self.config['decon_input_name']+'_decon',
-                    name = self.config['decon_input_name']+'_decon', 
+            pos_index = self.image_handler.image_lists[self.input_name].index(pos)
+            pos_img = self.image_handler.images[self.input_name][pos_index]
+            zarr_out_path = os.path.join(self.image_handler.image_save_path, self.input_name + '_decon')
+            z = create_zarr_store(path=zarr_out_path,
+                    name = self.input_name + '_decon', 
                     pos_name = pos+'.zarr',
                     shape = (pos_img.shape[0], len(decon_ch) + len(non_decon_ch),) + pos_img.shape[-3:], 
                     dtype = np.uint16, 

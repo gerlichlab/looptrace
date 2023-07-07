@@ -25,17 +25,17 @@ class Tracer:
         self.image_handler = image_handler
         self.config_path = image_handler.config_path
         self.config = image_handler.config
-        self.drift_table = image_handler.tables[self.config['spot_input_name']+'_drift_correction']
+        self.drift_table = image_handler.tables[image_handler.spot_input_name + '_drift_correction']
         self.images = self.image_handler.images[self.config['trace_input_name']]
             
-        self.pos_list = self.image_handler.image_lists[self.config['spot_input_name']]
-        self.traces_path = self.image_handler.out_path+'traces.csv'
+        self.pos_list = self.image_handler.image_lists[image_handler.spot_input_name]
+        self.traces_path = self.image_handler.out_path + 'traces.csv'
         self.trace_beads = trace_beads
         if trace_beads:
-            self.roi_table = image_handler.tables[self.config['spot_input_name']+'_bead_rois']
+            self.roi_table = image_handler.tables[image_handler.spot_input_name + '_bead_rois']
         else:
-            self.roi_table = image_handler.tables[self.config['spot_input_name']+'_rois']
-        self.all_rois = image_handler.tables[self.config['spot_input_name']+'_dc_rois']
+            self.roi_table = image_handler.tables[image_handler.spot_input_name + '_rois']
+        self.all_rois = image_handler.tables[image_handler.spot_input_name + '_dc_rois']
 
         self.fit_funcs = {'LS': fitSymmetricGaussian3D, 'MLE': fitSymmetricGaussian3DMLE}
         self.fit_func = self.fit_funcs[self.config['fit_func']]

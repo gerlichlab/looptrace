@@ -37,20 +37,18 @@ class Drifter():
         '''
         self.image_handler = image_handler
         self.config = self.image_handler.config
-        self.dc_file_path = self.image_handler.out_path+self.config['reg_input_moving']+'_drift_correction.csv'
-        self.images_template = self.image_handler.images[self.config['reg_input_template']]
-        self.images_moving = self.image_handler.images[self.config['reg_input_moving']]
-        self.full_pos_list = self.image_handler.image_lists[self.config['reg_input_moving']]
+        self.images_template = self.image_handler.images[self.image_handler.reg_input_template]
+        self.images_moving = self.image_handler.images[self.image_handler.reg_input_moving]
+        self.full_pos_list = self.image_handler.image_lists[self.image_handler.reg_input_moving]
         self.pos_list = self.full_pos_list
         
-        try:
-            self.bead_roi_px = self.config['bead_roi_size']
-        except KeyError: #Legacy config
-            self.bead_roi_px = 15
+        self.bead_roi_px = self.config.get('bead_roi_size', 15)
         
         if array_id is not None:
-            self.dc_file_path = self.image_handler.out_path+self.config['reg_input_moving']+'_drift_correction.csv'[:-4]+'_'+str(array_id).zfill(4)+'.csv'
+            self.dc_file_path = self.image_handler.out_path + self.image_handler.reg_input_moving + '_drift_correction.csv'[:-4]+'_' + str(array_id).zfill(4) + '.csv'
             self.pos_list = [self.pos_list[int(array_id)]]
+        else:
+            self.dc_file_path = self.image_handler.out_path + self.image_handler.reg_input_moving + '_drift_correction.csv'
 
 
     def fit_shift_single_bead(self, t_bead, o_bead):
@@ -220,17 +218,20 @@ class Drifter():
             pos_index = self.full_pos_list.index(pos)
             pos_img = self.images_moving[pos_index]
             proj_img = da.max(pos_img, axis=2)
-            z = image_io.create_zarr_store(path=self.image_handler.image_save_path+os.sep+self.config['reg_input_moving']+'_max_proj_dc',
-                                            name = self.config['reg_input_moving']+'_max_proj_dc', 
-                                            pos_name = pos,
-                                            shape = proj_img.shape, 
-                                            dtype = np.uint16,  
-                                            chunks = (1,1,proj_img.shape[-2], proj_img.shape[-1]))
+            zarr_out_path = os.path.join(self.image_handler.image_save_path, self.image_handler.reg_input_moving + '_max_proj_dc')
+            z = image_io.create_zarr_store(
+                path=zarr_out_path,
+                name = self.image_handler.reg_input_moving + '_max_proj_dc', 
+                pos_name = pos,
+                shape = proj_img.shape, 
+                dtype = np.uint16,  
+                chunks = (1,1,proj_img.shape[-2], proj_img.shape[-1]),
+                )
 
             n_t = proj_img.shape[0]
             
             for t in tqdm.tqdm(range(n_t)):
-                shift = self.image_handler.tables[self.config['reg_input_moving']+'_drift_correction'].query('position == @pos').iloc[t][['y_px_course', 'x_px_course', 'y_px_fine', 'x_px_fine']]
+                shift = self.image_handler.tables[self.image_handler.reg_input_moving + '_drift_correction'].query('position == @pos').iloc[t][['y_px_course', 'x_px_course', 'y_px_fine', 'x_px_fine']]
                 shift = (shift[0]+shift[2], shift[1]+shift[3])
                 z[t] = ndi.shift(proj_img[t].compute(), shift=(0,)+shift, order = 2)
         
@@ -253,8 +254,9 @@ class Drifter():
             pos_index = self.image_handler.image_lists['seq_images'].index(pos)
             pos_img = self.images[pos_index]
             #proj_img = da.max(pos_img, axis=2)
-            z = image_io.create_zarr_store(path=self.image_handler.image_save_path+os.sep+self.config['reg_input_moving']+'_course_dc',
-                                            name = self.config['reg_input_moving']+'_dc_images', 
+            zarr_out_path = os.path.join(self.image_handler.image_save_path, self.image_handler.reg_input_moving + '_course_dc')
+            z = image_io.create_zarr_store(path=zarr_out_path,
+                                            name = self.image_handler.reg_input_moving + '_dc_images', 
                                             pos_name = pos,
                                             shape = pos_img.shape, 
                                             dtype = np.uint16,  
@@ -263,7 +265,7 @@ class Drifter():
             n_t = pos_img.shape[0]
             
             for t in tqdm.tqdm(range(n_t)):
-                shift = self.image_handler.tables[self.config['reg_input_moving']+'_drift_correction'].query('position == @pos').iloc[t][['z_px_course', 'y_px_course', 'x_px_course']]
+                shift = self.image_handler.tables[self.image_handler.reg_input_moving + '_drift_correction'].query('position == @pos').iloc[t][['z_px_course', 'y_px_course', 'x_px_course']]
                 shift = (shift[0], shift[1], shift[2])
                 z[t] = ndi.shift(pos_img[t].compute(), shift=(0,)+shift, order = 0)
         

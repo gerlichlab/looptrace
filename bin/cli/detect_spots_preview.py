@@ -26,5 +26,5 @@ if __name__ == '__main__':
     logger.info(f"Building image handler: {args.image_path}")
     H = ImageHandler(config_path=args.config_path, image_path=args.image_path)
     S = SpotPicker(H)
-    preview_pos = H.image_lists[H.config['spot_input_name']][args.position]
+    preview_pos = H.image_lists[H.spot_input_name][args.position]
     S.rois_from_spots(preview_pos=preview_pos)

@@ -24,15 +24,19 @@ class SpotPicker:
     def __init__(self, image_handler, array_id = None):
         self.image_handler = image_handler
         self.config = image_handler.config
-        self.images = self.image_handler.images[self.config['spot_input_name']]
-        self.pos_list = self.image_handler.image_lists[self.config['spot_input_name']]
-        self.roi_path = self.image_handler.out_path + self.config['spot_input_name'] + '_rois.csv'
-        self.dc_roi_path = self.image_handler.out_path + self.config['spot_input_name'] + '_dc_rois.csv'
+        self.images = self.image_handler.images[self.input_name]
+        self.pos_list = self.image_handler.image_lists[self.input_name]
+        self.roi_path = self.image_handler.out_path + self.input_name + '_rois.csv'
+        self.dc_roi_path = self.image_handler.out_path + self.input_name + '_dc_rois.csv'
         self.array_id = array_id
         if self.array_id is not None:
             self.pos_list = [self.pos_list[int(self.array_id)]]
-            self.roi_path = self.image_handler.out_path + self.config['spot_input_name'] + '_rois.csv'[:-4] + '_' + str(self.array_id).zfill(4) + '.csv'
-        
+            self.roi_path = self.image_handler.out_path + self.input_name + '_rois.csv'[:-4] + '_' + str(self.array_id).zfill(4) + '.csv'
+
+    @property
+    def input_name(self):
+        return self.image_handler.spot_input_name
+
     def rois_from_spots(self, preview_pos=None, roi_outfile: Optional[str] = None, do_not_write_empty: bool = False):
         '''
         Autodetect ROIs from spot images using a manual threshold defined in config.
@@ -65,7 +69,7 @@ class SpotPicker:
             if 'nuc_images_drift_correction' in self.image_handler.tables:
                 nuc_drifts = self.image_handler.tables[self.config['nuc_input_name'] + '_drift_correction']
                 nuc_target_frame = self.config['nuc_ref_frame']
-                spot_drifts = self.image_handler.tables[self.config['spot_input_name'] + '_drift_correction']
+                spot_drifts = self.image_handler.tables[self.input_name + '_drift_correction']
             else:
                 nuc_drifts = None
                 nuc_target_frame = None
@@ -96,7 +100,7 @@ class SpotPicker:
             for i, frame in enumerate(spot_frame):
                 for j, ch in enumerate(spot_ch):
                     print(f'Preview spot detection in position {preview_pos}, frame {frame} with threshold {spot_threshold[i]}.')
-                    pos_index = self.image_handler.image_lists[self.config['spot_input_name']].index(preview_pos)
+                    pos_index = self.image_handler.image_lists[self.input_name].index(preview_pos)
                     img = self.images[pos_index][frame, ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
 
                     if subtract_beads:
@@ -120,7 +124,7 @@ class SpotPicker:
         # Loop through the imaging positions to collect all regions of interest (ROIs).
         all_rois = []
         for position in tqdm.tqdm(self.pos_list):
-            pos_index = self.image_handler.image_lists[self.config['spot_input_name']].index(position)
+            pos_index = self.image_handler.image_lists[self.input_name].index(position)
             for i, frame in tqdm.tqdm(enumerate(spot_frame)):
                 for j, ch in enumerate(spot_ch):
                 #print(f'Detecting spots in position {position}, frame {frame}, ch {ch}.',  end=' ')
@@ -186,7 +190,7 @@ class SpotPicker:
         n_fields = self.config['bead_trace_fields']
         n_beads = self.config['bead_trace_number']
         for pos in tqdm.tqdm(random.sample(self.pos_list, k=n_fields)):
-            pos_index = self.image_handler.image_lists[self.config['spot_input_name']].index(pos)
+            pos_index = self.image_handler.image_lists[self.input_name].index(pos)
             ref_frame = self.config['bead_reference_frame']
             ref_ch = self.config['bead_ch']
             threshold = self.config['bead_threshold']
@@ -248,11 +252,11 @@ class SpotPicker:
         #positions = sorted(list(self.roi_table.position.unique()))
 
         all_rois = []
-        for i, roi in tqdm.tqdm(self.image_handler.tables[self.config['spot_input_name']+'_rois'].iterrows(), total=len(self.image_handler.tables[self.config['spot_input_name']+'_rois'])):
+        for i, roi in tqdm.tqdm(self.image_handler.tables[self.input_name+'_rois'].iterrows(), total=len(self.image_handler.tables[self.input_name+'_rois'])):
             pos = roi['position']
-            pos_index = self.image_handler.image_lists[self.config['spot_input_name']].index(pos)#positions.index(pos)
+            pos_index = self.image_handler.image_lists[self.input_name].index(pos)#positions.index(pos)
             dc_pos_name = self.image_handler.image_lists[self.config['reg_input_moving']][pos_index]
-            sel_dc = self.image_handler.tables[self.config['spot_input_name']+'_drift_correction'].query('position == @dc_pos_name')
+            sel_dc = self.image_handler.tables[self.input_name+'_drift_correction'].query('position == @dc_pos_name')
             ref_frame = roi['frame']
             ch = roi['ch']
             ref_offset = sel_dc.query('frame == @ref_frame')
@@ -353,9 +357,9 @@ class SpotPicker:
         # Load full stacks into memory to extract spots.
         # Not the most elegant, but depending on the chunking of the original data it is often more performant than loading subsegments.
 
-        rois = self.image_handler.tables[self.config['spot_input_name']+'_dc_rois']
+        rois = self.image_handler.tables[self.input_name+'_dc_rois']
         if self.array_id is not None:
-            pos_name = self.image_handler.image_lists[self.config['spot_input_name']][self.array_id]
+            pos_name = self.image_handler.image_lists[self.input_name][self.array_id]
             rois = rois[rois.position == pos_name]
 
 
@@ -364,7 +368,7 @@ class SpotPicker:
             os.mkdir(spot_images_path)
 
         for pos, pos_group in tqdm.tqdm(rois.groupby('position')):
-            pos_index = self.image_handler.image_lists[self.config['spot_input_name']].index(pos)
+            pos_index = self.image_handler.image_lists[self.input_name].index(pos)
             #print(full_image.shape)
             f_id = 0
             n_frames = len(pos_group.frame.unique())
@@ -434,11 +438,11 @@ class SpotPicker:
         #rois = self.roi_table#.iloc[0:500]
         #imgs = self.
         print('Generating single spot image stacks from coursely drift corrected images.')
-        rois = self.image_handler.tables[self.config['spot_input_name']+'_dc_rois']
+        rois = self.image_handler.tables[self.input_name+'_dc_rois']
         spot_images_path = os.path.join(self.image_handler.image_save_path, 'spot_images_dir')
         for pos, group in tqdm.tqdm(rois.groupby('position')):
-            pos_index = self.image_handler.image_lists[self.config['spot_input_name']].index(pos)
-            full_image = np.array(self.image_handler.images[self.config['spot_input_name']][pos_index])
+            pos_index = self.image_handler.image_lists[self.input_name].index(pos)
+            full_image = np.array(self.image_handler.images[self.input_name][pos_index])
             #print(full_image.shape)
             for roi in group.to_dict('records'):
                 spot_stack = full_image[:, 

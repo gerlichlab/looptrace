@@ -45,6 +45,26 @@ class ImageHandler:
 
         self.load_tables()
 
+    @property
+    def decon_input_name(self):
+        return self.config['decon_input_name']
+    
+    @property
+    def decon_output_name(self):
+        return f"{self.decon_input_name}_decon"
+
+    @property
+    def reg_input_template(self):
+        return self.config.get('reg_input_template', self.decon_output_name)
+
+    @property
+    def reg_input_moving(self):
+        return self.config.get('reg_input_moving', self.reg_input_template)
+
+    @property
+    def spot_input_name(self):
+        return self.config.get('spot_input_name', self.decon_output_name)
+
     def load_tables(self):
         is_eligible = lambda fp: not os.path.split(fp)[1].startswith('_')
         parsers = {".csv": lambda f: pd.read_csv(f, index_col=0), ".pkl": pd.read_pickle}
@@ -89,6 +109,7 @@ class ImageHandler:
     def reload_config(self):
         with open(self.config_path, 'r') as fh:
             self.config = yaml.safe_load(fh)
+        return self.config
 
 
 def handler_from_cli(config_file: ExtantFile, images_folder: Optional[ExtantFolder], image_save_path: Optional[ExtantFolder] = None) -> ImageHandler:
