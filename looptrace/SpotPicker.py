@@ -19,6 +19,8 @@ import tqdm
 from looptrace import image_processing_functions as ip
 from looptrace import image_io
 
+SPOT_IMG_ZIP_NAME = "spot_images.npz"
+
 
 class SpotPicker:
     def __init__(self, image_handler, array_id = None):
@@ -36,6 +38,17 @@ class SpotPicker:
     @property
     def input_name(self):
         return self.image_handler.spot_input_name
+
+    @property
+    def spot_images_path(self):
+        return os.path.join(self.image_handler.image_save_path, 'spot_images_dir')
+
+    @property
+    def spot_images_zipfile(self):
+        # TODO: what to do if this path is nested under self.spot_images_path, and will be deleted upon zip?
+        # See: https://github.com/gerlichlab/looptrace/issues/19
+        # See: https://github.com/gerlichlab/looptrace/issues/20
+        return os.path.join(self.image_handler.image_save_path, SPOT_IMG_ZIP_NAME)
 
     def rois_from_spots(self, preview_pos=None, roi_outfile: Optional[str] = None, do_not_write_empty: bool = False):
         '''
@@ -362,10 +375,8 @@ class SpotPicker:
             pos_name = self.image_handler.image_lists[self.input_name][self.array_id]
             rois = rois[rois.position == pos_name]
 
-
-        spot_images_path = os.path.join(self.image_handler.image_save_path, 'spot_images_dir')
-        if not os.path.isdir(spot_images_path):
-            os.mkdir(spot_images_path)
+        if not os.path.isdir(self.spot_images_path):
+            os.mkdir(self.spot_images_path)
 
         for pos, pos_group in tqdm.tqdm(rois.groupby('position')):
             pos_index = self.image_handler.image_lists[self.input_name].index(pos)
@@ -378,7 +389,7 @@ class SpotPicker:
                     image_stack = np.array(self.images[pos_index][int(frame), int(ch)])
                     for i, roi in ch_group.iterrows():
                         roi_img = self.extract_single_roi_img_inmem(roi, image_stack).astype(np.uint16)
-                        fp = os.path.join(spot_images_path, f"{pos}_{str(roi['roi_id']).zfill(5)}.npy")
+                        fp = os.path.join(self.spot_images_path, f"{pos}_{str(roi['roi_id']).zfill(5)}.npy")
                         if f_id == 0:
                             arr = open_memmap(fp, mode='w+', dtype = roi_img.dtype, shape=(n_frames,) + roi_img.shape)
                             arr[f_id] = roi_img
@@ -397,12 +408,11 @@ class SpotPicker:
                         #roi_array_padded.append(ip.pad_to_shape(roi, shape = roi_image_size, mode = 'minimum'))
                 f_id += 1
         if self.array_id is None: #Only do this if not running distributed, otherwise need to collect and zip later.
-            image_io.zip_folder(spot_images_path, 'spot_images.npz', remove_folder = True)
-            outfile = os.path.join(self.image_handler.image_save_path, 'spot_images.npz')
-            self.image_handler.images['spot_images'] = image_io.NPZ_wrapper(outfile)
-            return outfile
+            image_io.zip_folder(self.spot_images_path, self.spot_images_zipfile, remove_folder = True)
+            self.image_handler.images['spot_images'] = image_io.NPZ_wrapper(self.spot_images_zipfile)
+            return self.spot_images_zipfile
         else:
-            return spot_images_path
+            return self.spot_images_path
 
             
             #for j, pos_roi in enumerate(pos_rois):
@@ -439,7 +449,6 @@ class SpotPicker:
         #imgs = self.
         print('Generating single spot image stacks from coursely drift corrected images.')
         rois = self.image_handler.tables[self.input_name+'_dc_rois']
-        spot_images_path = os.path.join(self.image_handler.image_save_path, 'spot_images_dir')
         for pos, group in tqdm.tqdm(rois.groupby('position')):
             pos_index = self.image_handler.image_lists[self.input_name].index(pos)
             full_image = np.array(self.image_handler.images[self.input_name][pos_index])
@@ -452,20 +461,18 @@ class SpotPicker:
                                 roi['x_min']:roi['x_max']].copy()
                 #print(spot_stack.shape)
                 fn = pos+'_'+str(roi['frame'])+'_'+str(roi['roi_id_pos']).zfill(4)
-                arr_out = os.path.join(spot_images_path, fn + '.npy')
+                arr_out = os.path.join(self.spot_images_path, fn + '.npy')
                 np.save(arr_out, spot_stack)
         #self.image_handler.images['spot_images'] = all_spots
         if self.array_id is None: #Only do this if not running distributed, otherwise need to collect and zip later.
-            image_io.zip_folder(folder=spot_images_path, out_file='spot_images.npz', remove_folder=True)
+            outfile = self.spot_images_zipfile
+            image_io.zip_folder(folder=self.spot_images_path, out_file=outfile, remove_folder=True)
             # TODO: what's the connection between the image path determination and the outfile
-            outfile = os.path.join(self.image_handler.image_save_path, 'spot_images.npz')
             self.image_handler.images['spot_images'] = image_io.NPZ_wrapper(outfile)
             return outfile
         else:
-            return spot_images_path
-        #np.savez_compressed(self.config['image_path']+os.sep+'spot_images.npz', **all_spots)
-        #self.image_handler.images['spot_images'] = image_io.NPZ_wrapper(self.config['image_path']+os.sep+'spot_images.npz')
-        
+            return self.spot_images_path
+    
 
     def fine_dc_single_roi_img(self, roi_img, roi):
         #Shift a single image according to precalculated drifts.
