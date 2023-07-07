@@ -94,7 +94,7 @@ class ImageHandler:
             logger.info(f"Loading table '{tn}': {fp}")
             self.tables[tn] = parse(fp)
             logger.info(f"Loaded: {tn}")
-            self.tables_paths[tn] = fp
+            self.table_paths[tn] = fp
     
     def read_images(self, is_eligible: Callable[[str], bool] = lambda path_name: path_name != "spot_images_dir" and not path_name.startswith("_")):
         '''
