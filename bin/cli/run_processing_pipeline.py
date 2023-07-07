@@ -67,7 +67,7 @@ def main(cmdl):
     logger.info(f"Building {PIPE_NAME} pipeline from {opts.config_file}, to use images from {opts.images_folder}")
     pipeline = LooptracePipeline(config_file=opts.config_file, images_folder=opts.images_folder, output_folder=opts.output_folder)
     logger.info("Running pipeline")
-    pipeline.run()
+    pipeline.run(start_point=opts.start_point)
 
 
 if __name__ == "__main__":
