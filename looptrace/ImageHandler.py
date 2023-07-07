@@ -87,7 +87,7 @@ class ImageHandler:
                 logger.debug(f"Not eligible as table: {fp}")
                 continue
             try:
-                parse = parsers[os.path.splitext(fp)]
+                parse = parsers[os.path.splitext(fp)[1]]
             except KeyError:
                 logger.warning(f"Cannot load as table: {fp}")
                 continue
