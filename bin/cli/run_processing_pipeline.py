@@ -52,7 +52,11 @@ def parse_cmdl(cmdl: argparse.Namespace):
     parser.add_argument("-C", "--config-file", type=ExtantFile.from_string, required=True, help="Path to the main configuration file")
     parser.add_argument("-I", "--images-folder", type=ExtantFolder.from_string, required=True, help="Path to the root folder with imaging data to process")
     parser.add_argument("-O", "--output-folder", type=ExtantFolder.from_string, required=True, help="Path to folder for pypiper output")
-    parser = pypiper.add_pypiper_args(parser, groups=("pypiper", "checkpoint"), args="start-point") # This adds logmuse options, too.
+    parser = pypiper.add_pypiper_args(
+        parser, 
+        groups=("pypiper", "checkpoint"), # This adds logmuse options, too (from pypiper group).
+        args=("start-point", ),
+        )
     return parser.parse_args(cmdl)
 
 
