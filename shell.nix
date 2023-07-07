@@ -18,7 +18,7 @@ let baseBuildInputs = with pkgs; [ poetry stdenv.cc.cc.lib zlib ];
       (if pydev then ["dev"] else []);
     poetryInstallExtras = (
       if poetryGroups == [] then ""
-      else " --with " ++ pkgs.lib.concatStringsSep "," poetryGroups
+      else pkgs.lib.concatStrings [ " --with " (pkgs.lib.concatStringsSep "," poetryGroups) ]
       );
 in
 pkgs.mkShell {
