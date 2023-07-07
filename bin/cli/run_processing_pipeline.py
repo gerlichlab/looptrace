@@ -1,14 +1,13 @@
 """Simple end-to-end processing pipeline for chromatin tracing data"""
 
 import argparse
+import logmuse
 import sys
 from typing import *
 
-from pypiper import Pipeline, Stage
+import pypiper
 
-from looptrace.ImageHandler import ImageHandler
 from looptrace.pathtools import ExtantFile, ExtantFolder
-
 from decon import workflow as run_deconvolution
 from nuc_label import workflow as run_nuclei_detection
 from drift_correct import workflow as run_drift_correction
@@ -18,13 +17,17 @@ from extract_spots_table import workflow as run_spot_bounding
 from extract_spots import workflow as run_spot_extraction
 from tracing import workflow as run_chromatin_tracing
 
+logger = None
 
-class LooptracePipeline(Pipeline):
+PIPE_NAME = "looptrace"
+
+
+class LooptracePipeline(pypiper.Pipeline):
 
     def __init__(self, config_file: ExtantFile, images_folder: ExtantFolder, output_folder: ExtantFolder) -> None:
         self.config_file = config_file
         self.images_folder = images_folder
-        super(LooptracePipeline, self).__init__(name="looptrace", outfolder=str(output_folder.path))
+        super(LooptracePipeline, self).__init__(name=PIPE_NAME, outfolder=str(output_folder.path))
 
     def stages(self) -> List[Callable]:
         conf_data_pair = (self.config_file, self.images_folder)
@@ -41,7 +44,7 @@ class LooptracePipeline(Pipeline):
             ("tracing", run_chromatin_tracing, conf_data_pair),
             ("clean_3", run_cleanup, conf_only),
         )
-        return [Stage(func=fxn, f_args=fxn_args, name=name) for name, fxn, fxn_args in func_args_pairs]
+        return [pypiper.Stage(func=fxn, f_args=fxn_args, name=name) for name, fxn, fxn_args in func_args_pairs]
 
 
 def parse_cmdl(cmdl: argparse.Namespace):
@@ -49,12 +52,17 @@ def parse_cmdl(cmdl: argparse.Namespace):
     parser.add_argument("-C", "--config-file", type=ExtantFile.from_string, required=True, help="Path to the main configuration file")
     parser.add_argument("-I", "--images-folder", type=ExtantFolder.from_string, required=True, help="Path to the root folder with imaging data to process")
     parser.add_argument("-O", "--output-folder", type=ExtantFolder.from_string, required=True, help="Path to folder for pypiper output")
+    parser = pypiper.add_pypiper_args(logmuse.add_logging_options(parser))
     return parser.parse_args(cmdl)
 
 
 def main(cmdl):
     opts = parse_cmdl(cmdl)
+    global logger
+    logger = logmuse.logger_via_cli(opts)
+    logger.info(f"Building {PIPE_NAME} pipeline from {opts.config_file}, to use images from {opts.images_folder}")
     pipeline = LooptracePipeline(config_file=opts.config_file, images_folder=opts.images_folder, output_folder=opts.output_folder)
+    logger.info("Running pipeline")
     pipeline.run()
 
 
