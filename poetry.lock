@@ -15,8 +15,8 @@ files = [
 name = "attmap"
 version = "0.13.2"
 description = "Multiple access patterns for key-value reference"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = "*"
 files = [
     {file = "attmap-0.13.2-py3-none-any.whl", hash = "sha256:9c76af312c3678927a03ebb8fd2fa3a9cab37f7ce34f1dc574ea890c778f2f26"},
@@ -30,8 +30,8 @@ ubiquerg = ">=0.2.1"
 name = "attrs"
 version = "23.1.0"
 description = "Classes Without Boilerplate"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.7"
 files = [
     {file = "attrs-23.1.0-py3-none-any.whl", hash = "sha256:1f28b4522cdc2fb4256ac1a020c78acf9cba2c6b461ccd2c126f3aa8e8335d04"},
@@ -88,8 +88,8 @@ files = [
 name = "contourpy"
 version = "1.1.0"
 description = "Python library for calculating contours of 2D quadrilateral grids"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.8"
 files = [
     {file = "contourpy-1.1.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:89f06eff3ce2f4b3eb24c1055a26981bffe4e7264acd86f15b97e40530b794bc"},
@@ -147,8 +147,8 @@ test-no-images = ["pytest", "pytest-cov", "wurlitzer"]
 name = "cycler"
 version = "0.11.0"
 description = "Composable style cycles"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.6"
 files = [
     {file = "cycler-0.11.0-py3-none-any.whl", hash = "sha256:3a27e95f763a428a739d2add979fa7494c912a32c17c4c38c4d5f082cad165a3"},
@@ -214,8 +214,8 @@ files = [
 name = "fonttools"
 version = "4.40.0"
 description = "Tools to manipulate font files"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.8"
 files = [
     {file = "fonttools-4.40.0-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:b802dcbf9bcff74672f292b2466f6589ab8736ce4dcf36f48eb994c2847c4b30"},
@@ -308,8 +308,8 @@ tqdm = ["tqdm"]
 name = "greenlet"
 version = "2.0.2"
 description = "Lightweight in-process concurrent programming"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*"
 files = [
     {file = "greenlet-2.0.2-cp27-cp27m-macosx_10_14_x86_64.whl", hash = "sha256:bdfea8c661e80d3c1c99ad7c3ff74e6e87184895bbaca6ee8cc61209f8b9b85d"},
@@ -434,8 +434,8 @@ testing = ["flufl.flake8", "importlib-resources (>=1.3)", "packaging", "pyfakefs
 name = "jsonschema"
 version = "4.18.0"
 description = "An implementation of JSON Schema validation for Python"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.8"
 files = [
     {file = "jsonschema-4.18.0-py3-none-any.whl", hash = "sha256:b508dd6142bd03f4c3670534c80af68cd7bbff9ea830b9cf2625d4a3c49ddf60"},
@@ -456,8 +456,8 @@ format-nongpl = ["fqdn", "idna", "isoduration", "jsonpointer (>1.13)", "rfc3339-
 name = "jsonschema-specifications"
 version = "2023.6.1"
 description = "The JSON Schema meta-schemas and vocabularies, exposed as a Registry"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.8"
 files = [
     {file = "jsonschema_specifications-2023.6.1-py3-none-any.whl", hash = "sha256:3d2b82663aff01815f744bb5c7887e2121a63399b49b104a3c96145474d091d7"},
@@ -471,8 +471,8 @@ referencing = ">=0.28.0"
 name = "kiwisolver"
 version = "1.4.4"
 description = "A fast implementation of the Cassowary constraint solver"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.7"
 files = [
     {file = "kiwisolver-1.4.4-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:2f5e60fabb7343a836360c4f0919b8cd0d6dbf08ad2ca6b9cf90bf0c76a3c4f6"},
@@ -565,8 +565,8 @@ test = ["pytest (>=7.4)", "pytest-cov (>=4.1)"]
 name = "llvmlite"
 version = "0.40.1"
 description = "lightweight wrapper around basic LLVM functionality"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.8"
 files = [
     {file = "llvmlite-0.40.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:84ce9b1c7a59936382ffde7871978cddcda14098e5a76d961e204523e5c372fb"},
@@ -623,8 +623,8 @@ files = [
 name = "matplotlib"
 version = "3.7.2"
 description = "Python plotting package"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.8"
 files = [
     {file = "matplotlib-3.7.2-cp310-cp310-macosx_10_12_universal2.whl", hash = "sha256:2699f7e73a76d4c110f4f25be9d2496d6ab4f17345307738557d345f099e07de"},
@@ -685,8 +685,8 @@ python-dateutil = ">=2.7"
 name = "nd2"
 version = "0.5.3"
 description = "Yet another nd2 (Nikon NIS Elements) file reader"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = "<3.12,>=3.7"
 files = [
     {file = "nd2-0.5.3-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:9dbec7104842eac4520ba251c30d4ccf4476afabf795af5e67a7afeb6bee6566"},
@@ -747,8 +747,8 @@ test = ["codecov (>=2.1)", "pytest (>=7.2)", "pytest-cov (>=4.0)"]
 name = "numba"
 version = "0.57.1"
 description = "compiling Python code using LLVM"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.8"
 files = [
     {file = "numba-0.57.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:db8268eb5093cae2288942a8cbd69c9352f6fe6e0bfa0a9a27679436f92e4248"},
@@ -856,8 +856,8 @@ files = [
 name = "oyaml"
 version = "1.0"
 description = "Ordered YAML: drop-in replacement for PyYAML which preserves dict ordering"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = "*"
 files = [
     {file = "oyaml-1.0-py2.py3-none-any.whl", hash = "sha256:3a378747b7fb2425533d1ce41962d6921cda075d46bb480a158d45242d156323"},
@@ -1018,8 +1018,8 @@ tests = ["check-manifest", "coverage", "defusedxml", "markdown2", "olefile", "pa
 name = "piper"
 version = "0.13.0"
 description = "A lightweight python toolkit for gluing together restartable, robust command line pipelines"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = "*"
 files = [
     {file = "piper-0.13.0-py3-none-any.whl", hash = "sha256:5e50e87ebdca713282b81bfb9754ab28cb0e99729a623d4183a07d48f77751ed"},
@@ -1045,8 +1045,8 @@ plot = ["matplotlib", "scipy", "seaborn"]
 name = "pipestat"
 version = "0.4.0"
 description = "A pipeline results reporter"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = "*"
 files = [
     {file = "pipestat-0.4.0-py3-none-any.whl", hash = "sha256:45d31092ac30be522fcf7a792a8170268e060273598a575e178218e9ad7299c6"},
@@ -1068,8 +1068,8 @@ yacman = ">=0.9.0"
 name = "psutil"
 version = "5.9.5"
 description = "Cross-platform lib for process and system monitoring in Python."
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 files = [
     {file = "psutil-5.9.5-cp27-cp27m-macosx_10_9_x86_64.whl", hash = "sha256:be8929ce4313f9f8146caad4272f6abb8bf99fc6cf59344a3167ecd74f4f203f"},
@@ -1095,8 +1095,8 @@ test = ["enum34", "ipaddress", "mock", "pywin32", "wmi"]
 name = "psycopg2-binary"
 version = "2.9.6"
 description = "psycopg2 - Python-PostgreSQL Database Adapter"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.6"
 files = [
     {file = "psycopg2-binary-2.9.6.tar.gz", hash = "sha256:1f64dcfb8f6e0c014c7f55e51c9759f024f70ea572fbdef123f85318c297947c"},
@@ -1167,8 +1167,8 @@ files = [
 name = "pydantic"
 version = "1.10.11"
 description = "Data validation and settings management using python type hints"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.7"
 files = [
     {file = "pydantic-1.10.11-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:ff44c5e89315b15ff1f7fdaf9853770b810936d6b01a7bcecaa227d2f8fe444f"},
@@ -1220,8 +1220,8 @@ email = ["email-validator (>=1.0.3)"]
 name = "pyparsing"
 version = "3.0.9"
 description = "pyparsing module - Classes and methods to define and execute parsing grammars"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.6.8"
 files = [
     {file = "pyparsing-3.0.9-py3-none-any.whl", hash = "sha256:5026bae9a10eeaefb61dab2f09052b9f4307d44aee4eda64b309723d8d206bbc"},
@@ -1350,8 +1350,8 @@ files = [
 name = "referencing"
 version = "0.29.1"
 description = "JSON Referencing + Python"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.8"
 files = [
     {file = "referencing-0.29.1-py3-none-any.whl", hash = "sha256:d3c8f323ee1480095da44d55917cfb8278d73d6b4d5f677e3e40eb21314ac67f"},
@@ -1366,8 +1366,8 @@ rpds-py = ">=0.7.0"
 name = "resource-backed-dask-array"
 version = "0.1.0"
 description = "experimental Dask array that opens/closes a resource when computing"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.7"
 files = [
     {file = "resource_backed_dask_array-0.1.0-py2.py3-none-any.whl", hash = "sha256:ec457fa72d81f0340a67ea6557a5a5919323a11cccc978a950df29fa69fe5679"},
@@ -1386,8 +1386,8 @@ testing = ["pytest", "pytest-cov", "tox", "tox-conda"]
 name = "rpds-py"
 version = "0.8.7"
 description = "Python bindings to Rust's persistent data structures (rpds)"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.8"
 files = [
     {file = "rpds_py-0.8.7-cp310-cp310-macosx_10_7_x86_64.whl", hash = "sha256:796c88ed41e13a37eae7b6a7c0c03501d587a39fb2902e5bd29e09cc08469138"},
@@ -1551,8 +1551,8 @@ test = ["asv", "gmpy2", "mpmath", "pooch", "pytest", "pytest-cov", "pytest-timeo
 name = "seaborn"
 version = "0.12.2"
 description = "Statistical data visualization"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.7"
 files = [
     {file = "seaborn-0.12.2-py3-none-any.whl", hash = "sha256:ebf15355a4dba46037dfd65b7350f014ceb1f13c05e814eda2c9f5fd731afc08"},
@@ -1585,8 +1585,8 @@ files = [
 name = "sqlalchemy"
 version = "1.4.41"
 description = "Database Abstraction Library"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,>=2.7"
 files = [
     {file = "SQLAlchemy-1.4.41-cp27-cp27m-macosx_10_14_x86_64.whl", hash = "sha256:13e397a9371ecd25573a7b90bd037db604331cf403f5318038c46ee44908c44d"},
@@ -1660,8 +1660,8 @@ sqlcipher = ["sqlcipher3-binary"]
 name = "sqlalchemy2-stubs"
 version = "0.0.2a34"
 description = "Typing Stubs for SQLAlchemy 1.4"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.6"
 files = [
     {file = "sqlalchemy2-stubs-0.0.2a34.tar.gz", hash = "sha256:2432137ab2fde1a608df4544f6712427b0b7ff25990cfbbc5a9d1db6c8c6f489"},
@@ -1675,8 +1675,8 @@ typing-extensions = ">=3.7.4"
 name = "sqlmodel"
 version = "0.0.8"
 description = "SQLModel, SQL databases in Python, designed for simplicity, compatibility, and robustness."
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.6.1,<4.0.0"
 files = [
     {file = "sqlmodel-0.0.8-py3-none-any.whl", hash = "sha256:0fd805719e0c5d4f22be32eb3ffc856eca3f7f20e8c7aa3e117ad91684b518ee"},
@@ -1743,8 +1743,8 @@ telegram = ["requests"]
 name = "typing-extensions"
 version = "4.7.1"
 description = "Backported and Experimental Type Hints for Python 3.7+"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.7"
 files = [
     {file = "typing_extensions-4.7.1-py3-none-any.whl", hash = "sha256:440d5dd3af93b060174bf433bccd69b0babc3b15b1a8dca43789fd7f61514b36"},
@@ -1755,8 +1755,8 @@ files = [
 name = "ubiquerg"
 version = "0.6.2"
 description = "Various utility functions"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = "*"
 files = [
     {file = "ubiquerg-0.6.2-py2.py3-none-any.whl", hash = "sha256:6336c4dc2c64fd759585265ad0a307eb48944368de531fb686447d2a93a5779d"},
@@ -1767,8 +1767,8 @@ files = [
 name = "yacman"
 version = "0.9.1"
 description = "A standardized configuration object for reference genome assemblies"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = "*"
 files = [
     {file = "yacman-0.9.1-py3-none-any.whl", hash = "sha256:f97872ff6c74705611893133af0a74e47d7e6780b1baa9d4638406d835276dcb"},
@@ -1819,7 +1819,13 @@ files = [
 docs = ["furo", "jaraco.packaging (>=9)", "jaraco.tidelift (>=1.4)", "rst.linker (>=1.9)", "sphinx (>=3.5)", "sphinx-lint"]
 testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more-itertools", "pytest (>=6)", "pytest-black (>=0.3.7)", "pytest-checkdocs (>=2.4)", "pytest-cov", "pytest-enabler (>=1.3)", "pytest-flake8", "pytest-mypy (>=0.9.1)"]
 
+[extras]
+analysis = ["matplotlib", "numba", "seaborn"]
+dev = ["matplotlib", "nd2", "numba", "seaborn", "tifffile"]
+pipeline = ["piper"]
+polymer = ["numba"]
+
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10.0, < 3.12"
-content-hash = "b6425634283bf77519a7ee2dd6fc8cd2260d4d0f621ed258dd3f0782083e66c0"
+content-hash = "5dd797a21d41fdc26f8701178586281675d366a3bc30154c23be36f9bc4e48af"

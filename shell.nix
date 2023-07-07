@@ -6,19 +6,19 @@
   }) {}, 
   pipeline ? false,
   analysis ? false, 
-  pydev ? false,
+  pydev ? true 
 }:
 let baseBuildInputs = with pkgs; [ poetry stdenv.cc.cc.lib zlib ];
     py310 = pkgs.python310.withPackages (ps: with ps; [ numpy pandas ]);
     py311 = pkgs.python311.withPackages (ps: with ps; [ numpy pandas ]);
     R-analysis = pkgs.rWrapper.override{ packages = with pkgs.rPackages; [ data_table ggplot2 ]; };
-    poetryGroups = [] ++ 
+    poetryExtras = [] ++ 
       (if pipeline then ["pipeline"] else []) ++
       (if analysis then ["analysis"] else []) ++ 
       (if pydev then ["dev"] else []);
     poetryInstallExtras = (
-      if poetryGroups == [] then ""
-      else pkgs.lib.concatStrings [ " --with " (pkgs.lib.concatStringsSep "," poetryGroups) ]
+      if poetryExtras == [] then ""
+      else pkgs.lib.concatStrings [ " -E " (pkgs.lib.concatStringsSep " -E " poetryExtras) ]
       );
 in
 pkgs.mkShell {
@@ -34,7 +34,7 @@ pkgs.mkShell {
   shellHook = ''
     poetry env use "${py310}/bin/python"
     export LD_LIBRARY_PATH="${pkgs.zlib}/lib:${pkgs.stdenv.cc.cc.lib}/lib"
-    poetry install --sync${poetryInstallExtras}
+    poetry install -vv --sync${poetryInstallExtras}
     source "$(poetry env info --path)/bin/activate"
   '';
 }
