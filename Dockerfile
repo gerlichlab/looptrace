@@ -14,7 +14,9 @@ RUN apt-get update -y && \
     update-alternatives --config gcc && \
     # Include the cuda-compat-11-4 version to match what's on whatever machine for nvidia driver.
     # Check nvidia-smi output.
-    apt-get install git wget libz-dev libbz2-dev liblzma-dev cuda-compat-11-4=470.199.02-1 -y
+    apt-get install git wget libz-dev libbz2-dev liblzma-dev cuda-compat-11-4=470.199.02-1 -y && \
+    # to facilitate editing the package and other files when in development
+    apt-get install vim
 
 # Clone repo.
 RUN cd / && mkdir looptrace && cd /looptrace
