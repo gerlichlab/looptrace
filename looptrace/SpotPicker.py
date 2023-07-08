@@ -76,20 +76,7 @@ class SpotPicker:
             subtract_beads = False
 
         min_dist = self.config.get('min_spot_dist')
-        
-        try:
-            filter_nucs = self.config['spot_in_nuc']
-            if 'nuc_images_drift_correction' in self.image_handler.tables:
-                nuc_drifts = self.image_handler.tables[self.config['nuc_input_name'] + '_drift_correction']
-                nuc_target_frame = self.config['nuc_ref_frame']
-                spot_drifts = self.image_handler.tables[self.input_name + '_drift_correction']
-            else:
-                nuc_drifts = None
-                nuc_target_frame = None
-                spot_drifts = None
-        except KeyError: #Legacy config.
-            filter_nucs = False
-        
+
         # Determine the detection method and threshold.
         spot_threshold = self.config['spot_threshold']
         if not isinstance(spot_threshold, list):
@@ -158,9 +145,17 @@ class SpotPicker:
         output = pd.concat(all_rois)
 
         n_spots_init = len(output)
-        print(f'Found {len(output)} spots.')
+        print(f'Found {n_spots_init} spots.')
 
-        if filter_nucs:
+        if self.config('spot_in_nuc', False):
+            if 'nuc_images_drift_correction' in self.image_handler.tables:
+                nuc_drifts = self.image_handler.tables[self.config['nuc_input_name'] + '_drift_correction']
+                nuc_target_frame = self.config['nuc_ref_frame']
+                spot_drifts = self.image_handler.tables[self.input_name + '_drift_correction']
+            else:
+                nuc_drifts = None
+                nuc_target_frame = None
+                spot_drifts = None
             if 'nuc_masks' not in self.image_handler.images:
                 print('No nuclei mask images found, cannot filter.')
             else:
@@ -190,6 +185,8 @@ class SpotPicker:
         rois = ip.roi_center_to_bbox(output, roi_size = tuple(self.config['roi_image_size'])) if detect_method == 'dog' else output
         
         rois = rois.sort_values(['position', 'frame'])
+        print(f'Spots remaining: {len(rois)} / {n_spots_init}')
+
         outfile = roi_outfile or self.roi_path
         print(f"Writing ROIs: {outfile}")
         rois.to_csv(outfile)
