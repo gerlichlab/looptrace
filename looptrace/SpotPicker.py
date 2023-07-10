@@ -28,12 +28,16 @@ class SpotPicker:
         self.config = image_handler.config
         self.images = self.image_handler.images[self.input_name]
         self.pos_list = self.image_handler.image_lists[self.input_name]
-        self.roi_path = self.image_handler.out_path + self.input_name + '_rois.csv'
         self.dc_roi_path = self.image_handler.out_path + self.input_name + '_dc_rois.csv'
         self.array_id = array_id
         if self.array_id is not None:
             self.pos_list = [self.pos_list[int(self.array_id)]]
-            self.roi_path = self.image_handler.out_path + self.input_name + '_rois.csv'[:-4] + '_' + str(self.array_id).zfill(4) + '.csv'
+            filename_differentiator = '_rois_' + str(self.array_id).zfill(4)
+        else:
+            filename_differentiator = '_rois'
+        roi_file_ext = ".csv"
+        self.roi_path = os.path.join(self.image_handler.out_path, self.input_name + filename_differentiator + roi_file_ext)
+        self.roi_path_unfiltered = os.path.splitext(self.roi_path)[0] + ".unfiltered" + roi_file_ext
 
     @property
     def input_name(self):
@@ -146,8 +150,8 @@ class SpotPicker:
 
         n_spots_init = len(output)
         print(f'Found {n_spots_init} spots.')
-
-        if self.config('spot_in_nuc', False):
+        
+        if self.config.get('spot_in_nuc', False):
             if 'nuc_images_drift_correction' in self.image_handler.tables:
                 nuc_drifts = self.image_handler.tables[self.config['nuc_input_name'] + '_drift_correction']
                 nuc_target_frame = self.config['nuc_ref_frame']
@@ -178,7 +182,7 @@ class SpotPicker:
             print(f'Filtering complete, {len(output)} ROIs after filtering.')
 
         if do_not_write_empty and len(output) == 0:
-            print("WARNING -- Since there are no spots, no spots file(s) will be written.")
+            print("WARNING -- Since there are no spots after filering, no filtered spots file will be written.")
             return
         
         output = output.reset_index().rename(columns={'index':'roi_id_pos'})
