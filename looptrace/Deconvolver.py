@@ -31,7 +31,7 @@ class Deconvolver:
 
     @property
     def input_name(self):
-        return self.image_handler.config.decon_input_name
+        return self.image_handler.decon_input_name
 
     def extract_exp_psf(self) -> Path:
         '''
