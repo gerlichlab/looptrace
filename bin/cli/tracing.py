@@ -24,7 +24,7 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run chromatin tracing.')
-    parser.add_argument("config_path", type=ExtantFile, help="Config file path")
-    parser.add_argument("image_path", type=ExtantFolder, help="Path to folder with images to read.")
+    parser.add_argument("config_path", type=ExtantFile.from_string, help="Config file path")
+    parser.add_argument("image_path", type=ExtantFolder.from_string, help="Path to folder with images to read.")
     args = parser.parse_args()
     workflow(config_file=args.config_path, images_folder=args.image_path)

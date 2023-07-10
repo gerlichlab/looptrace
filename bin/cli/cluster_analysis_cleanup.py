@@ -37,6 +37,6 @@ def workflow(config_file: ExtantFile) -> None:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Clean up output files from cluster processing.')
-    parser.add_argument("config_path", type=ExtantFile, help="Config file path")
+    parser.add_argument("config_path", type=ExtantFile.from_string, help="Config file path")
     args = parser.parse_args()
     workflow(config_file=args.config_path)

@@ -105,8 +105,8 @@ def workflow(
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run spot detection on all frames and channels listed in config.')
-    parser.add_argument("config_path", type=ExtantFile, help="Config file path")
-    parser.add_argument("image_path", type=ExtantFolder, help="Path to folder with images to read.")
-    parser.add_argument("--image_save_path", type=ExtantFolder, help="(Optional): Path to folder to save images to.")
+    parser.add_argument("config_path", type=ExtantFile.from_string, help="Config file path")
+    parser.add_argument("image_path", type=ExtantFolder.from_string, help="Path to folder with images to read.")
+    parser.add_argument("--image_save_path", type=ExtantFolder.from_string, help="(Optional): Path to folder to save images to.")
     args = parser.parse_args()
     workflow(config_file=args.config_path, images_folder=args.image_path, image_save_path=args.image_save_path, method=args.method, intensity_threshold=args.threshold)
