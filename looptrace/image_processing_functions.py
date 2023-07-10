@@ -7,6 +7,7 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+import logging
 import glob
 import os
 import re
@@ -22,6 +23,8 @@ from skimage.filters import gaussian, threshold_otsu
 from skimage.registration import phase_cross_correlation
 from skimage.morphology import white_tophat, ball, remove_small_objects
 from skimage.measure import regionprops_table
+
+logger = logging.getLogger()
 
 
 def rois_from_csv(path):
@@ -107,7 +110,7 @@ def update_roi_points(point_layer, roi_table, position, downscale):
     rois = rois.drop(rois[rois['position']==position].index)
     return pd.concat([rois, new_rois]).sort_values('position').reset_index(drop=True)
 
-def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label', nuc_drifts = None, nuc_target_frame = None, spot_drifts = None):
+def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label', nuc_drifts=None, nuc_target_frame=None, spot_drifts=None):
     '''Check if a spot is in inside a segmented nucleus.
 
     Args:
@@ -136,9 +139,11 @@ def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label', nuc_drif
     try:
         rois.drop(columns=[new_col], inplace=True)
     except KeyError:
+        logger.debug(f"Column not present to drop: {new_col}")
         pass
 
     if nuc_drifts is not None:
+        logger.debug("Using nuclear drifts during ROI filtration")
         rois_shifted = rois.copy()
         shifts = []
         for _, row in rois_shifted.iterrows():
@@ -148,10 +153,9 @@ def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label', nuc_drif
             shifts.append(shift[0])
         shifts = pd.DataFrame(shifts, columns=['z','y','x'])
         rois_shifted[['zc', 'yc', 'xc']] = rois_shifted[['zc', 'yc', 'xc']].to_numpy() - shifts[['z','y','x']].to_numpy()
-
         rois[new_col] = rois_shifted.apply(spot_in_nuc, nuc_masks=nuc_masks, axis=1)
-    
     else:
+        logger.debug("No nuclear drifts to use during ROI filtration")
         rois[new_col] = rois.apply(spot_in_nuc, nuc_masks=nuc_masks, axis=1)
 
     return rois
