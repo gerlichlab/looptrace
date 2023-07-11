@@ -3,6 +3,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG C.UTF-8  
 ENV LC_ALL C.UTF-8
 
+# Include the cuda-compat-11-4 version to match what's on whatever machine for nvidia driver. Check nvidia-smi output.
+# Include vim to facilitate editing the package and other files when in development
 RUN apt-get update -y && \
     apt-get upgrade -y && \
     apt-get dist-upgrade -y && \
@@ -12,13 +14,11 @@ RUN apt-get update -y && \
     apt-get install gcc-9 g++-9 -y && \
     update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 60 --slave /usr/bin/g++ g++ /usr/bin/g++-9 && \
     update-alternatives --config gcc && \
-    # Include the cuda-compat-11-4 version to match what's on whatever machine for nvidia driver.
-    # Check nvidia-smi output.
-    apt-get install git wget libz-dev libbz2-dev liblzma-dev cuda-compat-11-4=470.199.02-1 -y && \
-    # to facilitate editing the package and other files when in development
+    apt-get install git wget libz-dev libbz2-dev liblzma-dev && \
+    apt-get install cuda-compat-11-4=470.199.02-1 -y && \
     apt-get install vim
 
-# Clone repo.
+# Copy repo code, to be built later.
 RUN cd / && mkdir looptrace && cd /looptrace
 WORKDIR /looptrace
 COPY . .
@@ -30,9 +30,6 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86
 
 # For the CUDA-based container, we only need to add the Python env (because we install TensorFlow there).
 ENV PATH=/opt/conda/bin:${PATH}
-
-RUN echo "which conda 2" && \
-    which conda
 
 # Create conda env and install mamba, matching environment 
 # name to that in the config file to be used. 
