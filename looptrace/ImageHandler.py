@@ -30,39 +30,37 @@ class ImageHandler:
         See config file for details on parameters.
         Will try to use zarr file if present.
         '''
-        
         self.config_path = config_path
         self.reload_config()
-
         self.image_path = image_path
-
         if self.image_path is not None:
             self.read_images()
-
         self.image_save_path = image_save_path if image_save_path is not None else self.image_path
-        
         self.out_path = lambda fn_extra: os.path.join(self.config['analysis_path'], self.config['analysis_prefix'] + fn_extra)
-
         self.load_tables()
 
     @property
-    def decon_input_name(self):
+    def decon_input_name(self) -> str:
         return self.config['decon_input_name']
     
     @property
-    def decon_output_name(self):
-        return f"{self.decon_input_name}_decon"
+    def decon_output_name(self) -> str:
+        return self.config.get('decon_output_name', f"{self.decon_input_name}_decon")
 
     @property
-    def reg_input_template(self):
+    def decon_output_path(self) -> str:
+        return os.path.join(self.image_save_path, self.decon_output_name)
+
+    @property
+    def reg_input_template(self) -> str:
         return self.config.get('reg_input_template', self.decon_output_name)
 
     @property
-    def reg_input_moving(self):
+    def reg_input_moving(self) -> str:
         return self.config.get('reg_input_moving', self.reg_input_template)
 
     @property
-    def spot_input_name(self):
+    def spot_input_name(self) -> str:
         return self.config.get('spot_input_name', self.decon_output_name)
 
     def load_tables(self):
