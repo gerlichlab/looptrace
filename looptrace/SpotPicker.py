@@ -7,6 +7,7 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+import logging
 import os
 import random
 from typing import *
@@ -21,6 +22,7 @@ from looptrace import image_io
 
 SPOT_IMG_ZIP_NAME = "spot_images.npz"
 
+logger = logging.getLogger()
 
 class SpotPicker:
     def __init__(self, image_handler, array_id = None):
@@ -64,38 +66,39 @@ class SpotPicker:
         NB: Null (None) returned if no spots are found.
         '''
 
-        #Read parameters from config.
-        
+        # First, detemine which data are relevant.
         spot_ch = self.config['spot_ch']
         if not isinstance(spot_ch, list):
             spot_ch = [spot_ch]
         spot_frame = self.config['spot_frame']
         if not isinstance(spot_frame, list):
             spot_frame = [spot_frame]
-        
+
+        # Then, fetch some settings.        
         try:
             subtract_beads = self.config['subtract_crosstalk']
             crosstalk_ch = self.config['crosstalk_ch']
         except KeyError: #Legacy config.
             subtract_beads = False
+            crosstalk_ch = None # dummy that should cause errors; never accessed if subtract_beads is False
 
         min_dist = self.config.get('min_spot_dist')
 
-        # Determine the detection method and threshold.
+        # Determine the detection method and parameters threshold.
         spot_threshold = self.config['spot_threshold']
         if not isinstance(spot_threshold, list):
             spot_threshold = [spot_threshold]*len(spot_frame)
         spot_ds = self.config['spot_downsample']
-        
+        logger.info(f"Spot downsampling setting: {spot_ds}")
         method_key = 'detection_method'
         detect_method = self.config.get(method_key, 'dog')
+        logger.info(f"Using '{detect_method}' for spot detection, threshold : {spot_threshold}")
         if detect_method == 'intensity':
             detect_func = ip.detect_spots_int
         elif detect_method == 'dog':
             detect_func = ip.detect_spots
         else:
             raise ValueError(f"Illegal value for '{method_key}' in config: {detect_method}")
-        print(f"Using '{detect_method}' for spot detection, threshold : {spot_threshold}")
         
         center_spots = (lambda df: ip.roi_center_to_bbox(df, roi_size = np.array(self.config['roi_image_size']) // spot_ds)) if detect_method != 'intensity' else (lambda df: df)
         
@@ -103,7 +106,7 @@ class SpotPicker:
         if preview_pos is not None:
             for i, frame in enumerate(spot_frame):
                 for j, ch in enumerate(spot_ch):
-                    print(f'Preview spot detection in position {preview_pos}, frame {frame} with threshold {spot_threshold[i]}.')
+                    logger.info(f'Preview spot detection in position {preview_pos}, frame {frame} with threshold {spot_threshold[i]}.')
                     pos_index = self.image_handler.image_lists[self.input_name].index(preview_pos)
                     img = self.images[pos_index][frame, ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
 
@@ -149,21 +152,24 @@ class SpotPicker:
         output = pd.concat(all_rois)
 
         n_spots_init = len(output)
-        print(f'Found {n_spots_init} spots.')
+        logger.info(f'Found {n_spots_init} spots.')
         
         if self.config.get('spot_in_nuc', False):
+            logger.info("Will attempt filtration of spots / ROIs for inclusion in nuclei")
             if 'nuc_images_drift_correction' in self.image_handler.tables:
+                logger.info("Using drift-corrected nuclei data")
                 nuc_drifts = self.image_handler.tables[self.config['nuc_input_name'] + '_drift_correction']
                 nuc_target_frame = self.config['nuc_ref_frame']
                 spot_drifts = self.image_handler.tables[self.input_name + '_drift_correction']
             else:
+                logger.info("No drift-corrected nuclei data to use.")
                 nuc_drifts = None
                 nuc_target_frame = None
                 spot_drifts = None
             if 'nuc_masks' not in self.image_handler.images:
-                print('No nuclei mask images found, cannot filter.')
+                logger.warning('No nuclei mask images found, cannot filter.')
             else:
-                print('Filtering for spots in nuclei.')
+                logger.info('Filtering for spots in nuclei.')
                 if self.array_id is None:
                     nuc_masks = [a[0,0] for a in self.image_handler.images['nuc_masks']]
                 else:
@@ -173,26 +179,26 @@ class SpotPicker:
                 output = output[output['nuc_label'] > 0 ]
             
             if 'nuc_classes' in self.image_handler.images:
-                print('Assigning nucleus classes.')
+                logger.info('Assigning nucleus classes.')
                 if self.array_id is None:
                     nuc_classes = [a[0,0] for a in self.image_handler.images['nuc_classes']]
                 else:
                     nuc_classes = [self.image_handler.images['nuc_classes'][pos_index][0,0]]
                 output = ip.filter_rois_in_nucs(output, nuc_classes, self.pos_list, new_col='nuc_class', nuc_drifts=nuc_drifts, nuc_target_frame=nuc_target_frame, spot_drifts = spot_drifts)
-            print(f'Filtering complete, {len(output)} ROIs after filtering.')
+            logger.info(f'Filtering complete, {len(output)} ROIs after filtering.')
 
         if do_not_write_empty and len(output) == 0:
-            print("WARNING -- Since there are no spots after filering, no filtered spots file will be written.")
+            logger.warning("Since there are no spots after filtering, no filtered spots file will be written.")
             return
         
         output = output.reset_index().rename(columns={'index':'roi_id_pos'})
         rois = ip.roi_center_to_bbox(output, roi_size = tuple(self.config['roi_image_size'])) if detect_method == 'dog' else output
         
         rois = rois.sort_values(['position', 'frame'])
-        print(f'Spots remaining: {len(rois)} / {n_spots_init}')
+        logger.info(f'Spots remaining after nuclei filtration: {len(rois)} / {n_spots_init}')
 
         outfile = roi_outfile or self.roi_path
-        print(f"Writing ROIs: {outfile}")
+        logger.info(f"Writing ROIs: {outfile}")
         rois.to_csv(outfile)
         self.image_handler.load_tables()
         
