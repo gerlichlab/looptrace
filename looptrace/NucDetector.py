@@ -255,7 +255,7 @@ class NucDetector:
                                                                                                 'z_px_fine', 'y_px_fine', 'x_px_fine', 'nuc_class'])
         nuc_rois['nuc_class'] = nuc_rois['nuc_class'].round()
         self.nuc_rois = nuc_rois
-        self.nuc_rois.to_csv(self.image_handler.out_path+'nuc_table.csv')
+        self.nuc_rois.to_csv(self.image_handler.out_path('nuc_table.csv'))
 
     def gen_nuc_rois_prereg(self):
         nuc_rois = []
@@ -284,7 +284,7 @@ class NucDetector:
             nuc_rois.append(nuc_props)
 
         self.nuc_rois = pd.concat(nuc_rois).reset_index(drop=True)
-        self.nuc_rois.to_csv(self.image_handler.out_path+'nuc_rois.csv')
+        self.nuc_rois.to_csv(self.image_handler.out_path('nuc_rois.csv'))
                 
                 
     def extract_single_roi_img(self, single_roi, images):

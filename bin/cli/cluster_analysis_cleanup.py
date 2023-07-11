@@ -20,7 +20,10 @@ def workflow(config_file: ExtantFile) -> None:
     all_files = os.scandir(image_handler.config['analysis_path'])
     sel_files = sorted([f.path for f in all_files if re.match(".*\d{4}.csv", f.name)])
     if len(sel_files) > 0:
-        out_path = image_handler.out_path+sel_files[0][len(image_handler.out_path):-9]+'.csv'
+        # TODO: better solution
+        dummy_index = len(os.path.join(image_handler.config['analysis_path'], image_handler.config['analysis_prefix']).rstrip(os.pathsep))
+        #out_path = image_handler.out_path(sel_files[0][len(image_handler.out_path):-9] + '.csv')
+        out_path = image_handler.out_path(sel_files[0][dummy_index:-9] + '.csv')
 
         dfs = [pd.read_csv(f, index_col=0) for f in sel_files]
         dfs = pd.concat(dfs).sort_values(['position','frame']).reset_index(drop=True)

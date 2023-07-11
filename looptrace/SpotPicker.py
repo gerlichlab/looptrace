@@ -28,7 +28,7 @@ class SpotPicker:
         self.config = image_handler.config
         self.images = self.image_handler.images[self.input_name]
         self.pos_list = self.image_handler.image_lists[self.input_name]
-        self.dc_roi_path = self.image_handler.out_path + self.input_name + '_dc_rois.csv'
+        self.dc_roi_path = self.image_handler.out_path(self.input_name + '_dc_rois.csv')
         self.array_id = array_id
         if self.array_id is not None:
             self.pos_list = [self.pos_list[int(self.array_id)]]
@@ -36,7 +36,7 @@ class SpotPicker:
         else:
             filename_differentiator = '_rois'
         roi_file_ext = ".csv"
-        self.roi_path = os.path.join(self.image_handler.out_path, self.input_name + filename_differentiator + roi_file_ext)
+        self.roi_path = self.image_handler.out_path(self.input_name + filename_differentiator + roi_file_ext)
         self.roi_path_unfiltered = os.path.splitext(self.roi_path)[0] + ".unfiltered" + roi_file_ext
 
     @property

@@ -41,7 +41,7 @@ class ImageHandler:
 
         self.image_save_path = image_save_path if image_save_path is not None else self.image_path
         
-        self.out_path = os.path.join(self.config['analysis_path'], self.config['analysis_prefix'])
+        self.out_path = lambda fn_extra: os.path.join(self.config['analysis_path'], self.config['analysis_prefix'] + fn_extra)
 
         self.load_tables()
 

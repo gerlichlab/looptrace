@@ -45,10 +45,10 @@ class Drifter():
         self.bead_roi_px = self.config.get('bead_roi_size', 15)
         
         if array_id is not None:
-            self.dc_file_path = self.image_handler.out_path + self.image_handler.reg_input_moving + '_drift_correction.csv'[:-4]+'_' + str(array_id).zfill(4) + '.csv'
+            self.dc_file_path = self.image_handler.out_path(self.image_handler.reg_input_moving + '_drift_correction.csv'[:-4]+'_' + str(array_id).zfill(4) + '.csv')
             self.pos_list = [self.pos_list[int(array_id)]]
         else:
-            self.dc_file_path = self.image_handler.out_path + self.image_handler.reg_input_moving + '_drift_correction.csv'
+            self.dc_file_path = self.image_handler.out_path(self.image_handler.reg_input_moving + '_drift_correction.csv')
 
 
     def fit_shift_single_bead(self, t_bead, o_bead):

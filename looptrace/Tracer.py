@@ -29,7 +29,7 @@ class Tracer:
         self.images = self.image_handler.images[self.config['trace_input_name']]
             
         self.pos_list = self.image_handler.image_lists[image_handler.spot_input_name]
-        self.traces_path = self.image_handler.out_path + 'traces.csv'
+        self.traces_path = self.image_handler.out_path('traces.csv')
         self.trace_beads = trace_beads
         if trace_beads:
             self.roi_table = image_handler.tables[image_handler.spot_input_name + '_bead_rois']
@@ -45,7 +45,7 @@ class Tracer:
             self.pos_list = [self.pos_list[int(self.array_id)]]
             self.roi_table = self.roi_table[self.roi_table.position.isin(self.pos_list)]
             self.all_rois = self.all_rois[self.all_rois.position.isin(self.pos_list)].reset_index(drop=True)
-            self.traces_path = self.image_handler.out_path+'traces.csv'[:-4]+'_'+str(self.array_id).zfill(4)+'.csv'
+            self.traces_path = self.image_handler.out_path('traces.csv'[:-4] + '_' + str(self.array_id).zfill(4) + '.csv')
             self.images = self.images[self.roi_table.index.to_list()]
 
 
