@@ -10,6 +10,7 @@ EMBL Heidelberg
 #from distutils.command.config import config
 #from tkinter import image_names
 
+import logging
 import os
 from typing import *
 
@@ -28,6 +29,7 @@ from looptrace import image_processing_functions as ip
 from looptrace import image_io
 from looptrace.gaussfit import fitSymmetricGaussian3D
 
+logger = logging.getLogger()
 
 class Drifter():
 
@@ -97,9 +99,9 @@ class Drifter():
             all_drifts = []
             #out_imgs = []
             for pos in self.pos_list:
+                logger.info(f'Running only course drift correction for position: {pos}.')
                 i = self.full_pos_list.index(pos)
                 #pos_imgs = []
-                print(f'Running only course drift correction for position {pos}.')
                 drifts_course = []
                 drifts_fine = []
 
@@ -115,48 +117,47 @@ class Drifter():
                 drifts['position'] = pos
                 drifts.index.name = 'frame'
                 all_drifts.append(drifts)
-                print('Finished drift correction for position ', pos)
-                #print('Drifts:', drifts)
+                logger.info(f'Finished drift correction for position: {pos}')
         else:
             #Run drift correction for each position and save results in table.
-            all_drifts=[]
-            #out_imgs = []
+            all_drifts = []
             for pos in self.pos_list:
-                #pos_imgs = []
                 i = self.full_pos_list.index(pos)
-                print(f'Running drift correction for position {pos}.')
-                
+                logger.info(f'Running drift correction for position: {pos}')
                 t_img = np.array(self.images_template[i][frame_t, ch_t])
-
                 bead_rois = ip.generate_bead_rois(t_img, threshold, min_bead_int, roi_px, n_points)
-
                 t_bead_imgs =  Parallel(n_jobs=-1, prefer='threads')(delayed(ip.extract_single_bead)(point, t_img) for point in bead_rois)
-
+                method_lookup = {
+                    'cc': (self.correlate_single_bead, lambda img_pair: img_pair + (100, )), 
+                    'fit': (self.fit_shift_single_bead, lambda img_pair: img_pair)
+                }
+                try:
+                    corr_func, get_args = method_lookup[dc_method]
+                except KeyError:
+                    raise NotImplementedError(f"Unknown drift correction method ({dc_method}); choose from: {', '.join(method_lookup.keys())}")
                 for t in tqdm.tqdm(range(self.images_moving[i].shape[0])):
                     o_img = np.array(self.images_moving[i][t, ch_o])
-
                     drift_course = ip.drift_corr_course(t_img, o_img, downsample=ds)
-
                     o_bead_imgs = Parallel(n_jobs=-1, prefer='threads')(delayed(ip.extract_single_bead)(point, o_img, drift_course=drift_course) for point in bead_rois)
-
                     if len(bead_rois) > 0:
-                        if dc_method == 'cc':
-                            drift_fine = Parallel(n_jobs=-1, prefer='threads')(delayed(self.correlate_single_bead)(t_bead, o_bead, 100) 
-                                                                                for t_bead, o_bead in zip(t_bead_imgs, o_bead_imgs))
-                        elif dc_method == 'fit':
-                            drift_fine = Parallel(n_jobs=-1, prefer='threads')(delayed(self.fit_shift_single_bead)(t_bead, o_bead) 
-                                                                            for t_bead, o_bead in zip(t_bead_imgs, o_bead_imgs))
-                        else:
-                            raise NotImplementedError('Unknown dc method.')       
-
+                        logger.info("Computing fine drift")
+                        drift_fine = Parallel(n_jobs=-1, prefer='threads')(delayed(corr_func)(*get_args(img_pair)) for img_pair in zip(t_bead_imgs, o_bead_imgs))
+                        #if dc_method == 'cc':
+                        #    drift_fine = Parallel(n_jobs=-1, prefer='threads')(delayed(self.correlate_single_bead)(t_bead, o_bead, 100) 
+                        #                                                        for t_bead, o_bead in zip(t_bead_imgs, o_bead_imgs))
+                        #elif dc_method == 'fit':
+                        #    drift_fine = Parallel(n_jobs=-1, prefer='threads')(delayed(self.fit_shift_single_bead)(t_bead, o_bead) 
+                        #                                                    for t_bead, o_bead in zip(t_bead_imgs, o_bead_imgs))
+                        #else:
+                        #    raise NotImplementedError('Unknown dc method.')
                         drift_fine = np.array(drift_fine)
                         drift_fine = trim_mean(drift_fine, proportiontocut=0.2, axis=0)
                     else:
+                        logger.info("No bead ROIs, setting fine drift to all-0s")
                         drift_fine = np.zeros_like(drift_course)
 
-                    drifts = [t,pos]+list(drift_course)+list(drift_fine)
+                    drifts = [t,pos] + list(drift_course) + list(drift_fine)
                     all_drifts.append(drifts) 
-                    print('Drifts:', drifts)
 
                     #if save_dc_beads:
                     #    if not os.path.isdir(dc_bead_img_path):
@@ -167,7 +168,7 @@ class Drifter():
 
                         #pos_imgs(dc_bead_img_path+os.sep+pos+'_T'+str(t).zfill(4)+'.npy', out_imgs)
 
-                print('Finished drift correction for position ', pos)
+                logger.info(f'Finished drift correction for position: {pos}')
                     
         
         all_drifts=pd.DataFrame(all_drifts, columns=['frame',
@@ -182,7 +183,7 @@ class Drifter():
         
         outfile = self.dc_file_path
         all_drifts.to_csv(outfile)
-        print('Drift correction complete.')
+        logger.info('Drift correction complete.')
         self.image_handler.drift_table = all_drifts
         return outfile
 
@@ -199,7 +200,7 @@ class Drifter():
             pos_img.append(da.roll(self.images[pos_index][t], shift = shift, axis = (1,2,3)))
         self.dc_images = da.stack(pos_img)
 
-        print('DC images generated.')
+        logger.info('DC images generated.')
 
     def save_proj_dc_images(self):
         '''
@@ -235,7 +236,7 @@ class Drifter():
                 shift = (shift[0]+shift[2], shift[1]+shift[3])
                 z[t] = ndi.shift(proj_img[t].compute(), shift=(0,)+shift, order = 2)
         
-        print('DC images generated.')
+        logger.info('DC images generated.')
     
     def save_course_dc_images(self):
         '''
@@ -269,4 +270,4 @@ class Drifter():
                 shift = (shift[0], shift[1], shift[2])
                 z[t] = ndi.shift(pos_img[t].compute(), shift=(0,)+shift, order = 0)
         
-        print('DC images generated.')
+        logger.info('DC images generated.')
