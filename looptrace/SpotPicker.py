@@ -200,8 +200,8 @@ class SpotPicker:
         outfile = roi_outfile or self.roi_path
         logger.info(f"Writing ROIs: {outfile}")
         rois.to_csv(outfile)
+
         self.image_handler.load_tables()
-        
         return rois
 
     def rois_from_beads(self):
