@@ -22,7 +22,7 @@ classifiers = [
 # These are the main runtime dependencies.
 python = ">= 3.10.0, < 3.12"
 dask = "^2023.5.1"
-gertils = { git = "https://github.com/gerlichlab/gertils.git", branch = "main" }
+gertils = { git = "https://github.com/gerlichlab/gertils.git", tag = "2023-07-13" }
 logmuse = "^0.2.1"
 numcodecs = "^0.11.0"
 numpy = "^1.24.2"
