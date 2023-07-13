@@ -16,7 +16,7 @@ from typing import *
 
 from looptrace.ImageHandler import handler_from_cli
 from looptrace.SpotPicker import SpotPicker
-from looptrace.pathtools import ExtantFile, ExtantFolder
+from gertils.pathtools import ExtantFile, ExtantFolder
 
 __author__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 

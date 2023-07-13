@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import *
 import pandas as pd
 
-from looptrace.pathtools import ExtantFile, ExtantFolder
+from gertils.pathtools import ExtantFile, ExtantFolder
 from detect_spots import Parameters
 from detect_spots_gridsearch import ParamIndex
 

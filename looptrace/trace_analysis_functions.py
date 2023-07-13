@@ -48,9 +48,6 @@ warnings.simplefilter('ignore', category=NumbaPerformanceWarning)
 
 logger = logging.getLogger()
 
-FRAME_INDEX_KEY = "frame"
-FRAME_NAMES_KEY = "frame_name"
-
 
 def gen_random_coil(g_dist, s_dist = 24.7, std_scaling = 0.5, deg=360, n_traces = 1000, sigma_noise = 2):
     traces = []
@@ -128,69 +125,6 @@ def pylochrom_coords_to_traces(coords):
     return pd.concat(traces)
 
 
-def read_traces_and_apply_frame_names(traces_file: Path, frame_names: Sequence[str]) -> pd.DataFrame:
-    logger.debug(f"Reading traces: {traces_file}")
-    traces = pd.read_csv(traces_file, index_col=0)
-    logger.debug(f"Applying frame names to traces")
-    traces[FRAME_NAMES_KEY] = traces.apply(lambda row: frame_names[row[FRAME_INDEX_KEY]], axis=1)
-    return traces
-
-
-def compute_ref_frame_spatial_information(df: pd.DataFrame) -> pd.DataFrame:
-    """Populate table with coordinates of probe's reference point and distance of each spot to its reference."""
-    refs = df[df['frame'] == df['ref_frame']]
-    for dim in ['z', 'y', 'x']:
-        refs_map = dict(zip(refs['trace_id'], refs[dim]))
-        df[dim + '_ref'] = df['trace_id'].map(refs_map)
-    return np.sqrt((df['z_ref']-df['z'])**2 + (df['y_ref']-df['y'])**2 + (df['x_ref']-df['x'])**2)
-
-
-def read_traces_parse_frame_names_and_apply_traces_qc(
-        traces_file: Path, 
-        config_file: Path, 
-        min_trace_length: Optional[int], 
-        exclusions: Optional[Iterable[str]],
-        ) -> Tuple[List[str], pd.DataFrame]:
-    import yaml
-    logger.debug(f"Reading config file: {config_file}")
-    with open(config_file, 'r') as fh:
-        config = yaml.safe_load(fh)
-    frame_names = config[FRAME_NAMES_KEY]
-    logger.debug(f"{len(frame_names)} frame names: {', '.join(frame_names)}")
-    traces = read_traces_and_apply_frame_names(traces_file=traces_file, frame_names=frame_names)
-    logger.info("Applying general trace QC")
-    traces['QC'] = tracing_qc(df=traces, qc_config=config).astype(int)
-    logger.info("Applying trace length QC")
-    filter_by_name = lambda df: df[~df[FRAME_NAMES_KEY].isin(exclusions)] if exclusions else df
-    filter_by_length = lambda df: tracing_length_qc(traces=df, min_length=min_trace_length) if min_trace_length else df
-    traces = filter_by_length(filter_by_name(traces))
-    return frame_names, traces
-
-
-#def tracing_qc(traces, qc_config):
-def tracing_qc(df, qc_config):
-    #df = traces.copy()
-    A_to_BG = qc_config['A_to_BG']
-    sigma_xy_max = qc_config['sigma_xy_max']
-    sigma_z_max = qc_config['sigma_z_max']
-    max_dist = qc_config.get('max_dist', 0)
-
-    #qc = np.ones((len(traces)), dtype=bool)
-    qc = np.ones((len(df)), dtype=bool)
-
-    ref_dist = compute_ref_frame_spatial_information(df=df)
-    df['ref_dist'] = ref_dist
-    if max_dist > 0:
-        qc = qc & (ref_dist < max_dist)
-    
-    qc = qc & (df['A'] > (A_to_BG*df['BG']))
-    qc = qc & (df['sigma_xy'] < sigma_xy_max)
-    qc = qc & (df['sigma_z'] < sigma_z_max)
-    qc = qc & df['z_px'].between(0,100)
-    qc = qc & df['y_px'].between(0,100)
-    qc = qc & df['x_px'].between(0,100)
-
-    return qc.astype(int)
 '''
 def tracing_qc(row, qc_dict, traces_df=None):
 
@@ -376,10 +310,6 @@ def pwd_calc(traces):
     pwds = [cdist(p, p) for p in points]
     pwds = np.stack(pwds)
     return pwds
-
-def tracing_length_qc(traces: pd.DataFrame, min_length: int = 0) -> pd.DataFrame:
-    '''Remove traces that are not sufficiently long.'''
-    return traces.groupby('trace_id').filter(lambda x: x['QC'].sum() >= min_length)
 
 
 def trace_analysis(traces, pwds):

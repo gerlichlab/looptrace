@@ -12,7 +12,7 @@ import re
 import pandas as pd
 
 from looptrace.ImageHandler import handler_from_cli
-from looptrace.pathtools import ExtantFile
+from gertils.pathtools import ExtantFile
 
 
 def workflow(config_file: ExtantFile) -> None:

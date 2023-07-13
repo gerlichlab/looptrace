@@ -11,7 +11,7 @@ import os
 
 from looptrace.ImageHandler import handler_from_cli
 from looptrace.SpotPicker import SpotPicker
-from looptrace.pathtools import ExtantFile, ExtantFolder
+from gertils.pathtools import ExtantFile, ExtantFolder
 
 
 def workflow(config_file: ExtantFile, images_folder: ExtantFolder, already_registered: bool = False) -> str:

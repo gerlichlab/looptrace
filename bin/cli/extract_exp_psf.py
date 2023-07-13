@@ -10,7 +10,7 @@ import argparse
 from pathlib import Path
 from typing import *
 
-from looptrace.pathtools import ExtantFile, ExtantFolder
+from gertils.pathtools import ExtantFile, ExtantFolder
 from looptrace.ImageHandler import handler_from_cli
 from looptrace.Deconvolver import Deconvolver
 

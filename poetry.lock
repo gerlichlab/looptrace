@@ -305,6 +305,22 @@ ssh = ["paramiko"]
 tqdm = ["tqdm"]
 
 [[package]]
+name = "gertils"
+version = "0.1dev"
+description = "General computing utilities for data processing and analysis in the Gerlich group at IMBA"
+category = "main"
+optional = false
+python-versions = "^3.8.0"
+files = []
+develop = false
+
+[package.source]
+type = "git"
+url = "https://github.com/gerlichlab/gertils.git"
+reference = "main"
+resolved_reference = "40adf49a5bf762215188a13d427bf9960c46ab54"
+
+[[package]]
 name = "greenlet"
 version = "2.0.2"
 description = "Lightweight in-process concurrent programming"
@@ -1828,4 +1844,4 @@ polymer = ["numba"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10.0, < 3.12"
-content-hash = "5dd797a21d41fdc26f8701178586281675d366a3bc30154c23be36f9bc4e48af"
+content-hash = "eaa16c7fa0c93e292cc7b247b6e59fd0722d82395961878ce79f4eebf32af1ae"

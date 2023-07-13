@@ -7,7 +7,7 @@ from typing import *
 
 import pypiper
 
-from looptrace.pathtools import ExtantFile, ExtantFolder
+from gertils.pathtools import ExtantFile, ExtantFolder
 from decon import workflow as run_deconvolution
 from nuc_label import workflow as run_nuclei_detection
 from drift_correct import workflow as run_drift_correction

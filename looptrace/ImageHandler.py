@@ -16,7 +16,7 @@ import pandas as pd
 import yaml
 
 from looptrace.image_io import NPZ_wrapper, TIFF_EXTENSIONS
-from looptrace.pathtools import ExtantFile, ExtantFolder
+from gertils.pathtools import ExtantFile, ExtantFolder
 
 __all__ = ["ImageHandler", "handler_from_cli", "read_images"]
 

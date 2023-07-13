@@ -12,7 +12,7 @@ from typing import *
 
 from looptrace.ImageHandler import handler_from_cli
 from looptrace.Drifter import Drifter
-from looptrace.pathtools import ExtantFile, ExtantFolder
+from gertils.pathtools import ExtantFile, ExtantFolder
 
 
 def workflow(config_file: ExtantFile, images_folder: ExtantFolder, image_save_path: Optional[ExtantFolder] = None) -> Optional[str]:

@@ -13,7 +13,7 @@ from typing import *
 
 import logmuse
 
-from looptrace.pathtools import ExtantFile, ExtantFolder, NonExtantPath
+from gertils.pathtools import ExtantFile, ExtantFolder, NonExtantPath
 from detect_spots import ParamPatch, Method, Parameters, workflow as run_spot_detection
 
 __author__ = ["Vince Reuter"]
