@@ -100,7 +100,7 @@ def multi_ome_zarr_to_dask(folder: str, remove_unused_dims = True):
     image_folders = sorted([p.name for p in os.scandir(folder) if os.path.isdir(p) and not ignore_path(p)])
     out = []
     for image in image_folders:
-        z = zarr.open(folder+os.sep+image+os.sep+'0')
+        z = zarr.open(os.path.join(folder, image, '0'))
         arr = da.from_zarr(z)
 
         # Remove unecessary dimensions: #TODO consider if this is wise!
