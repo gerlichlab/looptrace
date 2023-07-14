@@ -1,7 +1,6 @@
 """Quality control / analysis of the drift correction step"""
 
 import argparse
-import logging
 import sys
 from pathlib import Path
 from typing import *
@@ -17,8 +16,6 @@ from gertils.pathtools import ExtantFile, ExtantFolder
 from looptrace.gaussfit import fitSymmetricGaussian3D
 from looptrace import image_io
 from looptrace import image_processing_functions as ip
-
-logger = logging.getLogger()
 
 
 def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
@@ -39,9 +36,9 @@ def workflow(images_folder: Path, drift_correction_table_file: Path, output_fold
     # TODO: how to handle case when output already exists
     # TODO: how to iterate over or aggregate the FOVs as reference
 
-    logger.info(f"Reading zarr to dask: {images_folder}")
+    print(f"Reading zarr to dask: {images_folder}")
     imgs, positions = image_io.multi_ome_zarr_to_dask(images_folder)
-    logger.info(f"Reading drift correction table: {drift_correction_table_file}")
+    print(f"Reading drift correction table: {drift_correction_table_file}")
     drift_table = pd.read_csv(drift_correction_table_file, index_col=0)
 
     full_pos = 10 # what is this?
