@@ -55,7 +55,6 @@ def workflow(images_folder: Path, drift_correction_table_file: Path, output_fold
     bead_imgs_dc = np.zeros((len(rois),T,C,bead_roi_px,bead_roi_px,bead_roi_px))
 
     fits = []
-    ref_img = imgs[full_pos][ref_frame, ref_ch].compute()
     for t in tqdm.tqdm(range(T)):
         # TODO: this requires that the drift table be ordered such that the FOVs are as expected; need flexibility.
         pos = drift_table.position.unique()[full_pos]
@@ -94,6 +93,11 @@ def workflow(images_folder: Path, drift_correction_table_file: Path, output_fold
     fits['QC'] = 0
     fits.loc[fits['A_to_BG'] > 2, 'QC'] = 1
 
+    fits_output_file = output_folder / "dc_analysis_fits.tsv"
+    print(f"Writing fits file: {fits_output_file}")
+    fits.to_csv(fits_output_file, index=False, sep="\t")
+
+    print("Plotting...")
     sns.lineplot(data = fits[(fits.QC==1) & (fits.c ==0)], y = 'z_dc_rel', x='t',  estimator=np.median)
     sns.lineplot(data = fits[(fits.QC==1) & (fits.c ==0)], y = 'y_dc_rel', x='t',  estimator=np.median)
     sns.lineplot(data = fits[(fits.QC==1) & (fits.c ==0)], y = 'x_dc_rel', x='t',  estimator=np.median)
