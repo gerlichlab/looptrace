@@ -348,7 +348,7 @@ def roi_center_to_bbox(rois: pd.DataFrame, roi_size: Union[np.ndarray, Tuple[int
     rois['x_max'] = rois['xc'] + roi_size[2]//2
     return rois
 
-def generate_bead_rois(t_img, threshold, min_bead_int, bead_roi_px=16, n_points=200):
+def generate_bead_rois(t_img, threshold, min_bead_int, bead_roi_px=16, n_points=200, max_size=500):
     '''Function for finding positions of beads in an image based on manually set thresholds in config file.
 
     Args:
@@ -363,18 +363,15 @@ def generate_bead_rois(t_img, threshold, min_bead_int, bead_roi_px=16, n_points=
     roi_px = bead_roi_px//2
     t_img_label,num_labels=ndi.label(t_img>threshold)
     print('Number of unfiltered beads found: ', num_labels)
-    t_img_maxima = pd.DataFrame(regionprops_table(t_img_label, t_img, properties=('label', 'centroid', 'max_intensity')))
+    t_img_maxima = pd.DataFrame(regionprops_table(t_img_label, t_img, properties=('label', 'centroid', 'max_intensity', 'area')))
     
-    t_img_maxima = t_img_maxima[(t_img_maxima['centroid-0'] > roi_px) & (t_img_maxima['centroid-1'] > roi_px) & (t_img_maxima['centroid-2'] > roi_px)].query('max_intensity > @min_bead_int')
+    cent0, cent1, cent2 = "centroid-0", "centroid-1", "centroid-2"
+    t_img_maxima = t_img_maxima[(t_img_maxima[cent0] > roi_px) & (t_img_maxima[cent1] > roi_px) & (t_img_maxima[cent2] > roi_px) & (t_img_maxima['area'] < max_size)].query('max_intensity > @min_bead_int')
     
-    if len(t_img_maxima) > n_points:
-        t_img_maxima = t_img_maxima.sample(n=n_points, random_state=1)[['centroid-0', 'centroid-1', 'centroid-2']].to_numpy()
-    else:
-        t_img_maxima = t_img_maxima.sample(n=len(t_img_maxima), random_state=1)[['centroid-0', 'centroid-1', 'centroid-2']].to_numpy()
-    
-    t_img_maxima = np.round(t_img_maxima).astype(int)
+    centroid_columns = [cent0, cent1, cent2]
+    t_img_maxima = t_img_maxima if n_points == -1 else t_img_maxima.sample(n=min(n_points, len(t_img_maxima)), random_state=1)
+    return np.round(t_img_maxima[centroid_columns].to_numpy()).astype(int)
 
-    return t_img_maxima
 
 def extract_single_bead(point, img, bead_roi_px=16, drift_course=None):
     #Exctract a cropped region of a single fiducial in an image, optionally including a pre-calucalated course drift to shift the cropped region.
