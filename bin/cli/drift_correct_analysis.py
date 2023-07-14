@@ -1,0 +1,115 @@
+"""Quality control / analysis of the drift correction step"""
+
+import argparse
+import logging
+import sys
+from pathlib import Path
+from typing import *
+
+from matplotlib import pyplot as plt
+import numpy as np
+import pandas as pd
+from scipy import ndimage as ndi
+import seaborn as sns
+import tqdm
+
+from gertils.pathtools import ExtantFile, ExtantFolder
+from looptrace.gaussfit import fitSymmetricGaussian3D
+from looptrace import image_io
+from looptrace import image_processing_functions as ip
+
+logger = logging.getLogger()
+
+
+def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Quality control / analysis of the drift correction step", 
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        )
+    parser.add_argument("--output-folder", required=True, type=Path, help="Path to output folder")
+    parser.add_argument("--images-folder", required=True, type=ExtantFolder.from_string, help="Path to folder with images used for drift correction")
+    parser.add_argument("--drift-correction-table", required=True, type=ExtantFile.from_string, help="Path to drift correction table")
+    
+    #parser.add_argument("--reference-FOV", type=int, help="0-based index, referring to fields of view, for using as reference.")
+    
+    return parser.parse_args(cmdl)
+
+
+def workflow(images_folder: Path, drift_correction_table_file: Path, output_folder: Path) -> None:
+    imgs, positions = image_io.multi_ome_zarr_to_dask(images_folder)
+    logger.info()
+    drift_table = pd.read_csv(drift_correction_table_file, index_col=0)
+
+    full_pos = 10 # what is this?
+
+    ref_frame = 10 # ref_frame_moving and/or ref_frame_template
+    ref_ch = 0 # beads channgel from how the config is 
+
+    T = imgs[full_pos].shape[0]
+    C = imgs[full_pos].shape[1]
+    ref_rois = ip.generate_bead_rois(imgs[full_pos][ref_frame,ref_ch].compute(), 2000, 5000, n_points = -1)
+    rois = ref_rois[np.random.choice(ref_rois.shape[0], 50, replace=False)]
+    bead_roi_px = 8
+    bead_imgs = np.zeros((len(rois),T,C,bead_roi_px,bead_roi_px,bead_roi_px))
+    bead_imgs_dc = np.zeros((len(rois),T,C,bead_roi_px,bead_roi_px,bead_roi_px))
+
+    fits = []
+    ref_img = imgs[full_pos][ref_frame, ref_ch].compute()
+    for t in tqdm.tqdm(range(T)):
+        # TODO: this requires that the drift table be ordered such that the FOVs are as expected; need flexibility.
+        pos = drift_table.position.unique()[full_pos]
+        course_shift = drift_table[(drift_table.position == pos) & (drift_table.frame == t)][['z_px_course', 'y_px_course', 'x_px_course']].values[0]
+        fine_shift = drift_table[(drift_table.position == pos) & (drift_table.frame == t)][['z_px_fine', 'y_px_fine', 'x_px_fine']].values[0]
+        for c in [ref_ch]:#range(C):
+            img = imgs[full_pos][t, c].compute()
+            for i, roi in enumerate(rois):
+                bead_img=ip.extract_single_bead(roi, img, bead_roi_px=bead_roi_px, drift_course=course_shift)
+                fit = fitSymmetricGaussian3D(bead_img, sigma=1, center='max')[0]
+                fits.append([full_pos, t, c, i] + list(fit))
+                bead_imgs[i,t,c] = bead_img.copy()
+                bead_imgs_dc[i,t,c] = ndi.shift(bead_img, shift=fine_shift)
+
+    fits_tmp = pd.DataFrame(fits, columns=['full_pos','t', 'c', 'roi', 'BG', 'A', 'z_loc', 'y_loc', 'x_loc', 'sigma_z', 'sigma_xy'])
+
+    fits = fits_tmp.copy()
+
+    fits.loc[:, ['y_loc', 'x_loc', 'sigma_xy']] = fits.loc[:,  ['y_loc', 'x_loc', 'sigma_xy']]*110 #Scale xy coordinates to nm (use xy pixel size from exp)
+    fits.loc[:, ['z_loc', 'sigma_z']] = fits.loc[:, ['z_loc', 'sigma_z']]*300 #Scale z coordinates to nm (use slice spacing from exp)
+
+    ref_points = fits.loc[(fits.t == ref_frame) & (fits.c == 0), ['z_loc', 'y_loc', 'x_loc']].to_numpy() #Fits of fiducial beads in ref frame
+    res = []
+    for t in tqdm.tqdm(range(T)):
+        mov_points = fits.loc[(fits.t == t) & (fits.c == 0), ['z_loc', 'y_loc', 'x_loc']].to_numpy() #Fits of fiducial beads in moving frame
+        shift = drift_table.loc[(drift_table.position == pos) & (drift_table.frame == t), ['z_px_fine', 'y_px_fine', 'x_px_fine']].values[0]
+        shift[0] =  shift[0] * 300 #Extract calculated drift correction from drift correction file.
+        shift[1] =  shift[1] * 110
+        shift[2] =  shift[2] * 110
+        fits.loc[(fits.t == t), ['z_dc', 'y_dc', 'x_dc']] = mov_points + shift #Apply precalculated drift correction to moving fits
+        fits.loc[(fits.t == t), ['z_dc_rel', 'y_dc_rel', 'x_dc_rel']] =  np.abs(fits.loc[(fits.t == t), ['z_dc', 'y_dc', 'x_dc']].to_numpy() - ref_points)#Find offset between moving and reference points.
+        fits.loc[(fits.t == t), ['euc_dc_rel']] = np.sqrt(np.sum((fits.loc[(fits.t == t), ['z_dc', 'y_dc', 'x_dc']].to_numpy() - ref_points)**2, axis=1)) #Calculate 3D eucledian distance between points and reference
+        res.append(shift)
+    print(res)
+    fits['A_to_BG'] = fits['A']/fits['BG']
+    fits['QC'] = 0
+    fits.loc[fits['A_to_BG'] > 2, 'QC'] = 1
+
+    sns.lineplot(data = fits[(fits.QC==1) & (fits.c ==0)], y = 'z_dc_rel', x='t',  estimator=np.median)
+    sns.lineplot(data = fits[(fits.QC==1) & (fits.c ==0)], y = 'y_dc_rel', x='t',  estimator=np.median)
+    sns.lineplot(data = fits[(fits.QC==1) & (fits.c ==0)], y = 'x_dc_rel', x='t',  estimator=np.median)
+    sns.lineplot(data = fits[(fits.QC==1) & (fits.c ==0)], y = 'euc_dc_rel', x='t',  estimator=np.median)
+    print(fits[(fits.QC==1) & (fits.c ==0)].z_dc_rel.median(), fits[(fits.QC==1) & (fits.c ==0)].y_dc_rel.median(), fits[(fits.QC==1) & (fits.c ==0)].x_dc_rel.median(), fits[(fits.QC==1) & (fits.c ==0)].euc_dc_rel.median())
+    print(fits[(fits.QC==1) & (fits.c ==0)].z_dc_rel.quantile([0.25,0.75]), fits[(fits.QC==1) & (fits.c ==0)].y_dc_rel.quantile([0.25,0.75]), fits[(fits.QC==1) & (fits.c ==0)].x_dc_rel.quantile([0.25,0.75]), fits[(fits.QC==1) & (fits.c ==0)].euc_dc_rel.quantile([0.25,0.75]))
+    print(fits[(fits.QC==1) & (fits.c ==0)].z_dc_rel.mean(), fits[(fits.QC==1) & (fits.c ==0)].y_dc_rel.mean(), fits[(fits.QC==1) & (fits.c ==0)].x_dc_rel.mean(), fits[(fits.QC==1) & (fits.c ==0)].euc_dc_rel.mean())
+    print(fits[(fits.QC==1) & (fits.c ==0)].z_dc_rel.std(), fits[(fits.QC==1) & (fits.c ==0)].y_dc_rel.std(), fits[(fits.QC==1) & (fits.c ==0)].x_dc_rel.std(), fits[(fits.QC==1) & (fits.c ==0)].euc_dc_rel.std())
+    plt.ylim(0,100)
+
+    plotfile = output_folder / "fiducial.png"
+    print(f"Saving plot: {plotfile}")
+    plt.savefig(plotfile, dpi=300)
+    
+    print("Done!")
+
+
+if __name__ == "__main__":
+    opts = parse_cmdl(sys.argv[1:])
+    workflow(images_folder=opts.images_folder, drift_correction_table_file=opts.drift_correction_table)
