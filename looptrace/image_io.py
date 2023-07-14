@@ -25,6 +25,10 @@ import zarr
 TIFF_EXTENSIONS = [".tif", ".tiff"]
 
 
+def ignore_path(p: Union[os.DirEntry, Path]) -> bool:
+    return p.name.startswith("_")
+
+
 class NPZ_wrapper():
     '''
     Class wrapping the numpy .npz loader to allow slicing npz files as standard arrays
@@ -93,7 +97,7 @@ def multi_ome_zarr_to_dask(folder: str, remove_unused_dims = True):
         list: list of dask arrays of the images
         list: list of strings of image folder names
     '''
-    image_folders = sorted([p.name for p in os.scandir(folder) if (os.path.isdir(p) and not p.name.startswith('_'))])
+    image_folders = sorted([p.name for p in os.scandir(folder) if os.path.isdir(p) and not ignore_path(p)])
     out = []
     for image in image_folders:
         z = zarr.open(folder+os.sep+image+os.sep+'0')
@@ -148,7 +152,7 @@ def stack_nd2_to_dask(
 
     import nd2
 
-    image_files = sorted([p.path for p in os.scandir(folder) if (p.name.endswith('.nd2') and not p.name.startswith('_'))])
+    image_files = sorted([p.path for p in os.scandir(folder) if (p.name.endswith('.nd2') and not ignore_path(p))])
     image_times = sorted(list(set([re.findall('.+(Time\d+)', s)[0] for s in image_files])))
     image_points = sorted(list(set([re.findall('.+(Point\d+)', s)[0] for s in image_files])))
     if position_id is not None:
@@ -242,7 +246,7 @@ def multifolder_nd2_to_dask(folder: str):
 
 
     import nd2
-    image_folders = sorted([p.path for p in os.scandir(folder) if os.path.isdir(p) and not p.name.startswith('_')])
+    image_folders = sorted([p.path for p in os.scandir(folder) if os.path.isdir(p) and not ignore_path(p)])
     out = []
     print(image_folders)
     for folder in image_folders:
