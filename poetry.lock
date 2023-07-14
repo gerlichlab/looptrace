@@ -317,8 +317,8 @@ develop = false
 [package.source]
 type = "git"
 url = "https://github.com/gerlichlab/gertils.git"
-reference = "2023-07-13"
-resolved_reference = "6789f05b1add848db7fe8b85f40b898725a47be5"
+reference = "2023-07-14"
+resolved_reference = "89fe4fa4eb316d7c6287668acbdb04645a7534f0"
 
 [[package]]
 name = "greenlet"
@@ -1846,4 +1846,4 @@ polymer = ["numba"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10.0, < 3.12"
-content-hash = "12e12956dee7b7c0a28b04450e5d15e47eb53a4b69b7378596ec9a7699ae7df3"
+content-hash = "5a991e197581304490c37c33b9404a8fe19f332efc3d9f958863461e78b8bcd7"
