@@ -95,7 +95,8 @@ def workflow(images_folder: Path, drift_correction_table_file: Path, output_fold
     drift_table = pd.read_csv(drift_correction_table_file, index_col=0)
 
     if full_pos is not None:
-        fits = proc_1_fov(full_pos)
+        # TODO: parameterise with config.
+        fits = process_single_FOV_single_reference_frame(imgs, drift_table, full_pos, 10, 0)
         make_plot = True
     else:
         fov_indices = range(len(drift_table.position.unique()))
