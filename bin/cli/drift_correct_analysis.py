@@ -94,25 +94,18 @@ def workflow(images_folder: Path, drift_correction_table_file: Path, output_fold
     print(f"Reading drift correction table: {drift_correction_table_file}")
     drift_table = pd.read_csv(drift_correction_table_file, index_col=0)
 
-    def proc_1_fov(pos_idx: int):
-        return process_single_FOV_single_reference_frame(
-            imgs=imgs, 
-            drift_table=drift_table, 
-            full_pos=pos_idx,
-            ref_frame=10, # TODO: parameterise with config.
-            ref_ch=0, # TODO: parameterise with config.
-            )
-    
     if full_pos is not None:
         fits = proc_1_fov(full_pos)
         make_plot = True
     else:
         fov_indices = range(len(drift_table.position.unique()))
+        # TODO: parameterise with config.
+        func_args = ((imgs, drift_table, idx, 10, 0) for idx in fov_indices)
         if opts.cores == 1:
-            single_fov_fits = map(proc_1_fov, fov_indices)
+            single_fov_fits = (process_single_FOV_single_reference_frame(*args) for args in func_args)
         else:
             with mp.Pool(opts.cores) as workers:
-                single_fov_fits = workers.starmap(proc_1_fov, fov_indices)
+                single_fov_fits = workers.starmap(process_single_FOV_single_reference_frame, func_args)
         fits = pd.concat(single_fov_fits)
         make_plot = False
     
