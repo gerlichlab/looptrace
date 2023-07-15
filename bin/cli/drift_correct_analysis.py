@@ -1,8 +1,9 @@
 """Quality control / analysis of the drift correction step"""
 
 import argparse
-import sys
+import multiprocessing as mp
 from pathlib import Path
+import sys
 from typing import *
 
 from matplotlib import pyplot as plt
@@ -27,6 +28,7 @@ def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
     parser.add_argument("--images-folder", required=True, type=ExtantFolder.from_string, help="Path to folder with images used for drift correction")
     parser.add_argument("--drift-correction-table", required=True, type=ExtantFile.from_string, help="Path to drift correction table")
     parser.add_argument("--reference-FOV", type=int, help="0-based index, referring to fields of view, for using as reference.")
+    parser.add_argument("--cores", type=int, default=1, help="Number of processors to use")
     return parser.parse_args(cmdl)
 
 
@@ -84,9 +86,8 @@ def process_single_FOV_single_reference_frame(imgs: List[np.ndarray], drift_tabl
     return fits
 
 
-def workflow(images_folder: Path, drift_correction_table_file: Path, output_folder: Path, full_pos: Optional[int] = None) -> pd.DataFrame:
+def workflow(images_folder: Path, drift_correction_table_file: Path, output_folder: Path, full_pos: Optional[int], cores: int) -> pd.DataFrame:
     # TODO: how to handle case when output already exists
-    # TODO: how to iterate over or aggregate the FOVs as reference
 
     print(f"Reading zarr to dask: {images_folder}")
     imgs, _ = image_io.multi_ome_zarr_to_dask(images_folder)
@@ -105,7 +106,13 @@ def workflow(images_folder: Path, drift_correction_table_file: Path, output_fold
         fits = proc_1_fov(full_pos)
         make_plot = True
     else:
-        fits = pd.concat(map(proc_1_fov, range(len(drift_table.position.unique()))))
+        fov_indices = range(len(drift_table.position.unique()))
+        if opts.cores == 1:
+            single_fov_fits = map(proc_1_fov, fov_indices)
+        else:
+            with mp.Pool(opts.cores) as workers:
+                single_fov_fits = workers.starmap(proc_1_fov, fov_indices)
+        fits = pd.concat(single_fov_fits)
         make_plot = False
     
     fits_output_file = output_folder / "dc_analysis_fits.tsv"
@@ -140,5 +147,6 @@ if __name__ == "__main__":
         images_folder=opts.images_folder.path, 
         drift_correction_table_file=opts.drift_correction_table.path, 
         output_folder=opts.output_folder, 
-        full_pos=opts.reference_FOV
+        full_pos=opts.reference_FOV, 
+        cores=opts.cores,
     )
