@@ -94,13 +94,14 @@ def workflow(images_folder: Path, drift_correction_table_file: Path, output_fold
     print(f"Reading drift correction table: {drift_correction_table_file}")
     drift_table = pd.read_csv(drift_correction_table_file, index_col=0)
 
-    proc_1_fov = lambda pos_idx: process_single_FOV_single_reference_frame(
-        imgs=imgs, 
-        drift_table=drift_table, 
-        full_pos=pos_idx,
-        ref_frame=10, # TODO: parameterise with config.
-        ref_ch=0, # TODO: parameterise with config.
-        )
+    def proc_1_fov(pos_idx: int):
+        return process_single_FOV_single_reference_frame(
+            imgs=imgs, 
+            drift_table=drift_table, 
+            full_pos=pos_idx,
+            ref_frame=10, # TODO: parameterise with config.
+            ref_ch=0, # TODO: parameterise with config.
+            )
     
     if full_pos is not None:
         fits = proc_1_fov(full_pos)
