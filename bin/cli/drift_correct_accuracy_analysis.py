@@ -1,7 +1,8 @@
 """Quality control / analysis of the drift correction step"""
 
 import argparse
-from dataclasses import dataclass
+import dataclasses
+import json
 import multiprocessing as mp
 from pathlib import Path
 import sys
@@ -45,7 +46,7 @@ class IllegalParametersError(Exception):
         super().__init__(f"{len(errors)} error(s): {', '.join(errors)}")
 
 
-@dataclass
+@dataclasses.dataclass
 class BeadDetectionParameters:
     """A bundle of parameters related to bead detection for assessment of drift correction accuracy"""
     reference_frame: int
@@ -71,7 +72,7 @@ class BeadDetectionParameters:
             raise IllegalParametersError(errors)
         
 
-@dataclass
+@dataclasses.dataclass
 class BeadFiltrationParameters:
     """A bundle of parameters related to filtration of beads for this fiducial accuracy analysis"""
     num_rois: int
@@ -95,7 +96,7 @@ class BeadFiltrationParameters:
             raise IllegalParametersError(errors)
 
 
-@dataclass
+@dataclasses.dataclass
 class CameraParameters:
     """A bundle of parameters related to properties of the camera used for imaging"""
     nanometers_xy: Union[int, float]
@@ -114,6 +115,14 @@ class CameraParameters:
         errors = self._invalidate()
         if errors:
             raise IllegalParametersError(errors)
+
+
+class DataclassCapableEncoder(json.JSONEncoder):
+        """Facilitate serialisation of the parameters dataclasses in this module, for data provenance."""
+        def default(self, o):
+            if dataclasses.is_dataclass(o):
+                return dataclasses.asdict(o)
+            return super().default(o)
 
 
 def process_single_FOV_single_reference_frame(imgs: List[np.ndarray], drift_table: pd.DataFrame, full_pos: int, bead_detection_params: BeadDetectionParameters, bead_filtration_params: BeadFiltrationParameters, camera_params: CameraParameters) -> pd.DataFrame:
@@ -197,6 +206,16 @@ def workflow(config_file: Path, images_folder: Path, drift_correction_table_file
     )
     print(f"Camera parameters: {camera_params}")
 
+    realised_params_file = output_folder / "drift_correction_accuracy_analysis_parameters.json"
+    print(f"Writing parameters file: {realised_params_file}")
+    with open(realised_params_file, 'w') as fh:
+        json.dump(
+            obj={"bead_detection": bead_detection_params, "bead_filtration": bead_filtration_params, "camera": camera_params}, 
+            fp=realised_params_file, 
+            indent=2,
+            cls=DataclassCapableEncoder
+            )
+
     print(f"Reading zarr to dask: {images_folder}")
     imgs, _ = image_io.multi_ome_zarr_to_dask(images_folder)
     print(f"Reading drift correction table: {drift_correction_table_file}")
@@ -216,7 +235,7 @@ def workflow(config_file: Path, images_folder: Path, drift_correction_table_file
                 single_fov_fits = workers.starmap(process_single_FOV_single_reference_frame, func_args)
         fits = pd.concat(single_fov_fits)
     
-    fits_output_file = output_folder / "dc_analysis_fits.tsv"
+    fits_output_file = output_folder / "drift_correction_accuracy.fits.tsv"
     print(f"Writing fits file: {fits_output_file}")
     fits.to_csv(fits_output_file, index=False, sep="\t")
 
