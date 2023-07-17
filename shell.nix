@@ -11,7 +11,7 @@
 let baseBuildInputs = with pkgs; [ poetry stdenv.cc.cc.lib zlib ];
     py310 = pkgs.python310.withPackages (ps: with ps; [ numpy pandas ]);
     py311 = pkgs.python311.withPackages (ps: with ps; [ numpy pandas ]);
-    R-analysis = pkgs.rWrapper.override{ packages = with pkgs.rPackages; [ data_table ggplot2 ]; };
+    R-analysis = pkgs.rWrapper.override{ packages = with pkgs.rPackages; [ argparse data_table ggplot2 reshape2 tidyverse ]; };
     poetryExtras = [] ++ 
       (if pipeline then ["pipeline"] else []) ++
       (if analysis then ["analysis"] else []) ++ 
