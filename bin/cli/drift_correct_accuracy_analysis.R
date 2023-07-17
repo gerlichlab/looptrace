@@ -5,6 +5,7 @@ library("ggplot2")
 library("reshape2")
 
 # Define some key constants.
+## Measurement names and other column names
 Z_COL <- "z_dc_rel"
 Y_COL <- "y_dc_rel"
 X_COL <- "x_dc_rel"
@@ -13,7 +14,13 @@ DISTANCE_COLUMNS <- c(Z_COL, Y_COL, X_COL, EUC_DIST_COL)
 NON_DISTANCE_COLUMNS <- c("full_pos", "t", "c", "QC")
 COLUMNS_OF_INTEREST <- c(NON_DISTANCE_COLUMNS, DISTANCE_COLUMNS)
 PLOT_RELEVANT_COLUMNS <- c("t", DISTANCE_COLUMNS)
+## Output-related
 OUTPUT_FILENAME_PREFIX <- "drift_correction_error"
+COLORS4 <- c("darkmagenta", "cornflowerblue", "seagreen", "coral")
+DISTANCE_LABELS <- c("z", "y", "x", "eucl")
+names(DISTANCE_LABELS) <- c(Z_COL, Y_COL, X_COL, EUC_DIST_COL)
+SCALE_FILL_4 <- scale_fill_manual(values = COLORS4, labels = DISTANCE_LABELS)
+SCALE_COLOUR_4 <- scale_colour_manual(values = COLORS4, labels = DISTANCE_LABELS)
 
 # Define the CLI and parse arguments.
 cli_parser <- ArgumentParser(description="Visualise results of drift_correct_analsis.py, namely the amount of imprecision that remains even after drift correction")
@@ -55,7 +62,8 @@ plot_means_and_intervals <- function(full_plot_data, fov = NULL) {
         geom_ribbon(aes(ymin = X$ci95_lower, ymax = X$ci95_upper), alpha=0.25) +
         geom_line(aes(y = X$mean_value), linewidth = 0.8) + 
         ylab("means and 95% CIs") + 
-        geom_point(alpha = 0.5) + xlab("frame index") + theme_minimal()
+        geom_point(alpha = 0.5) + xlab("frame index") + theme_minimal() + 
+        SCALE_FILL_4 + SCALE_COLOUR_4
     return(p)
 }
 
@@ -66,7 +74,8 @@ plot_medians_and_iqrs <- function(full_plot_data, fov = NULL) {
         geom_ribbon(aes(ymin = X$iqr_lower, ymax = X$iqr_upper), alpha=0.25) +
         geom_line(aes(y = X$median_value), linewidth = 0.8) + 
         ylab("medians and IQRs") + 
-        geom_point(alpha = 0.5) + xlab("frame index") + theme_minimal()
+        geom_point(alpha = 0.5) + xlab("frame index") + theme_minimal() + 
+        SCALE_FILL_4 + SCALE_COLOUR_4
     return(p)
 }
 
