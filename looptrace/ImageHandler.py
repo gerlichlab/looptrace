@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from looptrace.image_io import NPZ_wrapper, TIFF_EXTENSIONS
+from looptrace.image_io import ignore_path, NPZ_wrapper, TIFF_EXTENSIONS
 from gertils.pathtools import ExtantFile, ExtantFolder
 
 __all__ = ["ImageHandler", "handler_from_cli", "read_images"]
@@ -64,7 +64,6 @@ class ImageHandler:
         return self.config.get('spot_input_name', self.decon_output_name)
 
     def load_tables(self):
-        is_eligible = lambda fp: not os.path.split(fp)[1].startswith('_')
         parsers = {".csv": lambda f: pd.read_csv(f, index_col=0), ".pkl": pd.read_pickle}
         analysis_folder = self.config['analysis_path']
         try:
@@ -81,7 +80,7 @@ class ImageHandler:
                 logger.warning(f"Cannot parse table name from filename: {fp.name}")
                 continue
             fp = fp.path
-            if not is_eligible(fp):
+            if ignore_path(fp):
                 logger.debug(f"Not eligible as table: {fp}")
                 continue
             try:
@@ -94,14 +93,14 @@ class ImageHandler:
             logger.info(f"Loaded: {tn}")
             self.table_paths[tn] = fp
     
-    def read_images(self, is_eligible: Callable[[str], bool] = lambda path_name: path_name != "spot_images_dir" and not path_name.startswith("_")):
+    def read_images(self, is_eligible: Callable[[Union[os.DirEntry, Path]], bool] = lambda p: p.name != "spot_images_dir" and not ignore_path(p)):
         '''
         Function to load existing images from the input folder, and them into a dictionary (self.images{}),
         with folder name or image name (without extensions) as keys, images as values.
         Standardized to either folders with OME-ZARR, single NPY files or NPZ collections.
         More can be added as needed.
         '''
-        image_paths = ((p.name, p.path) for p in os.scandir(self.image_path) if is_eligible(p.name))
+        image_paths = ((p.name, p.path) for p in os.scandir(self.image_path) if is_eligible(p))
         self.images, self.image_lists = read_images(image_paths)
 
     def reload_config(self):

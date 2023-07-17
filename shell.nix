@@ -11,7 +11,7 @@
 let baseBuildInputs = with pkgs; [ poetry stdenv.cc.cc.lib zlib ];
     py310 = pkgs.python310.withPackages (ps: with ps; [ numpy pandas ]);
     py311 = pkgs.python311.withPackages (ps: with ps; [ numpy pandas ]);
-    R-analysis = pkgs.rWrapper.override{ packages = with pkgs.rPackages; [ data_table ggplot2 ]; };
+    R-analysis = pkgs.rWrapper.override{ packages = with pkgs.rPackages; [ argparse data_table ggplot2 reshape2 tidyverse ]; };
     poetryExtras = [] ++ 
       (if pipeline then ["pipeline"] else []) ++
       (if analysis then ["analysis"] else []) ++ 
@@ -32,6 +32,10 @@ pkgs.mkShell {
     ] else []) ++ 
     (if analysis then [ R-analysis ] else []);
   shellHook = ''
+    # To get this working on the lab machine, we need to modify Poetry's keyring interaction:
+    # https://stackoverflow.com/questions/74438817/poetry-failed-to-unlock-the-collection
+    # https://github.com/python-poetry/poetry/issues/1917
+    export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
     poetry env use "${py310}/bin/python"
     export LD_LIBRARY_PATH="${pkgs.zlib}/lib:${pkgs.stdenv.cc.cc.lib}/lib"
     poetry install -vv --sync${poetryInstallExtras}
