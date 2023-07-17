@@ -35,6 +35,7 @@ def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
     parser.add_argument("--images-folder", required=True, type=ExtantFolder.from_string, help="Path to folder with images used for drift correction")
     parser.add_argument("--drift-correction-table", required=True, type=ExtantFile.from_string, help="Path to drift correction table")
     parser.add_argument("--cores", type=int, default=1, help="Number of processors to use")
+    parser.add_argument("--num-bead-rois", type=int, help="Number of bead ROIs to subsample")
     return parser.parse_args(cmdl)
 
 
@@ -184,7 +185,7 @@ def workflow(config_file: Path, images_folder: Path, drift_correction_table_file
     print(f"Bead detection parameters: {bead_detection_params}")
     
     # Filtration parameters
-    num_bead_rois = num_bead_rois or config["n_bead_rois_dc_analysis"]
+    num_bead_rois = num_bead_rois or config["n_bead_rois_dc_accuracy"]
     min_signal_to_noise = config[SIGNAL_NOISE_RATIO_NAME]
     bead_filtration_params = BeadFiltrationParameters(num_rois=num_bead_rois, min_signal_to_noise=min_signal_to_noise)
     print(f"Bead filtration parameters: {bead_filtration_params}")
