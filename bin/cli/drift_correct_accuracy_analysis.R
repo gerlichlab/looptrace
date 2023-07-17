@@ -51,21 +51,23 @@ build_plot_table <- function(X, fov = NULL) {
 # Plot means, with 95% CI flanking.
 plot_means_and_intervals <- function(full_plot_data, fov = NULL) {
     X <- build_plot_table(full_plot_data, fov = fov)
-    ggplot(X, aes(x = t, y = mean_value, colour = variable, fill = variable)) + 
+    p <- ggplot(X, aes(x = t, y = mean_value, colour = variable, fill = variable)) + 
         geom_ribbon(aes(ymin = X$ci95_lower, ymax = X$ci95_upper), alpha=0.25) +
         geom_line(aes(y = X$mean_value), linewidth = 0.8) + 
         ylab("means and 95% CIs") + 
         geom_point(alpha = 0.5) + xlab("frame index") + theme_minimal()
+    return(p)
 }
 
 ## Plot medians, with IQR flanking.
 plot_medians_and_iqrs <- function(full_plot_data, fov = NULL) {
     X <- build_plot_table(full_plot_data, fov = fov)
-    ggplot(X, aes(x = t, y = median_value, colour = variable, fill = variable)) + 
+    p <- ggplot(X, aes(x = t, y = median_value, colour = variable, fill = variable)) + 
         geom_ribbon(aes(ymin = X$iqr_lower, ymax = X$iqr_upper), alpha=0.25) +
         geom_line(aes(y = X$median_value), linewidth = 0.8) + 
         ylab("medians and IQRs") + 
         geom_point(alpha = 0.5) + xlab("frame index") + theme_minimal()
+    return(p)
 }
 
 # Generic function to plot lines connecting measures of center and shaded margins of interval / IQR.
@@ -88,7 +90,8 @@ plot_drift_correction_error <- function(full_plot_data, central_measure, fov) {
     }
     message("Creating plot based on: ", fov_text)
     title_text <- sprintf("%s, %s", method_text, fov_text)
-    plot_func(full_plot_data = full_plot_data, fov = fov) + ggtitle(title_text)
+    p <- plot_func(full_plot_data = full_plot_data, fov = fov) + ggtitle(title_text)
+    return(p)
 }
 
 get_output_filepath <- function(fn) { file.path(opts$output_folder, fn) }
@@ -110,7 +113,8 @@ medians_plots_file <-  get_output_filepath(sprintf("%s.medians.by_FOV.pdf", OUTP
 message("Saving median plots by FOV: ", medians_plots_file)
 pdf(file = medians_plots_file)
 for (fov in all_fovs) {
-    plot_drift_correction_error(full_plot_data = fits_beads_pass_qc, central_measure = "median", fov = fov)
+    p <- plot_drift_correction_error(full_plot_data = fits_beads_pass_qc, central_measure = "median", fov = fov)
+    print(p)
 }
 dev.off()
 ## Then, the means.
@@ -118,6 +122,7 @@ means_plots_file <-  get_output_filepath(sprintf("%s.means.by_FOV.pdf", OUTPUT_F
 message("Saving mean plots by FOV: ", means_plots_file)
 pdf(file = means_plots_file)
 for (fov in all_fovs) {
-    print(plot_drift_correction_error(full_plot_data = fits_beads_pass_qc, central_measure = "mean", fov = fov))
+    p <- plot_drift_correction_error(full_plot_data = fits_beads_pass_qc, central_measure = "mean", fov = fov)
+    print(p)
 }
 dev.off()
