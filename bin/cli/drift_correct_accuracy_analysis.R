@@ -97,16 +97,16 @@ get_output_filepath <- function(fn) { file.path(opts$output_folder, fn) }
 plt_all_mean <- plot_drift_correction_error(full_plot_data = fits_beads_pass_qc, central_measure = "mean", fov = NULL)
 all_data_means_filepath <- get_output_filepath(sprintf("%s.means.all_FOV.png", OUTPUT_FILENAME_PREFIX))
 message("Saving all-means plot: ", all_data_means_filepath)
-ggsave(filename = all_data_means_filepath, plot = plt_all_mean)
+ggsave(filename = all_data_means_filepath, plot = plt_all_mean, bg = "white")
 plt_all_median <- plot_drift_correction_error(full_plot_data = fits_beads_pass_qc, central_measure = "median", fov = NULL)
 all_data_medians_filepath <- get_output_filepath(sprintf("%s.medians.all_FOV.png", OUTPUT_FILENAME_PREFIX))
 message("Saving all-medians plot: ", all_data_medians_filepath)
-ggsave(filename = all_data_medians_filepath, plot = plt_all_median)
+ggsave(filename = all_data_medians_filepath, plot = plt_all_median, bg = "white")
 
 # Save the per-FOV plots to files by method.
 all_fovs <- unique(fits_beads_pass_qc$full_pos)
 ## First, the medians.
-medians_plots_file <-  get_output_filepath(sprintf("%s.medians.by_FOV.png", OUTPUT_FILENAME_PREFIX))
+medians_plots_file <-  get_output_filepath(sprintf("%s.medians.by_FOV.pdf", OUTPUT_FILENAME_PREFIX))
 message("Saving median plots by FOV: ", medians_plots_file)
 pdf(file = medians_plots_file)
 for (fov in all_fovs) {
@@ -114,10 +114,10 @@ for (fov in all_fovs) {
 }
 dev.off()
 ## Then, the means.
-means_plots_file <-  get_output_filepath(sprintf("%s.means.by_FOV.png", OUTPUT_FILENAME_PREFIX))
+means_plots_file <-  get_output_filepath(sprintf("%s.means.by_FOV.pdf", OUTPUT_FILENAME_PREFIX))
 message("Saving mean plots by FOV: ", means_plots_file)
 pdf(file = means_plots_file)
 for (fov in all_fovs) {
-    plot_drift_correction_error(full_plot_data = fits_beads_pass_qc, central_measure = "mean", fov = fov)
+    print(plot_drift_correction_error(full_plot_data = fits_beads_pass_qc, central_measure = "mean", fov = fov))
 }
 dev.off()
