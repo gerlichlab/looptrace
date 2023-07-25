@@ -23,6 +23,9 @@ __all__ = ["ImageHandler", "handler_from_cli", "read_images"]
 logger = logging.getLogger()
 
 
+PathFilter = Callable[[Union[os.DirEntry, Path]], bool]
+
+
 class ImageHandler:
     def __init__(self, config_path: Union[str, Path], image_path: Optional[str] = None, image_save_path: Optional[str] = None):
         '''
@@ -93,15 +96,14 @@ class ImageHandler:
             logger.info(f"Loaded: {tn}")
             self.table_paths[tn] = fp
     
-    def read_images(self, is_eligible: Callable[[Union[os.DirEntry, Path]], bool] = lambda p: p.name != "spot_images_dir" and not ignore_path(p)):
+    def read_images(self, is_eligible: PathFilter = lambda p: p.name != "spot_images_dir" and not ignore_path(p)):
         '''
         Function to load existing images from the input folder, and them into a dictionary (self.images{}),
         with folder name or image name (without extensions) as keys, images as values.
         Standardized to either folders with OME-ZARR, single NPY files or NPZ collections.
         More can be added as needed.
         '''
-        image_paths = ((p.name, p.path) for p in os.scandir(self.image_path) if is_eligible(p))
-        self.images, self.image_lists = read_images(image_paths)
+        self.images, self.image_lists = read_images_folder(self.image_path, is_eligible=is_eligible)
 
     def reload_config(self):
         with open(self.config_path, 'r') as fh:
@@ -113,6 +115,11 @@ def handler_from_cli(config_file: ExtantFile, images_folder: Optional[ExtantFold
     image_path = None if images_folder is None else images_folder.to_string()
     image_save_path = None if image_save_path is None else image_save_path.to_string()
     return ImageHandler(config_path=config_file.to_string(), image_path=image_path, image_save_path=image_save_path)
+
+
+def read_images_folder(folder: Path, is_eligible: PathFilter = lambda _: True) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    image_paths = ((p.name, p.path) for p in os.scandir(folder) if is_eligible(p))
+    return read_images(image_paths)
 
 
 def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
