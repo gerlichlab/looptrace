@@ -57,7 +57,7 @@ class Deconvolver:
         ch = self.config['psf_bead_ch']
         threshold = self.config['bead_threshold']
         min_bead_int = self.config['min_bead_intensity']
-        n_beads = 500
+        n_beads = self.config.get('num_beads_pdf', 500)
         bead_d = self.config.get('bead_roi_size', 16)
         bead_r = bead_d // 2
         
