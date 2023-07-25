@@ -8,10 +8,11 @@ EMBL Heidelberg
 """
 
 import logging
-import os
 from pathlib import Path
 from typing import *
 import numpy as np
+
+from looptrace.point_spread_function import PointSpreadFunctionStrategy
 
 logger = logging.getLogger()
 
@@ -40,6 +41,11 @@ class Deconvolver:
     @property
     def output_path(self) -> str:
         return self.image_handler.decon_output_path
+
+    @property
+    def point_spread_function_strategy(self) -> Optional[PointSpreadFunctionStrategy]:
+        raw_spec = self.config.get('decon_psf')
+        return None if raw_spec is None else PointSpreadFunctionStrategy.from_string(raw_spec)
 
     def extract_exp_psf(self) -> Path:
         '''

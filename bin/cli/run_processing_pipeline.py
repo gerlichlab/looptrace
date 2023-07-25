@@ -6,9 +6,10 @@ import sys
 from typing import *
 
 import pypiper
-
 from gertils.pathtools import ExtantFile, ExtantFolder
+
 from decon import workflow as run_deconvolution
+from extract_exp_psf import workflow as run_psf_extraction
 from nuc_label import workflow as run_nuclei_detection
 from drift_correct import workflow as run_drift_correction
 from detect_spots import workflow as run_spot_detection
@@ -33,6 +34,7 @@ class LooptracePipeline(pypiper.Pipeline):
         conf_data_pair = (self.config_file, self.images_folder)
         conf_only = (self.config_file, )
         func_args_pairs = (
+            ("psf_extraction", run_psf_extraction, conf_data_pair)
             ("deconvolution", run_deconvolution, conf_data_pair), 
             ("nuclei_detection", run_nuclei_detection, conf_data_pair), 
             ("drift_correction", run_drift_correction, conf_data_pair), 
