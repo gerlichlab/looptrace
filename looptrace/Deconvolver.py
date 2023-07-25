@@ -58,8 +58,8 @@ class Deconvolver:
         threshold = self.config['bead_threshold']
         min_bead_int = self.config['min_bead_intensity']
         n_beads = self.config.get('num_beads_pdf', 500)
-        bead_d = self.config.get('bead_roi_size', 16)
-        bead_r = bead_d // 2
+        bead_d = self.config.get('bead_roi_size', 16) # diameter
+        bead_r = bead_d // 2 # radius
         
         bead_img = self.image_handler.images[self.config['psf_input_name']][0][t_slice, ch].compute()
         bead_pos = generate_bead_rois(bead_img, threshold, min_bead_int, bead_d, n_beads)
