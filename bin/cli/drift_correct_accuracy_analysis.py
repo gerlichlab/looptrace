@@ -36,8 +36,7 @@ def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
         )
     parser.add_argument("-C", "--config", required=True, type=ExtantFile.from_string, help="Path to the main looptrace config file used for current data processing and analysis")
-    parser.add_argument("--output-folder", required=True, type=Path, help="Path to output folder")
-    parser.add_argument("--images-folder", required=True, type=ExtantFolder.from_string, help="Path to folder with images used for drift correction")
+    parser.add_argument("-I", "--images-folder", required=True, type=ExtantFolder.from_string, help="Path to folder with images used for drift correction")
     parser.add_argument("--drift-correction-table", type=ExtantFile.from_string, help="Path to drift correction table")
     parser.add_argument("--cores", type=int, help="Number of processors to use")
     parser.add_argument("--num-bead-rois", type=int, help="Number of bead ROIs to subsample")
@@ -184,7 +183,6 @@ def workflow(
         config_file: Path, 
         images_folder: Path, 
         drift_correction_table_file: Optional[Path] = None, 
-        output_folder: Optional[Path] = None, 
         full_pos: Optional[int] = None, 
         cores: int = None, 
         num_bead_rois: Optional[int] = None
@@ -201,10 +199,8 @@ def workflow(
     with open(config_file, 'r') as fh:
         config = yaml.safe_load(fh)
 
-    if output_folder is None:
-        output_folder = Path(config['analysis_path'])
-        print(f"Inferred output folder: {output_folder}")
-
+    output_folder = Path(config['analysis_path'])
+    
     # Detection parameters
     bead_detection_params = BeadDetectionParameters(
         reference_frame = config["reg_ref_frame"],
@@ -258,19 +254,28 @@ def workflow(
                 single_fov_fits = workers.starmap(process_single_FOV_single_reference_frame, func_args)
         fits = pd.concat(single_fov_fits)
     
-    fits_output_file = output_folder / "drift_correction_accuracy.fits.tsv"
+    fits_output_file = _get_dc_fits_filepath(output_folder)
     print(f"Writing fits file: {fits_output_file}")
     fits.to_csv(fits_output_file, index=False, sep="\t")
+    return fits
 
+
+def run_visualisation(config_file: Path):
+    with open(config_file, 'r') as fh:
+        config = yaml.safe_load(fh)
+    output_folder = config['analysis_path']
+    fits_file = _get_dc_fits_filepath(output_folder)
     # TODO: spin off this function to make pipeline checkpointable after long-running DC analysis.
     analysis_script_file = os.path.join(os.dirname(__file__), "drift_correct_accuracy_analysis.R")
     if not os.path.isfile(analysis_script_file):
         raise FileNotFoundError(f"Missing drift correction analysis script: {analysis_script_file}")
-    analysis_cmd_parts = ["Rscript", analysis_script_file, "-i", str(fits_output_file), "-o", str(output_folder)]
+    analysis_cmd_parts = ["Rscript", analysis_script_file, "-i", str(fits_file), "-o", output_folder]
     print(f"Analysis command: {' '.join(analysis_cmd_parts)}")
-    subprocess.check_call(analysis_cmd_parts)
+    return subprocess.check_call(analysis_cmd_parts)
 
-    return fits
+
+def _get_dc_fits_filepath(folder: Union[str, Path]) -> str:
+    return os.path.join(folder, "drift_correction_accuracy.fits.tsv")
 
 
 if __name__ == "__main__":
@@ -280,7 +285,6 @@ if __name__ == "__main__":
         config_file=opts.config_file.path,
         images_folder=opts.images_folder.path, 
         drift_correction_table_file=opts.drift_correction_table.path, 
-        output_folder=opts.output_folder, 
         cores=opts.cores,
         num_bead_rois=opts.num_bead_rois,
     )
