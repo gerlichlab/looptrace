@@ -12,6 +12,11 @@ from pathlib import Path
 from typing import *
 import numpy as np
 
+from gertils.exception import TensorflowNotFoundException
+try:
+    from gertils.gpu import count_tensorflow_gpus
+except TensorflowNotFoundException:
+    def count_tensorflow_gpus(): print("GPU utility module isn't available to count GPUs.")
 from looptrace.point_spread_function import PointSpreadFunctionStrategy
 
 logger = logging.getLogger()
@@ -46,6 +51,10 @@ class Deconvolver:
     def point_spread_function_strategy(self) -> Optional[PointSpreadFunctionStrategy]:
         raw_spec = self.config.get('decon_psf')
         return None if raw_spec is None else PointSpreadFunctionStrategy.from_string(raw_spec)
+
+    @property
+    def require_gpu(self) -> bool:
+        return self.config.get('require_gpu', False)
 
     def extract_exp_psf(self) -> Path:
         '''
@@ -105,6 +114,16 @@ class Deconvolver:
         if n_iter == 0:
             logger.info("Iterations set to 0.")
             return
+
+        num_gpus_avail = count_tensorflow_gpus()
+        if num_gpus_avail is None or num_gpus_avail == 0:
+            tmp_msg = "GPU availability required but none can be guaranteed available."
+            if self.require_gpu:
+                raise Exception(tmp_msg)
+            else:
+                logger.warning(tmp_msg)
+        else:
+            print(f"GPU count: {num_gpus_avail}")
 
         # TODO: better error handling for type-like errors, e.g. if comma is used for decimal 
         #       and as a result the value for a distance is parsed as string rather than number
