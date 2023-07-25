@@ -24,9 +24,9 @@ SCALE_COLOUR_4 <- scale_colour_manual(values = COLORS4, labels = DISTANCE_LABELS
 
 # Define the CLI and parse arguments.
 cli_parser <- ArgumentParser(description="Visualise results of drift_correct_analsis.py, namely the amount of imprecision that remains even after drift correction")
-cli_parser$add_argument("--fits-file", required=TRUE, help="Path to the fits file created by drift_correct_analysis.py")
-cli_parser$add_argument("--handle-extant-output", required=TRUE, choices=c("OVERWRITE", "overwrite", "SKIP", "skip", "FAIL", "fail"), help="Specification of how to handle case in which output path already exists")
-cli_parser$add_argument("--output-folder", required=TRUE, help="Path to folder in which to place output files")
+cli_parser$add_argument("-i", "--fits-file", required=TRUE, help="Path to the fits file created by drift_correct_analysis.py")
+cli_parser$add_argument("-o", "--output-folder", required=TRUE, help="Path to folder in which to place output files")
+cli_parser$add_argument("--handle-extant-output", default="OVERWRITE", choices=c("OVERWRITE", "overwrite", "SKIP", "skip", "FAIL", "fail"), help="Specification of how to handle case in which output path already exists")
 opts <- cli_parser$parse_args()
 
 # Read and filter the data.

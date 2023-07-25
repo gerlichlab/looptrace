@@ -4,7 +4,9 @@ import argparse
 import dataclasses
 import json
 import multiprocessing as mp
+import os
 from pathlib import Path
+import subprocess
 import sys
 from typing import *
 
@@ -15,6 +17,8 @@ import tqdm
 import yaml
 
 from gertils.pathtools import ExtantFile, ExtantFolder
+from looptrace.Drifter import Drifter
+from looptrace.ImageHandler import ImageHandler
 from looptrace.gaussfit import fitSymmetricGaussian3D
 from looptrace import image_io
 from looptrace import image_processing_functions as ip
@@ -34,8 +38,8 @@ def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
     parser.add_argument("-C", "--config", required=True, type=ExtantFile.from_string, help="Path to the main looptrace config file used for current data processing and analysis")
     parser.add_argument("--output-folder", required=True, type=Path, help="Path to output folder")
     parser.add_argument("--images-folder", required=True, type=ExtantFolder.from_string, help="Path to folder with images used for drift correction")
-    parser.add_argument("--drift-correction-table", required=True, type=ExtantFile.from_string, help="Path to drift correction table")
-    parser.add_argument("--cores", type=int, default=1, help="Number of processors to use")
+    parser.add_argument("--drift-correction-table", type=ExtantFile.from_string, help="Path to drift correction table")
+    parser.add_argument("--cores", type=int, help="Number of processors to use")
     parser.add_argument("--num-bead-rois", type=int, help="Number of bead ROIs to subsample")
     return parser.parse_args(cmdl)
 
@@ -176,12 +180,30 @@ def process_single_FOV_single_reference_frame(imgs: List[np.ndarray], drift_tabl
     return fits
 
 
-def workflow(config_file: Path, images_folder: Path, drift_correction_table_file: Path, output_folder: Path, full_pos: Optional[int], cores: int, num_bead_rois: Optional[int]) -> pd.DataFrame:
+def workflow(
+        config_file: Path, 
+        images_folder: Path, 
+        drift_correction_table_file: Optional[Path] = None, 
+        output_folder: Optional[Path] = None, 
+        full_pos: Optional[int] = None, 
+        cores: int = None, 
+        num_bead_rois: Optional[int] = None
+    ) -> pd.DataFrame:
     # TODO: how to handle case when output already exists
+
+    if drift_correction_table_file is None:
+        print("Determining drift correction table path...")
+        drift_correction_table_file = Drifter(ImageHandler(config_path=config_file, image_path=images_folder)).dc_file_path
+    if not os.path.isfile(drift_correction_table_file):
+        raise FileNotFoundError(drift_correction_table_file)
 
     print(f"Parsing looptrace configuration file: {config_file}")
     with open(config_file, 'r') as fh:
         config = yaml.safe_load(fh)
+
+    if output_folder is None:
+        output_folder = Path(config['analysis_path'])
+        print(f"Inferred output folder: {output_folder}")
 
     # Detection parameters
     bead_detection_params = BeadDetectionParameters(
@@ -228,6 +250,7 @@ def workflow(config_file: Path, images_folder: Path, drift_correction_table_file
         fov_indices = range(len(drift_table.position.unique()))
         # TODO: parameterise with config.
         func_args = ((imgs, drift_table, idx, bead_detection_params, bead_filtration_params, camera_params) for idx in fov_indices)
+        cores = cores or config.get('num_cores_dc_analysis', 1)
         if cores == 1:
             single_fov_fits = (process_single_FOV_single_reference_frame(*args) for args in func_args)
         else:
@@ -238,6 +261,14 @@ def workflow(config_file: Path, images_folder: Path, drift_correction_table_file
     fits_output_file = output_folder / "drift_correction_accuracy.fits.tsv"
     print(f"Writing fits file: {fits_output_file}")
     fits.to_csv(fits_output_file, index=False, sep="\t")
+
+    # TODO: spin off this function to make pipeline checkpointable after long-running DC analysis.
+    analysis_script_file = os.path.join(os.dirname(__file__), "drift_correct_accuracy_analysis.R")
+    if not os.path.isfile(analysis_script_file):
+        raise FileNotFoundError(f"Missing drift correction analysis script: {analysis_script_file}")
+    analysis_cmd_parts = ["Rscript", analysis_script_file, "-i", str(fits_output_file), "-o", str(output_folder)]
+    print(f"Analysis command: {' '.join(analysis_cmd_parts)}")
+    subprocess.check_call(analysis_cmd_parts)
 
     return fits
 
