@@ -9,6 +9,7 @@ EMBL Heidelberg
 
 import logging
 import os
+from pathlib import Path
 import random
 from typing import *
 import numpy as np
@@ -39,7 +40,8 @@ class SpotPicker:
             filename_differentiator = '_rois'
         roi_file_ext = ".csv"
         self.roi_path = self.image_handler.out_path(self.input_name + filename_differentiator + roi_file_ext)
-        self.roi_path_unfiltered = os.path.splitext(self.roi_path)[0] + ".unfiltered" + roi_file_ext
+        self.roi_path_filtered = self.roi_path.replace(roi_file_ext, ".filtered" + roi_file_ext)
+        self.roi_path_unfiltered = self.roi_path.replace(roi_file_ext, ".unfiltered" + roi_file_ext)
 
     @property
     def input_name(self):
@@ -153,56 +155,68 @@ class SpotPicker:
 
         n_spots_init = len(output)
         logger.info(f'Found {n_spots_init} spots.')
+        if do_not_write_empty and n_spots_init == 0:
+            logger.warning("Since there are no spots detected, nothing will be written.")
+            return
         
-        if self.config.get('spot_in_nuc', False):
-            logger.info("Will attempt filtration of spots / ROIs for inclusion in nuclei")
-            if 'nuc_images_drift_correction' in self.image_handler.tables:
-                logger.info("Using drift-corrected nuclei data")
-                nuc_drifts = self.image_handler.tables[self.config['nuc_input_name'] + '_drift_correction']
-                nuc_target_frame = self.config['nuc_ref_frame']
-                spot_drifts = self.image_handler.tables[self.input_name + '_drift_correction']
+        def rois_to_file(rois_table: pd.DataFrame, outfile: Union[str, Path]) -> None:
+            rois_table = rois_table.reset_index().rename(columns={'index': 'roi_id_pos'})
+            rois = ip.roi_center_to_bbox(rois_table, roi_size = tuple(self.config['roi_image_size'])) if detect_method == 'dog' else rois_table
+            rois = rois.sort_values(['position', 'frame'])
+            rois.to_csv(outfile)
+            return rois
+        
+        logger.info(f"Writing unfiltered ROIs: {self.roi_path_unfiltered}")
+        unfiltered_rois = rois_to_file(rois_table=output, outfile=self.roi_path_unfiltered)
+        
+        logger.info("Will attempt filtration of spots / ROIs for inclusion in nuclei")
+        if 'nuc_images_drift_correction' in self.image_handler.tables:
+            logger.info("Using drift-corrected nuclei data")
+            nuc_drifts = self.image_handler.tables[self.config['nuc_input_name'] + '_drift_correction']
+            nuc_target_frame = self.config['nuc_ref_frame']
+            spot_drifts = self.image_handler.tables[self.input_name + '_drift_correction']
+        else:
+            logger.info("No drift-corrected nuclei data to use.")
+            nuc_drifts = None
+            nuc_target_frame = None
+            spot_drifts = None
+        if 'nuc_masks' not in self.image_handler.images:
+            logger.warning('No nuclei mask images found, cannot filter.')
+        else:
+            logger.info('Filtering for spots in nuclei.')
+            if self.array_id is None:
+                nuc_masks = [a[0,0] for a in self.image_handler.images['nuc_masks']]
             else:
-                logger.info("No drift-corrected nuclei data to use.")
-                nuc_drifts = None
-                nuc_target_frame = None
-                spot_drifts = None
-            if 'nuc_masks' not in self.image_handler.images:
-                logger.warning('No nuclei mask images found, cannot filter.')
-            else:
-                logger.info('Filtering for spots in nuclei.')
-                if self.array_id is None:
-                    nuc_masks = [a[0,0] for a in self.image_handler.images['nuc_masks']]
-                else:
-                    nuc_masks = [self.image_handler.images['nuc_masks'][pos_index][0,0]]
+                nuc_masks = [self.image_handler.images['nuc_masks'][pos_index][0,0]]
 
-                output = ip.filter_rois_in_nucs(output, nuc_masks, self.pos_list, new_col='nuc_label', nuc_drifts=nuc_drifts, nuc_target_frame=nuc_target_frame, spot_drifts = spot_drifts)
-                output = output[output['nuc_label'] > 0 ]
-            
-            if 'nuc_classes' in self.image_handler.images:
-                logger.info('Assigning nucleus classes.')
-                if self.array_id is None:
-                    nuc_classes = [a[0,0] for a in self.image_handler.images['nuc_classes']]
-                else:
-                    nuc_classes = [self.image_handler.images['nuc_classes'][pos_index][0,0]]
-                output = ip.filter_rois_in_nucs(output, nuc_classes, self.pos_list, new_col='nuc_class', nuc_drifts=nuc_drifts, nuc_target_frame=nuc_target_frame, spot_drifts = spot_drifts)
-            logger.info(f'Filtering complete, {len(output)} ROIs after filtering.')
+            output = ip.filter_rois_in_nucs(output, nuc_masks, self.pos_list, new_col='nuc_label', nuc_drifts=nuc_drifts, nuc_target_frame=nuc_target_frame, spot_drifts = spot_drifts)
+            output = output[output['nuc_label'] > 0 ]
+        if 'nuc_classes' in self.image_handler.images:
+            logger.info('Assigning nucleus classes.')
+            if self.array_id is None:
+                nuc_classes = [a[0,0] for a in self.image_handler.images['nuc_classes']]
+            else:
+                nuc_classes = [self.image_handler.images['nuc_classes'][pos_index][0,0]]
+            output = ip.filter_rois_in_nucs(output, nuc_classes, self.pos_list, new_col='nuc_class', nuc_drifts=nuc_drifts, nuc_target_frame=nuc_target_frame, spot_drifts = spot_drifts)
+        
+        logger.info(f'Filtering complete, {len(output)} ROIs after filtering.')
 
         if do_not_write_empty and len(output) == 0:
             logger.warning("Since there are no spots after filtering, no filtered spots file will be written.")
             return
         
-        output = output.reset_index().rename(columns={'index':'roi_id_pos'})
-        rois = ip.roi_center_to_bbox(output, roi_size = tuple(self.config['roi_image_size'])) if detect_method == 'dog' else output
+        logger.info(f"Writing filtered ROIs: {self.roi_path_filtered}")
+        filtered_rois = rois_to_file(rois_table=output, outfile=self.roi_path_filtered)
         
-        rois = rois.sort_values(['position', 'frame'])
-        logger.info(f'Spots remaining after nuclei filtration: {len(rois)} / {n_spots_init}')
+        logger.info(f'Spots remaining after nuclei filtration: {len(filtered_rois)} / {n_spots_init}')
 
+        main_rois = filtered_rois if self.config.get('spot_in_nuc', False) else unfiltered_rois
         outfile = roi_outfile or self.roi_path
-        logger.info(f"Writing ROIs: {outfile}")
-        rois.to_csv(outfile)
+        logger.info(f"Writing main ROIs: {outfile}")
+        main_rois.to_csv(outfile)
 
         self.image_handler.load_tables()
-        return rois
+        return main_rois
 
     def rois_from_beads(self):
         print('Detecting bead ROIs for tracing.')

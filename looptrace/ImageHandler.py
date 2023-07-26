@@ -39,8 +39,15 @@ class ImageHandler:
         if self.image_path is not None:
             self.read_images()
         self.image_save_path = image_save_path if image_save_path is not None else self.image_path
-        self.out_path = lambda fn_extra: os.path.join(self.config['analysis_path'], self.config['analysis_prefix'] + fn_extra)
         self.load_tables()
+
+    @property
+    def analysis_filename_prefix(self) -> str:
+        return self.config['analysis_prefix']
+
+    @property
+    def analysis_path(self):
+        return self.config['analysis_path']
 
     @property
     def decon_input_name(self) -> str:
@@ -53,6 +60,9 @@ class ImageHandler:
     @property
     def decon_output_path(self) -> str:
         return os.path.join(self.image_save_path, self.decon_output_name)
+
+    def out_path(self, fn_extra: str) -> str:
+        return os.path.join(self.analysis_path, self.analysis_filename_prefix + fn_extra)
 
     @property
     def reg_input_template(self) -> str:
