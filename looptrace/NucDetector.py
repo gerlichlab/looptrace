@@ -7,10 +7,11 @@ Ellenberg group
 EMBL Heidelberg
 """
 
-from looptrace import image_processing_functions as ip
-from looptrace import image_io
-import dask.array as da
+import logging
 import os
+from typing import *
+
+import dask.array as da
 import numpy as np
 import pandas as pd
 from skimage.segmentation import expand_labels, relabel_sequential
@@ -19,25 +20,52 @@ from skimage.transform import rescale
 from skimage.morphology import remove_small_objects
 import tqdm
 
+from looptrace import image_io
+from looptrace import image_processing_functions as ip
+
+logger = logging.getLogger()
+
+
 class NucDetector:
     '''
     Class for handling generation and detection of e.g. nucleus images.
     '''
-
     def __init__(self, image_handler, array_id = None):
         self.image_handler = image_handler
-        self.config = image_handler.config
         try:
-            self.images = self.image_handler.images[self.config['nuc_input_name']]
-            self.pos_list = self.image_handler.image_lists[self.config['nuc_input_name']]
-        except KeyError:
-            pass
-        self.nuc_images_path = self.image_handler.image_save_path+os.sep+'nuc_images'
-        self.nuc_masks_path = self.image_handler.image_save_path+os.sep+'nuc_masks'
-        self.nuc_classes_path = self.image_handler.image_save_path+os.sep+'nuc_classes'
-
+            self.images = self.image_handler.images[self.input_name]
+            self.pos_list = self.image_handler.image_lists[self.input_name]
+        except KeyError as e:
+            logger.warning("Error in nuclei detector setup: {e}")
         if array_id is not None:
             self.pos_list = [self.pos_list[int(array_id)]]
+
+    @property
+    def config(self) -> Dict[str, Any]:
+        return self.image_handler.config
+
+    @property
+    def input_name(self) -> str:
+        return self.config['nuc_input_name']
+
+    @property
+    def nuc_images_path(self) -> str:
+        return self._save_img_path("nuc_images")
+    
+    @property
+    def nuc_images_path(self) -> str:
+        return self._save_img_path("nuc_masks")
+    
+    @property
+    def nuc_images_path(self) -> str:
+        return self._save_img_path("nuc_classes")
+    
+    def _get_img_save_path(self, name: str) -> str:
+        return os.path.join(self._save_img_path, name)
+
+    @property
+    def _save_img_path(self):
+        return self.image_handler.images_save_path
 
     def gen_nuc_images(self):
         '''
@@ -81,7 +109,6 @@ class NucDetector:
         if 'nuc_images' not in self.image_handler.images:
             self.gen_nuc_images()
             self.image_handler.read_images()
-        print('Segmenting nuclei.')
         
         method = self.config.get('nuc_method', 'nuclei')
         
@@ -92,9 +119,9 @@ class NucDetector:
             if nuc_3d:
                 anisotropy = self.config['nuc_anisotropy']
                 ds_z = self.config['nuc_downscaling_z']
-                nuc_min_size = self.config['nuc_min_size']/(ds_z*ds_xy*ds_xy)
+                nuc_min_size = self.config['nuc_min_size'] / (ds_z * ds_xy * ds_xy)
             else:
-                nuc_min_size = self.config['nuc_min_size']/(ds_xy*ds_xy)
+                nuc_min_size = self.config['nuc_min_size'] / (ds_xy * ds_xy)
                 
             mitosis_class = self.config['nuc_mitosis_class']
         except KeyError:
@@ -103,9 +130,8 @@ class NucDetector:
             nuc_min_size = 10
             mitosis_class = False
         
-        diameter = self.config['nuc_diameter']/ds_xy
+        diameter = self.config['nuc_diameter'] / ds_xy
         
-        print('Segmenting nuclei.')
         nuc_imgs_in = self.image_handler.images['nuc_images']
         nuc_imgs = []
 
@@ -119,10 +145,12 @@ class NucDetector:
         print(f'Running nuclear segmentation using CellPose {method} model and diameter {diameter}.')
 
         if nuc_3d:
+            print("Using all 3 dimensions for nuclei detection")
             masks = ip.nuc_segmentation_cellpose_3d(nuc_imgs, diameter = diameter, model_type = method, anisotropy=anisotropy)
             scaling = (ds_z, ds_xy, ds_xy)
             axes_for_zarr = ('p', 'z', 'y', 'x')
         else:
+            print("Using just 2 dimensions for nuclei detection")
             masks = ip.nuc_segmentation_cellpose_2d(nuc_imgs, diameter = diameter, model_type = method)
             scaling = (ds_xy, ds_xy)
             axes_for_zarr = ('p', 'y', 'x')
