@@ -100,8 +100,11 @@ class NucDetector:
         Dilates a bit and saves images.
         '''
         
-        if 'nuc_images' not in self.image_handler.images:
+        imgs_key = "nuc_images"
+        if imgs_key not in self.image_handler.images:
+            logger.info(f"{imgs_key} doesn't yet exist; generating...")
             self.gen_nuc_images()
+            logger.info(f"Re-reading images...")
             self.image_handler.read_images()
         
         method = self.config.get('nuc_method', 'nuclei')
@@ -124,9 +127,12 @@ class NucDetector:
             nuc_min_size = 10
             mitosis_class = False
         
+        logger.info(f"Nuclei segmentation parameters: {[('nuc_3d', nuc_3d), ('ds_xy', ds_xy), ('nuc_min_size', nuc_min_size), ('mitosis_class', mitosis_class)]}")
+
         diameter = self.config['nuc_diameter'] / ds_xy
         
-        nuc_imgs_in = self.image_handler.images['nuc_images']
+        nuc_imgs_in = self.image_handler.images[imgs_key]
+
         nuc_imgs = []
 
         #Remove unused dimensions and downscale input images.
