@@ -180,24 +180,24 @@ class SpotPicker:
             nuc_drifts = None
             nuc_target_frame = None
             spot_drifts = None
-        if 'nuc_masks' not in self.image_handler.images:
+        
+        try:
+            mask_images = self.image_handler.images['nuc_masks']
+        except KeyError:
             logger.warning('No nuclei mask images found, cannot filter.')
         else:
             logger.info('Filtering for spots in nuclei.')
-            if self.array_id is None:
-                nuc_masks = [a[0,0] for a in self.image_handler.images['nuc_masks']]
-            else:
-                nuc_masks = [self.image_handler.images['nuc_masks'][pos_index][0,0]]
-
+            nuc_masks = [a[0,0] for a in mask_images] if self.array_id is None else [mask_images[pos_index][0,0]]
             nuc_label_col = 'nuc_label'
             output = ip.filter_rois_in_nucs(output, nuc_masks, self.pos_list, new_col=nuc_label_col, nuc_drifts=nuc_drifts, nuc_target_frame=nuc_target_frame, spot_drifts = spot_drifts)
             output = output[output[nuc_label_col] > 0 ]
-        if 'nuc_classes' in self.image_handler.images:
+        try:
+            class_images = self.image_handler.images['nuc_classes']
+        except KeyError:
+            logger.info()
+        else:
             logger.info('Assigning nucleus classes.')
-            if self.array_id is None:
-                nuc_classes = [a[0,0] for a in self.image_handler.images['nuc_classes']]
-            else:
-                nuc_classes = [self.image_handler.images['nuc_classes'][pos_index][0,0]]
+            nuc_classes = [a[0,0] for a in class_images] if self.array_id is None else [class_images[pos_index][0,0]]
             output = ip.filter_rois_in_nucs(output, nuc_classes, self.pos_list, new_col='nuc_class', nuc_drifts=nuc_drifts, nuc_target_frame=nuc_target_frame, spot_drifts = spot_drifts)
         
         logger.info(f'Filtering complete, {len(output)} ROIs after filtering.')
