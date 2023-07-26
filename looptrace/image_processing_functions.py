@@ -122,25 +122,29 @@ def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label', nuc_drif
     Returns:
         rois (DataFrame): Updated ROI table indicating if ROI is inside nucleus or not.
     '''
-    print(nuc_masks[0].shape)
-    def spot_in_nuc(row, nuc_masks):
+    print(f"First nuclear mask shape: {nuc_masks[0].shape}")
+    if nuc_masks[0].shape[0] == 1:
+        logger.info("Will use xy only for spot labeling")
+        def get_spot_label(row, pos_idx):
+            return int(nuc_masks[pos_idx][0, int(row['yc']), int(row['xc'])])
+    else:
+        logger.info("Will use xyz for spot labeling")
+        def get_spot_label(row, pos_idx):
+            return int(nuc_masks[pos_idx][int(row['zc']), int(row['yc']), int(row['xc'])])
+    
+    def spot_in_nuc(row):
         pos_index = pos_list.index(row['position'])
         try:
-            if nuc_masks[0].shape[0] == 1:
-                spot_label = int(nuc_masks[pos_index][0, int(row['yc']), int(row['xc'])])
-            else:
-                spot_label = int(nuc_masks[pos_index][int(row['zc']),int(row['yc']), int(row['xc'])])
+            spot_label = get_spot_label(row=row, pos_idx=pos_index)
         except IndexError as e: #If due to drift spot is outside frame.
             spot_label = 0
-            print(e)
-        #print(spot_label)
+            logger.warning(f"Drift spot outside frame? {e}")
         return spot_label
 
     try:
         rois.drop(columns=[new_col], inplace=True)
     except KeyError:
         logger.debug(f"Column not present to drop: {new_col}")
-        pass
 
     if nuc_drifts is not None:
         logger.debug("Using nuclear drifts during ROI filtration")
@@ -153,10 +157,12 @@ def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label', nuc_drif
             shifts.append(shift[0])
         shifts = pd.DataFrame(shifts, columns=['z','y','x'])
         rois_shifted[['zc', 'yc', 'xc']] = rois_shifted[['zc', 'yc', 'xc']].to_numpy() - shifts[['z','y','x']].to_numpy()
-        rois[new_col] = rois_shifted.apply(spot_in_nuc, nuc_masks=nuc_masks, axis=1)
+        rois_to_label = rois_shifted
     else:
         logger.debug("No nuclear drifts to use during ROI filtration")
-        rois[new_col] = rois.apply(spot_in_nuc, nuc_masks=nuc_masks, axis=1)
+        rois_to_label = rois
+    
+    rois[new_col] = rois_to_label.apply(spot_in_nuc, axis=1)
 
     return rois
 

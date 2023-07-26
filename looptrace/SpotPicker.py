@@ -189,8 +189,9 @@ class SpotPicker:
             else:
                 nuc_masks = [self.image_handler.images['nuc_masks'][pos_index][0,0]]
 
-            output = ip.filter_rois_in_nucs(output, nuc_masks, self.pos_list, new_col='nuc_label', nuc_drifts=nuc_drifts, nuc_target_frame=nuc_target_frame, spot_drifts = spot_drifts)
-            output = output[output['nuc_label'] > 0 ]
+            nuc_label_col = 'nuc_label'
+            output = ip.filter_rois_in_nucs(output, nuc_masks, self.pos_list, new_col=nuc_label_col, nuc_drifts=nuc_drifts, nuc_target_frame=nuc_target_frame, spot_drifts = spot_drifts)
+            output = output[output[nuc_label_col] > 0 ]
         if 'nuc_classes' in self.image_handler.images:
             logger.info('Assigning nucleus classes.')
             if self.array_id is None:
