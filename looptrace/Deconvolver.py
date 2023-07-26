@@ -77,7 +77,7 @@ class Deconvolver:
         bead_r = bead_d // 2 # radius
         
         bead_img = self.image_handler.images[self.config['psf_input_name']][0][t_slice, ch].compute()
-        bead_pos = generate_bead_rois(bead_img, threshold, min_bead_int, bead_d, n_beads)
+        bead_pos = generate_bead_rois(t_img=bead_img, threshold=threshold, min_bead_int=min_bead_int, bead_roi_px=bead_d, n_points=n_beads)
         beads = [extract_single_bead(point, bead_img) for point in bead_pos]
         bead_ints = np.sum(np.array(beads),axis = (1,2,3))
         perc_high = np.percentile(bead_ints, 40)
