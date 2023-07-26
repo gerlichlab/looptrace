@@ -72,8 +72,26 @@ class Deconvolver:
         ch = self.config['psf_bead_ch']
         threshold = self.config['bead_threshold']
         min_bead_int = self.config['min_bead_intensity']
-        n_beads = self.config.get('num_beads_pdf', 500)
-        bead_d = self.config.get('bead_roi_size', 16) # diameter
+
+        try:
+            n_beads = self.config['num_beads_psf']
+        except KeyError:
+            n_beads = 500
+            msg_pfx = "Using default bead count for PSF extraction"
+        else:
+            msg_pfx = "Using bead count from config for PSF extraction"
+        logger.info(f"{msg_pfx}: {n_beads}")
+        
+        # Region diameter setting
+        try:
+            bead_d = self.config['bead_roi_size']
+        except KeyError:
+            bead_d = 16
+            msg_pfx = "Using default bead ROI diameter"
+        else:
+            msg_pfx = "Using bead ROI diameter from config for PSF extraction"
+        logger.info(logger.info(f"{msg_pfx}: {bead_d}"))
+        
         bead_r = bead_d // 2 # radius
         
         bead_img = self.image_handler.images[self.config['psf_input_name']][0][t_slice, ch].compute()
