@@ -71,14 +71,8 @@ class NucDetector:
         '''
         Saves 2D/3D (defined in config) images of the nuclear channel into image folder for later analysis.
         '''
-        try:
-            nuc_slice = self.config['nuc_slice']
-        except KeyError: #Legacy config
-            nuc_slice = -1
-        try:
-            nuc_3d = self.config['nuc_3d']
-        except KeyError:
-            nuc_3d = False
+        nuc_slice = self.config.get('nuc_slice', -1)
+        nuc_3d = self.config.get('nuc_3d', False)
         
         print('Generating nuclei images.')
         imgs = []
