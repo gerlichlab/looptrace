@@ -28,10 +28,10 @@ dependencies:
         #- napari
         - nd2
         - numcodecs
-        - piper
+        - piper # for pipeline definition
         - pyyaml
         - tensorflow == 2.11.1 # for CUDA-based container, we need to install tensorflow.
-        - tensorrt
+        - tensorrt # for CUDA-based container, we need to install tensorrt.
         - tqdm
         - scikit-image
         - zarr
