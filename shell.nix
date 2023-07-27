@@ -9,8 +9,9 @@
   pydev ? true 
 }:
 let baseBuildInputs = with pkgs; [ poetry stdenv.cc.cc.lib zlib ];
-    py310 = pkgs.python310.withPackages (ps: with ps; [ numpy pandas ]);
-    py311 = pkgs.python311.withPackages (ps: with ps; [ numpy pandas ]);
+    py310 = if pipeline 
+            then pkgs.python310.withPackages (ps: with ps; [ numpy pandas tensorflowWithCuda ]) 
+            else pkgs.python310.withPackages (ps: with ps; [ numpy pandas ]);
     R-analysis = pkgs.rWrapper.override{ packages = with pkgs.rPackages; [ argparse data_table ggplot2 reshape2 tidyverse ]; };
     poetryExtras = [] ++ 
       (if pipeline then ["pipeline"] else []) ++
@@ -26,7 +27,6 @@ pkgs.mkShell {
   buildInputs = baseBuildInputs ++ 
     (if pipeline then [
       py310
-      py311
       pkgs.zlib
       pkgs.stdenv.cc.cc.lib
     ] else []) ++ 
