@@ -21,8 +21,14 @@ classifiers = [
 [tool.poetry.dependencies]
 # These are the main runtime dependencies.
 python = ">= 3.10.0, < 3.12"
+cellpose = { version = "v2.2.2", optional = true }
+czifile = { version = "^2019.7.2", optional = true }
 dask = "^2023.5.1"
+flowdec = { version = "^1.1.0", optional = true }
 gertils = { git = "https://github.com/gerlichlab/gertils.git", tag = "2023-07-14" }
+# TODO: imagecodecs is used by nd2 to support "legacy" ND2 (JPEG2000), but may not be needed otherwise.
+imagecodecs = { version = "2023.7.4", optional = true }
+joblib = { version = "^1.3.1", optional = true }
 logmuse = "^0.2.1"
 numcodecs = "^0.11.0"
 numpy = "^1.24.2"
@@ -41,8 +47,10 @@ zarr = "^2.4.12"
 
 [tool.poetry.extras]
 analysis = ["matplotlib", "numba", "seaborn"]
-dev = ["matplotlib", "nd2", "numba", "seaborn", "tifffile"]
-pipeline = ["piper"]
+deconvolution = ["flowdec"]
+dev = ["czifile", "matplotlib", "nd2", "numba", "seaborn", "tifffile"]
+nuclei = ["cellpose"]
+pipeline = ["cellpose", "czifile", "flowdec", "joblib", "nd2", "piper", "tifffile"]
 polymer = ["numba"]
 
 [build-system]
