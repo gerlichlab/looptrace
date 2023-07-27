@@ -35,11 +35,12 @@ def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
         description="Quality control / analysis of the drift correction step", 
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
         )
-    parser.add_argument("-C", "--config", required=True, type=ExtantFile.from_string, help="Path to the main looptrace config file used for current data processing and analysis")
+    parser.add_argument("-C", "--config-file", required=True, type=ExtantFile.from_string, help="Path to the main looptrace config file used for current data processing and analysis")
     parser.add_argument("-I", "--images-folder", required=True, type=ExtantFolder.from_string, help="Path to folder with images used for drift correction")
     parser.add_argument("--drift-correction-table", type=ExtantFile.from_string, help="Path to drift correction table")
     parser.add_argument("--cores", type=int, help="Number of processors to use")
     parser.add_argument("--num-bead-rois", type=int, help="Number of bead ROIs to subsample")
+    parser.add_argument("--reference-FOV", type=int, help="Index of single FOV to use as reference")
     return parser.parse_args(cmdl)
 
 
@@ -183,9 +184,9 @@ def workflow(
         config_file: Path, 
         images_folder: Path, 
         drift_correction_table_file: Optional[Path] = None, 
-        full_pos: Optional[int] = None, 
         cores: int = None, 
-        num_bead_rois: Optional[int] = None
+        num_bead_rois: Optional[int] = None, 
+        full_pos: Optional[int] = None, 
     ) -> pd.DataFrame:
     # TODO: how to handle case when output already exists
 
@@ -287,4 +288,5 @@ if __name__ == "__main__":
         drift_correction_table_file=opts.drift_correction_table.path, 
         cores=opts.cores,
         num_bead_rois=opts.num_bead_rois,
+        full_pos=opts.reference_FOV,
     )
