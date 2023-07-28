@@ -137,6 +137,7 @@ def read_images_folder(folder: Path, is_eligible: PathFilter = lambda _: True) -
 def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     images, image_lists = {}, {}
     for image_name, image_path in image_name_path_pairs:
+        print(f"Attempting to read images: {image_path}...")
         if os.path.isdir(image_path):
             exts = set(os.path.splitext(fn)[1] for fn in os.listdir(image_path))
             if len(exts) == 0:
@@ -154,16 +155,15 @@ def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[
                 from .image_io import multi_ome_zarr_to_dask
                 parse = multi_ome_zarr_to_dask
             images[image_name], image_lists[image_name] = parse(image_path)
-            print('Loaded images: ', image_name)
         elif image_name.endswith('.npz'):
             images[os.path.splitext(image_name)[0]] = NPZ_wrapper(image_path)
-            print('Loaded images: ', image_name)
         elif image_name.endswith('.npy'):
             try:
                 images[os.path.splitext(image_name)[0]] = np.load(image_path, mmap_mode = 'r')
             except ValueError: #This is for legacy datasets, will be removed after dataset cleanup!
                 images[os.path.splitext(image_name)[0]] = np.load(image_path, allow_pickle = True)
-            print('Loaded images: ', image_name)
         else:
             print(f"WARNING -- cannot process image path: {image_path}")
+            continue
+        print('Loaded images: ', image_name)
     return images, image_lists
