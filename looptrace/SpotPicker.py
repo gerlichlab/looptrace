@@ -99,7 +99,7 @@ class SpotPicker:
     
     @property
     def spot_threshold(self) -> List[int]:
-        spot_threshold = self.config['spot_threshold']
+        spot_threshold = self.config.get('spot_threshold', 1000)
         return spot_threshold if isinstance(spot_threshold, list) else [spot_threshold] * len(self.spot_frame)
 
     def rois_from_spots(self, preview_pos=None) -> Optional[Path]:
