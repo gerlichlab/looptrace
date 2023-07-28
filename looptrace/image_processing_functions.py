@@ -122,6 +122,8 @@ def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label', nuc_drif
     Returns:
         rois (DataFrame): Updated ROI table indicating if ROI is inside nucleus or not.
     '''
+    new_rois = rois.copy()
+
     print(f"First nuclear mask shape: {nuc_masks[0].shape}")
     if nuc_masks[0].shape[0] == 1:
         logger.info("Will use xy only for spot labeling")
@@ -142,13 +144,13 @@ def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label', nuc_drif
         return spot_label
 
     try:
-        rois.drop(columns=[new_col], inplace=True)
+        new_rois.drop(columns=[new_col], inplace=True)
     except KeyError:
         logger.debug(f"Column not present to drop: {new_col}")
 
     if nuc_drifts is not None:
         logger.debug("Using nuclear drifts during ROI filtration")
-        rois_shifted = rois.copy()
+        rois_shifted = new_rois.copy()
         shifts = []
         for _, row in rois_shifted.iterrows():
             drift_target = nuc_drifts[(nuc_drifts['position'] == row['position']) & (nuc_drifts['frame'] == nuc_target_frame)][['z_px_course', 'y_px_course', 'x_px_course']].to_numpy()
@@ -162,16 +164,21 @@ def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label', nuc_drif
         logger.debug("No nuclear drifts to use during ROI filtration")
         rois_to_label = rois
     
-    rois[new_col] = rois_to_label.apply(spot_in_nuc, axis=1)
+    new_rois[new_col] = rois_to_label.apply(spot_in_nuc, axis=1)
 
-    return rois
+    return new_rois
 
-def subtract_crosstalk(source, bleed, threshold=0):
-    mask = source > threshold
-    ratio=np.average(bleed[mask]/source[mask])
-    out = np.clip(bleed - (ratio * source), a_min=0, a_max=None)
+
+def subtract_crosstalk(source, bleed, threshold=500):
+    shift = drift_corr_course(source, bleed, downsample=1)
+    bleed = ndi.shift(bleed, shift=shift, order=1)
+    mask = bleed > threshold
+    ratio = np.average(source[mask] / bleed[mask])
+    print(ratio)
+    out = np.clip(source - (ratio * bleed), a_min=0, a_max=None)
     return out, bleed
-    
+
+
 def pad_to_shape(arr, shape, mode='constant'):
     '''
     Pads an array with fill to a given shape (list or tuple).

@@ -7,7 +7,6 @@ EMBL Heidelberg
 """
 
 import argparse
-import copy
 from dataclasses import dataclass
 from enum import Enum
 import json
@@ -85,9 +84,8 @@ def workflow(
         images_folder: ExtantFolder, 
         image_save_path: Optional[ExtantFolder] = None, 
         params_update: Optional[Union[Parameters, ConfigMapping]] = None, 
-        outfile: Optional[str] = None, 
         write_config_path: Optional[str] = None, 
-        ) -> str:
+        ) -> Optional[Path]:
     image_handler = handler_from_cli(config_file=config_file, images_folder=images_folder, image_save_path=image_save_path)
     if params_update is not None:
         update_data = params_update if isinstance(params_update, dict) else params_update.to_dict_for_json()
@@ -98,9 +96,7 @@ def workflow(
             json.dump(obj=image_handler.config, fp=fh)
     array_id = os.environ.get("SLURM_ARRAY_TASK_ID")
     S = SpotPicker(image_handler=image_handler, array_id=None if array_id is None else int(array_id))
-    outfile = outfile or S.roi_path
-    S.rois_from_spots(roi_outfile=outfile) # Execute for effect.
-    return outfile # This is the output file written in the effectful step.
+    return S.rois_from_spots()
 
 
 if __name__ == '__main__':

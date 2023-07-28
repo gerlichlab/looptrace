@@ -1,12 +1,12 @@
 """Simple end-to-end processing pipeline for chromatin tracing data"""
 
 import argparse
-import logmuse
 import sys
 from typing import *
 
-import pypiper
 from gertils.pathtools import ExtantFile, ExtantFolder
+import logmuse
+import pypiper
 
 from extract_exp_psf import workflow as run_psf_extraction
 from decon import workflow as run_deconvolution
@@ -14,6 +14,7 @@ from nuc_label import workflow as run_nuclei_detection
 from drift_correct import workflow as run_drift_correction
 from drift_correct_accuracy_analysis import workflow as run_drift_correction_analysis, run_visualisation as run_drift_correction_accuracy_visualisation
 from detect_spots import workflow as run_spot_detection
+from assign_spots_to_nucs import workflow as run_spot_filtration
 from cluster_analysis_cleanup import workflow as run_cleanup
 from extract_spots_table import workflow as run_spot_bounding
 from extract_spots import workflow as run_spot_extraction
@@ -42,6 +43,7 @@ class LooptracePipeline(pypiper.Pipeline):
             ("drift_correction_accuracy_analysis", run_drift_correction_analysis, conf_data_pair), 
             ("drift_correction_accuracy_visualisation", run_drift_correction_accuracy_visualisation, conf_only), 
             ("spot_detection", run_spot_detection, conf_data_pair),
+            ("spot_filtration", run_spot_filtration, conf_data_pair)
             ("clean_1", run_cleanup, conf_only),
             ("spot_bounding", run_spot_bounding, conf_data_pair),
             ("spot_extraction", run_spot_extraction, conf_data_pair),
