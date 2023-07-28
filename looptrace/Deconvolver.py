@@ -56,9 +56,22 @@ class Deconvolver:
     def require_gpu(self) -> bool:
         return self.config.get('require_gpu', False)
 
+    @property
+    def get_input_filepath_and_input_image(self):
+        input_key = self.config['psf_input_name']
+        input_names = self.image_handler.image_lists[input_key]
+        input_images = self.image_handler.images[input_key]
+        n_names = len(input_names)
+        n_imgs = len(input_images)
+        assert n_names == n_imgs, f"{n_names} PSF input names, but {n_imgs} PSF input images; should match"
+        if n_names == 1:
+            return input_names[0], input_images[0]
+        raise Exception(f"{n_names} PSF input names and images; should be just 1")
+
     def extract_exp_psf(self) -> Path:
         '''
-        Extract an experimental PDF from a bead image.
+        Extract an experimental point-spread function from a bead image.
+
         Parameters read from config to segment same beads as used for drift correction.
         Segments and extract beads, filters the intensities to remove possible doublets,
         fits the centers, registers and overlays the beads, calculates an average and normalizes the signal.
@@ -94,7 +107,9 @@ class Deconvolver:
         
         bead_r = bead_d // 2 # radius
         
-        bead_img = self.image_handler.images[self.config['psf_input_name']][0][t_slice, ch].compute()
+        bead_image_path, bead_image_data = self.get_input_filepath_and_input_image
+        print(f"Using image for empirical PSF computation: {bead_image_path}")
+        bead_img = bead_image_data[t_slice, ch].compute()
         bead_pos = generate_bead_rois(t_img=bead_img, threshold=threshold, min_bead_int=min_bead_int, bead_roi_px=bead_d, n_points=n_beads)
         beads = [extract_single_bead(point, bead_img) for point in bead_pos]
         bead_ints = np.sum(np.array(beads),axis = (1,2,3))
