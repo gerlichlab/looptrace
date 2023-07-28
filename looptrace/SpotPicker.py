@@ -139,7 +139,7 @@ class SpotPicker:
 
                 if subtract_beads:
                     bead_img = self.images[pos_index][frame, crosstalk_ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
-                    img, orig = ip.subtract_crosstalk(bead_img, img, threshold=self.config['bead_threshold'])
+                    img, orig = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
 
                 spot_props, filt_img = detect_func(img, spot_threshold[i], min_dist = min_dist)
                 spot_props['position'] = preview_pos
@@ -163,7 +163,7 @@ class SpotPicker:
                 img = self.images[pos_index][frame, ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
                 if subtract_beads:
                     bead_img = self.images[pos_index][frame, crosstalk_ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
-                    img, _ = ip.subtract_crosstalk(bead_img, img, threshold=self.config['bead_threshold'])
+                    img, _ = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
                 spot_props, _ = detect_func(img, spot_threshold[i], min_dist = min_dist)
 
                 spot_props = center_spots(spot_props)
