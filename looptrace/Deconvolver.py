@@ -86,8 +86,8 @@ class Deconvolver:
         try:
             bead_d = self.config['bead_roi_size']
         except KeyError:
-            bead_d = 16
             msg_pfx = "Using default bead ROI diameter"
+            bead_d = 12
         else:
             msg_pfx = "Using bead ROI diameter from config for PSF extraction"
         logger.info(logger.info(f"{msg_pfx}: {bead_d}"))
