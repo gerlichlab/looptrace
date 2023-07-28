@@ -19,7 +19,7 @@ from looptrace.point_spread_function import PointSpreadFunctionStrategy
 logger = logging.getLogger()
 
 
-def workflow(config_file: ExtantFile, images_folder: ExtantFolder, image_save_path: Optional[ExtantFolder]) -> Optional[Path]:
+def workflow(config_file: ExtantFile, images_folder: ExtantFolder, image_save_path: Optional[ExtantFolder] = None) -> Optional[Path]:
     # TODO: simplify the procurement of the data needed to determine whether this step runs.
     image_handler = handler_from_cli(config_file=config_file, images_folder=images_folder, image_save_path=image_save_path)
     decon = Deconvolver(image_handler=image_handler)

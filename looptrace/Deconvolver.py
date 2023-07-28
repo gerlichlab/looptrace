@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import *
 import numpy as np
 
-from gertils.exception import TensorflowNotFoundException
+from gertils.exceptions import TensorflowNotFoundException
 try:
     from gertils.gpu import count_tensorflow_gpus
 except TensorflowNotFoundException:

@@ -36,14 +36,14 @@ class LooptracePipeline(pypiper.Pipeline):
         conf_data_pair = (self.config_file, self.images_folder)
         conf_only = (self.config_file, )
         func_args_pairs = (
-            ("psf_extraction", run_psf_extraction, conf_data_pair)
+            ("psf_extraction", run_psf_extraction, conf_data_pair),
             ("deconvolution", run_deconvolution, conf_data_pair), 
             ("nuclei_detection", run_nuclei_detection, conf_data_pair), 
             ("drift_correction", run_drift_correction, conf_data_pair), 
             ("drift_correction_accuracy_analysis", run_drift_correction_analysis, conf_data_pair), 
             ("drift_correction_accuracy_visualisation", run_drift_correction_accuracy_visualisation, conf_only), 
             ("spot_detection", run_spot_detection, conf_data_pair),
-            ("spot_filtration", run_spot_filtration, conf_data_pair)
+            ("spot_filtration", run_spot_filtration, conf_data_pair), 
             ("clean_1", run_cleanup, conf_only),
             ("spot_bounding", run_spot_bounding, conf_data_pair),
             ("spot_extraction", run_spot_extraction, conf_data_pair),

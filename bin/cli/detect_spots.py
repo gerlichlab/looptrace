@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from enum import Enum
 import json
 import os
+from pathlib import Path
 from typing import *
 
 from looptrace.ImageHandler import handler_from_cli
