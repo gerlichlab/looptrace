@@ -14,9 +14,9 @@ RUN apt-get update -y && \
     apt-get install gcc-9 g++-9 -y && \
     update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 60 --slave /usr/bin/g++ g++ /usr/bin/g++-9 && \
     update-alternatives --config gcc && \
-    apt-get install git wget libz-dev libbz2-dev liblzma-dev && \
+    apt-get install git wget libz-dev libbz2-dev liblzma-dev -y && \
     apt-get install cuda-compat-11-4=470.199.02-1 -y && \
-    apt-get install vim
+    apt-get install vim -y
 
 # Copy repo code, to be built later.
 RUN cd / && mkdir looptrace && cd /looptrace
@@ -35,10 +35,11 @@ ENV PATH=/opt/conda/bin:${PATH}
 # name to that in the config file to be used. 
 # Install also the looptrace dependencies.
 # NB: The mamba default env name is evidently base.
-RUN conda install mamba -n base -c conda-forge && \
-    mamba env update -n base --file environment.yaml && \
+RUN conda install -n base conda-libmamba-solver && \
+    conda config --set solver libmamba && \
+    conda env update -n base --file environment.yaml && \
     pip install . && \
-    mamba list > software_versions_conda.txt
+    conda list > software_versions_conda.txt
 
 RUN cd /opt/conda/lib/python3.10/site-packages/tensorrt_libs && \
     ln -s libnvinfer.so.8 libnvinfer.so.7 && \
