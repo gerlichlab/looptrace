@@ -128,9 +128,9 @@ def handler_from_cli(config_file: ExtantFile, images_folder: Optional[ExtantFold
 
 
 def read_images_folder(folder: Path, is_eligible: PathFilter = lambda _: True) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    logger.info(f"Finding image paths in folder: {folder}")
+    print(f"Finding image paths in folder: {folder}")
     image_paths = ((p.name, p.path) for p in os.scandir(folder) if is_eligible(p))
-    logger.info(f"Reading images from folder: {folder}")
+    print(f"Reading images from folder: {folder}")
     return read_images(image_paths)
 
 
