@@ -213,7 +213,7 @@ def workflow(
     print(f"Bead detection parameters: {bead_detection_params}")
     
     # Filtration parameters
-    num_bead_rois = num_bead_rois or config["n_bead_rois_dc_accuracy"]
+    num_bead_rois = num_bead_rois or config.get("n_bead_rois_dc_accuracy", 500)
     min_signal_to_noise = config[SIGNAL_NOISE_RATIO_NAME]
     bead_filtration_params = BeadFiltrationParameters(num_rois=num_bead_rois, min_signal_to_noise=min_signal_to_noise)
     print(f"Bead filtration parameters: {bead_filtration_params}")
