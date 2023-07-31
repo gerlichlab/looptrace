@@ -145,7 +145,7 @@ class Deconvolver:
             non_decon_ch = [non_decon_ch]
         n_iter = self.config['decon_iter']
         if n_iter == 0:
-            logger.info("Iterations set to 0.")
+            print("Deconvolution iterations set to 0, doing nothing")
             return
 
         num_gpus_avail = count_tensorflow_gpus()
@@ -154,23 +154,24 @@ class Deconvolver:
             if self.require_gpu:
                 raise Exception(tmp_msg)
             else:
-                logger.warning(tmp_msg)
+                print(f"WARNING: {tmp_msg}")
         else:
             print(f"GPU count: {num_gpus_avail}")
 
         # TODO: better error handling for type-like errors, e.g. if comma is used for decimal 
         #       and as a result the value for a distance is parsed as string rather than number
+        print("Setting up for Richardson-Lucy deconvolution...")
         algo, psf, fd_data = decon_RL_setup(size_x=15, size_y=15, size_z=15, pz=0., wavelength=self.config['spot_wavelength']/1000,
             na=self.config['objective_na'], res_lateral=self.config['xy_nm']/1000, res_axial=self.config['z_nm']/1000)
 
         psf_type = self.config.get('decon_psf', 'gen')
 
         if psf_type == 'exp':
-            logger.info('Using experimental psf for deconvolution.')
+            print('Using experimental psf for deconvolution.')
             try:
                 psf =  self.image_handler.images['exp_psf']
             except KeyError:
-                logger.info('Experimental PSF not extracted, extracting now...')
+                print('Experimental PSF not extracted, extracting now...')
                 self.extract_exp_psf()
                 psf = self.image_handler.images['exp_psf']
 
@@ -181,6 +182,7 @@ class Deconvolver:
         array_paths = []
         
         for pos in tqdm.tqdm(self.pos_list):
+            print(f"Deconvolving position: {pos}")
             pos_index = self.image_handler.image_lists[self.input_name].index(pos)
             pos_img = self.image_handler.images[self.input_name][pos_index]
             z = create_zarr_store(path=self.output_path,
@@ -191,6 +193,7 @@ class Deconvolver:
                     chunks = (1, 1, 1, pos_img.shape[-2], pos_img.shape[-1]))
 
             for i, t_img_full in tqdm.tqdm(enumerate(pos_img)):
+                print(f"Processing image {i}")
                 for ch in decon_ch:
                     t_img = np.array(t_img_full[ch])
                     if np.any(np.array(t_img.shape[-3:])<5):
@@ -208,10 +211,14 @@ class Deconvolver:
                     else:
                         t_img = run_decon(data=t_img, algo=algo, fd_data=fd_data, psf=psf, n_iter=n_iter)
                     print(t_img.shape)
+                    print("Copying current image.")
                     z[i, ch] = t_img.copy()
+                    print("Done.")
 
                 for ch in non_decon_ch:
                     z[i, ch] = np.array(t_img_full[ch])
+
+            print(f"Completed position: {pos}")
             
             array_paths.append(z.store.path)
 
