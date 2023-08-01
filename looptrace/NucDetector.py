@@ -49,16 +49,16 @@ class NucDetector:
         return self.config['nuc_input_name']
 
     @property
+    def nuc_classes_path(self) -> str:
+        return self._get_img_save_path("nuc_classes")
+    
+    @property
     def nuc_images_path(self) -> str:
         return self._get_img_save_path("nuc_images")
     
     @property
-    def nuc_images_path(self) -> str:
+    def nuc_masks_path(self) -> str:
         return self._get_img_save_path("nuc_masks")
-    
-    @property
-    def nuc_images_path(self) -> str:
-        return self._get_img_save_path("nuc_classes")
     
     def _get_img_save_path(self, name: str) -> str:
         return os.path.join(self.image_handler.image_save_path, name)
