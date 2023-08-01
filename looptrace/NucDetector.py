@@ -65,7 +65,7 @@ class NucDetector:
 
     @property
     def _save_img_path(self):
-        return self.image_handler.images_save_path
+        return self.image_handler.image_save_path
 
     def gen_nuc_images(self):
         '''
