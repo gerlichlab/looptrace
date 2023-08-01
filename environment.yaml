@@ -5,10 +5,10 @@ channels:
     - defaults
     #- numba # post-hoc analysis
 dependencies:
-    - numpy
+    - numpy < 1.25 # Version upper bound is because of numba, from CellPose.
     - pandas
     - python == 3.10.11
-    #- numba # post-hoc analysis
+    #- numba # post-hoc analysis; indirectly pulled in by CellPose for nuclei segmentation also
     #- llvmlite # with numba
     #- jupyterlab=3.4.0    
       # due to https://github.com/jupyterhub/jupyterhub/pull/4039
