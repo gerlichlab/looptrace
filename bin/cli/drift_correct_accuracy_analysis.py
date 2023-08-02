@@ -132,17 +132,21 @@ class DataclassCapableEncoder(json.JSONEncoder):
 def process_single_FOV_single_reference_frame(imgs: List[np.ndarray], drift_table: pd.DataFrame, full_pos: int, bead_detection_params: BeadDetectionParameters, bead_filtration_params: BeadFiltrationParameters, camera_params: CameraParameters) -> pd.DataFrame:
     T = imgs[full_pos].shape[0]
     C = imgs[full_pos].shape[1]
+    print(f"Generating bead ROIs for DC accuracy analysis, full_pos: {full_pos}")
     ref_rois = ip.generate_bead_rois(imgs[full_pos][bead_detection_params.reference_frame, bead_detection_params.reference_channel].compute(), threshold=bead_detection_params.threshold, min_bead_int=bead_detection_params.min_intensity, n_points=-1)
     rois = ref_rois[np.random.choice(ref_rois.shape[0], bead_filtration_params.num_rois, replace=False)]
     bead_roi_px = bead_detection_params.roi_pixels
     dims = (len(rois), T, C, bead_roi_px, bead_roi_px, bead_roi_px)
+    print(f"Dims: {dims}")
     bead_imgs = np.zeros(dims)
     bead_imgs_dc = np.zeros(dims)
 
     fits = []
     for t in tqdm.tqdm(range(T)):
+        print(f"Frame: {t}")
         # TODO: this requires that the drift table be ordered such that the FOVs are as expected; need flexibility.
         pos = drift_table.position.unique()[full_pos]
+        print(f"Position: {pos}")
         course_shift = drift_table[(drift_table.position == pos) & (drift_table.frame == t)][['z_px_course', 'y_px_course', 'x_px_course']].values[0]
         fine_shift = drift_table[(drift_table.position == pos) & (drift_table.frame == t)][['z_px_fine', 'y_px_fine', 'x_px_fine']].values[0]
         for c in [bead_detection_params.reference_channel]:#range(C):
@@ -160,9 +164,11 @@ def process_single_FOV_single_reference_frame(imgs: List[np.ndarray], drift_tabl
     fits.loc[:, ['z_loc', 'sigma_z']] = fits.loc[:, ['z_loc', 'sigma_z']] * camera_params.nanometers_z #Scale z coordinates to nm (use slice spacing from exp)
 
     ref_points = fits.loc[(fits.t == bead_detection_params.reference_frame) & (fits.c == 0), ['z_loc', 'y_loc', 'x_loc']].to_numpy() # Fits of fiducial beads in ref frame
+    print(f"Reference point count: {len(ref_points)}")
     res = []
     for t in tqdm.tqdm(range(T)):
         mov_points = fits.loc[(fits.t == t) & (fits.c == 0), ['z_loc', 'y_loc', 'x_loc']].to_numpy() # Fits of fiducial beads in moving frame
+        print(f"mov_points shape: {mov_points.shape}")
         shift = drift_table.loc[(drift_table.position == pos) & (drift_table.frame == t), ['z_px_fine', 'y_px_fine', 'x_px_fine']].values[0]
         shift[0] =  shift[0] * camera_params.nanometers_z # Extract calculated drift correction from drift correction file.
         shift[1] =  shift[1] * camera_params.nanometers_xy
