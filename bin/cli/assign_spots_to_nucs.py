@@ -45,7 +45,7 @@ def workflow(
     get_nuc_drifts = query_table_for_pos('nuc_input_name', '_drift_correction')
     get_spot_drifts = query_table_for_pos('spot_input_name', '_drift_correction')
     get_rois = query_table_for_pos('spot_input_name', '_rois')
-    for i, pos in tqdm.tqdm(enumerate(H.image_lists[H.config['spot_input_name']])):
+    for i, pos in tqdm.tqdm(enumerate(H.image_lists[H.spot_input_name])):
         rois = get_rois(pos)
         if len(rois) == 0:
             continue
@@ -66,17 +66,17 @@ def workflow(
 
     all_rois = pd.concat(all_rois).sort_values(['position', 'frame'])
     if array_id is not None:
-        all_rois.to_csv(H.out_path + H.config['spot_input_name'] + '_rois_' + str(array_id).zfill(4) + '.csv')
+        all_rois.to_csv(H.out_path(H.spot_input_name + '_rois_' + str(array_id).zfill(4) + '.csv'))
     else:
-        all_rois.to_csv(H.out_path + H.config['spot_input_name'] + '_rois.csv')
-        if H.config['spot_input_name'] + '_traces' in H.tables:
+        all_rois.to_csv(H.out_path(H.spot_input_name + '_rois.csv'))
+        if H.spot_input_name + '_traces' in H.tables:
             logger.info('Assigning ids to traces.')
-            traces = H.tables[H.config['spot_input_name'] + '_traces'].copy()
+            traces = H.tables[H.spot_input_name + '_traces'].copy()
             if 'nuc_masks' in H.images:
                 traces.loc[:, 'nuc_label'] = traces['trace_id'].map(all_rois['nuc_label'].to_dict())
             if 'nuc_classes' in H.images:
                 traces.loc[:, 'nuc_class'] = traces['trace_id'].map(all_rois['nuc_class'].to_dict())
-            traces.sort_values(['trace_id', 'frame']).to_csv(H.out_path + H.config['spot_input_name'] + '_traces.csv')
+            traces.sort_values(['trace_id', 'frame']).to_csv(H.out_path(H.spot_input_name + '_traces.csv'))
 
     logger.info("Done!")
 
