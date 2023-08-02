@@ -163,11 +163,13 @@ def process_single_FOV_single_reference_frame(imgs: List[np.ndarray], drift_tabl
     fits.loc[:, ['y_loc', 'x_loc', 'sigma_xy']] = fits.loc[:,  ['y_loc', 'x_loc', 'sigma_xy']] * camera_params.nanometers_xy # Scale xy coordinates to nm (use xy pixel size from exp).
     fits.loc[:, ['z_loc', 'sigma_z']] = fits.loc[:, ['z_loc', 'sigma_z']] * camera_params.nanometers_z #Scale z coordinates to nm (use slice spacing from exp)
 
-    ref_points = fits.loc[(fits.t == bead_detection_params.reference_frame) & (fits.c == 0), ['z_loc', 'y_loc', 'x_loc']].to_numpy() # Fits of fiducial beads in ref frame
+    # TODO: update if ever allowing channel (reg_ch_template) to be List[int] rather than simple int.
+    ref_points = fits.loc[(fits.t == bead_detection_params.reference_frame) & (fits.c == bead_detection_params.reference_channel), ['z_loc', 'y_loc', 'x_loc']].to_numpy() # Fits of fiducial beads in ref frame
     print(f"Reference point count: {len(ref_points)}")
     res = []
     for t in tqdm.tqdm(range(T)):
-        mov_points = fits.loc[(fits.t == t) & (fits.c == 0), ['z_loc', 'y_loc', 'x_loc']].to_numpy() # Fits of fiducial beads in moving frame
+        # TODO: update if ever allowing channel (reg_ch_template) to be List[int] rather than simple int.
+        mov_points = fits.loc[(fits.t == t) & (fits.c == bead_detection_params.reference_channel), ['z_loc', 'y_loc', 'x_loc']].to_numpy() # Fits of fiducial beads in moving frame
         print(f"mov_points shape: {mov_points.shape}")
         shift = drift_table.loc[(drift_table.position == pos) & (drift_table.frame == t), ['z_px_fine', 'y_px_fine', 'x_px_fine']].values[0]
         shift[0] =  shift[0] * camera_params.nanometers_z # Extract calculated drift correction from drift correction file.
