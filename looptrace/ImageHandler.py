@@ -116,7 +116,9 @@ class ImageHandler:
         self.images, self.image_lists = read_images_folder(self.image_path, is_eligible=is_eligible)
 
     def reload_config(self):
-        with open(self.config_path, 'r') as fh:
+        conf = self.config_path.path if isinstance(self.config_path, ExtantFile) else self.config_path
+        print(f"Loading config file: {conf}")
+        with open(conf, 'r') as fh:
             self.config = yaml.safe_load(fh)
         return self.config
 
