@@ -238,8 +238,9 @@ def workflow(
             cls=DataclassCapableEncoder
             )
 
-    print(f"Reading zarr to dask: {images_folder}")
-    imgs, _ = image_io.multi_ome_zarr_to_dask(images_folder)
+    seqfish_images_folder = images_folder / config['reg_input_moving'] # TODO: reconcile with 'reg_input_template'
+    print(f"Reading zarr to dask: {seqfish_images_folder}")
+    imgs, _ = image_io.multi_ome_zarr_to_dask(str(seqfish_images_folder))
     print(f"Reading drift correction table: {drift_correction_table_file}")
     drift_table = pd.read_csv(drift_correction_table_file, index_col=0)
 
