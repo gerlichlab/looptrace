@@ -53,7 +53,7 @@ def workflow(
         nuc_drifts = get_nuc_drifts(pos)
         spot_drifts = get_spot_drifts(pos)
         
-        filter_kwargs = {"nuc_drift": nuc_drifts, "nuc_target_frame": H.config['nuc_ref_frame'], "spot_drifts": spot_drifts}
+        filter_kwargs = {"nuc_drifts": nuc_drifts, "nuc_target_frame": H.config['nuc_ref_frame'], "spot_drifts": spot_drifts}
         if 'nuc_masks' in H.images:
             logger.info(f"Assigning nuclei labels for sports from position: {pos}")
             rois = ip.filter_rois_in_nucs(rois, H.images['nuc_masks'][i][0,0], pos_list, new_col='nuc_label', **filter_kwargs)
