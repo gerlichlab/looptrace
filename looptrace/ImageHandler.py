@@ -27,18 +27,23 @@ PathFilter = Callable[[Union[os.DirEntry, Path]], bool]
 
 
 class ImageHandler:
-    def __init__(self, config_path: Union[str, Path], image_path: Optional[str] = None, image_save_path: Optional[str] = None):
+    def __init__(
+            self, 
+            config_path: Union[str, Path, ExtantFile], 
+            image_path: Union[str, Path, ExtantFolder, None] = None, 
+            image_save_path: Union[str, Path, ExtantFolder, None] = None
+            ):
         '''
         Initialize ImageHandler class with config read in from YAML file.
         See config file for details on parameters.
         Will try to use zarr file if present.
         '''
-        self.config_path = config_path
+        self.config_path = simplify_path(config_path)
         self.reload_config()
-        self.image_path = image_path
+        self.image_path = simplify_path(image_path)
         if self.image_path is not None:
             self.read_images()
-        self.image_save_path = image_save_path if image_save_path is not None else self.image_path
+        self.image_save_path = simplify_path(image_save_path if image_save_path is not None else self.image_path)
         self.load_tables()
 
     @property
@@ -116,9 +121,8 @@ class ImageHandler:
         self.images, self.image_lists = read_images_folder(self.image_path, is_eligible=is_eligible)
 
     def reload_config(self):
-        conf = self.config_path.path if isinstance(self.config_path, ExtantFile) else self.config_path
-        print(f"Loading config file: {conf}")
-        with open(conf, 'r') as fh:
+        print(f"Loading config file: {self.config_path}")
+        with open(self.config_path, 'r') as fh:
             self.config = yaml.safe_load(fh)
         return self.config
 
@@ -169,3 +173,7 @@ def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[
             continue
         print('Loaded images: ', image_name)
     return images, image_lists
+
+
+def simplify_path(p: Union[str, Path, ExtantFile, ExtantFolder, None]) -> Union[str, Path, None]:
+    return p.path if isinstance(p, (ExtantFile, ExtantFolder)) else p
