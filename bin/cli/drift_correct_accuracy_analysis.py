@@ -232,8 +232,8 @@ def workflow(
     print(f"Writing parameters file: {realised_params_file}")
     with open(realised_params_file, 'w') as fh:
         json.dump(
-            obj={"bead_detection": bead_detection_params, "bead_filtration": bead_filtration_params, "camera": camera_params}, 
-            fp=realised_params_file, 
+            {"bead_detection": bead_detection_params, "bead_filtration": bead_filtration_params, "camera": camera_params}, 
+            fh, 
             indent=2,
             cls=DataclassCapableEncoder
             )
