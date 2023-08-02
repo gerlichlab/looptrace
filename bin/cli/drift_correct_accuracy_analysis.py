@@ -18,7 +18,7 @@ import yaml
 
 from gertils.pathtools import ExtantFile, ExtantFolder
 from looptrace.Drifter import Drifter
-from looptrace.ImageHandler import ImageHandler
+from looptrace.ImageHandler import ImageHandler, simplify_path
 from looptrace.gaussfit import fitSymmetricGaussian3D
 from looptrace import image_io
 from looptrace import image_processing_functions as ip
@@ -181,14 +181,17 @@ def process_single_FOV_single_reference_frame(imgs: List[np.ndarray], drift_tabl
 
 
 def workflow(
-        config_file: Path, 
-        images_folder: Path, 
-        drift_correction_table_file: Optional[Path] = None, 
+        config_file: ExtantFile, 
+        images_folder: ExtantFolder, 
+        drift_correction_table_file: Optional[ExtantFile] = None, 
         cores: int = None, 
         num_bead_rois: Optional[int] = None, 
         full_pos: Optional[int] = None, 
     ) -> pd.DataFrame:
     # TODO: how to handle case when output already exists
+
+    config_file = simplify_path(config_file)
+    images_folder = simplify_path(images_folder)
 
     if drift_correction_table_file is None:
         print("Determining drift correction table path...")
@@ -261,7 +264,8 @@ def workflow(
     return fits
 
 
-def run_visualisation(config_file: Path):
+def run_visualisation(config_file: ExtantFile):
+    config_file = simplify_path(config_file)
     with open(config_file, 'r') as fh:
         config = yaml.safe_load(fh)
     output_folder = config['analysis_path']
@@ -283,9 +287,9 @@ if __name__ == "__main__":
     # TODO: setup logger with logmuse
     opts = parse_cmdl(sys.argv[1:])
     workflow(
-        config_file=opts.config_file.path,
-        images_folder=opts.images_folder.path, 
-        drift_correction_table_file=opts.drift_correction_table.path, 
+        config_file=opts.config_file,
+        images_folder=opts.images_folder, 
+        drift_correction_table_file=opts.drift_correction_table, 
         cores=opts.cores,
         num_bead_rois=opts.num_bead_rois,
         full_pos=opts.reference_FOV,
