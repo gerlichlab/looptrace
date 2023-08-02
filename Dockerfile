@@ -16,7 +16,11 @@ RUN apt-get update -y && \
     update-alternatives --config gcc && \
     apt-get install git wget libz-dev libbz2-dev liblzma-dev -y && \
     apt-get install cuda-compat-11-4=470.199.02-1 -y && \
+    apt-get install r-base -y && \
     apt-get install vim -y
+
+# Install R packages.
+RUN R -e "install.packages(c('argparse', 'data.table', 'ggplot2', 'reshape2'), dependencies=TRUE, repos='http://cran.rstudio.com/')"
 
 # Copy repo code, to be built later.
 RUN cd / && mkdir looptrace && cd /looptrace
