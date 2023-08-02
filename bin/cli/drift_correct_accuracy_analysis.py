@@ -280,7 +280,7 @@ def run_visualisation(config_file: ExtantFile):
     output_folder = config['analysis_path']
     fits_file = _get_dc_fits_filepath(output_folder)
     # TODO: spin off this function to make pipeline checkpointable after long-running DC analysis.
-    analysis_script_file = os.path.join(os.dirname(__file__), "drift_correct_accuracy_analysis.R")
+    analysis_script_file = os.path.join(os.path.dirname(__file__), "drift_correct_accuracy_analysis.R")
     if not os.path.isfile(analysis_script_file):
         raise FileNotFoundError(f"Missing drift correction analysis script: {analysis_script_file}")
     analysis_cmd_parts = ["Rscript", analysis_script_file, "-i", str(fits_file), "-o", output_folder]
