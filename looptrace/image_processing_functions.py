@@ -110,61 +110,54 @@ def update_roi_points(point_layer, roi_table, position, downscale):
     rois = rois.drop(rois[rois['position']==position].index)
     return pd.concat([rois, new_rois]).sort_values('position').reset_index(drop=True)
 
-def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label', nuc_drifts=None, nuc_target_frame=None, spot_drifts=None):
+
+def filter_rois_in_nucs(rois, nuc_label_img, new_col='nuc_label', nuc_drifts=None, nuc_target_frame=None, spot_drifts=None):
     '''Check if a spot is in inside a segmented nucleus.
 
     Args:
         rois (DataFrame): ROI table to check
-        nuc_masks (list): List of 2D nuclear mask images, where 0 is outside nuclei and >0 inside
+        nuc_label_img (list): 2D/3D label images, where 0 is outside nuclei and >0 inside
         pos_list (list): List of all the positions (str) to check
         new_col (str, optional): The name of the new column in the ROI table. Defaults to 'nuc_label'.
 
     Returns:
         rois (DataFrame): Updated ROI table indicating if ROI is inside nucleus or not.
     '''
-    new_rois = rois.copy()
 
-    print(f"First nuclear mask shape: {nuc_masks[0].shape}")
-    if nuc_masks[0].shape[0] == 1:
-        logger.info("Will use xy only for spot labeling")
-        def get_spot_label(row, pos_idx):
-            return int(nuc_masks[pos_idx][0, int(row['yc']), int(row['xc'])])
-    else:
-        logger.info("Will use xyz for spot labeling")
-        def get_spot_label(row, pos_idx):
-            return int(nuc_masks[pos_idx][int(row['zc']), int(row['yc']), int(row['xc'])])
-    
-    def spot_in_nuc(row):
-        pos_index = pos_list.index(row['position'])
+    new_rois = rois.copy()
+    print(nuc_label_img.shape)
+    def spot_in_nuc(row, nuc_label_img):
         try:
-            spot_label = get_spot_label(row=row, pos_idx=pos_index)
+            if nuc_label_img.shape[-3] == 1:
+                spot_label = int(nuc_label_img[0, int(row['yc']), int(row['xc'])])
+            else:
+                spot_label = int(nuc_label_img[int(row['zc']),int(row['yc']), int(row['xc'])])
         except IndexError as e: #If due to drift spot is outside frame.
             spot_label = 0
-            logger.warning(f"Drift spot outside frame? {e}")
+            print(e)
+        #print(spot_label)
         return spot_label
 
     try:
         new_rois.drop(columns=[new_col], inplace=True)
     except KeyError:
-        logger.debug(f"Column not present to drop: {new_col}")
-
+        pass
+    #print(rois, nuc_drifts)
     if nuc_drifts is not None:
-        logger.debug("Using nuclear drifts during ROI filtration")
         rois_shifted = new_rois.copy()
         shifts = []
-        for _, row in rois_shifted.iterrows():
+        for i, row in rois_shifted.iterrows():
             drift_target = nuc_drifts[(nuc_drifts['position'] == row['position']) & (nuc_drifts['frame'] == nuc_target_frame)][['z_px_course', 'y_px_course', 'x_px_course']].to_numpy()
             drift_roi = spot_drifts[(spot_drifts['position'] == row['position']) & (spot_drifts['frame'] == row['frame'])][['z_px_course', 'y_px_course', 'x_px_course']].to_numpy()
             shift = drift_target - drift_roi
             shifts.append(shift[0])
         shifts = pd.DataFrame(shifts, columns=['z','y','x'])
         rois_shifted[['zc', 'yc', 'xc']] = rois_shifted[['zc', 'yc', 'xc']].to_numpy() - shifts[['z','y','x']].to_numpy()
-        rois_to_label = rois_shifted
-    else:
-        logger.debug("No nuclear drifts to use during ROI filtration")
-        rois_to_label = rois
+
+        new_rois.loc[:,new_col] = rois_shifted.apply(spot_in_nuc, nuc_label_img=nuc_label_img, axis=1)
     
-    new_rois[new_col] = rois_to_label.apply(spot_in_nuc, axis=1)
+    else:
+        new_rois.loc[:,new_col] = new_rois.apply(spot_in_nuc, nuc_label_img=nuc_label_img, axis=1)
 
     return new_rois
 

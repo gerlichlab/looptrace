@@ -56,10 +56,12 @@ def workflow(
         filter_kwargs = {"nuc_drifts": nuc_drifts, "nuc_target_frame": H.config['nuc_ref_frame'], "spot_drifts": spot_drifts}
         if 'nuc_masks' in H.images:
             logger.info(f"Assigning nuclei labels for sports from position: {pos}")
-            rois = ip.filter_rois_in_nucs(rois, H.images['nuc_masks'][i][0,0], pos_list, new_col='nuc_label', **filter_kwargs)
+            rois = ip.filter_rois_in_nucs(rois, nuc_label_img=H.images['nuc_masks'][i][0,0], new_col='nuc_label', **filter_kwargs)
+            #rois = ip.filter_rois_in_nucs(rois, H.images['nuc_masks'][i][0,0], pos_list, new_col='nuc_label', **filter_kwargs)
         if 'nuc_classes' in H.images:
             logger.info(f"Assigning nuclei classes for spots from position: {pos}")
-            rois = ip.filter_rois_in_nucs(rois, H.images['nuc_classes'][i][0,0], pos_list, new_col='nuc_class', **filter_kwargs)
+            rois = ip.filter_rois_in_nucs(rois, nuc_label_img=H.images['nuc_classes'][i][0,0], new_col='nuc_class', **filter_kwargs)
+            #rois = ip.filter_rois_in_nucs(rois, H.images['nuc_classes'][i][0,0], pos_list, new_col='nuc_class', **filter_kwargs)
         all_rois.append(rois.copy())
 
     all_rois = pd.concat(all_rois).sort_values(['position', 'frame'])
