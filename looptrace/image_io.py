@@ -25,8 +25,12 @@ import zarr
 TIFF_EXTENSIONS = [".tif", ".tiff"]
 
 
-def ignore_path(p: Union[os.DirEntry, Path]) -> bool:
-    return p.name.startswith("_")
+def ignore_path(p: Union[str, os.DirEntry, Path]) -> bool:
+    try:
+        name = p.name
+    except AttributeError:
+        name = p
+    return name.startswith("_")
 
 
 class NPZ_wrapper():
