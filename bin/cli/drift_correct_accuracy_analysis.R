@@ -26,6 +26,7 @@ SCALE_COLOUR_4 <- scale_colour_manual(values = COLORS4, labels = DISTANCE_LABELS
 cli_parser <- ArgumentParser(description="Visualise results of drift_correct_analsis.py, namely the amount of imprecision that remains even after drift correction")
 cli_parser$add_argument("-i", "--fits-file", required=TRUE, help="Path to the fits file created by drift_correct_analysis.py")
 cli_parser$add_argument("-o", "--output-folder", required=TRUE, help="Path to folder in which to place output files")
+cli_parser$add_argument("--beads-channel", required=TRUE, type="integer", help="(0-based) channel in which beads were imaged")
 cli_parser$add_argument("--handle-extant-output", default="OVERWRITE", choices=c("OVERWRITE", "overwrite", "SKIP", "skip", "FAIL", "fail"), help="Specification of how to handle case in which output path already exists")
 opts <- cli_parser$parse_args()
 
@@ -36,7 +37,7 @@ if (!file_test("-f", opts$fits_file)) {
 }
 fits_data <- fread(opts$fits_file)[, ..COLUMNS_OF_INTEREST]
 message("Filtering data for beads channels and for QC pass...")
-fits_beads_pass_qc <- fits_data[QC == 1 & c == 0, ]
+fits_beads_pass_qc <- fits_data[QC == 1 & c == opts$beads_channel, ]
 message(sprintf("After filtering for QC pass and beads channel, %s of %s records remain.", nrow(fits_beads_pass_qc), nrow(fits_data)))
 
 # Define function to create data table for each round of plotting.

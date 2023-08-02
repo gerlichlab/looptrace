@@ -188,6 +188,10 @@ def process_single_FOV_single_reference_frame(imgs: List[np.ndarray], drift_tabl
     return fits
 
 
+def get_beads_channel(config: Dict[str, Any]) -> int:
+    return config["reg_ch_template"]
+
+
 def workflow(
         config_file: ExtantFile, 
         images_folder: ExtantFolder, 
@@ -216,7 +220,7 @@ def workflow(
     # Detection parameters
     bead_detection_params = BeadDetectionParameters(
         reference_frame = config["reg_ref_frame"],
-        reference_channel = config["reg_ch_template"], 
+        reference_channel = get_beads_channel(config), 
         threshold=config["bead_threshold"], 
         min_intensity=config["min_bead_intensity"],
         roi_pixels=config["bead_roi_size"],
@@ -283,7 +287,7 @@ def run_visualisation(config_file: ExtantFile):
     analysis_script_file = os.path.join(os.path.dirname(__file__), "drift_correct_accuracy_analysis.R")
     if not os.path.isfile(analysis_script_file):
         raise FileNotFoundError(f"Missing drift correction analysis script: {analysis_script_file}")
-    analysis_cmd_parts = ["Rscript", analysis_script_file, "-i", str(fits_file), "-o", output_folder]
+    analysis_cmd_parts = ["Rscript", analysis_script_file, "-i", str(fits_file), "-o", output_folder, "--beads-channel", str(get_beads_channel(config))]
     print(f"Analysis command: {' '.join(analysis_cmd_parts)}")
     return subprocess.check_call(analysis_cmd_parts)
 
