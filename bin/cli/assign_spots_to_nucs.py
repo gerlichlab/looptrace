@@ -65,10 +65,11 @@ def workflow(
         all_rois.append(rois.copy())
 
     all_rois = pd.concat(all_rois).sort_values(['position', 'frame'])
+    out_file_ext = ".nuclei_filtered.csv"
     if array_id is not None:
-        all_rois.to_csv(H.out_path(H.spot_input_name + '_rois_' + str(array_id).zfill(4) + '.csv'))
+        all_rois.to_csv(H.out_path(H.spot_input_name + '_rois_' + str(array_id).zfill(4) + out_file_ext))
     else:
-        all_rois.to_csv(H.out_path(H.spot_input_name + '_rois.csv'))
+        all_rois.to_csv(H.out_path(H.spot_input_name + '_rois' + out_file_ext))
         if H.spot_input_name + '_traces' in H.tables:
             logger.info('Assigning ids to traces.')
             traces = H.tables[H.spot_input_name + '_traces'].copy()
