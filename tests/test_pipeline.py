@@ -1,5 +1,6 @@
 """Tests for the main processing pipeline"""
 
+import copy
 from dataclasses import dataclass
 import itertools
 import logging
@@ -10,6 +11,7 @@ import pytest
 import yaml
 from gertils import PathWrapperException
 
+from looptrace.exceptions import MissingInputException
 from conftest import import_pipeline_script
 
 looptrace_pipeline = import_pipeline_script()
@@ -128,14 +130,25 @@ def test_required_inputs(tmp_path, cli, expect_success):
 
 
 @pytest.fixture
-def prepped_minimal_config_data(tmp_path):
+def prepped_minimal_config_data(tmp_path, seq_images_path):
     analysis_path = tmp_path / "analysis"
     analysis_path.mkdir()
+    seq_images_path.mkdir(parents=True)
     return {
         "analysis_path": str(analysis_path),
         "analysis_prefix": "TESTING__",
         "decon_input_name": "seq_images_raw_decon"
     }
+
+
+@pytest.fixture
+def images_all_path(tmp_path):
+    return tmp_path / "images_all"
+
+
+@pytest.fixture
+def seq_images_path(images_all_path):
+    return images_all_path / "seq_images_raw"
 
 
 @pytest.mark.parametrize("config_file_option", ["-C", "--config-file"])
@@ -158,3 +171,25 @@ def test_logging(tmp_path, prepped_minimal_config_data, caplog, config_file_opti
     # See: https://github.com/databio/pypiper/issues/186
     looptrace_pipeline.init(opts).manager.stop_pipeline()
     assert f"Building {looptrace_pipeline.PIPE_NAME} pipeline from {conf_path}, to use images from {imgs_path}" in caplog.text
+
+
+def test_no_deconvolution_input(tmp_path, prepped_minimal_config_data):
+    conf_path = tmp_path / "config.yaml"
+    with open(conf_path, 'w') as fh:
+        yaml.dump(prepped_minimal_config_data, fh)
+    imgs_path = prep_images_folder(tmp_path, create=True)
+    output_folder = prep_output_folder(tmp_path, create=True)
+    cmdl = [
+        "--config-file", str(conf_path), 
+        "--images-folder", str(imgs_path), 
+        "--output-folder", str(output_folder), 
+        looptrace_pipeline.NO_TEE_LOGS_OPTNAME, 
+        "--start-point", "deconvolution",
+        ]
+    with pytest.raises(MissingInputException):
+        looptrace_pipeline.main(cmdl)
+
+
+@pytest.mark.skip("not implemented")
+def test_deconvolution_gpu_requirement():
+    pass

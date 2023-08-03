@@ -17,6 +17,7 @@ try:
     from gertils.gpu import count_tensorflow_gpus
 except TensorflowNotFoundException:
     def count_tensorflow_gpus(): print("GPU utility module isn't available to count GPUs.")
+from looptrace.exceptions import GpusUnavailableException, MissingInputException
 from looptrace.point_spread_function import PointSpreadFunctionStrategy
 
 logger = logging.getLogger()
@@ -30,7 +31,10 @@ class Deconvolver:
     def __init__(self, image_handler, array_id = None):
         self.image_handler = image_handler
         self.config = image_handler.config
-        self.pos_list = self.image_handler.image_lists[self.input_name]
+        try:
+            self.pos_list = self.image_handler.image_lists[self.input_name]
+        except KeyError as e:
+            raise MissingInputException(f"Deconvolution stage is missing input images: {self.input_name}") from e
 
         if array_id is not None:
             self.pos_list = [self.pos_list[int(array_id)]]
@@ -152,7 +156,7 @@ class Deconvolver:
         if num_gpus_avail is None or num_gpus_avail == 0:
             tmp_msg = "GPU availability required but none can be guaranteed available."
             if self.require_gpu:
-                raise Exception(tmp_msg)
+                raise GpusUnavailableException(tmp_msg)
             else:
                 print(f"WARNING: {tmp_msg}")
         else:
