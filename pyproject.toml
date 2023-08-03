@@ -25,7 +25,7 @@ cellpose = { version = "v2.2.2", optional = true }
 czifile = { version = "^2019.7.2", optional = true }
 dask = "^2023.5.1"
 flowdec = { version = "^1.1.0", optional = true }
-gertils = { git = "https://github.com/gerlichlab/gertils.git", tag = "2023-07-14" }
+gertils = { git = "https://github.com/gerlichlab/gertils.git", tag = "2023-08-01" }
 # TODO: imagecodecs is used by nd2 to support "legacy" ND2 (JPEG2000), but may not be needed otherwise.
 imagecodecs = { version = "2023.7.4", optional = true }
 joblib = { version = "^1.3.1", optional = true }
@@ -37,6 +37,7 @@ numcodecs = "^0.11.0"
 numpy = "^1.24.2"
 pandas = "^1.5.3"
 piper = { version = "0.12.3", optional = true }
+pytest = { version = "^7.3.1", optional = true }
 pyyaml = "^6.0"
 scipy = "^1.10.1"
 scikit-image = "^0.20.0"
@@ -48,7 +49,7 @@ zarr = "^2.4.12"
 [tool.poetry.extras]
 analysis = ["matplotlib", "numba", "seaborn"]
 deconvolution = ["flowdec"]
-dev = ["czifile", "matplotlib", "nd2", "numba", "seaborn", "tifffile"]
+dev = ["czifile", "matplotlib", "nd2", "numba", "pytest", "seaborn", "tifffile"]
 nuclei = ["cellpose"]
 pipeline = ["cellpose", "czifile", "flowdec", "joblib", "nd2", "piper", "tifffile"]
 polymer = ["numba"]
