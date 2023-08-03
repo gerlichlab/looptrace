@@ -82,6 +82,7 @@ def main(cmdl):
     pipeline = init(opts)
     logger.info("Running pipeline")
     pipeline.run(start_point=opts.start_point, stop_after=opts.stop_after)
+    pipeline.wrapup()
 
 
 if __name__ == "__main__":
