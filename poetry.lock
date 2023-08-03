@@ -892,7 +892,7 @@ name = "logmuse"
 version = "0.2.7"
 description = "Logging setup"
 category = "main"
-optional = false
+optional = true
 python-versions = "*"
 files = [
     {file = "logmuse-0.2.7-py3-none-any.whl", hash = "sha256:691fc43118feddeaf41b57cd8b8ed5c8e6071948e57a2b824b9c690712e858a8"},
@@ -2171,4 +2171,4 @@ polymer = ["numba"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10.0, < 3.12"
-content-hash = "bdf01932085da8750d9cf210321cb2dadf21fe04aef769c847aa41480774ef43"
+content-hash = "f5b6225ec1c30618cf9ce88dca695b88f809bc13386d0346741c3066131707c2"

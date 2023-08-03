@@ -2,16 +2,14 @@
 
 import argparse
 from dataclasses import dataclass
-import glob
 import itertools
 import json
+import logging
 import multiprocessing as mp
 import os
 from pathlib import Path
 import sys
 from typing import *
-
-import logmuse
 
 from gertils.pathtools import ExtantFile, ExtantFolder, NonExtantPath
 from detect_spots import ParamPatch, Method, Parameters, workflow as run_spot_detection
@@ -24,7 +22,7 @@ ROI_PREFIX = "rois"
 CONFIG_FILETYPE = "json"
 ROI_FILETYPE = "csv"
 
-logger = None # to be built and configured during main control flow
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -79,9 +77,6 @@ def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
     parser.add_argument("--overwrite", action="store_true", help="Overwrite existing results file(s)")
     parser.add_argument("--index-range", type=IndexRange.from_string, nargs="*", help="Ranges of parameter indices to use, only when running through written configs code path")
 
-    # Logging
-    parser = logmuse.add_logging_options(parser)
-    
     return parser.parse_args(cmdl)
 
 
@@ -221,9 +216,6 @@ class IndexRange:
 def main(cmdl: List[str]) -> None:
     opts = parse_cmdl(cmdl)
     
-    global logger
-    logger = logmuse.logger_via_cli(opts)
-
     if opts.parameters_grid_file is None:
         if not opts.output_folder.exists():
             raise FileNotFoundError(f"Output folder, to search for configs, doesn't exist: {opts.output_folder}")

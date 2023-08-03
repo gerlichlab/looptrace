@@ -23,7 +23,6 @@ dependencies:
         - flowdec # for deconvolution
         - imagecodecs
         - joblib
-        - logmuse
         #- napari
         - nd2
         - numcodecs

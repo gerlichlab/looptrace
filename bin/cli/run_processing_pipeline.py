@@ -63,7 +63,7 @@ def parse_cli(args: Iterable[str]) -> argparse.Namespace:
     parser.add_argument(NO_TEE_LOGS_OPTNAME, action="store_true", help="Do not tee logging output from pypiper manager")
     parser = pypiper.add_pypiper_args(
         parser, 
-        groups=("pypiper", "checkpoint"), # This adds logmuse options, too (from pypiper group).
+        groups=("pypiper", "checkpoint"),
         args=("start-point", ),
         )
     return parser.parse_args(args)

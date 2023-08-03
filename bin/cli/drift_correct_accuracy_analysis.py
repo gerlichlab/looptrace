@@ -297,7 +297,6 @@ def _get_dc_fits_filepath(folder: Union[str, Path]) -> str:
 
 
 if __name__ == "__main__":
-    # TODO: setup logger with logmuse
     opts = parse_cmdl(sys.argv[1:])
     workflow(
         config_file=opts.config_file,

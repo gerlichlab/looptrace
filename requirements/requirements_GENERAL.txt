@@ -1,5 +1,4 @@
 dask
-logmuse
 numcodecs
 numpy
 pandas
