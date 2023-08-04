@@ -100,7 +100,9 @@ plot_drift_correction_error <- function(full_plot_data, central_measure, fov) {
     }
     message("Creating plot based on: ", fov_text)
     title_text <- sprintf("%s, %s", method_text, fov_text)
-    p <- plot_func(full_plot_data = full_plot_data, fov = fov) + ggtitle(title_text)
+    p <- plot_func(full_plot_data = full_plot_data, fov = fov) + 
+        ggtitle(title_text) + 
+        ylim(c(0, 100))
     return(p)
 }
 
