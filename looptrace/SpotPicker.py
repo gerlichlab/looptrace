@@ -254,12 +254,12 @@ class SpotPicker:
         #positions = sorted(list(self.roi_table.position.unique()))
 
         all_rois = []
-        rois_table = self.image_handler.tables[self.input_name + '_rois']
-        only_nuc_rois = self.config.get('spot_in_nuc', False)
-        for i, roi in tqdm.tqdm(rois_table.iterrows(), total=len(rois_table)):
-            if only_nuc_rois and roi['nuc_label'] == 0:
-                logger.debug(f"Skipping ROI (not in nuc): {roi}")
-                continue
+        if self.config.get('spot_in_nuc', False):
+            rois_table = self.image_handler.tables[self.input_name + '_rois.nuclei_filtered']
+            rois_table = rois_table.loc[rois_table['nuc_label'] != 0]
+        else:
+            rois_table = self.image_handler.tables[self.input_name + '_rois']
+        for _, roi in tqdm.tqdm(rois_table.iterrows(), total=len(rois_table)):
             pos = roi['position']
             pos_index = self.image_handler.image_lists[self.input_name].index(pos)#positions.index(pos)
             dc_pos_name = self.image_handler.image_lists[self.config['reg_input_moving']][pos_index]
