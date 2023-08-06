@@ -33,7 +33,7 @@ matplotlib = { version = "^3.7.0", optional = true }
 nd2 = { version = "^0.5.3", optional = true }
 numba = { version = "^0.57.0", optional = true }
 numcodecs = "^0.11.0"
-numpy = "^1.24.2"
+numpy = ">= 1.24.2, < 1.25"
 pandas = "^1.5.3"
 piper = { version = "0.12.3", optional = true }
 pytest = { version = "^7.3.1", optional = true }
