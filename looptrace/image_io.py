@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import time
 from typing import *
 import zipfile
 
@@ -378,17 +379,28 @@ def create_zarr_store(  path: str,
     level_store = root.create_dataset(name = str(0), compressor=compressor, shape=shape, chunks=chunks, dtype=dtype)
     return level_store
 
-def zip_folder(folder, out_file, compression = zipfile.ZIP_STORED, remove_folder = False) -> str:
+def zip_folder(folder, out_file, compression = zipfile.ZIP_STORED, remove_folder=False, retry_if_fails: bool = True) -> str:
     #Zips the contents of a folder and stores as filename in same dir as folder.
     #Strips the original fileextensions (usecase for npy -> npz archive). Will probably modify this in future.
+    if remove_folder and os.path.dirname(out_file) == folder:
+        raise ValueError(f"Cannot zip to file ({out_file}) in folder to be deleted ({folder})")
     filelist = sorted([p.path for p in os.scandir(folder)])
     filenamelist = sorted([p.name for p in os.scandir(folder)])
     with zipfile.ZipFile(out_file, mode='w', compression=compression, compresslevel=3) as zfile:
         for f, fn in tqdm.tqdm(zip(filelist, filenamelist), total=len(filelist)):
             zfile.write(f, arcname=os.path.splitext(fn)[0])
     if remove_folder:
-        # TODO: how is this not going to remove the newly created zipfile if it's in the same folder?
-        shutil.rmtree(folder)
+        try:
+            shutil.rmtree(folder)
+        except OSError:
+            time.sleep(1)
+            try:
+                shutil.rmtree(folder)
+            except OSError as e:
+                if 0 == len(os.listdir(folder)):
+                    print(f"WARNING -- could not remove folder ({folder}) whose contents were zipped: {e}")
+                else:
+                    raise
     return out_file
 
 def image_from_svih5(path,ch=None,index=(slice(None),
