@@ -6,6 +6,7 @@
   }) {}, 
   pipeline ? false,
   analysis ? false, 
+  interactive ? false,
   pydev ? true, 
   absolutelyOnlyR ? false,
 }:
@@ -13,8 +14,9 @@ let baseBuildInputs = with pkgs; [ poetry stdenv.cc.cc.lib zlib ];
     py310 = pkgs.python310.withPackages (ps: with ps; [ numpy pandas ]);
     R-analysis = pkgs.rWrapper.override{ packages = with pkgs.rPackages; [ argparse data_table ggplot2 reshape2 ]; };
     poetryExtras = [] ++ 
-      (if pipeline then ["pipeline"] else []) ++
-      (if analysis then ["analysis"] else []) ++ 
+      (if pipeline then [ "pipeline" ] else []) ++
+      (if analysis then [ "analysis" ] else []) ++ 
+      (if interactive then [ "interactive" ] else []) ++
       (if pydev then ["dev"] else []);
     poetryInstallExtras = (
       if poetryExtras == [] then ""
