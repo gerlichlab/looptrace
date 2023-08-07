@@ -18,14 +18,17 @@ from scipy import ndimage as ndi
 from skimage.measure import regionprops_table
 import tqdm
 
+from looptrace.filepaths import get_spot_images_path
 from looptrace import image_processing_functions as ip
-from looptrace import image_io
 
 DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC = 'dog'
-SPOT_IMG_ZIP_NAME = "spot_images.npz"
 NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION = ".nuclei_labeled"
 
 logger = logging.getLogger()
+
+
+def get_spot_images_zipfile(folder: Path) -> Path:
+    return folder / "spot_images.npz"
 
 
 class SpotPicker:
@@ -85,14 +88,14 @@ class SpotPicker:
 
     @property
     def spot_images_path(self):
-        return os.path.join(self.image_handler.image_save_path, 'spot_images_dir')
+        return get_spot_images_path(self.image_handler.image_save_path)
 
     @property
     def spot_images_zipfile(self):
         # TODO: what to do if this path is nested under self.spot_images_path, and will be deleted upon zip?
         # See: https://github.com/gerlichlab/looptrace/issues/19
         # See: https://github.com/gerlichlab/looptrace/issues/20
-        return os.path.join(self.image_handler.image_save_path, SPOT_IMG_ZIP_NAME)
+        return get_spot_images_zipfile(self.image_handler.image_save_path)
 
     @property
     def spot_in_nuc(self) -> bool:
@@ -398,17 +401,11 @@ class SpotPicker:
                             except ValueError: #Edge case: ROI fetching has failed giving strange shaped ROI, just leave the zeros as is.
                                 pass
                                 # roi_stack = np.append(roi_stack, np.expand_dims(np.zeros_like(roi_stack[0]), 0), axis=0)
-                        #np.save(self.config['image_path']+os.sep+'spot_images_dir'+os.sep+rn+'.npy', roi_stack)
+                        #np.save(os.path.join(self.spot_images_path, rn + '.npy', roi_stack)
                         #print(roi_array)
                         #roi_array_padded.append(ip.pad_to_shape(roi, shape = roi_image_size, mode = 'minimum'))
                 f_id += 1
-        if self.array_id is None: #Only do this if not running distributed, otherwise need to collect and zip later.
-            image_io.zip_folder(self.spot_images_path, self.spot_images_zipfile, remove_folder = True)
-            self.image_handler.images['spot_images'] = image_io.NPZ_wrapper(self.spot_images_zipfile)
-            return self.spot_images_zipfile
-        else:
-            return self.spot_images_path
-
+        return self.spot_images_path
             
             #for j, pos_roi in enumerate(pos_rois):
             #    roi_array[str(pos)+'_'+str(j).zfill(5)] = pos_roi.copy()
@@ -459,15 +456,7 @@ class SpotPicker:
                 arr_out = os.path.join(self.spot_images_path, fn + '.npy')
                 np.save(arr_out, spot_stack)
         #self.image_handler.images['spot_images'] = all_spots
-        if self.array_id is None: #Only do this if not running distributed, otherwise need to collect and zip later.
-            outfile = self.spot_images_zipfile
-            image_io.zip_folder(folder=self.spot_images_path, out_file=outfile, remove_folder=True)
-            # TODO: what's the connection between the image path determination and the outfile
-            self.image_handler.images['spot_images'] = image_io.NPZ_wrapper(outfile)
-            return outfile
-        else:
-            return self.spot_images_path
-    
+        return self.spot_images_path
 
     def fine_dc_single_roi_img(self, roi_img, roi):
         #Shift a single image according to precalculated drifts.

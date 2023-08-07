@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
+from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, simplify_path
 from looptrace.image_io import ignore_path, NPZ_wrapper, TIFF_EXTENSIONS
 from gertils.pathtools import ExtantFile, ExtantFolder
 
@@ -111,7 +112,7 @@ class ImageHandler:
             logger.info(f"Loaded: {tn}")
             self.table_paths[tn] = fp
     
-    def read_images(self, is_eligible: PathFilter = lambda p: p.name != "spot_images_dir" and not ignore_path(p)):
+    def read_images(self, is_eligible: PathFilter = lambda p: p.name != SPOT_IMAGES_SUBFOLDER and not ignore_path(p)):
         '''
         Function to load existing images from the input folder, and them into a dictionary (self.images{}),
         with folder name or image name (without extensions) as keys, images as values.
@@ -173,7 +174,3 @@ def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[
             continue
         print('Loaded images: ', image_name)
     return images, image_lists
-
-
-def simplify_path(p: Union[str, Path, ExtantFile, ExtantFolder, None]) -> Union[str, Path, None]:
-    return p.path if isinstance(p, (ExtantFile, ExtantFolder)) else p

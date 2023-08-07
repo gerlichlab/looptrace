@@ -18,6 +18,7 @@ from assign_spots_to_nucs import workflow as run_spot_filtration
 from cluster_analysis_cleanup import workflow as run_cleanup
 from extract_spots_table import workflow as run_spot_bounding
 from extract_spots import workflow as run_spot_extraction
+from extract_spots_cluster_cleanup import workflow as run_spot_zipping
 from tracing import workflow as run_chromatin_tracing
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,7 @@ class LooptracePipeline(pypiper.Pipeline):
             ("clean_1", run_cleanup, conf_only),
             ("spot_bounding", run_spot_bounding, conf_data_pair),
             ("spot_extraction", run_spot_extraction, conf_data_pair),
+            ("spot_zipping", run_spot_zipping, (self.images_folder, )),
             ("clean_2", run_cleanup, conf_only), 
             ("tracing", run_chromatin_tracing, conf_data_pair),
             ("clean_3", run_cleanup, conf_only),

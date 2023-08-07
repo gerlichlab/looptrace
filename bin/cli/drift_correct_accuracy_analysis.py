@@ -17,8 +17,10 @@ import tqdm
 import yaml
 
 from gertils.pathtools import ExtantFile, ExtantFolder
+
 from looptrace.Drifter import Drifter
-from looptrace.ImageHandler import ImageHandler, simplify_path
+from looptrace.ImageHandler import ImageHandler
+from looptrace.filepaths import simplify_path
 from looptrace.gaussfit import fitSymmetricGaussian3D
 from looptrace import image_io
 from looptrace import image_processing_functions as ip
