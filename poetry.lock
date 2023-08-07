@@ -2171,4 +2171,4 @@ polymer = ["numba"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10.0, < 3.12"
-content-hash = "f5b6225ec1c30618cf9ce88dca695b88f809bc13386d0346741c3066131707c2"
+content-hash = "103d2df4d5ed569b5a2d9e54e92143f77a96b6e7a0ccae23f25e8224016776fe"
