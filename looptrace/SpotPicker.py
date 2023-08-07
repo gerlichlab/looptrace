@@ -23,6 +23,7 @@ from looptrace import image_io
 
 DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC = 'dog'
 SPOT_IMG_ZIP_NAME = "spot_images.npz"
+NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION = ".nuclei_labeled"
 
 logger = logging.getLogger()
 
@@ -255,7 +256,7 @@ class SpotPicker:
 
         all_rois = []
         if self.config.get('spot_in_nuc', False):
-            rois_table = self.image_handler.tables[self.input_name + '_rois.nuclei_filtered']
+            rois_table = self.image_handler.tables[self.input_name + '_rois' + NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION]
             rois_table = rois_table.loc[rois_table['nuc_label'] != 0]
         else:
             rois_table = self.image_handler.tables[self.input_name + '_rois']

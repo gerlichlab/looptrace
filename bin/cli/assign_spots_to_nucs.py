@@ -10,6 +10,7 @@ import pandas as pd
 import tqdm
 
 from looptrace.ImageHandler import handler_from_cli
+from looptrace.SpotPicker import NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION
 import looptrace.image_processing_functions as ip
 
 logger = logging.getLogger()
@@ -65,7 +66,7 @@ def workflow(
         all_rois.append(rois.copy())
 
     all_rois = pd.concat(all_rois).sort_values(['position', 'frame'])
-    out_file_ext = ".nuclei_filtered.csv"
+    out_file_ext = f"{NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION}.csv"
     if array_id is not None:
         all_rois.to_csv(H.out_path(H.spot_input_name + '_rois_' + str(array_id).zfill(4) + out_file_ext))
     else:
