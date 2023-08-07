@@ -18,6 +18,8 @@ from scipy import ndimage as ndi
 from skimage.measure import regionprops_table
 import tqdm
 
+from gertils import ExtantFolder, NonExtantPath
+
 from looptrace.filepaths import get_spot_images_path
 from looptrace import image_processing_functions as ip
 
@@ -27,7 +29,10 @@ NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION = ".nuclei_labeled"
 logger = logging.getLogger()
 
 
-def get_spot_images_zipfile(folder: Path) -> Path:
+def get_spot_images_zipfile(folder: Union[Path, ExtantFolder, NonExtantPath]) -> Path:
+    """Return fixed-name path to zipfile for spot images, relative to the given folder."""
+    if isinstance(folder, (ExtantFolder, NonExtantPath)):
+        folder = folder.path
     return folder / "spot_images.npz"
 
 
