@@ -9,9 +9,10 @@ EMBL Heidelberg
 import argparse
 import os
 
+from gertils import ExtantFile, ExtantFolder
+
 from looptrace.ImageHandler import handler_from_cli
 from looptrace.SpotPicker import SpotPicker
-from gertils.pathtools import ExtantFile, ExtantFolder
 
 
 def workflow(config_file: ExtantFile, images_folder: ExtantFolder, already_registered: bool = False) -> str:

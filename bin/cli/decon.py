@@ -12,7 +12,7 @@ from typing import *
 
 from looptrace.Deconvolver import Deconvolver
 from looptrace.ImageHandler import handler_from_cli
-from gertils.pathtools import ExtantFile, ExtantFolder
+from gertils import ExtantFile, ExtantFolder
 
 
 def workflow(config_file: ExtantFile, images_folder: ExtantFolder, image_save_path: Optional[ExtantFolder] = None) -> List[str]:

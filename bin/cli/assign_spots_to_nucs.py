@@ -5,7 +5,7 @@ import logging
 import os
 from typing import *
 
-from gertils.pathtools import ExtantFile, ExtantFolder
+from gertils import ExtantFile, ExtantFolder
 import pandas as pd
 import tqdm
 

@@ -11,7 +11,7 @@ import argparse
 from pathlib import Path
 from typing import *
 
-from gertils.pathtools import ExtantFile, ExtantFolder, PathWrapperException
+from gertils import ExtantFile, ExtantFolder, PathWrapperException
 
 from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, get_spot_images_path
 from looptrace import image_io

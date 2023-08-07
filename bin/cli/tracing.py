@@ -12,7 +12,7 @@ import os
 
 from looptrace.ImageHandler import handler_from_cli
 from looptrace.Tracer import Tracer
-from gertils.pathtools import ExtantFile, ExtantFolder
+from gertils import ExtantFile, ExtantFolder
 
 
 def workflow(config_file: ExtantFile, images_folder: ExtantFolder):

@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from typing import *
 
-from gertils.pathtools import ExtantFile, ExtantFolder
+from gertils import ExtantFile, ExtantFolder
 
 __author__ = "Vince Reuter"
 

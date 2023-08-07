@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 from typing import *
 
-from gertils.pathtools import ExtantFile, ExtantFolder
+from gertils import ExtantFile, ExtantFolder
 from looptrace.Deconvolver import Deconvolver
 from looptrace.ImageHandler import handler_from_cli
 from looptrace.point_spread_function import PointSpreadFunctionStrategy

@@ -17,7 +17,7 @@ import yaml
 
 from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, simplify_path
 from looptrace.image_io import ignore_path, NPZ_wrapper, TIFF_EXTENSIONS
-from gertils.pathtools import ExtantFile, ExtantFolder
+from gertils import ExtantFile, ExtantFolder
 
 __all__ = ["ImageHandler", "handler_from_cli", "read_images"]
 

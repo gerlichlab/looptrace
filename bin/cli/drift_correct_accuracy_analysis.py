@@ -16,7 +16,7 @@ from scipy import ndimage as ndi
 import tqdm
 import yaml
 
-from gertils.pathtools import ExtantFile, ExtantFolder
+from gertils import ExtantFile, ExtantFolder
 
 from looptrace.Drifter import Drifter
 from looptrace.ImageHandler import ImageHandler

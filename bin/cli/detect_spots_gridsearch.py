@@ -11,7 +11,7 @@ from pathlib import Path
 import sys
 from typing import *
 
-from gertils.pathtools import ExtantFile, ExtantFolder, NonExtantPath
+from gertils import ExtantFile, ExtantFolder, NonExtantPath
 from detect_spots import ParamPatch, Method, Parameters, workflow as run_spot_detection
 
 __author__ = ["Vince Reuter"]

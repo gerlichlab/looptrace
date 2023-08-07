@@ -5,7 +5,7 @@ import logging
 import sys
 from typing import *
 
-from gertils.pathtools import ExtantFile, ExtantFolder
+from gertils import ExtantFile, ExtantFolder
 import pypiper
 
 from extract_exp_psf import workflow as run_psf_extraction
