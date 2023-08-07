@@ -392,7 +392,7 @@ def zip_folder(folder, out_file, compression = zipfile.ZIP_STORED, remove_folder
     if remove_folder:
         try:
             shutil.rmtree(folder)
-        except OSError:
+        except (OSError, FileNotFoundError):
             time.sleep(1)
             try:
                 shutil.rmtree(folder)
