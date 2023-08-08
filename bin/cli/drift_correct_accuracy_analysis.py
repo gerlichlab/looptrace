@@ -41,7 +41,7 @@ def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
     parser.add_argument("-I", "--images-folder", required=True, type=ExtantFolder.from_string, help="Path to folder with images used for drift correction")
     parser.add_argument("--drift-correction-table", type=ExtantFile.from_string, help="Path to drift correction table")
     parser.add_argument("--cores", type=int, help="Number of processors to use")
-    parser.add_argument("--num-bead-rois", type=int, help="Number of bead ROIs to subsample")
+    parser.add_argument("--max-num-bead-rois", type=int, help="Maximum number of bead ROIs to subsample")
     parser.add_argument("--reference-FOV", type=int, help="Index of single FOV to use as reference")
     return parser.parse_args(cmdl)
 
@@ -81,15 +81,15 @@ class BeadDetectionParameters:
 @dataclasses.dataclass
 class BeadFiltrationParameters:
     """A bundle of parameters related to filtration of beads for this fiducial accuracy analysis"""
-    num_rois: int
+    max_num_rois: int
     min_signal_to_noise: Union[int, float]
 
     def _invalidate(self):
         errors = []
-        if not isinstance(self.num_rois, int):
-            errors.append(TypeError(f"ROI count must be natural number, but got {type(self.num_rois).__name__}"))
-        elif self.num_rois < 1:
-            errors.append(ValueError(f"ROI count must be natural number, but got {self.num_rois}"))
+        if not isinstance(self.max_num_rois, int):
+            errors.append(TypeError(f"ROI count must be natural number, but got {type(self.max_num_rois).__name__}"))
+        elif self.max_num_rois < 1:
+            errors.append(ValueError(f"ROI count must be natural number, but got {self.max_num_rois}"))
         if not isinstance(self.min_signal_to_noise, (int, float)):
             errors.append(TypeError(f"Min signal-to-noise ratio must be int or float, but got {type(self.min_signal_to_noise).__name__}"))
         elif self.min_signal_to_noise < 0:
@@ -136,7 +136,7 @@ def process_single_FOV_single_reference_frame(imgs: List[np.ndarray], drift_tabl
     C = imgs[full_pos].shape[1]
     print(f"Generating bead ROIs for DC accuracy analysis, full_pos: {full_pos}")
     ref_rois = ip.generate_bead_rois(imgs[full_pos][bead_detection_params.reference_frame, bead_detection_params.reference_channel].compute(), threshold=bead_detection_params.threshold, min_bead_int=bead_detection_params.min_intensity, n_points=-1)
-    rois = ref_rois[np.random.choice(ref_rois.shape[0], bead_filtration_params.num_rois, replace=False)]
+    rois = ref_rois[np.random.choice(ref_rois.shape[0], bead_filtration_params.max_num_rois, replace=False)]
     bead_roi_px = bead_detection_params.roi_pixels
     dims = (len(rois), T, C, bead_roi_px, bead_roi_px, bead_roi_px)
     print(f"Dims: {dims}")
@@ -199,7 +199,7 @@ def workflow(
         images_folder: ExtantFolder, 
         drift_correction_table_file: Optional[ExtantFile] = None, 
         cores: int = None, 
-        num_bead_rois: Optional[int] = None, 
+        max_num_bead_rois: Optional[int] = None, 
         full_pos: Optional[int] = None, 
     ) -> pd.DataFrame:
     # TODO: how to handle case when output already exists
@@ -230,9 +230,10 @@ def workflow(
     print(f"Bead detection parameters: {bead_detection_params}")
     
     # Filtration parameters
-    num_bead_rois = num_bead_rois or config.get("n_bead_rois_dc_accuracy", 500)
-    min_signal_to_noise = config[SIGNAL_NOISE_RATIO_NAME]
-    bead_filtration_params = BeadFiltrationParameters(num_rois=num_bead_rois, min_signal_to_noise=min_signal_to_noise)
+    bead_filtration_params = BeadFiltrationParameters(
+        max_num_rois=max_num_bead_rois or config.get("max_num_bead_rois_for_dc_accuracy", 500), 
+        min_signal_to_noise=config[SIGNAL_NOISE_RATIO_NAME],
+        )
     print(f"Bead filtration parameters: {bead_filtration_params}")
 
     # Camera parameters
@@ -305,6 +306,6 @@ if __name__ == "__main__":
         images_folder=opts.images_folder, 
         drift_correction_table_file=opts.drift_correction_table, 
         cores=opts.cores,
-        num_bead_rois=opts.num_bead_rois,
+        max_num_bead_rois=opts.max_num_bead_rois,
         full_pos=opts.reference_FOV,
     )
