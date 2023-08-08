@@ -136,7 +136,8 @@ def process_single_FOV_single_reference_frame(imgs: List[np.ndarray], drift_tabl
     C = imgs[full_pos].shape[1]
     print(f"Generating bead ROIs for DC accuracy analysis, full_pos: {full_pos}")
     ref_rois = ip.generate_bead_rois(imgs[full_pos][bead_detection_params.reference_frame, bead_detection_params.reference_channel].compute(), threshold=bead_detection_params.threshold, min_bead_int=bead_detection_params.min_intensity, n_points=-1)
-    rois = ref_rois[np.random.choice(ref_rois.shape[0], bead_filtration_params.max_num_rois, replace=False)]
+    num_ref_rois = ref_rois.shape[0]
+    rois = ref_rois[np.random.choice(num_ref_rois, bead_filtration_params.max_num_rois, replace=False)] if num_ref_rois > bead_filtration_params.max_num_rois else ref_rois
     bead_roi_px = bead_detection_params.roi_pixels
     dims = (len(rois), T, C, bead_roi_px, bead_roi_px, bead_roi_px)
     print(f"Dims: {dims}")
