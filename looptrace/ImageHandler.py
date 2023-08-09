@@ -53,7 +53,7 @@ class ImageHandler:
 
     @property
     def analysis_path(self):
-        return self.config['analysis_path']
+        return os.path.expanduser(os.path.expandvars(self.config['analysis_path']))
 
     @property
     def decon_input_name(self) -> str:
@@ -84,11 +84,10 @@ class ImageHandler:
 
     def load_tables(self):
         parsers = {".csv": lambda f: pd.read_csv(f, index_col=0), ".pkl": pd.read_pickle}
-        analysis_folder = self.config['analysis_path']
         try:
-            table_files = os.scandir(analysis_folder)
+            table_files = os.scandir(self.analysis_path)
         except FileNotFoundError:
-            logger.info(f"Declared analysis folder doesn't yet exist: {self.config['analysis_path']}")
+            logger.info(f"Declared analysis folder doesn't yet exist: {self.analysis_path}")
             raise
         self.table_paths = {}
         self.tables = {}
