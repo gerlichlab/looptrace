@@ -14,13 +14,13 @@ Once you have the [minimal requirements](#minimal-requirements), this will be th
 1. __Path creation__: Assure that the necessary filepaths exist; particularly easy to forget are the path to the folder in which analysis output will be placed (the value of `analysis_path` in the config file), and the path to the folder in which the pipeline will place its own files (`-O / --output-folder` argument at the command-line). See the [data layout section](#data-layout-and-organisation).
 1. `tmux`: attach to an existing `tmux` session, or start a new one. See the [tmux section](#tmux) for more info.
 1. __Docker__: Start the relevant Docker container:
-```shell
-nvidia-docker run --rm -it -u root -v /path/to/your/exp/data:/home/experiment looptrace:2023-08-10 bash
-```
+    ```shell
+    nvidia-docker run --rm -it -u root -v /groups/gerlich/experiments/.../00XXXX:/home/experiment looptrace:2023-08-10 bash
+    ```
 1. __Run pipeline__: Once in the Docker container, run the pipeline, replacing the file and folder names as needed / desired:
-```shell
-python /looptrace/bin/cli/run_processing_pipeline.py -C /home/experiment/current_experiment_number_looptrace.yaml -I /home/experiment/images_all -O /home/experiment/pypiper_output
-```
+    ```shell
+    python /looptrace/bin/cli/run_processing_pipeline.py -C /home/experiment/looptrace_00XXXX.yaml -I /home/experiment/images_all -O /home/experiment/pypiper_output
+    ```
 1. __Detach__: `Ctrl+b d` -- for more, see the [tmux section](#tmux).
 
 
