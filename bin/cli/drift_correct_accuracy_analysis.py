@@ -266,12 +266,14 @@ def workflow(
     else:
         fov_indices = range(len(drift_table.position.unique()))
         # TODO: parameterise with config.
-        func_args = ((imgs, drift_table, idx, bead_detection_params, bead_filtration_params, camera_params) for idx in fov_indices)
+        func_args = [(imgs, drift_table, idx, bead_detection_params, bead_filtration_params, camera_params) for idx in fov_indices]
         cores = cores or config.get('num_cores_dc_analysis', 1)
         if cores == 1:
             single_fov_fits = (process_single_FOV_single_reference_frame(*args) for args in func_args)
         else:
-            with mp.Pool(cores) as workers:
+            cpus_used = min(cores, len(func_args))
+            print(f"CPU use count: {cpus_used}")
+            with mp.Pool(cpus_used) as workers:
                 single_fov_fits = workers.starmap(process_single_FOV_single_reference_frame, func_args)
         fits = pd.concat(single_fov_fits)
     
