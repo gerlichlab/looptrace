@@ -20,7 +20,7 @@ from gertils import ExtantFile, ExtantFolder
 
 from looptrace.Drifter import Drifter
 from looptrace.ImageHandler import ImageHandler
-from looptrace.filepaths import simplify_path
+from looptrace.filepaths import get_analysis_path, simplify_path
 from looptrace.gaussfit import fitSymmetricGaussian3D
 from looptrace import image_io
 from looptrace import image_processing_functions as ip
@@ -218,7 +218,7 @@ def workflow(
     with open(config_file, 'r') as fh:
         config = yaml.safe_load(fh)
 
-    output_folder = Path(config['analysis_path'])
+    output_folder = Path(get_analysis_path(config))
     
     # Detection parameters
     bead_detection_params = BeadDetectionParameters(
@@ -282,10 +282,8 @@ def workflow(
 
 
 def run_visualisation(config_file: ExtantFile):
-    config_file = simplify_path(config_file)
-    with open(config_file, 'r') as fh:
-        config = yaml.safe_load(fh)
-    output_folder = config['analysis_path']
+    with open(simplify_path(config_file), 'r') as fh:
+        output_folder = get_analysis_path(yaml.safe_load(fh))
     fits_file = _get_dc_fits_filepath(output_folder)
     # TODO: spin off this function to make pipeline checkpointable after long-running DC analysis.
     analysis_script_file = os.path.join(os.path.dirname(__file__), "drift_correct_accuracy_analysis.R")

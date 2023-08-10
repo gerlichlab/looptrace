@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, simplify_path
+from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, get_analysis_path, simplify_path
 from looptrace.image_io import ignore_path, NPZ_wrapper, TIFF_EXTENSIONS
 from gertils import ExtantFile, ExtantFolder
 
@@ -53,7 +53,7 @@ class ImageHandler:
 
     @property
     def analysis_path(self):
-        return os.path.expanduser(os.path.expandvars(self.config['analysis_path']))
+        return get_analysis_path(self.config)
 
     @property
     def decon_input_name(self) -> str:

@@ -7,9 +7,14 @@ from typing import *
 from gertils import ExtantFile, ExtantFolder
 
 __author__ = "Vince Reuter"
+__all__ = ["SPOT_IMAGES_SUBFOLDER", "get_analysis_path", "get_spot_images_path", "simplify_path"]
 
 
 SPOT_IMAGES_SUBFOLDER = "spot_images_dir"
+
+
+def get_analysis_path(config: Mapping[str, Any]) -> str:
+    return os.path.expanduser(os.path.expandvars(config['analysis_path']))
 
 
 def get_spot_images_path(folder: Union[str, Path, ExtantFolder]):
