@@ -52,6 +52,9 @@ RUN cd /opt/conda/lib/python3.10/site-packages/tensorrt_libs && \
 # For the CUDA-based container, we only need to add the tensorrt libraries path.
 ENV LD_LIBRARY_PATH=/opt/conda/lib/python3.10/site-packages/tensorrt_libs:/usr/local/cuda-11.4/compat:${LD_LIBRARY_PATH}
 
+# Establish the current experiment data mount point, for convenient config file match and path operations.
+ENV CURR_EXP_HOME=/home/experiment
+
 # Reset working directory
 WORKDIR /home
 
@@ -69,4 +72,3 @@ USER jovian
 
 # For Jupyter
 CMD ["/bin/bash"]
-
