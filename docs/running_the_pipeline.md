@@ -15,7 +15,7 @@ Once you have the [minimal requirements](#minimal-requirements), this will be th
 1. `tmux`: attach to an existing `tmux` session, or start a new one. See the [tmux section](#tmux) for more info.
 1. __Docker__: Start the relevant Docker container:
 ```shell
-
+nvidia-docker run --rm -it -u root -v /path/to/your/exp/data:/home/experiment looptrace:2023-08-10 bash
 ```
 1. __Run pipeline__: Once in the Docker container, run the pipeline, replacing the file and folder names as needed / desired:
 ```shell
