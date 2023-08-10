@@ -283,7 +283,8 @@ def workflow(
 
 def run_visualisation(config_file: ExtantFile):
     with open(simplify_path(config_file), 'r') as fh:
-        output_folder = get_analysis_path(yaml.safe_load(fh))
+        config = yaml.safe_load(fh)
+    output_folder = get_analysis_path(config)
     fits_file = _get_dc_fits_filepath(output_folder)
     # TODO: spin off this function to make pipeline checkpointable after long-running DC analysis.
     analysis_script_file = os.path.join(os.path.dirname(__file__), "drift_correct_accuracy_analysis.R")
