@@ -11,13 +11,12 @@ To be able to run this pipeline on the lab machine, these are the basic requirem
 ## General workflow
 Once you have the [minimal requirements](#minimal-requirements), this will be the typical workflow for running the pipeline:
 1. __Login__ to the machine: something like `ssh username@ask-Vince-or-Chris-for-the-machine-domain`
-1. __Path creation__: Assure that the necessary filepaths exist; particularly easy to forget are the path to the folder in which analysis output will be placed (the value of `analysis_path` in the config file), and the path to the folder in which the pipeline will place its own files (`-O / --output-folder` argument at the command-line).
+1. __Path creation__: Assure that the necessary filepaths exist; particularly easy to forget are the path to the folder in which analysis output will be placed (the value of `analysis_path` in the config file), and the path to the folder in which the pipeline will place its own files (`-O / --output-folder` argument at the command-line). See the [data layout section](#data-layout-and-organisation).
 1. `tmux`: attach to an existing `tmux` session, or start a new one. See the [tmux section](#tmux) for more info.
 1. __Docker__: Start the relevant Docker container:
 ```shell
 
 ```
-<a name="run-pipeline"></a>
 1. __Run pipeline__: Once in the Docker container, run the pipeline, replacing the file and folder names as needed / desired:
 ```shell
 python /looptrace/bin/cli/run_processing_pipeline.py -C /home/experiment/current_experiment_number_looptrace.yaml -I /home/experiment/images_all -O /home/experiment/pypiper_output
@@ -39,11 +38,11 @@ In this context, for running the pipeline, think of the _terminal multiplexer_ (
 For more, search for "tmux key bindings" or similar, or refer to [this helpful Gist](https://gist.github.com/mloskot/4285396)/
 
 
-## Data: folder layout / organisation
+## Data layout and organisation
 * __Main experiment folder__ (`CURR_EXP_HOME` environment variable): On the cluster and on the lab machine, this is often something like `/path/to/experiments/folder/Experiments_00XXXX/00XXXX`, but it could be anything so long as the substructure matches what's expected / defined in the config file.
-* __Images subfolder__ (created on lab machine or cluster): something like `images_all`, but just needs to match the value you'll give with the `-I / --images-folder` argument when [running the pipeline](#run-pipeline)
+* __Images subfolder__ (created on lab machine or cluster): something like `images_all`, but just needs to match the value you'll give with the `-I / --images-folder` argument when running the pipeline.
     * _Raw nuclei images_ subfolder: something like `nuc_images_raw`, though just must match the corresponding key in the config file
     * _FISH images_ subfolder: something like `seq_images_raw`, though just must match the corresponding key in the config file
-* __Pypiper subfolder__ (created on lab machine or on cluster): something like `pypiper_output`, where pipeline logs and checkpoints are written; this will be passed by you to the pipeline runner through the `-O / --output-folder` argument when you [run the pipeline](#run-pipeline).
+* __Pypiper subfolder__ (created on lab machine or on cluster): something like `pypiper_output`, where pipeline logs and checkpoints are written; this will be passed by you to the pipeline runner through the `-O / --output-folder` argument when you run the pipeline.
 * __Analysis subfolder__ (created on lab machine or on cluster): something like `2023-08-10_Analysis01`, though can be anything and just must match the name of the subfolder you supply in the config file, as the leaf of the path in the `analysis_path` value
 
