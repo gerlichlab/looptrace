@@ -263,11 +263,20 @@ class SpotPicker:
         #positions = sorted(list(self.roi_table.position.unique()))
 
         all_rois = []
+        
         if self.config.get('spot_in_nuc', False):
-            rois_table = self.image_handler.tables[self.input_name + '_rois' + NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION]
-            rois_table = rois_table.loc[rois_table['nuc_label'] != 0]
+            key_rois_table = self.input_name + '_rois' + NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION
+            filter_rois_table = lambda t: t.loc[t['nuc_label'] != 0]
         else:
-            rois_table = self.image_handler.tables[self.input_name + '_rois']
+            key_rois_table = self.input_name + '_rois'
+            filter_rois_table = lambda t: t
+        
+        try:
+            rois_table = self.image_handler.tables[key_rois_table]
+        except KeyError as e:
+            raise MissingRoisTableException(key_rois_table) from e
+        rois_table = filter_rois_table(rois_table)
+        
         for _, roi in tqdm.tqdm(rois_table.iterrows(), total=len(rois_table)):
             pos = roi['position']
             pos_index = self.image_handler.image_lists[self.input_name].index(pos)#positions.index(pos)

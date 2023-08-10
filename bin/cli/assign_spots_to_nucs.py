@@ -20,7 +20,7 @@ def workflow(
         config_file: ExtantFile, 
         images_folder: ExtantFolder, 
         image_save_path: Optional[ExtantFolder] = None,
-        ) -> pd.DataFrame:
+        ) -> None:
     
     # Set up the spot picker, to manage paths and settings.
     array_id = os.environ.get("SLURM_ARRAY_TASK_ID")
@@ -65,20 +65,28 @@ def workflow(
             #rois = ip.filter_rois_in_nucs(rois, H.images['nuc_classes'][i][0,0], pos_list, new_col='nuc_class', **filter_kwargs)
         all_rois.append(rois.copy())
 
-    all_rois = pd.concat(all_rois).sort_values(['position', 'frame'])
     out_file_ext = f"{NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION}.csv"
     if array_id is not None:
-        all_rois.to_csv(H.out_path(H.spot_input_name + '_rois_' + str(array_id).zfill(4) + out_file_ext))
+        outfile = H.out_path(H.spot_input_name + '_rois_' + str(array_id).zfill(4) + out_file_ext)
+        assign_ids_to_traces = lambda: None
     else:
-        all_rois.to_csv(H.out_path(H.spot_input_name + '_rois' + out_file_ext))
-        if H.spot_input_name + '_traces' in H.tables:
-            logger.info('Assigning ids to traces.')
-            traces = H.tables[H.spot_input_name + '_traces'].copy()
-            if 'nuc_masks' in H.images:
-                traces.loc[:, 'nuc_label'] = traces['trace_id'].map(all_rois['nuc_label'].to_dict())
-            if 'nuc_classes' in H.images:
-                traces.loc[:, 'nuc_class'] = traces['trace_id'].map(all_rois['nuc_class'].to_dict())
-            traces.sort_values(['trace_id', 'frame']).to_csv(H.out_path(H.spot_input_name + '_traces.csv'))
+        outfile = H.out_path(H.spot_input_name + '_rois' + out_file_ext)
+        def assign_ids_to_traces():
+            if H.spot_input_name + '_traces' in H.tables:
+                logger.info('Assigning ids to traces.')
+                traces = H.tables[H.spot_input_name + '_traces'].copy()
+                if 'nuc_masks' in H.images:
+                    traces.loc[:, 'nuc_label'] = traces['trace_id'].map(all_rois['nuc_label'].to_dict())
+                if 'nuc_classes' in H.images:
+                    traces.loc[:, 'nuc_class'] = traces['trace_id'].map(all_rois['nuc_class'].to_dict())
+                traces.sort_values(['trace_id', 'frame']).to_csv(H.out_path(H.spot_input_name + '_traces.csv'))
+    
+    if len(all_rois) > 0:
+        all_rois = pd.concat(all_rois).sort_values(['position', 'frame'])
+        all_rois.to_csv(outfile)
+        assign_ids_to_traces()
+    else:
+        print(f"No ROIs! Cannot write output file: {outfile}")
 
     logger.info("Done!")
 
