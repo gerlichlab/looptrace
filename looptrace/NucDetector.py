@@ -7,10 +7,11 @@ Ellenberg group
 EMBL Heidelberg
 """
 
-from looptrace import image_processing_functions as ip
-from looptrace import image_io
-import dask.array as da
+import logging
 import os
+from typing import *
+
+import dask.array as da
 import numpy as np
 import pandas as pd
 from skimage.segmentation import expand_labels, relabel_sequential
@@ -19,38 +20,55 @@ from skimage.transform import rescale
 from skimage.morphology import remove_small_objects
 import tqdm
 
+from looptrace import image_io
+from looptrace import image_processing_functions as ip
+
+logger = logging.getLogger()
+
+
 class NucDetector:
     '''
     Class for handling generation and detection of e.g. nucleus images.
     '''
-
     def __init__(self, image_handler, array_id = None):
         self.image_handler = image_handler
-        self.config = image_handler.config
         try:
-            self.images = self.image_handler.images[self.config['nuc_input_name']]
-            self.pos_list = self.image_handler.image_lists[self.config['nuc_input_name']]
-        except KeyError:
-            pass
-        self.nuc_images_path = self.image_handler.image_save_path+os.sep+'nuc_images'
-        self.nuc_masks_path = self.image_handler.image_save_path+os.sep+'nuc_masks'
-        self.nuc_classes_path = self.image_handler.image_save_path+os.sep+'nuc_classes'
-
+            self.images = self.image_handler.images[self.input_name]
+            self.pos_list = self.image_handler.image_lists[self.input_name]
+        except KeyError as e:
+            logger.warning("Error in nuclei detector setup: {e}")
         if array_id is not None:
             self.pos_list = [self.pos_list[int(array_id)]]
+
+    @property
+    def config(self) -> Dict[str, Any]:
+        return self.image_handler.config
+
+    @property
+    def input_name(self) -> str:
+        return self.config['nuc_input_name']
+
+    @property
+    def nuc_classes_path(self) -> str:
+        return self._get_img_save_path("nuc_classes")
+    
+    @property
+    def nuc_images_path(self) -> str:
+        return self._get_img_save_path("nuc_images")
+    
+    @property
+    def nuc_masks_path(self) -> str:
+        return self._get_img_save_path("nuc_masks")
+    
+    def _get_img_save_path(self, name: str) -> str:
+        return os.path.join(self.image_handler.image_save_path, name)
 
     def gen_nuc_images(self):
         '''
         Saves 2D/3D (defined in config) images of the nuclear channel into image folder for later analysis.
         '''
-        try:
-            nuc_slice = self.config['nuc_slice']
-        except KeyError: #Legacy config
-            nuc_slice = -1
-        try:
-            nuc_3d = self.config['nuc_3d']
-        except KeyError:
-            nuc_3d = False
+        nuc_slice = self.config.get('nuc_slice', -1)
+        nuc_3d = self.config.get('nuc_3d', False)
         
         print('Generating nuclei images.')
         imgs = []
@@ -72,21 +90,21 @@ class NucDetector:
         
         del imgs #Cleanup RAM
 
-    def segment_nuclei(self):
+    def segment_nuclei(self) -> str:
         '''
         Runs nucleus segmentation using nucleus segmentation algorithm defined in ip functions.
         Dilates a bit and saves images.
         '''
         
-        if 'nuc_images' not in self.image_handler.images:
+        imgs_key = "nuc_images"
+        if imgs_key not in self.image_handler.images:
+            logger.info(f"{imgs_key} doesn't yet exist; generating...")
             self.gen_nuc_images()
+            logger.info(f"Re-reading images...")
             self.image_handler.read_images()
-        print('Segmenting nuclei.')
         
-        try:
-            method = self.config['nuc_method']
-        except KeyError:
-            method = 'nuclei'
+        method = self.config.get('nuc_method', 'nuclei')
+        
         try:
             nuc_3d = self.config['nuc_3d']
             ds_xy = self.config['nuc_downscaling_xy']
@@ -94,9 +112,9 @@ class NucDetector:
             if nuc_3d:
                 anisotropy = self.config['nuc_anisotropy']
                 ds_z = self.config['nuc_downscaling_z']
-                nuc_min_size = self.config['nuc_min_size']/(ds_z*ds_xy*ds_xy)
+                nuc_min_size = self.config['nuc_min_size'] / (ds_z * ds_xy * ds_xy)
             else:
-                nuc_min_size = self.config['nuc_min_size']/(ds_xy*ds_xy)
+                nuc_min_size = self.config['nuc_min_size'] / (ds_xy * ds_xy)
                 
             mitosis_class = self.config['nuc_mitosis_class']
         except KeyError:
@@ -105,28 +123,33 @@ class NucDetector:
             nuc_min_size = 10
             mitosis_class = False
         
-        diameter = self.config['nuc_diameter']/ds_xy
+        logger.info(f"Nuclei segmentation parameters: {[('nuc_3d', nuc_3d), ('ds_xy', ds_xy), ('nuc_min_size', nuc_min_size), ('mitosis_class', mitosis_class)]}")
+
+        diameter = self.config['nuc_diameter'] / ds_xy
         
-        print('Segmenting nuclei.')
-        nuc_imgs_in = self.image_handler.images['nuc_images']
+        nuc_imgs_in = self.image_handler.images[imgs_key]
+
         nuc_imgs = []
 
         #Remove unused dimensions and downscale input images.
         for img in nuc_imgs_in:        
             new_slice = tuple([0 if i == 1 else slice(None) for i in img.shape])
             img = img[new_slice]
-            if nuc_3d:
-                img = np.array(img[::ds_z, ::ds_xy, ::ds_xy])
-            else:
-                img = np.array(img[::ds_xy,::ds_xy])
+            img = np.array(img[::ds_z, ::ds_xy, ::ds_xy]) if nuc_3d else np.array(img[::ds_xy,::ds_xy]) 
             nuc_imgs.append(img)
         
         print(f'Running nuclear segmentation using CellPose {method} model and diameter {diameter}.')
 
         if nuc_3d:
+            print("Using all 3 dimensions for nuclei detection")
             masks = ip.nuc_segmentation_cellpose_3d(nuc_imgs, diameter = diameter, model_type = method, anisotropy=anisotropy)
+            scaling = (ds_z, ds_xy, ds_xy)
+            axes_for_zarr = ('p', 'z', 'y', 'x')
         else:
+            print("Using just 2 dimensions for nuclei detection")
             masks = ip.nuc_segmentation_cellpose_2d(nuc_imgs, diameter = diameter, model_type = method)
+            scaling = (ds_xy, ds_xy)
+            axes_for_zarr = ('p', 'y', 'x')
 
         #Remove under-segmented nuclei and clean up:
         masks = [remove_small_objects(arr, min_size=nuc_min_size) for arr in masks]
@@ -136,21 +159,15 @@ class NucDetector:
             print(f'Detecting mitotic cells on top of CellPose nuclei.')
             masks, mitotic_idx = zip(*[ip.mitotic_cell_extra_seg(np.array(nuc_imgs[i]), masks[i]) for i in range(len(nuc_imgs))])
 
-        if nuc_3d:
-            masks = [rescale(expand_labels(mask.astype(np.uint16),3), scale = (ds_z, ds_xy, ds_xy), order = 0) for mask in masks]
-        else:
-            masks = [rescale(expand_labels(mask.astype(np.uint16),3), scale = (ds_xy, ds_xy), order = 0) for mask in masks]
+        masks = [rescale(expand_labels(mask.astype(np.uint16), 3), scale=scaling, order=0) for mask in masks]
         #masks = np.stack(masks)
 
         print('Saving segmentations.')
 
-        self.image_handler.images['nuc_masks']= masks
+        self.image_handler.images['nuc_masks'] = masks
 
-        if nuc_3d:
-            image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name='nuc_masks', axes=('p','z','y','x'), dtype = np.uint16, chunk_split=(1,1))
-        else:
-            image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name='nuc_masks', axes=('p','y','x'), dtype = np.uint16, chunk_split=(1,1))
-
+        image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name='nuc_masks', axes=axes_for_zarr, dtype = np.uint16, chunk_split=(1,1))
+        
         if mitosis_class:
             nuc_class = []
             for i, mask in enumerate(masks):
@@ -161,11 +178,10 @@ class NucDetector:
             print('Saving classifications.')
 
             self.image_handler.images['nuc_classes'] = nuc_class
-            if nuc_3d:
-                image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name='nuc_classes', axes=('p','z', 'y','x'), dtype = np.uint16, chunk_split=(1,1))
-            else:
-                image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name='nuc_classes', axes=('p','y','x'), dtype = np.uint16, chunk_split=(1,1))
+            image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name='nuc_classes', axes=axes_for_zarr, dtype = np.uint16, chunk_split=(1,1))
 
+        return self.nuc_masks_path
+            
     def update_masks_after_qc(self, new_mask, original_mask, mask_name, position):
 
         try:
@@ -263,7 +279,7 @@ class NucDetector:
                                                                                                 'z_px_fine', 'y_px_fine', 'x_px_fine', 'nuc_class'])
         nuc_rois['nuc_class'] = nuc_rois['nuc_class'].round()
         self.nuc_rois = nuc_rois
-        self.nuc_rois.to_csv(self.image_handler.out_path+'nuc_table.csv')
+        self.nuc_rois.to_csv(self.image_handler.out_path('nuc_table.csv'))
 
     def gen_nuc_rois_prereg(self):
         nuc_rois = []
@@ -292,7 +308,7 @@ class NucDetector:
             nuc_rois.append(nuc_props)
 
         self.nuc_rois = pd.concat(nuc_rois).reset_index(drop=True)
-        self.nuc_rois.to_csv(self.image_handler.out_path+'nuc_rois.csv')
+        self.nuc_rois.to_csv(self.image_handler.out_path('nuc_rois.csv'))
                 
                 
     def extract_single_roi_img(self, single_roi, images):

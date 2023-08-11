@@ -6,18 +6,33 @@ Ellenberg group
 EMBL Heidelberg
 """
 
-import os
-import dask.array as da
-import dask
-import zarr
-from numcodecs import Blosc
-import numpy as np
-import joblib
+import copy
 import itertools
+import os
+from pathlib import Path
 import re
-import yaml
-import tqdm
+import shutil
+import time
+from typing import *
 import zipfile
+
+import dask
+import dask.array as da
+import numpy as np
+import tqdm
+import zarr
+
+
+TIFF_EXTENSIONS = [".tif", ".tiff"]
+
+
+def ignore_path(p: Union[str, os.DirEntry, Path]) -> bool:
+    try:
+        name = p.name
+    except AttributeError:
+        name = p
+    return name.startswith("_")
+
 
 class NPZ_wrapper():
     '''
@@ -75,17 +90,6 @@ class NPZ_wrapper():
 #         return [self.arr[j] for j in list(range(len(self.arr)+1)[s])]
 
 
-def load_config(config_file):
-    '''
-    Open config file and return config variable form yaml file.
-    '''
-    with open(config_file, 'r') as stream:
-        try:
-            config=yaml.safe_load(stream)
-        except yaml.YAMLError as exc:
-            print(exc)
-    return config
-
 def multi_ome_zarr_to_dask(folder: str, remove_unused_dims = True):
     '''The multi_ome_zarr_to_dask function takes a folder path and returns a list of dask arrays and a list of image folders by reading multiple dask images in a single folder.
         If the remove_unused_dims flag is set to True, the function will also remove unnecessary dimensions from the dask array.
@@ -98,10 +102,10 @@ def multi_ome_zarr_to_dask(folder: str, remove_unused_dims = True):
         list: list of dask arrays of the images
         list: list of strings of image folder names
     '''
-    image_folders = sorted([p.name for p in os.scandir(folder) if (os.path.isdir(p) and not p.name.startswith('_'))])
+    image_folders = sorted([p.name for p in os.scandir(folder) if os.path.isdir(p) and not ignore_path(p)])
     out = []
     for image in image_folders:
-        z = zarr.open(folder+os.sep+image+os.sep+'0')
+        z = zarr.open(os.path.join(folder, image, '0'))
         arr = da.from_zarr(z)
 
         # Remove unecessary dimensions: #TODO consider if this is wise!
@@ -138,42 +142,57 @@ def multipos_nd2_to_dask(folder: str):
     #print('Loaded nd2 arrays of shape ', out.shape)
     return out
 
-def stack_nd2_to_dask(folder: str, position_id: int = None):
+
+def stack_nd2_to_dask(
+    folder: Union[str, Path], 
+    position_id: Optional[int] = None, 
+    handle_error: Callable[["ImageParseException"], None] = lambda e: print(f"WARNING: {e}")
+) -> Tuple[List[Any], List[str]]:
     '''The function takes a folder path and returns a list of dask arrays and a 
     list of image folders by reading multiple nd2 images where each represents a 3D stack (split by position and time) in a single folder.
-
-    Args:
-        folder (str): Input folder path
 
     Returns:
         list: list of dask arrays of the images
     '''
 
     import nd2
-    image_files = sorted([p.path for p in os.scandir(folder) if (p.name.endswith('.nd2') and not p.name.startswith('_'))])
+
+    image_files = sorted([p.path for p in os.scandir(folder) if (p.name.endswith('.nd2') and not ignore_path(p))])
     image_times = sorted(list(set([re.findall('.+(Time\d+)', s)[0] for s in image_files])))
     image_points = sorted(list(set([re.findall('.+(Point\d+)', s)[0] for s in image_files])))
-    #print(image_folders)
-    pos_stack = []
     if position_id is not None:
         image_points = [image_points[position_id]]
+    
+    pos_stack = []
+    errors = {}
+    arr = None
     for p in tqdm.tqdm(image_points):
         t_stack = []
         for t in image_times:
+            # TODO: need to check exactly 1 matching path here.
             path = list(filter(lambda s: (p in s) and (t in s), image_files))[0]
+            print(f"Reading: {path}")
             try:
-                arr = nd2.ND2File(path, validate_frames = False).to_dask()
-            except OSError:
-                print('File issue:', path)
-                arr = da.zeros_like(pos_stack[0][0])
+                with nd2.ND2File(path, validate_frames = False) as imgdat:
+                    arr = imgdat.to_dask()
+            except OSError as e:
+                print(f"Error reading file {path}: {e}")
+                print(f"Adding a zeros-like array for ({p}, {t})")
+                errors[path] = e
+                # TODO: handle case where error is before any path has succeeded.
+                arr = da.zeros_like(arr)
             t_stack.append(arr)
         pos_stack.append(da.stack(t_stack))
+    
+    if errors:
+        handle_error(ImageParseException(errors))
     
     out = da.stack(pos_stack)
     out = da.moveaxis(out, 2, 3)
     print('Loaded nd2 arrays of shape ', out.shape)
     pos_names = ["P"+str(i+1).zfill(4) for i in range(out.shape[0])]
     return out, pos_names
+
 
 def stack_tif_to_dask(folder: str):
     '''The function takes a folder path and returns a list of dask arrays and a 
@@ -186,12 +205,14 @@ def stack_tif_to_dask(folder: str):
         list: list of dask arrays of the images
     '''
     import tifffile
-    image_files = sorted([p.path for p in os.scandir(folder) if (p.name.endswith('.tiff') or p.name.endswith('.tif'))])
+    
+    image_files = sorted([p.path for p in os.scandir(folder) if _has_tiff_extension(p)])
     try:
         image_times = sorted(list(set([re.findall('.+(Time\d+)', s)[0] for s in image_files])))
-        time_dim = True
     except IndexError:
         time_dim = False
+    else:
+        time_dim = True
     image_points = sorted(list(set([re.findall('.+(Point\d+)', s)[0] for s in image_files])))
     #print(image_folders)
     out = []
@@ -230,7 +251,7 @@ def multifolder_nd2_to_dask(folder: str):
 
 
     import nd2
-    image_folders = sorted([p.path for p in os.scandir(folder) if os.path.isdir(p) and not p.name.startswith('_')])
+    image_folders = sorted([p.path for p in os.scandir(folder) if os.path.isdir(p) and not ignore_path(p)])
     out = []
     print(image_folders)
     for folder in image_folders:
@@ -255,6 +276,7 @@ def single_position_to_zarr(images: np.ndarray or list,
     '''
     Function to write a single position image with optional amount of additional dimensions to zarr.
     '''
+    from numcodecs import Blosc
 
     def single_image_to_zarr(z: zarr.DirectoryStore, idx: str, img: np.ndarray):
         '''Small helper function.
@@ -303,6 +325,7 @@ def single_position_to_zarr(images: np.ndarray or list,
     elif size['t'] < 10 or images.size < 1e9:
         [single_image_to_zarr(multiscale_level, i, images[i]) for i in range(size['t'])]
     else:
+        import joblib
         joblib.Parallel(n_jobs=-1, prefer='threads', verbose=10)(joblib.delayed(single_image_to_zarr)
                                                             (multiscale_level, i, images[i]) for i in range(size['t']))
 
@@ -338,6 +361,8 @@ def create_zarr_store(  path: str,
                         dtype:str,  
                         chunks:tuple,   
                         metadata:dict = None):
+    
+    from numcodecs import Blosc
 
     store = zarr.DirectoryStore(path+os.sep+pos_name)
     root = zarr.group(store=store, overwrite=True)
@@ -354,18 +379,29 @@ def create_zarr_store(  path: str,
     level_store = root.create_dataset(name = str(0), compressor=compressor, shape=shape, chunks=chunks, dtype=dtype)
     return level_store
 
-def zip_folder(folder, out_file, compression = zipfile.ZIP_STORED, remove_folder = False):
+def zip_folder(folder, out_file, compression = zipfile.ZIP_STORED, remove_folder=False, retry_if_fails: bool = True) -> str:
     #Zips the contents of a folder and stores as filename in same dir as folder.
     #Strips the original fileextensions (usecase for npy -> npz archive). Will probably modify this in future.
+    if remove_folder and os.path.dirname(out_file) == folder:
+        raise ValueError(f"Cannot zip to file ({out_file}) in folder to be deleted ({folder})")
     filelist = sorted([p.path for p in os.scandir(folder)])
     filenamelist = sorted([p.name for p in os.scandir(folder)])
     with zipfile.ZipFile(out_file, mode='w', compression=compression, compresslevel=3) as zfile:
         for f, fn in tqdm.tqdm(zip(filelist, filenamelist), total=len(filelist)):
             zfile.write(f, arcname=os.path.splitext(fn)[0])
     if remove_folder:
-        import shutil
-        shutil.rmtree(folder)
-    return
+        try:
+            shutil.rmtree(folder)
+        except (OSError, FileNotFoundError):
+            time.sleep(1)
+            try:
+                shutil.rmtree(folder)
+            except OSError as e:
+                if 0 == len(os.listdir(folder)):
+                    print(f"WARNING -- could not remove folder ({folder}) whose contents were zipped: {e}")
+                else:
+                    raise
+    return out_file
 
 def image_from_svih5(path,ch=None,index=(slice(None),
                                     slice(None),
@@ -459,7 +495,9 @@ def read_czi_meta(image_path, tags, save_meta=False):
     Return a dictionary with the extracted metadata.
     '''
     import czifile
-    from xml import Ele
+    import yaml
+    from xml import ElementTree
+
     def parser(data, tags):
         tree = ElementTree.iterparse(data, events=('start',))
         _, root = next(tree)
@@ -483,8 +521,6 @@ def read_czi_meta(image_path, tags, save_meta=False):
     return metadict
 
 def czi_to_tif(in_folder, template, out_folder, prefix):
-    import tifffile
-    import czifile
     '''Convert CZI files from MyPIC experiment to single YX tif images.
 
     Args:
@@ -493,6 +529,9 @@ def czi_to_tif(in_folder, template, out_folder, prefix):
         out_folder (str): Output folder to save tif images
         prefix (str): Prefix of output files, prepended to axis info
     '''
+    import czifile
+    import joblib
+    import tifffile
 
     all_files = all_matching_files_in_subfolders(in_folder, template)
     sample = czifile.CziFile(all_files[0])
@@ -558,7 +597,7 @@ def images_to_dask(folder, template):
     print("Loading files to dask array: ")
     #if '.h5' in template:
     #    x, groups = svih5_to_dask(folder, template)
-    if '.czi' in template or '.tif' in template or '.tiff' in template:
+    if '.czi' in template or _template_matches_tiff(template):
         x, groups, all_files = czi_tif_to_dask(folder, template)
     print('\n Loaded images of shape: ', x[0])
     print('Found positions ', groups)
@@ -582,7 +621,7 @@ def czi_tif_to_dask(folder, template):
     
     if '.czi' in template:
         sample = read_czi_image(all_files[0])
-    elif '.tif' in template or '.tiff' in template:
+    elif _template_matches_tiff(template):
         sample = read_tif_image(all_files[0])
     else:
         raise TypeError('Input filetype not yet implemented.')
@@ -593,7 +632,7 @@ def czi_tif_to_dask(folder, template):
         for fn in g:
             if '.czi' in template:
                 d = dask.delayed(read_czi_image)(fn)
-            elif '.tif' in template or '.tiff' in template:
+            elif _template_matches_tiff(template):
                 d = dask.delayed(read_tif_image)(fn)
             array = da.from_delayed(d, shape=sample.shape, dtype=sample.dtype)
             dask_arrays.append(array)
@@ -601,3 +640,27 @@ def czi_tif_to_dask(folder, template):
     #x = da.stack(pos_stack, axis=0)
     
     return pos_stack, groups, all_files
+
+
+class ImageParseException(Exception):
+    """Error subtype for when at least one error occurs during image """
+    
+    def __init__(self, errors: Dict[str, Exception]) -> None:
+        if len(errors) == 0:
+            raise ValueError("Errors must be nonempty to create an exception.")
+        msg = f"{len(errors)} error(s) during image parsing: {errors}"
+        super().__init__(msg)
+        self._errors = errors
+    
+    @property
+    def errors(self):
+        return copy.deepcopy(self._errors)
+
+
+def _has_tiff_extension(p: Union[str, Path]) -> bool:
+    _, ext = os.path.splitext(p)
+    return ext in TIFF_EXTENSIONS
+
+
+def _template_matches_tiff(template: str) -> bool:
+    return any(ext in template for ext in TIFF_EXTENSIONS)

@@ -20,11 +20,18 @@ tab:cyan : #17becf
 """
 import os
 import itertools
+import logging
+from math import cos, sin, radians
+from pathlib import Path
+import re
+from typing import *
+import warnings
+
+from numba import jit, njit
+from numba.core.errors import NumbaPerformanceWarning
+import numpy as np
 #from numpy.core.fromnumeric import shape
 import pandas as pd
-import numpy as np
-import tqdm
-import re
 #from plotly.offline import iplot
 #import plotly.graph_objs as go
 #import plotly.express as px
@@ -33,16 +40,14 @@ from scipy.spatial.distance import cdist, squareform, pdist
 from scipy.spatial import ConvexHull
 from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
 import matplotlib.pyplot as plt
-
-
-from numba import jit, njit
-from math import cos, sin, radians
-from numba.core.errors import NumbaPerformanceWarning
-import warnings
+import seaborn as sns
+import tqdm
 
 warnings.simplefilter('ignore', category=NumbaPerformanceWarning)
 
-import seaborn as sns
+
+logger = logging.getLogger()
+
 
 def gen_random_coil(g_dist, s_dist = 24.7, std_scaling = 0.5, deg=360, n_traces = 1000, sigma_noise = 2):
     traces = []
@@ -119,31 +124,7 @@ def pylochrom_coords_to_traces(coords):
         traces.append(pd.DataFrame(trace))
     return pd.concat(traces)
 
-def tracing_qc(traces, qc_config):
-    df = traces.copy()
-    A_to_BG = qc_config['A_to_BG']
-    sigma_xy_max = qc_config['sigma_xy_max']
-    sigma_z_max = qc_config['sigma_z_max']
-    max_dist = qc_config['max_dist']
 
-    qc = np.ones((len(traces)), dtype=bool)
-
-    if max_dist:
-        refs = df[df['frame'] == df['ref_frame']]
-        for dim in ['z','y','x']:
-            refs_map = dict(zip(refs['trace_id'], refs[dim]))
-            df[dim+'_ref'] = df['trace_id'].map(refs_map)
-        ref_dist = np.sqrt((df['z_ref']-df['z'])**2 + (df['y_ref']-df['y'])**2 + (df['x_ref']-df['x'])**2)
-        qc = qc & (ref_dist < max_dist)
-    
-    qc = qc & (df['A'] > (A_to_BG*df['BG']))
-    qc = qc & (df['sigma_xy'] < sigma_xy_max)
-    qc = qc & (df['sigma_z'] < sigma_z_max)
-    qc = qc & df['z_px'].between(0,100)
-    qc = qc & df['y_px'].between(0,100)
-    qc = qc & df['x_px'].between(0,100)
-
-    return qc.astype(int)
 '''
 def tracing_qc(row, qc_dict, traces_df=None):
 
@@ -330,22 +311,6 @@ def pwd_calc(traces):
     pwds = np.stack(pwds)
     return pwds
 
-def tracing_length_qc(traces, min_length=0):
-    '''
-    Parameters
-    ----------
-    traces : pd DataFrame with trace data.
-    min_length : Int, minimum length of trace to pass QC
-
-    Returns
-    -------
-    traces : pd DataFrame with shorter traces removed.
-    #pwds : 3-dim np array of pwds that passed length QC.
-
-    '''
-    grouped=traces.groupby('trace_id')
-    traces_long=grouped.filter(lambda x : x['QC'].sum()>=min_length)
-    return traces_long
 
 def trace_analysis(traces, pwds):
     '''

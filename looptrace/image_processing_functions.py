@@ -7,24 +7,24 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+import logging
+import glob
 import os
 import re
+from typing import *
 import numpy as np
 import pandas as pd
 
+import scipy.ndimage as ndi
+from scipy.spatial.distance import squareform, pdist
+from scipy.stats import trim_mean
 from skimage.segmentation import clear_border, find_boundaries, expand_labels
 from skimage.filters import gaussian, threshold_otsu
 from skimage.registration import phase_cross_correlation
 from skimage.morphology import white_tophat, ball, remove_small_objects
-from scipy.stats import trim_mean
-from scipy.spatial.distance import squareform, pdist
 from skimage.measure import regionprops_table
-import scipy.ndimage as ndi
 
-import dask.array as da
-import joblib
-import glob
-
+logger = logging.getLogger()
 
 
 def rois_from_csv(path):
@@ -33,6 +33,8 @@ def rois_from_csv(path):
     return rois
 
 def rois_from_imagej(roi_folder_path, template = '.zip', crop_size_z = 16, roi_scale = 0.5):
+    from .image_io import all_matching_files_in_subfolders
+
     roi_files = all_matching_files_in_subfolders(roi_folder_path, template)
     all_roi_coords = []
     for file_id, roi_path in enumerate(roi_files):
@@ -108,26 +110,28 @@ def update_roi_points(point_layer, roi_table, position, downscale):
     rois = rois.drop(rois[rois['position']==position].index)
     return pd.concat([rois, new_rois]).sort_values('position').reset_index(drop=True)
 
-def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label', nuc_drifts = None, nuc_target_frame = None, spot_drifts = None):
+
+def filter_rois_in_nucs(rois, nuc_label_img, new_col='nuc_label', nuc_drifts=None, nuc_target_frame=None, spot_drifts=None):
     '''Check if a spot is in inside a segmented nucleus.
 
     Args:
         rois (DataFrame): ROI table to check
-        nuc_masks (list): List of 2D nuclear mask images, where 0 is outside nuclei and >0 inside
+        nuc_label_img (list): 2D/3D label images, where 0 is outside nuclei and >0 inside
         pos_list (list): List of all the positions (str) to check
         new_col (str, optional): The name of the new column in the ROI table. Defaults to 'nuc_label'.
 
     Returns:
         rois (DataFrame): Updated ROI table indicating if ROI is inside nucleus or not.
     '''
-    print(nuc_masks[0].shape)
-    def spot_in_nuc(row, nuc_masks):
-        pos_index = pos_list.index(row['position'])
+
+    new_rois = rois.copy()
+    print(nuc_label_img.shape)
+    def spot_in_nuc(row, nuc_label_img):
         try:
-            if nuc_masks[0].shape[0] == 1:
-                spot_label = int(nuc_masks[pos_index][0, int(row['yc']), int(row['xc'])])
+            if nuc_label_img.shape[-3] == 1:
+                spot_label = int(nuc_label_img[0, int(row['yc']), int(row['xc'])])
             else:
-                spot_label = int(nuc_masks[pos_index][int(row['zc']),int(row['yc']), int(row['xc'])])
+                spot_label = int(nuc_label_img[int(row['zc']),int(row['yc']), int(row['xc'])])
         except IndexError as e: #If due to drift spot is outside frame.
             spot_label = 0
             print(e)
@@ -135,12 +139,12 @@ def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label', nuc_drif
         return spot_label
 
     try:
-        rois.drop(columns=[new_col], inplace=True)
+        new_rois.drop(columns=[new_col], inplace=True)
     except KeyError:
         pass
-
+    #print(rois, nuc_drifts)
     if nuc_drifts is not None:
-        rois_shifted = rois.copy()
+        rois_shifted = new_rois.copy()
         shifts = []
         for i, row in rois_shifted.iterrows():
             drift_target = nuc_drifts[(nuc_drifts['position'] == row['position']) & (nuc_drifts['frame'] == nuc_target_frame)][['z_px_course', 'y_px_course', 'x_px_course']].to_numpy()
@@ -150,19 +154,24 @@ def filter_rois_in_nucs(rois, nuc_masks, pos_list, new_col='nuc_label', nuc_drif
         shifts = pd.DataFrame(shifts, columns=['z','y','x'])
         rois_shifted[['zc', 'yc', 'xc']] = rois_shifted[['zc', 'yc', 'xc']].to_numpy() - shifts[['z','y','x']].to_numpy()
 
-        rois[new_col] = rois_shifted.apply(spot_in_nuc, nuc_masks=nuc_masks, axis=1)
+        new_rois.loc[:,new_col] = rois_shifted.apply(spot_in_nuc, nuc_label_img=nuc_label_img, axis=1)
     
     else:
-        rois[new_col] = rois.apply(spot_in_nuc, nuc_masks=nuc_masks, axis=1)
+        new_rois.loc[:,new_col] = new_rois.apply(spot_in_nuc, nuc_label_img=nuc_label_img, axis=1)
 
-    return rois
+    return new_rois
 
-def subtract_crosstalk(source, bleed, threshold=0):
-    mask = source > threshold
-    ratio=np.average(bleed[mask]/source[mask])
-    out = np.clip(bleed - (ratio * source), a_min=0, a_max=None)
+
+def subtract_crosstalk(source, bleed, threshold=500):
+    shift = drift_corr_course(source, bleed, downsample=1)
+    bleed = ndi.shift(bleed, shift=shift, order=1)
+    mask = bleed > threshold
+    ratio = np.average(source[mask] / bleed[mask])
+    print(ratio)
+    out = np.clip(source - (ratio * bleed), a_min=0, a_max=None)
     return out, bleed
-    
+
+
 def pad_to_shape(arr, shape, mode='constant'):
     '''
     Pads an array with fill to a given shape (list or tuple).
@@ -258,10 +267,10 @@ def detect_spots(input_img, spot_threshold=20, min_dist=None):
         img (ndarray): The DoG filtered image used for spot detection.
     '''
     img = white_tophat(image=input_img, footprint=ball(2))
-    img = gaussian(img, 0.8)-gaussian(img,1.3)
-    img = img/gaussian(input_img, 3)
-    img = (img-np.mean(img))/np.std(img)
-    labels, num_spots = ndi.label(img>spot_threshold)
+    img = gaussian(img, 0.8) - gaussian(img, 1.3)
+    img = img / gaussian(input_img, 3)
+    img = (img - np.mean(img)) / np.std(img)
+    labels, num_spots = ndi.label(img > spot_threshold)
     labels = expand_labels(labels, 10)
     
     #Make a DataFrame with the ROI info
@@ -335,7 +344,8 @@ def detect_spots_int(input_img, spot_threshold=500, expand_px = 1, min_dist=None
         #print(f'Found {len(spot_props)} spots.', end=' ')
         return spot_props, labels
 
-def roi_center_to_bbox(rois, roi_size):
+def roi_center_to_bbox(rois: pd.DataFrame, roi_size: Union[np.ndarray, Tuple[int, int, int]]):
+    """Make bounding box coordinates around centers of regions of interest, based on box dimensions."""
     rois['z_min'] = rois['zc'] - roi_size[0]//2
     rois['z_max'] = rois['zc'] + roi_size[0]//2
     rois['y_min'] = rois['yc'] - roi_size[1]//2
@@ -344,7 +354,7 @@ def roi_center_to_bbox(rois, roi_size):
     rois['x_max'] = rois['xc'] + roi_size[2]//2
     return rois
 
-def generate_bead_rois(t_img, threshold, min_bead_int, bead_roi_px=16, n_points=200):
+def generate_bead_rois(t_img, threshold, min_bead_int, bead_roi_px=16, n_points=200, max_size=500):
     '''Function for finding positions of beads in an image based on manually set thresholds in config file.
 
     Args:
@@ -359,18 +369,15 @@ def generate_bead_rois(t_img, threshold, min_bead_int, bead_roi_px=16, n_points=
     roi_px = bead_roi_px//2
     t_img_label,num_labels=ndi.label(t_img>threshold)
     print('Number of unfiltered beads found: ', num_labels)
-    t_img_maxima = pd.DataFrame(regionprops_table(t_img_label, t_img, properties=('label', 'centroid', 'max_intensity')))
+    t_img_maxima = pd.DataFrame(regionprops_table(t_img_label, t_img, properties=('label', 'centroid', 'max_intensity', 'area')))
     
-    t_img_maxima = t_img_maxima[(t_img_maxima['centroid-0'] > roi_px) & (t_img_maxima['centroid-1'] > roi_px) & (t_img_maxima['centroid-2'] > roi_px)].query('max_intensity > @min_bead_int')
+    cent0, cent1, cent2 = "centroid-0", "centroid-1", "centroid-2"
+    t_img_maxima = t_img_maxima[(t_img_maxima[cent0] > roi_px) & (t_img_maxima[cent1] > roi_px) & (t_img_maxima[cent2] > roi_px) & (t_img_maxima['area'] < max_size)].query('max_intensity > @min_bead_int')
     
-    if len(t_img_maxima) > n_points:
-        t_img_maxima = t_img_maxima.sample(n=n_points, random_state=1)[['centroid-0', 'centroid-1', 'centroid-2']].to_numpy()
-    else:
-        t_img_maxima = t_img_maxima.sample(n=len(t_img_maxima), random_state=1)[['centroid-0', 'centroid-1', 'centroid-2']].to_numpy()
-    
-    t_img_maxima = np.round(t_img_maxima).astype(int)
+    centroid_columns = [cent0, cent1, cent2]
+    t_img_maxima = t_img_maxima if n_points == -1 else t_img_maxima.sample(n=min(n_points, len(t_img_maxima)), random_state=1)
+    return np.round(t_img_maxima[centroid_columns].to_numpy()).astype(int)
 
-    return t_img_maxima
 
 def extract_single_bead(point, img, bead_roi_px=16, drift_course=None):
     #Exctract a cropped region of a single fiducial in an image, optionally including a pre-calucalated course drift to shift the cropped region.
@@ -429,6 +436,8 @@ def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int
 
     '''
     import datetime
+    import joblib
+
     #Label fiducial candidates and find maxima.
     t_img_label,num_labels=ndi.label(t_img>threshold)
     #t_img_maxima=np.array(ndi.measurements.maximum_position(t_img, 
@@ -474,7 +483,9 @@ def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int
     return fine_drift#, np.std(shifts, axis=0)
 
 def napari_view(img, points=None, downscale=2, axes = 'PTCZYX', point_frame_size = 1, name=None, contrast_limits=(100,10000)):
+    import dask.array as da
     import napari
+
     try:
         channel_axis = axes.index('C')
     except ValueError:
@@ -566,12 +577,12 @@ def nuc_segmentation_cellpose_3d(nuc_imgs, diameter = 150, model_type = 'nuclei'
     Args:
         nuc_imgs (ndarray or list of ndarrays): 2D or 3D images of nuclei, expects single channel
     '''
+    from cellpose import models
 
     if not isinstance(nuc_imgs, list):
         if nuc_imgs.ndim > 3:
             nuc_imgs = [np.array(nuc_imgs[i]) for i in range(nuc_imgs.shape[0])] #Force array conversion in case of zarr.
 
-    from cellpose import models
     model = models.CellposeModel(gpu=True, model_type=model_type, net_avg=False)
     masks = model.eval(nuc_imgs, diameter=diameter, channels=[0,0], z_axis = 0, anisotropy = anisotropy, do_3D=True)[0]
     return masks
@@ -758,73 +769,3 @@ def full_frame_dc_to_single_nuc_dc(old_dc_path, new_dc_position_list, new_dc_pat
     'y_px_fine','x_px_fine','orig_position', 'position'])
     new_drifts['z_px_course', 'y_px_course', 'x_px_course'] = 0
     new_drifts.to_csv(new_dc_path)
-
-
-
-'''
-
-def svih5_to_dask(folder, template):
-    all_files = all_matching_files_in_subfolders(folder, template)
-    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
-    progress = status_bar(len(all_files))
-    pos_stack=[]
-    with h5py.File(all_files[0], mode='r') as f:
-        shape = f[list(f.keys())[0]]['ImageData']['Image'].shape
-
-    for g in grouped_files:
-        dask_arrays = []
-        for fn in g:
-            next(progress)
-            f = h5py.File(fn, mode='r')
-            d = f[list(f.keys())[0]]['ImageData']['Image']
-            array = da.from_array(d, chunks=(1, 1, 1, shape[-2], shape[-1]))
-            dask_arrays.append(array)
-        pos_stack.append(da.stack(dask_arrays, axis=0))
-    x = da.stack(pos_stack, axis=0)[...,0,:,:,:]
-    print('Loaded images, final shape ', x.shape)
-    return x, groups
-
-def aio_lazy_to_dask(folder, template):
-    all_files = all_matching_files_in_subfolders(folder, template)
-    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
-    progress = status_bar(len(all_files))
-    group_array=[]
-    for g in grouped_files:
-        pos_stack = []
-        for fn in g:
-            next(progress)
-            img = aio.AICSImage(fn, chunk_by_dims=["Z", "Y", "X"])
-            pos_stack.append(img.dask_data[0,0])
-        pos_stack = da.stack(pos_stack)
-        group_array.append(pos_stack)
-    x = da.stack(group_array)
-
-    return x, groups
-
-### Does not works so well ###
-def czi_lazy_to_dask_czifile(folder, template):
-    all_files = all_matching_files_in_subfolders(folder, template)
-    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
-    progress = status_bar(len(all_files))
-    group_array=[]
-    sample = czifile.CziFile(all_files[0])
-    sample_shape = sample.subblock_directory[0].data_segment().data().shape
-    sample_dtype = sample.dtype
-    print('Loading images: ', sample_shape)
-    for g in grouped_files:
-        pos_stack = []
-        for fn in g:
-            next(progress)
-            img = czifile.CziFile(fn)
-            single_stack = []
-            for seg in img.subblock_directory:
-                d = da.from_delayed(dask.delayed(seg.data_segment().data)(),
-                shape=sample_shape, dtype=sample_dtype)
-                single_stack.append(d[0,0,0,0,0,:,:,0])
-            pos_stack.append(da.stack(single_stack))
-        pos_stack = da.stack(pos_stack)
-        group_array.append(pos_stack)
-    x = da.stack(group_array)
-
-    return x, groups
-    '''

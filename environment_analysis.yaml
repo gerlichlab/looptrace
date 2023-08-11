@@ -1,11 +1,10 @@
-# conda env create | update -f environment.yml
-name: looptrace
+# conda env create | update -f environment_analysis.yaml
+name: looptrace_analysis
 dependencies:
     - python=3.9
     - numba::numba
     - numba::llvmlite
     - scipy
-    - pandas
     - dask
     - joblib
     - jupyter
@@ -13,12 +12,10 @@ dependencies:
     - pip
     - pip:
         - scikit-image
-        - pyyaml
+        - seaborn
         - zarr
+        - napari[all]
         - fsspec>=0.9.0
-        - imagecodecs
-        - napari
-        - numcodecs
-        - tqdm
-        - cellpose
-        - nd2
+        - scikit-learn
+        - umap-learn
+        - ipyvolume

@@ -1,0 +1,37 @@
+# conda env create | update -f environment.yaml
+name: looptrace
+channels:
+    - conda-forge
+    - defaults
+    #- numba # post-hoc analysis
+dependencies:
+    - numpy < 1.25 # Version upper bound is because of numba, from CellPose.
+    - pandas
+    - python == 3.10.11
+    #- numba # post-hoc analysis; indirectly pulled in by CellPose for nuclei segmentation also
+    #- llvmlite # with numba
+    #- jupyterlab=3.4.0    
+      # due to https://github.com/jupyterhub/jupyterhub/pull/4039
+    #- jupyterhub-singleuser = 2.3.0 # Institute / CLIP minimal Jupyter
+    #- nb_conda
+    - pip
+    - pip:
+        #- batchspawner == 1.1.0 # Institute / CLIP minimal Jupyter
+        - cellpose
+        - czifile
+        - dask
+        - flowdec # for deconvolution
+        - imagecodecs
+        - joblib
+        #- napari
+        - nd2
+        - numcodecs
+        - piper # for pipeline definition
+        - pyyaml
+        - scikit-image
+        - scipy
+        - tensorflow == 2.11.1 # for CUDA-based container, we need to install tensorflow.
+        - tensorrt # for CUDA-based container, we need to install tensorrt? https://github.com/gerlichlab/looptrace/issues/47
+        - tifffile
+        - tqdm
+        - zarr
