@@ -17,7 +17,10 @@ RUN apt-get update -y && \
     apt-get install git wget libz-dev libbz2-dev liblzma-dev -y && \
     apt-get install cuda-compat-11-4=470.199.02-1 -y && \
     apt-get install r-base -y && \
-    apt-get install vim -y
+    apt-get install vim -y && \
+    apt-add-repository ppa:deadsnakes/ppa && \
+    apt-get update -y && \
+    apt-get install python3.10 -y
 
 # Install R packages.
 RUN R -e "install.packages(c('argparse', 'data.table', 'ggplot2', 'reshape2'), dependencies=TRUE, repos='http://cran.rstudio.com/')"
@@ -27,26 +30,18 @@ RUN cd / && mkdir looptrace && cd /looptrace
 WORKDIR /looptrace
 COPY . .
 
-# Install miniconda.
-## The installation home should be /opt/conda; if not, we need -p /path/to/install/home
-RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh && \
-    /bin/bash ~/miniconda.sh -b -p /opt/conda
-
-# For the CUDA-based container, we only need to add the Python env (because we install TensorFlow there).
-ENV PATH=/opt/conda/bin:${PATH}
-
 # Create conda env and install mamba, matching environment 
 # name to that in the config file to be used. 
 # Install also the looptrace dependencies.
 # NB: The mamba default env name is evidently base.
 RUN pip install .
 
-RUN cd /opt/conda/lib/python3.10/site-packages/tensorrt_libs && \
+RUN cd /usr/lib/python3.10/site-packages/tensorrt_libs && \
     ln -s libnvinfer.so.8 libnvinfer.so.7 && \
     ln -s libnvinfer_plugin.so.8 libnvinfer_plugin.so.7
 
 # For the CUDA-based container, we only need to add the tensorrt libraries path.
-ENV LD_LIBRARY_PATH=/opt/conda/lib/python3.10/site-packages/tensorrt_libs:/usr/local/cuda-11.4/compat:${LD_LIBRARY_PATH}
+ENV LD_LIBRARY_PATH=/usr/lib/python3.10/site-packages/tensorrt_libs:/usr/local/cuda-11.4/compat:${LD_LIBRARY_PATH}
 
 # Establish the current experiment data mount point, for convenient config file match and path operations.
 ENV CURR_EXP_HOME=/home/experiment
