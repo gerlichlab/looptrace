@@ -39,10 +39,7 @@ ENV PATH=/opt/conda/bin:${PATH}
 # name to that in the config file to be used. 
 # Install also the looptrace dependencies.
 # NB: The mamba default env name is evidently base.
-RUN conda install -n base conda-libmamba-solver && \
-    conda config --set solver libmamba && \
-    pip install . && \
-    conda list > software_versions_conda.txt
+RUN pip install .
 
 RUN cd /opt/conda/lib/python3.10/site-packages/tensorrt_libs && \
     ln -s libnvinfer.so.8 libnvinfer.so.7 && \
