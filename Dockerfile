@@ -22,23 +22,19 @@ RUN apt-get update -y && \
     apt-get update -y && \
     apt-get install python3.10 python3-pip -y
 
-# Install R packages.
-RUN R -e "install.packages(c('argparse', 'data.table', 'ggplot2', 'reshape2'), dependencies=TRUE, repos='http://cran.rstudio.com/')"
-
-# Copy repo code, to be built later.
+# Copy the code and build the package.
 RUN cd / && mkdir looptrace && cd /looptrace
 WORKDIR /looptrace
 COPY . .
-
-# Create conda env and install mamba, matching environment 
-# name to that in the config file to be used. 
-# Install also the looptrace dependencies.
-# NB: The mamba default env name is evidently base.
 RUN pip install .
 
+# Link the tensorrt libs to the names expected by tensorflow.
 RUN cd /usr/lib/python3.10/site-packages/tensorrt_libs && \
     ln -s libnvinfer.so.8 libnvinfer.so.7 && \
     ln -s libnvinfer_plugin.so.8 libnvinfer_plugin.so.7
+
+# Install R packages.
+RUN R -e "install.packages(c('argparse', 'data.table', 'ggplot2', 'reshape2'), dependencies=TRUE, repos='http://cran.rstudio.com/')"
 
 # For the CUDA-based container, we only need to add the tensorrt libraries path.
 ENV LD_LIBRARY_PATH=/usr/lib/python3.10/site-packages/tensorrt_libs:/usr/local/cuda-11.4/compat:${LD_LIBRARY_PATH}
