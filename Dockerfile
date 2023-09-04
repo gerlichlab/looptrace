@@ -20,7 +20,7 @@ RUN apt-get update -y && \
     apt-get install vim -y && \
     apt-add-repository ppa:deadsnakes/ppa && \
     apt-get update -y && \
-    apt-get install python3.10 -y
+    apt-get install python3.10 python3-pip -y
 
 # Install R packages.
 RUN R -e "install.packages(c('argparse', 'data.table', 'ggplot2', 'reshape2'), dependencies=TRUE, repos='http://cran.rstudio.com/')"
