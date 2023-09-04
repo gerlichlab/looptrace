@@ -41,7 +41,6 @@ ENV PATH=/opt/conda/bin:${PATH}
 # NB: The mamba default env name is evidently base.
 RUN conda install -n base conda-libmamba-solver && \
     conda config --set solver libmamba && \
-    conda env update -n base --file environment.yaml && \
     pip install . && \
     conda list > software_versions_conda.txt
 
