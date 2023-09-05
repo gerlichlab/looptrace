@@ -16,6 +16,8 @@ RUN apt-get update -y && \
     update-alternatives --config gcc && \
     apt-get install git wget libz-dev libbz2-dev liblzma-dev -y && \
     apt-get install cuda-compat-11-4=470.199.02-1 -y && \
+    apt-get install r-base -y && \
+    R -e "install.packages(c('argparse', 'data.table', 'ggplot2', 'reshape2'), dependencies=TRUE, repos='http://cran.rstudio.com/')" && \
     apt-get install vim -y
 
 # Copy repo code, to be built later.
@@ -38,10 +40,6 @@ RUN pip install .[pipeline]
 RUN cd /opt/conda/lib/python3.10/site-packages/tensorrt_libs && \
     ln -s libnvinfer.so.8 libnvinfer.so.7 && \
     ln -s libnvinfer_plugin.so.8 libnvinfer_plugin.so.7
-
-# Install R packages.
-RUN apt-get install r-base -y && \
-    R -e "install.packages(c('argparse', 'data.table', 'ggplot2', 'reshape2'), dependencies=TRUE, repos='http://cran.rstudio.com/')"
 
 # For the CUDA-based container, we only need to add the tensorrt libraries path.
 ENV LD_LIBRARY_PATH=/opt/conda/lib/python3.10/site-packages/tensorrt_libs:/usr/local/cuda-11.4/compat:${LD_LIBRARY_PATH}
