@@ -16,28 +16,34 @@ RUN apt-get update -y && \
     update-alternatives --config gcc && \
     apt-get install git wget libz-dev libbz2-dev liblzma-dev -y && \
     apt-get install cuda-compat-11-4=470.199.02-1 -y && \
-    apt-get install r-base -y && \
-    apt-get install vim -y && \
-    apt-add-repository ppa:deadsnakes/ppa && \
-    apt-get update -y && \
-    apt-get install python3.10 python3-pip -y
+    apt-get install vim -y
 
-# Copy the code and build the package.
+# Copy repo code, to be built later.
 RUN cd / && mkdir looptrace && cd /looptrace
 WORKDIR /looptrace
 COPY . .
+
+# Install miniconda.
+## The installation home should be /opt/conda; if not, we need -p /path/to/install/home
+RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh && \
+    /bin/bash ~/miniconda.sh -b -p /opt/conda
+
+# For the CUDA-based container, we only need to add the Python env (because we install TensorFlow there).
+ENV PATH=/opt/conda/bin:${PATH}
+
+# Build the looptrace package.
 RUN pip install .
 
-# Link the tensorrt libs to the names expected by tensorflow.
-RUN cd /usr/lib/python3.10/site-packages/tensorrt_libs && \
+RUN cd /opt/conda/lib/python3.10/site-packages/tensorrt_libs && \
     ln -s libnvinfer.so.8 libnvinfer.so.7 && \
     ln -s libnvinfer_plugin.so.8 libnvinfer_plugin.so.7
 
 # Install R packages.
-RUN R -e "install.packages(c('argparse', 'data.table', 'ggplot2', 'reshape2'), dependencies=TRUE, repos='http://cran.rstudio.com/')"
+RUN apt-get install r-base -y && \
+    R -e "install.packages(c('argparse', 'data.table', 'ggplot2', 'reshape2'), dependencies=TRUE, repos='http://cran.rstudio.com/')"
 
 # For the CUDA-based container, we only need to add the tensorrt libraries path.
-ENV LD_LIBRARY_PATH=/usr/lib/python3.10/site-packages/tensorrt_libs:/usr/local/cuda-11.4/compat:${LD_LIBRARY_PATH}
+ENV LD_LIBRARY_PATH=/opt/conda/lib/python3.10/site-packages/tensorrt_libs:/usr/local/cuda-11.4/compat:${LD_LIBRARY_PATH}
 
 # Establish the current experiment data mount point, for convenient config file match and path operations.
 ENV CURR_EXP_HOME=/home/experiment
