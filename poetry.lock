@@ -4668,6 +4668,7 @@ analysis = ["matplotlib", "numba", "seaborn"]
 deconvolution = ["flowdec"]
 dev = ["czifile", "matplotlib", "nd2", "numba", "pytest", "seaborn", "tifffile"]
 interactive = ["napari", "pyqt6"]
+legacy-support = ["imagecodecs"]
 nuclei = ["cellpose"]
 pipeline = ["cellpose", "czifile", "flowdec", "joblib", "nd2", "piper", "tensorflow", "tensorrt", "tifffile"]
 polymer = ["numba"]
@@ -4675,4 +4676,4 @@ polymer = ["numba"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "bf84c2500a6c5051e63d6b055377d4bb7ef0f49c79197944e7f28afe024e4111"
+content-hash = "f6ec28690ef473f6686d0d2197cc9daac66009b440f7e5a314e4d71d686c12e2"
