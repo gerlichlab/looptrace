@@ -25,7 +25,7 @@ COPY . .
 
 # Install miniconda.
 ## The installation home should be /opt/conda; if not, we need -p /path/to/install/home
-RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh && \
+RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-py310_23.5.2-0-Linux-x86_64.sh -O ~/miniconda.sh && \
     /bin/bash ~/miniconda.sh -b -p /opt/conda
 
 # For the CUDA-based container, we only need to add the Python env (because we install TensorFlow there).
