@@ -31,8 +31,9 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-py310_23.5.2-0-L
 # For the CUDA-based container, we only need to add the Python env (because we install TensorFlow there).
 ENV PATH=/opt/conda/bin:${PATH}
 
-# Build the looptrace package.
-RUN pip install .
+# Build the looptrace package, with extra dependencies for pipeline.
+# This group of extras should be declared in the pyproject.toml.
+RUN pip install .[pipeline]
 
 RUN cd /opt/conda/lib/python3.10/site-packages/tensorrt_libs && \
     ln -s libnvinfer.so.8 libnvinfer.so.7 && \
