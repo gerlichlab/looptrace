@@ -153,6 +153,22 @@ tests = ["attrs[tests-no-zope]", "zope-interface"]
 tests-no-zope = ["cloudpickle", "hypothesis", "mypy (>=1.1.1)", "pympler", "pytest (>=4.3.0)", "pytest-mypy-plugins", "pytest-xdist[psutil]"]
 
 [[package]]
+name = "autopep8"
+version = "2.0.4"
+description = "A tool that automatically formats Python code to conform to the PEP 8 style guide"
+category = "main"
+optional = true
+python-versions = ">=3.6"
+files = [
+    {file = "autopep8-2.0.4-py2.py3-none-any.whl", hash = "sha256:067959ca4a07b24dbd5345efa8325f5f58da4298dab0dde0443d5ed765de80cb"},
+    {file = "autopep8-2.0.4.tar.gz", hash = "sha256:2913064abd97b3419d1cc83ea71f042cb821f87e45b9c88cad5ad3c4ea87fe0c"},
+]
+
+[package.dependencies]
+pycodestyle = ">=2.10.0"
+tomli = {version = "*", markers = "python_version < \"3.11\""}
+
+[[package]]
 name = "babel"
 version = "2.12.1"
 description = "Internationalization utilities"
@@ -650,6 +666,24 @@ files = [
     {file = "decorator-5.1.1-py3-none-any.whl", hash = "sha256:b8c3f85900b9dc423225913c5aace94729fe1fa9763b38939a95226f02d37186"},
     {file = "decorator-5.1.1.tar.gz", hash = "sha256:637996211036b6385ef91435e4fae22989472f9d571faba8927ba8253acbc330"},
 ]
+
+[[package]]
+name = "deprecated"
+version = "1.2.14"
+description = "Python @deprecated decorator to deprecate old python classes, functions or methods."
+category = "main"
+optional = true
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
+files = [
+    {file = "Deprecated-1.2.14-py2.py3-none-any.whl", hash = "sha256:6fac8b097794a90302bdbb17b9b815e732d3c4720583ff1b198499d78470466c"},
+    {file = "Deprecated-1.2.14.tar.gz", hash = "sha256:e5323eb936458dccc2582dc6f9c322c852a775a27065ff2b0c4970b9d53d01b3"},
+]
+
+[package.dependencies]
+wrapt = ">=1.10,<2"
+
+[package.extras]
+dev = ["PyTest", "PyTest-Cov", "bump2version (<1)", "sphinx (<2)", "tox"]
 
 [[package]]
 name = "docstring-parser"
@@ -2021,6 +2055,27 @@ qtconsole = ">=4.5.1,<4.7.6 || >4.7.6,<5.4.2 || >5.4.2"
 qtpy = ">=1.7.0"
 
 [[package]]
+name = "napari-plot-profile"
+version = "0.2.2"
+description = "Plot intensity along a line and create topographical views in napari"
+category = "main"
+optional = true
+python-versions = ">=3.7"
+files = [
+    {file = "napari-plot-profile-0.2.2.tar.gz", hash = "sha256:1a1f087b23eaa71a16f0ffde66e965fd7f6b69e5d52b3664c7db295f30fed501"},
+    {file = "napari_plot_profile-0.2.2-py3-none-any.whl", hash = "sha256:3848a3d6bb3e55ec8f13b57f2c64cbd06029a5dd74daec77dd3a8fd089809dd7"},
+]
+
+[package.dependencies]
+imageio = "!=2.22.1"
+napari = "*"
+napari-plugin-engine = ">=0.1.4"
+napari-skimage-regionprops = ">=0.2.4"
+napari-tools-menu = "*"
+numpy = "*"
+pyqtgraph = "*"
+
+[[package]]
 name = "napari-plugin-engine"
 version = "0.2.0"
 description = "napari plugin engine, fork of pluggy"
@@ -2035,6 +2090,29 @@ files = [
 [package.extras]
 dev = ["pre-commit", "pytest", "pytest-cov", "tox", "tox-conda"]
 test = ["pytest", "pytest-cov"]
+
+[[package]]
+name = "napari-skimage-regionprops"
+version = "0.10.1"
+description = "A regionprops table widget plugin for napari"
+category = "main"
+optional = true
+python-versions = ">=3.8"
+files = [
+    {file = "napari-skimage-regionprops-0.10.1.tar.gz", hash = "sha256:a25f8a84ad78f5d09074a32d84996fb6ff900bf82369dfb50501872d23dc22bc"},
+    {file = "napari_skimage_regionprops-0.10.1-py3-none-any.whl", hash = "sha256:d9c3fb65c7a47a4f68eb577e901759826ca5b0f6669279f50b93441709766264"},
+]
+
+[package.dependencies]
+Deprecated = "*"
+imageio = "!=2.22.1"
+napari = "*"
+napari-plugin-engine = ">=0.1.4"
+napari-tools-menu = ">=0.1.19"
+napari-workflows = "*"
+numpy = "*"
+pandas = "*"
+scikit-image = "*"
 
 [[package]]
 name = "napari-svg"
@@ -2056,6 +2134,41 @@ vispy = ">=0.6.4"
 
 [package.extras]
 testing = ["napari (>=0.4)", "pyqt5", "pytest", "pytest-cov"]
+
+[[package]]
+name = "napari-tools-menu"
+version = "0.1.19"
+description = "Attaches a customizable Tools menu to napari"
+category = "main"
+optional = true
+python-versions = ">=3.7"
+files = [
+    {file = "napari-tools-menu-0.1.19.tar.gz", hash = "sha256:6b58ac45d7fe84bc5975e7a53142340d5d62beff9ade0f2f58d7a3a4a0a8e8f8"},
+    {file = "napari_tools_menu-0.1.19-py3-none-any.whl", hash = "sha256:bba864f7c67b5e8768a83d6e298cf038c6d87186dd54ed8af6f5cdb83d64be25"},
+]
+
+[package.dependencies]
+napari = "*"
+napari-plugin-engine = ">=0.1.4"
+numpy = "*"
+
+[[package]]
+name = "napari-workflows"
+version = "0.2.9"
+description = "Data structures for managing image processing workflows in napari"
+category = "main"
+optional = true
+python-versions = ">=3.7"
+files = [
+    {file = "napari-workflows-0.2.9.tar.gz", hash = "sha256:c2a218009578b78e16ccaa212b99e4857b3db3d41468728e5974ad253f6ef1d2"},
+    {file = "napari_workflows-0.2.9-py3-none-any.whl", hash = "sha256:d7e7f0bfa87754c0834fa63207bbe3a7238c19997ac0cb61fb897253a8e36681"},
+]
+
+[package.dependencies]
+autopep8 = "*"
+dask = "*"
+napari = "*"
+numpy = "*"
 
 [[package]]
 name = "natsort"
@@ -2842,6 +2955,18 @@ files = [
 pyasn1 = ">=0.4.6,<0.6.0"
 
 [[package]]
+name = "pycodestyle"
+version = "2.11.0"
+description = "Python style guide checker"
+category = "main"
+optional = true
+python-versions = ">=3.8"
+files = [
+    {file = "pycodestyle-2.11.0-py2.py3-none-any.whl", hash = "sha256:5d1013ba8dc7895b548be5afb05740ca82454fd899971563d2ef625d090326f8"},
+    {file = "pycodestyle-2.11.0.tar.gz", hash = "sha256:259bcc17857d8a8b3b4a2327324b79e5f020a13c16074670f9c8c8f872ea76d0"},
+]
+
+[[package]]
 name = "pycparser"
 version = "2.21"
 description = "C parser in Python"
@@ -3084,6 +3209,21 @@ files = [
     {file = "PyQt6_sip-13.5.2-cp39-cp39-win_amd64.whl", hash = "sha256:b54b0d8d21c5835af8f6d6d8a323a23106e67b7cd4c31e23c35bb4c321000de8"},
     {file = "PyQt6_sip-13.5.2.tar.gz", hash = "sha256:ebf6264b6feda01ba37d3b60a4bb87493bdb87be70f7b2a5384a7acd4902d88d"},
 ]
+
+[[package]]
+name = "pyqtgraph"
+version = "0.13.3"
+description = "Scientific Graphics and GUI Library for Python"
+category = "main"
+optional = true
+python-versions = ">=3.8"
+files = [
+    {file = "pyqtgraph-0.13.3-py3-none-any.whl", hash = "sha256:fdcc04ac4b32a7bedf1bf3cf74cbb93ab3ba5687791712bbfa8d0712377d2f2b"},
+    {file = "pyqtgraph-0.13.3.tar.gz", hash = "sha256:58108d8411c7054e0841d8b791ee85e101fc296b9b359c0e01dde38a98ff2ace"},
+]
+
+[package.dependencies]
+numpy = ">=1.20.0"
 
 [[package]]
 name = "pyside6"
@@ -4667,7 +4807,7 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 analysis = ["matplotlib", "numba", "seaborn"]
 deconvolution = ["flowdec"]
 dev = ["czifile", "matplotlib", "nd2", "numba", "pytest", "seaborn", "tifffile"]
-interactive = ["napari", "pyqt6"]
+interactive = ["napari", "napari-plot-profile", "pyqt6"]
 legacy-support = ["imagecodecs"]
 nuclei = ["cellpose"]
 pipeline = ["cellpose", "czifile", "flowdec", "joblib", "nd2", "piper", "tensorflow", "tensorrt", "tifffile"]
@@ -4676,4 +4816,4 @@ polymer = ["numba"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "f6ec28690ef473f6686d0d2197cc9daac66009b440f7e5a314e4d71d686c12e2"
+content-hash = "7bd0526f9e640fcb04a728e664d7cad9d1bd7e66f627c09f43529b00c473149f"
