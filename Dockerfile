@@ -17,10 +17,8 @@ RUN apt-get update -y && \
     apt-get install git wget libz-dev libbz2-dev liblzma-dev -y && \
     apt-get install cuda-compat-11-4=470.199.02-1 -y && \
     apt-get install r-base -y && \
+    R -e "install.packages(c('argparse', 'data.table', 'ggplot2', 'reshape2'), dependencies=TRUE, repos='http://cran.rstudio.com/')" && \
     apt-get install vim -y
-
-# Install R packages.
-RUN R -e "install.packages(c('argparse', 'data.table', 'ggplot2', 'reshape2'), dependencies=TRUE, repos='http://cran.rstudio.com/')"
 
 # Copy repo code, to be built later.
 RUN cd / && mkdir looptrace && cd /looptrace
@@ -29,21 +27,15 @@ COPY . .
 
 # Install miniconda.
 ## The installation home should be /opt/conda; if not, we need -p /path/to/install/home
-RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh && \
+RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-py310_23.5.2-0-Linux-x86_64.sh -O ~/miniconda.sh && \
     /bin/bash ~/miniconda.sh -b -p /opt/conda
 
 # For the CUDA-based container, we only need to add the Python env (because we install TensorFlow there).
 ENV PATH=/opt/conda/bin:${PATH}
 
-# Create conda env and install mamba, matching environment 
-# name to that in the config file to be used. 
-# Install also the looptrace dependencies.
-# NB: The mamba default env name is evidently base.
-RUN conda install -n base conda-libmamba-solver && \
-    conda config --set solver libmamba && \
-    conda env update -n base --file environment.yaml && \
-    pip install . && \
-    conda list > software_versions_conda.txt
+# Build the looptrace package, with extra dependencies for pipeline.
+# This group of extras should be declared in the pyproject.toml.
+RUN pip install .[pipeline]
 
 RUN cd /opt/conda/lib/python3.10/site-packages/tensorrt_libs && \
     ln -s libnvinfer.so.8 libnvinfer.so.7 && \
