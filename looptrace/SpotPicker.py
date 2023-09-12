@@ -78,8 +78,12 @@ class SpotPicker:
                 yield (i, frame), channel
 
     @property
+    def _raw_roi_image_size(self) -> Tuple[int, int, int]:
+        return tuple(self.config['roi_image_size'])
+
+    @property
     def roi_image_size(self) -> Optional[Tuple[int, int, int]]:
-        return tuple(self.config['roi_image_size']) if self.detection_method_name == DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC else None
+        return self._raw_roi_image_size if self.detection_method_name == DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC else None
 
     @property
     def spot_channel(self) -> List[int]:
@@ -137,7 +141,7 @@ class SpotPicker:
         spot_ds = self.config['spot_downsample']
         logger.info(f"Spot downsampling setting: {spot_ds}")
         
-        center_spots = (lambda df: ip.roi_center_to_bbox(df, roi_size = np.array(self.config['roi_image_size']) // spot_ds)) if self.detection_method_name != 'intensity' else (lambda df: df)
+        center_spots = (lambda df: df) if self.roi_image_size is None else (lambda df: ip.roi_center_to_bbox(df, roi_size=np.array(self.roi_image_size) // spot_ds))
 
         # previewing
         if preview_pos is not None:
@@ -231,7 +235,7 @@ class SpotPicker:
         
         output = pd.concat(all_rois)
         output=output.reset_index().rename(columns={'index':'roi_id'})
-        rois = ip.roi_center_to_bbox(output, roi_size = tuple(self.config['roi_image_size']))
+        rois = ip.roi_center_to_bbox(output, roi_size=self._raw_roi_image_size)
 
         self.image_handler.bead_rois = rois
         rois.to_csv(self.roi_path + '_beads.csv')
@@ -328,7 +332,6 @@ class SpotPicker:
         #Function to extract single ROI lazily without loading entire stack in RAM.
         #Depending on chunking of original data can be more or less performant.
 
-        roi_image_size = tuple(self.config['roi_image_size'])
         p = single_roi['pos_index']
         t = single_roi['frame']
         c = single_roi['ch']
@@ -348,7 +351,7 @@ class SpotPicker:
                 roi_img = np.pad(roi_img, pad, mode='edge')
 
         except ValueError: # ROI collection failed for some reason
-            roi_img = np.zeros(roi_image_size, dtype=np.float32)
+            roi_img = np.zeros(self._raw_roi_image_size, dtype=np.float32)
 
         #print(p, t, c, z, y, x)
         return roi_img  #{'p':p, 't':t, 'c':c, 'z':z, 'y':y, 'x':x, 'img':roi_img}
