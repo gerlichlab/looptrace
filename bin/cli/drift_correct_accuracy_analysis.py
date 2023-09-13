@@ -67,9 +67,9 @@ class BeadDetectionParameters:
         for attr_name in int_valued_attributes:
             attr_value = getattr(self, attr_name)
             if not isinstance(attr_value, int):
-                errors.append(TypeError(f"Value for '{attr_name}' atttribute is not int, but {type(attr_value).__name__}"))
+                errors.append(TypeError(f"Value for '{attr_name}' attribute is not int, but {type(attr_value).__name__}"))
             elif attr_value < 0:
-                errors.append(ValueError(f"Value for '{attr_name}' atttribute is negative: {attr_value}"))
+                errors.append(ValueError(f"Value for '{attr_name}' attribute is negative: {attr_value}"))
         return errors
         
     def __post_init__(self):
