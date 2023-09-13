@@ -20,6 +20,7 @@ import tqdm
 
 from gertils import ExtantFolder, NonExtantPath
 
+from looptrace.exceptions import MissingRoisTableException
 from looptrace.filepaths import get_spot_images_path
 from looptrace import image_processing_functions as ip
 
