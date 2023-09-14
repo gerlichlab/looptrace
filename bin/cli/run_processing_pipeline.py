@@ -44,10 +44,10 @@ class LooptracePipeline(pypiper.Pipeline):
             ("drift_correction", run_drift_correction, conf_data_pair), 
             ("drift_correction_accuracy_analysis", run_drift_correction_analysis, conf_data_pair), 
             ("drift_correction_accuracy_visualisation", run_drift_correction_accuracy_visualisation, conf_only), 
-            ("spot_detection", run_spot_detection, conf_data_pair),
+            ("spot_detection", run_spot_detection, conf_data_pair), # generates *_rois.csv (regional spots)
             ("spot_filtration", run_spot_filtration, conf_data_pair), 
             ("clean_1", run_cleanup, conf_only),
-            ("spot_bounding", run_spot_bounding, conf_data_pair),
+            ("spot_bounding", run_spot_bounding, conf_data_pair), # computes pad_x_min, etc.; writes *_dc_rois.csv (much bigger, since regional spots x frames)
             ("spot_extraction", run_spot_extraction, conf_data_pair),
             ("spot_zipping", run_spot_zipping, (self.images_folder, )),
             ("clean_2", run_cleanup, conf_only), 
