@@ -18,7 +18,7 @@ ROI_FIT_COLUMNS = ["BG", "A", "z_px", "y_px", "x_px", "sigma_z", "sigma_xy"]
 
 
 class Tracer:
-    def __init__(self, image_handler, trace_beads = False, array_id = None):
+    def __init__(self, image_handler, trace_beads=False, array_id=None):
         '''
         Initialize Tracer class with config read in from YAML file.
     '''
@@ -30,11 +30,12 @@ class Tracer:
             
         self.pos_list = self.image_handler.image_lists[image_handler.spot_input_name]
         self.traces_path = self.image_handler.out_path('traces.csv')
-        self.trace_beads = trace_beads
         if trace_beads:
             self.roi_table = image_handler.tables[image_handler.spot_input_name + '_bead_rois']
+            self.finalise_suffix = lambda p: p.replace(".csv", "_beads.csv")
         else:
             self.roi_table = image_handler.tables[image_handler.spot_input_name + '_rois']
+            self.finalise_suffix = lambda p: p
         self.all_rois = image_handler.tables[image_handler.spot_input_name + '_dc_rois']
 
         self.fit_funcs = {'LS': fitSymmetricGaussian3D, 'MLE': fitSymmetricGaussian3DMLE}
@@ -118,8 +119,7 @@ class Tracer:
         traces['sigma_xy'] = traces['sigma_xy'] * self.config['xy_nm']
         traces = traces.sort_values(['trace_id', 'frame'])
 
-        finalise_suffix = (lambda p: p.replace(".csv", "_beads.csv")) if self.trace_beads else (lambda p: p)
-        outfile = finalise_suffix(self.traces_path)
+        outfile = self.finalise_suffix(self.traces_path)
         
         print(f"Writing traces: {outfile}")
         traces.to_csv(outfile)
