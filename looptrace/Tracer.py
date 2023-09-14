@@ -107,23 +107,21 @@ class Tracer:
         traces.rename(columns={"roi_id": "trace_id"}, inplace=True)
 
         #Apply fine scale drift to fits, and physcial units.
-        traces['z_px_dc']=traces['z_px']+traces['z_px_fine']
-        traces['y_px_dc']=traces['y_px']+traces['y_px_fine']
-        traces['x_px_dc']=traces['x_px']+traces['x_px_fine']
+        traces['z_px_dc'] = traces['z_px'] + traces['z_px_fine']
+        traces['y_px_dc'] = traces['y_px'] + traces['y_px_fine']
+        traces['x_px_dc'] = traces['x_px'] + traces['x_px_fine']
         #traces=traces.drop(columns=['drift_z', 'drift_y', 'drift_x'])
-        traces['z']=traces['z_px_dc']*self.config['z_nm']
-        traces['y']=traces['y_px_dc']*self.config['xy_nm']
-        traces['x']=traces['x_px_dc']*self.config['xy_nm']
-        traces['sigma_z']=traces['sigma_z']*self.config['z_nm']
-        traces['sigma_xy']=traces['sigma_xy']*self.config['xy_nm']
+        traces['z'] = traces['z_px_dc'] * self.config['z_nm']
+        traces['y'] = traces['y_px_dc'] * self.config['xy_nm']
+        traces['x'] = traces['x_px_dc'] * self.config['xy_nm']
+        traces['sigma_z'] = traces['sigma_z'] * self.config['z_nm']
+        traces['sigma_xy'] = traces['sigma_xy'] * self.config['xy_nm']
         traces = traces.sort_values(['trace_id', 'frame'])
 
-        if self.trace_beads: 
-            suffix = '_beads.csv'
-        else:
-            suffix = ''
-
-        #self.image_handler.traces = traces
-        outfile = self.traces_path + suffix
+        finalise_suffix = (lambda p: p.replace(".csv", "_beads.csv")) if self.trace_beads else (lambda p: p)
+        outfile = finalise_suffix(self.traces_path)
+        
+        print(f"Writing traces: {outfile}")
         traces.to_csv(outfile)
+
         return outfile
