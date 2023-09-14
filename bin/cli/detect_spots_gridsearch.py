@@ -136,10 +136,6 @@ def execute(argument_bundles, cores) -> Iterable[str]:
     return outfiles
 
 
-def _have_same_type(a: Any, b: Any) -> bool:
-    return type(a) == type(b)
-
-
 @dataclass
 class ParamIndex:
     value: int
