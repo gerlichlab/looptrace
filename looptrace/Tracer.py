@@ -18,24 +18,23 @@ ROI_FIT_COLUMNS = ["BG", "A", "z_px", "y_px", "x_px", "sigma_z", "sigma_xy"]
 
 
 class Tracer:
+
     def __init__(self, image_handler, trace_beads=False, array_id=None):
         '''
         Initialize Tracer class with config read in from YAML file.
-    '''
+        '''
         self.image_handler = image_handler
         self.config_path = image_handler.config_path
         self.config = image_handler.config
         self.drift_table = image_handler.tables[image_handler.spot_input_name + '_drift_correction']
         self.images = self.image_handler.images[self.config['trace_input_name']]
-            
         self.pos_list = self.image_handler.image_lists[image_handler.spot_input_name]
-        self.traces_path = self.image_handler.out_path('traces.csv')
         if trace_beads:
             self.roi_table = image_handler.tables[image_handler.spot_input_name + '_bead_rois']
-            self.finalise_suffix = lambda p: p.replace(".csv", "_beads.csv")
+            finalise_suffix = lambda p: p.replace(".csv", "_beads.csv")
         else:
             self.roi_table = image_handler.tables[image_handler.spot_input_name + '_rois']
-            self.finalise_suffix = lambda p: p
+            finalise_suffix = lambda p: p
         self.all_rois = image_handler.tables[image_handler.spot_input_name + '_dc_rois']
 
         self.fit_funcs = {'LS': fitSymmetricGaussian3D, 'MLE': fitSymmetricGaussian3DMLE}
@@ -46,9 +45,12 @@ class Tracer:
             self.pos_list = [self.pos_list[int(self.array_id)]]
             self.roi_table = self.roi_table[self.roi_table.position.isin(self.pos_list)]
             self.all_rois = self.all_rois[self.all_rois.position.isin(self.pos_list)].reset_index(drop=True)
-            self.traces_path = self.image_handler.out_path('traces.csv'[:-4] + '_' + str(self.array_id).zfill(4) + '.csv')
+            traces_path = self.image_handler.out_path('traces.csv'[:-4] + '_' + str(self.array_id).zfill(4) + '.csv')
             self.images = self.images[self.roi_table.index.to_list()]
-
+        else:
+            traces_path = self.image_handler.out_path('traces.csv')
+        
+        self.traces_path = finalise_suffix(traces_path)
 
     def trace_single_roi(self, roi_img, mask = None, background = None):
         #Fit a single roi with 3D gaussian (MLE or LS as defined in config).
@@ -64,8 +66,7 @@ class Tracer:
             return self.fit_func(roi_img, sigma=1, center=center)[0]
         else:
             return np.array([-1] * len(ROI_FIT_COLUMNS))
-        
-
+    
     def trace_all_rois(self) -> str:
         '''
         Fits 3D gaussian to previously detected ROIs across positions and timeframes.
