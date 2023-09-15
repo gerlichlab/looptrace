@@ -59,6 +59,10 @@ class SpotPicker:
         #self.roi_path_unfiltered = self.roi_path.replace(roi_file_ext, ".unfiltered" + roi_file_ext)
 
     @property
+    def crosstalk_frame(self) -> Optional[int]:
+        return self.config.get('crosstalk_frame')
+
+    @property
     def detection_method_name(self) -> str:
         return self.config.get('detection_method', DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC)
     
@@ -175,8 +179,11 @@ class SpotPicker:
             pos_index = self.image_handler.image_lists[self.input_name].index(position)
             for (i, frame), ch in self.iter_frames_and_channels():
                 img = self.images[pos_index][frame, ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
+                crosstalk_frame = self.crosstalk_frame
+                if crosstalk_frame is None:
+                    crosstalk_frame = frame
                 if subtract_beads:
-                    bead_img = self.images[pos_index][frame, crosstalk_ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
+                    bead_img = self.images[pos_index][crosstalk_frame, crosstalk_ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
                     img, _ = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
                 spot_props, _ = detect_func(img, spot_threshold[i], min_dist = min_dist)
 
