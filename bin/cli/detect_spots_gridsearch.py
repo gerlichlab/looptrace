@@ -12,7 +12,8 @@ import sys
 from typing import *
 
 from gertils import ExtantFile, ExtantFolder, NonExtantPath
-from detect_spots import ParamPatch, Method, Parameters, workflow as run_spot_detection
+from detect_spots import ParamPatch, Parameters, workflow as run_spot_detection
+from looptrace.SpotPicker import DetectionMethod, CROSSTALK_SUBTRACTION_KEY
 
 __author__ = ["Vince Reuter"]
 
@@ -32,7 +33,7 @@ class FrameSet:
 
 @dataclass
 class MethodAndIntensities:
-    method: Method
+    method: DetectionMethod
     intensities: List[int]
 
 
@@ -43,11 +44,11 @@ def read_params_file(params_file: ExtantFile) -> Iterable[Parameters]:
     method_intensity_pairs = [(method_name, intensity) for method_name, intensities in params_config["intensities_by_method"].items() for intensity in intensities]
     downsamplings = params_config["downsamplings"]
     only_in_nuclei = params_config["only_in_nuclei"]
-    subtract_crosstalk = params_config["subtract_crosstalk"]
+    subtract_crosstalk = params_config[CROSSTALK_SUBTRACTION_KEY]
     combos = itertools.product(frame_sets, method_intensity_pairs, downsamplings, only_in_nuclei, subtract_crosstalk)
     params = []
     for frames, (method_name, intensity), downsampling, only_nucs, minus_xtalk in combos:
-        method = Method.parse(method_name)
+        method = DetectionMethod.parse(method_name)
         par = Parameters(
             frames=frames, 
             method=method, 

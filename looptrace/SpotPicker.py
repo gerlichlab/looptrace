@@ -7,6 +7,7 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+from enum import Enum
 import logging
 import os
 from pathlib import Path
@@ -24,8 +25,10 @@ from looptrace.exceptions import MissingRoisTableException
 from looptrace.filepaths import get_spot_images_path
 from looptrace import image_processing_functions as ip
 
+CROSSTALK_SUBTRACTION_KEY = "subtract_crosstalk"
 DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC = 'dog'
 NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION = ".nuclei_labeled"
+DETECTION_METHOD_KEY = "detection_method"
 
 logger = logging.getLogger()
 
@@ -35,6 +38,18 @@ def get_spot_images_zipfile(folder: Union[Path, ExtantFolder, NonExtantPath]) ->
     if isinstance(folder, (ExtantFolder, NonExtantPath)):
         folder = folder.path
     return folder / "spot_images.npz"
+
+
+class DetectionMethod(Enum):
+    INTENSITY = 'intensity'
+    DIFFERENCE_OF_GAUSSIANS = 'dog'
+
+    @classmethod
+    def parse(cls, name: str) -> "DetectionMethod":
+        try:
+            return next(m for m in cls if m.value.lower() == name.lower())
+        except StopIteration:
+            raise ValueError(f"Unknown detection method: {name}")
 
 
 class SpotPicker:
@@ -64,12 +79,12 @@ class SpotPicker:
 
     @property
     def detection_method_name(self) -> str:
-        return self.config.get('detection_method', DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC)
+        return self.config.get(DETECTION_METHOD_KEY, DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC)
     
     @property
     def detection_function(self) -> Callable:
         try:
-            return {'intensity': ip.detect_spots_int, DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC: ip.detect_spots}[self.detection_method_name]
+            return {Method.INTENSITY.value: ip.detect_spots_int, DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC: ip.detect_spots}[self.detection_method_name]
         except KeyError as e:
             raise ValueError(f"Illegal value for spot detection method in config: {self.detection_method_name}") from e
         
@@ -254,7 +269,7 @@ class SpotPicker:
     '''
     def refilter_rois(self):
         #TODO needs updating to new table syntax.
-        if self.config['detection_method'] == 'dog':
+        if self.detection_method_name == 'dog':
             self.image_handler.roi_table = ip.roi_center_to_bbox(self.image_handler.roi_table.copy(), roi_size = tuple(self.config['roi_image_size']))
         
         self.image_handler.roi_table[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] = self.image_handler.roi_table[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']].round().astype(int)
