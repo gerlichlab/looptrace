@@ -94,7 +94,7 @@ def run_one_detection(params: ParamPatch, config_file: ExtantFile, images_folder
 def workflow_new_configs(config_file: ExtantFile, images_folder: ExtantFolder, params_file: ExtantFile, output_folder: ExtantFolder, cores: Optional[int] = None) -> Iterable[str]:
     """Run the gridsearch from a collection of parameters for which looptrace config files haven't yet been generated."""
     parameterizations = read_params_file(params_file=params_file)
-    logger.info(f"Parameterizations count: {len(parameterizations)}")
+    print(f"Parameterizations count: {len(parameterizations)}")
     cores = cores or 1
     argument_bundles = []
     for param_index, params in enumerate(parameterizations):
@@ -114,7 +114,7 @@ def workflow_new_configs(config_file: ExtantFile, images_folder: ExtantFolder, p
 
 def workflow_preexisting_configs(config_file: ExtantFile, images_folder: ExtantFolder, params_outfile_pairs: Iterable[Tuple[ParamPatch, NonExtantPath]], cores: Optional[int] = None) -> Iterable[str]:
     """Run the gridsearch from a collection of pre-existing, pre-generated config files ready to run looptrace."""
-    logger.info(f"Parameterizations count: {len(params_outfile_pairs)}")
+    print(f"Parameterizations count: {len(params_outfile_pairs)}")
     cores = cores or 1
     argument_bundles = []
     for params, outfile in params_outfile_pairs:
@@ -131,10 +131,10 @@ def workflow_preexisting_configs(config_file: ExtantFile, images_folder: ExtantF
 
 def execute(argument_bundles, cores) -> Iterable[str]:
     if cores == 1:
-        logger.info("Using a single core")    
+        print("Using a single core")    
         outfiles = [run_one_detection(*args) for args in argument_bundles]
     else:
-        logger.info(f"Using {cores} cores")
+        print(f"Using {cores} cores")
         with mp.Pool(cores) as work_pool:
             outfiles = work_pool.starmap(func=run_one_detection, iterable=argument_bundles)
     return outfiles
@@ -229,21 +229,21 @@ def main(cmdl: List[str]) -> None:
                     results.add(ParamIndex.unsafe_from_roi_filename(fn))
                 except Exception:
                     continue
-        logger.debug(f"Found {len(configs)} config file(s)")
-        logger.debug(f"Found {len(results)} result file(s)")
+        print(f"Found {len(configs)} config file(s)")
+        print(f"Found {len(results)} result file(s)")
         param_indices_to_use = configs - (set() if opts.overwrite else results)
-        logger.debug(f"Preliminary indices to use: {', '.join(map(str, sorted(param_indices_to_use)))}")
+        print(f"Preliminary indices to use: {', '.join(map(str, sorted(param_indices_to_use)))}")
         if opts.index_range:
             include_filter = set(index for indices in opts.index_range for index in indices)
-            logger.debug(f"Including only from among these indices: {', '.join(map(str, sorted(include_filter)))}")
+            print(f"Including only from among these indices: {', '.join(map(str, sorted(include_filter)))}")
             param_indices_to_use = param_indices_to_use & include_filter
-        logger.debug(f"Count of parameterisation to use: {len(param_indices_to_use)}")
+        print(f"Count of parameterisation to use: {len(param_indices_to_use)}")
         params_outfile_pairs = []
         finalize_result_path = (lambda p: p) if opts.overwrite else (lambda p: NonExtantPath(p).path)
         for idx in param_indices_to_use:
             conf_path = opts.output_folder / idx.to_config_filename()
             result_path = finalize_result_path(opts.output_folder / idx.to_roi_filename())
-            logger.info(f"Reading config: {conf_path}")
+            print(f"Reading config: {conf_path}")
             with open(conf_path, 'r') as fh:
                 conf_data = json.load(fh)
             params_outfile_pairs.append((conf_data, result_path))
@@ -251,9 +251,9 @@ def main(cmdl: List[str]) -> None:
     else:
         if opts.output_folder.exists():
             raise FileExistsError(f"Output folder already exists: {opts.output_folder}")
-        logger.debug(f"Establishing output folder: {opts.output_folder}")
+        print(f"Establishing output folder: {opts.output_folder}")
         os.makedirs(opts.output_folder, exist_ok=False)
-        logger.info(f"Starting spot detection gridsearch, based on parameters file: {opts.parameters_grid_file}")
+        print(f"Starting spot detection gridsearch, based on parameters file: {opts.parameters_grid_file}")
         workflow_new_configs(
             config_file=opts.config_path, 
             images_folder=opts.image_path, 
