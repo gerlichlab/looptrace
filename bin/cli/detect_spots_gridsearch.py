@@ -92,12 +92,15 @@ def run_one_detection(params: ParamPatch, config_file: ExtantFile, images_folder
 
 
 def workflow_new_configs(config_file: ExtantFile, images_folder: ExtantFolder, params_file: ExtantFile, output_folder: ExtantFolder, cores: Optional[int] = None) -> Iterable[str]:
+    """Run the gridsearch from a collection of parameters for which looptrace config files haven't yet been generated."""
     parameterizations = read_params_file(params_file=params_file)
     logger.info(f"Parameterizations count: {len(parameterizations)}")
     cores = cores or 1
     argument_bundles = []
     for param_index, params in enumerate(parameterizations):
         idx = ParamIndex(param_index)
+        with open(f"params.{idx.value}.{CONFIG_FILETYPE}", 'w') as fh:
+            json.dump(params.to_dict_for_json(), fh, indent=4)
         args = (
             params, 
             config_file, 
@@ -110,6 +113,7 @@ def workflow_new_configs(config_file: ExtantFile, images_folder: ExtantFolder, p
 
 
 def workflow_preexisting_configs(config_file: ExtantFile, images_folder: ExtantFolder, params_outfile_pairs: Iterable[Tuple[ParamPatch, NonExtantPath]], cores: Optional[int] = None) -> Iterable[str]:
+    """Run the gridsearch from a collection of pre-existing, pre-generated config files ready to run looptrace."""
     logger.info(f"Parameterizations count: {len(params_outfile_pairs)}")
     cores = cores or 1
     argument_bundles = []
