@@ -119,10 +119,8 @@ class Tracer:
         traces['sigma_z'] = traces['sigma_z'] * self.config['z_nm']
         traces['sigma_xy'] = traces['sigma_xy'] * self.config['xy_nm']
         traces = traces.sort_values(['trace_id', 'frame'])
-
-        outfile = self.finalise_suffix(self.traces_path)
         
-        print(f"Writing traces: {outfile}")
-        traces.to_csv(outfile)
+        print(f"Writing traces: {self.traces_path}")
+        traces.to_csv(self.traces_path)
 
-        return outfile
+        return self.traces_path
