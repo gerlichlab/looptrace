@@ -402,7 +402,6 @@ def drift_corr_course(t_img, o_img, downsample=1):
     ----------
     t_path : Path to template image in svih5 format.
     o_path : Path to offset image in svih5 format.
-    ch : Which channel to use for drift correction.
 
     Returns
     -------
