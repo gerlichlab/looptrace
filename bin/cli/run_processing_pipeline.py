@@ -21,6 +21,7 @@ from extract_spots import workflow as run_spot_extraction
 from extract_spots_cluster_cleanup import workflow as run_spot_zipping
 from tracing import workflow as run_chromatin_tracing
 from tracing_qc import workflow as run_tracing_qc
+from config_file_validation import workflow as run_config_validation
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,7 @@ class LooptracePipeline(pypiper.Pipeline):
         conf_data_pair = (self.config_file, self.images_folder)
         conf_only = (self.config_file, )
         func_args_pairs = (
+            ("config_validation", run_config_validation, conf_only),
             ("psf_extraction", run_psf_extraction, conf_data_pair),
             ("deconvolution", run_deconvolution, conf_data_pair), 
             ("nuclei_detection", run_nuclei_detection, conf_data_pair), 

@@ -17,30 +17,18 @@ from typing import *
 from gertils import ExtantFile, ExtantFolder
 
 from looptrace.ImageHandler import handler_from_cli
-from looptrace.SpotPicker import SpotPicker
+from looptrace.SpotPicker import SpotPicker, CROSSTALK_SUBTRACTION_KEY, DETECTION_METHOD_KEY, DetectionMethod
 
 __author__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 
 
-class Method(Enum):
-    INTENSITY = 'intensity'
-    DIFFERENCE_OF_GAUSSIANS = 'dog'
-
-    @classmethod
-    def parse(cls, name: str) -> "Method":
-        try:
-            return next(m for m in cls if m.value.lower() == name.lower())
-        except StopIteration:
-            raise ValueError(f"Unknown detection method: {name}")
-
-
-ConfigMapping = Dict[str, Union[str, List[int], Method, int, bool]]
+ConfigMapping = Dict[str, Union[str, List[int], DetectionMethod, int, bool]]
 
 
 @dataclass
 class Parameters:
     frames: List[int]
-    method: Method
+    method: DetectionMethod
     threshold: int
     downsampling: int
     only_in_nuclei: bool
@@ -51,17 +39,17 @@ class Parameters:
 
     _config_keys = {
         "frames": "spot_frame", 
-        "method": "detection_method", 
+        "method": DETECTION_METHOD_KEY, 
         "threshold": "spot_threshold", 
         "downsampling": "spot_downsample", 
         "only_in_nuclei": "spot_in_nuc", 
-        "subtract_crosstalk": "subtract_crosstalk", 
+        "subtract_crosstalk": CROSSTALK_SUBTRACTION_KEY, 
         "minimum_spot_separation": "min_spot_dist",
     }
 
     @classmethod
     def from_dict(cls, src: ConfigMapping) -> "Parameters":
-        data = {k: Method.parse(src[v]) if k == "method" else src[v] for k, v in cls._config_keys.items()}
+        data = {k: DetectionMethod.parse(src[v]) if k == "method" else src[v] for k, v in cls._config_keys.items()}
         return cls(**data)
 
     @classmethod
