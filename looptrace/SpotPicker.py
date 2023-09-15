@@ -116,7 +116,7 @@ class SpotPicker:
         spot_threshold = self.config.get('spot_threshold', 1000)
         return spot_threshold if isinstance(spot_threshold, list) else [spot_threshold] * len(self.spot_frame)
 
-    def rois_from_spots(self, preview_pos=None) -> Optional[Path]:
+    def rois_from_spots(self, preview_pos=None, outfile: Optional[Union[str, Path]] = None) -> Optional[Union[str, Path]]:
         '''
         Autodetect ROIs from spot images using a manual threshold defined in config.
         
@@ -194,10 +194,12 @@ class SpotPicker:
         n_spots = len(output)
         (logger.warning if n_spots == 0 else logger.info)(f'Found {n_spots} spots.')
         #output.to_csv(self.roi_centers_filepath)
-        output.to_csv(self.roi_path)
+        outfile = outfile or self.roi_path
+        print(f"Writing ROIs: {outfile}")
+        output.to_csv(outfile)
 
         #return self.roi_centers_filepath
-        return self.roi_path
+        return outfile
 
 
     def rois_from_beads(self):
