@@ -182,7 +182,7 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder) -> Tuple[Path
     array_id = os.environ.get("SLURM_ARRAY_TASK_ID")
     tracer = Tracer(image_handler=image_handler, array_id=None if array_id is None else int(array_id))
     traces_file = Path(tracer.traces_path)
-    with open(config_file, 'r') as conf:
+    with open(config_file.path, 'r') as conf:
         probes_to_ignore = conf["illegal_frames_for_trace_support"]
         min_trace_length = conf.get("min_trace_length", 0)
     print(f"Probes to ignore: {', '.join(probes_to_ignore)}")
