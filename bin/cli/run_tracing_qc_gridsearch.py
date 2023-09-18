@@ -10,7 +10,7 @@ import pandas as pd
 import seaborn as sns
 from gertils import ExtantFile, ExtantFolder
 
-from looptrace.tracing_qc_support import QC_PASS_COUNT_COLUMN, write_tracing_qc_passes_from_gridfile
+from looptrace.tracing_qc import QC_PASS_COUNT_COLUMN, write_tracing_qc_passes_from_gridfile
 
 __author__ = "Vince Reuter"
 
