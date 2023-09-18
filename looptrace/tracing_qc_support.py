@@ -1,10 +1,8 @@
 """Apply quality control to traces and supporting points."""
 
-import argparse
 import dataclasses
 import itertools
 import json
-import os
 from pathlib import Path
 from typing import *
 
@@ -12,9 +10,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from looptrace.ImageHandler import handler_from_cli
-from looptrace.Tracer import Tracer
-from gertils import ExtantFile, ExtantFolder
+from gertils import ExtantFile
 
 
 Numeric = Union[int, float]
@@ -177,20 +173,6 @@ def tracing_qc(df: pd.DataFrame, parameters: TracingQCParameters) -> np.array:
     return qc.astype(int)
 
 
-def workflow(config_file: ExtantFile, images_folder: ExtantFolder) -> Tuple[Path, Path]:
-    image_handler = handler_from_cli(config_file=config_file, images_folder=images_folder, image_save_path=None)
-    array_id = os.environ.get("SLURM_ARRAY_TASK_ID")
-    tracer = Tracer(image_handler=image_handler, array_id=None if array_id is None else int(array_id))
-    traces_file = Path(tracer.traces_path)
-    with open(config_file.path, 'r') as tmp_cfg:
-        conf_data = yaml.safe_load(tmp_cfg)
-    probes_to_ignore = conf_data["illegal_frames_for_trace_support"]
-    min_trace_length = conf_data.get("min_trace_length", 0)
-    print(f"Probes to ignore: {', '.join(probes_to_ignore)}")
-    print(f"Min trace length: {min_trace_length}")
-    return apply_qc_filtration_and_write_results(traces_file=traces_file, config_file=config_file.path, min_trace_length=min_trace_length, exclusions=probes_to_ignore)
-
-
 def write_tracing_qc_passes_from_gridfile(
         traces_file: ExtantFile, 
         config_file: ExtantFile, gridfile: ExtantFile, outfile: Path, exclusions: Optional[Iterable[str]]) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -205,11 +187,3 @@ def write_tracing_qc_passes_from_gridfile(
     print(f"Saving QC pass counts: {outfile}")
     result.to_csv(outfile, index=False)
     return traces, result
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Apply quality control to chromatin fiber traces and supporting points.')
-    parser.add_argument("config_path", type=ExtantFile.from_string, help="Config file path")
-    parser.add_argument("image_path", type=ExtantFolder.from_string, help="Path to folder with images to read")
-    args = parser.parse_args()
-    workflow(config_file=args.config_path, images_folder=args.image_path)
