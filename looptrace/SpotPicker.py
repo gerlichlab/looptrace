@@ -42,9 +42,9 @@ def detect_spot_single(
         spot_downsampling, 
         min_dist, 
         subtract_beads: bool,
+        crosstalk_channel: int,
         center_spots: Optional[Callable[[pd.DataFrame], pd.DataFrame]] = None,
-        crosstalk_frame: Optional[int] = None,
-        crosstalk_channel: Optional[int] = None, 
+        crosstalk_frame: Optional[int] = None, 
         ) -> pd.DataFrame:
     img = full_image[frame, fish_channel, ::spot_downsampling, ::spot_downsampling, ::spot_downsampling].compute()
     if crosstalk_frame is None:
