@@ -50,7 +50,7 @@ class LooptracePipeline(pypiper.Pipeline):
             ("clean_1", run_cleanup, conf_only),
             ("spot_bounding", run_spot_bounding, conf_data_pair), # computes pad_x_min, etc.; writes *_dc_rois.csv (much bigger, since regional spots x frames)
             ("spot_extraction", run_spot_extraction, conf_data_pair),
-            ("spot_zipping", run_spot_zipping, (self.images_folder, )),
+            ("spot_zipping", run_spot_zipping, conf_data_pair),
             ("clean_2", run_cleanup, conf_only), 
             ("tracing", run_chromatin_tracing, conf_data_pair),
             ("tracing_QC", run_tracing_qc, conf_data_pair), 
