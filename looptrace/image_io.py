@@ -26,6 +26,15 @@ import zarr
 TIFF_EXTENSIONS = [".tif", ".tiff"]
 
 
+def canonise_npz(npz_file: Path) -> Path:
+    print(f"Reading NPZ: {npz_file}")
+    data = np.load(npz_file, allow_pickle=True)
+    newfile = npz_file.with_suffix(".canonised.npz")
+    print(f"Writing new NPZ file: {newfile}")
+    np.savez(data, newfile)
+    return newfile
+
+
 def ignore_path(p: Union[str, os.DirEntry, Path]) -> bool:
     try:
         name = p.name

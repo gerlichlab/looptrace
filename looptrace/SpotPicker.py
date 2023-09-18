@@ -33,6 +33,33 @@ DETECTION_METHOD_KEY = "detection_method"
 logger = logging.getLogger()
 
 
+def detect_spot_single(
+        detect_func,
+        spot_threshold,
+        full_image, 
+        fish_channel, 
+        frame,
+        spot_downsampling, 
+        min_dist, 
+        subtract_beads: bool,
+        center_spots: Optional[Callable[[pd.DataFrame], pd.DataFrame]] = None,
+        crosstalk_frame: Optional[int] = None,
+        crosstalk_channel: Optional[int] = None, 
+        ) -> pd.DataFrame:
+    img = full_image[frame, fish_channel, ::spot_downsampling, ::spot_downsampling, ::spot_downsampling].compute()
+    if crosstalk_frame is None:
+        crosstalk_frame = frame
+    if subtract_beads:
+        bead_img = full_image[crosstalk_frame, crosstalk_channel, ::spot_downsampling, ::spot_downsampling, ::spot_downsampling].compute()
+        img, _ = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
+    spot_props, _ = detect_func(img, spot_threshold, min_dist = min_dist)
+    if center_spots is not None:
+        spot_props = center_spots(spot_props)
+    
+    spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] = spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] * spot_downsampling
+    return spot_props
+
+
 def get_spot_images_zipfile(folder: Union[Path, ExtantFolder, NonExtantPath]) -> Path:
     """Return fixed-name path to zipfile for spot images, relative to the given folder."""
     if isinstance(folder, (ExtantFolder, NonExtantPath)):
@@ -84,7 +111,7 @@ class SpotPicker:
     @property
     def detection_function(self) -> Callable:
         try:
-            return {Method.INTENSITY.value: ip.detect_spots_int, DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC: ip.detect_spots}[self.detection_method_name]
+            return {DetectionMethod.INTENSITY.value: ip.detect_spots_int, DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC: ip.detect_spots}[self.detection_method_name]
         except KeyError as e:
             raise ValueError(f"Illegal value for spot detection method in config: {self.detection_method_name}") from e
         
@@ -193,23 +220,24 @@ class SpotPicker:
         for position in tqdm.tqdm(self.pos_list):
             pos_index = self.image_handler.image_lists[self.input_name].index(position)
             for (i, frame), ch in self.iter_frames_and_channels():
-                img = self.images[pos_index][frame, ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
-                crosstalk_frame = self.crosstalk_frame
-                if crosstalk_frame is None:
-                    crosstalk_frame = frame
-                if subtract_beads:
-                    bead_img = self.images[pos_index][crosstalk_frame, crosstalk_ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
-                    img, _ = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
-                spot_props, _ = detect_func(img, spot_threshold[i], min_dist = min_dist)
-
-                spot_props = center_spots(spot_props)
-                
-                spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] = spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']]*spot_ds
-                
+                spot_props = detect_spot_single(
+                    detect_func=detect_func, 
+                    spot_threshold=spot_threshold[i], 
+                    full_image=self.images[pos_index], 
+                    fish_channel=ch, 
+                    frame=frame, 
+                    spot_downsampling=spot_ds, 
+                    min_dist=min_dist, 
+                    subtract_beads=subtract_beads, 
+                    center_spots=center_spots,
+                    crosstalk_frame=frame if self.crosstalk_frame is None else self.crosstalk_frame,
+                    crosstalk_channel=crosstalk_ch, 
+                    )
                 spot_props['position'] = position
                 spot_props['frame'] = frame
                 spot_props['ch'] = ch
                 all_rois.append(spot_props)
+        
         output = pd.concat(all_rois)
         #logger.info(f"Writing ROI centers: {self.roi_centers_filepath}")
         logger.info(f"Writing initial spot ROIs: {self.roi_path}")
