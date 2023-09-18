@@ -34,7 +34,6 @@ def workflow(images_folder: ExtantFolder, require_outfile: bool = True) -> Optio
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run spot detection on all frames and channels listed in config.')
     parser.add_argument("image_path", type=ExtantFolder.from_string, help=f"Path to folder containing '{SPOT_IMAGES_SUBFOLDER}' folder")
-    parser.add_argument("--lax", action="store_true", help="Don't require output file to exist at the end")
     args = parser.parse_args()
     workflow(args.image_path)
     
