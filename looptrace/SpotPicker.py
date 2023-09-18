@@ -188,7 +188,7 @@ class SpotPicker:
         spot_ds = self.config['spot_downsample']
         logger.info(f"Spot downsampling setting: {spot_ds}")
         
-        center_spots = (lambda df: df) if self.roi_image_size is None else (lambda df: ip.roi_center_to_bbox(df, roi_size=np.array(self.roi_image_size) // spot_ds))
+        center_spots = (lambda df: df) if self.roi_image_size is None else (lambda df: ip.roi_center_to_bbox(df, roi_size=tuple(map(lambda x: x // spot_ds, self.roi_image_size))))
 
         # previewing
         if preview_pos is not None:
