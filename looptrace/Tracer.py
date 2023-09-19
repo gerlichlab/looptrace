@@ -7,14 +7,26 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+import dataclasses
+
+from typing import *
+
 import numpy as np
 import pandas as pd
 import scipy.ndimage as ndi
-import looptrace.image_processing_functions as ip
-from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
 from tqdm import tqdm
 
+import looptrace.image_processing_functions as ip
+from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
+
+
 ROI_FIT_COLUMNS = ["BG", "A", "z_px", "y_px", "x_px", "sigma_z", "sigma_xy"]
+
+
+@dataclasses.dataclass
+class BackgroundSpecification:
+    frame_index: int
+    drifts: Iterable[np.ndarray]
 
 
 class Tracer:
