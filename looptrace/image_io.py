@@ -8,6 +8,7 @@ EMBL Heidelberg
 
 import copy
 import itertools
+import multiprocessing as mp
 import os
 from pathlib import Path
 import re
@@ -26,12 +27,33 @@ import zarr
 TIFF_EXTENSIONS = [".tif", ".tiff"]
 
 
-def canonise_npz(npz_file: Path) -> Path:
+def _save_filepath_data_pair(t: Tuple[Path, np.ndarray]):
+    fp, arr = t
+    np.save(fp, arr, allow_pickle=True)
+    return fp
+
+
+def split_npz(npz_file: Path, outdir: Path, cores: Optional[int] = None) -> Iterable[Path]:
+    print(f"Reading NPZ: {npz_file}")
+    all_data = np.load(npz_file, allow_pickle=True)
+    args = ((outdir / fn, data) for fn, data in all_data.items())
+    if 1 == (cores or 1):
+        print("Using 1 core to split NPZ")
+        filepaths = list(map(_save_filepath_data_pair, args))
+    else:
+        print(f"Cores to split NPZ: {cores}")
+        with mp.Pool(cores) as workers:
+            filepaths = list(workers.starmap(_save_filepath_data_pair, args))
+    return filepaths
+
+
+def standardise_npz(npz_file: Path) -> Path:
+    """Convert manually written (here in looptrace) zipped numpy arrays to canonical form."""
     print(f"Reading NPZ: {npz_file}")
     data = np.load(npz_file, allow_pickle=True)
-    newfile = npz_file.with_suffix(".canonised.npz")
+    newfile = npz_file.with_suffix(".standardised.npz")
     print(f"Writing new NPZ file: {newfile}")
-    np.savez(data, newfile)
+    np.savez(newfile, **data.items())
     return newfile
 
 
