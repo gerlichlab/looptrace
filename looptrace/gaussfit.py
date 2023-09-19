@@ -76,37 +76,45 @@ def symmetricGaussian3D(bg, A, center_z, center_y, center_x, sigma_z, sigma_xy):
 
 
 def fitSymmetricGaussian3D(data, sigma, center=None):
-    """
-    Data is assumed centered on the gaussian and of size roughly 2x the width.
-    """
-    params = [numpy.min(data),
-              numpy.max(data)]
-    if center is None:
-        center = [s//2 for s in data.shape]
-    elif center == 'max':
-        center = list(numpy.unravel_index(numpy.argmax(data, axis=None), data.shape))
-
-    print(f"CENTER: {center}")
-
-    params += center
-    params += [sigma, sigma]
-
-    print(f"PARAMS: {params}")
-
-    return fitAFunctionLS(data, params, symmetricGaussian3D)
+    return _fit_3d_gaussian(fit_proc=fitAFunctionLS, img_data=data, sigma=sigma, center=center)
 
 
 def fitSymmetricGaussian3DMLE(data: numpy.ndarray, sigma: NumberLike, center: Optional[Union[str, List[IntegerLike]]]):
+    return _fit_3d_gaussian(fit_proc=fitAFunctionMLE, img_data=data, sigma=sigma, center=center)
+
+
+def _fit_3d_gaussian(fit_proc: callable, img_data: numpy.ndarray, sigma: NumberLike, center: Optional[Union[str, List[IntegerLike]]]):
     """
     Data is assumed centered on the gaussian and of size roughly 2x the width.
+    
+    Parameters
+    ----------
+    fit_proc : callable
+        The fitting procedure / optimisation strategy, e.g. maximum-likelihood estimation or least squares
+    img_data : np.ndarray
+        The array of pixel intensities to which to fit a Gaussian; this corresponds to a single round / 
+        hybridisation / frame / probe, for a particular field of view and a particular channel. 
+        Namely, then, it fixes FOV and 2 of the 5 dimensions, leaving (z,y,x), and hence this is a 3D 
+        numpy array.
+    sigma : NumberLike
+        The standard deviation starting guess 
+    center : Optional[Union[str, List[IntegerLike]]]
+        The starting guess strategy for the distribution's center; can be a set of 3 coordinates (z, y, x), 
+        or null to use the literal image center, or 'max' to say that the point of maximal pixel intensity 
+        should be used. If real values, these should be integer-like since they represent pixel coordinates.
+    
+    Returns
+    -------
+    list
+        A sequence of values corresponding to fitted values of the Gaussian function, optimising according 
+        to the given fit_proc
+    
     """
-    params = [numpy.min(data), numpy.max(data)]
     if center is None:
         # Take the literal pixel center of the image.
-        center = [s // 2 for s in data.shape]
+        center = [s // 2 for s in img_data.shape]
     elif center == 'max':
         # Seed the fit procedure's center with the pixel coordinates of max signal intensity.
-        center = list(numpy.unravel_index(numpy.argmax(data, axis=None), data.shape))
-    params += center
-    params += [sigma, sigma]
-    return fitAFunctionMLE(data, params, symmetricGaussian3D)
+        center = list(numpy.unravel_index(numpy.argmax(img_data, axis=None), img_data.shape))
+    init_guess = [numpy.min(img_data), numpy.max(img_data)] + center + [sigma, sigma]
+    return fit_proc(img_data, init_guess, symmetricGaussian3D)
