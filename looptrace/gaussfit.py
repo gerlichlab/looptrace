@@ -76,7 +76,10 @@ def fitSymmetricGaussian3DMLE(data, sigma, center):
     """
     params = [numpy.min(data),
               numpy.max(data)]
+    if center is None:
+        center = [s // 2 for s in data.shape]
+    elif center == 'max':
+        center = list(numpy.unravel_index(numpy.argmax(data, axis=None), data.shape))
     params += center
-    params += [sigma,
-              sigma]
+    params += [sigma, sigma]
     return fitAFunctionMLE(data, params, symmetricGaussian3D)
