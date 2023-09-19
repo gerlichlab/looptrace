@@ -61,7 +61,7 @@ class Tracer:
             if mask is None:
                 center = 'max'
             else:
-                roi_img_masked = (mask/np.max(mask)) * roi_img
+                roi_img_masked = roi_img * (mask / np.max(mask))**2
                 center = list(np.unravel_index(np.argmax(roi_img_masked, axis=None), roi_img.shape))
             return self.fit_func(roi_img, sigma=1, center=center)[0]
         else:
@@ -81,7 +81,7 @@ class Tracer:
         
         try:
             #This only works for a single position at the time currently
-            background = self.image_handler.config['substract_background']
+            background = self.image_handler.config['subtract_background']
             pos_drifts = self.drift_table[self.drift_table.position.isin(self.pos_list)][['z_px_fine', 'y_px_fine', 'x_px_fine']].to_numpy()
             background_rel_drifts = pos_drifts - pos_drifts[background]
         except KeyError:
