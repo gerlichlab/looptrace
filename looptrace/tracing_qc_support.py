@@ -89,9 +89,11 @@ def apply_qc_filtration_and_write_results(
 def compute_ref_frame_spatial_information(df: pd.DataFrame) -> pd.DataFrame:
     """Populate table with coordinates of probe's reference point and distance of each spot to its reference."""
     refs = df[df['frame'] == df['ref_frame']]
+    keycols = ['pos_index', 'trace_id', 'ref_frame']
+    refkeys = refs[keycols].apply(lambda r: tuple(map(lambda c: r[c], keycols)), axis=1)
     for dim in ['z', 'y', 'x']:
-        refs_map = dict(zip(refs['trace_id'], refs[dim]))
-        df[dim + '_ref'] = df['trace_id'].map(refs_map)
+        refs_map = dict(zip(refkeys, refs[dim]))
+        df[dim + '_ref'] = df[keycols].apply(lambda r: refs_map[tuple(map(lambda c: r[c], keycols))], axis=1)
     return np.sqrt((df['z_ref'] - df['z'])**2 + (df['y_ref'] - df['y'])**2 + (df['x_ref'] - df['x'])**2)
 
 
