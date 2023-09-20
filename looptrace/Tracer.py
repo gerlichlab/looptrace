@@ -106,19 +106,27 @@ class Tracer:
 
 def find_trace_fits(fit_func, images: Iterable[np.ndarray], ref_frames: List[int], mask_fits: bool, background_specification: Optional[BackgroundSpecification]) -> pd.DataFrame:
     fits = []
+    if background_specification is None:
+        def finalise_spot_img(img, _):
+            return img
+    else:
+        def finalise_spot_img(img, fov_imgs):
+            return img.astype(np.int16) - fov_imgs[background_specification.frame_index].astype(np.int16)
     if mask_fits:
         for p, pos_imgs in tqdm(enumerate(images), total=len(images)):
             ref_img = pos_imgs[ref_frames[p]]
             #print(ref_img.shape)
             for t, spot_img in enumerate(pos_imgs):
-                if background_specification is not None:
-                    shift = ndi.shift(pos_imgs[background_specification.frame_index], shift=background_specification.drifts[t])
-                    spot_img = np.clip(spot_img.astype(np.int16) - shift, a_min = 0, a_max = None)
+                #if background_specification is not None:
+                    #shift = ndi.shift(pos_imgs[background_specification.frame_index], shift=background_specification.drifts[t])
+                    #spot_img = np.clip(spot_img.astype(np.int16) - shift, a_min = 0, a_max = None)
+                spot_img = finalise_spot_img(spot_img, pos_imgs)
                 fits.append(trace_single_roi(fit_func=fit_func, roi_img=spot_img, mask=ref_img))
             #Parallel(n_jobs=1, prefer='threads')(delayed(self.trace_single_roi)(imgs[p, t], mask= ref_img) for t in range(imgs.shape[1]))
     else:
         for pos_imgs in tqdm(images, total=len(images)):
             for spot_img in pos_imgs:
+                spot_img = finalise_spot_img(spot_img, pos_imgs)
                 fits.append(trace_single_roi(fit_func=fit_func, roi_img=spot_img))
     return pd.DataFrame(fits, columns=ROI_FIT_COLUMNS)
 
