@@ -14,6 +14,7 @@ from pathlib import Path
 import random
 from typing import *
 import numpy as np
+from numpy.lib.format import open_memmap
 import pandas as pd
 from scipy import ndimage as ndi
 from skimage.measure import regionprops_table
@@ -431,10 +432,41 @@ class SpotPicker:
         except ValueError: # ROI collection failed for some reason
             roi_img = np.zeros((np.abs(z.stop-z.start), np.abs(y.stop-y.start), np.abs(x.stop-x.start)), dtype=np.float32)
 
-        return roi_img  
+        return roi_img
+    
+    def write_single_fov_data(self, pos_group_name: str, pos_group_data: pd.DataFrame) -> List[str]:
+        pos_index = self.image_handler.image_lists[self.input_name].index(pos_group_name)
+        f_id = 0
+        n_frames = len(pos_group_data.frame.unique())
+        array_files = []
+        for frame, frame_group in tqdm.tqdm(pos_group_data.groupby('frame')):
+            for ch, ch_group in frame_group.groupby('ch'):
+                image_stack = np.array(self.images[pos_index][int(frame), int(ch)])
+                for i, roi in ch_group.iterrows():
+                    roi_img = self.extract_single_roi_img_inmem(roi, image_stack).astype(np.uint16)
+                    fp = os.path.join(self.spot_images_path, f"{pos_group_name}_{str(roi['roi_id']).zfill(5)}.npy")
+                    if f_id == 0:
+                        array_files.append(fp)
+                        arr = open_memmap(fp, mode='w+', dtype = roi_img.dtype, shape=(n_frames,) + roi_img.shape)
+                        arr[f_id] = roi_img
+                        arr.flush()
+                    else:
+                        arr = open_memmap(fp, mode='r+')
+                        try:
+                            arr[f_id] = roi_img
+                            arr.flush()
+                            #arr[f_id] = np.append(arr[f_id], np.expand_dims(roi_img,0).copy(), axis=0)
+                        except ValueError: #Edge case: ROI fetching has failed giving strange shaped ROI, just leave the zeros as is.
+                            pass
+                            # roi_stack = np.append(roi_stack, np.expand_dims(np.zeros_like(roi_stack[0]), 0), axis=0)
+                    #np.save(os.path.join(self.spot_images_path, rn + '.npy', roi_stack)
+                    #print(roi_array)
+                    #roi_array_padded.append(ip.pad_to_shape(roi, shape = roi_image_size, mode = 'minimum'))
+            f_id += 1
+        return array_files
+
 
     def gen_roi_imgs_inmem(self) -> str:
-        from numpy.lib.format import open_memmap
         # Load full stacks into memory to extract spots.
         # Not the most elegant, but depending on the chunking of the original data it is often more performant than loading subsegments.
 
@@ -447,32 +479,8 @@ class SpotPicker:
             os.mkdir(self.spot_images_path)
 
         for pos, pos_group in tqdm.tqdm(rois.groupby('position')):
-            pos_index = self.image_handler.image_lists[self.input_name].index(pos)
-            f_id = 0
-            n_frames = len(pos_group.frame.unique())
-            for frame, frame_group in tqdm.tqdm(pos_group.groupby('frame')):
-                for ch, ch_group in frame_group.groupby('ch'):
-                    image_stack = np.array(self.images[pos_index][int(frame), int(ch)])
-                    for i, roi in ch_group.iterrows():
-                        roi_img = self.extract_single_roi_img_inmem(roi, image_stack).astype(np.uint16)
-                        fp = os.path.join(self.spot_images_path, f"{pos}_{str(roi['roi_id']).zfill(5)}.npy")
-                        if f_id == 0:
-                            arr = open_memmap(fp, mode='w+', dtype = roi_img.dtype, shape=(n_frames,) + roi_img.shape)
-                            arr[f_id] = roi_img
-                            arr.flush()
-                        else:
-                            arr = open_memmap(fp, mode='r+')
-                            try:
-                                arr[f_id] = roi_img
-                                arr.flush()
-                                #arr[f_id] = np.append(arr[f_id], np.expand_dims(roi_img,0).copy(), axis=0)
-                            except ValueError: #Edge case: ROI fetching has failed giving strange shaped ROI, just leave the zeros as is.
-                                pass
-                                # roi_stack = np.append(roi_stack, np.expand_dims(np.zeros_like(roi_stack[0]), 0), axis=0)
-                        #np.save(os.path.join(self.spot_images_path, rn + '.npy', roi_stack)
-                        #print(roi_array)
-                        #roi_array_padded.append(ip.pad_to_shape(roi, shape = roi_image_size, mode = 'minimum'))
-                f_id += 1
+            self.write_single_fov_data(pos_group_name=pos, pos_group_data=pos_group)
+            
         return self.spot_images_path
             
             #for j, pos_roi in enumerate(pos_rois):
