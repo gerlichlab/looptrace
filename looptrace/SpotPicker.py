@@ -448,10 +448,8 @@ class SpotPicker:
 
         for pos, pos_group in tqdm.tqdm(rois.groupby('position')):
             pos_index = self.image_handler.image_lists[self.input_name].index(pos)
-            #print(full_image.shape)
             f_id = 0
             n_frames = len(pos_group.frame.unique())
-            #print(n_frames)
             for frame, frame_group in tqdm.tqdm(pos_group.groupby('frame')):
                 for ch, ch_group in frame_group.groupby('ch'):
                     image_stack = np.array(self.images[pos_index][int(frame), int(ch)])
