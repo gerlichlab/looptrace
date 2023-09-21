@@ -94,8 +94,7 @@ class Tracer:
         trace_res = find_trace_fits(
             fit_func_spec=self.fit_func_spec,
             images=self.images, 
-            ref_frames=self.roi_table['frame'].to_list(), 
-            mask_fits=self.image_handler.config.get('mask_fits', False), 
+            mask_ref_frames=self.roi_table['frame'].to_list() if self.image_handler.config.get('mask_fits', False) else None, 
             background_specification=bg_spec
             )
 
@@ -115,7 +114,7 @@ class Tracer:
         return self.traces_path
     
 
-def find_trace_fits(fit_func_spec, images: Iterable[np.ndarray], ref_frames: List[int], mask_fits: bool, background_specification: Optional[BackgroundSpecification]) -> pd.DataFrame:
+def find_trace_fits(fit_func_spec, images: Iterable[np.ndarray], mask_ref_frames: Optional[List[int]], background_specification: Optional[BackgroundSpecification]) -> pd.DataFrame:
     fits = []
     if background_specification is None:
         def finalise_spot_img(img, _):
@@ -124,9 +123,9 @@ def find_trace_fits(fit_func_spec, images: Iterable[np.ndarray], ref_frames: Lis
         def finalise_spot_img(img, fov_imgs):
             return img.astype(np.int16) - fov_imgs[background_specification.frame_index].astype(np.int16)
     # NB: For these iterations, each is expected to be a 4D array (first dimension being hybridisation round, and (z, y, x) for each).
-    if mask_fits:
+    if mask_ref_frames:
         for p, pos_imgs in tqdm(enumerate(images), total=len(images)):
-            ref_img = pos_imgs[ref_frames[p]]
+            ref_img = pos_imgs[mask_ref_frames[p]]
             #print(ref_img.shape)
             for t, spot_img in enumerate(pos_imgs):
                 #if background_specification is not None:
