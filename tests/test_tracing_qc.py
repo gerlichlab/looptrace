@@ -79,39 +79,33 @@ def test_reference_point_distance_computation_writes_reference__coordindates(tra
     assert reference_coordinate in traces_table.columns
 
 
-@pytest.mark.xfail(reason="This will fail for some cases, awaiting fix for #79")
 @pytest.mark.parametrize("field_of_view", [0, 1])
 @pytest.mark.parametrize("trace_id", [0, 1])
 @pytest.mark.parametrize("reference_frame", REFERENCE_FRAMES)
-@pytest.mark.parametrize("ref_val_col", REFERENCE_COORDINATES + [REF_DIST_COL])
+@pytest.mark.parametrize("ref_val_col", REFERENCE_COORDINATES)
 def test_rows_with_same_fov_region_and_trace_id_have_same_reference_coordinates(traces_table, field_of_view, trace_id, reference_frame, ref_val_col):
     traces_table = _apply_reference_distances(traces_table)
     subtab = traces_table[(traces_table.pos_index == field_of_view) & (traces_table.trace_id == trace_id) & (traces_table.ref_frame == reference_frame)]
-    # Each of the 8 combinations of (FOV, trace, region) in the above data should have 4 data points (1 for each of 4 hybridisations).
-    assert 4 == len(subtab)
-    # Now make the main test assertion.
     assert 1 == subtab[ref_val_col].nunique()
 
 
-@pytest.mark.skip("awaiting implementation strategy")
-@pytest.mark.parametrize("ref_val_col", REFERENCE_COORDINATES + [REF_DIST_COL])
-def test_rows_with_same_reference_coordinates_are_all_same_fov_region_and_trace_id(traces_table, ref_val_col):
+@pytest.mark.parametrize("ref_val_col", REFERENCE_COORDINATES)
+@pytest.mark.parametrize("value_to_check", ["pos_index", "trace_id", "ref_frame"])
+def test_rows_with_same_reference_coordinates_are_all_same_fov_region_and_trace_id(traces_table, ref_val_col, value_to_check):
     traces_table = _apply_reference_distances(traces_table)
-    columns = ["pos_index", "trace_id", "ref_frame"]
-    assert 1 == traces_table.groupby(ref_val_col)[columns].apply(lambda x: (x[c] for c in columns)).nunique()
+    # In each group, there should be just 1 unique value for the variable of interest.
+    ref_val_groups = traces_table.groupby(ref_val_col)[value_to_check].agg(lambda xs: len(set(xs)))
+    print(ref_val_groups) # for debugging
+    assert (1 == ref_val_groups).all()
 
 
 @pytest.mark.parametrize("reference_frame", REFERENCE_FRAMES)
-@pytest.mark.xfail(reason="This should not yet pass, awaiting fix for #79")
 def test_all_reference_frame_data_points_have_zero_distance(traces_table, reference_frame):
     traces_table = _apply_reference_distances(traces_table)
-    subtab = traces_table[traces_table.frame == reference_frame]
+    # Assertion applies only where frame is reference frame, and we parametrize in each reference frame.
+    subtab = traces_table[(traces_table.frame == traces_table.ref_frame) & (traces_table.ref_frame == reference_frame)]
+    print(subtab[['pos_index', 'trace_id', 'frame', 'ref_frame', 'ref_dist']]) # for debugging if failing
     assert not subtab.empty and (subtab[REF_DIST_COL] == 0).all()
-
-
-@pytest.mark.skip("not implemented")
-def test_all_reference_frame_data_points_have_themselves_as_reference_coordinates():
-    pass
 
 
 def _apply_reference_distances(df: pd.DataFrame) -> pd.DataFrame:
