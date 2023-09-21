@@ -8,6 +8,7 @@ EMBL Heidelberg
 """
 
 import dataclasses
+import multiprocessing
 
 from typing import *
 
@@ -112,10 +113,58 @@ class Tracer:
         traces.to_csv(self.traces_path)
 
         return self.traces_path
-    
 
-def find_trace_fits(fit_func_spec, images: Iterable[np.ndarray], mask_ref_frames: Optional[List[int]], background_specification: Optional[BackgroundSpecification]) -> pd.DataFrame:
-    fits = []
+
+# For parallelisation (multiprocessing) in the case of mask_fits being False.
+def _iter_fit_args(
+        fit_func_spec: FunctionalForm, 
+        images: Iterable[np.ndarray], 
+        bg_spec: Optional[BackgroundSpecification]
+        ) -> Iterable[Tuple[FunctionalForm, np.ndarray]]:
+    if bg_spec is None:
+        # Iterating here over regional spots (pos_imgs)
+        for pos_imgs in images:
+            # Iterating here over individal timepoints / hybridisation rounds for each regional 
+            for spot_img in pos_imgs:
+                yield fit_func_spec, spot_img
+    else:
+        # Iterating here over regional spots (pos_imgs)
+        for pos_imgs in images:
+            # Iterating here over individal timepoints / hybridisation rounds for each regional 
+            for spot_img in pos_imgs:
+                yield fit_func_spec, spot_img.astype(np.int16) - pos_imgs[bg_spec.frame_index].astype(np.int16)                
+
+
+def find_trace_fits(
+        fit_func_spec: FunctionalForm, 
+        images: Iterable[np.ndarray], 
+        mask_ref_frames: Optional[List[int]], 
+        background_specification: Optional[BackgroundSpecification], 
+        cores: Optional[int] = None
+        ) -> pd.DataFrame:
+    """
+    Fit distributions to each of the regional spots, but over all hybridisation rounds.
+
+    Parameters
+    ----------
+    fit_func_spec : FunctionalForm
+        Pair of function to fit to each spot, and dimensionality of the data for that fit (e.g. 3)
+    images : Iterable of np.ndarray
+        The collection of 4D arrays from the spot_images.npz (1 for each FOV + ROI combo)
+    mask_ref_frames : list of int, optional
+        Frames to use for masking when fitting, indexed by FOV
+    background_specification : BackgroundSpecification, optional
+        Bundle of index of hybridisation round (e.g. 0) to define as background, and associated 
+        positional drifts
+    cores : int, optional
+        How many CPUs to use
+    
+    Returns
+    -------
+    pd.DataFrame
+        A pandas DataFrame with one row per hybridisation round per FOV, with columns named to 
+        denote the parameters of the optimised functional form for each one
+    """
     if background_specification is None:
         def finalise_spot_img(img, _):
             return img
@@ -124,6 +173,7 @@ def find_trace_fits(fit_func_spec, images: Iterable[np.ndarray], mask_ref_frames
             return img.astype(np.int16) - fov_imgs[background_specification.frame_index].astype(np.int16)
     # NB: For these iterations, each is expected to be a 4D array (first dimension being hybridisation round, and (z, y, x) for each).
     if mask_ref_frames:
+        fits = []
         for p, pos_imgs in tqdm(enumerate(images), total=len(images)):
             ref_img = pos_imgs[mask_ref_frames[p]]
             #print(ref_img.shape)
@@ -134,12 +184,14 @@ def find_trace_fits(fit_func_spec, images: Iterable[np.ndarray], mask_ref_frames
                 spot_img = finalise_spot_img(spot_img, pos_imgs)
                 fits.append(trace_single_roi(fit_func_spec=fit_func_spec, roi_img=spot_img, mask=ref_img))
     else:
-        # Iterating here over regional spots (pos_imgs)
-        for pos_imgs in tqdm(images, total=len(images)):
-            # Iterating here over individal timepoints / hybridisation rounds for each regional 
-            for spot_img in pos_imgs:
-                spot_img = finalise_spot_img(spot_img, pos_imgs)
-                fits.append(trace_single_roi(fit_func_spec=fit_func_spec, roi_img=spot_img))
+        args = _iter_fit_args(fit_func_spec=fit_func_spec, images=images, bg_spec=background_specification)
+        if (cores or 1) == 1:
+            print("Single-core tracing")
+            fits = [trace_single_roi(fit_func_spec=ff_spec, roi_img=spot_img) for ff_spec, spot_img in args]
+        else:
+            print(f"Core count for tracing: {cores}")
+            with multiprocessing.Pool(cores) as workers:
+                fits = list(workers.starmap(func=trace_single_roi, iterable=args))
     return pd.DataFrame(fits, columns=ROI_FIT_COLUMNS)
 
 
