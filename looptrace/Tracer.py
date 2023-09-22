@@ -76,6 +76,9 @@ class Tracer:
         else:
             traces_path = self.image_handler.out_path('traces.csv')
         
+        # will be concatenated horizontally with fits; idempotent if already effectively unindexed
+        self.all_rois.reset_index(drop=True, inplace=True)
+        
         self.traces_path = finalise_suffix(traces_path)
 
     def trace_all_rois(self) -> str:
@@ -100,6 +103,7 @@ class Tracer:
             )
 
         #trace_index = pd.DataFrame(fit_rois, columns=["trace_id", "frame", "ref_frame", "position", "drift_z", "drift_y", "drift_x"])
+        # TODO: fix this incredibly error-prone thing; #84
         traces = pd.concat([self.all_rois, trace_res], axis=1)
         traces.rename(columns={"roi_id": "trace_id"}, inplace=True)
 

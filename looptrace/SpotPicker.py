@@ -34,6 +34,26 @@ DETECTION_METHOD_KEY = "detection_method"
 logger = logging.getLogger()
 
 
+class RoiOrderingSpecification():
+    """
+    Bundle of column/field names to match sorting of rows to sorting of filenames.
+    
+    In particular, the table of all ROIs (from regional spots, and that region per hybridisation round) 
+    should be sorted so that iteration over sorted filenames corresponding to each regional spot will yield 
+    an iteration to match row-by-row. This is important for fitting functional forms to the 
+    individual spots, as fit parameters must match rows from the all-ROIs table.
+    """
+    
+    @staticmethod
+    def row_order_columns() -> List[str]:
+        return ['position', 'roi_id', 'ref_frame', 'frame']
+    
+    @staticmethod
+    def name_roi_file(pos_name, roi) -> str:
+        """Create a name for .npy file for particular ROI; ROI must support __getitem__."""
+        return f"{pos_name}_{str(roi['roi_id']).zfill(5)}_{roi['ref_frame']}.npy"
+
+
 def detect_spot_single(
         detect_func,
         spot_threshold,
@@ -375,7 +395,7 @@ class SpotPicker:
                                 'pad_z_min', 'pad_z_max', 'pad_y_min', 'pad_y_max', 'pad_x_min', 'pad_x_max', 
                                 'z_px_course', 'y_px_course', 'x_px_course',
                                 'z_px_fine', 'y_px_fine', 'x_px_fine'])
-        self.all_rois = self.all_rois.sort_values(['roi_id','frame'])
+        self.all_rois = self.all_rois.sort_values(RoiOrderingSpecification.row_order_columns).reset_index(drop=True)
         print(self.all_rois)
         outfile = self.dc_roi_path
         self.all_rois.to_csv(outfile)
@@ -460,7 +480,7 @@ class SpotPicker:
                 image_stack = np.array(self.images[pos_index][int(frame), int(ch)])
                 for i, roi in ch_group.iterrows():
                     roi_img = self.extract_single_roi_img_inmem(roi, image_stack).astype(np.uint16)
-                    fp = os.path.join(self.spot_images_path, f"{pos_group_name}_{str(roi['roi_id']).zfill(5)}_{roi['ref_frame']}.npy")
+                    fp = os.path.join(self.spot_images_path, RoiOrderingSpecification.name_roi_file(pos_name=pos_group_name, roi=roi))
                     if f_id == 0:
                         array_files.append(fp)
                         arr = open_memmap(fp, mode='w+', dtype = roi_img.dtype, shape=(n_frames,) + roi_img.shape)
