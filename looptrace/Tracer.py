@@ -77,7 +77,7 @@ class Tracer:
             traces_path = self.image_handler.out_path('traces.csv')
         
         # will be concatenated horizontally with fits; idempotent if already effectively unindexed
-        self.all_rois.reset_index(drop=True, inplace=True)
+        self.all_rois = self.all_rois.reset_index(drop=True)
         
         self.traces_path = finalise_suffix(traces_path)
 
