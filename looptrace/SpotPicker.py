@@ -435,6 +435,22 @@ class SpotPicker:
         return roi_img
     
     def write_single_fov_data(self, pos_group_name: str, pos_group_data: pd.DataFrame) -> List[str]:
+        """
+        Write all timepoints' 3D image arrays (1 for each hybridisation round) for each (region, trace ID) pair in the FOV.
+
+        Parameters
+        ----------
+        pos_group_name : str
+            The name of the position (FOV) to which the given data corresponds
+        pos_group_data : pd.DataFrame
+            The data from the all-ROIs (_dc_rois.csv) file (1 row per hybridisation for each regional spot, all FOVs) 
+            for a particular FOV / position
+        
+        Returns
+        -------
+        list of str
+            Names of the files written
+        """
         pos_index = self.image_handler.image_lists[self.input_name].index(pos_group_name)
         f_id = 0
         n_frames = len(pos_group_data.frame.unique())
@@ -444,7 +460,7 @@ class SpotPicker:
                 image_stack = np.array(self.images[pos_index][int(frame), int(ch)])
                 for i, roi in ch_group.iterrows():
                     roi_img = self.extract_single_roi_img_inmem(roi, image_stack).astype(np.uint16)
-                    fp = os.path.join(self.spot_images_path, f"{pos_group_name}_{str(roi['roi_id']).zfill(5)}.npy")
+                    fp = os.path.join(self.spot_images_path, f"{pos_group_name}_{roi['ref_frame']}_{str(roi['roi_id']).zfill(5)}.npy")
                     if f_id == 0:
                         array_files.append(fp)
                         arr = open_memmap(fp, mode='w+', dtype = roi_img.dtype, shape=(n_frames,) + roi_img.shape)
