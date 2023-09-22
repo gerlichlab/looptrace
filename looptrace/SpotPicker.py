@@ -70,7 +70,11 @@ class RoiOrderingSpecification():
     @staticmethod
     def get_file_key(filename: str) -> Tuple[str, int, int]:
         base, _ = os.path.splitext(filename)
-        pos, roi, ref = base.split("_")
+        try:
+            pos, roi, ref = base.split("_")
+        except ValueError:
+            print(f"Failed to get key for filename: {filename}")
+            raise
         return pos, int(roi), int(ref)
 
 
