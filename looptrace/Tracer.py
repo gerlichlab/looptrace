@@ -17,11 +17,13 @@ import pandas as pd
 import scipy.ndimage as ndi
 from tqdm import tqdm
 
+from looptrace.SpotPicker import RoiOrderingSpecification
 import looptrace.image_processing_functions as ip
 from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
 
 
 ROI_FIT_COLUMNS = ["BG", "A", "z_px", "y_px", "x_px", "sigma_z", "sigma_xy"]
+MASK_FITS_ERROR_MESSAGE = "Masking fits for tracing currently isn't supported!"
 
 
 @dataclasses.dataclass
@@ -97,7 +99,7 @@ class Tracer:
 
         trace_res = find_trace_fits(
             fit_func_spec=self.fit_func_spec,
-            images=self.images, 
+            images=(self.images[fn] for fn in sorted(self.images.files, key=RoiOrderingSpecification.get_file_key)), 
             mask_ref_frames=self.roi_table['frame'].to_list() if self.image_handler.config.get('mask_fits', False) else None, 
             background_specification=bg_spec
             )
@@ -177,6 +179,7 @@ def find_trace_fits(
             return img.astype(np.int16) - fov_imgs[background_specification.frame_index].astype(np.int16)
     # NB: For these iterations, each is expected to be a 4D array (first dimension being hybridisation round, and (z, y, x) for each).
     if mask_ref_frames:
+        raise NotImplementedError(MASK_FITS_ERROR_MESSAGE)
         fits = []
         for p, pos_imgs in tqdm(enumerate(images), total=len(images)):
             ref_img = pos_imgs[mask_ref_frames[p]]
