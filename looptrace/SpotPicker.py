@@ -460,7 +460,7 @@ class SpotPicker:
                 image_stack = np.array(self.images[pos_index][int(frame), int(ch)])
                 for i, roi in ch_group.iterrows():
                     roi_img = self.extract_single_roi_img_inmem(roi, image_stack).astype(np.uint16)
-                    fp = os.path.join(self.spot_images_path, f"{pos_group_name}_{roi['ref_frame']}_{str(roi['roi_id']).zfill(5)}.npy")
+                    fp = os.path.join(self.spot_images_path, f"{pos_group_name}_{str(roi['roi_id']).zfill(5)}_{roi['ref_frame']}.npy")
                     if f_id == 0:
                         array_files.append(fp)
                         arr = open_memmap(fp, mode='w+', dtype = roi_img.dtype, shape=(n_frames,) + roi_img.shape)

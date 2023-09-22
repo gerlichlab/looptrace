@@ -9,6 +9,7 @@ EMBL Heidelberg
 import copy
 import itertools
 import multiprocessing as mp
+from operator import itemgetter
 import os
 from pathlib import Path
 import re
@@ -415,10 +416,9 @@ def zip_folder(folder, out_file, compression = zipfile.ZIP_STORED, remove_folder
     #Strips the original fileextensions (usecase for npy -> npz archive). Will probably modify this in future.
     if remove_folder and os.path.dirname(out_file) == folder:
         raise ValueError(f"Cannot zip to file ({out_file}) in folder to be deleted ({folder})")
-    filelist = sorted([p.path for p in os.scandir(folder)])
-    filenamelist = sorted([p.name for p in os.scandir(folder)])
+    filelist = sorted([(p.path, p.name) for p in os.scandir(folder)], key=itemgetter(0))
     with zipfile.ZipFile(out_file, mode='w', compression=compression, compresslevel=3) as zfile:
-        for f, fn in tqdm.tqdm(zip(filelist, filenamelist), total=len(filelist)):
+        for f, fn in tqdm.tqdm(filelist, total=len(filelist)):
             zfile.write(f, arcname=os.path.splitext(fn)[0])
     if remove_folder:
         try:
