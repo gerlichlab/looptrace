@@ -50,8 +50,28 @@ class RoiOrderingSpecification():
     
     @staticmethod
     def name_roi_file(pos_name, roi) -> str:
-        """Create a name for .npy file for particular ROI; ROI must support __getitem__."""
-        return f"{pos_name}_{str(roi['roi_id']).zfill(5)}_{roi['ref_frame']}.npy"
+        """
+        Create a name for .npy file for particular ROI; ROI must support __getitem__.
+        
+        Parameters
+        ----------
+        pos_name : str
+            The name of a position (FOV) group, e.g. P0001.zarr
+        roi : Union[pd.Series, Mapping[str, Any]]
+            Single row record from all ROIs table
+        
+        Returns
+        -------
+        str
+            Name for file corresponding to this spot (regional)'s data in a single hybridisation round
+        """
+        return "_".join([pos_name, str(roi['roi_id']).zfill(5), roi['ref_frame']]) + ".npy"
+    
+    @staticmethod
+    def get_file_key(filename: str) -> Tuple[str, int, int]:
+        base, _ = os.path.splitext(filename)
+        pos, roi, ref = base.split("_")
+        return pos, int(roi), int(ref)
 
 
 def detect_spot_single(
