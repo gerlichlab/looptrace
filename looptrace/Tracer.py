@@ -20,6 +20,7 @@ from tqdm import tqdm
 from looptrace.SpotPicker import RoiOrderingSpecification
 import looptrace.image_processing_functions as ip
 from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
+from looptrace.numeric_types import NumberLike
 
 
 ROI_FIT_COLUMNS = ["BG", "A", "z_px", "y_px", "x_px", "sigma_z", "sigma_xy"]
@@ -97,23 +98,16 @@ class Tracer:
             pos_drifts = self.drift_table[self.drift_table.position.isin(self.pos_list)][['z_px_fine', 'y_px_fine', 'x_px_fine']].to_numpy()
             bg_spec = BackgroundSpecification(frame_index=bg_frame_idx, drifts=pos_drifts - pos_drifts[bg_frame_idx])
 
-        trace_res = find_trace_fits(
+        spot_fits = find_trace_fits(
             fit_func_spec=self.fit_func_spec,
             images=(self.images[fn] for fn in sorted(self.images.files, key=RoiOrderingSpecification.get_file_key)), 
             mask_ref_frames=self.roi_table['frame'].to_list() if self.image_handler.config.get('mask_fits', False) else None, 
             background_specification=bg_spec, 
             cores=self.config.get("tracing_cores")
             )
-
-        #trace_index = pd.DataFrame(fit_rois, columns=["trace_id", "frame", "ref_frame", "position", "drift_z", "drift_y", "drift_x"])
-        traces = pair_rois_with_fits(rois=self.all_rois, fits=trace_res)
         
-        #Apply fine scale drift to fits, and physcial units.
-        traces = apply_fine_scale_drift_correction(traces)
-        #traces=traces.drop(columns=['drift_z', 'drift_y', 'drift_x'])
-        traces = apply_pixels_to_nanometers(traces, z_nm_per_px=self.config['z_nm'], xy_nm_per_px=self.config['xy_nm'])
+        traces = finalise_traces(rois=self.all_rois, fits=spot_fits)
         
-        traces = traces.sort_values(RoiOrderingSpecification.row_order_columns())
         print(f"Writing traces: {self.traces_path}")
         traces.to_csv(self.traces_path)
 
@@ -138,6 +132,15 @@ def _iter_fit_args(
             # Iterating here over individal timepoints / hybridisation rounds for each regional 
             for spot_img in pos_imgs:
                 yield fit_func_spec, spot_img.astype(np.int16) - pos_imgs[bg_spec.frame_index].astype(np.int16)                
+
+
+def finalise_traces(rois: pd.DataFrame, fits: pd.DataFrame, z_nm: NumberLike, xy_nm: NumberLike) -> pd.DataFrame:
+    traces = pair_rois_with_fits(rois=rois, fits=fits)
+    #Apply fine scale drift to fits, and physcial units.
+    traces = apply_fine_scale_drift_correction(traces)
+    #traces=traces.drop(columns=['drift_z', 'drift_y', 'drift_x'])
+    traces = apply_pixels_to_nanometers(traces, z_nm_per_px=z_nm, xy_nm_per_px=xy_nm)
+    return traces.sort_values(RoiOrderingSpecification.row_order_columns())
 
 
 def pair_rois_with_fits(rois: pd.DataFrame, fits: pd.DataFrame) -> pd.DataFrame:
