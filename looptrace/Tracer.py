@@ -140,7 +140,9 @@ def finalise_traces(rois: pd.DataFrame, fits: pd.DataFrame, z_nm: NumberLike, xy
     traces = apply_fine_scale_drift_correction(traces)
     #traces=traces.drop(columns=['drift_z', 'drift_y', 'drift_x'])
     traces = apply_pixels_to_nanometers(traces, z_nm_per_px=z_nm, xy_nm_per_px=xy_nm)
-    return traces.sort_values(RoiOrderingSpecification.row_order_columns())
+    traces = traces.sort_values(RoiOrderingSpecification.row_order_columns())
+    traces.rename(columns={"roi_id": "trace_id"}, inplace=True)
+    return traces
 
 
 def pair_rois_with_fits(rois: pd.DataFrame, fits: pd.DataFrame) -> pd.DataFrame:
@@ -168,7 +170,6 @@ def pair_rois_with_fits(rois: pd.DataFrame, fits: pd.DataFrame) -> pd.DataFrame:
         raise ValueError("Indexes of sports table and fits table don't match!")
     # TODO: fix this incredibly error-prone thing; #84
     traces = pd.concat([rois, fits], axis=1)
-    traces.rename(columns={"roi_id": "trace_id"}, inplace=True)
     return traces
 
 
