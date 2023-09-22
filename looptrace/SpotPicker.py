@@ -68,12 +68,11 @@ class RoiOrderingSpecification():
         return "_".join([pos_name, str(roi['roi_id']).zfill(5), roi['ref_frame']]) + ".npy"
     
     @staticmethod
-    def get_file_key(filename: str) -> Tuple[str, int, int]:
-        base, _ = os.path.splitext(filename)
+    def get_file_key(file_key: str) -> Tuple[str, int, int]:
         try:
-            pos, roi, ref = base.split("_")
+            pos, roi, ref = file_key.split("_")
         except ValueError:
-            print(f"Failed to get key for filename: {filename}")
+            print(f"Failed to get key for file key: {file_key}")
             raise
         return pos, int(roi), int(ref)
 
