@@ -8,6 +8,7 @@ import yaml
 from gertils import ExtantFile
 
 from looptrace.SpotPicker import DetectionMethod, CROSSTALK_SUBTRACTION_KEY, DETECTION_METHOD_KEY as SPOT_DETECTION_METHOD_KEY
+from looptrace.Tracer import MASK_FITS_ERROR_MESSAGE
 
 
 class ConfigFileError(Exception):
@@ -32,6 +33,8 @@ def find_config_file_errors(config_file: ExtantFile) -> List[ConfigFileError]:
         errors.append(ConfigFileError(f"No spot detection method ('{SPOT_DETECTION_METHOD_KEY}') specified!"))
     elif spot_detection_method == DetectionMethod.INTENSITY.value:
         errors.append(ConfigFileError(f"Prohibited (or unsupported) spot detection method: '{spot_detection_method}'"))
+    if conf_data.get("mask_fits", False):
+        errors.append(ConfigFileError(MASK_FITS_ERROR_MESSAGE))
     return errors
 
 
