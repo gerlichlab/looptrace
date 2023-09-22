@@ -395,7 +395,7 @@ class SpotPicker:
                                 'pad_z_min', 'pad_z_max', 'pad_y_min', 'pad_y_max', 'pad_x_min', 'pad_x_max', 
                                 'z_px_course', 'y_px_course', 'x_px_course',
                                 'z_px_fine', 'y_px_fine', 'x_px_fine'])
-        self.all_rois = self.all_rois.sort_values(RoiOrderingSpecification.row_order_columns).reset_index(drop=True)
+        self.all_rois = self.all_rois.sort_values(RoiOrderingSpecification.row_order_columns()).reset_index(drop=True)
         print(self.all_rois)
         outfile = self.dc_roi_path
         self.all_rois.to_csv(outfile)
