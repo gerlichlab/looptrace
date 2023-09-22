@@ -101,7 +101,8 @@ class Tracer:
             fit_func_spec=self.fit_func_spec,
             images=(self.images[fn] for fn in sorted(self.images.files, key=RoiOrderingSpecification.get_file_key)), 
             mask_ref_frames=self.roi_table['frame'].to_list() if self.image_handler.config.get('mask_fits', False) else None, 
-            background_specification=bg_spec
+            background_specification=bg_spec, 
+            cores=self.config.get("tracing_cores")
             )
 
         #trace_index = pd.DataFrame(fit_rois, columns=["trace_id", "frame", "ref_frame", "position", "drift_z", "drift_y", "drift_x"])
