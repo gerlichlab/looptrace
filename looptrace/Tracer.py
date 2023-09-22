@@ -228,7 +228,7 @@ def find_trace_fits(
             fits = [trace_single_roi(fit_func_spec=ff_spec, roi_img=spot_img) for ff_spec, spot_img in args]
         else:
             print(f"Core count for tracing: {cores}")
-            with multiprocessing.Pool(cores) as workers:
+            with multiprocessing.get_context("spawn").Pool(cores) as workers:
                 fits = list(workers.starmap(func=trace_single_roi, iterable=args))
     return pd.DataFrame(fits, columns=ROI_FIT_COLUMNS)
 

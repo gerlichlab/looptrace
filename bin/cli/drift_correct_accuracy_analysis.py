@@ -273,7 +273,7 @@ def workflow(
         else:
             cpus_used = min(cores, len(func_args))
             print(f"CPU use count: {cpus_used}")
-            with mp.Pool(cpus_used) as workers:
+            with mp.get_context("spawn").Pool(cpus_used) as workers:
                 single_fov_fits = workers.starmap(process_single_FOV_single_reference_frame, func_args)
         fits = pd.concat(single_fov_fits)
     
