@@ -113,7 +113,7 @@ class Tracer:
         #traces=traces.drop(columns=['drift_z', 'drift_y', 'drift_x'])
         traces = apply_pixels_to_nanometers(traces, z_nm_per_px=self.config['z_nm'], xy_nm_per_px=self.config['xy_nm'])
         
-        traces = traces.sort_values(['trace_id', 'frame'])
+        traces = traces.sort_values(RoiOrderingSpecification.row_order_columns())
         print(f"Writing traces: {self.traces_path}")
         traces.to_csv(self.traces_path)
 
