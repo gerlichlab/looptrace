@@ -106,10 +106,8 @@ class Tracer:
             )
 
         #trace_index = pd.DataFrame(fit_rois, columns=["trace_id", "frame", "ref_frame", "position", "drift_z", "drift_y", "drift_x"])
-        # TODO: fix this incredibly error-prone thing; #84
-        traces = pd.concat([self.all_rois, trace_res], axis=1)
-        traces.rename(columns={"roi_id": "trace_id"}, inplace=True)
-
+        traces = pair_rois_with_fits(rois=self.all_rois, fits=trace_res)
+        
         #Apply fine scale drift to fits, and physcial units.
         traces = apply_fine_scale_drift_correction(traces)
         #traces=traces.drop(columns=['drift_z', 'drift_y', 'drift_x'])
@@ -140,6 +138,35 @@ def _iter_fit_args(
             # Iterating here over individal timepoints / hybridisation rounds for each regional 
             for spot_img in pos_imgs:
                 yield fit_func_spec, spot_img.astype(np.int16) - pos_imgs[bg_spec.frame_index].astype(np.int16)                
+
+
+def pair_rois_with_fits(rois: pd.DataFrame, fits: pd.DataFrame) -> pd.DataFrame:
+    """
+    Merge (horizontally) the data from the individual spots / ROIs (1 per frame per regional spot) and the Gaussian fits.
+
+    Parameters
+    ----------
+    rois : pd.DataFrame
+        Individual spot data (1 per frame per regional spot)
+    fits : pd.DataFrame
+        Parameters for function fit to each individual spot
+    
+    Returns
+    -------
+    pd.DataFrame
+        A frame combining the individual spot data with parameters of functional form fit to that data
+    
+    Raises
+    ------
+    ValueError
+        If the indexes of the frames to combine don't match
+    """
+    if any(rois.index != fits.index):
+        raise ValueError("Indexes of sports table and fits table don't match!")
+    # TODO: fix this incredibly error-prone thing; #84
+    traces = pd.concat([rois, fits], axis=1)
+    traces.rename(columns={"roi_id": "trace_id"}, inplace=True)
+    return traces
 
 
 def find_trace_fits(
