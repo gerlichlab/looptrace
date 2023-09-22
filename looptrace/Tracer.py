@@ -135,6 +135,25 @@ def _iter_fit_args(
 
 
 def finalise_traces(rois: pd.DataFrame, fits: pd.DataFrame, z_nm: NumberLike, xy_nm: NumberLike) -> pd.DataFrame:
+    """
+    Pair ROIs (single spots) table with row-by-row fits, apply drift correction, convert to nanometers, sort, and name columns.
+
+    Parameters
+    ----------
+    rois : pd.DataFrame
+        The table of data for each spot in each hybridisation frame
+    fits : pd.DataFrame
+        The table of functional form fits for each row in the ROIs frame
+    z_nm : NumberLike
+        Number of nanometers per pixel in the z-direction
+    xy_nm : NumberLike
+        Number of nanometers per pixel in the x- and y-directions
+
+    Returns
+    -------
+    pd.DataFrame
+        The result of joining (horizontally) the frames, applying drift correction, sorting, and applying units
+    """
     traces = pair_rois_with_fits(rois=rois, fits=fits)
     #Apply fine scale drift to fits, and physcial units.
     traces = apply_fine_scale_drift_correction(traces)
