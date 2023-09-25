@@ -11,7 +11,7 @@ Y_COL <- "y_dc_rel"
 X_COL <- "x_dc_rel"
 EUC_DIST_COL <- "euc_dc_rel"
 DISTANCE_COLUMNS <- c(Z_COL, Y_COL, X_COL, EUC_DIST_COL)
-NON_DISTANCE_COLUMNS <- c("full_pos", "t", "c", "QC")
+NON_DISTANCE_COLUMNS <- c("reference_fov", "t", "c", "QC")
 COLUMNS_OF_INTEREST <- c(NON_DISTANCE_COLUMNS, DISTANCE_COLUMNS)
 PLOT_RELEVANT_COLUMNS <- c("t", DISTANCE_COLUMNS)
 ## Output-related
@@ -43,7 +43,7 @@ message(sprintf("After filtering for QC pass and beads channel, %s of %s records
 # Define function to create data table for each round of plotting.
 build_plot_table <- function(X, fov = NULL) {
     if (!is.null(fov)) {
-        X <- X[full_pos == fov, ]
+        X <- X[reference_fov == fov, ]
     }
     X <- data.table(melt(X[, ..PLOT_RELEVANT_COLUMNS], id.vars = "t"))
     X[, .(
@@ -86,7 +86,7 @@ plot_drift_correction_error <- function(full_plot_data, central_measure, fov) {
         filt <- identity
         fov_text <- "all FOVs"
     } else {
-        filt <- function(X) { X[full_pos == fov, ] }
+        filt <- function(X) { X[reference_fov == fov, ] }
         fov_text <- sprintf("FOV %s", fov)
     }
     if (central_measure == "mean") {
@@ -119,7 +119,7 @@ message("Saving all-medians plot: ", all_data_medians_filepath)
 ggsave(filename = all_data_medians_filepath, plot = plt_all_median, bg = "white")
 
 # Save the per-FOV plots to files by method.
-all_fovs <- unique(fits_beads_pass_qc$full_pos)
+all_fovs <- unique(fits_beads_pass_qc$reference_fov)
 ## First, the medians.
 medians_plots_file <-  get_output_filepath(sprintf("%s.medians.by_FOV.pdf", OUTPUT_FILENAME_PREFIX))
 message("Saving median plots by FOV: ", medians_plots_file)
