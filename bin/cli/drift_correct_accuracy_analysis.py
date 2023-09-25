@@ -279,7 +279,7 @@ def workflow(
     
     fits_output_file = _get_dc_fits_filepath(output_folder)
     print(f"Writing fits file: {fits_output_file}")
-    fits.to_csv(fits_output_file, index=False, sep="\t")
+    fits.to_csv(fits_output_file, index=False, sep=",")
     return fits
 
 
@@ -288,17 +288,25 @@ def run_visualisation(config_file: ExtantFile):
         config = yaml.safe_load(fh)
     output_folder = get_analysis_path(config)
     fits_file = _get_dc_fits_filepath(output_folder)
-    # TODO: spin off this function to make pipeline checkpointable after long-running DC analysis.
-    analysis_script_file = os.path.join(os.path.dirname(__file__), "drift_correct_accuracy_analysis.R")
-    if not os.path.isfile(analysis_script_file):
+    analysis_script_file = Path(os.path.dirname(__file__)) / "drift_correct_accuracy_analysis.R"
+    if not analysis_script_file.is_file():
         raise FileNotFoundError(f"Missing drift correction analysis script: {analysis_script_file}")
-    analysis_cmd_parts = ["Rscript", analysis_script_file, "-i", str(fits_file), "-o", output_folder, "--beads-channel", str(get_beads_channel(config))]
+    analysis_cmd_parts = [
+        "Rscript", 
+        str(analysis_script_file), 
+        "-i", 
+        str(fits_file), 
+        "-o", 
+        output_folder, 
+        "--beads-channel", 
+        str(get_beads_channel(config)),
+        ]
     print(f"Analysis command: {' '.join(analysis_cmd_parts)}")
     return subprocess.check_call(analysis_cmd_parts)
 
 
 def _get_dc_fits_filepath(folder: Union[str, Path]) -> str:
-    return os.path.join(folder, "drift_correction_accuracy.fits.tsv")
+    return os.path.join(folder, "drift_correction_accuracy.fits.csv")
 
 
 if __name__ == "__main__":
