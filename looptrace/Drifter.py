@@ -7,6 +7,7 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+from enum import Enum
 import os
 from typing import *
 
@@ -24,6 +25,24 @@ import tqdm
 from looptrace import image_processing_functions as ip
 from looptrace import image_io
 from looptrace.gaussfit import fitSymmetricGaussian3D
+
+
+def get_method_name(config: Mapping[str, Any]) -> Optional[str]:
+    return config.get("dc_method")
+
+
+class Methods(Enum):
+    COARSE_NAME = "course"
+    CROSS_CORRELATION_NAME = "cc"
+    FIT_NAME = "fit"
+
+    @classmethod
+    def is_valid_name(cls, name: str) -> bool:
+        return name in cls.__members__
+    
+    @classmethod
+    def values(cls) -> Iterable[str]:
+        return (m.value for m in cls)
 
 
 def correlate_single_bead(t_bead, o_bead, upsampling):
@@ -113,13 +132,16 @@ class Drifter():
         else:
             self.dc_file_path = self.image_handler.out_path(self.image_handler.reg_input_moving + '_drift_correction.csv')
 
+    @property
+    def method_name(self):
+        get_method_name(self.config) or Methods.CROSS_CORRELATION_NAME
+
     def drift_corr(self) -> Optional[str]:
         '''
         Running function for drift correction along T-axis of 6D (PTCZYX) images/arrays.
         Settings set in config file.
 
         '''
-
         frame_t = self.config['reg_ref_frame']
         ch_t = self.config['reg_ch_template']
         ch_o = self.config['reg_ch_moving']
@@ -129,9 +151,9 @@ class Drifter():
         roi_px = self.bead_roi_px
         ds = self.config['course_drift_downsample']
 
-        dc_method = self.config.get('dc_method', 'cc')
+        dc_method = self.method_name
 
-        if dc_method == 'course':
+        if dc_method == Methods.COARSE_NAME:
             all_drifts = []
             for pos in self.pos_list:
                 print(f'Running only course drift correction for position: {pos}.')
@@ -162,8 +184,8 @@ class Drifter():
                 bead_rois = ip.generate_bead_rois(t_img, threshold, min_bead_int, roi_px, n_points)
                 t_bead_imgs =  Parallel(n_jobs=-1, prefer='threads')(delayed(ip.extract_single_bead)(point, t_img) for point in bead_rois)
                 method_lookup = {
-                    'cc': (correlate_single_bead, lambda img_pair: img_pair + (100, )), 
-                    'fit': (fit_shift_single_bead, lambda img_pair: img_pair)
+                    Methods.CROSS_CORRELATION_NAME: (correlate_single_bead, lambda img_pair: img_pair + (100, )), 
+                    Methods.FIT_NAME: (fit_shift_single_bead, lambda img_pair: img_pair)
                 }
                 try:
                     corr_func, get_args = method_lookup[dc_method]
