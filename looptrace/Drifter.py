@@ -7,10 +7,6 @@ Ellenberg group
 EMBL Heidelberg
 """
 
-#from distutils.command.config import config
-#from tkinter import image_names
-
-import logging
 import os
 from typing import *
 
@@ -29,7 +25,6 @@ from looptrace import image_processing_functions as ip
 from looptrace import image_io
 from looptrace.gaussfit import fitSymmetricGaussian3D
 
-logger = logging.getLogger()
 
 class Drifter():
 
@@ -92,7 +87,7 @@ class Drifter():
         if dc_method == 'course':
             all_drifts = []
             for pos in self.pos_list:
-                logger.info(f'Running only course drift correction for position: {pos}.')
+                print(f'Running only course drift correction for position: {pos}.')
                 i = self.full_pos_list.index(pos)
                 drifts_course = []
                 drifts_fine = []
@@ -109,13 +104,13 @@ class Drifter():
                 drifts['position'] = pos
                 drifts.index.name = 'frame'
                 all_drifts.append(drifts)
-                logger.info(f'Finished drift correction for position: {pos}')
+                print(f'Finished drift correction for position: {pos}')
         else:
             #Run drift correction for each position and save results in table.
             all_drifts = []
             for pos in self.pos_list:
                 i = self.full_pos_list.index(pos)
-                logger.info(f'Running drift correction for position: {pos}')
+                print(f'Running drift correction for position: {pos}')
                 t_img = np.array(self.images_template[i][frame_t, ch_t])
                 bead_rois = ip.generate_bead_rois(t_img, threshold, min_bead_int, roi_px, n_points)
                 t_bead_imgs =  Parallel(n_jobs=-1, prefer='threads')(delayed(ip.extract_single_bead)(point, t_img) for point in bead_rois)
@@ -132,18 +127,18 @@ class Drifter():
                     drift_course = ip.drift_corr_course(t_img, o_img, downsample=ds)
                     o_bead_imgs = Parallel(n_jobs=-1, prefer='threads')(delayed(ip.extract_single_bead)(point, o_img, drift_course=drift_course) for point in bead_rois)
                     if len(bead_rois) > 0:
-                        logger.info("Computing fine drift")
+                        print("Computing fine drift")
                         drift_fine = Parallel(n_jobs=-1, prefer='threads')(delayed(corr_func)(*get_args(img_pair)) for img_pair in zip(t_bead_imgs, o_bead_imgs))
                         drift_fine = np.array(drift_fine)
                         drift_fine = trim_mean(drift_fine, proportiontocut=0.2, axis=0)
                     else:
-                        logger.info("No bead ROIs, setting fine drift to all-0s")
+                        print("No bead ROIs, setting fine drift to all-0s")
                         drift_fine = np.zeros_like(drift_course)
 
                     drifts = [t,pos] + list(drift_course) + list(drift_fine)
                     all_drifts.append(drifts) 
 
-                logger.info(f'Finished drift correction for position: {pos}')
+                print(f'Finished drift correction for position: {pos}')
                     
         
         all_drifts=pd.DataFrame(all_drifts, columns=['frame',
@@ -158,7 +153,7 @@ class Drifter():
         
         outfile = self.dc_file_path
         all_drifts.to_csv(outfile)
-        logger.info('Drift correction complete.')
+        print('Drift correction complete.')
         self.image_handler.drift_table = all_drifts
         return outfile
 
@@ -175,7 +170,7 @@ class Drifter():
             pos_img.append(da.roll(self.images[pos_index][t], shift = shift, axis = (1,2,3)))
         self.dc_images = da.stack(pos_img)
 
-        logger.info('DC images generated.')
+        print('DC images generated.')
 
     def save_proj_dc_images(self):
         '''
@@ -211,7 +206,7 @@ class Drifter():
                 shift = (shift[0]+shift[2], shift[1]+shift[3])
                 z[t] = ndi.shift(proj_img[t].compute(), shift=(0,)+shift, order = 2)
         
-        logger.info('DC images generated.')
+        print('DC images generated.')
     
     def save_course_dc_images(self):
         '''
@@ -245,4 +240,4 @@ class Drifter():
                 shift = (shift[0], shift[1], shift[2])
                 z[t] = ndi.shift(pos_img[t].compute(), shift=(0,)+shift, order = 0)
         
-        logger.info('DC images generated.')
+        print('DC images generated.')
