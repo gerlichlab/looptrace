@@ -26,6 +26,72 @@ from looptrace import image_io
 from looptrace.gaussfit import fitSymmetricGaussian3D
 
 
+def correlate_single_bead(t_bead, o_bead, upsampling):
+    """
+    Use scikit-image's phase_cross_correlation funnction to compute the best shift to make two beads coincide.
+
+    Parameters
+    ----------
+    t_bead : np.ndarray
+        3D array (z, y, x) of pixel intensities for one bead image; "reference_image" in scikit-image terms
+    o_bead : np.ndarray
+        3D array (z, y, x) of pixel intensities for other bead image; "moving_image" in scikit-image terms
+    upsampling : int, optional
+
+    Returns
+    -------
+    """
+    try:
+        shift = phase_cross_correlation(t_bead, o_bead, upsample_factor=upsampling, return_error=False)
+    except (ValueError, AttributeError):
+        shift = np.array([0,0,0])
+    return shift
+
+
+def fit_shift_single_bead(t_bead, o_bead, strict: bool = False):
+    """
+    Fit the center of two beads using 3D gaussian fit, and fit the shift between the centers.
+
+    Parameters
+    ----------
+    t_bead : np.ndarray
+        3D array (z, y, x) of pixel intensities for one bead image; "reference_image" in scikit-image terms
+    o_bead : np.ndarray
+        3D array (z, y, x) of pixel intensities for other bead image; "moving_image" in scikit-image terms
+    strict : bool, default False
+        Whether the function must succeed; if an error occurs, throw it if this is True, 
+        but if it's False, just print the error and return all-0s for the shift.
+
+    Returns
+    -------
+    np.ndarray
+        1D array with 3 values, representing the shift (in pixels) necessary to align (as 
+        much as possible) the centers of the Gaussian distributions fit to each of the bead images
+    
+    Raises
+    ------
+    AttributeError or ValueError
+        If something goes wrong with fitting the beads or taking the fits' coordinates' difference, 
+        and strict = True
+    """
+    try:
+        t_fit = np.array(fitSymmetricGaussian3D(t_bead, sigma=1, center=None)[0])
+        o_fit = np.array(fitSymmetricGaussian3D(o_bead, sigma=1, center=None)[0])
+        shift = t_fit[2:5] - o_fit[2:5]
+    except (ValueError, AttributeError) as e: # TODO: when can this happen? -- narrow exceptions / provide better insight.
+        if strict:
+            print("Error finding shift between beads!")
+            print(f"Bead 1 (below):")
+            print(t_bead)
+            print(f"Bead 2 (below):")
+            print(o_bead)
+            raise
+        else:
+            print(f"Error: {e}")
+            shift = np.array([0,0,0])
+    return shift
+
+
 class Drifter():
 
     def __init__(self, image_handler, array_id = None):
@@ -46,25 +112,6 @@ class Drifter():
             self.pos_list = [self.pos_list[int(array_id)]]
         else:
             self.dc_file_path = self.image_handler.out_path(self.image_handler.reg_input_moving + '_drift_correction.csv')
-
-
-    def fit_shift_single_bead(self, t_bead, o_bead):
-        # Fit the center of two beads using 3D gaussian fit, and fit the shift between the centers.
-
-        try:
-            t_fit = np.array(fitSymmetricGaussian3D(t_bead, sigma=1, center=None)[0])
-            o_fit = np.array(fitSymmetricGaussian3D(o_bead, sigma=1, center=None)[0])
-            shift = t_fit[2:5] - o_fit[2:5]
-        except (ValueError, AttributeError):
-            shift = np.array([0,0,0])
-        return shift
-
-    def correlate_single_bead(self, t_bead, o_bead, upsampling):
-        try:
-            shift = phase_cross_correlation(t_bead, o_bead, upsample_factor=upsampling, return_error=False)
-        except (ValueError, AttributeError):
-            shift = np.array([0,0,0])
-        return shift
 
     def drift_corr(self) -> Optional[str]:
         '''
@@ -115,8 +162,8 @@ class Drifter():
                 bead_rois = ip.generate_bead_rois(t_img, threshold, min_bead_int, roi_px, n_points)
                 t_bead_imgs =  Parallel(n_jobs=-1, prefer='threads')(delayed(ip.extract_single_bead)(point, t_img) for point in bead_rois)
                 method_lookup = {
-                    'cc': (self.correlate_single_bead, lambda img_pair: img_pair + (100, )), 
-                    'fit': (self.fit_shift_single_bead, lambda img_pair: img_pair)
+                    'cc': (correlate_single_bead, lambda img_pair: img_pair + (100, )), 
+                    'fit': (fit_shift_single_bead, lambda img_pair: img_pair)
                 }
                 try:
                     corr_func, get_args = method_lookup[dc_method]
