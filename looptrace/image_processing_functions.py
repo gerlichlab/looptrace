@@ -408,12 +408,8 @@ def drift_corr_course(t_img, o_img, downsample=1):
     A list of zyx course drifts and fine drifts (compared to course)
 
     '''        
-    #Calculate course drift
     s = tuple(slice(None, None, downsample) for i in t_img.shape)
-    course_drift=phase_cross_correlation(np.array(t_img[s]), np.array(o_img[s]), return_error=False) * downsample
-    #Shift image for fine drift correction
-    #o_img=ndi.shift(o_img,course_drift,order=0)
-    #print('Course drift:', course_drift)
+    course_drift = phase_cross_correlation(np.array(t_img[s]), np.array(o_img[s]), return_error=False) * downsample
     return course_drift
 
 def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int, n_points=50, upsampling=100):
@@ -434,31 +430,15 @@ def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int
     A trimmed mean (default 20% on each side) of the drift for each fiducial.
 
     '''
-    import datetime
     import joblib
 
     #Label fiducial candidates and find maxima.
     t_img_label,num_labels=ndi.label(t_img>threshold)
-    #t_img_maxima=np.array(ndi.measurements.maximum_position(t_img, 
-    #                                            labels=t_img_label, 
-    #                                            index=np.random.choice(np.arange(1,num_labels), size=n_points*2)))
     print('Number of unfiltered beads found: ', num_labels)
     t_img_maxima = pd.DataFrame(regionprops_table(t_img_label, t_img, properties=('label', 'centroid', 'max_intensity')))
     t_img_maxima = t_img_maxima.query('max_intensity > @min_bead_int').sample(n=n_points, random_state=1)[['centroid-0', 'centroid-1', 'centroid-2']].to_numpy()
     t_img_maxima = np.round(t_img_maxima).astype(int)
 
-    #Filter maxima so not too close to edge and bright enough.
-    
-    #Select random fiducial candidates. Seeded for reproducibility.
-    #np.random.seed(1)
-    #try:
-    #    rand_points = t_img_maxima[np.random.choice(t_img_maxima.shape[0], size=n_points), :]
-    #except ValueError: #If no maxima are found just choose one random point:
-    #    rand_points = [[10,10,10]]
-    #print(datetime.datetime.now().time())
-    #Initialize array to store shifts for all selected fiducials.
-    #shifts=np.empty_like(rand_points, dtype=np.float32)
-    
     def extract_and_correlate(point, t_img, o_img, upsampling):
 
         #Calculate fine scale drift for all selected fiducials.
