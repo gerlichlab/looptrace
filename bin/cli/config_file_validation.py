@@ -7,6 +7,7 @@ import yaml
 
 from gertils import ExtantFile
 
+from looptrace import Drifter
 from looptrace.SpotPicker import DetectionMethod, CROSSTALK_SUBTRACTION_KEY, DETECTION_METHOD_KEY as SPOT_DETECTION_METHOD_KEY
 from looptrace.Tracer import MASK_FITS_ERROR_MESSAGE
 
@@ -35,6 +36,9 @@ def find_config_file_errors(config_file: ExtantFile) -> List[ConfigFileError]:
         errors.append(ConfigFileError(f"Prohibited (or unsupported) spot detection method: '{spot_detection_method}'"))
     if conf_data.get("mask_fits", False):
         errors.append(ConfigFileError(MASK_FITS_ERROR_MESSAGE))
+    dc_method = Drifter.get_drift_correction_method_name(conf_data)
+    if dc_method and not Drifter.Methods.is_valid_name(dc_method):
+        errors.append(ConfigFileError(f"Invalid drift correction method ({dc_method}); choose from: {', '.join(Drifter.Methods.values())}"))
     return errors
 
 
