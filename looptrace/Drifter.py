@@ -43,6 +43,17 @@ class Methods(Enum):
     @classmethod
     def values(cls) -> Iterable[str]:
         return (m.value for m in cls)
+    
+    @classmethod
+    def get_func_and_args_getter(cls, method_name: str) -> Tuple[callable, callable]:
+        method_lookup = {
+            Methods.CROSS_CORRELATION_NAME.value: (correlate_single_bead, lambda img_pair: img_pair + (100, )), 
+            Methods.FIT_NAME.value: (fit_shift_single_bead, lambda img_pair: img_pair)
+        }
+        try:
+            return method_lookup[method_name]
+        except KeyError as e:
+            raise NotImplementedError(f"Unknown drift correction method ({method_name}); choose from: {', '.join(method_lookup.keys())}") from e
 
 
 def correlate_single_bead(t_bead, o_bead, upsampling):
@@ -111,6 +122,9 @@ def fit_shift_single_bead(t_bead, o_bead, strict: bool = False):
     return shift
 
 
+
+
+
 class Drifter():
 
     def __init__(self, image_handler, array_id = None):
@@ -175,7 +189,8 @@ class Drifter():
                 all_drifts.append(drifts)
                 print(f'Finished drift correction for position: {pos}')
         else:
-            #Run drift correction for each position and save results in table.
+            corr_func, get_args = Methods.get_func_and_args_getter(dc_method)
+            # Run drift correction for each position and save results in table.
             all_drifts = []
             for pos in self.pos_list:
                 i = self.full_pos_list.index(pos)
@@ -183,14 +198,6 @@ class Drifter():
                 t_img = np.array(self.images_template[i][frame_t, ch_t])
                 bead_rois = ip.generate_bead_rois(t_img, threshold, min_bead_int, roi_px, n_points)
                 t_bead_imgs =  Parallel(n_jobs=-1, prefer='threads')(delayed(ip.extract_single_bead)(point, t_img) for point in bead_rois)
-                method_lookup = {
-                    Methods.CROSS_CORRELATION_NAME: (correlate_single_bead, lambda img_pair: img_pair + (100, )), 
-                    Methods.FIT_NAME: (fit_shift_single_bead, lambda img_pair: img_pair)
-                }
-                try:
-                    corr_func, get_args = method_lookup[dc_method]
-                except KeyError:
-                    raise NotImplementedError(f"Unknown drift correction method ({dc_method}); choose from: {', '.join(method_lookup.keys())}")
                 for t in tqdm.tqdm(range(self.images_moving[i].shape[0])):
                     o_img = np.array(self.images_moving[i][t, ch_o])
                     drift_course = ip.drift_corr_course(t_img, o_img, downsample=ds)
