@@ -84,24 +84,16 @@ class Drifter():
         threshold = self.config['bead_threshold']
         min_bead_int = self.config['min_bead_intensity']
         n_points= self.config['bead_points']
-        #dc_bead_img_path = self.config['output_path']+os.sep+'dc_bead_images'
         roi_px = self.bead_roi_px
         ds = self.config['course_drift_downsample']
 
         dc_method = self.config.get('dc_method', 'cc')
 
-        #try:
-        #    save_dc_beads = self.config['save_dc_beads']
-        #except KeyError:
-        #    save_dc_beads = False
-
         if dc_method == 'course':
             all_drifts = []
-            #out_imgs = []
             for pos in self.pos_list:
                 logger.info(f'Running only course drift correction for position: {pos}.')
                 i = self.full_pos_list.index(pos)
-                #pos_imgs = []
                 drifts_course = []
                 drifts_fine = []
 
@@ -142,14 +134,6 @@ class Drifter():
                     if len(bead_rois) > 0:
                         logger.info("Computing fine drift")
                         drift_fine = Parallel(n_jobs=-1, prefer='threads')(delayed(corr_func)(*get_args(img_pair)) for img_pair in zip(t_bead_imgs, o_bead_imgs))
-                        #if dc_method == 'cc':
-                        #    drift_fine = Parallel(n_jobs=-1, prefer='threads')(delayed(self.correlate_single_bead)(t_bead, o_bead, 100) 
-                        #                                                        for t_bead, o_bead in zip(t_bead_imgs, o_bead_imgs))
-                        #elif dc_method == 'fit':
-                        #    drift_fine = Parallel(n_jobs=-1, prefer='threads')(delayed(self.fit_shift_single_bead)(t_bead, o_bead) 
-                        #                                                    for t_bead, o_bead in zip(t_bead_imgs, o_bead_imgs))
-                        #else:
-                        #    raise NotImplementedError('Unknown dc method.')
                         drift_fine = np.array(drift_fine)
                         drift_fine = trim_mean(drift_fine, proportiontocut=0.2, axis=0)
                     else:
@@ -158,15 +142,6 @@ class Drifter():
 
                     drifts = [t,pos] + list(drift_course) + list(drift_fine)
                     all_drifts.append(drifts) 
-
-                    #if save_dc_beads:
-                    #    if not os.path.isdir(dc_bead_img_path):
-                    #        os.mkdir(dc_bead_img_path)
-                    #    t_bead_imgs = np.stack([ip.pad_to_shape(img, (roi_px, roi_px, roi_px)) for img in t_bead_imgs])
-                    #    o_bead_imgs = np.stack([ip.pad_to_shape(img, (roi_px, roi_px, roi_px)) for img in o_bead_imgs])
-                        #out_imgs = np.stack([t_bead_imgs, o_bead_imgs])
-
-                        #pos_imgs(dc_bead_img_path+os.sep+pos+'_T'+str(t).zfill(4)+'.npy', out_imgs)
 
                 logger.info(f'Finished drift correction for position: {pos}')
                     
