@@ -146,7 +146,7 @@ class ArrayLikeLengthMismatchError(Exception):
     """Exception subtype for when array-like objects of expected-equal length don't match on length"""
 
 
-def generate_coarse_and_fine_drifts(
+def generate_drift_function_arguments__coarse_drift_only(
         full_pos_list: List[str], 
         pos_list: Iterable[str], 
         reference_images: List[np.ndarray], 
@@ -266,7 +266,7 @@ class Drifter():
             all_drifts = Parallel(n_jobs=-1, prefer='threads')(
                 delayed(process_single_fov_single_frame_coarse_only)(pos, frame, t_img, o_img, ds) 
                     for pos, frame, t_img, o_img in 
-                    generate_coarse_and_fine_drifts(
+                    generate_drift_function_arguments__coarse_drift_only(
                         full_pos_list=self.full_pos_list, 
                         pos_list=self.pos_list, 
                         reference_images=self.images_template, 
