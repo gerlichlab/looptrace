@@ -196,7 +196,7 @@ def generate_drift_function_arguments__coarse_drift_only(
         print(f'Finished drift correction for position: {pos}')
 
 
-def process_single_fov_single_frame__coarse_only(pos: str, frame: int, t_img: np.ndarray, o_img: np.ndarray, ds: int):
+def process_single_fov_single_frame__coarse_only(pos: str, frame: int, t_img: np.ndarray, o_img: np.ndarray):
     """
     Compute coarse drift for a single (FOV, frame) combination, passing through those values and addind dummy values for fine DC.
 
@@ -210,8 +210,6 @@ def process_single_fov_single_frame__coarse_only(pos: str, frame: int, t_img: np
         Reference image
     o_img : np.ndarray
         Image for which drift/shift relative to reference is to be computed
-    ds : int
-        Downsampling factor, i.e. take every nth entry of the image arrays
     
     Returns
     -------
@@ -220,8 +218,18 @@ def process_single_fov_single_frame__coarse_only(pos: str, frame: int, t_img: np
         hybridisation round / timepoint, the second representing the name of the field of view, and the rest 
         representing 6 values for coarse and fine drift correction (first three coarse, second three fine).
     """
-    shift = ip.drift_corr_course(t_img=t_img, o_img=o_img, downsample=ds)
-    return [frame, pos] + list(shift) + DUMMY_SHIFT
+    shift = ip.drift_corr_course(t_img=t_img, o_img=o_img, downsample=1)
+    return _create_drift_table_record(pos=pos, frame=frame, coarse_drift=shift, fine_drift=DUMMY_SHIFT)
+
+
+def process_single_fov_single_frame__coarse_and_fine(pos: str, frame: int, t_img: np.ndarray, o_img: np.ndarray, ds: int, calc_fine: Optional[callable]):
+    coarse = ip.drift_corr_course(t_img=t_img, o_img=o_img, downsample=ds)
+    fine = calc_fine() if calc_fine else DUMMY_SHIFT
+    return _create_drift_table_record(pos=pos, frame=frame, coarse_drift=coarse, fine_drift=fine)
+
+
+def _create_drift_table_record(pos: str, frame: int, coarse_drift: Iterable[FloatLike], fine_drift: Iterable[NumberLike]) -> List[Union[str, NumberLike]]:
+    return [frame, pos] + list(coarse_drift) + list(fine_drift)
 
 
 class Drifter():
@@ -255,26 +263,29 @@ class Drifter():
         Settings set in config file.
 
         '''
-        frame_t = self.config['reg_ref_frame']
-        ch_t = self.config['reg_ch_template']
-        ch_o = self.config['reg_ch_moving']
-        ds = self.config['course_drift_downsample']
+        reference_frame = self.config['reg_ref_frame']
+        reference_channel = self.config['reg_ch_template']
+        moving_channel = self.config['reg_ch_moving']
+        downsampling = self.config['course_drift_downsample']
 
         dc_method = self.method_name
 
         if dc_method == Methods.COARSE_NAME:
+            # NB: as in upstream looptrace, we pass downsampling = 1 for the actual call to the 
+            #     coarse drift computation function; we do the downsampling in the determination 
+            #     of the arguments, stepping through the image arrays according to the downsampling factor.
             all_drifts = Parallel(n_jobs=-1, prefer='threads')(
-                delayed(process_single_fov_single_frame__coarse_only)(pos, frame, t_img, o_img, ds) 
+                delayed(process_single_fov_single_frame__coarse_only)(pos, frame, t_img, o_img) 
                     for pos, frame, t_img, o_img in 
                     generate_drift_function_arguments__coarse_drift_only(
                         full_pos_list=self.full_pos_list, 
                         pos_list=self.pos_list, 
                         reference_images=self.images_template, 
-                        reference_frame=frame_t, 
-                        reference_channel=ch_t,
+                        reference_frame=reference_frame, 
+                        reference_channel=reference_channel,
                         moving_images=self.images_moving, 
-                        moving_channel=ch_o, 
-                        downsampling=ds,
+                        moving_channel=moving_channel, 
+                        downsampling=downsampling,
                     )
                 )
         else:
@@ -288,12 +299,12 @@ class Drifter():
             for pos in self.pos_list:
                 i = self.full_pos_list.index(pos)
                 print(f'Running drift correction for position: {pos}')
-                t_img = np.array(self.images_template[i][frame_t, ch_t])
+                t_img = np.array(self.images_template[i][reference_frame, reference_channel])
                 bead_rois = ip.generate_bead_rois(t_img, threshold, min_bead_int, roi_px, n_points)
                 t_bead_imgs =  Parallel(n_jobs=-1, prefer='threads')(delayed(ip.extract_single_bead)(point, t_img) for point in bead_rois)
                 for t in tqdm.tqdm(range(self.images_moving[i].shape[0])):
-                    o_img = np.array(self.images_moving[i][t, ch_o])
-                    drift_course = ip.drift_corr_course(t_img, o_img, downsample=ds)
+                    o_img = np.array(self.images_moving[i][t, moving_channel])
+                    drift_course = ip.drift_corr_course(t_img, o_img, downsample=downsampling)
                     o_bead_imgs = Parallel(n_jobs=-1, prefer='threads')(delayed(ip.extract_single_bead)(point, o_img, drift_course=drift_course) for point in bead_rois)
                     if len(bead_rois) > 0:
                         print("Computing fine drift")
