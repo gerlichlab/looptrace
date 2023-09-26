@@ -8,6 +8,7 @@ EMBL Heidelberg
 """
 
 from enum import Enum
+from functools import partial
 import os
 from typing import *
 
@@ -28,6 +29,8 @@ from looptrace.wrappers import phase_cross_correlation
 
 
 DUMMY_SHIFT = [0, 0, 0]
+
+DriftTableRow = List[Union[str, NumberLike]]
 
 
 def get_method_name(config: Mapping[str, Any]) -> Optional[str]:
@@ -196,7 +199,7 @@ def generate_drift_function_arguments__coarse_drift_only(
         print(f'Finished drift correction for position: {pos}')
 
 
-def process_single_fov_single_frame__coarse_only(pos: str, frame: int, t_img: np.ndarray, o_img: np.ndarray):
+def process_single_fov_single_frame__coarse_only(pos: str, frame: int, t_img: np.ndarray, o_img: np.ndarray) -> DriftTableRow:
     """
     Compute coarse drift for a single (FOV, frame) combination, passing through those values and addind dummy values for fine DC.
 
@@ -213,7 +216,7 @@ def process_single_fov_single_frame__coarse_only(pos: str, frame: int, t_img: np
     
     Returns
     -------
-    List[Union[int, str, FloatLike]]
+    DriftTableRow
         A list which will become a row/record in a data frame, with first value representing the index of the 
         hybridisation round / timepoint, the second representing the name of the field of view, and the rest 
         representing 6 values for coarse and fine drift correction (first three coarse, second three fine).
@@ -222,13 +225,53 @@ def process_single_fov_single_frame__coarse_only(pos: str, frame: int, t_img: np
     return _create_drift_table_record(pos=pos, frame=frame, coarse_drift=shift, fine_drift=DUMMY_SHIFT)
 
 
-def process_single_fov_single_frame__coarse_and_fine(pos: str, frame: int, t_img: np.ndarray, o_img: np.ndarray, ds: int, calc_fine: Optional[callable]):
+def generate_drift_function_arguments__coarse_and_fine(
+    full_pos_list: List[str], 
+    pos_list: Iterable[str], 
+    reference_images: List[np.ndarray], 
+    reference_frame: int, 
+    reference_channel: int, 
+    moving_images: List[np.ndarray], 
+    moving_channel: int, 
+    get_bead_rois: Callable[[np.ndarray], Iterable[Iterable[int]]], 
+    get_ref_bead_img: Callable[[Iterable[int], np.ndarray], np.ndarray],
+    ) -> Iterable[Tuple[str, int, np.ndarray, np.ndarray]]:
+    for pos in pos_list:
+        i = full_pos_list.index(pos)
+        print(f'Running drift correction for position: {pos}')
+        t_img = np.array(reference_images[i][reference_frame, reference_channel])
+        bead_rois = get_bead_rois(t_img)
+        t_bead_imgs = [get_ref_bead_img(point, t_img) for point in bead_rois]
+        for t in tqdm.tqdm(range(moving_images[i].shape[0])):
+            o_img = np.array(moving_images[i][t, moving_channel])
+            yield pos, t, t_img, o_img, bead_rois, t_bead_imgs
+
+
+def process_single_fov_single_frame__coarse_and_fine(
+        pos: str, 
+        frame: int, 
+        t_img: np.ndarray, 
+        o_img: np.ndarray, 
+        bead_rois: Iterable[np.ndarray], 
+        t_bead_imgs: Iterable[np.ndarray], 
+        ds: int, 
+        corr_func: callable,
+        get_args: callable,
+        ) -> DriftTableRow:
     coarse = ip.drift_corr_course(t_img=t_img, o_img=o_img, downsample=ds)
-    fine = calc_fine() if calc_fine else DUMMY_SHIFT
+    o_bead_imgs = Parallel(n_jobs=-1, prefer='threads')(delayed(ip.extract_single_bead)(point, o_img, drift_course=coarse) for point in bead_rois)
+    if len(bead_rois) > 0:
+        print("Computing fine drift")
+        fine = Parallel(n_jobs=-1, prefer='threads')(delayed(corr_func)(*get_args(img_pair)) for img_pair in zip(t_bead_imgs, o_bead_imgs))
+        fine = np.array(fine)
+        fine = trim_mean(fine, proportiontocut=0.2, axis=0)
+    else:
+        print("No bead ROIs, setting fine drift to all-0s")
+        fine = DUMMY_SHIFT
     return _create_drift_table_record(pos=pos, frame=frame, coarse_drift=coarse, fine_drift=fine)
 
 
-def _create_drift_table_record(pos: str, frame: int, coarse_drift: Iterable[FloatLike], fine_drift: Iterable[NumberLike]) -> List[Union[str, NumberLike]]:
+def _create_drift_table_record(pos: str, frame: int, coarse_drift: Iterable[FloatLike], fine_drift: Iterable[NumberLike]) -> DriftTableRow:
     return [frame, pos] + list(coarse_drift) + list(fine_drift)
 
 
@@ -290,36 +333,30 @@ class Drifter():
                 )
         else:
             corr_func, get_args = Methods.get_func_and_args_getter(dc_method)
-            threshold = self.config['bead_threshold']
-            min_bead_int = self.config['min_bead_intensity']
-            n_points= self.config['bead_points']
-            roi_px = self.bead_roi_px
+            get_bead_rois = partial(
+                ip.generate_bead_rois, 
+                threshold=self.config['bead_threshold'], 
+                min_bead_int=self.config['min_bead_intensity'], 
+                bead_roi_px=self.bead_roi_px, 
+                n_points=self.config['bead_points'],
+                )
+            get_ref_bead_img = partial(ip.extract_single_bead, bead_roi_px=self.bead_roi_px)
             # Run drift correction for each position and save results in table.
-            all_drifts = []
-            for pos in self.pos_list:
-                i = self.full_pos_list.index(pos)
-                print(f'Running drift correction for position: {pos}')
-                t_img = np.array(self.images_template[i][reference_frame, reference_channel])
-                bead_rois = ip.generate_bead_rois(t_img, threshold, min_bead_int, roi_px, n_points)
-                t_bead_imgs =  Parallel(n_jobs=-1, prefer='threads')(delayed(ip.extract_single_bead)(point, t_img) for point in bead_rois)
-                for t in tqdm.tqdm(range(self.images_moving[i].shape[0])):
-                    o_img = np.array(self.images_moving[i][t, moving_channel])
-                    drift_course = ip.drift_corr_course(t_img, o_img, downsample=downsampling)
-                    o_bead_imgs = Parallel(n_jobs=-1, prefer='threads')(delayed(ip.extract_single_bead)(point, o_img, drift_course=drift_course) for point in bead_rois)
-                    if len(bead_rois) > 0:
-                        print("Computing fine drift")
-                        drift_fine = Parallel(n_jobs=-1, prefer='threads')(delayed(corr_func)(*get_args(img_pair)) for img_pair in zip(t_bead_imgs, o_bead_imgs))
-                        drift_fine = np.array(drift_fine)
-                        drift_fine = trim_mean(drift_fine, proportiontocut=0.2, axis=0)
-                    else:
-                        print("No bead ROIs, setting fine drift to all-0s")
-                        drift_fine = np.zeros_like(drift_course)
-
-                    drifts = [t,pos] + list(drift_course) + list(drift_fine)
-                    all_drifts.append(drifts) 
-
-                print(f'Finished drift correction for position: {pos}')
-                    
+            all_drifts = Parallel(n_jobs=-1, prefer='threads')(
+                delayed(process_single_fov_single_frame__coarse_and_fine)(pos, t, t_img, o_img, bead_rois, t_bead_imgs, downsampling, corr_func, get_args)
+                    for pos, t, t_img, o_img, bead_rois, t_bead_imgs in
+                    generate_drift_function_arguments__coarse_and_fine(
+                        full_pos_list=self.full_pos_list,
+                        pos_list=self.pos_list, 
+                        reference_images=self.images_template, 
+                        reference_frame=reference_frame, 
+                        reference_channel=reference_channel,
+                        moving_images=self.images_moving, 
+                        moving_channel=moving_channel, 
+                        get_bead_rois=get_bead_rois,
+                        get_ref_bead_img=get_ref_bead_img,
+                    )
+                )                    
         
         all_drifts=pd.DataFrame(all_drifts, columns=['frame',
                                                     'position',
