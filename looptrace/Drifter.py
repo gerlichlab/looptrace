@@ -18,13 +18,12 @@ from dask.delayed import delayed
 from joblib import Parallel, delayed
 from scipy import ndimage as ndi
 from scipy.stats import trim_mean
-from skimage.measure import regionprops_table
-from skimage.registration import phase_cross_correlation
 import tqdm
 
 from looptrace import image_processing_functions as ip
 from looptrace import image_io
 from looptrace.gaussfit import fitSymmetricGaussian3D
+from looptrace.wrappers import phase_cross_correlation
 
 
 def get_method_name(config: Mapping[str, Any]) -> Optional[str]:
@@ -72,7 +71,7 @@ def correlate_single_bead(t_bead, o_bead, upsampling):
     -------
     """
     try:
-        shift = phase_cross_correlation(t_bead, o_bead, upsample_factor=upsampling, return_error=False)
+        shift, _, _ = phase_cross_correlation(t_bead, o_bead, upsample_factor=upsampling)
     except (ValueError, AttributeError):
         shift = np.array([0,0,0])
     return shift
