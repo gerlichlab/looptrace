@@ -20,7 +20,6 @@ import numpy as np
 import pandas as pd
 from scipy import ndimage as ndi
 from skimage.exposure import match_histograms
-from skimage.registration import phase_cross_correlation
 from skimage.measure import regionprops_table
 from skimage.filters import threshold_otsu
 import tifffile as tiff
@@ -28,6 +27,7 @@ import yaml
 
 from looptrace import comparison_functions as comp
 from looptrace import image_processing_functions as ip
+from looptrace.wrappers import phase_cross_correlation
 
 
 class Compare:
