@@ -23,6 +23,7 @@ import tqdm
 from looptrace import image_processing_functions as ip
 from looptrace import image_io
 from looptrace.gaussfit import fitSymmetricGaussian3D
+from looptrace.numeric_types import FloatLike
 from looptrace.wrappers import phase_cross_correlation
 
 
@@ -121,7 +122,29 @@ def fit_shift_single_bead(t_bead, o_bead, strict: bool = False):
     return shift
 
 
+def generate_coarse_and_fine_drifts(full_pos_list, pos_list, reference_images, reference_frame, reference_channel, moving_images, moving_channel, downsampling):
+    for pos in pos_list:
+        print(f'Running only course drift correction for position: {pos}.')
+        i = full_pos_list.index(pos)
+        t_img = np.array(reference_images[i][reference_frame, reference_channel, ::downsampling, ::downsampling, ::downsampling])
+        for t in tqdm.tqdm(range(moving_images[i].shape[0])):
+            o_img = np.array(moving_images[i][t, moving_channel, ::downsampling, ::downsampling, ::downsampling])
+            drift_course = ip.drift_corr_course(t_img, o_img, downsample=downsampling)
+            yield drift_course, [0,0,0]
 
+
+def generate_coarse_and_fine_drifts(bead_rois, t_img, corr_func: callable) -> Iterable[Tuple[Iterable[FloatLike], Iterable[FloatLike]]]:
+    if len(bead_rois) > 0:
+        def calc_drift_fine(drift_coarse):
+            print("No bead ROIs, setting fine drift to all-0s")
+            return np.zeros_like(drift_coarse)
+    else:
+        def calc_drift_fine(drift_coarse):
+            print("Computing fine drift")
+            drift_fine = Parallel(n_jobs=-1, prefer='threads')(delayed(corr_func)(*get_args(img_pair)) for img_pair in zip(t_bead_imgs, o_bead_imgs))
+            drift_fine = np.array(drift_fine)
+            drift_fine = trim_mean(drift_fine, proportiontocut=0.2, axis=0)
+    
 
 
 class Drifter():
