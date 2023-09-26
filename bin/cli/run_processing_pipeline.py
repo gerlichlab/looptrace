@@ -45,6 +45,8 @@ class LooptracePipeline(pypiper.Pipeline):
             ("deconvolution", run_deconvolution, conf_data_pair), 
             ("nuclei_detection", run_nuclei_detection, conf_data_pair), 
             ("drift_correction", run_drift_correction, conf_data_pair), 
+            ("drift_correction_accuracy_analysis", run_drift_correction_analysis, conf_data_pair), 
+            ("drift_correction_accuracy_visualisation", run_drift_correction_accuracy_visualisation, conf_only), 
             ("spot_detection", run_spot_detection, conf_data_pair), # generates *_rois.csv (regional spots)
             ("spot_filtration", run_spot_filtration, conf_data_pair), 
             ("clean_1", run_cleanup, conf_only),
@@ -55,8 +57,6 @@ class LooptracePipeline(pypiper.Pipeline):
             ("tracing", run_chromatin_tracing, conf_data_pair),
             ("tracing_QC", run_tracing_qc, conf_data_pair), 
             ("clean_3", run_cleanup, conf_only),
-            ("drift_correction_accuracy_analysis", run_drift_correction_analysis, conf_data_pair), 
-            ("drift_correction_accuracy_visualisation", run_drift_correction_accuracy_visualisation, conf_only), 
             
         )
         return [pypiper.Stage(func=fxn, f_args=fxn_args, name=name) for name, fxn, fxn_args in func_args_pairs]
