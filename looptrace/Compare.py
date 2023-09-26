@@ -14,19 +14,20 @@ Usage:
 """
 
 import os
+
+import dask.array as da
 import numpy as np
 import pandas as pd
-import yaml
-from looptrace import comparison_functions as comp
-from looptrace import image_processing_functions as ip
 from scipy import ndimage as ndi
 from skimage.exposure import match_histograms
 from skimage.registration import phase_cross_correlation
 from skimage.measure import regionprops_table
 from skimage.filters import threshold_otsu
 import tifffile as tiff
-import dask.array as da
+import yaml
 
+from looptrace import comparison_functions as comp
+from looptrace import image_processing_functions as ip
 
 
 class Compare:
@@ -58,21 +59,25 @@ class Compare:
         input1=config['comp_folder_1']
         input2=config['comp_folder_2']
         
-        images1, pos1 = ip.images_to_dask(input1,template1)
-        images2, pos2 = ip.images_to_dask(input2,template2)
+        images1, _ = ip.images_to_dask(input1,template1)
+        images2, _ = ip.images_to_dask(input2,template2)
         images = da.concatenate([images1, images2], axis=1)
         return images
 
-    def drift_correction(self, ds=2):
-        '''
-        Global 3D drift correction of images to compare.
+    def drift_correction(self, ds: int = 2) -> np.ndarray:
+        """
+        Global 3D drift correction of images to compare
 
-        Args:
-            ds (int, optional): Downsampling for drift correction. Defaults to 2.
+        Parameters
+        ----------
+        ds : int, optional
+            Downsampling for drift correction, defaulting to 2
 
-        Returns:
-            [List]: List of global drifts per position found for comparison.
-        '''
+        Returns
+        -------
+        list of np.ndarray
+            List of global drifts per position found for comparison.
+        """
 
         dc_ch = self.config['drift_correction_channel']
         drifts = []
@@ -82,7 +87,7 @@ class Compare:
             print('Loaded image 1')
             img2 = self.images[pos, 1, dc_ch, ::ds, ::ds, ::ds].compute()
             print('Loaded image 2')
-            drift = np.array(phase_cross_correlation(img1, img2, return_error=False))*ds
+            drift, _, _ = np.array(phase_cross_correlation(img1, img2)) * ds
             print(f'Found drift {drift}.')
             drifts.append(drift)
         self.drifts = drifts
@@ -183,7 +188,7 @@ class Compare:
                 bbox.loc[i, 'zmid_o'] = zmid_o
 
                 #Calculate residual fine-scale drift:
-                new_drift = phase_cross_correlation(nuc_img_t, nuc_img_o, upsample_factor=2, return_error=False)
+                new_drift, _, _ = phase_cross_correlation(nuc_img_t, nuc_img_o, upsample_factor=2)
                 bbox.loc[i, 'y_f'] = new_drift[0]
                 bbox.loc[i, 'x_f'] = new_drift[1]
                 nuc_img_o = ndi.shift(nuc_img_o, new_drift)
@@ -260,7 +265,7 @@ class Compare:
                                                                                  'ty':[0,5]})['timg']
                 except IndexError:
                     continue
-                new_drift = phase_cross_correlation(rd_img_t, rd_img_o, upsample_factor=4, return_error=False)
+                new_drift, _, _ = phase_cross_correlation(rd_img_t, rd_img_o, upsample_factor=4)
                 
                 #Shift and normalize images for equal comparison
                 rd_img_o = ndi.shift(rd_img_o, new_drift)
@@ -387,7 +392,7 @@ class Compare:
                                                                                  'ty':[0,5]})['timg']
             except IndexError:
                 continue
-            new_drift = phase_cross_correlation(nuc_img_t, nuc_img_o, upsample_factor=4, return_error=False)
+            new_drift, _, _ = phase_cross_correlation(nuc_img_t, nuc_img_o, upsample_factor=4)
             nuc_img_o = ndi.shift(nuc_img_o,new_drift)
             nuc_img_o = match_histograms(nuc_img_o, nuc_img_t)
 
@@ -407,7 +412,7 @@ class Compare:
                                                                 'ty':[0,5]})['timg']
             except IndexError:
                 continue
-            new_drift = phase_cross_correlation(rd_img_t, rd_img_o, upsample_factor=4, return_error=False)
+            new_drift, _, _ = phase_cross_correlation(rd_img_t, rd_img_o, upsample_factor=4)
             rd_img_o = ndi.shift(rd_img_o,new_drift)
             rd_img_o = match_histograms(rd_img_o, rd_img_t)
 
