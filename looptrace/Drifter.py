@@ -196,7 +196,7 @@ def generate_drift_function_arguments__coarse_drift_only(
         print(f'Finished drift correction for position: {pos}')
 
 
-def process_single_fov_single_frame_coarse_only(pos: str, frame: int, t_img: np.ndarray, o_img: np.ndarray, ds: int):
+def process_single_fov_single_frame__coarse_only(pos: str, frame: int, t_img: np.ndarray, o_img: np.ndarray, ds: int):
     """
     Compute coarse drift for a single (FOV, frame) combination, passing through those values and addind dummy values for fine DC.
 
@@ -264,7 +264,7 @@ class Drifter():
 
         if dc_method == Methods.COARSE_NAME:
             all_drifts = Parallel(n_jobs=-1, prefer='threads')(
-                delayed(process_single_fov_single_frame_coarse_only)(pos, frame, t_img, o_img, ds) 
+                delayed(process_single_fov_single_frame__coarse_only)(pos, frame, t_img, o_img, ds) 
                     for pos, frame, t_img, o_img in 
                     generate_drift_function_arguments__coarse_drift_only(
                         full_pos_list=self.full_pos_list, 
