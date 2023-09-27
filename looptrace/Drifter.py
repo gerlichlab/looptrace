@@ -298,7 +298,7 @@ class Drifter():
 
     @property
     def method_name(self):
-        get_method_name(self.config) or Methods.CROSS_CORRELATION_NAME
+        get_method_name(self.config) or Methods.CROSS_CORRELATION_NAME.value
 
     def drift_corr(self) -> Optional[str]:
         '''
@@ -313,7 +313,7 @@ class Drifter():
 
         dc_method = self.method_name
 
-        if dc_method == Methods.COARSE_NAME:
+        if dc_method == Methods.COARSE_NAME.value:
             # NB: as in upstream looptrace, we pass downsampling = 1 for the actual call to the 
             #     coarse drift computation function; we do the downsampling in the determination 
             #     of the arguments, stepping through the image arrays according to the downsampling factor.
