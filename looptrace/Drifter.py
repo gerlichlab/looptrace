@@ -9,6 +9,7 @@ EMBL Heidelberg
 
 from enum import Enum
 from functools import partial
+import multiprocessing as mp
 import os
 from typing import *
 
@@ -343,21 +344,43 @@ class Drifter():
                 )
             get_ref_bead_img = partial(ip.extract_single_bead, bead_roi_px=self.bead_roi_px)
             # Run drift correction for each position and save results in table.
-            all_drifts = Parallel(n_jobs=-1, prefer='threads')(
-                delayed(process_single_fov_single_frame__coarse_and_fine)(pos, t, t_img, o_img, bead_rois, t_bead_imgs, downsampling, corr_func, get_args)
-                    for pos, t, t_img, o_img, bead_rois, t_bead_imgs in
-                    generate_drift_function_arguments__coarse_and_fine(
-                        full_pos_list=self.full_pos_list,
-                        pos_list=self.pos_list, 
-                        reference_images=self.images_template, 
-                        reference_frame=reference_frame, 
-                        reference_channel=reference_channel,
-                        moving_images=self.images_moving, 
-                        moving_channel=moving_channel, 
-                        get_bead_rois=get_bead_rois,
-                        get_ref_bead_img=get_ref_bead_img,
+            if self.config.get("joblib_for_drift_correction", True):
+                print("Using joblib-backed parallelism for drift correction")
+                all_drifts = Parallel(n_jobs=-1, prefer='threads')(
+                    delayed(process_single_fov_single_frame__coarse_and_fine)(pos, t, t_img, o_img, bead_rois, t_bead_imgs, downsampling, corr_func, get_args)
+                        for pos, t, t_img, o_img, bead_rois, t_bead_imgs in
+                        generate_drift_function_arguments__coarse_and_fine(
+                            full_pos_list=self.full_pos_list,
+                            pos_list=self.pos_list, 
+                            reference_images=self.images_template, 
+                            reference_frame=reference_frame, 
+                            reference_channel=reference_channel,
+                            moving_images=self.images_moving, 
+                            moving_channel=moving_channel, 
+                            get_bead_rois=get_bead_rois,
+                            get_ref_bead_img=get_ref_bead_img,
+                        )
                     )
-                )                    
+            else:
+                num_cpu = self.config.get("cpu_for_drift_correction", mp.cpu_count())
+                print(f"Using multiprocessing-backed parallelism for drift correction, with CPU count: {num_cpu}")
+                with mp.get_context("spawn").Pool(num_cpu) as workers:
+                    all_drifts = workers.starmap(
+                        process_single_fov_single_frame__coarse_and_fine, 
+                        ((pos, t, t_img, o_img, bead_rois, t_bead_imgs, downsampling, corr_func, get_args)
+                        for pos, t, t_img, o_img, bead_rois, t_bead_imgs in
+                        generate_drift_function_arguments__coarse_and_fine(
+                            full_pos_list=self.full_pos_list,
+                            pos_list=self.pos_list, 
+                            reference_images=self.images_template, 
+                            reference_frame=reference_frame, 
+                            reference_channel=reference_channel,
+                            moving_images=self.images_moving, 
+                            moving_channel=moving_channel, 
+                            get_bead_rois=get_bead_rois,
+                            get_ref_bead_img=get_ref_bead_img,
+                        ))
+                    )
         
         all_drifts=pd.DataFrame(all_drifts, columns=['frame',
                                                     'position',
