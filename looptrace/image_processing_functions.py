@@ -380,19 +380,39 @@ def generate_bead_rois(t_img, threshold, min_bead_int, bead_roi_px=16, n_points=
     return np.round(t_img_maxima[centroid_columns].to_numpy()).astype(int)
 
 
-def extract_single_bead(point, img, bead_roi_px=16, drift_course=None):
-    #Exctract a cropped region of a single fiducial in an image, optionally including a pre-calucalated course drift to shift the cropped region.
-    roi_px = bead_roi_px//2
-    if drift_course is not None:
-        s = tuple([slice(ind-int(shift)-roi_px, ind-int(shift)+roi_px) for (ind, shift) in zip(point, drift_course)])
-    else:
-        s = tuple([slice(ind-roi_px, ind+roi_px) for ind in point])
-    bead = img[s]
+def extract_single_bead(
+        point: Union[np.ndarray, Iterable[int]], 
+        img: np.ndarray, 
+        bead_roi_px: int = 16, 
+        drift_course: Union[None, np.ndarray, Iterable[int]] = None
+        ) -> np.ndarray:
+    """
+    Extract a cropped region of a single fiducial in an image, optionally including a pre-calucalated course drift to shift the cropped region.
 
-    if bead.shape != (2*roi_px, 2*roi_px, 2*roi_px):
-        return np.zeros((2*roi_px, 2*roi_px, 2*roi_px))
-    else:
-        return bead
+    Parameters
+    ----------
+    point : np.ndarray or Iterable of int
+        Coordinates representing the center of a detected bead
+    img : np.ndarray
+        An array of values representing an image in which a fiducial bead is detected
+    bead_roi_px : int
+        The number of pixels for the side length of the bead ROI
+    drift_course : None or np.ndarray or Iterable of int
+        The coarse-grained drift correction already computed
+
+    Returns
+    -------
+    np.ndarray
+        A numpy array representing the subspace of the given image corresponding to the bead ROI
+    """
+    roi_px = bead_roi_px // 2
+    coords = point if drift_course is None else (x - int(dx) for x, dx in zip(point, drift_course))
+    s = tuple([slice(p - roi_px, p + roi_px) for p in coords])
+    bead = img[s]
+    side_length = 2 * roi_px
+    output_shape = (side_length, side_length, side_length)
+    # TODO: consider, for provenance, logging a message here, that the bead shape was not as expected, and all-0s is used.
+    return np.zeros(output_shape) if bead.shape != output_shape else bead
         
 def drift_corr_course(t_img, o_img, downsample=1):
     '''
