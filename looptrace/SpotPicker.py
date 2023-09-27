@@ -382,7 +382,8 @@ class SpotPicker:
             pos = roi['position']
             pos_index = self.image_handler.image_lists[self.input_name].index(pos)#positions.index(pos)
             dc_pos_name = self.image_handler.image_lists[self.config['reg_input_moving']][pos_index] # not unused; used for table query
-            sel_dc = self.image_handler.tables[self.input_name + '_drift_correction'].query('position == @dc_pos_name')
+            #sel_dc = self.image_handler.tables[self.input_name + '_drift_correction'].query('position == @dc_pos_name')
+            sel_dc = self.image_handler.tables[self.input_name + '_drift_correction_fine'].query('position == @dc_pos_name')
             ref_frame = roi['frame']
             ch = roi['ch']
             ref_offset = sel_dc.query('frame == @ref_frame')

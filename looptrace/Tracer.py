@@ -48,7 +48,7 @@ class Tracer:
         self.image_handler = image_handler
         self.config_path = image_handler.config_path
         self.config = image_handler.config
-        self.drift_table = image_handler.tables[image_handler.spot_input_name + '_drift_correction']
+        self.drift_table = image_handler.tables[image_handler.spot_input_name + '_drift_correction_fine']
         self.images = self.image_handler.images[self.config['trace_input_name']]
         self.pos_list = self.image_handler.image_lists[image_handler.spot_input_name]
         if trace_beads:

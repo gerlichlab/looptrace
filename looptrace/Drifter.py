@@ -457,8 +457,8 @@ class Drifter():
         else:
             get_file_path = lambda ext: self.image_handler.out_path(self.image_handler.reg_input_moving + '_drift_correction' + ext)
             self.dc_file_path = get_file_path(".csv")
-            self.dc_file_path__coarse = get_file_path(".coarse.csv")
-            self.dc_file_path__fine = get_file_path(".fine.csv")
+            self.dc_file_path__coarse = get_file_path("_coarse.csv")
+            self.dc_file_path__fine = get_file_path("_fine.csv")
 
     @property
     def bead_roi_px(self) -> int:
