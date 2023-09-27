@@ -398,7 +398,7 @@ def fine_correction_workflow(config_file: ExtantFile, images_folder: ExtantFolde
     return outfile
 
 
-def generate_drift_function_arguments__fine_drift_only(drifter: Drifter) -> Iterable[Tuple[np.ndarray, np.ndarray, Union[Iterable[int], np.ndarray], Union[Iterable[int], np.ndarray]]]:
+def generate_drift_function_arguments__fine_drift_only(drifter: "Drifter") -> Iterable[Tuple[np.ndarray, np.ndarray, Union[Iterable[int], np.ndarray], Union[Iterable[int], np.ndarray]]]:
     coarse_table_file = drifter.dc_file_path__coarse
     print(f"Reading coarse drift table: {coarse_table_file}")
     coarse_table = pd.read_csv(coarse_table_file, index_col=0)
