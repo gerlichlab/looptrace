@@ -131,7 +131,7 @@ def subtract_point_fits(ref_fit: np.ndarray, mov_fit: np.ndarray) -> np.ndarray:
     return diff
 
 
-def fit_shift_single_bead(t_bead : np.ndarray, o_bead: np.ndarray):
+def fit_shift_single_bead(t_bead: np.ndarray, o_bead: np.ndarray):
     """
     Fit the center of two beads using 3D gaussian fit, and fit the shift between the centers.
 
@@ -351,7 +351,7 @@ def compute_fine_drifts__with_ref_img_gain(drifter: "Drifter"):
                 print("Computing reference bead fits")
                 ref_bead_fits = Parallel(n_jobs=-1, prefer='threads')(
                     delayed(lambda pt: fit_bead_coordinates(ip.extract_single_bead(pt, ref_img, bead_roi_px=roi_px)))(pt)
-                    for pt in iter(bead_rois)
+                    for pt in tqdm.tqdm(bead_rois)
                     )
                 print("Iterating over frames/timepoints/hybridisations")
                 for _, row in position_group.iterrows():
@@ -363,7 +363,7 @@ def compute_fine_drifts__with_ref_img_gain(drifter: "Drifter"):
                     print(f"Computing fine drifts: ({position}, {frame})")
                     fine_drifts = Parallel(n_jobs=-1, prefer='threads')(
                         delayed(lambda pt: subtract_point_fits(ref_fit, fit_bead_coordinates(ip.extract_single_bead(pt, mov_img, bead_roi_px=roi_px, drift_course=coarse))))(pt)
-                        for pt, ref_fit in zip(bead_rois, ref_bead_fits)
+                        for pt, ref_fit in tqdm.tqdm(zip(bead_rois, ref_bead_fits))
                         )
                     yield (position, frame) + coarse + finalise_fine_drift(fine_drifts)
             elif drifter.method_name == Methods.CROSS_CORRELATION_NAME.value:
@@ -379,7 +379,7 @@ def compute_fine_drifts__with_ref_img_gain(drifter: "Drifter"):
                     print(f"Computing fine drifts: ({position}, {frame})")
                     fine_drifts = Parallel(n_jobs=-1, prefer='threads')(
                         delayed(lambda point, ref_bead_img: correlate_single_bead(ref_bead_img, ip.extract_single_bead(point, mov_img, bead_roi_px=roi_px, drift_course=coarse), 100))(*args)
-                        for args in zip(bead_rois, ref_bead_images)
+                        for args in tqdm.tqdm(zip(bead_rois, ref_bead_images))
                         )
                     yield (position, frame) + coarse + finalise_fine_drift(fine_drifts)
             else:
