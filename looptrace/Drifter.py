@@ -125,9 +125,10 @@ def fit_bead_coordinates(bead_img: np.ndarray) -> Iterable[FloatLike]:
 
 def subtract_point_fits(ref_fit: np.ndarray, mov_fit: np.ndarray) -> np.ndarray:
     try:
-        ref_fit - mov_fit
+        diff = ref_fit - mov_fit
     except TypeError: # One or both of the fits is null.
-        return np.array(DUMMY_SHIFT)
+        diff = np.array(DUMMY_SHIFT)
+    return diff
 
 
 def fit_shift_single_bead(t_bead : np.ndarray, o_bead: np.ndarray):
@@ -360,11 +361,11 @@ def compute_fine_drifts__with_ref_img_gain(drifter: "Drifter"):
                     coarse = tuple(row[COARSE_DRIFT_COLUMNS])
                     mov_img = drifter.get_moving_image(pos_idx=pos_idx, frame_idx=frame)
                     print(f"Computing fine drifts: ({position}, {frame})")
-                    fine = Parallel(n_jobs=-1, prefer='threads')(
-                        delayed(lambda pt: finalise_fine_drift(subtract_point_fits(ref_fit, fit_bead_coordinates(ip.extract_single_bead(pt, mov_img, bead_roi_px=roi_px, drift_course=coarse)))))(pt)
+                    fine_drifts = Parallel(n_jobs=-1, prefer='threads')(
+                        delayed(lambda pt: subtract_point_fits(ref_fit, fit_bead_coordinates(ip.extract_single_bead(pt, mov_img, bead_roi_px=roi_px, drift_course=coarse))))(pt)
                         for pt, ref_fit in zip(bead_rois, ref_bead_fits)
                         )
-                    yield (position, frame) + coarse + fine
+                    yield (position, frame) + coarse + finalise_fine_drift(fine_drifts)
             elif drifter.method_name == Methods.CROSS_CORRELATION_NAME.value:
                 print("Extracting reference bead images")
                 ref_bead_images = [ip.extract_single_bead(point, ref_img, bead_roi_px=roi_px) for point in bead_rois]
@@ -376,16 +377,16 @@ def compute_fine_drifts__with_ref_img_gain(drifter: "Drifter"):
                     coarse = tuple(row[COARSE_DRIFT_COLUMNS])
                     mov_img = drifter.get_moving_image(pos_idx=pos_idx, frame_idx=frame)
                     print(f"Computing fine drifts: ({position}, {frame})")
-                    fine = Parallel(n_jobs=-1, prefer='threads')(
-                        delayed(lambda point, ref_bead_img: finalise_fine_drift(correlate_single_bead(ref_bead_img, ip.extract_single_bead(point, mov_img, bead_roi_px=roi_px, drift_course=coarse), 100)))(*args)
+                    fine_drifts = Parallel(n_jobs=-1, prefer='threads')(
+                        delayed(lambda point, ref_bead_img: correlate_single_bead(ref_bead_img, ip.extract_single_bead(point, mov_img, bead_roi_px=roi_px, drift_course=coarse), 100))(*args)
                         for args in zip(bead_rois, ref_bead_images)
                         )
-                    yield (position, frame) + coarse + fine
+                    yield (position, frame) + coarse + finalise_fine_drift(fine_drifts)
             else:
                 raise Exception(f"Unknown drift correction method: {drifter.method_name}")
 
 
-def finalise_fine_drift(drift: Iterable[FloatLike]) -> Tuple[FloatLike, FloatLike, FloatLike]:
+def finalise_fine_drift(drift: Iterable[np.ndarray]) -> Tuple[FloatLike, FloatLike, FloatLike]:
     return tuple(trim_mean(np.array(drift), proportiontocut=0.2, axis=0))
 
 
