@@ -30,7 +30,7 @@ from looptrace import image_processing_functions as ip
 from looptrace import image_io
 from looptrace.ImageHandler import ImageHandler
 from looptrace.gaussfit import fitSymmetricGaussian3D
-from looptrace.numeric_types import NumberLike
+from looptrace.numeric_types import FloatLike, NumberLike
 from looptrace.wrappers import phase_cross_correlation
 
 
@@ -115,7 +115,22 @@ def correlate_single_bead(t_bead, o_bead, upsampling):
     return shift
 
 
-def fit_shift_single_bead(t_bead, o_bead, strict: bool = False):
+def fit_bead_coordinates(bead_img: np.ndarray) -> Iterable[FloatLike]:
+    try:
+        return np.array(fitSymmetricGaussian3D(bead_img, sigma=1, center=None)[0])[2:5]
+    except (AttributeError, ValueError) as e: # TODO: when can this happen? -- narrow exceptions / provide better insight.
+        print("Error finding shift between beads: {e}")
+        return None
+
+
+def subtract_point_fits(ref_fit: np.ndarray, mov_fit: np.ndarray) -> np.ndarray:
+    try:
+        ref_fit - mov_fit
+    except TypeError: # One or both of the fits is null.
+        return np.array(DUMMY_SHIFT)
+
+
+def fit_shift_single_bead(t_bead : np.ndarray, o_bead: np.ndarray):
     """
     Fit the center of two beads using 3D gaussian fit, and fit the shift between the centers.
 
@@ -125,38 +140,16 @@ def fit_shift_single_bead(t_bead, o_bead, strict: bool = False):
         3D array (z, y, x) of pixel intensities for one bead image; "reference_image" in scikit-image terms
     o_bead : np.ndarray
         3D array (z, y, x) of pixel intensities for other bead image; "moving_image" in scikit-image terms
-    strict : bool, default False
-        Whether the function must succeed; if an error occurs, throw it if this is True, 
-        but if it's False, just print the error and return all-0s for the shift.
 
     Returns
     -------
     np.ndarray
         1D array with 3 values, representing the shift (in pixels) necessary to align (as 
         much as possible) the centers of the Gaussian distributions fit to each of the bead images
-    
-    Raises
-    ------
-    AttributeError or ValueError
-        If something goes wrong with fitting the beads or taking the fits' coordinates' difference, 
-        and strict = True
     """
-    try:
-        t_fit = np.array(fitSymmetricGaussian3D(t_bead, sigma=1, center=None)[0])
-        o_fit = np.array(fitSymmetricGaussian3D(o_bead, sigma=1, center=None)[0])
-        shift = t_fit[2:5] - o_fit[2:5]
-    except (ValueError, AttributeError) as e: # TODO: when can this happen? -- narrow exceptions / provide better insight.
-        if strict:
-            print("Error finding shift between beads!")
-            print(f"Bead 1 (below):")
-            print(t_bead)
-            print(f"Bead 2 (below):")
-            print(o_bead)
-            raise
-        else:
-            print(f"Error: {e}")
-            shift = np.array(DUMMY_SHIFT)
-    return shift
+    t_fit = fit_bead_coordinates(t_bead)
+    o_fit = fit_bead_coordinates(o_bead)
+    return subtract_point_fits(ref_fit=t_fit, mov_fit=o_fit)
 
 
 class ArrayLikeLengthMismatchError(Exception):
@@ -239,56 +232,6 @@ def process_single_fov_single_frame__coarse_only(pos: str, frame: int, t_img: np
     return (frame, pos) + tuple(shift)
 
 
-def generate_drift_function_arguments__coarse_and_fine(
-    full_pos_list: List[str], 
-    pos_list: Iterable[str], 
-    reference_images: List[np.ndarray], 
-    reference_frame: int, 
-    reference_channel: int, 
-    moving_images: List[np.ndarray], 
-    moving_channel: int, 
-    get_bead_rois: Callable[[np.ndarray], Iterable[Iterable[int]]], 
-    get_ref_bead_img: Callable[[Iterable[int], np.ndarray], np.ndarray],
-    ) -> Iterable[Tuple[str, int, np.ndarray, np.ndarray]]:
-    for pos in pos_list:
-        i = full_pos_list.index(pos)
-        print(f'Running drift correction for position: {pos}')
-        t_img = np.array(reference_images[i][reference_frame, reference_channel])
-        bead_rois = get_bead_rois(t_img)
-        t_bead_imgs = [get_ref_bead_img(point, t_img) for point in bead_rois]
-        for t in tqdm.tqdm(range(moving_images[i].shape[0])):
-            o_img = np.array(moving_images[i][t, moving_channel])
-            yield pos, t, t_img, o_img, bead_rois, t_bead_imgs
-
-
-def process_single_fov_single_frame__coarse_and_fine(
-        pos: str, 
-        frame: int, 
-        t_img: np.ndarray, 
-        o_img: np.ndarray, 
-        bead_rois: Iterable[np.ndarray], 
-        t_bead_imgs: Iterable[np.ndarray], 
-        ds: int, 
-        corr_func: callable,
-        get_args: callable,
-        ) -> FullDriftTableRow:
-    coarse = ip.drift_corr_course(t_img=t_img, o_img=o_img, downsample=ds)
-    o_bead_imgs = Parallel(n_jobs=-1, prefer='threads')(delayed(ip.extract_single_bead)(point, o_img, drift_course=coarse) for point in bead_rois)
-    if len(bead_rois) > 0:
-        print("Computing fine drift")
-        fine = Parallel(n_jobs=-1, prefer='threads')(delayed(corr_func)(*get_args(img_pair)) for img_pair in zip(t_bead_imgs, o_bead_imgs))
-        fine = np.array(fine)
-        fine = trim_mean(fine, proportiontocut=0.2, axis=0)
-    else:
-        print("No bead ROIs, setting fine drift to all-0s")
-        fine = DUMMY_SHIFT
-    return (frame, pos) + tuple(coarse) + tuple(fine)
-
-
-def _build_full_drift_table(records: Iterable[FullDriftTableRow]) -> pd.DataFrame:
-    return pd.DataFrame(records, columns=FULL_DRIFT_TABLE_COLUMNS)
-
-
 @dataclasses.dataclass
 class JoblibParallelSpecification:
     """Bundle of the parameters to pass to joblib.Parallel"""
@@ -301,61 +244,6 @@ class MultiprocessingPoolSpecification:
     """Bundle of parameters to pass to multiprocessing.Pool"""
     n_workers: int
 
-
-def compute_all_drifts__coarse_and_fine(
-    full_pos_list: List[str], 
-    pos_list: Iterable[str], 
-    reference_images: List[np.ndarray], 
-    reference_frame: int, 
-    reference_channel: int, 
-    moving_images: List[np.ndarray], 
-    moving_channel: int, 
-    get_bead_rois: Callable[[np.ndarray], Iterable[Iterable[int]]], 
-    get_ref_bead_img: Callable[[Iterable[int], np.ndarray], np.ndarray],
-    downsampling: int, 
-    corr_func: callable,
-    get_args: callable,
-    exec_spec: Union[JoblibParallelSpecification, MultiprocessingPoolSpecification],
-    ) -> Iterable[List[FullDriftTableRow]]:
-    if isinstance(exec_spec, JoblibParallelSpecification):
-        print("Using joblib-backed parallelism for drift correction")
-        return Parallel(n_jobs=exec_spec.n_jobs, prefer=exec_spec.prefer)(
-            delayed(process_single_fov_single_frame__coarse_and_fine)(pos, t, t_img, o_img, bead_rois, t_bead_imgs, downsampling, corr_func, get_args)
-                for pos, t, t_img, o_img, bead_rois, t_bead_imgs in
-                generate_drift_function_arguments__coarse_and_fine(
-                    full_pos_list=full_pos_list,
-                    pos_list=pos_list, 
-                    reference_images=reference_images, 
-                    reference_frame=reference_frame, 
-                    reference_channel=reference_channel,
-                    moving_images=moving_images, 
-                    moving_channel=moving_channel, 
-                    get_bead_rois=get_bead_rois,
-                    get_ref_bead_img=get_ref_bead_img,
-                )
-            )
-    elif isinstance(exec_spec, MultiprocessingPoolSpecification):
-        print(f"Using multiprocessing-backed parallelism for drift correction, with CPU count: {exec_spec.n_workers}")
-        with mp.get_context("spawn").Pool(exec_spec.n_workers) as workers:
-            return workers.starmap(
-                process_single_fov_single_frame__coarse_and_fine, 
-                ((pos, t, t_img, o_img, bead_rois, t_bead_imgs, downsampling, corr_func, get_args)
-                for pos, t, t_img, o_img, bead_rois, t_bead_imgs in
-                generate_drift_function_arguments__coarse_and_fine(
-                    full_pos_list=full_pos_list,
-                    pos_list=pos_list, 
-                    reference_images=reference_images, 
-                    reference_frame=reference_frame, 
-                    reference_channel=reference_channel,
-                    moving_images=moving_images, 
-                    moving_channel=moving_channel, 
-                    get_bead_rois=get_bead_rois,
-                    get_ref_bead_img=get_ref_bead_img,
-                ))
-            )
-    else:
-        raise TypeError(f"Unsupported executor specification type ({type(exec_spec)}): {exec_spec}")
-        
 
 def coarse_correction_workflow(config_file: ExtantFile, images_folder: ExtantFolder):
     """The workflow for the initial (and sometimes only), coarse, drift correction."""
@@ -379,30 +267,18 @@ def coarse_correction_workflow(config_file: ExtantFile, images_folder: ExtantFol
 
 
 def compute_coarse_drifts(all_args) -> pd.DataFrame:
-    return _build_coarse_drift_table(Parallel(n_jobs=-1, prefer='threads')(delayed(process_single_fov_single_frame__coarse_only)(*args) for args in all_args))    
+    return pd.DataFrame(
+        Parallel(n_jobs=-1, prefer='threads')(delayed(process_single_fov_single_frame__coarse_only)(*args) for args in all_args), 
+        columns=COARSE_DRIFT_TABLE_COLUMNS, 
+        )
 
 
-def _build_coarse_drift_table(records: Iterable[CoarseDriftTableRow]) -> pd.DataFrame:
-    return pd.DataFrame(records, columns=COARSE_DRIFT_TABLE_COLUMNS)
-
-
-def fine_correction_workflow__1(config_file: ExtantFile, images_folder: ExtantFolder) -> str:
+def fine_correction_workflow(config_file: ExtantFile, images_folder: ExtantFolder) -> str:
     """The workflow for the second, optional, fine drift correction"""
     D = Drifter(image_handler=ImageHandler(config_file, images_folder))
     print("Computing fine drifts")
-    all_drifts = pd.DataFrame(compute_fine_drifts__1(D), columns=FULL_DRIFT_TABLE_COLUMNS)
-    outfile = D.dc_file_path__fine
-    print(f"Writing fine drifts: {outfile}")
-    all_drifts.to_csv(outfile)
-    return outfile
-
-
-def fine_correction_workflow__2(config_file: ExtantFile, images_folder: ExtantFolder) -> str:
-    """The workflow for the second, optional, fine drift correction"""
-    D = Drifter(image_handler=ImageHandler(config_file, images_folder))
-    corr_func, get_args = Methods.get_func_and_args_getter(D.method_name)
-    print("Computing fine drifts")
-    all_drifts = compute_fine_drifts__2(D)
+    all_drifts = pd.DataFrame(compute_fine_drifts__with_ref_img_gain(D), columns=FULL_DRIFT_TABLE_COLUMNS)
+    #all_drifts = pd.DataFrame(compute_fine_drifts(D), columns=FULL_DRIFT_TABLE_COLUMNS)
     outfile = D.dc_file_path__fine
     print(f"Writing fine drifts: {outfile}")
     all_drifts.to_csv(outfile)
@@ -416,7 +292,7 @@ def iter_coarse_drifts_by_position(filepath: Union[str, Path, ExtantFile]) -> It
     return coarse_table.groupby(POSITION_COLUMN)
 
 
-def compute_fine_drifts__1(drifter: "Drifter") -> Iterable[Tuple[np.ndarray, np.ndarray, Union[Iterable[int], np.ndarray], Union[Iterable[int], np.ndarray]]]:
+def compute_fine_drifts(drifter: "Drifter") -> Iterable[Tuple[np.ndarray, np.ndarray, Union[Iterable[int], np.ndarray], Union[Iterable[int], np.ndarray]]]:
     corr_func, get_args = Methods.get_func_and_args_getter(drifter.method_name)
     roi_px = drifter.bead_roi_px
     for position, position_group in iter_coarse_drifts_by_position(filepath=drifter.dc_file_path__coarse):
@@ -452,7 +328,8 @@ def compute_fine_drifts__1(drifter: "Drifter") -> Iterable[Tuple[np.ndarray, np.
                 yield (position, frame) + coarse + (0, 0, 0)
 
 
-def compute_fine_drifts__2(drifter: "Drifter") -> pd.DataFrame:
+def compute_fine_drifts__with_ref_img_gain(drifter: "Drifter"):
+    roi_px = drifter.bead_roi_px
     for position, position_group in iter_coarse_drifts_by_position(filepath=drifter.dc_file_path__coarse):
         print(f"Running fine drift correction for position: {position}")
         pos_idx = drifter.full_pos_list.index(position)
@@ -462,21 +339,52 @@ def compute_fine_drifts__2(drifter: "Drifter") -> pd.DataFrame:
             t_img=ref_img, 
             threshold=drifter.bead_threshold, 
             min_bead_int=drifter.min_bead_intensity, 
-            bead_roi_px=drifter.bead_roi_px, 
+            bead_roi_px=roi_px, 
             n_points=drifter.num_bead_points,
             )
-        # TODO: handle case when bead_rois is empty (need to generate the dummy drifts for each of the frames in this position group then).
         print("Extracting reference bead images")
-        ref_bead_images = [ip.extract_single_bead(point, ref_img, bead_roi_px=drifter.bead_roi_px) for point in bead_rois]
-        print("Iterating over frames")
-        for _, row in position_group.iterrows():
-            # This should be unique now in frame, since we're iterating within a single FOV.
-            frame = row[FRAME_COLUMN]
-            coarse = tuple(row[COARSE_DRIFT_COLUMNS])
-            mov_img = drifter.get_moving_image(pos_idx=pos_idx, frame_idx=frame)
-            print(f"Current frame: {frame}")
-            for point, ref_bead_img in zip(bead_rois, ref_bead_images):
-                yield position, frame, mov_img, point, ref_bead_img, coarse
+        if bead_rois:
+            if drifter.method_name == Methods.FIT_NAME.value:
+                print("Computing reference bead fits")
+                ref_bead_fits = Parallel(n_jobs=-1, prefer='threads')(
+                    delayed(lambda pt: fit_bead_coordinates(ip.extract_single_bead(pt, ref_img, bead_roi_px=roi_px)))(pt)
+                    for pt in iter(bead_rois)
+                    )
+                print("Iterating over frames/timepoints/hybridisations")
+                for _, row in position_group.iterrows():
+                    # This should be unique now in frame, since we're iterating within a single FOV.
+                    frame = row[FRAME_COLUMN]
+                    print(f"Current frame: {frame}")
+                    coarse = tuple(row[COARSE_DRIFT_COLUMNS])
+                    mov_img = drifter.get_moving_image(pos_idx=pos_idx, frame_idx=frame)
+                    fine = Parallel(n_jobs=-1, prefer='threads')(
+                        delayed(lambda pt: finalise_fine_drift(subtract_point_fits(ref_fit, fit_bead_coordinates(ip.extract_single_bead(pt, mov_img, bead_roi_px=roi_px, drift_course=coarse)))))(pt)
+                        for pt, ref_fit in zip(bead_rois, ref_bead_fits)
+                        )
+                    yield (position, frame) + coarse + fine
+            elif drifter.method_name == Methods.CROSS_CORRELATION_NAME.value:
+                ref_bead_images = [ip.extract_single_bead(point, ref_img, bead_roi_px=roi_px) for point in bead_rois]
+                print("Iterating over frames/timepoints/hybridisations")
+                for _, row in position_group.iterrows():
+                    # This should be unique now in frame, since we're iterating within a single FOV.
+                    frame = row[FRAME_COLUMN]
+                    print(f"Current frame: {frame}")
+                    coarse = tuple(row[COARSE_DRIFT_COLUMNS])
+                    mov_img = drifter.get_moving_image(pos_idx=pos_idx, frame_idx=frame)
+                    fine = Parallel(n_jobs=-1, prefer='threads')(
+                        delayed(lambda point, ref_bead_img: finalise_fine_drift(correlate_single_bead(ref_bead_img, ip.extract_single_bead(point, mov_img, bead_roi_px=roi_px, drift_course=coarse), 100)))(*args)
+                        for args in zip(bead_rois, ref_bead_images)
+                        )
+                    yield (position, frame) + coarse + fine
+            else:
+                raise Exception(f"Unknown drift correction method: {drifter.method_name}")
+        else:
+            for _, row in position_group.iterrows():
+                yield (position, frame) + coarse + (0, 0, 0)
+
+
+def finalise_fine_drift(drift: Iterable[FloatLike]) -> Tuple[FloatLike, FloatLike, FloatLike]:
+    return tuple(trim_mean(np.array(drift), proportiontocut=0.2, axis=0))
 
 
 class Drifter():
@@ -543,51 +451,6 @@ class Drifter():
 
     def get_reference_image(self, pos_idx: int) -> np.ndarray:
         return np.array(self.images_template[pos_idx][self.reference_frame, self.reference_channel])
-
-    def drift_corr(self) -> Optional[str]:
-        '''
-        Running function for drift correction along T-axis of 6D (PTCZYX) images/arrays.
-        Settings set in config file.
-
-        '''
-
-        dc_method = self.method_name
-        print(f"Drift correction method: {dc_method}")
-
-        corr_func, get_args = Methods.get_func_and_args_getter(dc_method)
-        get_bead_rois = partial(
-            ip.generate_bead_rois, 
-            threshold=self.bead_threshold, 
-            min_bead_int=self.min_bead_intensity, 
-            bead_roi_px=self.bead_roi_px, 
-            n_points=self.num_bead_points,
-            )
-        get_ref_bead_img = partial(ip.extract_single_bead, bead_roi_px=self.bead_roi_px)
-        exec_spec = JoblibParallelSpecification() if self.config.get("use_joblib_for_drift_correction", True)  \
-            else MultiprocessingPoolSpecification(self.config.get("cpu_for_drift_correction", mp.cpu_count()))
-        all_drifts = compute_all_drifts__coarse_and_fine(
-            full_pos_list=self.full_pos_list,
-            pos_list=self.pos_list, 
-            reference_images=self.images_template, 
-            reference_frame=self.reference_frame, 
-            reference_channel=self.reference_channel,
-            moving_images=self.images_moving, 
-            moving_channel=self.moving_channel, 
-            get_bead_rois=get_bead_rois,
-            get_ref_bead_img=get_ref_bead_img,
-            downsampling=self.downsampling, 
-            corr_func=corr_func,
-            get_args=get_args,
-            exec_spec=exec_spec,
-            )
-        
-        all_drifts = _build_full_drift_table(all_drifts, columns=FULL_DRIFT_TABLE_COLUMNS)
-        
-        outfile = self.dc_file_path
-        all_drifts.to_csv(outfile)
-        print('Drift correction complete.')
-        self.image_handler.drift_table = all_drifts
-        return outfile
 
     def gen_dc_images(self, pos):
         '''
