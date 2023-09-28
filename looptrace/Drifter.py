@@ -434,7 +434,7 @@ def compute_fine_drifts(all_args, bead_roi_px, corr_func, get_args) -> pd.DataFr
 
 def process_single_fov_single_frame__fine_only(position: str, frame: int, mov_img: np.ndarray, point: Union[Iterable[int], np.ndarray], ref_bead_img: np.ndarray, coarse: Union[Iterable[int], np.ndarray], bead_roi_px, corr_func, get_args) -> FullDriftTableRow:
     mov_bead_img = ip.extract_single_bead(point, mov_img, bead_roi_px=bead_roi_px, drift_course=coarse)
-    return (frame, position) + tuple(coarse) + corr_func(*get_args((ref_bead_img, mov_bead_img)))
+    return (frame, position) + tuple(coarse) + tuple(corr_func(*get_args((ref_bead_img, mov_bead_img))))
 
 
 class Drifter():
