@@ -404,6 +404,7 @@ def generate_drift_function_arguments__fine_drift_only(drifter: "Drifter") -> It
     coarse_table = pd.read_csv(coarse_table_file, index_col=0)
     coarse_table = coarse_table.sort_values([POSITION_COLUMN, FRAME_COLUMN]) # Sort so that grouping by position then frame doesn't alter order.
     for position, position_group in coarse_table.groupby(POSITION_COLUMN):
+        print(f"Running fine drift correction for position: {position}")
         pos_idx = drifter.full_pos_list.index(position)
         ref_img = drifter.get_reference_image(pos_idx)
         bead_rois = ip.generate_bead_rois(
@@ -420,6 +421,7 @@ def generate_drift_function_arguments__fine_drift_only(drifter: "Drifter") -> It
             frame = row[FRAME_COLUMN]
             coarse = tuple(row[COARSE_DRIFT_COLUMNS])
             mov_img = drifter.get_moving_image(pos_idx=pos_idx, frame_idx=frame)
+            print(f"Current frame: {frame}")
             for point, ref_bead_img in zip(bead_rois, ref_bead_images):
                 yield position, frame, mov_img, point, ref_bead_img, coarse
 
