@@ -409,7 +409,7 @@ def fine_correction_workflow__2(config_file: ExtantFile, images_folder: ExtantFo
     return outfile
 
 
-def iter_coarse_drifts_by_position(filepath: Union[str, Path, ExtantFile]) -> Iterable[Tuple[str, pd.api.typing.DataFrameGroupBy]]:
+def iter_coarse_drifts_by_position(filepath: Union[str, Path, ExtantFile]) -> Iterable[Tuple[str, pd.DataFrame]]:
     print(f"Reading coarse drift table: {filepath}")
     coarse_table = pd.read_csv(filepath, index_col=0)
     coarse_table = coarse_table.sort_values([POSITION_COLUMN, FRAME_COLUMN]) # Sort so that grouping by position then frame doesn't alter order.
