@@ -203,7 +203,7 @@ def generate_drift_function_arguments__coarse_drift_only(
     if len(full_pos_list) != len(reference_images) or len(full_pos_list) != len(moving_images):
         raise ArrayLikeLengthMismatchError(f"Full pos: {len(full_pos_list)}, ref imgs: {len(reference_images)}, mov imgs: {len(moving_images)}")
     for pos in pos_list:
-        print(f'Running only course drift correction for position: {pos}.')
+        print(f'Running course drift correction for position: {pos}.')
         i = full_pos_list.index(pos)
         t_img = np.array(reference_images[i][reference_frame, reference_channel, ::downsampling, ::downsampling, ::downsampling])
         for t in tqdm.tqdm(range(moving_images[i].shape[0])):
