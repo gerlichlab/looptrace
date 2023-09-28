@@ -446,7 +446,7 @@ def compute_fine_drifts__1(drifter: "Drifter") -> Iterable[Tuple[np.ndarray, np.
                     delayed(corr_func)(*get_args((ref_bead_img, ip.extract_single_bead(point, mov_img, bead_roi_px=roi_px, drift_course=coarse)))) 
                     for point, ref_bead_img in zip(bead_rois, ref_bead_images)
                     )
-                yield (position, frame) + coarse + tuple(fine)
+                yield (position, frame) + coarse + tuple(trim_mean(np.array(fine), proportiontocut=0.2, axis=0))
         else:
             for _, row in position_group.iterrows():
                 yield (position, frame) + coarse + (0, 0, 0)
