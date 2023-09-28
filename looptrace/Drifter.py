@@ -342,8 +342,10 @@ def compute_fine_drifts__with_ref_img_gain(drifter: "Drifter"):
             bead_roi_px=roi_px, 
             n_points=drifter.num_bead_points,
             )
-        print("Extracting reference bead images")
-        if bead_rois:
+        if bead_rois.size == 0:
+            for _, row in position_group.iterrows():
+                yield (position, frame) + coarse + (0, 0, 0)
+        else:
             if drifter.method_name == Methods.FIT_NAME.value:
                 print("Computing reference bead fits")
                 ref_bead_fits = Parallel(n_jobs=-1, prefer='threads')(
@@ -357,12 +359,14 @@ def compute_fine_drifts__with_ref_img_gain(drifter: "Drifter"):
                     print(f"Current frame: {frame}")
                     coarse = tuple(row[COARSE_DRIFT_COLUMNS])
                     mov_img = drifter.get_moving_image(pos_idx=pos_idx, frame_idx=frame)
+                    print(f"Computing fine drifts: ({position}, {frame})")
                     fine = Parallel(n_jobs=-1, prefer='threads')(
                         delayed(lambda pt: finalise_fine_drift(subtract_point_fits(ref_fit, fit_bead_coordinates(ip.extract_single_bead(pt, mov_img, bead_roi_px=roi_px, drift_course=coarse)))))(pt)
                         for pt, ref_fit in zip(bead_rois, ref_bead_fits)
                         )
                     yield (position, frame) + coarse + fine
             elif drifter.method_name == Methods.CROSS_CORRELATION_NAME.value:
+                print("Extracting reference bead images")
                 ref_bead_images = [ip.extract_single_bead(point, ref_img, bead_roi_px=roi_px) for point in bead_rois]
                 print("Iterating over frames/timepoints/hybridisations")
                 for _, row in position_group.iterrows():
@@ -371,6 +375,7 @@ def compute_fine_drifts__with_ref_img_gain(drifter: "Drifter"):
                     print(f"Current frame: {frame}")
                     coarse = tuple(row[COARSE_DRIFT_COLUMNS])
                     mov_img = drifter.get_moving_image(pos_idx=pos_idx, frame_idx=frame)
+                    print(f"Computing fine drifts: ({position}, {frame})")
                     fine = Parallel(n_jobs=-1, prefer='threads')(
                         delayed(lambda point, ref_bead_img: finalise_fine_drift(correlate_single_bead(ref_bead_img, ip.extract_single_bead(point, mov_img, bead_roi_px=roi_px, drift_course=coarse), 100)))(*args)
                         for args in zip(bead_rois, ref_bead_images)
@@ -378,9 +383,6 @@ def compute_fine_drifts__with_ref_img_gain(drifter: "Drifter"):
                     yield (position, frame) + coarse + fine
             else:
                 raise Exception(f"Unknown drift correction method: {drifter.method_name}")
-        else:
-            for _, row in position_group.iterrows():
-                yield (position, frame) + coarse + (0, 0, 0)
 
 
 def finalise_fine_drift(drift: Iterable[FloatLike]) -> Tuple[FloatLike, FloatLike, FloatLike]:
