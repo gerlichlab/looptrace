@@ -391,7 +391,7 @@ def fine_correction_workflow(config_file: ExtantFile, images_folder: ExtantFolde
     all_args = generate_drift_function_arguments__fine_drift_only(D)
     print("Computing fine drifts")
     corr_func, get_args = Methods.get_func_and_args_getter(D.method_name)
-    all_drifts = compute_fine_drifts(all_args, corr_func=corr_func, get_args=get_args, roi_px=D.bead_roi_px)
+    all_drifts = compute_fine_drifts(all_args, bead_roi_px=D.bead_roi_px, corr_func=corr_func, get_args=get_args)
     outfile = D.dc_file_path__fine
     print(f"Writing fine drifts: {outfile}")
     all_drifts.to_csv(outfile)
