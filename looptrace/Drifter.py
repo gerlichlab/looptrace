@@ -32,7 +32,7 @@ from looptrace import image_io
 from looptrace.ImageHandler import ImageHandler
 from looptrace.gaussfit import fitSymmetricGaussian3D
 from looptrace.numeric_types import FloatLike, NumberLike
-from looptrace.wrappers import phase_cross_correlation
+from looptrace.wrappers import phase_xcor
 
 
 FRAME_COLUMN = "frame"
@@ -109,7 +109,7 @@ def correlate_single_bead(t_bead, o_bead, upsampling):
         that should align with that one; dummy values of 0s if something goes wrong with the computation
     """
     try:
-        shift, _, _ = phase_cross_correlation(t_bead, o_bead, upsample_factor=upsampling)
+        shift = phase_xcor(t_bead, o_bead, upsample_factor=upsampling)
     except (ValueError, AttributeError):
         # TODO: log if all-0s is used here?
         shift = np.array(DUMMY_SHIFT)
@@ -249,7 +249,7 @@ def coarse_correction_workflow(config_file: ExtantFile, images_folder: ExtantFol
     )
     print("Computing coarse drifts")
     records = Parallel(n_jobs=-1, prefer='threads')(
-        delayed(lambda p, t, ref_ds, mov_ds: (p, t) + tuple(phase_cross_correlation(ref_ds, mov_ds) * D.downsampling))(*args) 
+        delayed(lambda p, t, ref_ds, mov_ds: (p, t) + tuple(phase_xcor(ref_ds, mov_ds) * D.downsampling))(*args) 
         for args in all_args
         )
     try:

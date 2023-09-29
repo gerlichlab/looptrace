@@ -23,7 +23,7 @@ from skimage.filters import gaussian, threshold_otsu
 from skimage.morphology import white_tophat, ball, remove_small_objects
 from skimage.measure import regionprops_table
 
-from looptrace.wrappers import phase_cross_correlation
+from looptrace.wrappers import phase_xcor
 
 logger = logging.getLogger()
 
@@ -430,7 +430,7 @@ def drift_corr_course(t_img, o_img, downsample=1):
 
     '''        
     s = tuple(slice(None, None, downsample) for i in t_img.shape)
-    course_drift, _, _ = phase_cross_correlation(np.array(t_img[s]), np.array(o_img[s])) * downsample
+    course_drift = phase_xcor(np.array(t_img[s]), np.array(o_img[s])) * downsample
     return course_drift
 
 def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int, n_points=50, upsampling=100):
@@ -469,7 +469,7 @@ def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int
         o = o_img[s_o]
         
         try:
-            shift, _, _ = phase_cross_correlation(t, o, upsample_factor=upsampling)
+            shift = phase_xcor(t, o, upsample_factor=upsampling)
         except (ValueError, AttributeError):
             shift = np.array([0,0,0])
         return shift
@@ -725,7 +725,7 @@ def combine_overviews_ND2(input_folder, tidx = 0, align_channels=[1,1], ds = 2):
             continue
         off_img = pad_to_shape(off_img, imgs[tidx].shape)
         o_img = off_img[align_channels[i],Y*3//5:Y*4//5:ds, X*3//5:X*4//5:ds]
-        shift, _, _ = phase_cross_correlation(ref_img, o_img) * ds
+        shift = phase_xcor(ref_img, o_img) * ds
         print(shift)
         off_img_reg = ndi.shift(off_img, (0, shift[0], shift[1]), mode='constant', order=1).astype(np.uint16)
         imgs_reg.append(off_img_reg)
