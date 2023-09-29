@@ -91,12 +91,15 @@ class BeadRoiParameters:
         # TODO: why divide-by-2 here?
         roi_px = self.roi_pixels // 2
         # TODO: record better the mapping from -0/-1/-2 to z/y/x.
+        too_high = (lambda _: False) if self.max_intensity_for_detection is None \
+            else (lambda row: row ["max_intensity"] > self.max_intensity_for_detection)
         invalidation_label_pairs = [
             (lambda row: row["centroid-0"] <= roi_px, "z"), 
             (lambda row: row["centroid-1"] <= roi_px, "y"), 
             (lambda row: row["centroid-2"] <= roi_px, "x"), 
             (lambda row: row["area"] > self.max_region_size, "s"), 
-            (lambda row: row["max_intensity"] < self.min_intensity_for_detection or row["max_intensity"] > self.max_intensity_for_detection, "i"), 
+            (lambda row: row["max_intensity"] < self.min_intensity_for_detection, "i"), 
+            (too_high, "I"), 
             ]
         return regions.apply(lambda row: "".join(code if fails(row) else "" for fails, code in invalidation_label_pairs), axis=1)
 
