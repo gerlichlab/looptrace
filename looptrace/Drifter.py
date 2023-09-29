@@ -243,12 +243,13 @@ def coarse_correction_workflow(config_file: ExtantFile, images_folder: ExtantFol
         reference_channel=D.reference_channel,
         moving_images=D.images_moving, 
         moving_channel=D.moving_channel, 
-        stop_after=pos_halt_point
+        stop_after=pos_halt_point,
     )
+    ds = D.downsampling
     print("Computing coarse drifts")
     coarse_drifts = pd.DataFrame(
         Parallel(n_jobs=-1, prefer='threads')(
-            delayed(lambda p, t, ref, mov: (p, t) + tuple(ip.drift_corr_course(t_img=ref, o_img=mov, downsample=D.downsampling)))(*args) 
+            delayed(lambda p, t, ref, mov: (p, t) + tuple(phase_cross_correlation(ref[::ds, ::ds, ::ds], mov[::ds, ::ds, ::ds]) * ds))(*args) 
             for args in all_args
             ), 
         columns=COARSE_DRIFT_TABLE_COLUMNS, 
