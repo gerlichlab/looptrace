@@ -166,6 +166,7 @@ def generate_drift_function_arguments__coarse_drift_only(
         reference_channel: int, 
         moving_images: List[np.ndarray], 
         moving_channel: int, 
+        downsampling: int, 
         stop_after: int,
         ) -> Iterable[Tuple[str, int, np.ndarray, np.ndarray]]:
     """
@@ -187,6 +188,8 @@ def generate_drift_function_arguments__coarse_drift_only(
         The images to shift to align to reference
     moving_channel : int
         The channel in signal to shift was imaged
+    downsampling : int
+        A factor by which to downsample the reference and moving signal, by taking every nth entry of an array
     
     Returns
     -------
@@ -203,9 +206,9 @@ def generate_drift_function_arguments__coarse_drift_only(
         raise ArrayLikeLengthMismatchError(f"Full pos: {len(full_pos_list)}, ref imgs: {len(reference_images)}, mov imgs: {len(moving_images)}")
     for i, pos in takewhile(lambda i_and_p: i_and_p[0] <= stop_after, map(lambda p: (full_pos_list.index(p), p), pos_list)):
         print(f'Running course drift correction for position: {pos}.')
-        t_img = np.array(reference_images[i][reference_frame, reference_channel])
+        t_img = np.array(reference_images[i][reference_frame, reference_channel, ::downsampling, ::downsampling, ::downsampling])
         for t in tqdm.tqdm(range(moving_images[i].shape[0])):
-            o_img = np.array(moving_images[i][t, moving_channel])
+            o_img = np.array(moving_images[i][t, moving_channel, ::downsampling, ::downsampling, ::downsampling])
             yield pos, t, t_img, o_img
         print(f'Finished drift correction for position: {pos}')
 
@@ -241,13 +244,13 @@ def coarse_correction_workflow(config_file: ExtantFile, images_folder: ExtantFol
         reference_channel=D.reference_channel,
         moving_images=D.images_moving, 
         moving_channel=D.moving_channel, 
+        downsampling = D.downsampling,
         stop_after=pos_halt_point,
     )
-    ds = D.downsampling
     print("Computing coarse drifts")
     coarse_drifts = pd.DataFrame(
         Parallel(n_jobs=-1, prefer='threads')(
-            delayed(lambda p, t, ref, mov: (p, t) + tuple(phase_cross_correlation(ref[::ds, ::ds, ::ds], mov[::ds, ::ds, ::ds]) * ds))(*args) 
+            delayed(lambda p, t, ref_ds, mov_ds: (p, t) + tuple(phase_cross_correlation(ref_ds, mov_ds) * D.downsampling))(*args) 
             for args in all_args
             ), 
         columns=COARSE_DRIFT_TABLE_COLUMNS, 
