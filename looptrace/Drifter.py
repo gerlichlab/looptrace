@@ -249,7 +249,7 @@ def coarse_correction_workflow(config_file: ExtantFile, images_folder: ExtantFol
     )
     print("Computing coarse drifts")
     records = Parallel(n_jobs=-1, prefer='threads')(
-        delayed(lambda p, t, ref_ds, mov_ds: (p, t) + tuple(phase_xcor(ref_ds, mov_ds) * D.downsampling))(*args) 
+        delayed(lambda p, t, ref_ds, mov_ds: (t, p) + tuple(phase_xcor(ref_ds, mov_ds) * D.downsampling))(*args) 
         for args in all_args
         )
     try:
@@ -312,10 +312,10 @@ def compute_fine_drifts(drifter: "Drifter") -> Iterable[Tuple[np.ndarray, np.nda
                     delayed(corr_func)(*get_args((ref_bead_img, ip.extract_single_bead(point, mov_img, bead_roi_px=roi_px, drift_course=coarse)))) 
                     for point, ref_bead_img in zip(bead_rois, ref_bead_images)
                     )
-                yield (position, frame) + coarse + tuple(trim_mean(np.array(fine), proportiontocut=0.2, axis=0))
+                yield (frame, position) + coarse + tuple(trim_mean(np.array(fine), proportiontocut=0.2, axis=0))
         else:
             for _, row in position_group.iterrows():
-                yield (position, frame) + coarse + (0, 0, 0)
+                yield (frame, position) + coarse + (0, 0, 0)
 
 
 def compute_fine_drifts__with_ref_img_gain(drifter: "Drifter"):
