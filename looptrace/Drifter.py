@@ -248,13 +248,15 @@ def coarse_correction_workflow(config_file: ExtantFile, images_folder: ExtantFol
         stop_after=pos_halt_point,
     )
     print("Computing coarse drifts")
-    coarse_drifts = pd.DataFrame(
-        Parallel(n_jobs=-1, prefer='threads')(
-            delayed(lambda p, t, ref_ds, mov_ds: (p, t) + tuple(phase_cross_correlation(ref_ds, mov_ds) * D.downsampling))(*args) 
-            for args in all_args
-            ), 
-        columns=COARSE_DRIFT_TABLE_COLUMNS, 
+    records = Parallel(n_jobs=-1, prefer='threads')(
+        delayed(lambda p, t, ref_ds, mov_ds: (p, t) + tuple(phase_cross_correlation(ref_ds, mov_ds) * D.downsampling))(*args) 
+        for args in all_args
         )
+    try:
+        coarse_drifts = pd.DataFrame(records, columns=COARSE_DRIFT_TABLE_COLUMNS)
+    except ValueError: # most likely if element count of one or more rows doesn't match column count
+        print(f"Example record (below):\n{records[0]}")
+        raise
     outfile = update_outfile(D.dc_file_path__coarse)
     print(f"Writing coarse drifts: {outfile}")
     coarse_drifts.to_csv(outfile)
