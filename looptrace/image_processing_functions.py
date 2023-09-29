@@ -413,10 +413,7 @@ def extract_single_bead(
     output_shape = (side_length, side_length, side_length)
     # TODO: consider, for provenance, logging a message here, that the bead shape was not as expected, and all-0s is used.
     return np.zeros(output_shape) if bead.shape != output_shape else bead
-
-def downsample_image(img: np.ndarray, step_size: int) -> np.ndarray:
-    return np.array(img[tuple(slice(None, None, step_size) for _ in img.shape)])
-
+        
 def drift_corr_course(t_img, o_img, downsample=1):
     '''
     Calculates course and fine 
@@ -432,7 +429,8 @@ def drift_corr_course(t_img, o_img, downsample=1):
     A list of zyx course drifts and fine drifts (compared to course)
 
     '''        
-    course_drift, _, _ = phase_cross_correlation(downsample_image(t_img), downsample_image(o_img)) * downsample
+    s = tuple(slice(None, None, downsample) for i in t_img.shape)
+    course_drift, _, _ = phase_cross_correlation(np.array(t_img[s]), np.array(o_img[s])) * downsample
     return course_drift
 
 def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int, n_points=50, upsampling=100):
