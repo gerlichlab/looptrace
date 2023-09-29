@@ -57,6 +57,7 @@ class BeadRoiParameters:
 
         if unfiltered_filepath:
             print(f"Writing unfiltered bead ROIs: {unfiltered_filepath}")
+            unfiltered_filepath.parent.mkdir(parents=False, exist_ok=True)
             img_maxima.to_csv(unfiltered_filepath)
 
         print("Filtering bead ROIs")
