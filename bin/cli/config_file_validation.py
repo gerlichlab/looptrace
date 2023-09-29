@@ -7,6 +7,7 @@ import yaml
 
 from gertils import ExtantFile
 
+from looptrace.Deconvolver import REQ_GPU_KEY
 from looptrace import Drifter
 from looptrace.SpotPicker import DetectionMethod, CROSSTALK_SUBTRACTION_KEY, DETECTION_METHOD_KEY as SPOT_DETECTION_METHOD_KEY
 from looptrace.Tracer import MASK_FITS_ERROR_MESSAGE
@@ -24,9 +25,27 @@ class ConfigFileCrash(Exception):
 
 
 def find_config_file_errors(config_file: ExtantFile) -> List[ConfigFileError]:
+    """
+    Parse the given looptrace main processing configuration file, and build a collection of any errors.
+
+    Parameters
+    ----------
+    config_file : ExtantFile
+        Path to the main looptrace processing configuration file to parse
+
+    Returns
+    -------
+    list of ConfigFileError
+        A collection of violations of prohibitions, or other faults, found in the parsed config data
+    """
     with open(config_file.path, 'r') as fh:
         conf_data = yaml.safe_load(fh)
     errors = []
+    if not conf_data.get(REQ_GPU_KEY, False):
+        errors.append(ConfigFileError(f"Requiring GPUs for deconvolution with key {REQ_GPU_KEY} is currently required."))
+    dc_method = Drifter.get_drift_correction_method_name(conf_data)
+    if dc_method and not Drifter.Methods.is_valid_name(dc_method):
+        errors.append(ConfigFileError(f"Invalid drift correction method ({dc_method}); choose from: {', '.join(Drifter.Methods.values())}"))
     if conf_data.get(CROSSTALK_SUBTRACTION_KEY, False):
         errors.append(ConfigFileError(f"Crosstalk subtraction ('{CROSSTALK_SUBTRACTION_KEY}') isn't currently supported."))
     spot_detection_method = conf_data.get(SPOT_DETECTION_METHOD_KEY)
@@ -36,9 +55,6 @@ def find_config_file_errors(config_file: ExtantFile) -> List[ConfigFileError]:
         errors.append(ConfigFileError(f"Prohibited (or unsupported) spot detection method: '{spot_detection_method}'"))
     if conf_data.get("mask_fits", False):
         errors.append(ConfigFileError(MASK_FITS_ERROR_MESSAGE))
-    dc_method = Drifter.get_drift_correction_method_name(conf_data)
-    if dc_method and not Drifter.Methods.is_valid_name(dc_method):
-        errors.append(ConfigFileError(f"Invalid drift correction method ({dc_method}); choose from: {', '.join(Drifter.Methods.values())}"))
     return errors
 
 

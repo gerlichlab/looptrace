@@ -30,6 +30,7 @@ from gertils import ExtantFile, ExtantFolder
 from looptrace import image_processing_functions as ip
 from looptrace import image_io
 from looptrace.ImageHandler import ImageHandler
+from looptrace.bead_roi_generation import BeadRoiParameters
 from looptrace.gaussfit import fitSymmetricGaussian3D
 from looptrace.numeric_types import FloatLike, NumberLike
 from looptrace.wrappers import phase_xcor
@@ -268,7 +269,6 @@ def fine_correction_workflow(config_file: ExtantFile, images_folder: ExtantFolde
     D = Drifter(image_handler=ImageHandler(config_file, images_folder))
     print("Computing fine drifts")
     all_drifts = pd.DataFrame(compute_fine_drifts__with_ref_img_gain(D), columns=FULL_DRIFT_TABLE_COLUMNS)
-    #all_drifts = pd.DataFrame(compute_fine_drifts(D), columns=FULL_DRIFT_TABLE_COLUMNS)
     outfile = D.dc_file_path__fine
     print(f"Writing fine drifts: {outfile}")
     all_drifts.to_csv(outfile)
@@ -282,55 +282,19 @@ def iter_coarse_drifts_by_position(filepath: Union[str, Path, ExtantFile]) -> It
     return coarse_table.groupby(POSITION_COLUMN)
 
 
-def compute_fine_drifts(drifter: "Drifter") -> Iterable[Tuple[np.ndarray, np.ndarray, Union[Iterable[int], np.ndarray], Union[Iterable[int], np.ndarray]]]:
-    corr_func, get_args = Methods.get_func_and_args_getter(drifter.method_name)
-    roi_px = drifter.bead_roi_px
-    for position, position_group in iter_coarse_drifts_by_position(filepath=drifter.dc_file_path__coarse):
-        print(f"Running fine drift correction for position: {position}")
-        pos_idx = drifter.full_pos_list.index(position)
-        ref_img = drifter.get_reference_image(pos_idx)
-        print("Generating bead ROIs")
-        bead_rois = ip.generate_bead_rois(
-            t_img=ref_img, 
-            threshold=drifter.bead_threshold, 
-            min_bead_int=drifter.min_bead_intensity, 
-            bead_roi_px=roi_px, 
-            n_points=drifter.num_bead_points,
-            )
-        # TODO: handle case when bead_rois is empty (need to generate the dummy drifts for each of the frames in this position group then).
-        print("Extracting reference bead images")
-        ref_bead_images = [ip.extract_single_bead(point, ref_img, bead_roi_px=roi_px) for point in bead_rois]
-        if ref_bead_images:
-            print("Iterating over frames/timepoints/hybridisations")
-            for _, row in position_group.iterrows():
-                # This should be unique now in frame, since we're iterating within a single FOV.
-                frame = row[FRAME_COLUMN]
-                coarse = tuple(row[COARSE_DRIFT_COLUMNS])
-                mov_img = drifter.get_moving_image(pos_idx=pos_idx, frame_idx=frame)
-                print(f"Current frame: {frame}")
-                fine = Parallel(n_jobs=-1, prefer='threads')(
-                    delayed(corr_func)(*get_args((ref_bead_img, ip.extract_single_bead(point, mov_img, bead_roi_px=roi_px, drift_course=coarse)))) 
-                    for point, ref_bead_img in zip(bead_rois, ref_bead_images)
-                    )
-                yield (frame, position) + coarse + tuple(trim_mean(np.array(fine), proportiontocut=0.2, axis=0))
-        else:
-            for _, row in position_group.iterrows():
-                yield (frame, position) + coarse + (0, 0, 0)
-
-
 def compute_fine_drifts__with_ref_img_gain(drifter: "Drifter"):
     roi_px = drifter.bead_roi_px
+    bead_roi_params = drifter.get_bead_roi_parameters
     for position, position_group in iter_coarse_drifts_by_position(filepath=drifter.dc_file_path__coarse):
         print(f"Running fine drift correction for position: {position}")
         pos_idx = drifter.full_pos_list.index(position)
         ref_img = drifter.get_reference_image(pos_idx)
         print("Generating bead ROIs")
-        bead_rois = ip.generate_bead_rois(
-            t_img=ref_img, 
-            threshold=drifter.bead_threshold, 
-            min_bead_int=drifter.min_bead_intensity, 
-            bead_roi_px=roi_px, 
-            n_points=drifter.num_bead_points,
+        bead_rois = bead_roi_params.generate_image_rois(
+            img=ref_img, 
+            num_points=drifter.num_bead_points,
+            filtered_filepath=drifter.get_bead_rois_filtered_filepath(pos_idx=pos_idx),
+            unfiltered_filepath=drifter.get_bead_rois_unfiltered_filepath(pos_idx=pos_idx),
             )
         if bead_rois.size == 0:
             for _, row in position_group.iterrows():
@@ -403,6 +367,18 @@ class Drifter():
             self.dc_file_path__fine = get_file_path("_fine.csv")
 
     @property
+    def bead_detection_max_intensity(self) -> Optional[int]:
+        return self.config.get("max_bead_intensity")
+
+    @property
+    def bead_rois_analysis_subfolder(self) -> Path:
+        return Path(self.image_handler.analysis_path) / "bead_rois"
+
+    @property
+    def bead_roi_max_size(self) -> int:
+        return self.config.get("max_bead_roi_size", 500)
+
+    @property
     def bead_roi_px(self) -> int:
         return self.config.get('bead_roi_size', 15)
 
@@ -413,6 +389,22 @@ class Drifter():
     @property
     def downsampling(self) -> int:
         return self.config['course_drift_downsample']
+
+    def get_bead_rois_filtered_filepath(self, pos_idx: int) -> Path:
+        return self.bead_rois_analysis_subfolder / f"beads.{pos_idx}.filtered.csv"
+
+    def get_bead_rois_unfiltered_filepath(self, pos_idx: int) -> Path:
+        return self.bead_rois_analysis_subfolder / f"beads.{pos_idx}.unfiltered.csv"
+
+    @property
+    def get_bead_roi_parameters(self) -> BeadRoiParameters:
+        return BeadRoiParameters(
+            min_intensity_for_segmentation=self.bead_threshold, 
+            min_intensity_for_detection=self.min_bead_intensity, 
+            roi_pixels=self.bead_roi_px, 
+            max_region_size=self.bead_roi_max_size, 
+            max_intensity_for_detection=self.bead_detection_max_intensity,
+            )
 
     @property
     def method_name(self) -> str:
