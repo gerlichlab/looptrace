@@ -43,8 +43,8 @@ reg_input_moving: seq_images_decon                  #Images to register to templ
 reg_ch_template: 0                                  #The channel of the fiducial beads/marks in template images #The beads are in Channel1 (=0).
 reg_ch_moving: 0                                    #The channel of the fiducial beads/marks in moving images   #The (same) beads are in Channel1 (=0).
 reg_ref_frame : 10                                  #The frame used as reference of the drift correction #This number was randomly chosen. In this frame/timepoint the beads will stay untouched and all other frames will be aligned to this frame.
-bead_threshold: 10000                               #Minimum intensity for bead detection #Will be empirically determined, but I assume it will be rather easy to select a clear threshold as beads have a good SNR.
-min_bead_intensity: 15000                           #Minimum intensity for bead segmentation #I assume this means that only the brighter ones of the detected spots are used. We can test this once the analysis pipeline is working.
+bead_threshold: 10000                               #Minimum intensity for bead segmentation #Will be empirically determined, but I assume it will be rather easy to select a clear threshold as beads have a good SNR.
+min_bead_intensity: 15000                           #Minimum intensity for bead detection #I assume this means that only the brighter ones of the detected spots are used. We can test this once the analysis pipeline is working.
 bead_roi_size: 16                                   #Size of bead ROI in px. #The ROI nicely contains the bead and some background. I assume that this small ROI is sufficient and won't need to be changed.
 bead_points: 200                                    #Maximum number of beads to segment #TODO: 200 was selected in the paper. We might have less beads in our images depending on the experiment. As far as I know, these beads are randomly chosen.
 course_drift_downsample: 2                          #Factor to downsample course drift correction to speed up calculation. #TODO: Not sure how the course drift is defined in the registration script.

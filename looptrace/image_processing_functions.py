@@ -23,6 +23,7 @@ from skimage.filters import gaussian, threshold_otsu
 from skimage.morphology import white_tophat, ball, remove_small_objects
 from skimage.measure import regionprops_table
 
+from looptrace.numeric_types import NumberLike
 from looptrace.wrappers import phase_xcor
 
 logger = logging.getLogger()
@@ -355,17 +356,26 @@ def roi_center_to_bbox(rois: pd.DataFrame, roi_size: Union[np.ndarray, Tuple[int
     rois['x_max'] = rois['xc'] + roi_size[2]//2
     return rois
 
-def generate_bead_rois(t_img, threshold, min_bead_int, bead_roi_px=16, n_points=200, max_size=500):
+def generate_bead_rois(
+        t_img: np.ndarray, 
+        threshold: NumberLike, 
+        min_bead_int: NumberLike, 
+        bead_roi_px: int = 16, 
+        n_points: int = 200, 
+        max_size: NumberLike = 500, 
+        max_bead_int: Optional[NumberLike] = None
+        ):
     '''Function for finding positions of beads in an image based on manually set thresholds in config file.
 
-    Args:
-        t_img (3D ndarray): Image
-        threshold (float): Threshold for initial bead segmentation
-        min_bead_int (float): Secondary filtering of segmented maxima.
-        n_points (int): How many bead positions to return
+    Parameters
+    ----------
+    t_img (3D ndarray): Image
+    threshold (float): Threshold for initial bead segmentation
+    min_bead_int (float): Secondary filtering of segmented maxima.
+    n_points (int): How many bead positions to return
 
     Returns:
-        t_img_maxima: 3XN ndarray of 3D bead coordinates in t_img.
+    t_img_maxima: 3XN ndarray of 3D bead coordinates in t_img.
     '''
     roi_px = bead_roi_px//2
     t_img_label,num_labels=ndi.label(t_img>threshold)

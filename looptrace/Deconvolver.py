@@ -22,6 +22,8 @@ from looptrace.point_spread_function import PointSpreadFunctionStrategy
 
 logger = logging.getLogger()
 
+REQ_GPU_KEY = "require_gpu"
+
 
 class Deconvolver:
     '''
@@ -58,7 +60,7 @@ class Deconvolver:
 
     @property
     def require_gpu(self) -> bool:
-        return self.config.get('require_gpu', False)
+        return self.config.get(REQ_GPU_KEY, True)
 
     @property
     def get_input_filepath_and_input_image(self):
