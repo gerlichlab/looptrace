@@ -260,18 +260,14 @@ def coarse_correction_workflow(config_file: ExtantFile, images_folder: ExtantFol
         downsampling=D.downsampling,
     )
     print("Computing coarse drifts")
-    coarse_drifts = compute_coarse_drifts(all_args)
+    coarse_drifts = pd.DataFrame(
+        Parallel(n_jobs=-1, prefer='threads')(delayed(process_single_fov_single_frame__coarse_only)(*args) for args in all_args), 
+        columns=COARSE_DRIFT_TABLE_COLUMNS, 
+        )
     outfile = D.dc_file_path__coarse
     print(f"Writing coarse drifts: {outfile}")
     coarse_drifts.to_csv(outfile)
     return outfile
-
-
-def compute_coarse_drifts(all_args) -> pd.DataFrame:
-    return pd.DataFrame(
-        Parallel(n_jobs=-1, prefer='threads')(delayed(process_single_fov_single_frame__coarse_only)(*args) for args in all_args), 
-        columns=COARSE_DRIFT_TABLE_COLUMNS, 
-        )
 
 
 def fine_correction_workflow(config_file: ExtantFile, images_folder: ExtantFolder) -> str:
