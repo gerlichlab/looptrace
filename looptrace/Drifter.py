@@ -9,10 +9,11 @@ EMBL Heidelberg
 
 import dataclasses
 from enum import Enum
-from functools import partial
+from itertools import takewhile
 import multiprocessing as mp
 import os
 from pathlib import Path
+import sys
 from typing import *
 
 import numpy as np
@@ -165,7 +166,7 @@ def generate_drift_function_arguments__coarse_drift_only(
         reference_channel: int, 
         moving_images: List[np.ndarray], 
         moving_channel: int, 
-        downsampling: int,
+        stop_after: int,
         ) -> Iterable[Tuple[str, int, np.ndarray, np.ndarray]]:
     """
     Generate the coarse and fine drift correction shifts, when just doing coarse correction (dummy values for fine DC).
@@ -186,9 +187,12 @@ def generate_drift_function_arguments__coarse_drift_only(
         The images to shift to align to reference
     moving_channel : int
         The channel in signal to shift was imaged
-    downsampling : int
-        A factor by which to downsample the reference and moving signal, by taking every nth entry of an arrayt
     
+    Returns
+    -------
+    Iterable of (str, int, np.ndarray, np.ndarray)
+        Bundle of position (FOV), frame (hybdridisation timepoint), reference image, and shifted image
+
     Raises
     ------
     ArrayLikeLengthMismatchError
@@ -197,40 +201,15 @@ def generate_drift_function_arguments__coarse_drift_only(
     """
     if len(full_pos_list) != len(reference_images) or len(full_pos_list) != len(moving_images):
         raise ArrayLikeLengthMismatchError(f"Full pos: {len(full_pos_list)}, ref imgs: {len(reference_images)}, mov imgs: {len(moving_images)}")
-    for pos in pos_list:
+    for i, pos in takewhile(lambda i_and_p: i_and_p[0] <= stop_after, map(lambda p: (full_pos_list.index(p), p), pos_list)):
         print(f'Running course drift correction for position: {pos}.')
-        i = full_pos_list.index(pos)
-        t_img = np.array(reference_images[i][reference_frame, reference_channel, ::downsampling, ::downsampling, ::downsampling])
+        if i > stop_after:
+            return
+        t_img = np.array(reference_images[i][reference_frame, reference_channel])
         for t in tqdm.tqdm(range(moving_images[i].shape[0])):
-            o_img = np.array(moving_images[i][t, moving_channel, ::downsampling, ::downsampling, ::downsampling])
+            o_img = np.array(moving_images[i][t, moving_channel])
             yield pos, t, t_img, o_img
         print(f'Finished drift correction for position: {pos}')
-
-
-def process_single_fov_single_frame__coarse_only(pos: str, frame: int, t_img: np.ndarray, o_img: np.ndarray) -> CoarseDriftTableRow:
-    """
-    Compute coarse drift for a single (FOV, frame) combination, passing through those values and addind dummy values for fine DC.
-
-    Parameters
-    ----------
-    pos : str
-        Name of the FOV from which the imaging data comes
-    frame : int
-        Index of the hybridisation timepoint for which the coarse drift/shift is to be computed
-    t_img : np.ndarray
-        Reference image
-    o_img : np.ndarray
-        Image for which drift/shift relative to reference is to be computed
-    
-    Returns
-    -------
-    FullDriftTableRow
-        A list which will become a row/record in a data frame, with first value representing the index of the 
-        hybridisation round / timepoint, the second representing the name of the field of view, and the rest 
-        representing 6 values for coarse and fine drift correction (first three coarse, second three fine).
-    """
-    shift = ip.drift_corr_course(t_img=t_img, o_img=o_img, downsample=1)
-    return (frame, pos) + tuple(shift)
 
 
 @dataclasses.dataclass
@@ -249,6 +228,13 @@ class MultiprocessingPoolSpecification:
 def coarse_correction_workflow(config_file: ExtantFile, images_folder: ExtantFolder):
     """The workflow for the initial (and sometimes only), coarse, drift correction."""
     D = Drifter(image_handler=ImageHandler(config_file, images_folder))
+    try:
+        pos_halt_point = D.config["dc_pos_limit"]
+    except KeyError:
+        pos_halt_point = sys.maxsize
+        update_outfile = lambda fp: fp
+    else:
+        update_outfile = lambda fp: str(Path(fp).with_suffix(f".halt_after_{pos_halt_point}.csv"))
     all_args = generate_drift_function_arguments__coarse_drift_only(
         full_pos_list=D.full_pos_list, 
         pos_list=D.pos_list, 
@@ -257,14 +243,17 @@ def coarse_correction_workflow(config_file: ExtantFile, images_folder: ExtantFol
         reference_channel=D.reference_channel,
         moving_images=D.images_moving, 
         moving_channel=D.moving_channel, 
-        downsampling=D.downsampling,
+        stop_after=pos_halt_point
     )
     print("Computing coarse drifts")
     coarse_drifts = pd.DataFrame(
-        Parallel(n_jobs=-1, prefer='threads')(delayed(process_single_fov_single_frame__coarse_only)(*args) for args in all_args), 
+        Parallel(n_jobs=-1, prefer='threads')(
+            delayed(lambda p, t, ref, mov: (p, t) + tuple(ip.drift_corr_course(t_img=ref, o_img=mov, downsample=D.downsampling)))(*args) 
+            for args in all_args
+            ), 
         columns=COARSE_DRIFT_TABLE_COLUMNS, 
         )
-    outfile = D.dc_file_path__coarse
+    outfile = update_outfile(D.dc_file_path__coarse)
     print(f"Writing coarse drifts: {outfile}")
     coarse_drifts.to_csv(outfile)
     return outfile
