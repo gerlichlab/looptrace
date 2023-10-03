@@ -23,6 +23,7 @@ from skimage.filters import gaussian, threshold_otsu
 from skimage.morphology import white_tophat, ball, remove_small_objects
 from skimage.measure import regionprops_table
 
+from looptrace.bead_roi_generation import BeadRoiParameters
 from looptrace.numeric_types import NumberLike
 from looptrace.wrappers import phase_xcor
 
@@ -356,6 +357,7 @@ def roi_center_to_bbox(rois: pd.DataFrame, roi_size: Union[np.ndarray, Tuple[int
     rois['x_max'] = rois['xc'] + roi_size[2]//2
     return rois
 
+
 def generate_bead_rois(
         t_img: np.ndarray, 
         threshold: NumberLike, 
@@ -377,17 +379,14 @@ def generate_bead_rois(
     Returns:
     t_img_maxima: 3XN ndarray of 3D bead coordinates in t_img.
     '''
-    roi_px = bead_roi_px//2
-    t_img_label,num_labels=ndi.label(t_img>threshold)
-    print('Number of unfiltered beads found: ', num_labels)
-    t_img_maxima = pd.DataFrame(regionprops_table(t_img_label, t_img, properties=('label', 'centroid', 'max_intensity', 'area')))
-    
-    cent0, cent1, cent2 = "centroid-0", "centroid-1", "centroid-2"
-    t_img_maxima = t_img_maxima[(t_img_maxima[cent0] > roi_px) & (t_img_maxima[cent1] > roi_px) & (t_img_maxima[cent2] > roi_px) & (t_img_maxima['area'] < max_size)].query('max_intensity > @min_bead_int')
-    
-    centroid_columns = [cent0, cent1, cent2]
-    t_img_maxima = t_img_maxima if n_points == -1 else t_img_maxima.sample(n=min(n_points, len(t_img_maxima)), random_state=1)
-    return np.round(t_img_maxima[centroid_columns].to_numpy()).astype(int)
+    params = BeadRoiParameters(
+        min_intensity_for_segmentation=threshold, 
+        min_intensity_for_detection=min_bead_int, 
+        roi_pixels=bead_roi_px, 
+        max_region_size=max_size, 
+        max_intensity_for_detection=max_bead_int
+        )
+    return params.generate_image_rois(img=t_img, num_points=n_points)
 
 
 def extract_single_bead(
