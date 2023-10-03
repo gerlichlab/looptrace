@@ -34,7 +34,7 @@ class BeadRoiParameters:
     max_region_size: NumberLike
     max_intensity_for_detection: Optional[NumberLike] = None
 
-    def generate_image_rois(self, img: np.ndarray, num_points: int, filtered_filepath: PathLike, unfiltered_filepath: Optional[PathLike] = None) -> np.ndarray[int]:
+    def generate_image_rois(self, img: np.ndarray, num_points: int, filtered_filepath: Optional[PathLike] = None, unfiltered_filepath: Optional[PathLike] = None) -> np.ndarray[int]:
         """
         Parameters
         ----------
@@ -42,6 +42,12 @@ class BeadRoiParameters:
             3D array in which each value is a pixel intensity
         num_points : int
             How many bead ROIs to return
+        filtered_filepath : str or Path, optional
+            Path to which to write the ROIs chosen / sampled; 
+            if unspecified, don't write anything
+        unfiltered_filepath : str or Path, optional
+            Path to which to write the ROIs before sampling, but with QC label based on detection criteria; 
+            if unspecified, don't write anything
 
         Returns
         -------
@@ -50,10 +56,10 @@ class BeadRoiParameters:
         """
         
         # Segment the image into contiguous regions of signal above the current threshold.
-        img_maxima = self.extract_regions(img)
+        img_maxima = self._extract_regions(img)
 
         # Apply failure code labels based on the regional filtration criteria.
-        img_maxima["fail_code"] = self.compute_discard_reasons(regions=img_maxima)
+        img_maxima["fail_code"] = self._compute_discard_reasons(regions=img_maxima)
 
         if unfiltered_filepath:
             print(f"Writing unfiltered bead ROIs: {unfiltered_filepath}")
@@ -76,19 +82,20 @@ class BeadRoiParameters:
             print(f"Sampling bead ROIs: {num_points}/{num_filtered}")
             img_maxima = img_maxima.sample(n=num_points, random_state=1)
         
-        print(f"Writing sampled bead ROIs: {filtered_filepath}")
-        img_maxima.to_csv(filtered_filepath)
+        if filtered_filepath:
+            print(f"Writing sampled bead ROIs: {filtered_filepath}")
+            img_maxima.to_csv(filtered_filepath)
 
         return np.round(img_maxima[["centroid-0", "centroid-1", "centroid-2"]].to_numpy()).astype(int)
 
-    def extract_regions(self, img: np.ndarray) -> pd.DataFrame:
+    def _extract_regions(self, img: np.ndarray) -> pd.DataFrame:
         # Segment the given image into regions of pixels in which the signal intensity exceeds the segmentation threshold.
         img_label, num_labels = self._segment_image(img)
         print("Number of unfiltered beads found: ", num_labels)
         # Extract the relevant data for each of the segmented regions.
         return pd.DataFrame(regionprops_table(img_label, img, properties=("label", "centroid", "max_intensity", "area")))
 
-    def compute_discard_reasons(self, regions: pd.DataFrame) -> pd.Series:
+    def _compute_discard_reasons(self, regions: pd.DataFrame) -> pd.Series:
         # TODO: why divide-by-2 here?
         roi_px = self.roi_pixels // 2
         # TODO: record better the mapping from -0/-1/-2 to z/y/x.
