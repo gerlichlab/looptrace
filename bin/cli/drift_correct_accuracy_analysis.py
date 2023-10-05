@@ -143,28 +143,28 @@ class CameraParameters:
 
 
 class DataclassCapableEncoder(json.JSONEncoder):
-        """Facilitate serialisation of the parameters dataclasses in this module, for data provenance."""
-        def default(self, o):
-            if dataclasses.is_dataclass(o):
-                return dataclasses.asdict(o)
-            return super().default(o)
+    """Facilitate serialisation of the parameters dataclasses in this module, for data provenance."""
+    def default(self, o):
+        if dataclasses.is_dataclass(o):
+            return dataclasses.asdict(o)
+        return super().default(o)
 
 
 def process_single_FOV_single_reference_frame(
-        imgs: List[np.ndarray], 
-        drift_table: pd.DataFrame, 
-        reference_fov: int, 
-        bead_detection_params: BeadDetectionParameters, 
-        bead_filtration_params: BeadFiltrationParameters, 
-        camera_params: CameraParameters
-        ) -> pd.DataFrame:
+    imgs: List[np.ndarray], 
+    drift_table: pd.DataFrame, 
+    reference_fov: int, 
+    bead_detection_params: BeadDetectionParameters, 
+    bead_filtration_params: BeadFiltrationParameters, 
+    camera_params: CameraParameters
+    ) -> pd.DataFrame:
     """
     Compute the drift correction accuracy for a single hybridisation round / imaging frame, within a single field-of-view.
 
     Parameters
     ----------
     imgs : Sequence of np.ndarray
-        The full collection of imaging data; namely, a list-/array-like indexed by position/FOV, in which each element is a 
+        The full collection of imaging data; nasmely, a list-/array-like indexed by position/FOV, in which each element is a 
         five-dimensional array itself (t, c, z, y, x) -- that is, a stack (z) of 2D images (y, x) for each imaging channel (c) 
         for each hybridisation round / timepoint (t).
     drift_table : pd.DataFrame
