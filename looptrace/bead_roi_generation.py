@@ -13,9 +13,11 @@ and generate regions of interest (ROIs) corresponding to them.
 __author__ = "Vince Reuter"
 
 import dataclasses
+from joblib import Parallel, delayed
 from pathlib import Path
 from typing import *
 
+from gertils import ExtantFolder
 import numpy as np
 import pandas as pd
 import scipy.ndimage as ndi
@@ -24,6 +26,61 @@ from skimage.measure import regionprops_table
 from looptrace.numeric_types import NumberLike
 
 PathLike = Union[str, Path]
+ImageArrayLike = Union["FiveTensor", List["FourTensor"]]
+
+
+class ArrayDimensionalityError(Exception):
+    """Error subtype to represent an error in array dimensionality"""
+
+
+def validate_array_dimension(arr: np.ndarray, expected: int) -> None:
+    obs = len(arr.shape)
+    if obs != expected:
+        raise ArrayDimensionalityError(f"Expected {expected} dimensions, but got {obs}")
+
+
+@dataclasses.dataclass
+class FourTensor:
+    data: np.ndarray
+
+    def __post_init__(self) -> None:
+        validate_array_dimension(arr=self.data, expected=4)
+
+@dataclasses.dataclass
+class FiveTensor:
+    data: np.ndarray
+
+    def __post_init__(self) -> None:
+        validate_array_dimension(arr=self.data, expected=4)
+
+
+def iterate_over_pos_time_images(image_array: ImageArrayLike) -> Iterable[Tuple[int, FourTensor]]:
+    if isinstance(image_array, FiveTensor):
+        def gen_pos_images():
+            for i in range(image_array.shape[0]):
+                yield i, image_array[i, :, :, :, :]
+    elif isinstance(image_array, list) and all(isinstance(arr, FourTensor) for arr in image_array):
+        gen_pos_images = lambda _: enumerate(image_array)
+    elif isinstance(image_array, np.ndarray):
+        raise ArrayDimensionalityError(f"Illegal shape for positional iteration over image array: {image_array.shape}")
+    else:
+        raise TypeError(f"Illegal image array for positional iteration: {type(image_array).__name__}")
+    for p, pos_imgs in gen_pos_images():
+        for t in range(pos_imgs.shape[0]):
+            yield (p, t), pos_imgs[t, :, :, :]
+
+
+def generate_all_bead_rois(image_array: ImageArrayLike, output_folder: ExtantFolder, params: "BeadRoiParameters", **joblib_kwargs) -> List[Tuple[Path, pd.DataFrame]]:
+    def get_outfile(pos_idx: int, frame_idx: int) -> Path:
+        return output_folder.path / f"bead_rois__{pos_idx}_{frame_idx}.csv"
+    def proc1(img: np.ndarray, outfile: Path) -> Tuple[Path, pd.DataFrame]:
+        rois = params.compute_labeled_regions(img=img)
+        rois.to_csv(outfile)
+        return outfile, rois
+    return Parallel(**joblib_kwargs)(delayed(proc1)(
+        get_outfile(pos_idx=pos_idx, frame_idx=frame), img) 
+        for (pos_idx, frame), img in iterate_over_pos_time_images(image_array=image_array)
+        )
 
 
 @dataclasses.dataclass
@@ -55,11 +112,7 @@ class BeadRoiParameters:
             3 x num_points array of 3D bead coordinates in given image
         """
         
-        # Segment the image into contiguous regions of signal above the current threshold.
-        img_maxima = self._extract_regions(img)
-
-        # Apply failure code labels based on the regional filtration criteria.
-        img_maxima["fail_code"] = self._compute_discard_reasons(regions=img_maxima)
+        img_maxima = self.compute_labeled_regions(img=img)
 
         if unfiltered_filepath:
             print(f"Writing unfiltered bead ROIs: {unfiltered_filepath}")
@@ -87,6 +140,16 @@ class BeadRoiParameters:
             img_maxima.to_csv(filtered_filepath)
 
         return np.round(img_maxima[["centroid-0", "centroid-1", "centroid-2"]].to_numpy()).astype(int)
+
+    def compute_labeled_regions(self, img: np.ndarray) -> pd.DataFrame:
+        """Find contiguous regions (according to instance settings) within given image, and assign fail code(s)."""
+        # Segment the image into contiguous regions of signal above the current threshold.
+        img_maxima = self._extract_regions(img)
+        
+        # Apply failure code labels based on the regional filtration criteria.
+        img_maxima["fail_code"] = self._compute_discard_reasons(regions=img_maxima)
+
+        return img_maxima
 
     def _extract_regions(self, img: np.ndarray) -> pd.DataFrame:
         # Segment the given image into regions of pixels in which the signal intensity exceeds the segmentation threshold.
