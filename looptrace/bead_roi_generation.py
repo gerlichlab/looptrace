@@ -26,7 +26,6 @@ from skimage.measure import regionprops_table
 from looptrace.numeric_types import NumberLike
 
 PathLike = Union[str, Path]
-ImageArrayLike = Union["FiveTensor", List["FourTensor"], List["FiveTensor"]]
 
 
 class ArrayDimensionalityError(Exception):
@@ -39,45 +38,30 @@ def validate_array_dimension(arr: np.ndarray, expected: int) -> None:
         raise ArrayDimensionalityError(f"Expected {expected} dimensions, but got {obs}")
 
 
-@dataclasses.dataclass
-class FourTensor:
-    data: np.ndarray
-
-    def __post_init__(self) -> None:
-        validate_array_dimension(arr=self.data, expected=4)
-
-@dataclasses.dataclass
-class FiveTensor:
-    data: np.ndarray
-
-    def __post_init__(self) -> None:
-        validate_array_dimension(arr=self.data, expected=4)
+def get_dimension(obj) -> Optional[int]:
+    try:
+        shape = obj.shape
+    except AttributeError:
+        return None
+    return len(shape)
 
 
-def iterate_over_pos_time_images(image_array: ImageArrayLike, channel: Optional[int] = None) -> Iterable[Tuple[int, np.ndarray]]:
-    if isinstance(image_array, List[FiveTensor]): # includes dimension for channel (t, c, z, y, x)
+def iterate_over_pos_time_images(image_array: List[np.ndarray], channel: Optional[int] = None) -> Iterable[Tuple[int, np.ndarray]]:
+    if isinstance(image_array, list) and all(get_dimension(arr) == 5 for arr in image_array): # includes dimension for channel (t, c, z, y, x)
         if channel is None:
             raise ValueError("Must specify beads channel when iterating over 5-tensors.")
         for p, pos_imgs in enumerate(image_array):
             for t in range(pos_imgs.shape[0]):
                 yield (p, t), pos_imgs[t, channel, :, :, :]
+    elif isinstance(image_array, list) and all(get_dimension(arr) == 4 for arr in image_array):
+            for p, pos_imgs in enumerate(image_array):
+                for t in range(pos_imgs.shape[0]):
+                    yield (p, t), pos_imgs[t, :, :, :]
     else:
-        if isinstance(image_array, FiveTensor):
-            def gen_pos_images():
-                for i in range(image_array.shape[0]):
-                    yield i, image_array[i, :, :, :, :]
-        elif isinstance(image_array, list) and all(isinstance(arr, FourTensor) for arr in image_array):
-            gen_pos_images = lambda _: enumerate(image_array)
-        elif isinstance(image_array, np.ndarray):
-            raise ArrayDimensionalityError(f"Illegal shape for positional iteration over image array: {image_array.shape}")
-        else:
-            raise TypeError(f"Illegal image array for positional iteration: {type(image_array).__name__}")
-        for p, pos_imgs in gen_pos_images():
-            for t in range(pos_imgs.shape[0]):
-                yield (p, t), pos_imgs[t, :, :, :]
+        raise TypeError(f"Illegal image array for positional iteration: {type(image_array).__name__}")
 
 
-def generate_all_bead_rois(image_array: ImageArrayLike, output_folder: ExtantFolder, params: "BeadRoiParameters", channel: Optional[int], **joblib_kwargs) -> List[Tuple[Path, pd.DataFrame]]:
+def generate_all_bead_rois(image_array: List[np.ndarray], output_folder: ExtantFolder, params: "BeadRoiParameters", channel: Optional[int], **joblib_kwargs) -> List[Tuple[Path, pd.DataFrame]]:
     def get_outfile(pos_idx: int, frame_idx: int) -> Path:
         return output_folder.path / f"bead_rois__{pos_idx}_{frame_idx}.csv"
     def proc1(img: np.ndarray, outfile: Path) -> Tuple[Path, pd.DataFrame]:
