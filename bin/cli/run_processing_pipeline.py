@@ -12,7 +12,7 @@ from config_file_validation import workflow as run_config_validation
 from extract_exp_psf import workflow as run_psf_extraction
 from decon import workflow as run_deconvolution
 from nuc_label import workflow as run_nuclei_detection
-from drift_correct import workflow as run_drift_correction
+from looptrace.Drifter import coarse_correction_workflow as run_coarse_drift_correction, fine_correction_workflow as run_fine_drift_correction
 from drift_correct_accuracy_analysis import workflow as run_drift_correction_analysis, run_visualisation as run_drift_correction_accuracy_visualisation
 from detect_spots import workflow as run_spot_detection
 from assign_spots_to_nucs import workflow as run_spot_filtration
@@ -23,7 +23,6 @@ from extract_spots_cluster_cleanup import workflow as run_spot_zipping
 from tracing import workflow as run_chromatin_tracing
 from tracing_qc import workflow as run_tracing_qc
 
-from looptrace.Drifter import coarse_correction_workflow as run_coarse_drift_correction, fine_correction_workflow as run_fine_drift_correction
 
 logger = logging.getLogger(__name__)
 
