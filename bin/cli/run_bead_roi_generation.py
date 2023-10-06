@@ -63,10 +63,13 @@ if __name__ == "__main__":
     parser.add_argument("--frame-count", required=True, type=int, help="Number of frames / hybridisation timepoints; can use to arbitrarily upper-bound frame iteration")
     parser.add_argument("--min-frame-index", type=int, default=0, help="Starting point for hybridisation timepoint to compute (0-based, inclusive)")
     parser.add_argument("--prefer-for-joblib", default="threads", help="Argument for joblib.Parallel's 'prefer' parameter")
+    parser.add_argument("--num-jobs", type=int, default=1, help="Argument for joblib.Parallel's n_jobs parameter")
     args = parser.parse_args()
     workflow(
         config_file=args.config_path, 
         images_folder=args.image_path, 
         output_folder=args.output_folder, 
         frame_range=range(args.min_frame_index, args.frame_count), 
+        prefer=args.prefer_for_joblib, 
+        n_jobs=args.num_jobs,
         )
