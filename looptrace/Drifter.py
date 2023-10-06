@@ -371,8 +371,8 @@ class Drifter():
         return self.config.get("max_bead_intensity")
 
     @property
-    def bead_rois_analysis_subfolder(self) -> Path:
-        return Path(self.image_handler.analysis_path) / "bead_rois"
+    def reference_bead_rois_subfolder(self) -> Path:
+        return Path(self.image_handler.analysis_path) / "reference_bead_rois"
 
     @property
     def bead_roi_max_size(self) -> int:
@@ -391,10 +391,10 @@ class Drifter():
         return self.config['course_drift_downsample']
 
     def get_bead_rois_filtered_filepath(self, pos_idx: int) -> Path:
-        return self.bead_rois_analysis_subfolder / f"beads.{pos_idx}.filtered.csv"
+        return self.reference_bead_rois_subfolder / f"beads.{pos_idx}.filtered.csv"
 
     def get_bead_rois_unfiltered_filepath(self, pos_idx: int) -> Path:
-        return self.bead_rois_analysis_subfolder / f"beads.{pos_idx}.unfiltered.csv"
+        return self.reference_bead_rois_subfolder / f"beads.{pos_idx}.unfiltered.csv"
 
     @property
     def get_bead_roi_parameters(self) -> BeadRoiParameters:
