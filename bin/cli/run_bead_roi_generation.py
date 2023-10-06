@@ -10,7 +10,7 @@ from gertils import ExtantFile, ExtantFolder
 
 from looptrace.Drifter import Drifter
 from looptrace.ImageHandler import ImageHandler, handler_from_cli
-from looptrace.bead_roi_generation import generate_all_bead_rois_from_array, generate_all_bead_rois_from_getter
+from looptrace.bead_roi_generation import generate_all_bead_rois_from_getter
 
 __author__ = "Vince Reuter"
 
@@ -22,18 +22,14 @@ def workflow(
         frame_range: Iterable[int],
         **joblib_kwargs
         ) -> Iterable[Tuple[Path, pd.DataFrame]]:
+    
     H = handler_from_cli(config_file=config_file, images_folder=images_folder)
     D = Drifter(image_handler=H)
-    # return generate_all_bead_rois_from_array(
-    #     image_array=H.images[get_images_key(H)], 
-    #     output_folder=output_folder, 
-    #     params=D.get_bead_roi_parameters, 
-    #     channel=get_beads_channel(D),
-    #     **joblib_kwargs,
-    #     )
+    
     def get_image_stack(pos_idx: int, frame_idx: int) -> np.ndarray:
         return D.get_moving_image(pos_idx=pos_idx, frame_idx=frame_idx)
-    generate_all_bead_rois_from_getter(
+    
+    return generate_all_bead_rois_from_getter(
         get_3d_stack=get_image_stack, 
         iter_position=range(len(D.images_moving)), 
         iter_frame=frame_range, 
