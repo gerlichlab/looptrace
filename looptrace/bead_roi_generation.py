@@ -134,6 +134,11 @@ class BeadRoiParameters:
 
     def compute_labeled_regions(self, img: np.ndarray) -> pd.DataFrame:
         """Find contiguous regions (according to instance settings) within given image, and assign fail code(s)."""
+        if not isinstance(img, np.ndarray):
+            raise TypeError(f"Image must be 3D array; got {type(img).__name__}")
+        if 3 != len(img.shape):
+            raise TypeError(f"Image must be 3D array; got dimension of {len(img.shape)}")
+        
         # Segment the image into contiguous regions of signal above the current threshold.
         img_maxima = self._extract_regions(img)
         
