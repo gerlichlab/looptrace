@@ -69,8 +69,8 @@ def generate_all_bead_rois(image_array: List[np.ndarray], output_folder: ExtantF
         rois.to_csv(outfile)
         return outfile, rois
     return Parallel(**joblib_kwargs)(delayed(proc1)(
-        get_outfile(pos_idx=pos_idx, frame_idx=frame), img) 
-        for (pos_idx, frame), img in iterate_over_pos_time_images(image_array=image_array)
+        img, get_outfile(pos_idx=pos_idx, frame_idx=frame)) 
+        for (pos_idx, frame), img in iterate_over_pos_time_images(image_array=image_array, channel=channel)
         )
 
 
