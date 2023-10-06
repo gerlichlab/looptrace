@@ -61,7 +61,7 @@ def iterate_over_pos_time_images(image_array: List[np.ndarray], channel: Optiona
         raise TypeError(f"Illegal image array for positional iteration: {type(image_array).__name__}")
 
 
-def generate_all_bead_rois(image_array: List[np.ndarray], output_folder: ExtantFolder, params: "BeadRoiParameters", channel: Optional[int], **joblib_kwargs) -> List[Tuple[Path, pd.DataFrame]]:
+def generate_all_bead_rois_from_array(image_array: List[np.ndarray], output_folder: ExtantFolder, params: "BeadRoiParameters", channel: Optional[int], **joblib_kwargs) -> List[Tuple[Path, pd.DataFrame]]:
     def get_outfile(pos_idx: int, frame_idx: int) -> Path:
         return output_folder.path / f"bead_rois__{pos_idx}_{frame_idx}.csv"
     def proc1(img: np.ndarray, outfile: Path) -> Tuple[Path, pd.DataFrame]:
@@ -71,6 +71,29 @@ def generate_all_bead_rois(image_array: List[np.ndarray], output_folder: ExtantF
     return Parallel(**joblib_kwargs)(delayed(proc1)(
         img, get_outfile(pos_idx=pos_idx, frame_idx=frame)) 
         for (pos_idx, frame), img in iterate_over_pos_time_images(image_array=image_array, channel=channel)
+        )
+
+
+def generate_all_bead_rois_from_getter(
+    get_3d_stack: Callable[[int, int],  np.ndarray], 
+    iter_position: Iterable[int], 
+    iter_frame: Iterable[int], 
+    output_folder: ExtantFolder, 
+    params: "BeadRoiParameters", 
+    **joblib_kwargs,
+    ) -> List[Tuple[Path, pd.DataFrame]]:
+    
+    def get_outfile(pos_idx: int, frame_idx: int) -> Path:
+        return output_folder.path / f"bead_rois__{pos_idx}_{frame_idx}.csv"
+    
+    def proc1(img: np.ndarray, outfile: Path) -> Tuple[Path, pd.DataFrame]:
+        rois = params.compute_labeled_regions(img=img)
+        rois.to_csv(outfile)
+        return outfile, rois
+    
+    return Parallel(**joblib_kwargs)(
+        delayed(proc1)(img=get_3d_stack(pos_idx, frame), outfile=get_outfile(pos_idx=pos_idx, frame_idx=frame)) 
+        for pos_idx in iter_position for frame in iter_frame
         )
 
 
