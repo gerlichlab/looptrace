@@ -361,7 +361,6 @@ class SpotPicker:
     def make_dc_rois_all_frames(self) -> str:
         #Precalculate all ROIs for extracting spot images, based on identified ROIs and precalculated drifts between time frames.
         print('Generating list of all ROIs for tracing:')
-        #positions = sorted(list(self.roi_table.position.unique()))
 
         all_rois = []
         
@@ -380,9 +379,8 @@ class SpotPicker:
         
         for _, roi in tqdm.tqdm(rois_table.iterrows(), total=len(rois_table)):
             pos = roi['position']
-            pos_index = self.image_handler.image_lists[self.input_name].index(pos)#positions.index(pos)
+            pos_index = self.image_handler.image_lists[self.input_name].index(pos)
             dc_pos_name = self.image_handler.image_lists[self.config['reg_input_moving']][pos_index] # not unused; used for table query
-            #sel_dc = self.image_handler.tables[self.input_name + '_drift_correction'].query('position == @dc_pos_name')
             sel_dc = self.image_handler.tables[self.input_name + '_drift_correction_fine'].query('position == @dc_pos_name')
             ref_frame = roi['frame']
             ch = roi['ch']
