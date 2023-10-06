@@ -22,6 +22,7 @@ import numpy as np
 import pandas as pd
 import scipy.ndimage as ndi
 from skimage.measure import regionprops_table
+import tqdm
 
 from looptrace.numeric_types import NumberLike
 
@@ -81,7 +82,7 @@ def generate_all_bead_rois_from_getter(
     
     return Parallel(**joblib_kwargs)(
         delayed(proc1)(img=get_3d_stack(pos_idx, frame), outfile=get_outfile(pos_idx=pos_idx, frame_idx=frame)) 
-        for pos_idx in iter_position for frame in iter_frame
+        for pos_idx in tqdm.tqdm(iter_position) for frame in tqdm.tqdm(iter_frame)
         )
 
 
