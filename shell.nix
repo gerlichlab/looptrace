@@ -12,7 +12,7 @@
 }:
 let baseBuildInputs = with pkgs; [ poetry stdenv.cc.cc.lib zlib ];
     py310 = pkgs.python310.withPackages (ps: with ps; [ numpy pandas ]);
-    R-analysis = pkgs.rWrapper.override{ packages = with pkgs.rPackages; [ argparse data_table ggplot2 reshape2 ]; };
+    R-analysis = pkgs.rWrapper.override{ packages = with pkgs.rPackages; [ argparse data_table ggplot2 reshape2 stringi ]; };
     poetryExtras = [] ++ 
       (if pipeline then [ "pipeline" ] else []) ++
       (if analysis then [ "analysis" ] else []) ++ 
@@ -25,13 +25,13 @@ let baseBuildInputs = with pkgs; [ poetry stdenv.cc.cc.lib zlib ];
 in
 pkgs.mkShell {
   name = "looptrace-env";
-  buildInputs = if absolutelyOnlyR then [ R-analysis ] else baseBuildInputs ++ 
+  buildInputs = [ R-analysis ] ++ 
+    (if absolutelyOnlyR then [ ] else baseBuildInputs) ++ 
     (if pipeline then [
       py310
       pkgs.zlib
       pkgs.stdenv.cc.cc.lib
-    ] else []) ++ 
-    (if analysis then [ R-analysis ] else []);
+    ] else []);
   shellHook = if absolutelyOnlyR then "" else ''
     # To get this working on the lab machine, we need to modify Poetry's keyring interaction:
     # https://stackoverflow.com/questions/74438817/poetry-failed-to-unlock-the-collection
