@@ -293,8 +293,8 @@ def compute_fine_drifts__with_ref_img_gain(drifter: "Drifter"):
         bead_rois = bead_roi_params.generate_image_rois(
             img=ref_img, 
             num_points=drifter.num_bead_points,
-            filtered_filepath=drifter.get_bead_rois_filtered_filepath(pos_idx=pos_idx),
-            unfiltered_filepath=drifter.get_bead_rois_unfiltered_filepath(pos_idx=pos_idx),
+            filtered_filepath=drifter.get_reference_bead_rois_filtered_filepath(pos_idx=pos_idx),
+            unfiltered_filepath=drifter.get_reference_bead_rois_unfiltered_filepath(pos_idx=pos_idx),
             )
         if bead_rois.size == 0:
             for _, row in position_group.iterrows():
@@ -390,10 +390,10 @@ class Drifter():
     def downsampling(self) -> int:
         return self.config['course_drift_downsample']
 
-    def get_bead_rois_filtered_filepath(self, pos_idx: int) -> Path:
+    def get_reference_bead_rois_filtered_filepath(self, pos_idx: int) -> Path:
         return self.reference_bead_rois_subfolder / f"beads.{pos_idx}.filtered.csv"
 
-    def get_bead_rois_unfiltered_filepath(self, pos_idx: int) -> Path:
+    def get_reference_bead_rois_unfiltered_filepath(self, pos_idx: int) -> Path:
         return self.reference_bead_rois_subfolder / f"beads.{pos_idx}.unfiltered.csv"
 
     @property
