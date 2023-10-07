@@ -43,7 +43,7 @@ def find_config_file_errors(config_file: ExtantFile) -> List[ConfigFileError]:
     errors = []
     if not conf_data.get(REQ_GPU_KEY, False):
         errors.append(ConfigFileError(f"Requiring GPUs for deconvolution with key {REQ_GPU_KEY} is currently required."))
-    dc_method = Drifter.get_drift_correction_method_name(conf_data)
+    dc_method = Drifter.get_method_name(conf_data)
     if dc_method and not Drifter.Methods.is_valid_name(dc_method):
         errors.append(ConfigFileError(f"Invalid drift correction method ({dc_method}); choose from: {', '.join(Drifter.Methods.values())}"))
     if conf_data.get(CROSSTALK_SUBTRACTION_KEY, False):
