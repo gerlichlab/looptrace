@@ -14,7 +14,7 @@ cli_parser$add_argument("-o", "--output-folder", required = TRUE, help = "Path t
 cli_parser$add_argument("--num-positions", type = "integer", required = TRUE, help="Number of positions (fields of view) for the experiment, used for validation of found files collection")
 cli_parser$add_argument("--num-frames", type = "integer", required = TRUE, help="Number of frames (hybridisation rounds / timepoints) for the experiment, used for validation of found files collection")
 ## Optional
-cli_parser$add_argument("--counts-files-prefix", default = "bead_rois", help = "Prefix for files to find to count ROIs")
+cli_parser$add_argument("--counts-files-prefix", default = "bead_rois__", help = "Prefix for files to find to count ROIs")
 cli_parser$add_argument("--counts-files-extension", default = "csv", help = "Extension for files to fine to count ROIs")
 cli_parser$add_argument("--do-not-modify-counts", action = "store_true", help = "Indicate that counts are real counts not line counts (no header, e.g.)")
 cli_parser$add_argument("--position-frame-delimiter", default = "_", help = "Delimiter between position and frame in filename")
@@ -36,17 +36,18 @@ parsePositionAndFrame <- function(fn, file_prefix, file_ext, pos_frame_sep) {
     encoded <- stripSuffix(suffix = paste0(".", file_ext), target = encoded)
     fields <- unlist(strsplit(encoded, pos_frame_sep))
     if (length(fields) != 2) {
-        stop("Failed to parse position and frame from filename: ", fn)
+        stop(sprintf("Failed to parse position and frame from filename: %s. %s field(s): %s", fn, length(fields), paste0(fields, collapse = ",")))
     }
     list(position = as.integer(fields[1]), frame = as.integer(fields[2]))
 }
 
 # Build the table.
 pattern <- sprintf("%s*.%s", opts$counts_files_prefix, opts$counts_files_extension)
-count_rois_cmd <- sprintf("wc -l %s", pattern)
+count_rois_cmd <- sprintf("wc -l %s", file.path(opts$input_folder, pattern))
 message("Building table from command: ", count_rois_cmd)
 roi_counts <- data.table(read.table(text = system(count_rois_cmd, intern = TRUE)))
 colnames(roi_counts) <- c("count", "filename")
+roi_counts$filename <- sapply(roi_counts$filename, basename)
 
 # Validate the table.
 if (1 != nrow(roi_counts[filename == "total", ])) {
@@ -77,17 +78,18 @@ if (opts$do_not_modify_counts) {
 if (any(roi_counts$count < 0)) {
     stop("Counts table has negative count values! ", sum(roi_counts$count < 0))
 }
+## Print the validated table.
+message("Printing validated table")
+roi_counts
 ## Parse position and frame from each filename.
-pos_and_frame <- apply(
-    X = roi_counts, 
-    MARGIN = 1, 
-    FUN = function(fn) parsePositionAndFrame(
+pos_and_frame <- lapply(roi_counts$filename, function(fn) {
+    parsePositionAndFrame(
         fn = fn, 
         file_prefix = opts$counts_files_prefix, 
         file_ext = opts$counts_files_extension, 
         pos_frame_sep = opts$position_frame_delimiter
         )
-    )
+    })
 roi_counts$position <- sapply(pos_and_frame, function(e) e$position)
 roi_counts$frame <- sapply(pos_and_frame, function(e) e$frame)
 ## Make hybridisation timepoint / frame a factor variable rather than integer.
@@ -95,11 +97,12 @@ roi_counts$frame <- as.factor(roi_counts$frame)
 
 data_output_file <- file.path(opts$output_folder, "bead_roi_counts.csv")
 message("Writing bead ROI counts data: ", data_output_file)
-write.table(roi_counts, file = data_output_file, quote = FALSE, sep = ",")
+write.table(roi_counts, file = data_output_file, quote = FALSE, sep = ",", row.names = FALSE, col.names = TRUE)
 
 message("Building per-frame boxplot")
 roi_counts_boxplot <- ggplot(roi_counts, aes(x=frame, y=count)) + 
     geom_boxplot() + 
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
     ggtitle("Detected bead ROI count by frame, across FOVs")
 
 plotfile <- file.path(opts$output_folder, "bead_roi_counts.boxplot.png")
