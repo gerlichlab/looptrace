@@ -15,7 +15,8 @@ from looptrace.bead_roi_generation import generate_all_bead_rois_from_getter
 __author__ = "Vince Reuter"
 
 
-OUTPUT_SUBFOLDER = "bead_rois__ALL"
+def get_bead_rois_path(handler: ImageHandler):
+    return Path(handler.analysis_path) / "bead_rois__ALL"
 
 
 def workflow(
@@ -31,7 +32,7 @@ def workflow(
     D = Drifter(image_handler=H)
     
     # Finalise and prepare the output folder.
-    output_folder = output_folder or Path(H.analysis_path) / OUTPUT_SUBFOLDER
+    output_folder = output_folder or get_bead_rois_path(handler=H)
     output_folder.mkdir(exist_ok=True, parents=False)
 
     # Determine the range of frames / hybridisation rounds to use.
