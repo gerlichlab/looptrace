@@ -84,6 +84,14 @@ class Tracer:
         
         self.traces_path = finalise_suffix(traces_path)
 
+    @property
+    def nanometers_per_pixel_xy(self) -> NumberLike:
+        return self.config["xy_nm"]
+
+    @property
+    def nanometers_per_pixel_z(self) -> NumberLike:
+        return self.config["z_nm"]
+
     def trace_all_rois(self) -> str:
         '''
         Fits 3D gaussian to previously detected ROIs across positions and timeframes.
@@ -106,7 +114,7 @@ class Tracer:
             cores=self.config.get("tracing_cores")
             )
         
-        traces = finalise_traces(rois=self.all_rois, fits=spot_fits)
+        traces = finalise_traces(rois=self.all_rois, fits=spot_fits, z_nm=self.nanometers_per_pixel_z, xy_nm=self.nanometers_per_pixel_xy)
         
         print(f"Writing traces: {self.traces_path}")
         traces.to_csv(self.traces_path)
