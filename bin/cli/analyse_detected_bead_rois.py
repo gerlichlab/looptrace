@@ -21,7 +21,7 @@ def workflow(config_file: ExtantFile):
         to determine the counts of positions (fields of view) and hybridisation rounds/timepoints (frames) 
         to pass to the script to know which files to look at to count records.
     """
-    H = handler_from_cli(config_file=config_file)
+    H = handler_from_cli(config_file=config_file, images_folder=None)
     D = Drifter(image_handler=H)
     rois_path = H.bead_rois_path
     n_pos = D.num_positions
