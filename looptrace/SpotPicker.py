@@ -283,16 +283,13 @@ class SpotPicker:
                 all_rois.append(spot_props)
         
         output = pd.concat(all_rois)
-        #logger.info(f"Writing ROI centers: {self.roi_centers_filepath}")
         logger.info(f"Writing initial spot ROIs: {self.roi_path}")
         n_spots = len(output)
         (logger.warning if n_spots == 0 else logger.info)(f'Found {n_spots} spots.')
-        #output.to_csv(self.roi_centers_filepath)
         outfile = outfile or self.roi_path
         print(f"Writing ROIs: {outfile}")
         output.to_csv(outfile)
 
-        #return self.roi_centers_filepath
         return outfile
 
 
@@ -310,9 +307,6 @@ class SpotPicker:
 
             t_img = self.images[pos_index][ref_frame, ref_ch].compute()
             t_img_label, num_labels = ndi.label(t_img>threshold)
-            #t_img_maxima=np.array(ndi.measurements.maximum_position(t_img, 
-            #                                            labels=t_img_label, 
-            #                                            index=np.random.choice(np.arange(1,num_labels), size=n_points*2)))
             
             spot_props = pd.DataFrame(regionprops_table(t_img_label, t_img, properties=('label', 'centroid', 'max_intensity')))
             spot_props = spot_props.query('max_intensity > @min_bead_int').sample(n=n_beads, random_state=1)
@@ -405,7 +399,6 @@ class SpotPicker:
                 pad_x_min = abs(min(0,x_min))
                 pad_x_max = abs(max(0,x_max-X))
 
-                #print('Appending ', s)
                 all_rois.append([pos, pos_index, roi.name, dc_frame['frame'], ref_frame, ch, 
                                 z_min, z_max, y_min, y_max, x_min, x_max, 
                                 pad_z_min, pad_z_max, pad_y_min, pad_y_max, pad_x_min, pad_x_max,
@@ -443,14 +436,12 @@ class SpotPicker:
 
             #If microscope drifted, ROI could be outside image. Correct for this:
             if pad != ((0,0),(0,0),(0,0)):
-                #print('Padding ', pad)
                 roi_img = np.pad(roi_img, pad, mode='edge')
 
         except ValueError: # ROI collection failed for some reason
             roi_img = np.zeros(self._raw_roi_image_size, dtype=np.float32)
 
-        #print(p, t, c, z, y, x)
-        return roi_img  #{'p':p, 't':t, 'c':c, 'z':z, 'y':y, 'x':x, 'img':roi_img}
+        return roi_img
 
     def extract_single_roi_img_inmem(self, single_roi, images):
         # Function for extracting a single cropped region defined by ROI from a larger 3D image.
@@ -517,9 +508,6 @@ class SpotPicker:
                         except ValueError: #Edge case: ROI fetching has failed giving strange shaped ROI, just leave the zeros as is.
                             pass
                             # roi_stack = np.append(roi_stack, np.expand_dims(np.zeros_like(roi_stack[0]), 0), axis=0)
-                    #np.save(os.path.join(self.spot_images_path, rn + '.npy', roi_stack)
-                    #print(roi_array)
-                    #roi_array_padded.append(ip.pad_to_shape(roi, shape = roi_image_size, mode = 'minimum'))
             f_id += 1
         return array_files
 
@@ -540,56 +528,23 @@ class SpotPicker:
             self.write_single_fov_data(pos_group_name=pos, pos_group_data=pos_group)
             
         return self.spot_images_path
-            
-            #for j, pos_roi in enumerate(pos_rois):
-            #    roi_array[str(pos)+'_'+str(j).zfill(5)] = pos_roi.copy()
-        
-        #print(roi_array.keys())
-        
-        # pos_rois = {}
-      
-        # for roi_id in rois.roi_id.unique():
-        #     try:
-        #         pos_rois[str(roi_id).zfill(5)] = np.stack([roi_array[(roi_id, frame)] for frame in range(T)])
-        #     except KeyError:
-        #         break
-        #     except ValueError: #Edge case handling for rois very close to the edge, sometimes the intial padding does not work properly due to rounding errors.
-        #         roi_size = roi_array[(roi_id, T-1)].shape
-        #         pos_rois[str(roi_id).zfill(5)] = np.stack([ip.pad_to_shape(roi_array[(roi_id, frame)], roi_size) for frame in range(T)])
-        
-        #self.temp_array = pos_rois
-        #roi_array_padded = np.stack(roi_array_padded)
-
-        #print('ROIs generated, saving...')
-        #self.image_handler.images['spot_images'] = pos_rois
-        #self.image_handler.spot_images['spot_images_padded'] = roi_array_padded
-            
-        #np.savez(self.config['image_path']+os.sep+'spot_images'+self.postfix+'.npz', **roi_array)
-        #self.image_handler.images['spot_images'] = image_io.NPZ_wrapper(self.config['image_path']+os.sep+'spot_images'+self.postfix+'.npz')
-        #print('ROIs saved.')
-        #np.save(self.image_handler.spot_images_path+os.sep+'spot_images_padded.npy', roi_array_padded)
 
     def gen_roi_imgs_inmem_coursedc(self) -> str:
         # Use this simplified function if the images that the spots are gathered from are already coursely drift corrected!
-        #rois = self.roi_table#.iloc[0:500]
-        #imgs = self.
         print('Generating single spot image stacks from coursely drift corrected images.')
         rois = self.image_handler.tables[self.input_name+'_dc_rois']
         for pos, group in tqdm.tqdm(rois.groupby('position')):
             pos_index = self.image_handler.image_lists[self.input_name].index(pos)
             full_image = np.array(self.image_handler.images[self.input_name][pos_index])
-            #print(full_image.shape)
             for roi in group.to_dict('records'):
                 spot_stack = full_image[:, 
                                 roi['ch'], 
                                 roi['z_min']:roi['z_max'], 
                                 roi['y_min']:roi['y_max'],
                                 roi['x_min']:roi['x_max']].copy()
-                #print(spot_stack.shape)
                 fn = pos+'_'+str(roi['frame'])+'_'+str(roi['roi_id_pos']).zfill(4)
                 arr_out = os.path.join(self.spot_images_path, fn + '.npy')
                 np.save(arr_out, spot_stack)
-        #self.image_handler.images['spot_images'] = all_spots
         return self.spot_images_path
 
     def fine_dc_single_roi_img(self, roi_img, roi):
@@ -597,7 +552,6 @@ class SpotPicker:
         dz = float(roi['z_px_fine'])
         dy = float(roi['y_px_fine'])
         dx = float(roi['x_px_fine'])
-        #roi_image_shifted = delayed(ndi.shift)(roi_image_exp, (dz, dy, dx))
         roi_img = ndi.shift(roi_img, (dz, dy, dx)).astype(np.uint16)
         return roi_img
 
@@ -618,9 +572,5 @@ class SpotPicker:
                 i += 1
             roi_array_fine.append(np.stack(roi_stack_fine))
 
-        #roi_imgs_fine = Parallel(n_jobs=-1, verbose=1, prefer='threads')(delayed(self.fine_dc_single_roi_img)(roi_imgs[i], rois.iloc[i]) for i in tqdm(range(roi_imgs.shape[0])))
-        #roi_imgs_fine = np.stack(roi_array_fine)
-        #roi_array_fine = np.array(roi_array_fine, dtype='object')
-        
         self.image_handler.images['spot_images_fine'] = roi_array_fine
         np.savez_compressed(self.image_handler.image_save_path+os.sep+'spot_images_fine.npz', *roi_array_fine)
