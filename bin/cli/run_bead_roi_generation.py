@@ -21,7 +21,7 @@ OUTPUT_SUBFOLDER = "bead_rois__ALL"
 def workflow(
         config_file: ExtantFile, 
         images_folder: ExtantFolder, 
-        output_folder: Optional[Path] = None, 
+        output_folder: Union[None, Path, ExtantFolder] = None, 
         frame_range: Optional[Iterable[int]] = None,
         **joblib_kwargs
         ) -> Iterable[Tuple[Path, pd.DataFrame]]:
