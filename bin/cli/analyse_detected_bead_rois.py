@@ -8,6 +8,7 @@ from gertils import ExtantFile, ExtantFolder
 
 from looptrace.Drifter import Drifter
 from looptrace.ImageHandler import handler_from_cli
+from run_bead_roi_generation import get_bead_rois_path
 
 
 def workflow(config_file: ExtantFile, images_folder: ExtantFolder):
@@ -25,10 +26,10 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder):
     """
     H = handler_from_cli(config_file=config_file, images_folder=images_folder)
     D = Drifter(image_handler=H)
-    rois_path = H.bead_rois_path
+    rois_path = get_bead_rois_path(handler=H)
     n_pos = D.num_positions
     n_time = H.num_timepoints
-    script = os.path.join(os.dirname(__file__), 'analyse_detected_bead_rois.py')
+    script = os.path.join(os.path.dirname(__file__), 'analyse_detected_bead_rois.py')
     cmd_to_run = f"Rscript {script} -i {rois_path} -o --num-positions {n_pos} --num-frames {n_time}"
     print("Running command: ", cmd_to_run)
     subprocess.check_call(cmd_to_run.split(" "))
