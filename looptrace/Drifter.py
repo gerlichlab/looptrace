@@ -58,7 +58,7 @@ class Methods(Enum):
     @classmethod
     def is_valid_name(cls, name: str) -> bool:
         """Determine if the given value is a valid drift correction method name."""
-        return name in cls.__members__
+        return name in (e.value for e in cls)
     
     @classmethod
     def values(cls) -> Iterable[str]:

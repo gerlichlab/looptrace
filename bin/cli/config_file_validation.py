@@ -21,7 +21,7 @@ class ConfigFileError(Exception):
 class ConfigFileCrash(Exception):
     """Class aggregating nonempty collection of config file errors"""
     def __init__(self, errors: Iterable[ConfigFileError]):
-        super().__init__(f"{len(errors)} error(s):\n{'; '.join(errors)}")
+        super().__init__(f"{len(errors)} error(s):\n{'; '.join(map(str, errors))}")
 
 
 def find_config_file_errors(config_file: ExtantFile) -> List[ConfigFileError]:
