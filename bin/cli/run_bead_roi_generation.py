@@ -15,17 +15,29 @@ from looptrace.bead_roi_generation import generate_all_bead_rois_from_getter
 __author__ = "Vince Reuter"
 
 
+OUTPUT_SUBFOLDER = "bead_rois__ALL"
+
+
 def workflow(
         config_file: ExtantFile, 
         images_folder: ExtantFolder, 
-        output_folder: ExtantFolder, 
-        frame_range: Iterable[int],
+        output_folder: Optional[Path] = None, 
+        frame_range: Optional[Iterable[int]] = None,
         **joblib_kwargs
         ) -> Iterable[Tuple[Path, pd.DataFrame]]:
     
+    # Instantiate the main values needed for this workflow.
     H = handler_from_cli(config_file=config_file, images_folder=images_folder)
     D = Drifter(image_handler=H)
     
+    # Finalise and prepare the output folder.
+    output_folder = output_folder or Path(H.analysis_path) / OUTPUT_SUBFOLDER
+    output_folder.mkdir(exist_ok=True, parents=False)
+
+    # Determine the range of frames / hybridisation rounds to use.
+    frame_range = frame_range or range(H.num_frames)
+
+    # Function to get (z, y, x) (stack of 2D images) for a particular FOV and imaging round.
     def get_image_stack(pos_idx: int, frame_idx: int) -> np.ndarray:
         return D.get_moving_image(pos_idx=pos_idx, frame_idx=frame_idx)
     
@@ -59,17 +71,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Driver for computing all fiducial bead ROIs for a particular imaging experiment")
     parser.add_argument("config_path", type=ExtantFile.from_string, help="Config file path")
     parser.add_argument("image_path", type=ExtantFolder.from_string, help="Path to folder with images to read.")
-    parser.add_argument("-O", "--output-folder", required=True, type=ExtantFolder.from_string, help="Path to folder in which to place output")
-    parser.add_argument("--frame-count", required=True, type=int, help="Number of frames / hybridisation timepoints; can use to arbitrarily upper-bound frame iteration")
-    parser.add_argument("--min-frame-index", type=int, default=0, help="Starting point for hybridisation timepoint to compute (0-based, inclusive)")
+    
+    parser.add_argument("-O", "--output-folder", type=Path, help="Path to folder in which to place output")
+    
     parser.add_argument("--prefer-for-joblib", default="threads", help="Argument for joblib.Parallel's 'prefer' parameter")
-    parser.add_argument("--num-jobs", type=int, default=1, help="Argument for joblib.Parallel's n_jobs parameter")
+    parser.add_argument("--num-jobs", type=int, default=-1, help="Argument for joblib.Parallel's n_jobs parameter")
+    
     args = parser.parse_args()
+    
     workflow(
         config_file=args.config_path, 
         images_folder=args.image_path, 
         output_folder=args.output_folder, 
-        frame_range=range(args.min_frame_index, args.frame_count), 
         prefer=args.prefer_for_joblib, 
         n_jobs=args.num_jobs,
         )
