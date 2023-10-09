@@ -62,7 +62,7 @@ class LooptracePipeline(pypiper.Pipeline):
             ("bead_roi_generation", gen_all_bead_rois, conf_data_pair), 
             ("bead_roi_detection_analysis", run_all_bead_roi_detection_analysis, conf_only), 
             ("drift_correction_accuracy_analysis", run_drift_correction_analysis, conf_data_pair), 
-            ("drift_correction_accuracy_visualisation", run_drift_correction_accuracy_visualisation, conf_data_pair), 
+            ("drift_correction_accuracy_visualisation", run_drift_correction_accuracy_visualisation, conf_only), 
         )
         return [pypiper.Stage(func=fxn, f_args=fxn_args, name=name) for name, fxn, fxn_args in func_args_pairs]
 
