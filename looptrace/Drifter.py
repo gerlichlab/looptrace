@@ -10,7 +10,6 @@ EMBL Heidelberg
 import dataclasses
 from enum import Enum
 from itertools import takewhile
-import multiprocessing as mp
 import os
 from pathlib import Path
 import sys
@@ -383,10 +382,6 @@ class Drifter():
         return self.config.get("max_bead_intensity")
 
     @property
-    def reference_bead_rois_subfolder(self) -> Path:
-        return Path(self.image_handler.analysis_path) / "reference_bead_rois"
-
-    @property
     def bead_roi_max_size(self) -> int:
         return self.config.get("max_bead_roi_size", 500)
 
@@ -433,6 +428,10 @@ class Drifter():
     @property
     def num_bead_points(self) -> int:
         return self.config['bead_points']
+
+    @property
+    def reference_bead_rois_subfolder(self) -> Path:
+        return Path(self.image_handler.analysis_path) / "reference_bead_rois"
 
     @property
     def reference_channel(self) -> int:
