@@ -60,7 +60,7 @@ class LooptracePipeline(pypiper.Pipeline):
             ("tracing_QC", run_tracing_qc, conf_data_pair), 
             ("clean_3", run_cleanup, conf_only),
             ("bead_roi_generation", gen_all_bead_rois, conf_data_pair), 
-            ("bead_roi_detection_analysis", run_all_bead_roi_detection_analysis, conf_only), 
+            ("bead_roi_detection_analysis", run_all_bead_roi_detection_analysis, conf_data_pair), 
             ("drift_correction_accuracy_analysis", run_drift_correction_analysis, conf_data_pair), 
             ("drift_correction_accuracy_visualisation", run_drift_correction_accuracy_visualisation, conf_only), 
         )
