@@ -282,7 +282,19 @@ def iter_coarse_drifts_by_position(filepath: Union[str, Path, ExtantFile]) -> It
     return coarse_table.groupby(POSITION_COLUMN)
 
 
-def compute_fine_drifts__with_ref_img_gain(drifter: "Drifter"):
+def compute_fine_drifts__with_ref_img_gain(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
+    """
+    Compute the fine drifts, using what's already been done for coarse drifts.
+
+    Parameters
+    ----------
+    drifter : The drift correction abstraction, managing paths for relevant files
+
+    Returns
+    -------
+    Iterable of tuple
+        Data for each row of the fine/full drift correction table
+    """
     roi_px = drifter.bead_roi_px
     bead_roi_params = drifter.get_bead_roi_parameters
     for position, position_group in iter_coarse_drifts_by_position(filepath=drifter.dc_file_path__coarse):
