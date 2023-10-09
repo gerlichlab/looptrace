@@ -65,7 +65,7 @@ class RoiOrderingSpecification():
         str
             Name for file corresponding to this spot (regional)'s data in a single hybridisation round
         """
-        return "_".join([pos_name, str(roi['roi_id']).zfill(5), roi['ref_frame']]) + ".npy"
+        return "_".join([pos_name, str(roi['roi_id']).zfill(5), str(roi['ref_frame'])]) + ".npy"
     
     @staticmethod
     def get_file_key(file_key: str) -> Tuple[str, int, int]:
