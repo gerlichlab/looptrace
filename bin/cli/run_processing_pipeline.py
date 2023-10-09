@@ -22,6 +22,7 @@ from extract_spots import workflow as run_spot_extraction
 from extract_spots_cluster_cleanup import workflow as run_spot_zipping
 from tracing import workflow as run_chromatin_tracing
 from tracing_qc import workflow as run_tracing_qc
+from analyse_detected_bead_rois import workflow as run_all_bead_roi_detection_analysis
 
 
 logger = logging.getLogger(__name__)
@@ -59,7 +60,7 @@ class LooptracePipeline(pypiper.Pipeline):
             ("tracing", run_chromatin_tracing, conf_data_pair),
             ("tracing_QC", run_tracing_qc, conf_data_pair), 
             ("clean_3", run_cleanup, conf_only),
-            
+            ("bead_roi_detection_analysis", run_all_bead_roi_detection_analysis, conf_only)
         )
         return [pypiper.Stage(func=fxn, f_args=fxn_args, name=name) for name, fxn, fxn_args in func_args_pairs]
 

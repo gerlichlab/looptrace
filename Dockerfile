@@ -17,7 +17,7 @@ RUN apt-get update -y && \
     apt-get install git wget libz-dev libbz2-dev liblzma-dev -y && \
     apt-get install cuda-compat-11-4=470.199.02-1 -y && \
     apt-get install r-base -y && \
-    R -e "install.packages(c('argparse', 'data.table', 'ggplot2', 'reshape2'), dependencies=TRUE, repos='http://cran.rstudio.com/')" && \
+    R -e "install.packages(c('argparse', 'data.table', 'ggplot2', 'reshape2', 'stringi'), dependencies=TRUE, repos='http://cran.rstudio.com/')" && \
     apt-get install vim -y
 
 # Copy repo code, to be built later.

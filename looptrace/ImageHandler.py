@@ -67,6 +67,22 @@ class ImageHandler:
     def decon_output_path(self) -> str:
         return os.path.join(self.image_save_path, self.decon_output_name)
 
+    @property
+    def frame_names(self) -> List[str]:
+        return self.config["frame_name"]
+    
+    @property
+    def num_frames(self) -> int:
+        return len(self.frame_names)
+    
+    @property
+    def num_rounds(self) -> int:
+        return self.num_frames
+
+    @property
+    def num_timepoints(self) -> int:
+        return self.num_frames
+
     def out_path(self, fn_extra: str) -> str:
         return os.path.join(self.analysis_path, self.analysis_filename_prefix + fn_extra)
 
