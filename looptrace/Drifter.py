@@ -362,8 +362,13 @@ class Drifter():
         '''
         self.image_handler = image_handler
         self.config = self.image_handler.config
-        self.images_template = self.image_handler.images[self.image_handler.reg_input_template]
-        self.images_moving = self.image_handler.images[self.image_handler.reg_input_moving]
+        try:
+            images = image_handler.images
+        except AttributeError:
+            print("ERROR! Image handler has no images attribute; was it created with an images folder?")
+            raise
+        self.images_template = images[self.image_handler.reg_input_template]
+        self.images_moving = images[self.image_handler.reg_input_moving]
         self.full_pos_list = self.image_handler.image_lists[self.image_handler.reg_input_moving]
         self.pos_list = self.full_pos_list
         
