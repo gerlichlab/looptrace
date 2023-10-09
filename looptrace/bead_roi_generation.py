@@ -66,13 +66,15 @@ def generate_all_bead_rois_from_getter(
     get_3d_stack: Callable[[int, int],  np.ndarray], 
     iter_position: Iterable[int], 
     iter_frame: Iterable[int], 
-    output_folder: ExtantFolder, 
+    output_folder: Union[Path, ExtantFolder], 
     params: "BeadRoiParameters", 
     **joblib_kwargs,
     ) -> List[Tuple[Path, pd.DataFrame]]:
     
+    output_folder = output_folder.path if isinstance(output_folder, ExtantFolder) else output_folder
+
     def get_outfile(pos_idx: int, frame_idx: int) -> Path:
-        return output_folder.path / f"bead_rois__{pos_idx}_{frame_idx}.csv"
+        return output_folder / f"bead_rois__{pos_idx}_{frame_idx}.csv"
     
     def proc1(img: np.ndarray, outfile: Path) -> Tuple[Path, pd.DataFrame]:
         rois = params.compute_labeled_regions(img=img)
