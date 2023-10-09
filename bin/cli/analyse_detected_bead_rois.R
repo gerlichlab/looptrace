@@ -47,6 +47,8 @@ count_rois_cmd <- sprintf("wc -l %s", file.path(opts$input_folder, pattern))
 message("Building table from command: ", count_rois_cmd)
 roi_counts <- data.table(read.table(text = system(count_rois_cmd, intern = TRUE)))
 colnames(roi_counts) <- c("count", "filename")
+message("Printing ROI counts table")
+roi_counts
 roi_counts$filename <- sapply(roi_counts$filename, basename)
 
 # Validate the table.
