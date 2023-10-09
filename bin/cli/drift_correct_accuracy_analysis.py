@@ -290,7 +290,7 @@ def workflow(
 
     if drift_correction_table_file is None:
         print("Determining drift correction table path...")
-        drift_correction_table_file = Drifter(ImageHandler(config_path=config_file, image_path=images_folder)).dc_file_path
+        drift_correction_table_file = Drifter(ImageHandler(config_path=config_file, image_path=images_folder)).dc_file_path__fine
     if not os.path.isfile(drift_correction_table_file):
         raise FileNotFoundError(drift_correction_table_file)
 
