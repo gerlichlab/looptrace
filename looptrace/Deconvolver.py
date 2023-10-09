@@ -42,6 +42,10 @@ class Deconvolver:
             self.pos_list = [self.pos_list[int(array_id)]]
 
     @property
+    def field_of_view_indices(self) -> Iterable[int]:
+        return self.position_indices
+
+    @property
     def input_name(self) -> str:
         return self.image_handler.decon_input_name
 
@@ -57,6 +61,14 @@ class Deconvolver:
     def point_spread_function_strategy(self) -> Optional[PointSpreadFunctionStrategy]:
         raw_spec = self.config.get('decon_psf')
         return None if raw_spec is None else PointSpreadFunctionStrategy.from_string(raw_spec)
+
+    @property
+    def position_indices(self) -> Iterable[int]:
+        return range(len(self.position_names))
+
+    @property
+    def position_names(self) -> List[str]:
+        return self.image_handler.image_lists[self.input_name]
 
     @property
     def require_gpu(self) -> bool:
@@ -189,7 +201,7 @@ class Deconvolver:
         
         for pos in tqdm.tqdm(self.pos_list):
             print(f"Deconvolving position: {pos}")
-            pos_index = self.image_handler.image_lists[self.input_name].index(pos)
+            pos_index = self.position_names.index(pos)
             pos_img = self.image_handler.images[self.input_name][pos_index]
             z = create_zarr_store(path=self.output_path,
                     name = self.output_name, 
