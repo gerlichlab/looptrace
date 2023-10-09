@@ -29,7 +29,7 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder):
     rois_path = get_bead_rois_path(handler=H)
     n_pos = D.num_positions
     n_time = H.num_timepoints
-    script = os.path.join(os.path.dirname(__file__), 'analyse_detected_bead_rois.py')
+    script = os.path.join(os.path.dirname(__file__), 'analyse_detected_bead_rois.R')
     cmd_to_run = f"Rscript {script} -i {rois_path} -o --num-positions {n_pos} --num-frames {n_time}"
     print("Running command: ", cmd_to_run)
     subprocess.check_call(cmd_to_run.split(" "))
