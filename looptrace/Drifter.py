@@ -430,6 +430,10 @@ class Drifter():
         return self.config['bead_points']
 
     @property
+    def num_positions(self) -> int:
+        return len(self.full_pos_list)
+
+    @property
     def reference_bead_rois_subfolder(self) -> Path:
         return Path(self.image_handler.analysis_path) / "reference_bead_rois"
 
