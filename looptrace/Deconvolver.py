@@ -96,8 +96,8 @@ class Deconvolver:
         Saves as a .npy ndarray, image is a centered PSF useful for deconvolution.
         '''
         from scipy.ndimage import shift as shift_image
+        from looptrace.bead_roi_generation import extract_single_bead, generate_bead_rois
         from looptrace.gaussfit import fitSymmetricGaussian3DMLE
-        from looptrace.image_processing_functions import extract_single_bead, generate_bead_rois
 
         t_slice = self.config['psf_bead_frame']
         ch = self.config['psf_bead_ch']
