@@ -229,15 +229,15 @@ def find_trace_fits(
         A pandas DataFrame with one row per hybridisation round per FOV, with columns named to 
         denote the parameters of the optimised functional form for each one
     """
-    if background_specification is None:
-        def finalise_spot_img(img, _):
-            return img
-    else:
-        def finalise_spot_img(img, fov_imgs):
-            return img.astype(np.int16) - fov_imgs[background_specification.frame_index].astype(np.int16)
     # NB: For these iterations, each is expected to be a 4D array (first dimension being hybridisation round, and (z, y, x) for each).
     if mask_ref_frames:
         raise NotImplementedError(MASK_FITS_ERROR_MESSAGE)
+        if background_specification is None:
+            def finalise_spot_img(img, _):
+                return img
+        else:
+            def finalise_spot_img(img, fov_imgs):
+                return img.astype(np.int16) - fov_imgs[background_specification.frame_index].astype(np.int16)
         fits = []
         for p, pos_imgs in tqdm(enumerate(images), total=len(images)):
             ref_img = pos_imgs[mask_ref_frames[p]]
