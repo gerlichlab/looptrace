@@ -8,10 +8,9 @@ EMBL Heidelberg
 """
 
 import dataclasses
-import multiprocessing
-
 from typing import *
 
+from joblib import Parallel, delayed
 import numpy as np
 import pandas as pd
 import scipy.ndimage as ndi
@@ -250,14 +249,10 @@ def find_trace_fits(
                 spot_img = finalise_spot_img(spot_img, pos_imgs)
                 fits.append(trace_single_roi(fit_func_spec=fit_func_spec, roi_img=spot_img, mask=ref_img))
     else:
-        args = _iter_fit_args(fit_func_spec=fit_func_spec, images=images, bg_spec=background_specification)
-        if (cores or 1) == 1:
-            print("Single-core tracing")
-            fits = [trace_single_roi(fit_func_spec=ff_spec, roi_img=spot_img) for ff_spec, spot_img in args]
-        else:
-            print(f"Core count for tracing: {cores}")
-            with multiprocessing.get_context("spawn").Pool(cores) as workers:
-                fits = list(workers.starmap(func=trace_single_roi, iterable=args))
+        fits = Parallel(n_jobs=cores or -1)(
+            delayed(trace_single_roi)(fit_func_spec=ff_spec, roi_img=spot_img) 
+            for ff_spec, spot_img in _iter_fit_args(fit_func_spec=fit_func_spec, images=images, bg_spec=background_specification)
+            )
     return pd.DataFrame(fits, columns=ROI_FIT_COLUMNS)
 
 
