@@ -20,10 +20,10 @@ from gertils import ExtantFile, ExtantFolder
 
 from looptrace.Drifter import Drifter
 from looptrace.ImageHandler import ImageHandler
+from looptrace.bead_roi_generation import extract_single_bead, generate_bead_rois
 from looptrace.filepaths import get_analysis_path, simplify_path
 from looptrace.gaussfit import fitSymmetricGaussian3D
 from looptrace import image_io
-from looptrace import image_processing_functions as ip
 
 
 SIGNAL_NOISE_RATIO_NAME = "A_to_BG"
@@ -190,7 +190,7 @@ def process_single_FOV_single_reference_frame(
     T = imgs[reference_fov].shape[0]
     C = imgs[reference_fov].shape[1]
     print(f"Generating bead ROIs for DC accuracy analysis, reference_fov: {reference_fov}")
-    ref_rois = ip.generate_bead_rois(imgs[reference_fov][bead_detection_params.reference_frame, bead_detection_params.reference_channel].compute(), threshold=bead_detection_params.threshold, min_bead_int=bead_detection_params.min_intensity, n_points=-1)
+    ref_rois = generate_bead_rois(imgs[reference_fov][bead_detection_params.reference_frame, bead_detection_params.reference_channel].compute(), threshold=bead_detection_params.threshold, min_bead_int=bead_detection_params.min_intensity, n_points=-1)
     num_ref_rois = ref_rois.shape[0]
     rois = ref_rois[np.random.choice(num_ref_rois, bead_filtration_params.max_num_rois, replace=False)] if num_ref_rois > bead_filtration_params.max_num_rois else ref_rois
     bead_roi_px = bead_detection_params.roi_pixels
@@ -210,7 +210,7 @@ def process_single_FOV_single_reference_frame(
         for c in [bead_detection_params.reference_channel]:#range(C):
             img = imgs[reference_fov][t, c].compute()
             for i, roi in enumerate(rois):
-                bead_img = ip.extract_single_bead(roi, img, bead_roi_px=bead_roi_px, drift_course=course_shift)
+                bead_img = extract_single_bead(roi, img, bead_roi_px=bead_roi_px, drift_course=course_shift)
                 fit = fitSymmetricGaussian3D(bead_img, sigma=1, center='max')[0]
                 fits.append([reference_fov, t, c, i] + list(fit))
                 bead_imgs[i, t, c] = bead_img.copy()

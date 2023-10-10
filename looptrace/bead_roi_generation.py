@@ -33,6 +33,41 @@ class ArrayDimensionalityError(Exception):
     """Error subtype to represent an error in array dimensionality"""
 
 
+def extract_single_bead(
+        point: Union[np.ndarray, Iterable[int]], 
+        img: np.ndarray, 
+        bead_roi_px: int = 16, 
+        drift_course: Union[None, np.ndarray, Iterable[int]] = None
+        ) -> np.ndarray:
+    """
+    Extract a cropped region of a single fiducial in an image, optionally including a pre-calucalated course drift to shift the cropped region.
+
+    Parameters
+    ----------
+    point : np.ndarray or Iterable of int
+        Coordinates representing the center of a detected bead
+    img : np.ndarray
+        An array of values representing an image in which a fiducial bead is detected
+    bead_roi_px : int
+        The number of pixels for the side length of the bead ROI
+    drift_course : None or np.ndarray or Iterable of int
+        The coarse-grained drift correction already computed
+
+    Returns
+    -------
+    np.ndarray
+        A numpy array representing the subspace of the given image corresponding to the bead ROI
+    """
+    roi_px = bead_roi_px // 2
+    coords = point if drift_course is None else (x - int(dx) for x, dx in zip(point, drift_course))
+    s = tuple([slice(p - roi_px, p + roi_px) for p in coords])
+    bead = img[s]
+    side_length = 2 * roi_px
+    output_shape = (side_length, side_length, side_length)
+    # TODO: consider, for provenance, logging a message here, that the bead shape was not as expected, and all-0s is used.
+    return np.zeros(output_shape) if bead.shape != output_shape else bead
+
+
 def validate_array_dimension(arr: np.ndarray, expected: int) -> None:
     obs = len(arr.shape)
     if obs != expected:
@@ -86,6 +121,37 @@ def generate_all_bead_rois_from_getter(
         delayed(proc1)(img=get_3d_stack(pos_idx, frame), outfile=get_outfile(pos_idx=pos_idx, frame_idx=frame)) 
         for pos_idx in tqdm.tqdm(iter_position) for frame in tqdm.tqdm(iter_frame)
         )
+
+
+def generate_bead_rois(
+        t_img: np.ndarray, 
+        threshold: NumberLike, 
+        min_bead_int: NumberLike, 
+        bead_roi_px: int = 16, 
+        n_points: int = 200, 
+        max_size: NumberLike = 500, 
+        max_bead_int: Optional[NumberLike] = None
+        ):
+    '''Function for finding positions of beads in an image based on manually set thresholds in config file.
+
+    Parameters
+    ----------
+    t_img (3D ndarray): Image
+    threshold (float): Threshold for initial bead segmentation
+    min_bead_int (float): Secondary filtering of segmented maxima.
+    n_points (int): How many bead positions to return
+
+    Returns:
+    t_img_maxima: 3XN ndarray of 3D bead coordinates in t_img.
+    '''
+    params = BeadRoiParameters(
+        min_intensity_for_segmentation=threshold, 
+        min_intensity_for_detection=min_bead_int, 
+        roi_pixels=bead_roi_px, 
+        max_region_size=max_size, 
+        max_intensity_for_detection=max_bead_int
+        )
+    return params.generate_image_rois(img=t_img, num_points=n_points)
 
 
 @dataclasses.dataclass
