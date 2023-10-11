@@ -7,7 +7,10 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+import copy
+import dataclasses
 from enum import Enum
+from joblib import Parallel, delayed
 import logging
 import os
 from pathlib import Path
@@ -25,6 +28,7 @@ from gertils import ExtantFolder, NonExtantPath
 from looptrace.exceptions import MissingRoisTableException
 from looptrace.filepaths import get_spot_images_path
 from looptrace import image_processing_functions as ip
+from looptrace.numeric_types import NumberLike
 
 CROSSTALK_SUBTRACTION_KEY = "subtract_crosstalk"
 DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC = 'dog'
@@ -77,31 +81,71 @@ class RoiOrderingSpecification():
         return pos, int(roi), int(ref)
 
 
-def detect_spot_single(
-        detect_func,
-        spot_threshold,
-        full_image, 
-        fish_channel, 
-        frame,
-        spot_downsampling, 
-        min_dist, 
-        subtract_beads: bool,
-        crosstalk_channel: int,
-        center_spots: Optional[Callable[[pd.DataFrame], pd.DataFrame]] = None,
-        crosstalk_frame: Optional[int] = None, 
-        ) -> pd.DataFrame:
-    img = full_image[frame, fish_channel, ::spot_downsampling, ::spot_downsampling, ::spot_downsampling].compute()
-    if crosstalk_frame is None:
-        crosstalk_frame = frame
-    if subtract_beads:
-        bead_img = full_image[crosstalk_frame, crosstalk_channel, ::spot_downsampling, ::spot_downsampling, ::spot_downsampling].compute()
-        img, _ = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
-    spot_props, _ = detect_func(img, spot_threshold, min_dist = min_dist)
-    if center_spots is not None:
-        spot_props = center_spots(spot_props)
-    
-    spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] = spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] * spot_downsampling
+def finalise_single_spot_props_table(spot_props: pd.DataFrame, position: str, frame: int, channel: int) -> pd.DataFrame:
+    """
+    Perform the addition of several context-relevant fields to the table of detected spot properties for a particular image and channel.
+
+    The arguments to this function specify the table to update, as well as the field of view, the hybridisation round / timepoint, 
+    and the imaging channel from which the data came that were used to detect spots to which the given properties table corresponds.
+
+    Parameters
+    ----------
+    spot_props : pd.DataFrame
+        Data table with properties (location, intensity, etc.) of detected spots
+    position : str
+        Hybridisation round / timepoint in which spots were detected
+    frame : int
+        Hybridisation round / timepoint for which spots were detected
+    channel : int
+        Imaging channel in which spots were detected
+
+    Returns
+    -------
+    pd.DataFrame
+        A table annotated with the fields for context (field of view, hybridisation timepoint / round, and imaging channel)
+    """
+    spot_props["position"] = position
+    spot_props["frame"] = frame
+    spot_props["ch"] = channel
     return spot_props
+
+
+@dataclasses.dataclass
+class SpotDetectionParameters:
+    """Bundle the parameters which are relevant for spot detection."""
+    detection_function: callable
+    downsampling: int
+    minimum_distance_between: NumberLike
+    subtract_beads: bool
+    crosstalk_channel: int
+    center_spots: Optional[Callable[[pd.DataFrame], pd.DataFrame]]
+    crosstalk_frame: Optional[int]
+
+    def detect_spot_single(self, full_image: np.ndarray, frame: int, fish_channel: int, spot_threshold: NumberLike):
+        img = full_image[frame, fish_channel, ::self.downsampling, ::self.downsampling, ::self.downsampling].compute()
+        crosstalk_frame = frame if self.crosstalk_frame is None else self.crosstalk_frame
+        if self.subtract_beads:
+            bead_img = full_image[crosstalk_frame, self.crosstalk_channel, ::self.downsampling, ::self.downsampling, ::self.downsampling].compute()
+            img, _ = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
+        spot_props, _ = self.detection_function(img, spot_threshold, min_dist=self.minimum_distance_between)
+        if self.center_spots is not None:
+            spot_props = self.center_spots(spot_props)
+        spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] = spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] * self.downsampling
+        return spot_props
+
+
+def detect_spots_multiple(pos_img_pairs: Iterable[Tuple[str, np.ndarray]], frame_specs: Iterable["SingleFrameDetectionSpec"], channels: Iterable[int], spot_detection_parameters: "SpotDetectionParameters", **joblib_kwargs) -> Iterable[pd.DataFrame]:
+    """Detect spots in each relevant channel and for each given timepoint for the given whole-FOV images."""
+    kwargs = copy.copy(joblib_kwargs)
+    kwargs.setdefault("n_jobs", -1)
+    return Parallel(**kwargs)(
+        delayed(lambda img, t, c, threshold, position: finalise_single_spot_props_table(
+            spot_props=spot_detection_parameters.detect_spot_single(full_image=img, frame=t, fish_channel=c, spot_threshold=threshold), 
+            position=position, 
+            frame=t, 
+            channel=c))(img=img, t=spec.frame, c=ch, threshold=spec.threshold, position=pos)
+        for pos, img in pos_img_pairs for spec in frame_specs for ch in channels
+        )
 
 
 def get_spot_images_zipfile(folder: Union[Path, ExtantFolder, NonExtantPath]) -> Path:
@@ -112,6 +156,7 @@ def get_spot_images_zipfile(folder: Union[Path, ExtantFolder, NonExtantPath]) ->
 
 
 class DetectionMethod(Enum):
+    """Enumerate the spot detection methods available"""
     INTENSITY = 'intensity'
     DIFFERENCE_OF_GAUSSIANS = 'dog'
 
@@ -123,7 +168,53 @@ class DetectionMethod(Enum):
             raise ValueError(f"Unknown detection method: {name}")
 
 
+class FieldOfViewRepresentation:
+    # TODO: refine index as nonnegative
+    name: str
+    index: int # This specifies the 0-based index of the position name in a list of position names.
+
+
+class SingleFrameDetectionSpec:
+    # TODO: refine these values as nonnegative.
+    frame: int # specifies the index of the hybridisation round/timepoint
+    threshold: int # specifies a threshold value for intensity-based detection or detection with difference of Gaussians
+
+
+class DetectionSpec3D:
+    """Three values that, together, should constitute an index that retrieves a '3D' image (z-stack of 2D images)"""
+    position: "FieldOfViewRepresentation" # specifies the field of view (FOV / "position")
+    frame: "SingleFrameDetectionSpec" # specifies the hybridisation round / timepoint
+    channel: int # specifies the imaging channel in which signal was captured
+
+
+def generate_detection_specifications(positions: Iterable["FieldOfViewRepresentation"], single_frame_specs: Iterable["SingleFrameDetectionSpec"], channels: Iterable[int]) -> Iterable["DetectionSpec3D"]:
+    """
+    Build individual specifications for spot detection, with each specification bundling field of view, hybridisation round, and imaging channel.
+
+    Parameters
+    ----------
+    positions : Iterable of str
+        Collection of the names of the fields of view
+    single_frame_specs : Iterable of SingleFrameDetectionSpec
+        Collection of the hybridisation round and corresponding detection threshold
+    channels : Iterable of int
+        Collection of the imaging channels to process for each hybridisation timepoint/round
+
+    Returns
+    -------
+    Iterable of DetectionSpec3D
+        Collection of the specifications for where and how to detect spots
+    """
+    for position_definition in tqdm.tqdm(positions):
+        print("Position: ", position_definition)
+        for frame_spec in tqdm.tqdm(single_frame_specs):
+            print("Frame spec: ", frame_spec)
+            for ch in tqdm.tqdm(channels):
+                yield DetectionSpec3D(position=position_definition, frame=frame_spec, channel=ch)
+
+
 class SpotPicker:
+    """Encapsulation of data and roles for detection of fluorescent spots in imaging data"""
     def __init__(self, image_handler, array_id = None):
         self.image_handler = image_handler
         self.config = image_handler.config
@@ -161,12 +252,25 @@ class SpotPicker:
         
     @property
     def input_name(self):
+        """Name of the input to the spot detection phase of the pipeline; in particular, a subfolder of the 'all images' folder typically passed to looptrace"""
         return self.image_handler.spot_input_name
 
     def iter_frames_and_channels(self) -> Iterable[Tuple[Tuple[int, int], int]]:
         for i, frame in enumerate(self.spot_frame):
             for channel in self.spot_channel:
                 yield (i, frame), channel
+
+    def iter_frame_threshold_pairs(self) -> Iterable[SingleFrameDetectionSpec]:
+        """Iterate over the frames in which to detect spots, and the corresponding threshold for each (typically uniform across all frames)."""
+        for i, frame in enumerate(self.spot_frame):
+            yield SingleFrameDetectionSpec(frame=frame, threshold=self.spot_threshold[i])
+
+    def iter_pos_img_pairs(self) -> Iterable[Tuple[str, np.ndarray]]:
+        """Iterate over pairs of position (FOV) name, and corresponding 5-tensor (t, c, z, y, x ) of images."""
+        pos_names = self.image_handler.image_lists[self.input_name]
+        for pos in tqdm.tqdm(self.pos_list):
+            idx = pos_names.index(pos)
+            yield pos, self.images[idx]
 
     @property
     def _raw_roi_image_size(self) -> Tuple[int, int, int]:
@@ -234,6 +338,8 @@ class SpotPicker:
         
         center_spots = (lambda df: df) if self.roi_image_size is None else (lambda df: ip.roi_center_to_bbox(df, roi_size=tuple(map(lambda x: x // spot_ds, self.roi_image_size))))
 
+        params = SpotDetectionParameters()
+
         # previewing
         if preview_pos is not None:
             for (i, frame), ch in self.iter_frames_and_channels():
@@ -258,29 +364,14 @@ class SpotPicker:
                     ip.napari_view(np.stack([filt_img, img]), axes = 'CZYX', points=roi_points, downscale=1, name = ['DoG', 'Original'])
 
             return
-        
+
         # Loop through the imaging positions to collect all regions of interest (ROIs).
-        all_rois = []
-        for position in tqdm.tqdm(self.pos_list):
-            pos_index = self.image_handler.image_lists[self.input_name].index(position)
-            for (i, frame), ch in self.iter_frames_and_channels():
-                spot_props = detect_spot_single(
-                    detect_func=detect_func, 
-                    spot_threshold=spot_threshold[i], 
-                    full_image=self.images[pos_index], 
-                    fish_channel=ch, 
-                    frame=frame, 
-                    spot_downsampling=spot_ds, 
-                    min_dist=min_dist, 
-                    subtract_beads=subtract_beads, 
-                    center_spots=center_spots,
-                    crosstalk_frame=frame if self.crosstalk_frame is None else self.crosstalk_frame,
-                    crosstalk_channel=crosstalk_ch, 
-                    )
-                spot_props['position'] = position
-                spot_props['frame'] = frame
-                spot_props['ch'] = ch
-                all_rois.append(spot_props)
+        all_rois = detect_spots_multiple(
+            pos_img_pairs=self.iter_pos_img_pairs(), 
+            frame_specs=self.iter_frame_threshold_pairs(), 
+            channels=iter(self.spot_channel), 
+            spot_detection_parameters=params
+            )
         
         output = pd.concat(all_rois)
         logger.info(f"Writing initial spot ROIs: {self.roi_path}")
