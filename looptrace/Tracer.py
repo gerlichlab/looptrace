@@ -256,7 +256,12 @@ def find_trace_fits(
     return pd.DataFrame(fits, columns=ROI_FIT_COLUMNS)
 
 
-def trace_single_roi(fit_func_spec: FunctionalForm, roi_img: np.ndarray, mask: Optional[np.ndarray] = None) -> np.ndarray:
+def trace_single_roi(
+        fit_func_spec: FunctionalForm, 
+        roi_img: np.ndarray, 
+        mask: Optional[np.ndarray] = None, 
+        background: Optional[np.ndarray] = None,
+        ) -> np.ndarray:
     """
     Fit a single roi with 3D gaussian (MLE or LS as defined in config).
     
@@ -272,6 +277,9 @@ def trace_single_roi(fit_func_spec: FunctionalForm, roi_img: np.ndarray, mask: O
     mask : np.ndarray, optional
         Array of values which, after transformation, multiplies the ROI image, allegedly to perhaps 
         provide better tracing performance; if provided, the dimensions should match that of ROI image.
+    background : np.ndarray, optional
+        Data of values to subtract from main image, representing background fluorescence signal, optional; 
+        if not provided, no background subtraction will be performed
 
     Returns
     -------
@@ -280,15 +288,17 @@ def trace_single_roi(fit_func_spec: FunctionalForm, roi_img: np.ndarray, mask: O
     """
     if len(roi_img.shape) != fit_func_spec.dimensionality:
         raise ValueError(f"ROI image to trace isn't correct dimensionality ({fit_func_spec.dimensionality}); shape: {roi_img.shape}")
-    if np.any(roi_img) and np.all([d > 2 for d in roi_img.shape]): #Check if empty or too small for fitting
-        if mask is None:
-            center = 'max'
-        else:
-            roi_img_masked = roi_img * (mask / np.max(mask))**2
-            center = list(np.unravel_index(np.argmax(roi_img_masked, axis=None), roi_img.shape))
-        return fit_func_spec.function(roi_img, sigma=1, center=center)[0]
-    else:
+    if background:
+        # TODO: check that dimension of background image matches that of main ROI image.s
+        roi_img = roi_img - background
+    if not np.any(roi_img) or any(d < 3 for d in roi_img.shape): # Check if empty or too small for fitting.
         return np.array([-1] * len(ROI_FIT_COLUMNS))
+    if mask is None:
+        center = 'max'
+    else:
+        roi_img_masked = roi_img * (mask / np.max(mask))**2
+        center = list(np.unravel_index(np.argmax(roi_img_masked, axis=None), roi_img.shape))
+    return fit_func_spec.function(roi_img, sigma=1, center=center)[0]
 
 
 def apply_fine_scale_drift_correction(traces: pd.DataFrame) -> pd.DataFrame:
