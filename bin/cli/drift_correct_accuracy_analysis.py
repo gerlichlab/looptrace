@@ -233,7 +233,7 @@ def process_single_FOV_single_reference_frame(
         return fitSymmetricGaussian3D(bead_img, sigma=1, center='max')[0]
     
     fits = Parallel(n_jobs=-1, prefer='threads')(
-        delayed(lambda t, c, roi: [reference_image_stack_definition.index, t, c, i] + proc1(frame_index=t, ref_ch=c, roi=roi))(t=t, c=c, roi=roi) 
+        delayed(lambda t, c, roi: [reference_image_stack_definition.index, t, c, i] + list(proc1(frame_index=t, ref_ch=c, roi=roi)))(t=t, c=c, roi=roi) 
         for t in tqdm.tqdm(range(T)) for c in [bead_detection_params.reference_channel] for i, roi in enumerate(rois)
         )
 
