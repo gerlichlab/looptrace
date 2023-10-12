@@ -2,8 +2,8 @@
 
 import argparse
 import dataclasses
+from joblib import Parallel, delayed
 import json
-import multiprocessing as mp
 import os
 from pathlib import Path
 import subprocess
@@ -24,12 +24,11 @@ from looptrace.bead_roi_generation import extract_single_bead, generate_bead_roi
 from looptrace.filepaths import get_analysis_path, simplify_path
 from looptrace.gaussfit import fitSymmetricGaussian3D
 from looptrace import image_io
+from looptrace.numeric_types import NumberLike
 
 
 SIGNAL_NOISE_RATIO_NAME = "A_to_BG"
 FALLBACK_MAX_NUM_BEAD_ROIS = 500
-
-# TODO: switch from print() to logging
 
 
 def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
@@ -150,10 +149,27 @@ class DataclassCapableEncoder(json.JSONEncoder):
         return super().default(o)
 
 
+@dataclasses.dataclass
+class ReferenceImageStackDefinition:
+    index: int # TODO: refine as nonnegative
+    image_stack: np.ndarray
+
+    def __post_init__(self):
+        if 5 != len(self.image_stack.shape):
+            raise TypeError(f"A reference image stack should be a 5-dimensional array; got {len(self.image_stack.shape)}")
+    
+    @property
+    def num_channels(self) -> int:
+        return self.image_stack.shape[1]
+
+    @property
+    def num_timepoints(self) -> int:
+        return self.image_stack.shape[0]
+
+
 def process_single_FOV_single_reference_frame(
-    imgs: List[np.ndarray], 
-    drift_table: pd.DataFrame, 
-    reference_fov: int, 
+    reference_image_stack_definition: ReferenceImageStackDefinition,
+    drift_table: pd.DataFrame,
     bead_detection_params: BeadDetectionParameters, 
     bead_filtration_params: BeadFiltrationParameters, 
     camera_params: CameraParameters
@@ -166,7 +182,9 @@ def process_single_FOV_single_reference_frame(
     imgs : Sequence of np.ndarray
         The full collection of imaging data; nasmely, a list-/array-like indexed by position/FOV, in which each element is a 
         five-dimensional array itself (t, c, z, y, x) -- that is, a stack (z) of 2D images (y, x) for each imaging channel (c) 
-        for each hybridisation round / timepoint (t).
+        for each hybridisation round / timepoint (t). In other words, each array in this collection represents an entire 
+        field of view / "position", with many timepoints (hybridisation rounds)--and potentially multiple imaging channels--of 
+        data represented therein.
     drift_table : pd.DataFrame
         The table of precomputed drift correction information; namely, the drift correction values whose accuracy / efficacy 
         is being assessed by this program
@@ -187,10 +205,11 @@ def process_single_FOV_single_reference_frame(
         A table in which there is Gaussian fit information, and distance information, for each bead point sampled for the 
         indicated hybridisation timepoint within the indicated FOV
     """
-    T = imgs[reference_fov].shape[0]
-    C = imgs[reference_fov].shape[1]
-    print(f"Generating bead ROIs for DC accuracy analysis, reference_fov: {reference_fov}")
-    ref_rois = generate_bead_rois(imgs[reference_fov][bead_detection_params.reference_frame, bead_detection_params.reference_channel].compute(), threshold=bead_detection_params.threshold, min_bead_int=bead_detection_params.min_intensity, n_points=-1)
+    image_stack = reference_image_stack_definition.image_stack
+    T = reference_image_stack_definition.num_timepoints
+    C = reference_image_stack_definition.num_channels
+    print(f"Generating bead ROIs for DC accuracy analysis, reference_fov: {reference_image_stack_definition.index}")
+    ref_rois = generate_bead_rois(image_stack[bead_detection_params.reference_frame, bead_detection_params.reference_channel].compute(), threshold=bead_detection_params.threshold, min_bead_int=bead_detection_params.min_intensity, n_points=-1)
     num_ref_rois = ref_rois.shape[0]
     rois = ref_rois[np.random.choice(num_ref_rois, bead_filtration_params.max_num_rois, replace=False)] if num_ref_rois > bead_filtration_params.max_num_rois else ref_rois
     bead_roi_px = bead_detection_params.roi_pixels
@@ -198,34 +217,45 @@ def process_single_FOV_single_reference_frame(
     print(f"Dims: {dims}")
 
     # TODO: note that these are currently unused; we can omit these or write the results to disk; see #100.
-    bead_imgs = np.zeros(dims)
-    bead_imgs_dc = np.zeros(dims)
+    #bead_imgs = np.zeros(dims)
+    #bead_imgs_dc = np.zeros(dims)
 
     # TODO: this requires that the drift table be ordered such that the FOVs are as expected; need flexibility.
-    pos = drift_table.position.unique()[reference_fov]
-    print(f"Inferred position (for reference FOV index {reference_fov}): {pos}")
+    pos = drift_table.position.unique()[reference_image_stack_definition.index]
+    print(f"Inferred position (for reference FOV index {reference_image_stack_definition.index}): {pos}")
+    curr_fov_drift_subtable = drift_table[drift_table.position == pos]
 
-    fits = []
-    for t in tqdm.tqdm(range(T)):
-        print(f"Frame: {t}")
-        course_shift = drift_table[(drift_table.position == pos) & (drift_table.frame == t)][['z_px_course', 'y_px_course', 'x_px_course']].values[0]
-        fine_shift = drift_table[(drift_table.position == pos) & (drift_table.frame == t)][['z_px_fine', 'y_px_fine', 'x_px_fine']].values[0]
-        for c in [bead_detection_params.reference_channel]:#range(C):
-            img = imgs[reference_fov][t, c].compute()
-            for i, roi in enumerate(rois):
-                bead_img = extract_single_bead(roi, img, bead_roi_px=bead_roi_px, drift_course=course_shift)
-                fit = fitSymmetricGaussian3D(bead_img, sigma=1, center='max')[0]
-                fits.append([reference_fov, t, c, i] + list(fit))
+    # TODO: could type-refine the argument values to these parameters (which should be nonnegative).
+    def proc1(frame_index: int, ref_ch: int, roi: np.ndarray) -> Iterable[NumberLike]:
+        coarse_shift = curr_fov_drift_subtable[curr_fov_drift_subtable.frame == frame_index][['z_px_course', 'y_px_course', 'x_px_course']].values[0]
+        img = image_stack[frame_index, ref_ch].compute()
+        bead_img = extract_single_bead(roi, img, bead_roi_px=bead_roi_px, drift_course=coarse_shift)
+        return fitSymmetricGaussian3D(bead_img, sigma=1, center='max')[0]
+    
+    fits = Parallel(n_jobs=-1, prefer='threads')(
+        delayed(lambda t, c, roi: [reference_image_stack_definition.index, t, c, i] + proc1(frame_index=t, ref_ch=c, roi=roi))(frame_index=t, ref_ch=c, roi_index=i, roi=roi) 
+        for t in tqdm.tqdm(range(T)) for c in [bead_detection_params.reference_channel] for i, roi in enumerate(rois)
+        )
+
+    #fits = []
+    #for t in tqdm.tqdm(range(T)):
+        #print(f"Frame: {t}")
+        #course_shift = curr_fov_drift_subtable[curr_fov_drift_subtable.frame == t][['z_px_course', 'y_px_course', 'x_px_course']].values[0]
+        #fine_shift = curr_fov_drift_subtable[curr_fov_drift_subtable.frame == t][['z_px_fine', 'y_px_fine', 'x_px_fine']].values[0] # TODO: only used when building up the bead images array?
+        #for c in [bead_detection_params.reference_channel]:#range(C):
+            #img = imgs[reference_fov][t, c].compute()
+            #for i, roi in enumerate(rois):
+                #bead_img = extract_single_bead(roi, img, bead_roi_px=bead_roi_px, drift_course=course_shift)
+                #fit = fitSymmetricGaussian3D(bead_img, sigma=1, center='max')[0]
+                #fits.append([reference_fov, t, c, i] + list(fit))
                 
                 # TODO: note that these are currently unused; we can omit these or write the results to disk; see #100.
-                bead_imgs[i, t, c] = bead_img.copy()
-                bead_imgs_dc[i, t, c] = ndi.shift(bead_img, shift=fine_shift)
+                #bead_imgs[i, t, c] = bead_img.copy()
+                #bead_imgs_dc[i, t, c] = ndi.shift(bead_img, shift=fine_shift)
 
-    fits = pd.DataFrame(fits, columns=['reference_fov','t', 'c', 'roi', 'BG', 'A', 'z_loc', 'y_loc', 'x_loc', 'sigma_z', 'sigma_xy'])
+    fits = pd.DataFrame(fits, columns=['reference_fov', 't', 'c', 'roi', 'BG', 'A', 'z_loc', 'y_loc', 'x_loc', 'sigma_z', 'sigma_xy'])
+    fits = express_pixel_columns_as_nanometers(fits=fits, xy_cols=('y_loc', 'x_loc', 'sigma_xy'), z_cols=('z_loc', 'sigma_z'), camera_params=camera_params)
     
-    fits.loc[:, ['y_loc', 'x_loc', 'sigma_xy']] = fits.loc[:,  ['y_loc', 'x_loc', 'sigma_xy']] * camera_params.nanometers_xy # Scale xy coordinates to nm (use xy pixel size from exp).
-    fits.loc[:, ['z_loc', 'sigma_z']] = fits.loc[:, ['z_loc', 'sigma_z']] * camera_params.nanometers_z #Scale z coordinates to nm (use slice spacing from exp)
-
     # TODO: update if ever allowing channel (reg_ch_template) to be List[int] rather than simple int.
     ref_points = fits.loc[(fits.t == bead_detection_params.reference_frame) & (fits.c == bead_detection_params.reference_channel), ['z_loc', 'y_loc', 'x_loc']].to_numpy() # Fits of fiducial beads in ref frame
     print(f"Reference point count: {len(ref_points)}")
@@ -238,16 +268,58 @@ def process_single_FOV_single_reference_frame(
         shift[0] =  shift[0] * camera_params.nanometers_z # Extract calculated drift correction from drift correction file.
         shift[1] =  shift[1] * camera_params.nanometers_xy
         shift[2] =  shift[2] * camera_params.nanometers_xy
+        # TODO: some of these statements can be combined to share values without needing to reindex and reconvert between data types.
         fits.loc[(fits.t == t), ['z_dc', 'y_dc', 'x_dc']] = mov_points + shift #Apply precalculated drift correction to moving fits
         fits.loc[(fits.t == t), ['z_dc_rel', 'y_dc_rel', 'x_dc_rel']] = np.abs(fits.loc[(fits.t == t), ['z_dc', 'y_dc', 'x_dc']].to_numpy() - ref_points)# Find offset between moving and reference points.
         fits.loc[(fits.t == t), ['euc_dc_rel']] = np.sqrt(np.sum((fits.loc[(fits.t == t), ['z_dc', 'y_dc', 'x_dc']].to_numpy() - ref_points)**2, axis=1)) # Calculate 3D eucledian distance between points and reference.
-        res.append(shift)
+        res.append(shift) # NB: the shift values are expressed in units of nanometers rather than pixels.
 
-    # TODO: paramrterise by config and/or CLI.
+    # TODO: consider returning (and/or writing to disk) the resulting shift array (1 shift (1D array of size 3) per timepoint, for this field of view).
+    return finalise_fits_frame(fits=fits, min_signal_noise_ratio=bead_filtration_params.min_signal_to_noise)
+
+
+def express_pixel_columns_as_nanometers(fits: pd.DataFrame, xy_cols: Iterable[str], z_cols: Iterable[str], camera_params: "CameraParameters") -> pd.DataFrame:
+    """
+    Convert the values in the relevant columns to be expressed in nanometers rather than in pixels.
+
+    Parameters
+    ----------
+    fits : pd.DataFrame
+        The frame in which values are to be converted
+    xy_cols : Iterable of str
+        Names of columns representing values in x- or y-direction
+    z_cols : Iterable of str
+        Names of columns representing values in z-direction
+    camera_params : Camera
+        Parameters bundle related to the camera used for imaging; here, for number of nanometers per pixel in each direction
+    
+    Returns
+    -------
+    pd.DataFrame
+        Identical to input, just with the values in the relevant columns changed to reflect the change of units
+    """
+    xy_cols = list(xy_cols)
+    z_cols = list(z_cols)
+    fits.loc[:, xy_cols] = fits.loc[:, xy_cols] * camera_params.nanometers_xy # Scale xy coordinates to nm (use xy pixel size from exp).
+    fits.loc[:, z_cols] = fits.loc[:, z_cols] * camera_params.nanometers_z #Scale z coordinates to nm (use slice spacing from exp)
+    return fits
+
+
+def finalise_fits_frame(fits: pd.DataFrame, min_signal_noise_ratio: NumberLike) -> pd.DataFrame:
+    """
+    Add the signal-to-noise ratio measurements and quality control pass/fail label
+
+    Parameters
+    ----------
+    fits : pd.DataFrame
+    The frame in which data are to be quality controlled
+    min_signal_noise_ratio : NumberLike
+        The minimum value of signal-to-noise ratio that a point can have and still pass QC
+
+    """
     fits[SIGNAL_NOISE_RATIO_NAME] = fits['A'] / fits['BG']
     fits['QC'] = 0
-    fits.loc[fits[SIGNAL_NOISE_RATIO_NAME] >= bead_filtration_params.min_signal_to_noise, 'QC'] = 1
-
+    fits.loc[fits[SIGNAL_NOISE_RATIO_NAME] >= min_signal_noise_ratio, 'QC'] = 1
     return fits
 
 
@@ -353,20 +425,27 @@ def workflow(
     # Whether this is done in just a single FOV or across all FOVs is determined by the command-line specification.
     if reference_fov is not None:
         # TODO: parameterise with config.
-        fits = process_single_FOV_single_reference_frame(imgs, drift_table, reference_fov, bead_detection_params, bead_filtration_params, camera_params)
+        refspec = ReferenceImageStackDefinition(index=reference_fov, image_stack=imgs[reference_fov])
+        fits = process_single_FOV_single_reference_frame(
+            reference_image_stack_definition=refspec, 
+            drift_table=drift_table, 
+            bead_detection_params=bead_detection_params, 
+            bead_filtration_params=bead_filtration_params, 
+            camera_params=camera_params
+            )
     else:
-        fov_indices = range(len(drift_table.position.unique()))
-        # TODO: parameterise with config.
-        func_args = [(imgs, drift_table, idx, bead_detection_params, bead_filtration_params, camera_params) for idx in fov_indices]
-        cores = cores or config.get('num_cores_dc_analysis', 1)
-        if cores == 1:
-            single_fov_fits = (process_single_FOV_single_reference_frame(*args) for args in func_args)
-        else:
-            cpus_used = min(cores, len(func_args))
-            print(f"CPU use count: {cpus_used}")
-            with mp.get_context("spawn").Pool(cpus_used) as workers:
-                single_fov_fits = workers.starmap(process_single_FOV_single_reference_frame, func_args)
-        fits = pd.concat(single_fov_fits)
+        refspecs = (ReferenceImageStackDefinition(index=i, image_stack=imgs[i]) for i in range(len(drift_table.position.unique())))
+        fits = (
+            process_single_FOV_single_reference_frame(
+                reference_image_stack_definition=spec, 
+                drift_table=drift_table, 
+                bead_detection_params=bead_detection_params, 
+                bead_filtration_params=bead_filtration_params, 
+                camera_params=camera_params
+                ) 
+            for spec in refspecs
+            )
+        fits = pd.concat(fits)
     
     # Write the individual bead Gaussian fits, spatial coordinates, and distance values.
     fits_output_file = _get_dc_fits_filepath(output_folder)
