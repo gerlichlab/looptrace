@@ -102,6 +102,7 @@ class Tracer:
         except KeyError:
             bg_spec = None
         else:
+            # TODO: note -- the drifts part of this  is currently (2023-10-12) irrelevant, as the 'drifts' component of the background spec is unused.
             pos_drifts = self.drift_table[self.drift_table.position.isin(self.pos_list)][['z_px_fine', 'y_px_fine', 'x_px_fine']].to_numpy()
             bg_spec = BackgroundSpecification(frame_index=bg_frame_idx, drifts=pos_drifts - pos_drifts[bg_frame_idx])
 
@@ -136,9 +137,10 @@ def _iter_fit_args(
     else:
         # Iterating here over regional spots (pos_imgs)
         for pos_imgs in images:
-            # Iterating here over individal timepoints / hybridisation rounds for each regional 
+            bg_img = pos_imgs[bg_spec.frame_index].astype(np.int16)
+            # Iterating here over individal timepoints / hybridisation rounds for each regiona
             for spot_img in pos_imgs:
-                yield fit_func_spec, spot_img.astype(np.int16) - pos_imgs[bg_spec.frame_index].astype(np.int16)                
+                yield fit_func_spec, spot_img.astype(np.int16) - bg_img
 
 
 def finalise_traces(rois: pd.DataFrame, fits: pd.DataFrame, z_nm: NumberLike, xy_nm: NumberLike) -> pd.DataFrame:
