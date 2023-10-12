@@ -331,7 +331,7 @@ def get_beads_channel(config: Dict[str, Any]) -> int:
 def workflow(
         config_file: ExtantFile, 
         images_folder: ExtantFolder, 
-        drift_correction_table_file: Optional[ExtantFile] = None, 
+        drift_correction_table_file: Union[None, Path, ExtantFile] = None, 
         max_num_bead_rois: Optional[int] = None, 
         reference_fov: Optional[int] = None, 
         timepoints: Optional[Iterable[int]] = None,
@@ -368,6 +368,8 @@ def workflow(
     if drift_correction_table_file is None:
         print("Determining drift correction table path...")
         drift_correction_table_file = Drifter(ImageHandler(config_path=config_file, image_path=images_folder)).dc_file_path__fine
+    elif isinstance(drift_correction_table_file, ExtantFile):
+        drift_correction_table_file = drift_correction_table_file.path
     if not os.path.isfile(drift_correction_table_file):
         raise FileNotFoundError(drift_correction_table_file)
 
