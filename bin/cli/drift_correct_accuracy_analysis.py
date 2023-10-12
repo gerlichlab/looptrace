@@ -168,7 +168,8 @@ def process_single_FOV_single_reference_frame(
     drift_table: pd.DataFrame,
     bead_detection_params: BeadDetectionParameters, 
     bead_filtration_params: BeadFiltrationParameters, 
-    camera_params: CameraParameters
+    camera_params: CameraParameters, 
+    timepoints: Optional[Iterable[int]],
     ) -> pd.DataFrame:
     """
     Compute the drift correction accuracy for a single hybridisation round / imaging frame, within a single field-of-view.
@@ -194,6 +195,8 @@ def process_single_FOV_single_reference_frame(
         The parameters relevant to which beads to use and which to discard
     camera_params : CameraParameters
         The parameters about the camera used to capture the imaging data passed here
+    timepoints : Iterable of int, optional
+        Specific hybridisation rounds/frames/timepoints to analyse; if unspecified, use all available
     
     Returns
     -------
@@ -203,15 +206,16 @@ def process_single_FOV_single_reference_frame(
     """
     image_stack = reference_image_stack_definition.image_stack
     T = reference_image_stack_definition.num_timepoints
-    C = reference_image_stack_definition.num_channels
+    iter_time = (lambda: range(T)) if timepoints is None else (lambda: iter(timepoints))
+    #C = reference_image_stack_definition.num_channels
     print(f"Generating bead ROIs for DC accuracy analysis, reference_fov: {reference_image_stack_definition.index}")
     ref_rois = generate_bead_rois(image_stack[bead_detection_params.reference_frame, bead_detection_params.reference_channel].compute(), threshold=bead_detection_params.threshold, min_bead_int=bead_detection_params.min_intensity, n_points=-1)
     num_ref_rois = ref_rois.shape[0]
     rois = ref_rois[np.random.choice(num_ref_rois, bead_filtration_params.max_num_rois, replace=False)] if num_ref_rois > bead_filtration_params.max_num_rois else ref_rois
     bead_roi_px = bead_detection_params.roi_pixels
-    dims = (len(rois), T, C, bead_roi_px, bead_roi_px, bead_roi_px)
-    print(f"Dims: {dims}")
-
+    
+    #dims = (len(rois), T, C, bead_roi_px, bead_roi_px, bead_roi_px)
+    #print(f"Dims: {dims}")
     # TODO: note that these are currently unused; we can omit these or write the results to disk; see #100.
     #bead_imgs = np.zeros(dims)
     #bead_imgs_dc = np.zeros(dims)
@@ -230,7 +234,7 @@ def process_single_FOV_single_reference_frame(
     
     fits = Parallel(n_jobs=-1, prefer='threads')(
         delayed(lambda t, c, roi: [reference_image_stack_definition.index, t, c, i] + list(proc1(frame_index=t, ref_ch=c, roi=roi)))(t=t, c=c, roi=roi) 
-        for t in tqdm.tqdm(range(T)) for c in [bead_detection_params.reference_channel] for i, roi in enumerate(rois)
+        for t in tqdm.tqdm(iter_time()) for c in [bead_detection_params.reference_channel] for i, roi in enumerate(rois)
         )
 
     #fits = []
@@ -256,7 +260,7 @@ def process_single_FOV_single_reference_frame(
     ref_points = fits.loc[(fits.t == bead_detection_params.reference_frame) & (fits.c == bead_detection_params.reference_channel), ['z_loc', 'y_loc', 'x_loc']].to_numpy() # Fits of fiducial beads in ref frame
     print(f"Reference point count: {len(ref_points)}")
     res = []
-    for t in tqdm.tqdm(range(T)):
+    for t in tqdm.tqdm(iter_time()):
         # TODO: update if ever allowing channel (reg_ch_template) to be List[int] rather than simple int.
         mov_points = fits.loc[(fits.t == t) & (fits.c == bead_detection_params.reference_channel), ['z_loc', 'y_loc', 'x_loc']].to_numpy() # Fits of fiducial beads in moving frame
         print(f"mov_points shape: {mov_points.shape}")
@@ -330,6 +334,7 @@ def workflow(
         drift_correction_table_file: Optional[ExtantFile] = None, 
         max_num_bead_rois: Optional[int] = None, 
         reference_fov: Optional[int] = None, 
+        timepoints: Optional[Iterable[int]] = None,
     ) -> pd.DataFrame:
     """
     Pull random subset of beads and compute the distance that remains even after drift correction.
@@ -346,7 +351,9 @@ def workflow(
         Upper bound on number of beads to sample to compute the distances; if unspecified, use config value or default in this module
     reference_fov : int, optional
         Index (0-based) of position/field-of-view to use; if unspecified, use all FOVs
-
+    timepoints : Iterable of int, optional
+        Specific hybridisation rounds/frames/timepoints to analyse; if unspecified, use all available
+        
     Returns
     -------
     pd.DataFrame
@@ -424,7 +431,8 @@ def workflow(
             drift_table=drift_table, 
             bead_detection_params=bead_detection_params, 
             bead_filtration_params=bead_filtration_params, 
-            camera_params=camera_params
+            camera_params=camera_params, 
+            timepoints=timepoints,
             )
     else:
         refspecs = (ReferenceImageStackDefinition(index=i, image_stack=imgs[i]) for i in range(len(drift_table.position.unique())))
@@ -434,7 +442,8 @@ def workflow(
                 drift_table=drift_table, 
                 bead_detection_params=bead_detection_params, 
                 bead_filtration_params=bead_filtration_params, 
-                camera_params=camera_params
+                camera_params=camera_params, 
+                timepoints=timepoints,
                 ) 
             for spec in refspecs
             )
