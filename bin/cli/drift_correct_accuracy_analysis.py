@@ -196,15 +196,18 @@ def process_single_FOV_single_reference_frame(
     bead_roi_px = bead_detection_params.roi_pixels
     dims = (len(rois), T, C, bead_roi_px, bead_roi_px, bead_roi_px)
     print(f"Dims: {dims}")
+
+    # TODO: note that these are currently unused; we can omit these or write the results to disk; see #100.
     bead_imgs = np.zeros(dims)
     bead_imgs_dc = np.zeros(dims)
+
+    # TODO: this requires that the drift table be ordered such that the FOVs are as expected; need flexibility.
+    pos = drift_table.position.unique()[reference_fov]
+    print(f"Inferred position (for reference FOV index {reference_fov}): {pos}")
 
     fits = []
     for t in tqdm.tqdm(range(T)):
         print(f"Frame: {t}")
-        # TODO: this requires that the drift table be ordered such that the FOVs are as expected; need flexibility.
-        pos = drift_table.position.unique()[reference_fov]
-        print(f"Position: {pos}")
         course_shift = drift_table[(drift_table.position == pos) & (drift_table.frame == t)][['z_px_course', 'y_px_course', 'x_px_course']].values[0]
         fine_shift = drift_table[(drift_table.position == pos) & (drift_table.frame == t)][['z_px_fine', 'y_px_fine', 'x_px_fine']].values[0]
         for c in [bead_detection_params.reference_channel]:#range(C):
@@ -213,6 +216,8 @@ def process_single_FOV_single_reference_frame(
                 bead_img = extract_single_bead(roi, img, bead_roi_px=bead_roi_px, drift_course=course_shift)
                 fit = fitSymmetricGaussian3D(bead_img, sigma=1, center='max')[0]
                 fits.append([reference_fov, t, c, i] + list(fit))
+                
+                # TODO: note that these are currently unused; we can omit these or write the results to disk; see #100.
                 bead_imgs[i, t, c] = bead_img.copy()
                 bead_imgs_dc[i, t, c] = ndi.shift(bead_img, shift=fine_shift)
 
@@ -234,7 +239,7 @@ def process_single_FOV_single_reference_frame(
         shift[1] =  shift[1] * camera_params.nanometers_xy
         shift[2] =  shift[2] * camera_params.nanometers_xy
         fits.loc[(fits.t == t), ['z_dc', 'y_dc', 'x_dc']] = mov_points + shift #Apply precalculated drift correction to moving fits
-        fits.loc[(fits.t == t), ['z_dc_rel', 'y_dc_rel', 'x_dc_rel']] =  np.abs(fits.loc[(fits.t == t), ['z_dc', 'y_dc', 'x_dc']].to_numpy() - ref_points)# Find offset between moving and reference points.
+        fits.loc[(fits.t == t), ['z_dc_rel', 'y_dc_rel', 'x_dc_rel']] = np.abs(fits.loc[(fits.t == t), ['z_dc', 'y_dc', 'x_dc']].to_numpy() - ref_points)# Find offset between moving and reference points.
         fits.loc[(fits.t == t), ['euc_dc_rel']] = np.sqrt(np.sum((fits.loc[(fits.t == t), ['z_dc', 'y_dc', 'x_dc']].to_numpy() - ref_points)**2, axis=1)) # Calculate 3D eucledian distance between points and reference.
         res.append(shift)
 
