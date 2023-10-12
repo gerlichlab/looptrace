@@ -50,10 +50,6 @@ def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
         help="Path to drift correction table; if unspecified, infer from the config file and images folder",
         )
     parser.add_argument(
-        "--cores", type=int, 
-        help="Number of processors to use; will default to a single CPU",
-        )
-    parser.add_argument(
         "--max-num-bead-rois", type=int, 
         help=f"Maximum number of bead ROIs to subsample, overriding value in config if present; if neither here nor in config, default to {FALLBACK_MAX_NUM_BEAD_ROIS}",
         )
@@ -332,7 +328,6 @@ def workflow(
         config_file: ExtantFile, 
         images_folder: ExtantFolder, 
         drift_correction_table_file: Optional[ExtantFile] = None, 
-        cores: Optional[int] = None, 
         max_num_bead_rois: Optional[int] = None, 
         reference_fov: Optional[int] = None, 
     ) -> pd.DataFrame:
@@ -347,8 +342,6 @@ def workflow(
         Path to the folder with an experiment's imaging data
     drift_correction_table_file : gertils.ExtantFile, optional
         Path to the table of drift correction values; if unspecified, this can be inferred from config_file and images_folder
-    cores : int, optional
-        Number of CPUs to use
     max_num_bead_rois : int, optional
         Upper bound on number of beads to sample to compute the distances; if unspecified, use config value or default in this module
     reference_fov : int, optional
@@ -486,7 +479,6 @@ if __name__ == "__main__":
         config_file=opts.config_file,
         images_folder=opts.images_folder, 
         drift_correction_table_file=opts.drift_correction_table, 
-        cores=opts.cores,
         max_num_bead_rois=opts.max_num_bead_rois,
         reference_fov=opts.reference_FOV,
     )
