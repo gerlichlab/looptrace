@@ -117,7 +117,7 @@ class SpotDetectionParameters:
     downsampling: int
     minimum_distance_between: NumberLike
     subtract_beads: bool
-    crosstalk_channel: int
+    crosstalk_channel: Optional[int]
     center_spots: Optional[Callable[[pd.DataFrame], pd.DataFrame]]
     crosstalk_frame: Optional[int]
 
@@ -125,6 +125,7 @@ class SpotDetectionParameters:
         img = full_image[frame, fish_channel, ::self.downsampling, ::self.downsampling, ::self.downsampling].compute()
         crosstalk_frame = frame if self.crosstalk_frame is None else self.crosstalk_frame
         if self.subtract_beads:
+            # TODO: non-nullity requirement for crosstalk_channel is coupled to this condition, and this should be reflected in the types.
             bead_img = full_image[crosstalk_frame, self.crosstalk_channel, ::self.downsampling, ::self.downsampling, ::self.downsampling].compute()
             img, _ = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
         spot_props, _ = self.detection_function(img, spot_threshold, min_dist=self.minimum_distance_between)
@@ -338,8 +339,6 @@ class SpotPicker:
         
         center_spots = (lambda df: df) if self.roi_image_size is None else (lambda df: ip.roi_center_to_bbox(df, roi_size=tuple(map(lambda x: x // spot_ds, self.roi_image_size))))
 
-        params = SpotDetectionParameters()
-
         # previewing
         if preview_pos is not None:
             for (i, frame), ch in self.iter_frames_and_channels():
@@ -365,7 +364,16 @@ class SpotPicker:
 
             return
 
-        # Loop through the imaging positions to collect all regions of interest (ROIs).
+        # Not previewing, but actually computing all ROIs
+        params = SpotDetectionParameters(
+            detection_function=detect_func, 
+            downsampling=spot_ds, 
+            minimum_distance_between=min_dist, 
+            subtract_beads=subtract_beads, 
+            crosstalk_channel=crosstalk_ch, 
+            center_spots=center_spots, 
+            crosstalk_frame=None
+            )
         all_rois = detect_spots_multiple(
             pos_img_pairs=self.iter_pos_img_pairs(), 
             frame_specs=self.iter_frame_threshold_pairs(), 
