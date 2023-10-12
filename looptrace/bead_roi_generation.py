@@ -131,7 +131,7 @@ def generate_bead_rois(
         n_points: int = 200, 
         max_size: NumberLike = 500, 
         max_bead_int: Optional[NumberLike] = None
-        ):
+        ) -> np.ndarray[int]:
     '''Function for finding positions of beads in an image based on manually set thresholds in config file.
 
     Parameters
@@ -180,7 +180,9 @@ class BeadRoiParameters:
         Returns
         -------
         np.ndarray
-            3 x num_points array of 3D bead coordinates in given image
+            (num_points x 3) array of 3D bead coordinates in given image; that is, 
+            this value is a 2D array in which there are num_points rows, each of which 
+            is a 1D array of 3 values
         """
         
         img_maxima = self.compute_labeled_regions(img=img)
