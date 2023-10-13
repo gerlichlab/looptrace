@@ -270,6 +270,7 @@ def process_single_FOV_single_reference_frame(
         shift[2] =  shift[2] * camera_params.nanometers_xy
         # TODO: some of these statements can be combined to share values without needing to reindex and reconvert between data types.
         fits.loc[(fits.t == t), ['z_dc', 'y_dc', 'x_dc']] = mov_points + shift #Apply precalculated drift correction to moving fits
+        # TODO: what happens if there's more than 1 channel here (within each timepoint), but ref points are just from 1 channel (dimensionality problem?)
         fits.loc[(fits.t == t), ['z_dc_rel', 'y_dc_rel', 'x_dc_rel']] = np.abs(fits.loc[(fits.t == t), ['z_dc', 'y_dc', 'x_dc']].to_numpy() - ref_points)# Find offset between moving and reference points.
         fits.loc[(fits.t == t), ['euc_dc_rel']] = np.sqrt(np.sum((fits.loc[(fits.t == t), ['z_dc', 'y_dc', 'x_dc']].to_numpy() - ref_points)**2, axis=1)) # Calculate 3D eucledian distance between points and reference.
         res.append(shift) # NB: the shift values are expressed in units of nanometers rather than pixels.
@@ -427,29 +428,21 @@ def workflow(
     # Whether this is done in just a single FOV or across all FOVs is determined by the command-line specification.
     if reference_fov is not None:
         # TODO: parameterise with config.
-        refspec = ReferenceImageStackDefinition(index=reference_fov, image_stack=imgs[reference_fov])
-        fits = process_single_FOV_single_reference_frame(
-            reference_image_stack_definition=refspec, 
+        refspecs = [ReferenceImageStackDefinition(index=reference_fov, image_stack=imgs[reference_fov])]
+    else:
+        refspecs = (ReferenceImageStackDefinition(index=i, image_stack=imgs[i]) for i in range(len(drift_table.position.unique())))
+    fits = (
+        process_single_FOV_single_reference_frame(
+            reference_image_stack_definition=spec, 
             drift_table=drift_table, 
             bead_detection_params=bead_detection_params, 
             bead_filtration_params=bead_filtration_params, 
             camera_params=camera_params, 
             timepoints=timepoints,
-            )
-    else:
-        refspecs = (ReferenceImageStackDefinition(index=i, image_stack=imgs[i]) for i in range(len(drift_table.position.unique())))
-        fits = (
-            process_single_FOV_single_reference_frame(
-                reference_image_stack_definition=spec, 
-                drift_table=drift_table, 
-                bead_detection_params=bead_detection_params, 
-                bead_filtration_params=bead_filtration_params, 
-                camera_params=camera_params, 
-                timepoints=timepoints,
-                ) 
-            for spec in refspecs
-            )
-        fits = pd.concat(fits)
+            ) 
+        for spec in refspecs
+        )
+    fits = pd.concat(fits)
     
     # Write the individual bead Gaussian fits, spatial coordinates, and distance values.
     fits_output_file = _get_dc_fits_filepath(output_folder)
