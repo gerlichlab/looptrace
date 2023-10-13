@@ -266,7 +266,7 @@ def fine_correction_workflow(config_file: ExtantFile, images_folder: ExtantFolde
     """The workflow for the second, optional, fine drift correction"""
     D = Drifter(image_handler=ImageHandler(config_file, images_folder))
     print("Computing fine drifts")
-    all_drifts = pd.DataFrame(compute_fine_drifts__with_ref_img_gain(D), columns=FULL_DRIFT_TABLE_COLUMNS)
+    all_drifts = pd.DataFrame(compute_fine_drifts(D), columns=FULL_DRIFT_TABLE_COLUMNS)
     outfile = D.dc_file_path__fine
     print(f"Writing fine drifts: {outfile}")
     all_drifts.to_csv(outfile)
@@ -280,7 +280,7 @@ def iter_coarse_drifts_by_position(filepath: Union[str, Path, ExtantFile]) -> It
     return coarse_table.groupby(POSITION_COLUMN)
 
 
-def compute_fine_drifts__with_ref_img_gain(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
+def compute_fine_drifts(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
     """
     Compute the fine drifts, using what's already been done for coarse drifts.
 
