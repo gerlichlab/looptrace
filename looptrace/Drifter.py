@@ -37,7 +37,10 @@ from looptrace.wrappers import phase_xcor
 FRAME_COLUMN = "frame"
 POSITION_COLUMN = "position"
 CoarseDriftTableRow = Tuple[int, str, NumberLike, NumberLike, NumberLike]
-COARSE_DRIFT_COLUMNS = ['z_px_course', 'y_px_course', 'x_px_course']
+Z_PX_COARSE = 'z_px_course'
+Y_PX_COARSE = 'y_px_course'
+X_PX_COARSE = 'x_px_course'
+COARSE_DRIFT_COLUMNS = [Z_PX_COARSE, Y_PX_COARSE, X_PX_COARSE]
 COARSE_DRIFT_TABLE_COLUMNS = [FRAME_COLUMN, POSITION_COLUMN] + COARSE_DRIFT_COLUMNS
 FullDriftTableRow = Tuple[int, str, NumberLike, NumberLike, NumberLike, NumberLike, NumberLike, NumberLike]
 FULL_DRIFT_TABLE_COLUMNS = COARSE_DRIFT_TABLE_COLUMNS + ['z_px_fine', 'y_px_fine', 'x_px_fine']
