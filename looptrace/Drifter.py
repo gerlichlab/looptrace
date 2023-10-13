@@ -158,16 +158,16 @@ class ArrayLikeLengthMismatchError(Exception):
 
 
 def generate_drift_function_arguments__coarse_drift_only(
-        full_pos_list: List[str], 
-        pos_list: Iterable[str], 
-        reference_images: List[np.ndarray], 
-        reference_frame: int, 
-        reference_channel: int, 
-        moving_images: List[np.ndarray], 
-        moving_channel: int, 
-        downsampling: int, 
-        stop_after: int,
-        ) -> Iterable[Tuple[str, int, np.ndarray, np.ndarray]]:
+    full_pos_list: List[str], 
+    pos_list: Iterable[str], 
+    reference_images: List[np.ndarray], 
+    reference_frame: int, 
+    reference_channel: int, 
+    moving_images: List[np.ndarray], 
+    moving_channel: int, 
+    downsampling: int, 
+    stop_after: int,
+    ) -> Iterable[Tuple[str, int, np.ndarray, np.ndarray]]:
     """
     Generate the coarse and fine drift correction shifts, when just doing coarse correction (dummy values for fine DC).
 
