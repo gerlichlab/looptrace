@@ -8,6 +8,14 @@ import sys
 PIPE_NAME = "looptrace_pipeline"
 
 
+def get_pipeline_path():
+    return get_script_path("run_processing_pipeline.py")
+
+
+def get_script_path(name: str) -> Path:
+    return scripts_folder() / name
+
+
 def import_pipeline_script():
     pipe_path = get_pipeline_path()
     sys.path.append(os.path.dirname(pipe_path))
@@ -16,14 +24,6 @@ def import_pipeline_script():
     sys.modules[PIPE_NAME] = module
     spec.loader.exec_module(module)
     return module
-
-
-def get_pipeline_path():
-    return get_script_path("run_processing_pipeline.py")
-
-
-def get_script_path(name: str) -> Path:
-    return scripts_folder() / name
 
 
 def scripts_folder():
