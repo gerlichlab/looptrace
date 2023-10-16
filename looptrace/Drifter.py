@@ -122,7 +122,7 @@ def fit_bead_coordinates(bead_img: np.ndarray) -> Iterable[FloatLike]:
     try:
         return np.array(fitSymmetricGaussian3D(bead_img, sigma=1, center=None)[0])[2:5]
     except (AttributeError, ValueError) as e: # TODO: when can this happen? -- narrow exceptions / provide better insight.
-        print("Error finding shift between beads: {e}")
+        print(f"Error finding shift between beads: {e}")
         return None
 
 
