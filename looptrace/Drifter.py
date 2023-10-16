@@ -283,6 +283,10 @@ def iter_coarse_drifts_by_position(filepath: Union[str, Path, ExtantFile]) -> It
     return coarse_table.groupby(POSITION_COLUMN)
 
 
+def _get_frame_and_coarse(row) -> Tuple[int, Tuple[int, int, int]]:
+    return row[FRAME_COLUMN], tuple(row[COARSE_DRIFT_COLUMNS])
+
+
 def compute_fine_drifts(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
     """
     Compute the fine drifts, using what's already been done for coarse drifts.
@@ -310,8 +314,10 @@ def compute_fine_drifts(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
             unfiltered_filepath=drifter.get_reference_bead_rois_unfiltered_filepath(pos_idx=pos_idx),
             )
         if bead_rois.size == 0:
+            print(f"WARNING -- no bead ROIs detected for position {pos_idx}!")
             for _, row in position_group.iterrows():
-                yield (frame, position) + coarse + (0, 0, 0)
+                frame, coarse = _get_frame_and_coarse(row)
+                yield (frame, position) + coarse + (0.0, 0.0, 0.0)
         else:
             if drifter.method_name == Methods.FIT_NAME.value:
                 print("Computing reference bead fits")
@@ -322,9 +328,8 @@ def compute_fine_drifts(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
                 print("Iterating over frames/timepoints/hybridisations")
                 for _, row in position_group.iterrows():
                     # This should be unique now in frame, since we're iterating within a single FOV.
-                    frame = row[FRAME_COLUMN]
+                    frame, coarse = _get_frame_and_coarse(row)
                     print(f"Current frame: {frame}")
-                    coarse = tuple(row[COARSE_DRIFT_COLUMNS])
                     mov_img = drifter.get_moving_image(pos_idx=pos_idx, frame_idx=frame)
                     print(f"Computing fine drifts: ({position}, {frame})")
                     fine_drifts = Parallel(n_jobs=-1, prefer='threads')(
