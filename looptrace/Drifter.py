@@ -321,10 +321,12 @@ def compute_fine_drifts(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
         else:
             if drifter.method_name == Methods.FIT_NAME.value:
                 print("Computing reference bead fits")
-                ref_bead_fits = Parallel(n_jobs=-1, prefer='threads')(
-                    delayed(lambda pt: fit_bead_coordinates(extract_single_bead(pt, ref_img, bead_roi_px=roi_px)))(pt)
-                    for pt in tqdm.tqdm(bead_rois)
-                    )
+                ref_bead_subimgs = Parallel(n_jobs=-1, prefer='threads')(delayed(extract_single_bead)(pt, ref_img, bead_roi_px=roi_px) for pt in tqdm.tqdm(bead_rois))
+                ref_bead_fits = Parallel(n_jobs=-1, prefer='threads')(delayed(fit_bead_coordinates)(rbi) for rbi in tqdm.tqdm(ref_bead_subimgs))
+                # ref_bead_fits = Parallel(n_jobs=-1, prefer='threads')(
+                #     delayed(lambda pt: fit_bead_coordinates(extract_single_bead(pt, ref_img, bead_roi_px=roi_px)))(pt)
+                #     for pt in tqdm.tqdm(bead_rois)
+                #     )
                 print("Iterating over frames/timepoints/hybridisations")
                 for _, row in position_group.iterrows():
                     # This should be unique now in frame, since we're iterating within a single FOV.
@@ -332,10 +334,13 @@ def compute_fine_drifts(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
                     print(f"Current frame: {frame}")
                     mov_img = drifter.get_moving_image(pos_idx=pos_idx, frame_idx=frame)
                     print(f"Computing fine drifts: ({position}, {frame})")
-                    fine_drifts = Parallel(n_jobs=-1, prefer='threads')(
-                        delayed(lambda pt: subtract_point_fits(ref_fit, fit_bead_coordinates(extract_single_bead(pt, mov_img, bead_roi_px=roi_px, drift_course=coarse))))(pt)
-                        for pt, ref_fit in tqdm.tqdm(zip(bead_rois, ref_bead_fits))
-                        )
+                    mov_bead_subimgs = Parallel(n_jobs=-1, prefer='threads')(delayed(extract_single_bead)(pt, mov_img, bead_roi_px=roi_px, drift_course=coarse) for pt in tqdm.tqdm(bead_rois))
+                    mov_bead_fits = Parallel(n_jobs=-1, prefer='threads')(delayed(fit_bead_coordinates)(mbi) for mbi in tqdm.tqdm(mov_bead_subimgs))
+                    fine_drifts = [subtract_point_fits(ref, mov) for ref, mov in zip(ref_bead_fits, mov_bead_fits)]
+                    # fine_drifts = Parallel(n_jobs=-1, prefer='threads')(
+                    #     delayed(lambda pt: subtract_point_fits(ref_fit, fit_bead_coordinates(extract_single_bead(pt, mov_img, bead_roi_px=roi_px, drift_course=coarse))))(pt)
+                    #     for pt, ref_fit in tqdm.tqdm(zip(bead_rois, ref_bead_fits))
+                    #     )
                     yield (frame, position) + coarse + finalise_fine_drift(fine_drifts)
             elif drifter.method_name == Methods.CROSS_CORRELATION_NAME.value:
                 print("Extracting reference bead images")
@@ -343,9 +348,8 @@ def compute_fine_drifts(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
                 print("Iterating over frames/timepoints/hybridisations")
                 for _, row in position_group.iterrows():
                     # This should be unique now in frame, since we're iterating within a single FOV.
-                    frame = row[FRAME_COLUMN]
+                    frame, coarse = _get_frame_and_coarse(row)
                     print(f"Current frame: {frame}")
-                    coarse = tuple(row[COARSE_DRIFT_COLUMNS])
                     mov_img = drifter.get_moving_image(pos_idx=pos_idx, frame_idx=frame)
                     print(f"Computing fine drifts: ({position}, {frame})")
                     fine_drifts = Parallel(n_jobs=-1, prefer='threads')(
