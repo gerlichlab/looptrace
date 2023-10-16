@@ -14,7 +14,7 @@ SPOT_IMAGES_SUBFOLDER = "spot_images_dir"
 
 
 def get_analysis_path(config: Mapping[str, Any]) -> str:
-    return os.path.expanduser(os.path.expandvars(config['analysis_path']))
+    return os.path.expanduser(os.path.expandvars(config["analysis_path"]))
 
 
 def get_spot_images_path(folder: Union[str, Path, ExtantFolder]):
