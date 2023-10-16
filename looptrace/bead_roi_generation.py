@@ -185,7 +185,10 @@ class BeadRoiParameters:
             is a 1D array of 3 values
         """
         
+        # Add the fail_code field, based on reason(s) to exclude a detected bead from selection.
         img_maxima = self.compute_labeled_regions(img=img)
+
+        fail_codes = img_maxima["fail_code"]
 
         if unfiltered_filepath:
             print(f"Writing unfiltered bead ROIs: {unfiltered_filepath}")
@@ -194,9 +197,13 @@ class BeadRoiParameters:
 
         print("Filtering bead ROIs")
         num_unfiltered = len(img_maxima)
-        img_maxima = img_maxima[img_maxima["fail_code"] == ""]
+        img_maxima = img_maxima[fail_codes == ""]
         num_filtered = len(img_maxima)
         print(f"Bead ROIs remaining: {num_filtered}/{num_unfiltered}")
+
+        if num_filtered == 0:
+            print("FAIL CODES...")
+            print(fail_codes)
 
         # Sample the ROIs, or retain all of them, depending on the config setting for number of points, and 
         # the number of regions which satisfy the filtration criteria.
