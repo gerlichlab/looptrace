@@ -24,6 +24,7 @@ __all__ = ["ImageHandler", "handler_from_cli", "read_images"]
 logger = logging.getLogger()
 
 
+FolderLike = Union[str, Path, ExtantFolder]
 PathFilter = Callable[[Union[os.DirEntry, Path]], bool]
 
 
@@ -32,13 +33,15 @@ class ImageHandler:
             self, 
             config_path: Union[str, Path, ExtantFile], 
             image_path: Union[str, Path, ExtantFolder, None] = None, 
-            image_save_path: Union[str, Path, ExtantFolder, None] = None
+            image_save_path: Union[str, Path, ExtantFolder, None] = None, 
+            strict_load_tables: bool = True,
             ):
         '''
         Initialize ImageHandler class with config read in from YAML file.
         See config file for details on parameters.
         Will try to use zarr file if present.
         '''
+        self._strict_load_tables = strict_load_tables
         self.config_path = simplify_path(config_path)
         self.reload_config()
         self.image_path = simplify_path(image_path)
@@ -83,6 +86,19 @@ class ImageHandler:
     def num_timepoints(self) -> int:
         return self.num_frames
 
+    def set_analysis_path(self, newpath: FolderLike) -> None:
+        """
+        Update the value of the image handler's analysis subfolder path.
+
+        Parameters
+        ----------
+        newpath : str
+            The new value (possibly including environment and/or user variables) for the handler's analysis subfolder path
+        """
+        if isinstance(newpath, ExtantFolder):
+            newpath = newpath.path
+        self.config["analysis_path"] = str(newpath)
+
     def out_path(self, fn_extra: str) -> str:
         return os.path.join(self.analysis_path, self.analysis_filename_prefix + fn_extra)
 
@@ -104,7 +120,9 @@ class ImageHandler:
             table_files = os.scandir(self.analysis_path)
         except FileNotFoundError:
             logger.info(f"Declared analysis folder doesn't yet exist: {self.analysis_path}")
-            raise
+            if self._strict_load_tables:
+                raise
+            table_files = []
         self.table_paths = {}
         self.tables = {}
         for fp in table_files:
