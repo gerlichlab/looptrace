@@ -134,9 +134,11 @@ def multi_ome_zarr_to_dask(folder: str, remove_unused_dims = True):
         list: list of dask arrays of the images
         list: list of strings of image folder names
     '''
+    print("Parsing zarr to dask: ", folder)
     image_folders = sorted([p.name for p in os.scandir(folder) if os.path.isdir(p) and not ignore_path(p)])
     out = []
     for image in image_folders:
+        print("Parsing subfolder: ", image)
         z = zarr.open(os.path.join(folder, image, '0'))
         arr = da.from_zarr(z)
 
