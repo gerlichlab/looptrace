@@ -149,7 +149,7 @@ def multi_ome_zarr_to_dask(folder: str, remove_unused_dims = True):
         #chunks = (1,1,s[-3], s[-2], s[-1])
         out.append(arr)#, chunks=chunks))
     #out = da.stack(out) #Removed as not compatible with different shaped
-    print('Loaded list of ', len(out), 'arrays.')
+    print('Loaded list of ', len(out), ' arrays.')
     return out, image_folders
 
 def multipos_nd2_to_dask(folder: str):
