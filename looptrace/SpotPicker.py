@@ -160,7 +160,9 @@ def detect_spots_multiple(pos_img_pairs: Iterable[Tuple[str, np.ndarray]], frame
     kwargs = copy.copy(joblib_kwargs)
     kwargs.setdefault("n_jobs", -1)
     subframes = Parallel(**kwargs)(
-        delayed(build_spot_prop_table)(img=img, position=pos, channel=ch, frame_spec=spec, detection_parameters=spot_detection_parameters) 
+        delayed(build_spot_prop_table)(
+            img=img, position=pos, channel=ch, frame_spec=spec, detection_parameters=spot_detection_parameters
+            )
         for pos, img in tqdm.tqdm(pos_img_pairs) for spec in frame_specs for ch in channels
         )
     return pd.concat(subframes).reset_index(drop=True)
@@ -410,8 +412,8 @@ class SpotPicker:
         # Not previewing, but actually computing all ROIs
         output = detect_spots_multiple(
             pos_img_pairs=self.iter_pos_img_pairs(), 
-            frame_specs=self.iter_frame_threshold_pairs(), 
-            channels=iter(self.spot_channel), 
+            frame_specs=list(self.iter_frame_threshold_pairs()), 
+            channels=list(self.spot_channel), 
             spot_detection_parameters=params
             )
         
