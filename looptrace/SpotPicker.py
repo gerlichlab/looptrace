@@ -341,6 +341,10 @@ class SpotPicker:
             yield pos, self.images[idx]
 
     @property
+    def parallelise(self) -> bool:
+        return self.config.get("parallelise_spot_detection", False)
+
+    @property
     def _raw_roi_image_size(self) -> Tuple[int, int, int]:
         return tuple(self.config['roi_image_size'])
 
@@ -444,7 +448,8 @@ class SpotPicker:
             pos_img_pairs=self.iter_pos_img_pairs(), 
             frame_specs=list(self.iter_frame_threshold_pairs()), 
             channels=list(self.spot_channel), 
-            spot_detection_parameters=params
+            spot_detection_parameters=params, 
+            parallelise=self.parallelise,
             )
         
         logger.info(f"Writing initial spot ROIs: {self.roi_path}")
