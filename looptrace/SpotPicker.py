@@ -155,14 +155,15 @@ def build_spot_prop_table(img: np.ndarray, position: str, channel: int, frame_sp
     return finalise_single_spot_props_table(spot_props=spot_props, position=position, frame=frame, channel=channel)
 
 
-def detect_spots_multiple(pos_img_pairs: Iterable[Tuple[str, np.ndarray]], frame_specs: Iterable["SingleFrameDetectionSpec"], channels: Iterable[int], spot_detection_parameters: "SpotDetectionParameters", **joblib_kwargs) -> Iterable[pd.DataFrame]:
+def detect_spots_multiple(pos_img_pairs: Iterable[Tuple[str, np.ndarray]], frame_specs: Iterable["SingleFrameDetectionSpec"], channels: Iterable[int], spot_detection_parameters: "SpotDetectionParameters", **joblib_kwargs) -> pd.DataFrame:
     """Detect spots in each relevant channel and for each given timepoint for the given whole-FOV images."""
     kwargs = copy.copy(joblib_kwargs)
     kwargs.setdefault("n_jobs", -1)
-    return Parallel(**kwargs)(
+    subframes = Parallel(**kwargs)(
         delayed(build_spot_prop_table)(img=img, position=pos, channel=ch, frame_spec=spec, detection_parameters=spot_detection_parameters) 
         for pos, img in tqdm.tqdm(pos_img_pairs) for spec in frame_specs for ch in channels
         )
+    return pd.concat(subframes).reset_index(drop=True)
     # return Parallel(**kwargs)(
     #     delayed(lambda img, t, c, threshold, position: finalise_single_spot_props_table(
     #         spot_props=spot_detection_parameters.detect_spot_single(full_image=img, frame=t, fish_channel=c, spot_threshold=threshold), 
@@ -303,7 +304,7 @@ class SpotPicker:
     def iter_pos_img_pairs(self) -> Iterable[Tuple[str, np.ndarray]]:
         """Iterate over pairs of position (FOV) name, and corresponding 5-tensor (t, c, z, y, x ) of images."""
         pos_names = self.image_handler.image_lists[self.input_name]
-        for pos in tqdm.tqdm(self.pos_list):
+        for pos in self.pos_list:
             idx = pos_names.index(pos)
             yield pos, self.images[idx]
 
@@ -407,15 +408,13 @@ class SpotPicker:
             return
 
         # Not previewing, but actually computing all ROIs
-        all_rois = detect_spots_multiple(
+        output = detect_spots_multiple(
             pos_img_pairs=self.iter_pos_img_pairs(), 
             frame_specs=self.iter_frame_threshold_pairs(), 
             channels=iter(self.spot_channel), 
             spot_detection_parameters=params
             )
         
-        print(f"ROIs subtable count: {len(all_rois)}")
-        output = pd.concat(all_rois).reset_index(drop=True)
         logger.info(f"Writing initial spot ROIs: {self.roi_path}")
         n_spots = len(output)
         (logger.warning if n_spots == 0 else logger.info)(f'Found {n_spots} spots.')
