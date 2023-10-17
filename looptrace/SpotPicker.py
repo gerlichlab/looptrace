@@ -169,18 +169,21 @@ class DetectionMethod(Enum):
             raise ValueError(f"Unknown detection method: {name}")
 
 
+@dataclasses.dataclass
 class FieldOfViewRepresentation:
     # TODO: refine index as nonnegative
     name: str
     index: int # This specifies the 0-based index of the position name in a list of position names.
 
 
+@dataclasses.dataclass
 class SingleFrameDetectionSpec:
     # TODO: refine these values as nonnegative.
     frame: int # specifies the index of the hybridisation round/timepoint
     threshold: int # specifies a threshold value for intensity-based detection or detection with difference of Gaussians
 
 
+@dataclasses.dataclass
 class DetectionSpec3D:
     """Three values that, together, should constitute an index that retrieves a '3D' image (z-stack of 2D images)"""
     position: "FieldOfViewRepresentation" # specifies the field of view (FOV / "position")
