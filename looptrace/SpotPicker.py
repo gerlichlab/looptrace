@@ -126,13 +126,41 @@ class SpotDetectionParameters:
         crosstalk_frame = frame if self.crosstalk_frame is None else self.crosstalk_frame
         if self.subtract_beads:
             # TODO: non-nullity requirement for crosstalk_channel is coupled to this condition, and this should be reflected in the types.
-            bead_img = full_image[crosstalk_frame, self.crosstalk_channel, ::self.downsampling, ::self.downsampling, ::self.downsampling].compute()
+            bead_img = full_image[
+                crosstalk_frame, 
+                self.crosstalk_channel, 
+                ::self.downsampling, 
+                ::self.downsampling, 
+                ::self.downsampling
+                ].compute()
             img, _ = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
         spot_props, _ = self.detection_function(img, spot_threshold, min_dist=self.minimum_distance_between)
         if self.center_spots is not None:
             spot_props = self.center_spots(spot_props)
-        spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] = spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] * self.downsampling
+        spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] = \
+            spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] * self.downsampling
         return spot_props
+
+
+# def detect_spot_single(full_image: np.ndarray, frame: int, fish_channel: int, spot_threshold: NumberLike, detection_parameters: SpotDetectionParameters):
+#     img = full_image[frame, fish_channel, ::detection_parameters.downsampling, ::detection_parameters.downsampling, ::detection_parameters.downsampling].compute()
+#     crosstalk_frame = frame if detection_parameters.crosstalk_frame is None else detection_parameters.crosstalk_frame
+#     if detection_parameters.subtract_beads:
+#         # TODO: non-nullity requirement for crosstalk_channel is coupled to this condition, and this should be reflected in the types.
+#         bead_img = full_image[
+#             crosstalk_frame, 
+#             detection_parameters.crosstalk_channel, 
+#             ::detection_parameters.downsampling, 
+#             ::detection_parameters.downsampling, 
+#             ::detection_parameters.downsampling
+#             ].compute()
+#         img, _ = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
+#     spot_props, _ = detection_parameters.detection_function(img, spot_threshold, min_dist=detection_parameters.minimum_distance_between)
+#     if detection_parameters.center_spots is not None:
+#         spot_props = detection_parameters.center_spots(spot_props)
+#     spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] = \
+#         spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] * detection_parameters.downsampling
+#     return spot_props
 
 
 def build_spot_prop_table(img: np.ndarray, position: str, channel: int, frame_spec: "SingleFrameDetectionSpec", detection_parameters: "SpotDetectionParameters") -> pd.DataFrame:
@@ -144,10 +172,6 @@ def detect_spots_multiple(pos_img_pairs: Iterable[Tuple[str, np.ndarray]], frame
     """Detect spots in each relevant channel and for each given timepoint for the given whole-FOV images."""
     kwargs = copy.copy(joblib_kwargs)
     kwargs.setdefault("n_jobs", -1)
-    spot_props_list = Parallel(**kwargs)(
-        delayed(spot_detection_parameters.detect_spot_single)(full_img=img, frame=spec.frame, fish_channel=c, spot_threshold=spec.threshold) 
-        for _, img in pos_img_pairs for spec in frame_specs for c in channels
-        )
     return Parallel(**kwargs)(
         delayed(build_spot_prop_table)(img=img, position=pos, channel=ch, frame_spec=spec, detection_parameters=spot_detection_parameters) 
         for pos, img in pos_img_pairs for spec in frame_specs for ch in channels
