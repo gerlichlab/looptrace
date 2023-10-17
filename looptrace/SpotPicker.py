@@ -118,8 +118,14 @@ class SpotDetectionParameters:
     minimum_distance_between: NumberLike
     subtract_beads: bool
     crosstalk_channel: Optional[int]
-    center_spots: Optional[Callable[[pd.DataFrame], pd.DataFrame]]
     crosstalk_frame: Optional[int]
+    roi_image_size: Optional[Tuple[int, int, int]]
+
+    def center_spots(self, spots_table: pd.DataFrame) -> pd.DataFrame:
+        if self.roi_image_size is None:
+            return spots_table
+        dims = tuple(map(lambda x: x // self.downsampling, self.roi_image_size))
+        return ip.roi_center_to_bbox(spots_table, roi_size=dims)
 
 
 def detect_spot_single(full_image: np.ndarray, frame: int, fish_channel: int, spot_threshold: NumberLike, detection_parameters: SpotDetectionParameters):
@@ -136,8 +142,7 @@ def detect_spot_single(full_image: np.ndarray, frame: int, fish_channel: int, sp
             ].compute()
         img, _ = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
     spot_props, _ = detection_parameters.detection_function(img, spot_threshold, min_dist=detection_parameters.minimum_distance_between)
-    if detection_parameters.center_spots is not None:
-        spot_props = detection_parameters.center_spots(spot_props)
+    spot_props = detection_parameters.center_spots(spots_table=spot_props)
     spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] = \
         spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] * detection_parameters.downsampling
     return spot_props
@@ -232,6 +237,13 @@ def generate_detection_specifications(positions: Iterable["FieldOfViewRepresenta
             print("Frame spec: ", frame_spec)
             for ch in tqdm.tqdm(channels):
                 yield DetectionSpec3D(position=position_definition, frame=frame_spec, channel=ch)
+
+
+def center_spots(spots_table: pd.DataFrame, spot_ds: int, roi_image_size: Optional[Tuple[int, int, int]]) -> pd.DataFrame:
+    if roi_image_size is None:
+        return spots_table
+    dims = tuple(map(lambda x: x // spot_ds, roi_image_size))
+    return ip.roi_center_to_bbox(spots_table, roi_size=dims)
 
 
 class SpotPicker:
@@ -357,7 +369,15 @@ class SpotPicker:
         spot_ds = self.config['spot_downsample']
         logger.info(f"Spot downsampling setting: {spot_ds}")
         
-        center_spots = (lambda df: df) if self.roi_image_size is None else (lambda df: ip.roi_center_to_bbox(df, roi_size=tuple(map(lambda x: x // spot_ds, self.roi_image_size))))
+        params = SpotDetectionParameters(
+            detection_function=detect_func, 
+            downsampling=spot_ds, 
+            minimum_distance_between=min_dist, 
+            subtract_beads=subtract_beads, 
+            crosstalk_channel=crosstalk_ch, 
+            crosstalk_frame=None, 
+            roi_image_size=self.roi_image_size, 
+            )
 
         # previewing
         if preview_pos is not None:
@@ -374,7 +394,7 @@ class SpotPicker:
                 spot_props['position'] = preview_pos
                 spot_props = spot_props.reset_index().rename(columns={'index':'roi_id_pos'})
 
-                spot_props = center_spots(spot_props)
+                spot_props = params.center_spots(spots_table=spot_props)
                 
                 roi_points, _ = ip.roi_to_napari_points(spot_props, position=preview_pos)
                 try:
@@ -385,15 +405,6 @@ class SpotPicker:
             return
 
         # Not previewing, but actually computing all ROIs
-        params = SpotDetectionParameters(
-            detection_function=detect_func, 
-            downsampling=spot_ds, 
-            minimum_distance_between=min_dist, 
-            subtract_beads=subtract_beads, 
-            crosstalk_channel=crosstalk_ch, 
-            center_spots=center_spots, 
-            crosstalk_frame=None
-            )
         all_rois = detect_spots_multiple(
             pos_img_pairs=self.iter_pos_img_pairs(), 
             frame_specs=self.iter_frame_threshold_pairs(), 
