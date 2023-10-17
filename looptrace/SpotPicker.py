@@ -149,8 +149,10 @@ def detect_spot_single(full_image: np.ndarray, frame: int, fish_channel: int, sp
 
 
 def build_spot_prop_table(img: np.ndarray, position: str, channel: int, frame_spec: "SingleFrameDetectionSpec", detection_parameters: "SpotDetectionParameters") -> pd.DataFrame:
-    spot_props = detect_spot_single(full_image=img, frame=frame_spec.frame, fish_channel=channel, spot_threshold=frame_spec.threshold, detection_parameters=detection_parameters)
-    return finalise_single_spot_props_table(spot_props=spot_props, position=position, frame=frame_spec.frame, channel=channel)
+    frame = frame_spec.frame
+    print(f"Building spot properties table; position={position}, frame={frame}, channel={channel}")
+    spot_props = detect_spot_single(full_image=img, frame=frame, fish_channel=channel, spot_threshold=frame_spec.threshold, detection_parameters=detection_parameters)
+    return finalise_single_spot_props_table(spot_props=spot_props, position=position, frame=frame, channel=channel)
 
 
 def detect_spots_multiple(pos_img_pairs: Iterable[Tuple[str, np.ndarray]], frame_specs: Iterable["SingleFrameDetectionSpec"], channels: Iterable[int], spot_detection_parameters: "SpotDetectionParameters", **joblib_kwargs) -> Iterable[pd.DataFrame]:
@@ -159,7 +161,7 @@ def detect_spots_multiple(pos_img_pairs: Iterable[Tuple[str, np.ndarray]], frame
     kwargs.setdefault("n_jobs", -1)
     return Parallel(**kwargs)(
         delayed(build_spot_prop_table)(img=img, position=pos, channel=ch, frame_spec=spec, detection_parameters=spot_detection_parameters) 
-        for pos, img in pos_img_pairs for spec in frame_specs for ch in channels
+        for pos, img in tqdm.tqdm(pos_img_pairs) for spec in tqdm.tqdm(frame_specs) for ch in channels
         )
     # return Parallel(**kwargs)(
     #     delayed(lambda img, t, c, threshold, position: finalise_single_spot_props_table(
