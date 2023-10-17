@@ -172,17 +172,29 @@ def detect_spots_multiple(
         frame_specs: Iterable["SingleFrameDetectionSpec"], 
         channels: Iterable[int], 
         spot_detection_parameters: "SpotDetectionParameters", 
+        parallelise: bool = False,
         **joblib_kwargs
         ) -> pd.DataFrame:
     """Detect spots in each relevant channel and for each given timepoint for the given whole-FOV images."""
     kwargs = copy.copy(joblib_kwargs)
     kwargs.setdefault("n_jobs", -1)
-    subframes = Parallel(**kwargs)(
-        delayed(build_spot_prop_table)(
-            img=img, position=pos, channel=ch, frame_spec=spec, detection_parameters=spot_detection_parameters
+    if parallelise:
+        subframes = Parallel(**kwargs)(
+            delayed(build_spot_prop_table)(
+                img=img, position=pos, channel=ch, frame_spec=spec, detection_parameters=spot_detection_parameters
+                )
+            for pos, img in tqdm.tqdm(pos_img_pairs) for spec in frame_specs for ch in channels
             )
-        for pos, img in tqdm.tqdm(pos_img_pairs) for spec in frame_specs for ch in channels
-        )
+    else:
+        subframes = []
+        for pos, img in tqdm.tqdm(pos_img_pairs):
+            for spec in tqdm.tqdm(frame_specs):
+                for ch in channels:
+                    spots = build_spot_prop_table(
+                        img=img, position=pos, channel=ch, frame_spec=spec, detection_parameters=spot_detection_parameters
+                        )
+                    print(f"Spot count: {len(spots)}")
+                    subframes.append(spots)
     return pd.concat(subframes).reset_index(drop=True)
     # return Parallel(**kwargs)(
     #     delayed(lambda img, t, c, threshold, position: finalise_single_spot_props_table(
