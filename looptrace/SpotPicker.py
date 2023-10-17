@@ -104,10 +104,10 @@ def finalise_single_spot_props_table(spot_props: pd.DataFrame, position: str, fr
     pd.DataFrame
         A table annotated with the fields for context (field of view, hybridisation timepoint / round, and imaging channel)
     """
-    spot_props["position"] = position
-    spot_props["frame"] = frame
-    spot_props["ch"] = channel
-    return spot_props
+    old_cols = list(spot_props.columns)
+    new_cols = ["position", "frame", "ch"]
+    spot_props[new_cols] = [position, frame, channel]
+    return spot_props[new_cols + old_cols]
 
 
 @dataclasses.dataclass
