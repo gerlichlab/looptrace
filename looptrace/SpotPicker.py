@@ -161,7 +161,7 @@ def detect_spots_multiple(pos_img_pairs: Iterable[Tuple[str, np.ndarray]], frame
     kwargs.setdefault("n_jobs", -1)
     return Parallel(**kwargs)(
         delayed(build_spot_prop_table)(img=img, position=pos, channel=ch, frame_spec=spec, detection_parameters=spot_detection_parameters) 
-        for pos, img in tqdm.tqdm(pos_img_pairs) for spec in tqdm.tqdm(frame_specs) for ch in channels
+        for pos, img in tqdm.tqdm(pos_img_pairs) for spec in frame_specs for ch in channels
         )
     # return Parallel(**kwargs)(
     #     delayed(lambda img, t, c, threshold, position: finalise_single_spot_props_table(
