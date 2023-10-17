@@ -121,50 +121,30 @@ class SpotDetectionParameters:
     center_spots: Optional[Callable[[pd.DataFrame], pd.DataFrame]]
     crosstalk_frame: Optional[int]
 
-    def detect_spot_single(self, full_image: np.ndarray, frame: int, fish_channel: int, spot_threshold: NumberLike):
-        img = full_image[frame, fish_channel, ::self.downsampling, ::self.downsampling, ::self.downsampling].compute()
-        crosstalk_frame = frame if self.crosstalk_frame is None else self.crosstalk_frame
-        if self.subtract_beads:
-            # TODO: non-nullity requirement for crosstalk_channel is coupled to this condition, and this should be reflected in the types.
-            bead_img = full_image[
-                crosstalk_frame, 
-                self.crosstalk_channel, 
-                ::self.downsampling, 
-                ::self.downsampling, 
-                ::self.downsampling
-                ].compute()
-            img, _ = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
-        spot_props, _ = self.detection_function(img, spot_threshold, min_dist=self.minimum_distance_between)
-        if self.center_spots is not None:
-            spot_props = self.center_spots(spot_props)
-        spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] = \
-            spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] * self.downsampling
-        return spot_props
 
-
-# def detect_spot_single(full_image: np.ndarray, frame: int, fish_channel: int, spot_threshold: NumberLike, detection_parameters: SpotDetectionParameters):
-#     img = full_image[frame, fish_channel, ::detection_parameters.downsampling, ::detection_parameters.downsampling, ::detection_parameters.downsampling].compute()
-#     crosstalk_frame = frame if detection_parameters.crosstalk_frame is None else detection_parameters.crosstalk_frame
-#     if detection_parameters.subtract_beads:
-#         # TODO: non-nullity requirement for crosstalk_channel is coupled to this condition, and this should be reflected in the types.
-#         bead_img = full_image[
-#             crosstalk_frame, 
-#             detection_parameters.crosstalk_channel, 
-#             ::detection_parameters.downsampling, 
-#             ::detection_parameters.downsampling, 
-#             ::detection_parameters.downsampling
-#             ].compute()
-#         img, _ = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
-#     spot_props, _ = detection_parameters.detection_function(img, spot_threshold, min_dist=detection_parameters.minimum_distance_between)
-#     if detection_parameters.center_spots is not None:
-#         spot_props = detection_parameters.center_spots(spot_props)
-#     spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] = \
-#         spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] * detection_parameters.downsampling
-#     return spot_props
+def detect_spot_single(full_image: np.ndarray, frame: int, fish_channel: int, spot_threshold: NumberLike, detection_parameters: SpotDetectionParameters):
+    img = full_image[frame, fish_channel, ::detection_parameters.downsampling, ::detection_parameters.downsampling, ::detection_parameters.downsampling].compute()
+    crosstalk_frame = frame if detection_parameters.crosstalk_frame is None else detection_parameters.crosstalk_frame
+    if detection_parameters.subtract_beads:
+        # TODO: non-nullity requirement for crosstalk_channel is coupled to this condition, and this should be reflected in the types.
+        bead_img = full_image[
+            crosstalk_frame, 
+            detection_parameters.crosstalk_channel, 
+            ::detection_parameters.downsampling, 
+            ::detection_parameters.downsampling, 
+            ::detection_parameters.downsampling
+            ].compute()
+        img, _ = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
+    spot_props, _ = detection_parameters.detection_function(img, spot_threshold, min_dist=detection_parameters.minimum_distance_between)
+    if detection_parameters.center_spots is not None:
+        spot_props = detection_parameters.center_spots(spot_props)
+    spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] = \
+        spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] * detection_parameters.downsampling
+    return spot_props
 
 
 def build_spot_prop_table(img: np.ndarray, position: str, channel: int, frame_spec: "SingleFrameDetectionSpec", detection_parameters: "SpotDetectionParameters") -> pd.DataFrame:
-    spot_props = detection_parameters.detect_spot_single(full_image=img, frame=frame_spec.frame, fish_channel=channel, spot_threshold=frame_spec.threshold)
+    spot_props = detect_spot_single(full_image=img, frame=frame_spec.frame, fish_channel=channel, spot_threshold=frame_spec.threshold, detection_parameters=detection_parameters)
     return finalise_single_spot_props_table(spot_props=spot_props, position=position, frame=frame_spec.frame, channel=channel)
 
 
