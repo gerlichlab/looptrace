@@ -135,18 +135,31 @@ class SpotDetectionParameters:
         return spot_props
 
 
+def build_spot_prop_table(img: np.ndarray, position: str, channel: int, frame_spec: "SingleFrameDetectionSpec", detection_parameters: "SpotDetectionParameters") -> pd.DataFrame:
+    spot_props = detection_parameters.detect_spot_single(full_image=img, frame=frame_spec.frame, fish_channel=channel, spot_threshold=frame_spec.threshold)
+    return finalise_single_spot_props_table(spot_props=spot_props, position=position, frame=frame_spec.frame, channel=channel)
+
+
 def detect_spots_multiple(pos_img_pairs: Iterable[Tuple[str, np.ndarray]], frame_specs: Iterable["SingleFrameDetectionSpec"], channels: Iterable[int], spot_detection_parameters: "SpotDetectionParameters", **joblib_kwargs) -> Iterable[pd.DataFrame]:
     """Detect spots in each relevant channel and for each given timepoint for the given whole-FOV images."""
     kwargs = copy.copy(joblib_kwargs)
     kwargs.setdefault("n_jobs", -1)
+    spot_props_list = Parallel(**kwargs)(
+        delayed(spot_detection_parameters.detect_spot_single)(full_img=img, frame=spec.frame, fish_channel=c, spot_threshold=spec.threshold) 
+        for _, img in pos_img_pairs for spec in frame_specs for c in channels
+        )
     return Parallel(**kwargs)(
-        delayed(lambda img, t, c, threshold, position: finalise_single_spot_props_table(
-            spot_props=spot_detection_parameters.detect_spot_single(full_image=img, frame=t, fish_channel=c, spot_threshold=threshold), 
-            position=position, 
-            frame=t, 
-            channel=c))(img=img, t=spec.frame, c=ch, threshold=spec.threshold, position=pos)
+        delayed(build_spot_prop_table)(img=img, position=pos, channel=ch, frame_spec=spec, detection_parameters=spot_detection_parameters) 
         for pos, img in pos_img_pairs for spec in frame_specs for ch in channels
         )
+    # return Parallel(**kwargs)(
+    #     delayed(lambda img, t, c, threshold, position: finalise_single_spot_props_table(
+    #         spot_props=spot_detection_parameters.detect_spot_single(full_image=img, frame=t, fish_channel=c, spot_threshold=threshold), 
+    #         position=position, 
+    #         frame=t, 
+    #         channel=c))(img=img, t=spec.frame, c=ch, threshold=spec.threshold, position=pos)
+    #     for pos, img in pos_img_pairs for spec in frame_specs for ch in channels
+    #     )
 
 
 def get_spot_images_zipfile(folder: Union[Path, ExtantFolder, NonExtantPath]) -> Path:
