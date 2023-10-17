@@ -414,7 +414,8 @@ class SpotPicker:
             spot_detection_parameters=params
             )
         
-        output = pd.concat(all_rois)
+        print(f"ROIs subtable count: {len(all_rois)}")
+        output = pd.concat(all_rois).reset_index(drop=True)
         logger.info(f"Writing initial spot ROIs: {self.roi_path}")
         n_spots = len(output)
         (logger.warning if n_spots == 0 else logger.info)(f'Found {n_spots} spots.')
