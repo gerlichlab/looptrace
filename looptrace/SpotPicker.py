@@ -128,7 +128,13 @@ class SpotDetectionParameters:
         return ip.roi_center_to_bbox(spots_table, roi_size=dims)
 
 
-def detect_spot_single(full_image: np.ndarray, frame: int, fish_channel: int, spot_threshold: NumberLike, detection_parameters: SpotDetectionParameters):
+def detect_spot_single(
+        full_image: np.ndarray, 
+        frame: int, 
+        fish_channel: int, 
+        spot_threshold: NumberLike, 
+        detection_parameters: SpotDetectionParameters
+        ) -> pd.DataFrame:
     img = full_image[frame, fish_channel, ::detection_parameters.downsampling, ::detection_parameters.downsampling, ::detection_parameters.downsampling].compute()
     crosstalk_frame = frame if detection_parameters.crosstalk_frame is None else detection_parameters.crosstalk_frame
     if detection_parameters.subtract_beads:
@@ -148,14 +154,26 @@ def detect_spot_single(full_image: np.ndarray, frame: int, fish_channel: int, sp
     return spot_props
 
 
-def build_spot_prop_table(img: np.ndarray, position: str, channel: int, frame_spec: "SingleFrameDetectionSpec", detection_parameters: "SpotDetectionParameters") -> pd.DataFrame:
+def build_spot_prop_table(
+        img: np.ndarray, 
+        position: str, 
+        channel: int, 
+        frame_spec: "SingleFrameDetectionSpec", 
+        detection_parameters: "SpotDetectionParameters"
+        ) -> pd.DataFrame:
     frame = frame_spec.frame
     print(f"Building spot properties table; position={position}, frame={frame}, channel={channel}")
     spot_props = detect_spot_single(full_image=img, frame=frame, fish_channel=channel, spot_threshold=frame_spec.threshold, detection_parameters=detection_parameters)
     return finalise_single_spot_props_table(spot_props=spot_props, position=position, frame=frame, channel=channel)
 
 
-def detect_spots_multiple(pos_img_pairs: Iterable[Tuple[str, np.ndarray]], frame_specs: Iterable["SingleFrameDetectionSpec"], channels: Iterable[int], spot_detection_parameters: "SpotDetectionParameters", **joblib_kwargs) -> pd.DataFrame:
+def detect_spots_multiple(
+        pos_img_pairs: Iterable[Tuple[str, np.ndarray]], 
+        frame_specs: Iterable["SingleFrameDetectionSpec"], 
+        channels: Iterable[int], 
+        spot_detection_parameters: "SpotDetectionParameters", 
+        **joblib_kwargs
+        ) -> pd.DataFrame:
     """Detect spots in each relevant channel and for each given timepoint for the given whole-FOV images."""
     kwargs = copy.copy(joblib_kwargs)
     kwargs.setdefault("n_jobs", -1)
