@@ -196,14 +196,6 @@ def detect_spots_multiple(
                     print(f"Spot count: {len(spots)}")
                     subframes.append(spots)
     return pd.concat(subframes).reset_index(drop=True)
-    # return Parallel(**kwargs)(
-    #     delayed(lambda img, t, c, threshold, position: finalise_single_spot_props_table(
-    #         spot_props=spot_detection_parameters.detect_spot_single(full_image=img, frame=t, fish_channel=c, spot_threshold=threshold), 
-    #         position=position, 
-    #         frame=t, 
-    #         channel=c))(img=img, t=spec.frame, c=ch, threshold=spec.threshold, position=pos)
-    #     for pos, img in pos_img_pairs for spec in frame_specs for ch in channels
-    #     )
 
 
 def get_spot_images_zipfile(folder: Union[Path, ExtantFolder, NonExtantPath]) -> Path:
