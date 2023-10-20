@@ -7,31 +7,39 @@
   pipeline ? false,
   analysis ? false, 
   interactive ? false,
-  pydev ? true, 
+  rDev ? true,
+  pyDev ? true, 
+  scalaDev ? true, 
   absolutelyOnlyR ? false,
+  jdk ? "jdk17",
 }:
-let baseBuildInputs = with pkgs; [ poetry stdenv.cc.cc.lib zlib ];
+let baseBuildInputs = with pkgs; [ poetry stdenv.cc.cc.lib zlib ] ++ [ pkgs.${jdk} ];
     py310 = pkgs.python310.withPackages (ps: with ps; [ numpy pandas ]);
-    R-analysis = pkgs.rWrapper.override{ packages = with pkgs.rPackages; [ argparse data_table ggplot2 reshape2 stringi ]; };
+    myR = pkgs.rWrapper.override{ 
+      packages = with pkgs.rPackages; [ argparse data_table ggplot2 reshape2 stringi ] ++ 
+        (if rDev then [ pkgs.rPackages.languageserver ] else [ ]);
+    };
     poetryExtras = [] ++ 
       (if pipeline then [ "pipeline" ] else []) ++
       (if analysis then [ "analysis" ] else []) ++ 
       (if interactive then [ "interactive" ] else []) ++
-      (if pydev then ["dev"] else []);
+      (if pyDev then ["dev"] else []);
     poetryInstallExtras = (
       if poetryExtras == [] then ""
       else pkgs.lib.concatStrings [ " -E " (pkgs.lib.concatStringsSep " -E " poetryExtras) ]
       );
+    scalaDevTools = with pkgs; [ ammonite coursier sbt-with-scala-native ];
 in
 pkgs.mkShell {
   name = "looptrace-env";
-  buildInputs = [ R-analysis ] ++ 
-    (if absolutelyOnlyR then [ ] else baseBuildInputs) ++ 
-    (if pipeline then [
-      py310
-      pkgs.zlib
-      pkgs.stdenv.cc.cc.lib
-    ] else []);
+  buildInputs = [ myR ] ++ 
+    (if absolutelyOnlyR then [ ] else baseBuildInputs ++ 
+        (if pipeline then [
+          py310
+          pkgs.zlib
+          pkgs.stdenv.cc.cc.lib
+        ] else [ ]) ++ 
+        (if scalaDev then scalaDevTools else [ ]));
   shellHook = if absolutelyOnlyR then "" else ''
     # To get this working on the lab machine, we need to modify Poetry's keyring interaction:
     # https://stackoverflow.com/questions/74438817/poetry-failed-to-unlock-the-collection
