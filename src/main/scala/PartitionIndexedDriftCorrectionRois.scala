@@ -8,6 +8,7 @@ import cats.syntax.either.*
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
 import cats.syntax.list.*
+import cats.syntax.option.*
 import mouse.boolean.*
 import upickle.default.*
 import scopt.OParser
@@ -26,12 +27,14 @@ object PartitionIndexedPoints {
     type RawRecord = Array[String]
     type ErrorMessages = NEL[String]
     type ErrMsgsOr[A] = Either[ErrorMessages, A]
+    type InitFile = (PositionIndex, FrameIndex, os.Path)
 
     final case class CliConfig(
         parserConfig: os.Path = null,
         beadRoisRoot: os.Path = null,
         numShifting: PositiveInt = PositiveInt(1),
         numAccuracy: PositiveInt = PositiveInt(1),
+        outputFolder: Option[os.Path] = None,
         shiftingSubfolderName: String = "shifting",
         accuracySubfolderName: String = "accuracy",
     )
@@ -63,6 +66,8 @@ object PartitionIndexedPoints {
                 .required()
                 .action((n, c) => c.copy(numAccuracy = n))
                 .text("Number of ROIs to use for accuracy"),
+            opt[os.Path]('O', "outputFolder")
+                .action((p, c) => c.copy(outputFolder = p.some)),
             opt[String]("shiftingSubfolderName")
                 .action((fn, c) => c.copy(shiftingSubfolderName = fn))
                 .text("Name of the subfolder in which to place the ROIs selected for drift correction shifting"),
@@ -74,52 +79,33 @@ object PartitionIndexedPoints {
         OParser.parse(parser, args, CliConfig()) match {
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
             case Some(opts) => {
+                
+                /* Function definitions based on raw CLI inputs */
                 // TODO: try to restrict this to just the specific subtype, so that the ROIs collection can't be mixed.
-                def getRoisOutfile[R <: IndexedRoi](position: PositionIndex, frame: FrameIndex, rois: List[R]): Option[(NEL[R], os.Path)] = rois.toNel.map{ rois =>
-                    val nameOfPurpose = rois.head match {
-                        case _: DetectedRoi => "unused"
-                        case _: RoiForShifting => "shifting"
-                        case _: RoiForAccuracy => "accuracy"
-                    }
-                    val filename = s"${BeadRoisPrefix}${position.get}_${frame.get}.${nameOfPurpose}.json"
-                    val outfile = opts.beadRoisRoot / nameOfPurpose / filename
-                    rois -> outfile
-                }
-
+                val partition = sampleDetectedRois(numShifting = opts.numShifting, numAccuracy = opts.numAccuracy).fmap(_.leftMap(NEL.one))
+                
+                /* Configuration of input parser */
                 println(s"Reading parser config: ${opts.parserConfig}")
                 val parserConfig: ParserConfig = read[ParserConfig](os.read(opts.parserConfig))
-                val partition = sampleDetectedRois(numShifting = opts.numShifting, numAccuracy = opts.numAccuracy).fmap(_.leftMap(NEL.one))
-                def tryReadThruNN[A](f: NonnegativeInt => A): String => Option[A] = s => Try(s.toInt).toOption >>= NonnegativeInt.maybe.fmap(_.map(f))
-                val prepFileMeta: os.Path => Option[(PositionIndex, FrameIndex, os.Path)] = filepath => {
-                    filepath.last.split("\\.").head.stripPrefix(BeadRoisPrefix).split("_").toList match {
-                        case rawPosIdx :: rawFrameIdx :: Nil => for {
-                            position <- tryReadThruNN(PositionIndex.apply)(rawPosIdx)
-                            frame <- tryReadThruNN(FrameIndex.apply)(rawFrameIdx)
-                        } yield (position, frame, filepath)
-                        case _ => None
-                    }
-                }
-                val inputFiles = os.list(opts.beadRoisRoot).filter(os.isFile).toList.flatMap(prepFileMeta)
-                println(s"Input file count: ${inputFiles.length}")
-                val (bads, goods) = Alternative[List].separate(inputFiles.map { case (pos, frame, roiFile) => 
-                    val maybeOutputPaths = for {
-                        rois <- readFile(parserConfig)(roiFile)
-                        (_, shiftingRois, accuracyRois) <- partition(rois)
-                        shifting <- getRoisOutfile(pos, frame, shiftingRois).toRight("No ROIs for shifting!")
-                        accuracy <- getRoisOutfile(pos, frame, accuracyRois).toRight("No ROIs for accuracy!")
-                    } yield (shifting, accuracy)
-                    maybeOutputPaths.leftMap((pos -> frame) -> _)
-                })
-                if (bads.nonEmpty) throw new Exception(s"${bads.length} (position, frame) pairs with problems.\n${bads}")
+                
+                /* Function definitions based on parsed config and CLI input */
                 val writeRois = (rois: NEL[IndexedRoi], outpath: os.Path) => {
                     println(s"Writing: $outpath")
-                    val arr = IndexedRoi.toJsonSimple(parserConfig.coordinateSequence)(rois.toList)(using ((_: Coordinate).get).andThen(ujson.Num.apply))
+                    val jsonObjs = rois.toList map { r => IndexedRoi.toJsonSimple(parserConfig.coordinateSequence)(r)(using ((_: Coordinate).get).andThen(ujson.Num.apply)) }
                     os.makeDir.all(os.Path(outpath.toNIO.getParent))
-                    os.write.over(outpath, ujson.write(arr, indent = 4))
+                    os.write.over(outpath, ujson.write(jsonObjs, indent = 4))
                 }
-                goods foreach { case ((shiftingRois, shiftingPath), (accuracyRois, accuracyPath)) => 
-                    writeRois(shiftingRois, shiftingPath)
-                    writeRois(accuracyRois, accuracyPath)
+                
+                /* Actions */
+                val inputFiles = discoverInputs(opts.beadRoisRoot)
+                println(s"Input file count: ${inputFiles.length}")
+                val outfolder = opts.outputFolder.getOrElse(opts.beadRoisRoot)
+                println(s"Will use output folder: $outfolder")
+                val (bads, goods) = preparePartitions(outfolder, parserConfig, numShifting = opts.numShifting, numAccuracy = opts.numAccuracy)(inputFiles)
+                if (bads.nonEmpty) throw new Exception(s"${bads.length} (position, frame) pairs with problems.\n${bads}")
+                goods foreach { case ((shiftingRois, getShiftingPath), (accuracyRois, getAccuracyPath)) => 
+                    writeRois(shiftingRois, getShiftingPath(outfolder))
+                    writeRois(accuracyRois, getAccuracyPath(outfolder))
                 }
             }
         }
@@ -151,6 +137,40 @@ object PartitionIndexedPoints {
                 (maybeX, maybeY, maybeZ, maybeQC).mapN((x, y, z, qcPass) => { (i: NonnegativeInt) => DetectedRoi(RoiIndex(i), Point3D(x, y, z), qcPass) }).toEither
             }
         }
+    }
+
+    def discoverInputs(inputsFolder: os.Path): List[InitFile] = {
+        def tryReadThruNN[A](f: NonnegativeInt => A): String => Option[A] = s => Try(s.toInt).toOption >>= NonnegativeInt.maybe.fmap(_.map(f))
+        val prepFileMeta: os.Path => Option[InitFile] = filepath => {
+            filepath.last.split("\\.").head.stripPrefix(BeadRoisPrefix).split("_").toList match {
+                case rawPosIdx :: rawFrameIdx :: Nil => for {
+                    position <- tryReadThruNN(PositionIndex.apply)(rawPosIdx)
+                    frame <- tryReadThruNN(FrameIndex.apply)(rawFrameIdx)
+                } yield (position, frame, filepath)
+                case _ => None
+            }
+        }
+        os.list(inputsFolder).filter(os.isFile).toList.flatMap(prepFileMeta)
+    }
+    
+    def preparePartitions(
+        outputFolder: os.Path, 
+        parserConfig: ParserConfig, 
+        numShifting: PositiveInt, 
+        numAccuracy: PositiveInt
+        )(inputs: List[InitFile]): (List[NEL[String] | NEL[BadRecord]], List[((NEL[IndexedRoi], os.Path => os.Path), (NEL[IndexedRoi], os.Path => os.Path))]) = {
+        val partition = sampleDetectedRois(numShifting = numShifting, numAccuracy = numAccuracy).fmap(_.leftMap(NEL.one))
+        val getErrMsg = (purpose: String, pos: PositionIndex, frame: FrameIndex) => s"No ROIs for $purpose in (${pos.get}, ${frame.get})"
+        def tryPrep[R <: IndexedRoi](purpose: String, pos: PositionIndex, frame: FrameIndex, rois: List[R]): ErrMsgsOr[(NEL[R], os.Path => os.Path)] = 
+            tryPrepRois(pos, frame, rois).toRight{ NEL.one(getErrMsg(purpose, pos, frame)) }
+        Alternative[List].separate(inputs.map { case (pos, frame, roiFile) => 
+            for {
+                rois <- readFile(parserConfig)(roiFile)
+                (_, shiftingRois, accuracyRois) <- partition(rois)
+                shifting <- tryPrep("shifting", pos, frame, shiftingRois)
+                accuracy <- tryPrep("accuracy", pos, frame, accuracyRois)
+            } yield (shifting, accuracy)
+        })
     }
     
     def readFile(parserConfig: ParserConfig)(roisFile: os.Path): Either[ErrorMessages | NEL[BadRecord], Iterable[DetectedRoi]] = {
@@ -187,10 +207,22 @@ object PartitionIndexedPoints {
     given rwZcol: ReadWriter[ZColumn] = readwriter[String].bimap(_.get, ZColumn(_)) // Facilitate RW[ParserConfig] derivation.
     
     final case class BadRecord(index: NonnegativeInt, record: RawRecord, problems: ErrorMessages)
-    
+    final case class NameOfPurpose(get: String)
+    final case class Filename(get: String)
     final case class ParserConfig(xCol: XColumn, yCol: YColumn, zCol: ZColumn, qcCol: String, coordinateSequence: CoordinateSequence) derives ReadWriter
 
     /* Helper functions */
+    def tryPrepRois[R <: IndexedRoi](position: PositionIndex, frame: FrameIndex, rois: List[R]): Option[(NEL[R], os.Path => os.Path)] = 
+        rois.toNel.map{ rois =>
+            val nameOfPurpose = NameOfPurpose(rois.head match {
+                case _: DetectedRoi => "unused"
+                case _: RoiForShifting => "shifting"
+                case _: RoiForAccuracy => "accuracy"
+            })
+            val filename = Filename(s"${BeadRoisPrefix}${position.get}_${frame.get}.${nameOfPurpose.get}.json")
+            (rois, (_: os.Path) / nameOfPurpose.get / filename.get)
+        }
+
     def prepFileRead(roisFile: os.Path): ValidatedNel[String, (Delimiter, String, List[String])] = {
         val maybeSep = Delimiter.infer(roisFile).toRight(f"Cannot infer delimiter for file: $roisFile").toValidatedNel
         val maybeHeadTail = (os.read.lines(roisFile).toList match {
@@ -199,6 +231,6 @@ object PartitionIndexedPoints {
         }).toValidatedNel
         (maybeSep, maybeHeadTail).mapN{ case (sep, (h, t)) => (sep, h, t) }
     }
+    
     def safeParseDouble(s: String): Either[String, Double] = Try{ s.toDouble }.toEither.leftMap(_.getMessage)
-
 }
