@@ -92,7 +92,7 @@ object PartitionIndexedPoints {
                 /* Function definitions based on parsed config and CLI input */
                 val writeRois = (rois: NEL[SelectedRoi], outpath: os.Path) => {
                     println(s"Writing: $outpath")
-                    val jsonObjs = rois.toList map { r => SelectedRoi.toJsonSimple(parserConfig.coordinateSequence)(r)(using ((_: Coordinate).get).andThen(ujson.Num.apply)) }
+                    val jsonObjs = rois.toList map { r => SelectedRoi.toJsonSimple(parserConfig.coordinateSequence)(r) }
                     os.makeDir.all(os.Path(outpath.toNIO.getParent))
                     os.write.over(outpath, ujson.write(jsonObjs, indent = 4))
                 }
