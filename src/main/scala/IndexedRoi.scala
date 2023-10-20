@@ -27,9 +27,4 @@ object IndexedRoi {
             "index" -> ujson.Num(roi.index.get), 
             "centroid" -> ujson.Arr.from(Point3D.toList(coordseq)(roi.centroid).toList)
         )
-    
-    def toJsonSimple(coordseq: CoordinateSequence)(rois: Iterable[IndexedRoi])(using (Coordinate => ujson.Value)): ujson.Arr = {
-        val serialise1 = toJsonSimple(coordseq)(_: IndexedRoi)
-        ujson.Arr(rois map serialise1)
-    }
 }
