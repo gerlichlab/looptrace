@@ -20,15 +20,19 @@ final case class RoiForAccuracy(index: RoiIndex, centroid: Point3D) extends Sele
 
 /** Helpers for working with indexed regions of interest (ROIs) */
 object SelectedRoi:
+    /** The key for the ROI's index in JSON representation */
     val indexKey: String = "index"
+    /** The key for the ROI's point/centroid in JSON representation */
     val pointKey: String = "centroid"
 
+    /** Serialise the index as a simple integer, and centroid as a simple array of Double, sequenced as requested. */
     def toJsonSimple(coordseq: CoordinateSequence)(roi: SelectedRoi)(using (Coordinate => ujson.Value)): ujson.Obj = 
         ujson.Obj(
             indexKey -> ujson.Num(roi.index.get), 
             pointKey -> ujson.Arr.from(Point3D.toList(coordseq)(roi.centroid).toList)
         )
 
+    /** Serialise the index as a simple integer, and centroid as a simple array of Double, sequenced as requested. */
     def simpleJsonReadWriter[R <: SelectedRoi](coordseq: CoordinateSequence, build: (RoiIndex, Point3D) => R)(using (Coordinate => ujson.Value)): ReadWriter[R] = {
         readwriter[ujson.Value].bimap[R](
             toJsonSimple(coordseq), 
@@ -41,4 +45,12 @@ object SelectedRoi:
             }
         )
     }
+
+    /** JSON reader/writer for shifting-selected ROI, based on given coordinate sequencer */
+    def simpleShiftingRW(coordseq: CoordinateSequence)(using (Coordinate) => ujson.Value): ReadWriter[RoiForShifting] = 
+        simpleJsonReadWriter(coordseq, RoiForShifting.apply)
+    
+    /** JSON reader/writer for accuracy-selected ROI, based on given coordinate sequencer */
+    def simpleAccuracyRW(coordseq: CoordinateSequence)(using (Coordinate) => ujson.Value): ReadWriter[RoiForAccuracy] = 
+        simpleJsonReadWriter(coordseq, RoiForAccuracy.apply)
 
