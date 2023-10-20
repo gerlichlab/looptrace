@@ -24,14 +24,13 @@ package object looptrace {
         inline def apply(z: Int): NonnegativeInt = 
             inline if z < 0 then compiletime.error("Negative integer where nonnegative is required!")
             else (z: NonnegativeInt)
-        def either(z: Int): Either[String, NonnegativeInt] = 
-            maybe(z).toRight(s"Cannot refine as nonnegative: $z")
+        def either(z: Int): Either[String, NonnegativeInt] = maybe(z).toRight(s"Cannot refine as nonnegative: $z")
         def indexed[A](xs: List[A]): List[(A, NonnegativeInt)] = {
             // guaranteed nonnegative by construction here
             xs.zipWithIndex.map{ case (x, i) => x -> unsafe(i) }
         }
         def maybe(z: Int): Option[NonnegativeInt] = (z >= 0).option((z: NonnegativeInt))
-        def unsafe(z: Int): NonnegativeInt = maybe(z).getOrElse{ throw new NumberFormatException(f"Not nonnegative: $z") }
+        def unsafe(z: Int): NonnegativeInt = either(z).fold(msg => throw new NumberFormatException(msg), identity)
 
     /** Refinement type for nonnegative integers */
     opaque type PositiveInt <: Int = Int
@@ -41,10 +40,9 @@ package object looptrace {
         inline def apply(z: Int): PositiveInt = 
             inline if z <= 0 then compiletime.error("Non-positive integer where positive is required!")
             else (z: PositiveInt)
-        def either(z: Int): Either[String, PositiveInt] = 
-            maybe(z).toRight(s"Cannot refine as positive: $z")
+        def either(z: Int): Either[String, PositiveInt] = maybe(z).toRight(s"Cannot refine as positive: $z")
         def maybe(z: Int): Option[PositiveInt] = (z > 0).option((z: PositiveInt))
-        def unsafe(z: Int): PositiveInt = maybe(z).getOrElse{ throw new NumberFormatException(f"Not positive: $z") }
+        def unsafe(z: Int): PositiveInt = either(z).fold(msg => throw new NumberFormatException(msg), identity)
                 
     sealed trait Delimiter {
         def canonicalExtension: String

@@ -1,18 +1,16 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
+import upickle.default.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ Coordinate, CoordinateSequence, Point3D }
 
-/** Supertype for regions of interest (ROIs) */
-sealed trait IndexedRoi {
+/** Type representing a detected fiducial bead region of interest (ROI) */
+final case class DetectedRoi(index: RoiIndex, centroid: Point3D, isUsable: Boolean)
+
+/** A region of interest (ROI) selected for use in some process */
+sealed trait SelectedRoi {
     def index: RoiIndex
     def centroid: Point3D
 }
-
-/** Type representing a detected fiducial bead region of interest (ROI) */
-final case class DetectedRoi(index: RoiIndex, centroid: Point3D, isUsable: Boolean) extends IndexedRoi
-
-/** A region of interest (ROI) selected for use in some process */
-sealed trait SelectedRoi extends IndexedRoi
 
 /** A region of interest (ROI) selected for use in drift correction shifting */
 final case class RoiForShifting(index: RoiIndex, centroid: Point3D) extends SelectedRoi
@@ -21,10 +19,26 @@ final case class RoiForShifting(index: RoiIndex, centroid: Point3D) extends Sele
 final case class RoiForAccuracy(index: RoiIndex, centroid: Point3D) extends SelectedRoi
 
 /** Helpers for working with indexed regions of interest (ROIs) */
-object IndexedRoi {
-    def toJsonSimple(coordseq: CoordinateSequence)(roi: IndexedRoi)(using (Coordinate => ujson.Value)): ujson.Obj = 
+object SelectedRoi:
+    val indexKey: String = "index"
+    val pointKey: String = "centroid"
+
+    def toJsonSimple(coordseq: CoordinateSequence)(roi: SelectedRoi)(using (Coordinate => ujson.Value)): ujson.Obj = 
         ujson.Obj(
-            "index" -> ujson.Num(roi.index.get), 
-            "centroid" -> ujson.Arr.from(Point3D.toList(coordseq)(roi.centroid).toList)
+            indexKey -> ujson.Num(roi.index.get), 
+            pointKey -> ujson.Arr.from(Point3D.toList(coordseq)(roi.centroid).toList)
         )
-}
+
+    def simpleJsonReadWriter[R <: SelectedRoi](coordseq: CoordinateSequence, build: (RoiIndex, Point3D) => R)(using (Coordinate => ujson.Value)): ReadWriter[R] = {
+        readwriter[ujson.Value].bimap[R](
+            toJsonSimple(coordseq), 
+            json => {
+                val rawIndex = NonnegativeInt.unsafe(json(indexKey).num.toInt)
+                val idx = RoiIndex(NonnegativeInt.unsafe(rawIndex))
+                val coords = json(pointKey).arr.map(_.num.toDouble)
+                val pt = Point3D.fromList(coordseq)(coords.toList).fold(msg => throw new Exception(msg), identity)
+                build(idx, pt)
+            }
+        )
+    }
+

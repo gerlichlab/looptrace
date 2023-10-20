@@ -28,6 +28,7 @@ object PartitionIndexedPoints {
     type ErrorMessages = NEL[String]
     type ErrMsgsOr[A] = Either[ErrorMessages, A]
     type InitFile = (PositionIndex, FrameIndex, os.Path)
+    type IndexedRoi = DetectedRoi | SelectedRoi
 
     final case class CliConfig(
         parserConfig: os.Path = null,
@@ -89,9 +90,9 @@ object PartitionIndexedPoints {
                 val parserConfig: ParserConfig = read[ParserConfig](os.read(opts.parserConfig))
                 
                 /* Function definitions based on parsed config and CLI input */
-                val writeRois = (rois: NEL[IndexedRoi], outpath: os.Path) => {
+                val writeRois = (rois: NEL[SelectedRoi], outpath: os.Path) => {
                     println(s"Writing: $outpath")
-                    val jsonObjs = rois.toList map { r => IndexedRoi.toJsonSimple(parserConfig.coordinateSequence)(r)(using ((_: Coordinate).get).andThen(ujson.Num.apply)) }
+                    val jsonObjs = rois.toList map { r => SelectedRoi.toJsonSimple(parserConfig.coordinateSequence)(r)(using ((_: Coordinate).get).andThen(ujson.Num.apply)) }
                     os.makeDir.all(os.Path(outpath.toNIO.getParent))
                     os.write.over(outpath, ujson.write(jsonObjs, indent = 4))
                 }
@@ -158,10 +159,10 @@ object PartitionIndexedPoints {
         parserConfig: ParserConfig, 
         numShifting: PositiveInt, 
         numAccuracy: PositiveInt
-        )(inputs: List[InitFile]): (List[NEL[String] | NEL[BadRecord]], List[((NEL[IndexedRoi], os.Path => os.Path), (NEL[IndexedRoi], os.Path => os.Path))]) = {
+        )(inputs: List[InitFile]): (List[NEL[String] | NEL[BadRecord]], List[((NEL[SelectedRoi], os.Path => os.Path), (NEL[SelectedRoi], os.Path => os.Path))]) = {
         val partition = sampleDetectedRois(numShifting = numShifting, numAccuracy = numAccuracy).fmap(_.leftMap(NEL.one))
         val getErrMsg = (purpose: String, pos: PositionIndex, frame: FrameIndex) => s"No ROIs for $purpose in (${pos.get}, ${frame.get})"
-        def tryPrep[R <: IndexedRoi](purpose: String, pos: PositionIndex, frame: FrameIndex, rois: List[R]): ErrMsgsOr[(NEL[R], os.Path => os.Path)] = 
+        def tryPrep(purpose: String, pos: PositionIndex, frame: FrameIndex, rois: List[SelectedRoi]): ErrMsgsOr[(NEL[SelectedRoi], os.Path => os.Path)] = 
             tryPrepRois(pos, frame, rois).toRight{ NEL.one(getErrMsg(purpose, pos, frame)) }
         Alternative[List].separate(inputs.map { case (pos, frame, roiFile) => 
             for {
@@ -200,28 +201,33 @@ object PartitionIndexedPoints {
     /* Helper types */
     sealed trait ColumnName
     final case class XColumn(get: String) extends ColumnName
-    given rwXcol: ReadWriter[XColumn] = readwriter[String].bimap(_.get, XColumn(_)) // Facilitate RW[ParserConfig] derivation.
     final case class YColumn(get: String) extends ColumnName
-    given rwYcol: ReadWriter[YColumn] = readwriter[String].bimap(_.get, YColumn(_)) // Facilitate RW[ParserConfig] derivation.
     final case class ZColumn(get: String) extends ColumnName
-    given rwZcol: ReadWriter[ZColumn] = readwriter[String].bimap(_.get, ZColumn(_)) // Facilitate RW[ParserConfig] derivation.
     
+    object ColumnName:
+        given rwXcol: ReadWriter[XColumn] = readwriter[String].bimap(_.get, XColumn(_)) // Facilitate RW[ParserConfig] derivation.
+        given rwYcol: ReadWriter[YColumn] = readwriter[String].bimap(_.get, YColumn(_)) // Facilitate RW[ParserConfig] derivation.
+        given rwZcol: ReadWriter[ZColumn] = readwriter[String].bimap(_.get, ZColumn(_)) // Facilitate RW[ParserConfig] derivation.
+
     final case class BadRecord(index: NonnegativeInt, record: RawRecord, problems: ErrorMessages)
     final case class NameOfPurpose(get: String)
     final case class Filename(get: String)
+    
+    import ColumnName.given
     final case class ParserConfig(xCol: XColumn, yCol: YColumn, zCol: ZColumn, qcCol: String, coordinateSequence: CoordinateSequence) derives ReadWriter
 
     /* Helper functions */
-    def tryPrepRois[R <: IndexedRoi](position: PositionIndex, frame: FrameIndex, rois: List[R]): Option[(NEL[R], os.Path => os.Path)] = 
-        rois.toNel.map{ rois =>
-            val nameOfPurpose = NameOfPurpose(rois.head match {
-                case _: DetectedRoi => "unused"
+    def tryPrepRois(position: PositionIndex, frame: FrameIndex, rois: List[SelectedRoi]): Option[(NEL[SelectedRoi], os.Path => os.Path)] = rois match {
+        case Nil => None
+        case firstRoi :: remainingRois => {
+            val nameOfPurpose = NameOfPurpose(firstRoi match {
                 case _: RoiForShifting => "shifting"
                 case _: RoiForAccuracy => "accuracy"
             })
             val filename = Filename(s"${BeadRoisPrefix}${position.get}_${frame.get}.${nameOfPurpose.get}.json")
-            (rois, (_: os.Path) / nameOfPurpose.get / filename.get)
+            (NEL(firstRoi, remainingRois), (_: os.Path) / nameOfPurpose.get / filename.get).some
         }
+    }
 
     def prepFileRead(roisFile: os.Path): ValidatedNel[String, (Delimiter, String, List[String])] = {
         val maybeSep = Delimiter.infer(roisFile).toRight(f"Cannot infer delimiter for file: $roisFile").toValidatedNel
