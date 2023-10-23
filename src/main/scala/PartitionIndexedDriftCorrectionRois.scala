@@ -188,8 +188,12 @@ object PartitionIndexedPoints {
 
     def sampleDetectedRois(numShifting: PositiveInt, numAccuracy: PositiveInt)(rois: Iterable[DetectedRoi]): Either[String, (List[DetectedRoi], List[RoiForShifting], List[RoiForAccuracy])] = {
         val sampleSize = numShifting + numAccuracy
+        if (sampleSize < numShifting || sampleSize < numAccuracy) {
+            val msg = s"Appears overflow occurred: ${numShifting} + ${numAccuracy} = ${sampleSize}"
+            throw new IllegalArgumentException(msg)
+        }
         val numAvailable = rois.size
-        (sampleSize <= numAvailable).either(s"Fewer ROIs available than requested! {numAvailable} < {sampleSize}", {
+        (sampleSize <= numAvailable).either(s"Fewer ROIs available than requested! $numAvailable < $sampleSize", {
             val (inSample, outOfSample) = Random.shuffle(rois.toList).splitAt(sampleSize)
             val (forShifting, forAccuracy) = inSample.splitAt(numShifting)
             val shiftingRois = forShifting.map(roi => RoiForShifting(roi.index, roi.centroid))
