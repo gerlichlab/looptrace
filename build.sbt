@@ -22,9 +22,8 @@ lazy val root = (project in file("."))
       "-feature",
       "-language:implicitConversions",
       "-language:existentials",
-      // for tuples in for comprehension: 
       // https://contributors.scala-lang.org/t/for-comprehension-requires-withfilter-to-destructure-tuples/5953
-      "-source:future",
+      "-source:future", // for tuples in for comprehension; see above link
       "-unchecked",
       "-Werror",
     ),
