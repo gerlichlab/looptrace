@@ -42,24 +42,33 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite with ScalaChec
 
     def getInputFilename(pos: PositionIndex, frame: FrameIndex): String = s"bead_rois__${pos.get}_${frame.get}.csv"
 
-    test("Requesting total sample size greater than record count is an error.") {
-        val maxRoisCount = 10000
-        def genBadInputs: Gen[(PositiveInt, PositiveInt, Iterable[DetectedRoi])] = for {
+    test("Requesting sample size greater than available record count is an error.") {
+        val maxRoisCount = 100
+        
+        def genSampleSizeInExcessOfAllRois: Gen[(PositiveInt, PositiveInt, Iterable[DetectedRoi])] = for {
             rois <- Gen.choose(0, maxRoisCount).flatMap{ n => Gen.listOfN(n, arbitrary[DetectedRoi]) }
             del <- Gen.choose(1, maxRoisCount).map(PositiveInt.unsafe)
             acc <- Gen.choose(scala.math.max(0, rois.size - del) + 1, maxRoisCount).map(PositiveInt.unsafe)
         } yield (del, acc, rois)
-        forAll (genBadInputs) { case (numShifting, numAccuracy, rois) => 
-            val observed = sampleDetectedRois(numShifting, numAccuracy)(rois)
-            val expected = {
-                val sampleSize = numShifting + numAccuracy
-                Left(s"Fewer ROIs available than requested! ${rois.size} < ${sampleSize}")
-            }
-            observed shouldBe expected
+
+        def genSampleSizeInExcessOfAvailableRois: Gen[(PositiveInt, PositiveInt, Iterable[DetectedRoi])] = for {
+            rois <- Gen.choose(2, maxRoisCount).flatMap{ n => Gen.listOfN(n, arbitrary[DetectedRoi]).suchThat(_.exists(_.isUsable)) }
+            numUsable = rois.count(_.isUsable)
+            del <- Gen.choose(1, numUsable).map(PositiveInt.unsafe)
+            acc <- Gen.choose(numUsable - del + 1, rois.size - del).map(PositiveInt.unsafe)
+        } yield (del, acc, rois)
+        
+        forAll (Gen.oneOf(genSampleSizeInExcessOfAllRois, genSampleSizeInExcessOfAvailableRois)) { 
+            case (numShifting, numAccuracy, rois) => 
+                assert(numShifting + numAccuracy > rois.count(_.isUsable), "Uh-oh!")
+                val observed = sampleDetectedRois(numShifting, numAccuracy)(rois)
+                val expected = {
+                    val sampleSize = numShifting + numAccuracy
+                    Left(s"Fewer ROIs available than requested! ${rois.count(_.isUsable)} < ${sampleSize}")
+                }
+                observed shouldBe expected
         }
     }
-
-    test("Requesting total sample size greather than available (discarding QC fails) pool size is an error.") { (pending) }
 
     test("Input discovery works as expected for folder with no other contents.") {
         type NNPair = (NonnegativeInt, NonnegativeInt)
