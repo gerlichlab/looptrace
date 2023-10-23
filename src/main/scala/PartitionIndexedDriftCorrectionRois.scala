@@ -87,7 +87,7 @@ object PartitionIndexedPoints {
                 
                 /* Configuration of input parser */
                 println(s"Reading parser config: ${opts.parserConfig}")
-                val parserConfig: ParserConfig = read[ParserConfig](os.read(opts.parserConfig))
+                val parserConfig: ParserConfig = readJson[ParserConfig](opts.parserConfig)
                 
                 /* Function definitions based on parsed config and CLI input */
                 val writeRois = (rois: NEL[SelectedRoi], outpath: os.Path) => {
@@ -214,9 +214,21 @@ object PartitionIndexedPoints {
     final case class Filename(get: String)
     
     import ColumnName.given
-    final case class ParserConfig(xCol: XColumn, yCol: YColumn, zCol: ZColumn, qcCol: String, coordinateSequence: CoordinateSequence) derives ReadWriter
+    final case class ParserConfig(xCol: XColumn, yCol: YColumn, zCol: ZColumn, qcCol: String, coordinateSequence: CoordinateSequence) derives ReadWriter:
+        {
+            val textLikeMembers: List[String] = List(xCol.get, yCol.get, zCol.get, qcCol)
+            textLikeMembers.groupBy(identity).withFilter(_._2.length > 1).map(_._1) match {
+                case Nil => ()
+                case reps => throw new IllegalArgumentException(
+                    s"${reps.size} repeats among text-like columns for parsing config: ${reps mkString ","}")
+            }
+        }
 
     /* Helper functions */
+    def getOutputFilename(pos: PositionIndex, frame: FrameIndex, purpose: NameOfPurpose): Filename = {
+        Filename(s"${BeadRoisPrefix}${pos.get}_${frame.get}.${purpose.get}.json")
+    }
+
     def tryPrepRois(position: PositionIndex, frame: FrameIndex, rois: List[SelectedRoi]): Option[(NEL[SelectedRoi], os.Path => os.Path)] = rois match {
         case Nil => None
         case firstRoi :: remainingRois => {
@@ -224,7 +236,7 @@ object PartitionIndexedPoints {
                 case _: RoiForShifting => "shifting"
                 case _: RoiForAccuracy => "accuracy"
             })
-            val filename = Filename(s"${BeadRoisPrefix}${position.get}_${frame.get}.${nameOfPurpose.get}.json")
+            val filename = getOutputFilename(position, frame, nameOfPurpose)
             (NEL(firstRoi, remainingRois), (_: os.Path) / nameOfPurpose.get / filename.get).some
         }
     }
