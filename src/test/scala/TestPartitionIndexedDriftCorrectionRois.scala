@@ -1,16 +1,27 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
+import scala.util.Random
 import cats.syntax.eq.*
+import cats.syntax.flatMap.*
 import upickle.default.*
 
-import org.scalacheck.Gen
+import org.scalacheck.{ Arbitrary, Gen }
+import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
-import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedPoints.{ BeadRoisPrefix, ParserConfig, discoverInputs, getOutputFilename }
+import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedPoints.{
+    BeadRoisPrefix, 
+    ParserConfig, 
+    XColumn, 
+    YColumn, 
+    ZColumn, 
+    discoverInputs, 
+    getOutputFilename, 
+    sampleDetectedRois
+}
 import at.ac.oeaw.imba.gerlich.looptrace.space.CoordinateSequence
-import javax.swing.text.html.HTMLEditorKit.Parser
 
 /** Tests for the partitioning of regions of interest (ROIs) for drift correction */
 class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite with ScalaCheckPropertyChecks with should.Matchers with PartitionRoisSuite {
@@ -31,21 +42,21 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite with ScalaChec
 
     def getInputFilename(pos: PositionIndex, frame: FrameIndex): String = s"bead_rois__${pos.get}_${frame.get}.csv"
 
-    def withTempDataset[D](testCode: D => Any)(using DatasetLike[D]): Any = {
-        val tempRoot = ???
-    }
-
-    def touchFile(fp: os.Path): Unit = os.write(fp, "")
-
     test("Requesting total sample size greater than record count is an error.") {
-        val genDataAndSampleSize: Gen[(Dataset, Int)] = for {
-            ds <- genDataset
-            n <- Gen.posNum[Int].suchThat(_ > ds.expectedNumTotal)
-        } yield (ds, n)
-        // forAll (genDataAndSampleSize) { case (ds, n) => withTempDirectory{ p => 
-        //     ???
-        // } }
-        (pending)
+        val maxRoisCount = 10000
+        def genBadInputs: Gen[(PositiveInt, PositiveInt, Iterable[DetectedRoi])] = for {
+            rois <- Gen.choose(0, maxRoisCount).flatMap{ n => Gen.listOfN(n, arbitrary[DetectedRoi]) }
+            del <- Gen.choose(1, maxRoisCount).map(PositiveInt.unsafe)
+            acc <- Gen.choose(scala.math.max(0, rois.size - del) + 1, maxRoisCount).map(PositiveInt.unsafe)
+        } yield (del, acc, rois)
+        forAll (genBadInputs) { case (numShifting, numAccuracy, rois) => 
+            val observed = sampleDetectedRois(numShifting, numAccuracy)(rois)
+            val expected = {
+                val sampleSize = numShifting + numAccuracy
+                Left(s"Fewer ROIs available than requested! ${rois.size} < ${sampleSize}")
+            }
+            observed shouldBe expected
+        }
     }
 
     test("Requesting total sample size greather than available (discarding QC fails) pool size is an error.") { (pending) }
@@ -82,7 +93,36 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite with ScalaChec
         (pending)
     }
 
-    test("Collision between column-like names in parser config is illegal") { (pending) }
+    test("Collision between column-like names in parser config is illegal") {
+        /* Build the random input generator for this test, assuring that at least one column name collision occurs */
+        val uniqueValueCounts = List(List(1, 1, 2), List(2, 2), List(1, 3), List(4))
+        def genElems: List[Int] => Gen[List[String]] = structure => {
+            val genBlock: Gen[List[List[String]]] = 
+                Gen.sequence(structure map { n => arbitrary[String].map(List.fill(n)) })
+            genBlock.map(_.flatten)
+        }
+        def genTextLikes: Gen[(XColumn, YColumn, ZColumn, String)] = {
+            val rawTextValues: Gen[List[String]] = for {
+                numUniq <- Gen.oneOf(1, 3)
+                structure <- numUniq match {
+                    case 1 => Gen.const(List(4))
+                    case 2 => Gen.oneOf(List(2, 2), List(1, 3))
+                    case 3 => Gen.const(List(1, 1, 2))
+                }
+                subs <- genElems(structure)
+            } yield Random.shuffle(subs)
+            rawTextValues.map{
+                case x :: y :: z :: qc :: Nil => (XColumn(x), YColumn(y), ZColumn(z), qc)
+                case raws => throw new Exception(s"${raws.length} values generated when 4 were expected!")
+            }
+        }
+        def genBadConfigInputs: Gen[(XColumn, YColumn, ZColumn, String, CoordinateSequence)] = for {
+            (x, y, z, qc) <- genTextLikes
+            cs <- arbitrary[CoordinateSequence]
+        } yield (x, y, z, qc, cs)
+        
+        forAll(genBadConfigInputs) { tup => assertThrows[IllegalArgumentException]{ ParserConfig.apply.tupled(tup) } }
+    }
 
     test("Parser config roundtrips through JSON") {
         forAll { (original: ParserConfig) => 
@@ -91,7 +131,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite with ScalaChec
         }
     }
 
-    def configLines = """
+    def standardConfigLines = """
     {
         "xCol": "centroid-0",
         "yCol": "centroid-1",

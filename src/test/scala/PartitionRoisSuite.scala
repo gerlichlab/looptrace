@@ -2,6 +2,7 @@ package at.ac.oeaw.imba.gerlich.looptrace
 
 import cats.instances.string.*
 import cats.syntax.eq.*
+import cats.syntax.functor.*
 import org.scalacheck.{ Arbitrary, Gen }
 import org.scalacheck.Arbitrary.arbitrary
 
@@ -11,6 +12,8 @@ import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedPoints.{ XColumn, YColu
 /** Types and helpers for testing partitioning of regions of interest (ROIs) */
 trait PartitionRoisSuite extends LooptraceSuite:
     given parserConfigArbitrary: Arbitrary[ParserConfig] = Arbitrary(genParserConfig)
+    given detectedRoiArbitrary(using arbComponents: Arbitrary[(RoiIndex, Point3D, Boolean)]): Arbitrary[DetectedRoi] = 
+        arbComponents.fmap(DetectedRoi.apply.tupled)
     given shiftingRoiArbitrary: Arbitrary[RoiForShifting] = Arbitrary{ genSelectedRoi(RoiForShifting.apply) }
     given accuracyRoiArbitrary: Arbitrary[RoiForAccuracy] = Arbitrary{ genSelectedRoi(RoiForAccuracy.apply) }
     
