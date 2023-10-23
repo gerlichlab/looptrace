@@ -3,12 +3,16 @@ package at.ac.oeaw.imba.gerlich
 import java.io.File
 import cats.{ Eq, Show }
 import cats.syntax.show.*
+
 import mouse.boolean.*
 import scopt.Read
 
 /** Chromatin fiber tracing with FISH probes */
 package object looptrace {
     val VersionName = "0.3.0-SNAPSHOT"
+
+    /** Read given JSON file into value of target type. */
+    def readJson[A](jsonFile: os.Path)(using upickle.default.Reader[A]): A = upickle.default.read[A](os.read(jsonFile))
 
     /** Allow custom types as CLI parameters. */
     object CliReaders:
@@ -31,6 +35,7 @@ package object looptrace {
         }
         def maybe(z: Int): Option[NonnegativeInt] = (z >= 0).option((z: NonnegativeInt))
         def unsafe(z: Int): NonnegativeInt = either(z).fold(msg => throw new NumberFormatException(msg), identity)
+        given nonnegativeIntEq: Eq[NonnegativeInt] = Eq.fromUniversalEquals[NonnegativeInt]
 
     /** Refinement type for nonnegative integers */
     opaque type PositiveInt <: Int = Int
@@ -43,6 +48,7 @@ package object looptrace {
         def either(z: Int): Either[String, PositiveInt] = maybe(z).toRight(s"Cannot refine as positive: $z")
         def maybe(z: Int): Option[PositiveInt] = (z > 0).option((z: PositiveInt))
         def unsafe(z: Int): PositiveInt = either(z).fold(msg => throw new NumberFormatException(msg), identity)
+        given posIntEq: Eq[PositiveInt] = Eq.fromUniversalEquals[PositiveInt]
                 
     sealed trait Delimiter {
         def canonicalExtension: String

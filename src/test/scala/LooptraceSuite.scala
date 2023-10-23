@@ -9,7 +9,10 @@ import cats.syntax.functor.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 
+/** Base trait for tests in looptrace */
 trait LooptraceSuite:
+    
+    /* Givens ("implicits") */
     given arbitraryFunctor: Functor[Arbitrary] = new Functor[Arbitrary] {
         def map[A, B](fa: Arbitrary[A])(f: A => B): Arbitrary[B] = Arbitrary{
             arbitrary[A](fa).map(f)
@@ -23,11 +26,26 @@ trait LooptraceSuite:
     given point3DArbitrary(using arbX: Arbitrary[Double]): Arbitrary[Point3D] = Arbitrary{
         Gen.zip(arbitrary[XCoordinate], arbitrary[YCoordinate], arbitrary[ZCoordinate]).map(Point3D.apply.tupled)
     }
-    def genSelectedRoi[R <: SelectedRoi](build: (RoiIndex, Point3D) => R): Gen[R] = for {
-        i <- arbitrary[RoiIndex]
-        p <- arbitrary[Point3D]
-    } yield build(i, p)
-    given shiftingRoiArbitrary: Arbitrary[RoiForShifting] = Arbitrary{ genSelectedRoi(RoiForShifting.apply) }
-    given accuracyRoiArbitrary: Arbitrary[RoiForAccuracy] = Arbitrary{ genSelectedRoi(RoiForAccuracy.apply) }
     given coordseqArbitrary: Arbitrary[CoordinateSequence] = 
         Arbitrary{ Gen.oneOf(CoordinateSequence.Forward, CoordinateSequence.Reverse) }
+    given nonnegativeIntArbitray: Arbitrary[NonnegativeInt] = Arbitrary { genNonnegativeInt }
+    given positiveIntArbitrary: Arbitrary[PositiveInt] = Arbitrary{ genPositiveInt }
+
+    /* Other defintions */
+    def genNonnegativeInt: Gen[NonnegativeInt] = Gen.choose(0, Int.MaxValue).map(NonnegativeInt.unsafe)
+    def genPositiveInt: Gen[PositiveInt] = Gen.posNum[Int].map(PositiveInt.unsafe)
+    
+    /** Execute some test code that uses a {@code os.Path} folder. */
+    def withTempDirectory(testCode: os.Path => Any): Any = {
+        val tempRoot = os.temp.dir()
+        // TODO: make tempfile retention CLI- or config-controllable, to not need comment toggling.
+        //testCode(tempRoot)
+        //os.remove(tempRoot)
+        try { testCode(tempRoot) } finally { os.remove.all(tempRoot) }
+    }
+
+    /** Execute some test code that uses a {@code os.Path} file. */
+    def withTempFile(initData: os.Source = null)(testCode: os.Path => Any): Any = {
+        val tempfile = os.temp(contents = initData)
+        try { testCode(tempfile) } finally { os.remove(tempfile) }
+    }
