@@ -7,7 +7,6 @@ Ellenberg group
 EMBL Heidelberg
 """
 
-import logging
 from pathlib import Path
 from typing import *
 import numpy as np
@@ -20,7 +19,6 @@ except TensorflowNotFoundException:
 from looptrace.exceptions import GpusUnavailableException, MissingInputException
 from looptrace.point_spread_function import PointSpreadFunctionStrategy
 
-logger = logging.getLogger()
 
 REQ_GPU_KEY = "require_gpu"
 
@@ -42,12 +40,36 @@ class Deconvolver:
             self.pos_list = [self.pos_list[int(array_id)]]
 
     @property
+    def bead_roi_size(self) -> int:
+        try:
+            bead_d = self.config['bead_roi_size']
+        except KeyError:
+            msg_pfx = "Using default bead ROI diameter"
+            bead_d = 12
+        else:
+            msg_pfx = "Using bead ROI diameter from config"
+        print(f"{msg_pfx}: {bead_d}")
+        return bead_d
+
+    @property
     def field_of_view_indices(self) -> Iterable[int]:
         return self.position_indices
 
     @property
     def input_name(self) -> str:
         return self.image_handler.decon_input_name
+
+    @property
+    def num_beads(self) -> int:
+        try:
+            n_beads = self.config['num_beads_psf']
+        except KeyError:
+            n_beads = 500
+            msg_pfx = "Using default bead count"
+        else:
+            msg_pfx = "Using bead count from config"
+        print(f"{msg_pfx}: {n_beads}")
+        return n_beads
 
     @property
     def output_name(self) -> str:
@@ -101,50 +123,38 @@ class Deconvolver:
 
         t_slice = self.config['psf_bead_frame']
         ch = self.config['psf_bead_ch']
+        
         threshold = self.config['bead_threshold']
         min_bead_int = self.config['min_bead_intensity']
 
-        try:
-            n_beads = self.config['num_beads_psf']
-        except KeyError:
-            n_beads = 500
-            msg_pfx = "Using default bead count for PSF extraction"
-        else:
-            msg_pfx = "Using bead count from config for PSF extraction"
-        logger.info(f"{msg_pfx}: {n_beads}")
-        
-        # Region diameter setting
-        try:
-            bead_d = self.config['bead_roi_size']
-        except KeyError:
-            msg_pfx = "Using default bead ROI diameter"
-            bead_d = 12
-        else:
-            msg_pfx = "Using bead ROI diameter from config for PSF extraction"
-        logger.info(logger.info(f"{msg_pfx}: {bead_d}"))
-        
+        # Region size setting
+        bead_d = self.bead_roi_size # diameter
         bead_r = bead_d // 2 # radius
         
         bead_image_path, bead_image_data = self.get_input_filepath_and_input_image
         print(f"Using image for empirical PSF computation: {bead_image_path}")
+        
         bead_img = bead_image_data[t_slice, ch].compute()
-        bead_pos = generate_bead_rois(t_img=bead_img, threshold=threshold, min_bead_int=min_bead_int, bead_roi_px=bead_d, n_points=n_beads)
-        beads = [extract_single_bead(point, bead_img) for point in bead_pos]
-        bead_ints = np.sum(np.array(beads),axis = (1,2,3))
-        perc_high = np.percentile(bead_ints, 40)
-        perc_low = np.percentile(bead_ints, 5)
+        bead_pos = generate_bead_rois(t_img=bead_img, threshold=threshold, min_bead_int=min_bead_int, bead_roi_px=bead_d, n_points=self.num_beads)
+        beads = [extract_single_bead(point=point, img=bead_img, bead_roi_px=bead_d) for point in bead_pos]
+        
+        intensities = np.sum(np.array(beads), axis = (1, 2, 3))
+        perc_high = np.percentile(intensities, 40)
+        perc_low = np.percentile(intensities, 5)
         beads = [b for b in beads if ((np.sum(b) < perc_high) & (np.sum(b) > perc_low))]
 
-        fits = [fitSymmetricGaussian3DMLE(b, 3, [bead_r,bead_r,bead_r]) for b in beads]
+        fits = [fitSymmetricGaussian3DMLE(b, 3, [bead_r, bead_r, bead_r]) for b in beads]
 
         drifts = [np.array([bead_r, bead_r, bead_r]) - fit[0][2:5] for fit in fits]
         beads_c = [shift_image(b, d, mode='wrap') for b, d in zip(beads, drifts)]
+        
         exp_psf = np.mean(np.stack(beads_c), axis=0)[1:, 1:, 1:]
         exp_psf = exp_psf / np.max(exp_psf)
+        
         outfile = Path(self.image_handler.image_path) / "exp_psf.npy"
-        logger.info(f"Saving empirical point-spread function: {outfile}")
+        print(f"Saving empirical point-spread function: {outfile}")
         np.save(str(outfile), exp_psf)
-        logger.info('Empirical PSF saved.')
+        print("Empirical PSF saved.")
         self.image_handler.images['exp_psf'] = exp_psf
         return outfile
 
