@@ -3309,6 +3309,24 @@ tomli = {version = ">=1.0.0", markers = "python_version < \"3.11\""}
 testing = ["argcomplete", "attrs (>=19.2.0)", "hypothesis (>=3.56)", "mock", "nose", "pygments (>=2.7.2)", "requests", "setuptools", "xmlschema"]
 
 [[package]]
+name = "pytest-skip-slow"
+version = "0.0.5"
+description = "A pytest plugin to skip `@pytest.mark.slow` tests by default."
+category = "main"
+optional = true
+python-versions = ">=3.7"
+files = [
+    {file = "pytest-skip-slow-0.0.5.tar.gz", hash = "sha256:655ea5c748c72947e0d302334e7fa8ef99929257a2a2bc928f630ddb5a161d88"},
+    {file = "pytest_skip_slow-0.0.5-py3-none-any.whl", hash = "sha256:e2f6401d6ed0db3be1402622a7b24f7df14f61ebd26feda808a0d45433d4d474"},
+]
+
+[package.dependencies]
+pytest = ">=6.2.0"
+
+[package.extras]
+test = ["tox"]
+
+[[package]]
 name = "python-dateutil"
 version = "2.8.2"
 description = "Extensions to the standard Python datetime module"
@@ -4806,7 +4824,7 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [extras]
 analysis = ["matplotlib", "numba", "seaborn"]
 deconvolution = ["flowdec"]
-dev = ["czifile", "matplotlib", "nd2", "numba", "pytest", "seaborn", "tifffile"]
+dev = ["czifile", "matplotlib", "nd2", "numba", "pytest", "pytest-skip-slow", "seaborn", "tifffile"]
 interactive = ["napari", "napari-plot-profile", "pyqt6"]
 legacy-support = ["imagecodecs"]
 nuclei = ["cellpose"]
@@ -4816,4 +4834,4 @@ polymer = ["numba"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "7bd0526f9e640fcb04a728e664d7cad9d1bd7e66f627c09f43529b00c473149f"
+content-hash = "9ee88c09aa2218d4a679c79a2be5147d0918b4b970d584cb7f6fb5d123709515"
