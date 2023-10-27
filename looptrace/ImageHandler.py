@@ -28,6 +28,17 @@ FolderLike = Union[str, Path, ExtantFolder]
 PathFilter = Callable[[Union[os.DirEntry, Path]], bool]
 
 
+def bead_rois_filename(pos_idx: int, frame: int) -> str:
+    return f"bead_rois__{pos_idx}_{frame}.csv"
+
+
+def fetch_bead_rois(H: "ImageHandler", pos_idx: int, frame: int, num_rois: int) -> pd.DataFrame:
+    fp = H.get_bead_rois_file(pos_idx=pos_idx, frame=frame).path
+    print(f"Featching bead ROIs from file: {fp}")
+    rois = pd.read_csv(fp, index_col=0)
+    return rois.sample(num_rois, random_state=1) if num_rois < rois.shape[0] else rois
+
+
 class ImageHandler:
     def __init__(
             self, 
@@ -57,6 +68,15 @@ class ImageHandler:
     @property
     def analysis_path(self):
         return get_analysis_path(self.config)
+
+    @property
+    def bead_rois_path(self) -> Path:
+        return Path(self.analysis_path) / "bead_rois"
+
+    def get_bead_rois_file(self, pos_idx: int, frame: int) -> ExtantFile:
+        fn = bead_rois_filename(pos_idx=pos_idx, frame=frame)
+        fp = self.bead_rois_path / fn
+        return ExtantFile(fp)
 
     @property
     def decon_input_name(self) -> str:
