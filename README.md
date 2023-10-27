@@ -1,6 +1,6 @@
 # Loop tracing in python.
 
-LoopTrace is a Python package for chromatin tracing image and data analysis as described in https://doi.org/10.1101/2021.04.12.439407
+`looptrace` is a Python package for chromatin tracing image and data analysis as described in https://doi.org/10.1101/2021.04.12.439407
 
 ## Installation
 
@@ -23,16 +23,17 @@ pip install flowdec[tf_gpu]
 ```
 
 ## Basic usage (chromatin tracing):
-See example notebooks (notebooks folder) for running the provided CLI scripts either locally or in an HPC environment. Each CLI script is also documented. Updated GUI documentation will be provided shortly.
-
 Once the tracing is done, the data can be further analyzed for example using iPython notebooks. See examples of the full analysis as well as several full datasets at https://www.ebi.ac.uk/biostudies/studies/S-BIAD59
 
 ## Authors
-Written and maintained by Kai Sandvold Beckwith (kai.beckwith@embl.de), Ellenberg group, CBB, EMBL Heidelberg.
+Written by Kai Sandvold Beckwith (kai.beckwith@embl.de), Ellenberg group, CBB, EMBL Heidelberg.
 See https://www-ellenberg.embl.de/. 
+
+Extended and maintained by Vincent Reuter (vincent.reuter@imba.oeaw.ac.at), Gerlich group, IMBA in Vienna, Austria.
+See https://www.oeaw.ac.at/imba/research/daniel-gerlich/
 
 ## License
 [MIT](https://choosealicense.com/licenses/mit/)
 
 ## Citation
-Please cite our paper: https://www.biorxiv.org/content/10.1101/2021.04.12.439407
+Please cite this paper: https://www.biorxiv.org/content/10.1101/2021.04.12.439407
