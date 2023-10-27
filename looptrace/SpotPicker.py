@@ -266,13 +266,6 @@ def generate_detection_specifications(positions: Iterable["FieldOfViewRepresenta
                 yield DetectionSpec3D(position=position_definition, frame=frame_spec, channel=ch)
 
 
-def center_spots(spots_table: pd.DataFrame, spot_ds: int, roi_image_size: Optional[Tuple[int, int, int]]) -> pd.DataFrame:
-    if roi_image_size is None:
-        return spots_table
-    dims = tuple(map(lambda x: x // spot_ds, roi_image_size))
-    return ip.roi_center_to_bbox(spots_table, roi_size=dims)
-
-
 class SpotPicker:
     """Encapsulation of data and roles for detection of fluorescent spots in imaging data"""
     def __init__(self, image_handler, array_id = None):
@@ -454,45 +447,45 @@ class SpotPicker:
         return outfile
 
 
-    def rois_from_beads(self):
-        print('Detecting bead ROIs for tracing.')
-        all_rois = []
-        n_fields = self.config['bead_trace_fields']
-        n_beads = self.config['bead_trace_number']
-        for pos in tqdm.tqdm(random.sample(self.pos_list, k=n_fields)):
-            pos_index = self.image_handler.image_lists[self.input_name].index(pos)
-            ref_frame = self.config['bead_reference_frame']
-            ref_ch = self.config['bead_ch']
-            threshold = self.config['bead_threshold']
-            min_bead_int = self.config['min_bead_intensity']
+    # def rois_from_beads(self):
+    #     print('Detecting bead ROIs for tracing.')
+    #     all_rois = []
+    #     n_fields = self.config['bead_trace_fields']
+    #     n_beads = self.config['bead_trace_number']
+    #     for pos in tqdm.tqdm(random.sample(self.pos_list, k=n_fields)):
+    #         pos_index = self.image_handler.image_lists[self.input_name].index(pos)
+    #         ref_frame = self.config['bead_reference_frame']
+    #         ref_ch = self.config['bead_ch']
+    #         threshold = self.config['bead_threshold']
+    #         min_bead_int = self.config['min_bead_intensity']
 
-            t_img = self.images[pos_index][ref_frame, ref_ch].compute()
-            t_img_label, num_labels = ndi.label(t_img>threshold)
+    #         t_img = self.images[pos_index][ref_frame, ref_ch].compute()
+    #         t_img_label, num_labels = ndi.label(t_img>threshold)
             
-            spot_props = pd.DataFrame(regionprops_table(t_img_label, t_img, properties=('label', 'centroid', 'max_intensity')))
-            spot_props = spot_props.query('max_intensity > @min_bead_int').sample(n=n_beads, random_state=1)
+    #         spot_props = pd.DataFrame(regionprops_table(t_img_label, t_img, properties=('label', 'centroid', 'max_intensity')))
+    #         spot_props = spot_props.query('max_intensity > @min_bead_int').sample(n=n_beads, random_state=1)
             
-            spot_props.drop(['label'], axis=1, inplace=True)
-            spot_props.rename(columns={'centroid-0': 'zc',
-                                        'centroid-1': 'yc',
-                                        'centroid-2': 'xc',
-                                        'index':'roi_id_pos'},
-                                        inplace = True)
+    #         spot_props.drop(['label'], axis=1, inplace=True)
+    #         spot_props.rename(columns={'centroid-0': 'zc',
+    #                                     'centroid-1': 'yc',
+    #                                     'centroid-2': 'xc',
+    #                                     'index':'roi_id_pos'},
+    #                                     inplace = True)
 
-            spot_props['position'] = pos
-            spot_props['frame'] = ref_frame
-            spot_props['ch'] = ref_ch
-            print('Detected beads in position', pos, spot_props)
-            all_rois.append(spot_props)
+    #         spot_props['position'] = pos
+    #         spot_props['frame'] = ref_frame
+    #         spot_props['ch'] = ref_ch
+    #         print('Detected beads in position', pos, spot_props)
+    #         all_rois.append(spot_props)
         
-        output = pd.concat(all_rois)
-        output=output.reset_index().rename(columns={'index':'roi_id'})
-        rois = ip.roi_center_to_bbox(output, roi_size=self._raw_roi_image_size)
+    #     output = pd.concat(all_rois)
+    #     output=output.reset_index().rename(columns={'index':'roi_id'})
+    #     rois = ip.roi_center_to_bbox(output, roi_size=self._raw_roi_image_size)
 
-        self.image_handler.bead_rois = rois
-        rois.to_csv(self.roi_path + '_beads.csv')
-        self.image_handler.load_tables()
-        return rois
+    #     self.image_handler.bead_rois = rois
+    #     rois.to_csv(self.roi_path + '_beads.csv')
+    #     self.image_handler.load_tables()
+    #     return rois
     '''
     def refilter_rois(self):
         #TODO needs updating to new table syntax.
