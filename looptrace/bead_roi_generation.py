@@ -17,13 +17,14 @@ from joblib import Parallel, delayed
 from pathlib import Path
 from typing import *
 
-from gertils import ExtantFolder
+from gertils import ExtantFile, ExtantFolder
 import numpy as np
 import pandas as pd
 import scipy.ndimage as ndi
 from skimage.measure import regionprops_table
 import tqdm
 
+from looptrace.ImageHandler import ImageHandler, bead_rois_filename
 from looptrace.numeric_types import NumberLike
 
 PathLike = Union[str, Path]
@@ -31,6 +32,11 @@ PathLike = Union[str, Path]
 
 class ArrayDimensionalityError(Exception):
     """Error subtype to represent an error in array dimensionality"""
+
+
+def partition_entire_experiment(config_path: ExtantFile):
+    H = ImageHandler(config_path=config_path)
+    folder = H.bead_rois_path
 
 
 def extract_single_bead(
@@ -109,7 +115,7 @@ def generate_all_bead_rois_from_getter(
     output_folder = output_folder.path if isinstance(output_folder, ExtantFolder) else output_folder
 
     def get_outfile(pos_idx: int, frame_idx: int) -> Path:
-        return output_folder / f"bead_rois__{pos_idx}_{frame_idx}.csv"
+        return output_folder / bead_rois_filename(pos_idx=pos_idx, frame=frame_idx)
     
     def proc1(img: np.ndarray, outfile: Path) -> Tuple[Path, pd.DataFrame]:
         rois = params.compute_labeled_regions(img=img)
@@ -130,7 +136,8 @@ def generate_bead_rois(
         bead_roi_px: int = 16, 
         n_points: int = 200, 
         max_size: NumberLike = 500, 
-        max_bead_int: Optional[NumberLike] = None
+        max_bead_int: Optional[NumberLike] = None, 
+        **kwargs,
         ) -> np.ndarray[int]:
     '''Function for finding positions of beads in an image based on manually set thresholds in config file.
 
@@ -151,7 +158,7 @@ def generate_bead_rois(
         max_region_size=max_size, 
         max_intensity_for_detection=max_bead_int
         )
-    return params.generate_image_rois(img=t_img, num_points=n_points)
+    return params.generate_image_rois(img=t_img, num_points=n_points, **kwargs)
 
 
 @dataclasses.dataclass
@@ -241,7 +248,7 @@ class BeadRoiParameters:
         img_label, num_labels = self._segment_image(img)
         print("Number of unfiltered beads found: ", num_labels)
         # Extract the relevant data for each of the segmented regions.
-        return pd.DataFrame(regionprops_table(img_label, img, properties=("label", "centroid", "max_intensity", "area")))
+        return pd.DataFrame(regionprops_table(img_label, img, properties=("centroid", "max_intensity", "area")))
 
     def _compute_discard_reasons(self, regions: pd.DataFrame) -> pd.Series:
         # TODO: why divide-by-2 here?

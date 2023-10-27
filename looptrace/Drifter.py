@@ -27,7 +27,7 @@ import tqdm
 from gertils import ExtantFile, ExtantFolder
 
 from looptrace import image_io
-from looptrace.ImageHandler import ImageHandler
+from looptrace.ImageHandler import ImageHandler, fetch_bead_rois
 from looptrace.bead_roi_generation import BeadRoiParameters, extract_single_bead
 from looptrace.gaussfit import fitSymmetricGaussian3D
 from looptrace.numeric_types import FloatLike, NumberLike
@@ -301,13 +301,17 @@ def compute_fine_drifts(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
         Data for each row of the fine/full drift correction table
     """
     roi_px = drifter.bead_roi_px
-    bead_roi_params = drifter.get_bead_roi_parameters
     for position, position_group in iter_coarse_drifts_by_position(filepath=drifter.dc_file_path__coarse):
         print(f"Running fine drift correction for position: {position}")
         pos_idx = drifter.full_pos_list.index(position)
         ref_img = drifter.get_reference_image(pos_idx)
+        
         print("Generating bead ROIs")
-        bead_rois = bead_roi_params.generate_image_rois(
+        #bead_rois = fetch_bead_rois(H=drifter.image_handler, pos_idx=pos_idx, frame=drifter.reference_frame, num_rois=drifter.num_bead_points)
+        # TODO: convert to numpy, and store the indices of what's used from this file.
+
+        # TODO: remove this when sharing bead ROI information. See #101
+        bead_rois = drifter.bead_roi_parameters.generate_image_rois(
             img=ref_img, 
             num_points=drifter.num_bead_points,
             filtered_filepath=drifter.get_reference_bead_rois_filtered_filepath(pos_idx=pos_idx),
@@ -323,10 +327,6 @@ def compute_fine_drifts(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
                 print("Computing reference bead fits")
                 ref_bead_subimgs = Parallel(n_jobs=-1, prefer='threads')(delayed(extract_single_bead)(pt, ref_img, bead_roi_px=roi_px) for pt in tqdm.tqdm(bead_rois))
                 ref_bead_fits = Parallel(n_jobs=-1, prefer='threads')(delayed(fit_bead_coordinates)(rbi) for rbi in tqdm.tqdm(ref_bead_subimgs))
-                # ref_bead_fits = Parallel(n_jobs=-1, prefer='threads')(
-                #     delayed(lambda pt: fit_bead_coordinates(extract_single_bead(pt, ref_img, bead_roi_px=roi_px)))(pt)
-                #     for pt in tqdm.tqdm(bead_rois)
-                #     )
                 print("Iterating over frames/timepoints/hybridisations")
                 for _, row in position_group.iterrows():
                     # This should be unique now in frame, since we're iterating within a single FOV.
@@ -337,10 +337,6 @@ def compute_fine_drifts(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
                     mov_bead_subimgs = Parallel(n_jobs=-1, prefer='threads')(delayed(extract_single_bead)(pt, mov_img, bead_roi_px=roi_px, drift_course=coarse) for pt in tqdm.tqdm(bead_rois))
                     mov_bead_fits = Parallel(n_jobs=-1, prefer='threads')(delayed(fit_bead_coordinates)(mbi) for mbi in tqdm.tqdm(mov_bead_subimgs))
                     fine_drifts = [subtract_point_fits(ref, mov) for ref, mov in zip(ref_bead_fits, mov_bead_fits)]
-                    # fine_drifts = Parallel(n_jobs=-1, prefer='threads')(
-                    #     delayed(lambda pt: subtract_point_fits(ref_fit, fit_bead_coordinates(extract_single_bead(pt, mov_img, bead_roi_px=roi_px, drift_course=coarse))))(pt)
-                    #     for pt, ref_fit in tqdm.tqdm(zip(bead_rois, ref_bead_fits))
-                    #     )
                     yield (frame, position) + coarse + finalise_fine_drift(fine_drifts)
             elif drifter.method_name == Methods.CROSS_CORRELATION_NAME.value:
                 print("Extracting reference bead images")
@@ -403,7 +399,7 @@ class Drifter():
 
     @property
     def bead_roi_px(self) -> int:
-        return self.config.get('bead_roi_size', 15)
+        return self.config.get('bead_roi_size', 12)
 
     @property
     def bead_threshold(self) -> int:
@@ -413,14 +409,8 @@ class Drifter():
     def downsampling(self) -> int:
         return self.config['course_drift_downsample']
 
-    def get_reference_bead_rois_filtered_filepath(self, pos_idx: int) -> Path:
-        return self.reference_bead_rois_subfolder / f"beads.{pos_idx}.filtered.csv"
-
-    def get_reference_bead_rois_unfiltered_filepath(self, pos_idx: int) -> Path:
-        return self.reference_bead_rois_subfolder / f"beads.{pos_idx}.unfiltered.csv"
-
     @property
-    def get_bead_roi_parameters(self) -> BeadRoiParameters:
+    def bead_roi_parameters(self) -> BeadRoiParameters:
         return BeadRoiParameters(
             min_intensity_for_segmentation=self.bead_threshold, 
             min_intensity_for_detection=self.min_bead_intensity, 
@@ -428,6 +418,14 @@ class Drifter():
             max_region_size=self.bead_roi_max_size, 
             max_intensity_for_detection=self.bead_detection_max_intensity,
             )
+
+    # TODO: remove this when sharing bead ROI information. See #101
+    def get_reference_bead_rois_filtered_filepath(self, pos_idx: int) -> Path:
+        return self.reference_bead_rois_subfolder / f"beads.{pos_idx}.filtered.csv"
+
+    # TODO: remove this when sharing bead ROI information. See #101
+    def get_reference_bead_rois_unfiltered_filepath(self, pos_idx: int) -> Path:
+        return self.reference_bead_rois_subfolder / f"beads.{pos_idx}.unfiltered.csv"
 
     @property
     def method_name(self) -> str:
@@ -449,6 +447,7 @@ class Drifter():
     def num_positions(self) -> int:
         return len(self.full_pos_list)
 
+    # TODO: remove this when sharing bead ROI information. See #101
     @property
     def reference_bead_rois_subfolder(self) -> Path:
         return Path(self.image_handler.analysis_path) / "reference_bead_rois"
