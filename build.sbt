@@ -20,7 +20,6 @@ lazy val root = (project in file("."))
       "-encoding", "utf8",
       //"-explain",
       "-feature",
-      "-language:implicitConversions",
       "-language:existentials",
       // https://contributors.scala-lang.org/t/for-comprehension-requires-withfilter-to-destructure-tuples/5953
       "-source:future", // for tuples in for comprehension; see above link
