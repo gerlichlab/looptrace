@@ -285,6 +285,7 @@ object PartitionIndexedPoints {
         def readFileUnsafe(confFile: os.Path): ParserConfig = readFile(confFile).fold(throw _, identity)
 
         final case class ParseError(errorMessages: NEL[String]) extends Exception(s"${errorMessages.size} errors: ${errorMessages}")
+    end ParserConfig
 
     /* Helper functions */
     def getOutputFilename(pos: PositionIndex, frame: FrameIndex, purpose: NameOfPurpose): Filename = {

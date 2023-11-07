@@ -540,14 +540,14 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
 
     /** Bundles of test data to use for the integration-like tests here, doing more actual file I/O */
     object SmallDataSet:
-        case class InputBundle(lines: List[String], partition: Partition) {
+        case class InputBundle(lines: List[String], partition: Partition):
             final def points = partition.points
-        }
+        end InputBundle
         
-        case class Partition(points: List[Point3D], usable: Set[RoiIndex]) {
+        case class Partition(points: List[Point3D], usable: Set[RoiIndex]):
             final def getPointSafe = (i: RoiIndex) => Try{ points(i.get) }.toOption
             final def unusable: Set[RoiIndex] = (0 to points.size).map(intToIndex).toSet -- usable
-        }
+        end Partition
 
         def input1 = InputBundle(lines1, indexPartition1)
         private def points1 = List(
@@ -608,7 +608,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         """
         private def buildPoint(x: Double, y: Double, z: Double) = Point3D(XCoordinate(x), YCoordinate(y), ZCoordinate(z))
         private def intToIndex: Int => RoiIndex = NonnegativeInt.unsafe.andThen(RoiIndex.apply)
-        
+    end SmallDataSet
 
     /* *******************************************************************************
      * Ancillary types and functions
