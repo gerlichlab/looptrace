@@ -45,9 +45,10 @@ class LooptracePipeline(pypiper.Pipeline):
         func_args_pairs = (
             ("config_validation", run_config_validation, conf_only),
             ("psf_extraction", run_psf_extraction, conf_data_pair),
-            ("bead_roi_generation", gen_all_bead_rois, conf_data_pair), 
-            ("bead_roi_detection_analysis", run_all_bead_roi_detection_analysis, conf_data_pair), 
-            ("deconvolution", run_deconvolution, conf_data_pair), 
+            ("bead_roi_generation", gen_all_bead_rois, conf_data_pair), # Find/define all the bead ROIs in each (FOV, frame) pair.
+            # Count detected bead ROIs for each timepoint, mainly to see if anything went awry during some phase of the imaging, e.g. air bubble.
+            ("bead_roi_detection_analysis", run_all_bead_roi_detection_analysis, conf_data_pair),
+            ("deconvolution", run_deconvolution, conf_data_pair), # Really just for denoising, no need for structural disambiguation
             ("nuclei_detection", run_nuclei_detection, conf_data_pair), 
             ("drift_correction__coarse", run_coarse_drift_correction, conf_data_pair), 
             ("drift_correction__fine", run_fine_drift_correction, conf_data_pair),
