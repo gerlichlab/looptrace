@@ -1,7 +1,9 @@
 package at.ac.oeaw.imba.gerlich
 
 import java.io.File
+import scala.util.Try
 import cats.{ Eq, Show }
+import cats.syntax.eq.*
 import cats.syntax.show.*
 
 import mouse.boolean.*
@@ -11,8 +13,8 @@ import scopt.Read
 package object looptrace {
     val VersionName = "0.3.0-SNAPSHOT"
 
-    /** Read given JSON file into value of target type. */
-    def readJson[A](jsonFile: os.Path)(using upickle.default.Reader[A]): A = upickle.default.read[A](os.read(jsonFile))
+    /** Get the labels of a Product. */
+    inline def labelsOf[A](using p: scala.deriving.Mirror.ProductOf[A]) = scala.compiletime.constValueTuple[p.MirroredElemLabels]
 
     /** Allow custom types as CLI parameters. */
     object CliReaders:
@@ -49,41 +51,49 @@ package object looptrace {
         def maybe(z: Int): Option[PositiveInt] = (z > 0).option((z: PositiveInt))
         def unsafe(z: Int): PositiveInt = either(z).fold(msg => throw new NumberFormatException(msg), identity)
         given posIntEq: Eq[PositiveInt] = Eq.fromUniversalEquals[PositiveInt]
-                
-    sealed trait Delimiter {
-        def canonicalExtension: String
-        def show: String
-        final def join(fields: Array[String]): String = fields mkString show
-        infix def split(s: String): Array[String] = split(s, 0)
-        def split(s: String, limit: Int): Array[String] = s.split(show, -1)
-    }
+    
+
+    enum Delimiter(val sep: String, val ext: String):
+        case CommaSeparator extends Delimiter(",", "csv")
+        case TabSeparator extends Delimiter("\t", "tsv")
+
+        def canonicalExtension: String = ext
+        def join(fields: Array[String]): String = fields mkString sep
+        def split(s: String): Array[String] = split(s, -1)
+        def split(s: String, limit: Int): Array[String] = s.split(sep, limit)
+    
 
     object Delimiter:
-        def infer(p: os.Path): Option[Delimiter] = Map("csv" -> CommaSeparator, "tsv" -> TabSeparator).get(p.ext)
-
-    case object TabSeparator extends Delimiter {
-        override def canonicalExtension: String = "tsv"
-        override def show: String = "\t"
-    }
-
-    case object CommaSeparator extends Delimiter {
-        override def canonicalExtension: String = "csv"
-        override def show: String = ","
-    }
-
-    final case class FrameIndex(get: NonnegativeInt) extends AnyVal
+        def fromPath(p: os.Path): Option[Delimiter] = fromExtension(p.ext)
+        def fromExtension(ext: String): Option[Delimiter] = Delimiter.values.filter(_.ext === ext).headOption
     
+    
+    final case class FrameIndex(get: NonnegativeInt) extends AnyVal
     object FrameIndex:
         implicit val showForFrameIndex: Show[FrameIndex] = Show.show(_.get.show)
     
     final case class PositionIndex(get: NonnegativeInt) extends AnyVal
-
     object PositionIndex:
         implicit val showForPositionIndex: Show[PositionIndex] = Show.show(_.get.show)
 
     final case class RoiIndex(get: NonnegativeInt) extends AnyVal
-
     object RoiIndex:
         implicit val showForRoiIndex: Show[RoiIndex] = Show.show(_.get.show)
 
+    /**
+      * Write a mapping, from position and frame pair to value, to JSON.
+      *
+      * @param vKey The key to use for the {@code V} element in each object
+      * @param pfToV The mapping of data to write
+      * @param writeV How to write each {@code V} element as JSON
+      * @return A JSON array of object corresponding to each element of the map
+      */
+    def posFrameMapToJson[V](vKey: String, pfToV: Map[(PositionIndex, FrameIndex), V])(using writeV: (V) => ujson.Value): ujson.Value = {
+        val proc1 = (pf: (PositionIndex, FrameIndex), v: V) => ujson.Obj(
+            "position" -> pf._1.get,
+            "frame" -> pf._2.get,
+            vKey -> writeV(v)
+        )
+        pfToV.toList.map(proc1.tupled)
+    }
 }
