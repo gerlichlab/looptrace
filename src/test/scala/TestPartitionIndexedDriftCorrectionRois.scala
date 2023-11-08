@@ -13,7 +13,7 @@ import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
 
-import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedPoints.{
+import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.{
     BadRecord,
     BeadRoisPrefix, 
     ColumnName,

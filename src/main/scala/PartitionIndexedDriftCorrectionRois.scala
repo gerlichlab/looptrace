@@ -17,11 +17,10 @@ import scopt.OParser
 
 import space.CoordinateSequence
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
-import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedPoints.RawRecord
 
 /** Split pool of detected bead ROIs into those for drift correction shift, drift correction accuracy, and unused. */
-object PartitionIndexedPoints {
-    val ProgramName = "PartitionDriftCorrectionRois"
+object PartitionIndexedDriftCorrectionRois {
+    val ProgramName = "PartitionIndexedDriftCorrectionRois"
 
     val BeadRoisPrefix = "bead_rois_"
 
