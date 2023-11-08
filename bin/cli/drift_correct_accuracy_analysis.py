@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 import sys
 from typing import *
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -19,8 +20,8 @@ import yaml
 from gertils import ExtantFile, ExtantFolder
 
 from looptrace.Drifter import Drifter
-from looptrace.ImageHandler import ImageHandler
-from looptrace.bead_roi_generation import extract_single_bead, generate_bead_rois
+from looptrace.ImageHandler import ImageHandler, handler_from_cli
+from looptrace.bead_roi_generation import extract_single_bead
 from looptrace.filepaths import get_analysis_path, simplify_path
 from looptrace.gaussfit import fitSymmetricGaussian3D
 from looptrace import image_io
@@ -139,10 +140,10 @@ class CameraParameters:
 
 class DataclassCapableEncoder(json.JSONEncoder):
     """Facilitate serialisation of the parameters dataclasses in this module, for data provenance."""
-    def default(self, o):
-        if dataclasses.is_dataclass(o):
-            return dataclasses.asdict(o)
-        return super().default(o)
+    def default(self, obj):
+        if dataclasses.is_dataclass(obj):
+            return dataclasses.asdict(obj)
+        return super().default(obj)
 
 
 @dataclasses.dataclass
@@ -164,6 +165,7 @@ class ReferenceImageStackDefinition:
 
 
 def process_single_FOV_single_reference_frame(
+    image_handler: ImageHandler,
     reference_image_stack_definition: ReferenceImageStackDefinition,
     drift_table: pd.DataFrame,
     bead_detection_params: BeadDetectionParameters, 
@@ -176,7 +178,7 @@ def process_single_FOV_single_reference_frame(
 
     Parameters
     ----------
-    imgs : Sequence of np.ndarray
+    reference_image_stack_definition : Sequence of np.ndarray
         The full collection of imaging data; nasmely, a list-/array-like indexed by position/FOV, in which each element is a 
         five-dimensional array itself (t, c, z, y, x) -- that is, a stack (z) of 2D images (y, x) for each imaging channel (c) 
         for each hybridisation round / timepoint (t). In other words, each array in this collection represents an entire 
@@ -207,22 +209,17 @@ def process_single_FOV_single_reference_frame(
     image_stack = reference_image_stack_definition.image_stack
     T = reference_image_stack_definition.num_timepoints
     iter_time = (lambda: range(T)) if timepoints is None else (lambda: iter(timepoints))
-    #C = reference_image_stack_definition.num_channels
-    print(f"Generating bead ROIs for DC accuracy analysis, reference_fov: {reference_image_stack_definition.index}")
-    ref_rois = generate_bead_rois(image_stack[bead_detection_params.reference_frame, bead_detection_params.reference_channel].compute(), threshold=bead_detection_params.threshold, min_bead_int=bead_detection_params.min_intensity, n_points=-1)
-    num_ref_rois = ref_rois.shape[0]
-    rois = ref_rois[np.random.choice(num_ref_rois, bead_filtration_params.max_num_rois, replace=False)] if num_ref_rois > bead_filtration_params.max_num_rois else ref_rois
+    
+    fov_idx = reference_image_stack_definition.index
+    rois = image_handler.read_bead_rois_file_accuracy(pos_idx=fov_idx, frame=bead_detection_params.reference_frame)
+    if rois.size != image_handler.num_bead_rois_for_drift_correction_accuracy:
+        warnings.warn(RuntimeWarning(f"Fewer ROIs available ({rois.size}) than requested ({image_handler.num_bead_rois_for_drift_correction_accuracy}) for FOV {fov_idx}"))
+
     bead_roi_px = bead_detection_params.roi_pixels
     
-    #dims = (len(rois), T, C, bead_roi_px, bead_roi_px, bead_roi_px)
-    #print(f"Dims: {dims}")
-    # TODO: note that these are currently unused; we can omit these or write the results to disk; see #100.
-    #bead_imgs = np.zeros(dims)
-    #bead_imgs_dc = np.zeros(dims)
-
     # TODO: this requires that the drift table be ordered such that the FOVs are as expected; need flexibility.
-    pos = drift_table.position.unique()[reference_image_stack_definition.index]
-    print(f"Inferred position (for reference FOV index {reference_image_stack_definition.index}): {pos}")
+    pos = drift_table.position.unique()[fov_idx]
+    print(f"Inferred position (for reference FOV index {fov_idx}): {pos}")
     curr_fov_drift_subtable = drift_table[drift_table.position == pos]
 
     # TODO: could type-refine the argument values to these parameters (which should be nonnegative).
@@ -233,26 +230,9 @@ def process_single_FOV_single_reference_frame(
         return fitSymmetricGaussian3D(bead_img, sigma=1, center='max')[0]
     
     fits = Parallel(n_jobs=-1, prefer='threads')(
-        delayed(lambda t, c, roi: [reference_image_stack_definition.index, t, c, i] + list(proc1(frame_index=t, ref_ch=c, roi=roi)))(t=t, c=c, roi=roi) 
+        delayed(lambda t, c, roi: [fov_idx, t, c, i] + list(proc1(frame_index=t, ref_ch=c, roi=roi)))(t=t, c=c, roi=roi) 
         for t in tqdm.tqdm(iter_time()) for c in [bead_detection_params.reference_channel] for i, roi in enumerate(rois)
         )
-
-    #fits = []
-    #for t in tqdm.tqdm(range(T)):
-        #print(f"Frame: {t}")
-        #course_shift = curr_fov_drift_subtable[curr_fov_drift_subtable.frame == t][['z_px_course', 'y_px_course', 'x_px_course']].values[0]
-        #fine_shift = curr_fov_drift_subtable[curr_fov_drift_subtable.frame == t][['z_px_fine', 'y_px_fine', 'x_px_fine']].values[0] # TODO: only used when building up the bead images array?
-        #for c in [bead_detection_params.reference_channel]:#range(C):
-            #img = imgs[reference_fov][t, c].compute()
-            #for i, roi in enumerate(rois):
-                #bead_img = extract_single_bead(roi, img, bead_roi_px=bead_roi_px, drift_course=course_shift)
-                #fit = fitSymmetricGaussian3D(bead_img, sigma=1, center='max')[0]
-                #fits.append([reference_fov, t, c, i] + list(fit))
-                
-                # TODO: note that these are currently unused; we can omit these or write the results to disk; see #100.
-                #bead_imgs[i, t, c] = bead_img.copy()
-                #bead_imgs_dc[i, t, c] = ndi.shift(bead_img, shift=fine_shift)
-
     fits = pd.DataFrame(fits, columns=['reference_fov', 't', 'c', 'roi', 'BG', 'A', 'z_loc', 'y_loc', 'x_loc', 'sigma_z', 'sigma_xy'])
     fits = express_pixel_columns_as_nanometers(fits=fits, xy_cols=('y_loc', 'x_loc', 'sigma_xy'), z_cols=('z_loc', 'sigma_z'), camera_params=camera_params)
     
@@ -368,7 +348,8 @@ def workflow(
 
     if drift_correction_table_file is None:
         print("Determining drift correction table path...")
-        drift_correction_table_file = Drifter(ImageHandler(config_path=config_file, image_path=images_folder)).dc_file_path__fine
+        H = handler_from_cli(config_file=config_file, images_folder=images_folder)
+        drift_correction_table_file = Drifter(H).dc_file_path__fine
     elif isinstance(drift_correction_table_file, ExtantFile):
         drift_correction_table_file = drift_correction_table_file.path
     if not os.path.isfile(drift_correction_table_file):
