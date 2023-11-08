@@ -7,7 +7,7 @@ import org.scalacheck.{ Arbitrary, Gen }
 import org.scalacheck.Arbitrary.arbitrary
 
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ CoordinateSequence, Point3D }
-import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedPoints.{ XColumn, YColumn, ZColumn, ParserConfig }
+import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.{ XColumn, YColumn, ZColumn, ParserConfig }
 
 /** Types and helpers for testing partitioning of regions of interest (ROIs) */
 trait PartitionRoisSuite extends LooptraceSuite:
