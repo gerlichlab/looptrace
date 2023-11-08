@@ -95,20 +95,30 @@ pos_and_frame <- lapply(roi_counts$filename, function(fn) {
 roi_counts$position <- sapply(pos_and_frame, function(e) e$position)
 roi_counts$frame <- sapply(pos_and_frame, function(e) e$frame)
 ## Make hybridisation timepoint / frame a factor variable rather than integer.
-roi_counts$frame <- as.factor(roi_counts$frame)
 
 data_output_file <- file.path(opts$output_folder, "bead_roi_counts.csv")
 message("Writing bead ROI counts data: ", data_output_file)
 write.table(roi_counts, file = data_output_file, quote = FALSE, sep = ",", row.names = FALSE, col.names = TRUE)
 
-message("Building per-frame boxplot")
-roi_counts_boxplot <- ggplot(roi_counts, aes(x=frame, y=count)) + 
+saveCountsPlot <- function(fig, plotTypeName) {
+    plotfile <- file.path(opts$output_folder, sprintf("bead_roi_counts.%s.png", plotTypeName))
+    message("Saving plot: ", plotfile)
+    ggsave(filename = plotfile, plot = fig)
+    plotfile
+}
+
+message("Building per-frame bead ROI count boxplot, all detected")
+roi_counts_boxplot <- ggplot(roi_counts, aes(x = as.factor(frame), y = count)) + 
     geom_boxplot() + 
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
     ggtitle("Detected bead ROI count by frame, across FOVs")
+saveCountsPlot(fig = roi_counts_boxplot, plotTypeName = "detected.boxplot")
 
-plotfile <- file.path(opts$output_folder, "bead_roi_counts.boxplot.png")
-message("Saving plot: ", plotfile)
-ggsave(filename = plotfile, plot = roi_counts_boxplot)
+message("Building (frame, FOV) bead ROI count heatmap")
+roi_counts_heatmap <- ggplot(roi_counts, aes(x = frame, y = position, fill = count)) + 
+    geom_tile() + 
+    ggtitle("Counts, all detected bead ROIs") + 
+    theme_bw()
+saveCountsPlot(fig = roi_counts_heatmap, plotTypeName = "detected.heatmap")
 
 message("Done!")
