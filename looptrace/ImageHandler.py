@@ -7,6 +7,7 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+import json
 import logging
 import os
 from pathlib import Path
@@ -32,11 +33,10 @@ def bead_rois_filename(pos_idx: int, frame: int) -> str:
     return f"bead_rois__{pos_idx}_{frame}.csv"
 
 
-def fetch_bead_rois(H: "ImageHandler", pos_idx: int, frame: int, num_rois: int) -> pd.DataFrame:
-    fp = H.get_bead_rois_file(pos_idx=pos_idx, frame=frame).path
-    print(f"Featching bead ROIs from file: {fp}")
-    rois = pd.read_csv(fp, index_col=0)
-    return rois.sample(num_rois, random_state=1) if num_rois < rois.shape[0] else rois
+def _read_bead_rois_file(fp: ExtantFile) -> np.ndarray[int]:
+    with open(fp, 'r') as fh:
+        data = json.load(fh)
+    return np.round(np.array(list(map(data, lambda obj: np.array(obj["centroid"]))))).astype(int)
 
 
 class ImageHandler:
@@ -73,10 +73,18 @@ class ImageHandler:
     def bead_rois_path(self) -> Path:
         return Path(self.analysis_path) / "bead_rois"
 
-    def get_bead_rois_file(self, pos_idx: int, frame: int) -> ExtantFile:
+    def _get_bead_rois_file(self, pos_idx: int, frame: int, purpose: str) -> ExtantFile:
         fn = bead_rois_filename(pos_idx=pos_idx, frame=frame)
-        fp = self.bead_rois_path / fn
+        fp = self.bead_rois_path / purpose / fn
         return ExtantFile(fp)
+
+    def read_bead_rois_file_accuracy(self, pos_idx: int, frame: int) -> np.ndarray[np.ndarray]:
+        fp = self._get_bead_rois_file(pos_idx=pos_idx, frame=frame, purpose="accuracy").path
+        return _read_bead_rois_file(fp)
+
+    def read_bead_rois_file_shifting(self, pos_idx: int, frame: int) -> ExtantFile:
+        fp = self._get_bead_rois_file(pos_idx=pos_idx, frame=frame, purpose="shifting").path
+        return _read_bead_rois_file(fp)
 
     @property
     def decon_input_name(self) -> str:
@@ -94,6 +102,14 @@ class ImageHandler:
     def frame_names(self) -> List[str]:
         return self.config["frame_name"]
     
+    @property
+    def num_bead_rois_for_drift_correction(self) -> int:
+        return self.config["bead_points"]
+
+    @property
+    def num_bead_rois_for_drift_correction_accuracy(self) -> int:
+        return self.config["num_bead_rois_for_drift_correction_accuracy"]
+
     @property
     def num_frames(self) -> int:
         return len(self.frame_names)
