@@ -184,20 +184,35 @@ object PartitionIndexedDriftCorrectionRois {
         def tryPrep(purpose: String, pos: PositionIndex, frame: FrameIndex, rois: List[SelectedRoi]): ErrMsgsOr[(NEL[SelectedRoi], os.Path => os.Path)] = 
             tryPrepRois(pos, frame, rois).toRight{ NEL.one(getErrMsg(purpose, pos, frame)) }
         Alternative[List].separate(inputs.map { case (pos, frame, roiFile) => 
-            for {
-                rois <- readRoisFile(parserConfig)(roiFile)
-                (_, shiftingRois, accuracyRois) <- partition(rois)
-                shifting <- tryPrep("shifting", pos, frame, shiftingRois)
-                accuracy <- tryPrep("accuracy", pos, frame, accuracyRois)
-            } yield (shifting, accuracy)
+            // Any error should be fatal when reading ROIs file.
+            // Only insufficient number of shifting ROIs should be fatal once partitioning.
+            readRoisFile(parserConfig)(roiFile).flatMap(partition).flatMap{ case (_, shiftingRois, accuracyRois) => 
+                val shiftingValidNel = tryPrep("shifting", pos, frame, shiftingRois).toValidated
+                val accuracyValidNel = tryPrep("accuracy", pos, frame, accuracyRois).toValidated
+                (shiftingValidNel, accuracyValidNel).mapN((_1, _2) => (_1, _2)).toEither
+            }
         })
     }
     
+    /**
+      * Read a single (one FOV, one frame) ROIs file.
+      * 
+      * Potential "failures":
+      * 1. Given path isn't a file
+      * 2. Field delimiter can't be inferred from given path's extension
+      * 3. Given file is empty
+      * 4. One or more columns required (by the parserConfig) to parse aren't in file'e header (first line)
+      * 5. Any record fails to parse
+      * 
+      * @param parserConfig How to parse the file
+      * @param roisFile The file to parse
+      * @return A collection of ROIs, representing what was detected for a particular (FOV, frame) combo
+      */
     def readRoisFile(parserConfig: ParserConfig)(roisFile: os.Path): Either[ErrorMessages | NEL[BadRecord], Iterable[DetectedRoi]] = {
         val maybeParserAndRecords: ErrMsgsOr[(RawRecord => ErrMsgsOr[NonnegativeInt => DetectedRoi], List[RawRecord])] = for {
             (sep, head, lines) <- prepFileRead(roisFile).toEither
-            safeParse <- createParser(parserConfig)(sep.split(head, -1))
-        } yield (safeParse, lines map (sep.split(_, -1)))
+            safeParse <- createParser(parserConfig)(sep `split` head)
+        } yield (safeParse, lines map sep.split)
         maybeParserAndRecords flatMap { case (parse, rawRecords) => 
             val (bads, rois) = Alternative[List].separate(
                 NonnegativeInt.indexed(rawRecords).map{ case (rr, i) => parse(rr).bimap(errs => BadRecord(i, rr, errs), _(i)) } )
@@ -291,16 +306,13 @@ object PartitionIndexedDriftCorrectionRois {
         Filename(s"${BeadRoisPrefix}_${pos.get}_${frame.get}.${purpose.get}.json")
     }
 
-    private def tryPrepRois(position: PositionIndex, frame: FrameIndex, rois: List[SelectedRoi]): Option[(NEL[SelectedRoi], os.Path => os.Path)] = rois match {
-        case Nil => None
-        case firstRoi :: remainingRois => {
-            val nameOfPurpose = NameOfPurpose(firstRoi match {
-                case _: RoiForShifting => "shifting"
-                case _: RoiForAccuracy => "accuracy"
-            })
-            val filename = getOutputFilename(position, frame, nameOfPurpose)
-            (NEL(firstRoi, remainingRois), (_: os.Path) / nameOfPurpose.get / filename.get).some
-        }
+    private def tryPrepRois(position: PositionIndex, frame: FrameIndex, rois: List[SelectedRoi]): Option[(NEL[SelectedRoi], os.Path => os.Path)] = rois.toNel.map{ rs =>
+        val nameOfPurpose = NameOfPurpose(rs.head match {
+            case _: RoiForShifting => "shifting"
+            case _: RoiForAccuracy => "accuracy"
+        })
+        val filename = getOutputFilename(position, frame, nameOfPurpose)
+        (rs, (_: os.Path) / nameOfPurpose.get / filename.get)
     }
 
     private def prepFileRead(roisFile: os.Path): ValidatedNel[String, (Delimiter, String, List[String])] = {
