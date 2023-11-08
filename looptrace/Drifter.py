@@ -27,7 +27,7 @@ import tqdm
 from gertils import ExtantFile, ExtantFolder
 
 from looptrace import image_io
-from looptrace.ImageHandler import ImageHandler, fetch_bead_rois
+from looptrace.ImageHandler import ImageHandler
 from looptrace.bead_roi_generation import BeadRoiParameters, extract_single_bead
 from looptrace.gaussfit import fitSymmetricGaussian3D
 from looptrace.numeric_types import FloatLike, NumberLike
@@ -301,27 +301,22 @@ def compute_fine_drifts(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
         Data for each row of the fine/full drift correction table
     """
     roi_px = drifter.bead_roi_px
+    beads_exp_shape = (drifter.num_bead_points, 3)
     for position, position_group in iter_coarse_drifts_by_position(filepath=drifter.dc_file_path__coarse):
         print(f"Running fine drift correction for position: {position}")
         pos_idx = drifter.full_pos_list.index(position)
         ref_img = drifter.get_reference_image(pos_idx)
         
-        print("Generating bead ROIs")
-        #bead_rois = fetch_bead_rois(H=drifter.image_handler, pos_idx=pos_idx, frame=drifter.reference_frame, num_rois=drifter.num_bead_points)
-        # TODO: convert to numpy, and store the indices of what's used from this file.
+        bead_rois = drifter.image_handler.read_bead_rois_file_shifting(pos_idx=pos_idx, frame=drifter.reference_frame)
+        if bead_rois.shape != beads_exp_shape:
+            raise Exception(f"Unexpected for bead ROIs shape for (pos, frame) = ({pos_idx}, {frame}): ({bead_rois.shape}), expecting {beads_exp_shape}")
 
-        # TODO: remove this when sharing bead ROI information. See #101
-        bead_rois = drifter.bead_roi_parameters.generate_image_rois(
-            img=ref_img, 
-            num_points=drifter.num_bead_points,
-            filtered_filepath=drifter.get_reference_bead_rois_filtered_filepath(pos_idx=pos_idx),
-            unfiltered_filepath=drifter.get_reference_bead_rois_unfiltered_filepath(pos_idx=pos_idx),
-            )
-        if bead_rois.size == 0:
-            print(f"WARNING -- no bead ROIs detected for position {pos_idx}!")
-            for _, row in position_group.iterrows():
-                frame, coarse = _get_frame_and_coarse(row)
-                yield (frame, position) + coarse + (0.0, 0.0, 0.0)
+        # TODO: consider removing this or collecting all errors.
+        # if bead_rois.size == 0:
+        #     print(f"WARNING -- no bead ROIs detected for position {pos_idx}!")
+        #     for _, row in position_group.iterrows():
+        #         frame, coarse = _get_frame_and_coarse(row)
+        #         yield (frame, position) + coarse + (0.0, 0.0, 0.0)
         else:
             if drifter.method_name == Methods.FIT_NAME.value:
                 print("Computing reference bead fits")
@@ -441,7 +436,7 @@ class Drifter():
 
     @property
     def num_bead_points(self) -> int:
-        return self.config['bead_points']
+        return self.image_handler.num_bead_rois_for_drift_correction
 
     @property
     def num_positions(self) -> int:
