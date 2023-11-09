@@ -18,19 +18,27 @@ import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.{
     BeadRoisPrefix, 
     ColumnName,
     InitFile,
-    NameOfPurpose,
     ParserConfig, 
+    Purpose,
+    RoisFileParseFailedRecords,
+    RoisFileParseFailedSetup,
+    RoisPartition,
+    RoisSplitResult,
+    TooFewAccuracyRois, 
+    TooFewRois,
+    TooFewShiftingRois,
     XColumn, 
     YColumn, 
     ZColumn, 
     discoverInputs, 
-    getOutputFilename,
+    getOutputFilepath,
     readRoisFile,
     sampleDetectedRois, 
     workflow
 }
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.readJsonFile
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ CoordinateSequence, Point3D, XCoordinate, YCoordinate, ZCoordinate }
+import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.getOutputSubfolder
 
 /** Tests for the partitioning of regions of interest (ROIs) for drift correction */
 class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSuite, should.Matchers, PartitionRoisSuite {
@@ -290,30 +298,47 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         }
     }
     
-    test("Requesting sample size greater than available record count is an error.") {
-        val maxRoisCount = 10000
-        
-        def genSampleSizeInExcessOfAllRois: Gen[(PositiveInt, PositiveInt, Iterable[DetectedRoi])] = for {
+    test("Requesting ROIs count size greater than usable record count yields expected result.") {
+        val maxRoisCount = PositiveInt(1000)
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        type Expectation = TooFewShiftingRois | TooFewRois
+
+        def getExpectation(reqShifting: PositiveInt, reqAccuracy: PositiveInt, numUsable: NonnegativeInt): Expectation = {
+            if (reqShifting > numUsable) TooFewShiftingRois(reqShifting, numUsable)
+            else if (reqShifting + reqAccuracy > numUsable) {
+                val expAccRealized = NonnegativeInt.unsafe(numUsable - reqShifting) // guaranteed safe by falsehood of (del > numUsable)
+                TooFewRois(reqAccuracy, expAccRealized)
+            }
+            else { throw new IllegalArgumentException(s"Sample size is NOT in excess of usable count: ${reqShifting + reqAccuracy} <= ${numUsable}") }
+        }
+
+        final case class InputsAndExpectation(reqShifting: PositiveInt, reqAccuracy: PositiveInt, rois: Iterable[DetectedRoi], expectation: Expectation)
+
+        def genSampleSizeInExcessOfAllRois: Gen[InputsAndExpectation] = for {
             rois <- Gen.choose(0, maxRoisCount).flatMap{ n => Gen.listOfN(n, arbitrary[DetectedRoi]) }
             del <- Gen.choose(1, maxRoisCount).map(PositiveInt.unsafe)
             acc <- Gen.choose(scala.math.max(0, rois.size - del) + 1, maxRoisCount).map(PositiveInt.unsafe)
-        } yield (del, acc, rois)
+            exp = getExpectation(del, acc, NonnegativeInt.unsafe(rois.count(_.isUsable)))
+        } yield InputsAndExpectation(del, acc, rois, exp)
 
-        def genSampleSizeInExcessOfAvailableRois: Gen[(PositiveInt, PositiveInt, Iterable[DetectedRoi])] = for {
-            rois <- Gen.choose(2, maxRoisCount).flatMap{ n => Gen.listOfN(n, arbitrary[DetectedRoi]).suchThat(_.exists(_.isUsable)) }
-            numUsable = rois.count(_.isUsable)
+        def genSampleSizeInExcessOfUsableRois: Gen[InputsAndExpectation] = for {
+            numUsable <- Gen.choose(1, maxRoisCount - 1).map(PositiveInt.unsafe)
+            usable <- Gen.listOfN(numUsable, arbitrary[DetectedRoi].map(_.copy(isUsable = true)))
+            unusable <- Gen.choose(1, maxRoisCount - numUsable).flatMap{ Gen.listOfN(_, arbitrary[DetectedRoi].map(_.copy(isUsable = false))) }
+            rois = Random.shuffle(usable ++ unusable)
             del <- Gen.choose(1, numUsable).map(PositiveInt.unsafe)
             acc <- Gen.choose(numUsable - del + 1, rois.size - del).map(PositiveInt.unsafe)
-        } yield (del, acc, rois)
+            exp = getExpectation(del, acc, numUsable.asNonnegative)
+        } yield InputsAndExpectation(del, acc, rois, exp)
         
-        forAll (Gen.oneOf(genSampleSizeInExcessOfAllRois, genSampleSizeInExcessOfAvailableRois)) { 
-            case (numShifting, numAccuracy, rois) => 
-                val observed = sampleDetectedRois(numShifting, numAccuracy)(rois)
-                val expected = {
-                    val sampleSize = numShifting + numAccuracy
-                    Left(s"Fewer ROIs available than requested! ${rois.count(_.isUsable)} < ${sampleSize}")
+        forAll (Gen.oneOf(genSampleSizeInExcessOfAllRois, genSampleSizeInExcessOfUsableRois), minSuccessful(10000)) { 
+            case InputsAndExpectation(numShifting, numAccuracy, rois, expectation) => 
+                val observation = sampleDetectedRois(numShifting, numAccuracy)(rois)
+                (observation, expectation) match {
+                    case (obs: TooFewShiftingRois, exp: TooFewShiftingRois) => obs shouldEqual exp
+                    case (obs: TooFewAccuracyRois, exp: TooFewRois) => obs.problem shouldEqual exp
+                    case _ => fail(s"Incompatible observation ($observation) and expectation ($expectation)")
                 }
-                observed shouldBe expected
         }
     }
 
@@ -341,8 +366,9 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         forAll (Gen.zip(arbitrary[ParserConfig], genInvalidExt, genHeaderAndGetExtraErrorOpt)) { 
             case (parserConfig, ext, (header, maybeGetExpError)) => 
                 withTempFile(initData = header, suffix = ext){ (roisFile: os.Path) => 
-                    val expErrorMessages = List(s"Cannot infer delimiter for file! $roisFile".some, maybeGetExpError.map(_(roisFile))).flatten.toNel.get
-                    readRoisFile(parserConfig)(roisFile) shouldEqual Left(expErrorMessages)
+                    val extras: List[String] = maybeGetExpError.fold(List())(getMsg => List(getMsg(roisFile)))
+                    val expErrorMessages = NEL(s"Cannot infer delimiter for file! $roisFile", extras)
+                    readRoisFile(parserConfig)(roisFile) shouldEqual Left(RoisFileParseFailedSetup(expErrorMessages))
                 }
         }
     }
@@ -379,15 +405,16 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         
         forAll (genParserConfigHeaderAndDelimiter) { 
             case (parserConfig, headerFields, delimiter) =>
+                val expMissFields = getParserConfigColumnNames(parserConfig).toSet -- headerFields.toSet
+                val expMessages = expMissFields.map(name => s"Missing field in header: $name")
                 val headLine = delimiter.join(headerFields.toArray) ++ "\n"
                 withTempFile(headLine, delimiter){ (roisFile: os.Path) => 
                     readRoisFile(parserConfig)(roisFile) match {
                         case Right(_) => fail("ROIs file read succeeded when it should've failed!")
-                        case Left(errorMessages) => 
-                            val expMissFields = getParserConfigColumnNames(parserConfig).toSet -- headerFields.toSet
-                            val expMessages = expMissFields.map(name => s"Missing field in header: $name")
+                        case Left(RoisFileParseFailedSetup(errorMessages)) => 
                             errorMessages.length shouldEqual expMissFields.size
                             errorMessages.toList.toSet shouldEqual expMessages
+                        case Left(e) => fail(s"Parse failed but in unexpected (non-setup) way: $e")
                     }
                 }
             }
@@ -435,7 +462,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                     os.write.over(roisFile, inputLines.map(_ ++ "\n"))
                     readRoisFile(SmallDataSet.standardParserConfig)(roisFile) match
                         case Right(_) => fail("Parse succeeded when it should've failed!")
-                        case Left(bads) => bads shouldEqual expBadRecords
+                        case Left(bads) => bads shouldEqual RoisFileParseFailedRecords(expBadRecords)
                 }
         }
     }
@@ -465,6 +492,8 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                 }
         }
     }
+
+    test("An ROI is never used for more than one purpose.") { pending }
 
     test("Integration: overall behavioral properties are correct.") {
         import SmallDataSet.*
@@ -496,19 +525,20 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                             pf -> inputBundle.partition
                         }.toMap
                     workflow(configFile = confFile, inputRoot = roisFolder, numShifting = numShifting, numAccuracy = numAccuracy)
-                    val shiftingOutfolder = roisFolder / "shifting"
-                    val accuracyOutfolder = roisFolder / "accuracy"
+                    val shiftingOutfolder = getOutputSubfolder(roisFolder)(Purpose.Shifting)
+                    val accuracyOutfolder = getOutputSubfolder(roisFolder)(Purpose.Accuracy)
                     List(shiftingOutfolder, accuracyOutfolder).forall(os.isDir) shouldBe true
-                    val shiftingOutFiles = os.list(shiftingOutfolder)
-                    val accuracyOutFiles = os.list(accuracyOutfolder)
+                    
                     val posFramePairs = List(pf1, pf2)
-                    val expShiftingOutfiles = posFramePairs.map{ case (p, f) => (p, f) -> shiftingOutfolder / getOutputFilename(p, f, NameOfPurpose("shifting")).get }
-                    val expAccuracyOutfiles = posFramePairs.map{ case (p, f) => (p, f) -> accuracyOutfolder / getOutputFilename(p, f, NameOfPurpose("accuracy")).get }
+                    val expShiftingOutfiles = posFramePairs.map{ case (p, f) => (p, f) -> getOutputFilepath(roisFolder)(p, f, Purpose.Shifting) }
+                    val expAccuracyOutfiles = posFramePairs.map{ case (p, f) => (p, f) -> getOutputFilepath(roisFolder)(p, f, Purpose.Accuracy) }
                     given shiftingRoiRW: ReadWriter[RoiForShifting] = SelectedRoi.simpleShiftingRW(coordseq)
                     given accuracyRoiRW: ReadWriter[RoiForAccuracy] = SelectedRoi.simpleAccuracyRW(coordseq)
                     val obsShiftings = expShiftingOutfiles.map { case (pf, fp) => (pf, readJsonFile[List[RoiForShifting]](fp)) }.toMap
                     val obsAccuracies = expAccuracyOutfiles.map { case (pf, fp) => pf -> readJsonFile[List[RoiForAccuracy]](fp) }.toMap
                     
+                    val shiftingOutFiles = os.list(shiftingOutfolder)
+                    val accuracyOutFiles = os.list(accuracyOutfolder)
                     shiftingOutFiles.length shouldBe posFramePairs.length
                     accuracyOutFiles.length shouldBe posFramePairs.length
                     shiftingOutFiles.toSet shouldEqual expShiftingOutfiles.map(_._2).toSet
@@ -519,10 +549,12 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                     
                     val byPosFrame = obsShiftings.map{ case (pf, shifting) => pf -> (shifting, obsAccuracies(pf)) }
                     
+                    // Set of ROIs for shifting must have no overlap with ROIs for accuracy.
                     byPosFrame.values.map{ case (shifting, accuracy) => 
                         (shifting.map(_.index).toSet & accuracy.map(_.index).toSet) 
                     } shouldEqual List.fill(posFramePairs.length)(Set()) // no intersection
                     
+                    // Each selected ROI (shifting and accuracy) should have been in the usable pool, not unusable.
                     byPosFrame.toList.map{ case (pf, (shifting, accuracy)) => 
                         val delIdx = shifting.map(_.index).toSet
                         val accIdx = accuracy.map(_.index).toSet
@@ -530,6 +562,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                         (delIdx.forall(part.usable.contains), !delIdx.exists(part.unusable.contains), accIdx.forall(part.usable.contains), !accIdx.exists(part.unusable.contains))
                     } shouldEqual List.fill(posFramePairs.length)((true, true, true, true))
                     
+                    // The coordinates of the ROI centroids must be preserved during the selection/partitioning.
                     byPosFrame.toList.map{ case (pf, (shifting, accuracy)) => 
                         val getPoint = roiFileParts(pf).getPointSafe
                         shifting.filterNot(roi => roi.centroid.some === getPoint(roi.index)) -> accuracy.filterNot(roi => roi.centroid.some === getPoint(roi.index))

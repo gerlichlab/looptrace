@@ -94,9 +94,9 @@ object PartitionIndexedDriftCorrectionRois {
         val parserConfig = ParserConfig.readFileUnsafe(configFile)
         
         /* Function definitions based on parsed config and CLI input */
-        val writeRois = (rois: NEL[SelectedRoi], outpath: os.Path) => {
+        val writeRois = (rois: List[SelectedRoi], outpath: os.Path) => {
             println(s"Writing: $outpath")
-            val jsonObjs = rois.toList map { r => SelectedRoi.toJsonSimple(parserConfig.coordinateSequence)(r) }
+            val jsonObjs = rois.map { r => SelectedRoi.toJsonSimple(parserConfig.coordinateSequence)(r) }
             os.makeDir.all(os.Path(outpath.toNIO.getParent))
             os.write.over(outpath, ujson.write(jsonObjs, indent = 4))
         }
@@ -106,11 +106,29 @@ object PartitionIndexedDriftCorrectionRois {
         println(s"Input file count: ${inputFiles.size}")
         val outfolder = outputFolder.getOrElse(inputRoot)
         println(s"Will use output folder: $outfolder")
-        val (bads, goods) = preparePartitions(outfolder, parserConfig, numShifting = numShifting, numAccuracy = numAccuracy)(inputFiles.toList)
-        if (bads.nonEmpty) throw new Exception(s"${bads.length} (position, frame) pairs with problems.\n${bads}")
-        goods foreach { case ((shiftingRois, getShiftingPath), (accuracyRois, getAccuracyPath)) => 
-            writeRois(shiftingRois, getShiftingPath(outfolder))
-            writeRois(accuracyRois, getAccuracyPath(outfolder))
+        // TODO: Any error should be fatal when reading ROIs file.
+        // TODO: Only insufficient number of shifting ROIs should be fatal once partitioning.
+        val (bads, goods): (List[(InitFile, RoiSplitFailure)], List[(InitFile, RoiSplitSuccess)]) = 
+            Alternative[List].separate(
+                preparePartitions(outfolder, parserConfig, numShifting = numShifting, numAccuracy = numAccuracy)(inputFiles.toList) map {
+                    case (initFile, result) => PartitionAttempt.intoEither(result).bimap(initFile -> _, initFile -> _)
+                }
+            )
+        if (bads.nonEmpty) {
+            val problems = bads.map{ case ((p, f, _), errs) => ((p -> f) -> errs) }.toMap
+            throw new Exception(s"${problems.size} (position, frame) pairs with problems.\n${problems}")
+        }
+        val warnings = goods flatMap { case ((p, f, _), splitResult) => 
+            // Get the selected ROI groupings and build an optional warning.
+            val (shifting, accuracy, warnOpt) = splitResult match {
+                case RoisPartition(shifting, accuracy) => (shifting, accuracy, None)
+                case tooFew: TooFewAccuracyRois => 
+                    (tooFew.partition.shifting, tooFew.partition.accuracy, ((p, f), tooFew.problem).some)
+            }
+            // Write the ROIs and emit the optional warning.
+            writeRois(shifting, getOutputFilepath(outfolder)(p, f, Purpose.Shifting))
+            writeRois(accuracy, getOutputFilepath(outfolder)(p, f, Purpose.Accuracy))
+            warnOpt
         }
     }
 
@@ -172,28 +190,13 @@ object PartitionIndexedDriftCorrectionRois {
         results.toSet
     }
     
-    def preparePartitions(
-        outputFolder: os.Path, 
-        parserConfig: ParserConfig, 
-        numShifting: PositiveInt, 
-        numAccuracy: PositiveInt
-        )(inputs: List[InitFile]): (List[NEL[String] | NEL[BadRecord]], List[((NEL[SelectedRoi], os.Path => os.Path), (NEL[SelectedRoi], os.Path => os.Path))]) = {
-        // TODO: try to restrict this to just the specific subtype, so that the ROIs collection can't be mixed.
-        val partition = sampleDetectedRois(numShifting = numShifting, numAccuracy = numAccuracy).fmap(_.leftMap(NEL.one))
-        val getErrMsg = (purpose: String, pos: PositionIndex, frame: FrameIndex) => s"No ROIs for $purpose in (${pos.get}, ${frame.get})"
-        def tryPrep(purpose: String, pos: PositionIndex, frame: FrameIndex, rois: List[SelectedRoi]): ErrMsgsOr[(NEL[SelectedRoi], os.Path => os.Path)] = 
-            tryPrepRois(pos, frame, rois).toRight{ NEL.one(getErrMsg(purpose, pos, frame)) }
-        Alternative[List].separate(inputs.map { case (pos, frame, roiFile) => 
-            // Any error should be fatal when reading ROIs file.
-            // Only insufficient number of shifting ROIs should be fatal once partitioning.
-            readRoisFile(parserConfig)(roiFile).flatMap(partition).flatMap{ case (_, shiftingRois, accuracyRois) => 
-                val shiftingValidNel = tryPrep("shifting", pos, frame, shiftingRois).toValidated
-                val accuracyValidNel = tryPrep("accuracy", pos, frame, accuracyRois).toValidated
-                (shiftingValidNel, accuracyValidNel).mapN((_1, _2) => (_1, _2)).toEither
+    def preparePartitions(outputFolder: os.Path, parserConfig: ParserConfig, numShifting: PositiveInt, numAccuracy: PositiveInt): 
+        List[InitFile] => List[(InitFile, RoisFileParseError | RoisSplitResult)] = 
+            _.map { case init => init -> readRoisFile(parserConfig)(init._3).fold(
+                identity, 
+                sampleDetectedRois(numShifting = numShifting, numAccuracy = numAccuracy))
             }
-        })
-    }
-    
+
     /**
       * Read a single (one FOV, one frame) ROIs file.
       * 
@@ -208,36 +211,101 @@ object PartitionIndexedDriftCorrectionRois {
       * @param roisFile The file to parse
       * @return A collection of ROIs, representing what was detected for a particular (FOV, frame) combo
       */
-    def readRoisFile(parserConfig: ParserConfig)(roisFile: os.Path): Either[ErrorMessages | NEL[BadRecord], Iterable[DetectedRoi]] = {
-        val maybeParserAndRecords: ErrMsgsOr[(RawRecord => ErrMsgsOr[NonnegativeInt => DetectedRoi], List[RawRecord])] = for {
-            (sep, head, lines) <- prepFileRead(roisFile).toEither
-            safeParse <- createParser(parserConfig)(sep `split` head)
-        } yield (safeParse, lines map sep.split)
-        maybeParserAndRecords flatMap { case (parse, rawRecords) => 
-            val (bads, rois) = Alternative[List].separate(
-                NonnegativeInt.indexed(rawRecords).map{ case (rr, i) => parse(rr).bimap(errs => BadRecord(i, rr, errs), _(i)) } )
-            bads.toNel.toLeft(rois)
-        }
+    def readRoisFile(parserConfig: ParserConfig)(roisFile: os.Path): Either[RoisFileParseError, Iterable[DetectedRoi]] = {
+        prepFileRead(roisFile)
+            .toEither
+            .flatMap{ case (sep, head, lines) => createParser(parserConfig)(sep `split` head).map(_ -> lines.map(sep.split)) }
+            .leftMap(RoisFileParseFailedSetup.apply)
+            .flatMap { case (parse, rawRecords) => 
+                Alternative[List].separate(
+                    NonnegativeInt.indexed(rawRecords)
+                        .map{ case (rr, i) => parse(rr).bimap(errs => BadRecord(i, rr, errs), _(i)) }
+                ) match { case (bads, rois) => bads.toNel.toLeft(rois).leftMap(RoisFileParseFailedRecords.apply) }
+            }
     }
 
-    def sampleDetectedRois(numShifting: PositiveInt, numAccuracy: PositiveInt)(rois: Iterable[DetectedRoi]): Either[String, (List[DetectedRoi], List[RoiForShifting], List[RoiForAccuracy])] = {
+    /**
+      * Try the given ROIs into a pool for actual drift correction and a (nonoverlapping) pool for accuracy assessment
+      *
+      * @param numShifting
+      * @param numAccuracy
+      * @param rois
+      * @return
+      */
+    def sampleDetectedRois(numShifting: PositiveInt, numAccuracy: PositiveInt)(rois: Iterable[DetectedRoi]): RoisSplitResult = {
         val sampleSize = numShifting + numAccuracy
         if (sampleSize < numShifting || sampleSize < numAccuracy) {
-            val msg = s"Appears overflow occurred: ${numShifting} + ${numAccuracy} = ${sampleSize}"
+            val msg = s"Appears overflow occurred computing sample size: ${numShifting} + ${numAccuracy} = ${sampleSize}"
             throw new IllegalArgumentException(msg)
         }
+        
         val pool = rois.filter(_.isUsable)
-        val numAvailable = pool.size
-        (sampleSize <= numAvailable).either(s"Fewer ROIs available than requested! $numAvailable < $sampleSize", {
-            val (inSample, outOfSample) = Random.shuffle(pool.toList).splitAt(sampleSize)
-            val (forShifting, forAccuracy) = inSample.splitAt(numShifting)
-            val shiftingRois = forShifting.map(roi => RoiForShifting(roi.index, roi.centroid))
-            val accuracyRois = forAccuracy.map(roi => RoiForAccuracy(roi.index, roi.centroid))
-            (outOfSample, shiftingRois, accuracyRois)
-        })
+        val (inSample, _) = Random.shuffle(pool.toList) `splitAt` sampleSize
+        val (shifting, remaining) = inSample `splitAt` numShifting
+        val accuracy = remaining `take` numAccuracy
+        
+        val shiftingRealized = NonnegativeInt.unsafe(shifting.length)
+        if (shiftingRealized < numShifting) TooFewShiftingRois(numShifting, shiftingRealized)
+        else {
+            val partition = RoisPartition(
+                shifting.map(roi => RoiForShifting(roi.index, roi.centroid)), 
+                accuracy.map(roi => RoiForAccuracy(roi.index, roi.centroid))
+                )
+            if (accuracy.length < numAccuracy) TooFewAccuracyRois(partition, numAccuracy, accuracy.length) else partition
+        }
     }
 
-    /* Helper types */
+    /***********************/
+    /* Helper types        */
+    /***********************/
+    sealed trait RoisFileParseError extends Throwable
+    final case class RoisFileParseFailedSetup(get: ErrorMessages) extends RoisFileParseError
+    final case class RoisFileParseFailedRecords(get: NEL[BadRecord]) extends RoisFileParseError
+    
+    type RoiSplitFailure = RoisFileParseError | TooFewShiftingRois
+    type RoiSplitOutcome = Either[RoiSplitFailure, RoiSplitSuccess]
+
+    sealed trait RoisSplitResult
+    sealed trait RoiSplitSuccess extends RoisSplitResult:
+        def partition: RoisPartition
+    
+    final case class TooFewShiftingRois(requested: PositiveInt, realized: NonnegativeInt) extends RoisSplitResult
+    object TooFewShiftingRois:
+        given TooFewForShifting: TooFewRoisLike[TooFewShiftingRois] with
+            def getTooFew = { case TooFewShiftingRois(requested, realized) => TooFewRois(requested, realized) }
+    
+    final case class TooFewAccuracyRois(partition: RoisPartition, requested: PositiveInt, realized: Int) extends RoiSplitSuccess
+    object TooFewAccuracyRois:
+        given TooFewForAccuracy: TooFewRoisLike[TooFewAccuracyRois] with
+            def getTooFew = { case TooFewAccuracyRois(_, requested, realized) => TooFewRois(requested, realized) }
+    
+    final case class RoisPartition(shifting: List[RoiForShifting], accuracy: List[RoiForAccuracy]) extends RoiSplitSuccess:
+        final def partition = this
+    
+    final case class TooFewRois(val requested: PositiveInt, val realized: Int):
+        require(requested > realized, s"Realized accuracy count ($realized) isn't less than request ($requested)")
+    
+    trait TooFewRoisLike[A]:
+        def getTooFew: A => TooFewRois
+
+    extension [A](a: A)(using ev: TooFewRoisLike[A])
+        def problem = ev.getTooFew(a)
+
+    object RoisSplitResult:
+        def intoEither = (_: RoisSplitResult) match {
+            case p: RoisPartition => p.asRight
+            case a: TooFewAccuracyRois => a.asRight
+            case s: TooFewShiftingRois => s.asLeft
+        }
+    end RoisSplitResult
+
+    object PartitionAttempt:
+        def intoEither(eOrR: RoisFileParseError | RoisSplitResult): RoiSplitOutcome = eOrR match {
+            case e: RoisFileParseError => e.asLeft
+            case r: RoisSplitResult => RoisSplitResult.intoEither(r)
+        }
+    end PartitionAttempt
+
     sealed trait ColumnName { def get: String }
     final case class XColumn(get: String) extends ColumnName
     final case class YColumn(get: String) extends ColumnName
@@ -250,7 +318,11 @@ object PartitionIndexedDriftCorrectionRois {
     object BadRecord:
         def apply(index: NonnegativeInt, record: RawRecord, problems: ErrorMessages) = new BadRecord(index, record.toList, problems)
 
-    final case class NameOfPurpose(get: String)
+    /** How the ROIs will be used w.r.t. drift correction (either actual shift, or accuracy assessment) */
+    enum Purpose:
+        case Shifting, Accuracy
+        def lowercase = this.toString.toLowerCase
+    
     final case class Filename(get: String)
     
     final case class ParserConfig(xCol: XColumn, yCol: YColumn, zCol: ZColumn, qcCol: String, coordinateSequence: CoordinateSequence):
@@ -302,18 +374,13 @@ object PartitionIndexedDriftCorrectionRois {
     end ParserConfig
 
     /* Helper functions */
-    def getOutputFilename(pos: PositionIndex, frame: FrameIndex, purpose: NameOfPurpose): Filename = {
-        Filename(s"${BeadRoisPrefix}_${pos.get}_${frame.get}.${purpose.get}.json")
-    }
+    def getOutputFilename(pos: PositionIndex, frame: FrameIndex, purpose: Purpose): Filename =
+        Filename(s"${BeadRoisPrefix}_${pos.get}_${frame.get}.${purpose.lowercase}.json")
 
-    private def tryPrepRois(position: PositionIndex, frame: FrameIndex, rois: List[SelectedRoi]): Option[(NEL[SelectedRoi], os.Path => os.Path)] = rois.toNel.map{ rs =>
-        val nameOfPurpose = NameOfPurpose(rs.head match {
-            case _: RoiForShifting => "shifting"
-            case _: RoiForAccuracy => "accuracy"
-        })
-        val filename = getOutputFilename(position, frame, nameOfPurpose)
-        (rs, (_: os.Path) / nameOfPurpose.get / filename.get)
-    }
+    def getOutputSubfolder(root: os.Path) = root / (_: Purpose).lowercase
+
+    def getOutputFilepath(root: os.Path)(pos: PositionIndex, frame: FrameIndex, purpose: Purpose): os.Path = 
+        getOutputSubfolder(root)(purpose) / getOutputFilename(pos, frame, purpose).get
 
     private def prepFileRead(roisFile: os.Path): ValidatedNel[String, (Delimiter, String, List[String])] = {
         val maybeSep = Delimiter.fromPath(roisFile).toRight(s"Cannot infer delimiter for file! $roisFile").toValidatedNel
