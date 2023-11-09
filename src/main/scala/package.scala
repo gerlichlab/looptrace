@@ -51,6 +51,8 @@ package object looptrace {
         def maybe(z: Int): Option[PositiveInt] = (z > 0).option((z: PositiveInt))
         def unsafe(z: Int): PositiveInt = either(z).fold(msg => throw new NumberFormatException(msg), identity)
         given posIntEq: Eq[PositiveInt] = Eq.fromUniversalEquals[PositiveInt]
+        extension (n: PositiveInt)
+            def asNonnegative: NonnegativeInt = NonnegativeInt.unsafe(n)
     
 
     enum Delimiter(val sep: String, val ext: String):
