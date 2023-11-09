@@ -225,12 +225,17 @@ object PartitionIndexedDriftCorrectionRois {
     }
 
     /**
-      * Try the given ROIs into a pool for actual drift correction and a (nonoverlapping) pool for accuracy assessment
+      * Try the given ROIs into a pool for actual drift correction and a (nonoverlapping) pool for accuracy assessment.
       *
-      * @param numShifting
-      * @param numAccuracy
-      * @param rois
-      * @return
+      * There are 3 output cases, based on count of usable ROIs...
+      * 1. ...exceeds or equals the sum of shifting and accuracy, all good
+      * 2. ...exceeds or equals shifting count, but not enough to "fill the order" for accuracy, yielding partiting with warning
+      * 3. ...less than shifting count, yielding an error-like type with no partition
+      * 
+      * @param numShifting Number of ROIs to use for actual drift correction
+      * @param numAccuracy Number of ROIs to use for drift correction accuracy assessment
+      * @param rois Collection of detected bead ROIs, from a single (FOV, frame) pair
+      * @return An explanation of failure if partition isn't possible, or a partition with perhaps a warning
       */
     def sampleDetectedRois(numShifting: PositiveInt, numAccuracy: PositiveInt)(rois: Iterable[DetectedRoi]): RoisSplitResult = {
         val sampleSize = numShifting + numAccuracy
