@@ -19,6 +19,9 @@ trait PartitionRoisSuite extends LooptraceSuite:
     given detectedRoiArbitrary(using arbComponents: Arbitrary[(RoiIndex, Point3D, Boolean)]): Arbitrary[DetectedRoi] = 
         arbComponents.fmap(DetectedRoi.apply.tupled)
     
+    /** Generator for detected ROI, fixing the usability flag as given */
+    def genDetectedRoiFixedUse = (p: Boolean) => arbitrary[DetectedRoi].map(_.copy(isUsable = p))
+
     /** Arbitrary point, index, and lifted into shifting ROI data type value */
     given shiftingRoiArbitrary: Arbitrary[RoiForShifting] = Arbitrary{ genSelectedRoi(RoiForShifting.apply) }
     

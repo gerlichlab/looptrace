@@ -23,7 +23,9 @@ import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.{
     RoisFileParseFailedRecords,
     RoisFileParseFailedSetup,
     RoisPartition,
+    RoiSplitFailure,
     RoisSplitResult,
+    RoiSplitSuccess,
     TooFewAccuracyRois, 
     TooFewRois,
     TooFewShiftingRois,
@@ -509,7 +511,30 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         }
     }
 
-    test("An ROI is never used for more than one purpose.") { pending }
+    test("An ROI is never used for more than one purpose.") {
+        val maxRoisCount = PositiveInt(1000)
+        def genGoodInput: Gen[(PositiveInt, PositiveInt, Iterable[DetectedRoi])] = for {
+            numUsable <- Gen.choose(2, maxRoisCount - 1)
+            usable <- Gen.listOfN(numUsable, genDetectedRoiFixedUse(true))
+            numUnusable <- Gen.choose(1, maxRoisCount - numUsable)
+            unusable <- Gen.listOfN(numUnusable, genDetectedRoiFixedUse(false))
+            numShifting <- Gen.choose(1, numUsable - 1).map(PositiveInt.unsafe)
+            numAccuracy <- Gen.choose(1, maxRoisCount).map(PositiveInt.unsafe)
+        } yield (numShifting, numAccuracy, Random.shuffle(usable ++ unusable))
+        
+        def simplifyRoi(roi: RoiForShifting | RoiForAccuracy): (RoiIndex, Point3D) = roi.index -> roi.centroid
+
+        forAll (genGoodInput, minSuccessful(1000)) { case (numShifting, numAccuracy, rois) => 
+            sampleDetectedRois(numShifting, numAccuracy)(rois) match {
+                case result: RoiSplitFailure => fail(s"Expected successful partition but got failure: $result")
+                case result: RoiSplitSuccess => 
+                    val part = result.partition
+                    part.shifting.length shouldEqual part.shifting.toSet.size // no duplicates within shifting
+                    part.accuracy.length shouldEqual part.accuracy.toSet.size // no duplicates within accuracy
+                    (part.shifting.map(simplifyRoi).toSet & part.accuracy.map(simplifyRoi).toSet) shouldEqual Set()
+            }
+        }
+    }
 
     test("Integration: overall behavioral properties are correct.") {
         import SmallDataSet.*
