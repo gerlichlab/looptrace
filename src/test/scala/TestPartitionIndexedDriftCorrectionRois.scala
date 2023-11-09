@@ -41,7 +41,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.{ CoordinateSequence, Point3D, XC
 import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.getOutputSubfolder
 
 /** Tests for the partitioning of regions of interest (ROIs) for drift correction */
-class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSuite, should.Matchers, PartitionRoisSuite {
+class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSuite, should.Matchers, PartitionRoisSuite:
     import SelectedRoi.*
     
     /* *******************************************************************************
@@ -297,6 +297,24 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                 })
         }
     }
+
+    test("ROI request sizes must be positive integers.") {
+        assertCompiles("sampleDetectedRois(PositiveInt(1), PositiveInt(1))(List())") // negative control
+        
+        /* Alternatives with at least 1 positive int */
+        assertDoesNotCompile("sampleDetectedRois(PositiveInt(1), NonnegativeInt(1))(List())")
+        assertDoesNotCompile("sampleDetectedRois(NonnegativeInt(1), PositiveInt(1))(List())")
+        assertDoesNotCompile("sampleDetectedRois(PositiveInt(1), 1)(List())")
+        assertDoesNotCompile("sampleDetectedRois(1, PositiveInt(1))(List())")
+        
+        /* Other alternatives with at least 1 nonnegative int */
+        assertDoesNotCompile("sampleDetectedRois(NonnegativeInt(1), NonnegativeInt(1))(List())")
+        assertDoesNotCompile("sampleDetectedRois(NonnegativeInt(1), 1)(List())")
+        assertDoesNotCompile("sampleDetectedRois(1, NonnegativeInt(1))(List())")
+        
+        // Alternative with simple integers
+        assertDoesNotCompile("sampleDetectedRois(1, 1)(List())")
+    }
     
     test("Requesting ROIs count size greater than usable record count yields expected result.") {
         val maxRoisCount = PositiveInt(1000)
@@ -372,8 +390,6 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                 }
         }
     }
-
-    def getParserConfigColumnNames(conf: ParserConfig): List[String] = List(conf.xCol.get, conf.yCol.get, conf.zCol.get, conf.qcCol)
 
     test("Header-only file parses but yields empty record collection.") {
         def createHeaderLine(conf: ParserConfig, delimiter: Delimiter): String =
@@ -650,13 +666,15 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
     type NNPair = (NonnegativeInt, NonnegativeInt)
     type PosFramePair = (PositionIndex, FrameIndex)
 
-    def getInputFilename(pos: PositionIndex, frame: FrameIndex): String = s"bead_rois__${pos.get}_${frame.get}.csv"
-
-    def genNonnegativePair: Gen[NNPair] = Gen.zip(genNonnegativeInt, genNonnegativeInt)    
-    
     def genDistinctNonnegativePairs: Gen[(PosFramePair, PosFramePair)] = 
         Gen.zip(genNonnegativePair, genNonnegativePair)
             .suchThat{ case (p1, p2) => p1 =!= p2 }
             .map { case ((p1, f1), (p2, f2)) => (PositionIndex(p1) -> FrameIndex(f1), PositionIndex(p2) -> FrameIndex(f2)) }
     
-}
+    def genNonnegativePair: Gen[NNPair] = Gen.zip(genNonnegativeInt, genNonnegativeInt)    
+
+    def getInputFilename(pos: PositionIndex, frame: FrameIndex): String = s"bead_rois__${pos.get}_${frame.get}.csv"
+    
+    def getParserConfigColumnNames(conf: ParserConfig): List[String] = List(conf.xCol.get, conf.yCol.get, conf.zCol.get, conf.qcCol)
+
+end TestPartitionIndexedDriftCorrectionRois
