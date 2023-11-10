@@ -166,16 +166,20 @@ def tracing_qc(df: pd.DataFrame, parameters: TracingQCParameters) -> np.array:
     qc = qc & (df['A'] > (parameters.min_signal_noise_ratio * df['BG']))
     qc = qc & (df['sigma_xy'] < parameters.max_sd_xy_nanometers)
     qc = qc & (df['sigma_z'] < parameters.max_sd_z_nanometers)
-    qc = qc & df['z_px'].between(0,100)
-    qc = qc & df['y_px'].between(0,100)
-    qc = qc & df['x_px'].between(0,100)
+    qc = qc & df.apply(lambda row: row["sigma_z"] < row["z_px"] < row["spot_box_z"] - row["sigma_z"], axis=1)
+    qc = qc & df.apply(lambda row: row["sigma_xy"] < row["y_px"] < row["spot_box_y"] - row["sigma_xy"], axis=1)
+    qc = qc & df.apply(lambda row: row["sigma_xy"] < row["x_px"] < row["spot_box_x"] - row["sigma_xy"], axis=1)
 
     return qc.astype(int)
 
 
 def write_tracing_qc_passes_from_gridfile(
         traces_file: ExtantFile, 
-        config_file: ExtantFile, gridfile: ExtantFile, outfile: Path, exclusions: Optional[Iterable[str]]) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        config_file: ExtantFile, 
+        gridfile: ExtantFile, 
+        outfile: Path, 
+        exclusions: Optional[Iterable[str]]
+        ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     traces, _ = read_traces_and_apply_frame_names(traces_file=traces_file.path, config_file=config_file.path)
     ref_dist = compute_ref_frame_spatial_information(df=traces)
     traces["ref_dist"] = ref_dist
