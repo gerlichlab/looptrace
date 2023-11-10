@@ -17,11 +17,11 @@ import scipy.ndimage as ndi
 from tqdm import tqdm
 
 from looptrace.SpotPicker import RoiOrderingSpecification
-import looptrace.image_processing_functions as ip
 from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
 from looptrace.numeric_types import NumberLike
 
 
+IMG_SIDE_LEN_COLS = ["spot_box_z", "spot_box_y", "spot_box_x"]
 ROI_FIT_COLUMNS = ["BG", "A", "z_px", "y_px", "x_px", "sigma_z", "sigma_xy"]
 MASK_FITS_ERROR_MESSAGE = "Masking fits for tracing currently isn't supported!"
 
@@ -36,6 +36,10 @@ class BackgroundSpecification:
 class FunctionalForm:
     function: callable
     dimensionality: int
+
+    def __post_init__(self) -> None:
+        if self.dimensionality != 3:
+            raise NotImplementedError("Only currently supporting dimensionality = 3 for functional form fit")
 
 
 class Tracer:
@@ -255,7 +259,7 @@ def find_trace_fits(
             delayed(trace_single_roi)(fit_func_spec=ff_spec, roi_img=spot_img) 
             for ff_spec, spot_img in _iter_fit_args(fit_func_spec=fit_func_spec, images=images, bg_spec=background_specification)
             )
-    return pd.DataFrame(fits, columns=ROI_FIT_COLUMNS)
+    return pd.DataFrame(fits, columns=ROI_FIT_COLUMNS + IMG_SIDE_LEN_COLS)
 
 
 def trace_single_roi(
@@ -288,19 +292,25 @@ def trace_single_roi(
     np.ndarray
         Array-/vector-Like of values representing the optimised parameter values of the function to fit
     """
+    try:
+        len_z, len_y, len_x = roi_img.shape
+    except ValueError as e:
+        raise Exception(f"ROI image for tracing isn't 3D: {roi_img.shape}") from e
     if len(roi_img.shape) != fit_func_spec.dimensionality:
         raise ValueError(f"ROI image to trace isn't correct dimensionality ({fit_func_spec.dimensionality}); shape: {roi_img.shape}")
     if background:
         # TODO: check that dimension of background image matches that of main ROI image.s
         roi_img = roi_img - background
     if not np.any(roi_img) or any(d < 3 for d in roi_img.shape): # Check if empty or too small for fitting.
-        return np.array([-1] * len(ROI_FIT_COLUMNS))
-    if mask is None:
-        center = 'max'
+        fit = np.array([-1] * len(ROI_FIT_COLUMNS))
     else:
-        roi_img_masked = roi_img * (mask / np.max(mask))**2
-        center = list(np.unravel_index(np.argmax(roi_img_masked, axis=None), roi_img.shape))
-    return fit_func_spec.function(roi_img, sigma=1, center=center)[0]
+        if mask is None:
+            center = 'max'
+        else:
+            roi_img_masked = roi_img * (mask / np.max(mask))**2
+            center = list(np.unravel_index(np.argmax(roi_img_masked, axis=None), roi_img.shape))
+        fit = fit_func_spec.function(roi_img, sigma=1, center=center)[0]
+    return fit + [len_z, len_y, len_x]
 
 
 def apply_fine_scale_drift_correction(traces: pd.DataFrame) -> pd.DataFrame:
