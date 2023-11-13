@@ -22,7 +22,6 @@ import os
 import itertools
 import logging
 from math import cos, sin, radians
-from pathlib import Path
 import re
 from typing import *
 import warnings
@@ -124,46 +123,6 @@ def pylochrom_coords_to_traces(coords):
         traces.append(pd.DataFrame(trace))
     return pd.concat(traces)
 
-
-'''
-def tracing_qc(row, qc_dict, traces_df=None):
-
-    
-    A_to_BG = qc_dict['A_to_BG']
-    sigma_xy_max = qc_dict['sigma_xy_max']
-    sigma_z_max = qc_dict['sigma_z_max']
-    max_dist = qc_dict['max_dist']
-    
-
-    if max_dist:
-        ref_frame = row['ref_frame'] #
-        #trace_id = row['trace_id']
-        #ref_frame = traces_df.query('trace_id == @trace_id').iloc[ref]
-        z_c = ref_frame['z']
-        y_c = ref_frame['y']
-        x_c = ref_frame['x']
-        z = row['z']
-        y = row['y']
-        x = row['x']
-
-        dist = ((z-z_c)**2 + (y-y_c)**2 + (x-x_c)**2)**0.5
-
-        if dist > max_dist:
-            return 0
-
-    if row['A']<(A_to_BG*row['BG']):
-        return 0
-    elif row['sigma_xy'] > sigma_xy_max or row['sigma_z'] > sigma_z_max:
-        return 0
-    elif row['sigma_xy'] < 0 or row['sigma_z'] < 0:
-        return 0
-    elif row['x_px']<0 or row['y_px'] < 0 or row['z_px']<0:
-        return 0
-    elif row['x_px']>100 or row['y_px'] > 100 or row['z_px'] > 100:
-        return 0
-    else:
-        return 1
-'''
 
 def view_context(all_images,
                  contrast= ((0,5000),(0,2000),(0,5000)),

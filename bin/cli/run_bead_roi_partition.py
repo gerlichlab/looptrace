@@ -6,11 +6,10 @@ import subprocess
 from typing import *
 
 from gertils import ExtantFile, ExtantFolder
-from looptrace import LOOPTRACE_JAR_PATH
+from looptrace import LOOPTRACE_JAR_PATH, LOOPTRACE_JAVA_PACKAGE
 from looptrace.ImageHandler import handler_from_cli
 
 __author__ = "Vince Reuter"
-
 
 
 def workflow(
@@ -19,10 +18,12 @@ def workflow(
     output_folder: Union[None, Path, ExtantFolder] = None,
     ):
     H = handler_from_cli(config_file=config_file, images_folder=images_folder)
-    prog_path = "at.ac.oeaw.imba.gerlich.looptrace.PartitionDriftCorrectionRois"
+    prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.PartitionDriftCorrectionRois"
     num_del = H.num_bead_rois_for_drift_correction
     num_acc = H.num_bead_rois_for_drift_correction_accuracy
     output_folder = output_folder or H.bead_rois_path
+    if isinstance(output_folder, ExtantFolder):
+        output_folder = output_folder.path
     cmd_parts = [
         "java", 
         "-cp",
@@ -31,13 +32,13 @@ def workflow(
         "--beadRoisRoot",
         H.bead_rois_path, 
         "--numShifting", 
-        str(num_del),
+        num_del,
         "--numAccuracy",
-        str(num_acc),
+        num_acc,
         "--outputFolder",
-        str(output_folder)
+        output_folder,
     ]
-    print(f"Running bead ROI partitioning: {' '.join(cmd_parts)}")
+    print(f"Running bead ROI partitioning: {' '.join(map(str, cmd_parts))}")
     subprocess.check_call(cmd_parts)
 
 

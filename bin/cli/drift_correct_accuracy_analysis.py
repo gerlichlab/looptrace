@@ -13,7 +13,6 @@ import warnings
 
 import numpy as np
 import pandas as pd
-from scipy import ndimage as ndi
 import tqdm
 import yaml
 
@@ -24,11 +23,10 @@ from looptrace.ImageHandler import ImageHandler, handler_from_cli
 from looptrace.bead_roi_generation import extract_single_bead
 from looptrace.filepaths import get_analysis_path, simplify_path
 from looptrace.gaussfit import fitSymmetricGaussian3D
-from looptrace import image_io
+from looptrace import image_io, SIGNAL_NOISE_RATIO_NAME
 from looptrace.numeric_types import NumberLike
 
 
-SIGNAL_NOISE_RATIO_NAME = "A_to_BG"
 FALLBACK_MAX_NUM_BEAD_ROIS = 500
 
 

@@ -16,6 +16,7 @@ import pandas as pd
 import scipy.ndimage as ndi
 from tqdm import tqdm
 
+from looptrace import *
 from looptrace.SpotPicker import RoiOrderingSpecification
 from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
 from looptrace.numeric_types import NumberLike
