@@ -11,7 +11,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.CoordinateSequence
 class TestRois extends AnyFunSuite, ScalacheckSuite, should.Matchers, PartitionRoisSuite {
     import SelectedRoi.*
 
-    test("ROI for shifting roundtrips through JSON") {
+    test("ROI for shifting roundtrips through JSON.") {
         forAll { (original: RoiForShifting, coordseq: CoordinateSequence) =>
             given rw: ReadWriter[RoiForShifting] = SelectedRoi.simpleShiftingRW(coordseq)
             val json = write(original)
@@ -19,7 +19,7 @@ class TestRois extends AnyFunSuite, ScalacheckSuite, should.Matchers, PartitionR
         }
     }
 
-    test("ROI for accuracy roundtrips through JSON") {
+    test("ROI for accuracy roundtrips through JSON.") {
         forAll { (original: RoiForAccuracy, coordseq: CoordinateSequence) =>
             given rw: ReadWriter[RoiForAccuracy] = SelectedRoi.simpleAccuracyRW(coordseq)
             val json = write(original)
