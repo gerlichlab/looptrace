@@ -7,6 +7,7 @@ authors = [
     "Vince Reuter <vince.reuter@gmail.com>",
 ]
 readme = "README.md"
+include = ["looptrace/looptrace-assembly*.jar"]
 license = "MIT"
 repository = "https://github.com/gerlichlab/looptrace"
 classifiers = [
