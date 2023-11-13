@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
+from looptrace import *
 from looptrace.numeric_types import NumberLike as Numeric
 
 QC_PASS_COUNT_COLUMN = "n_qc_pass"
@@ -51,10 +52,10 @@ class TracingQCParameters:
     @classmethod
     def _internal_to_external(cls):
         return {
-            "min_signal_noise_ratio": "A_to_BG", 
-            "max_sd_xy_nanometers": "sigma_xy_max", 
-            "max_sd_z_nanometers": "sigma_z_max",
-            "max_dist_from_region_center_nanometers": "max_dist"
+            "min_signal_noise_ratio": SIGNAL_NOISE_RATIO_NAME, 
+            "max_sd_xy_nanometers": SIGMA_XY_MAX_NAME, 
+            "max_sd_z_nanometers": SIGMA_Z_MAX_NAME,
+            "max_dist_from_region_center_nanometers": MAX_DISTANCE_SPOT_FROM_REGION_NAME,
         }
 
 
@@ -65,6 +66,13 @@ def add_qc_and_parse_config(traces_file: Path, config_file: Path) -> Tuple[pd.Da
     print(f"QC params:\n{json.dumps(qc_params.to_dict_internal(), indent=2)}")
     traces['QC'] = tracing_qc(df=traces, parameters=qc_params)
     return traces, config
+
+
+def apply_frame_names_and_spatial_information(traces_file: Path, config_file: Path) -> pd.DataFrame:
+    traces, _ = read_traces_and_apply_frame_names(traces_file=traces_file, config_file=config_file)
+    if "ref_dist" not in traces.columns:
+        traces["ref_dist"] = compute_ref_frame_spatial_information(traces)
+    return traces
 
 
 def apply_qc_filtration_and_write_results(

@@ -12,6 +12,7 @@ from config_file_validation import workflow as run_config_validation
 from extract_exp_psf import workflow as run_psf_extraction
 from run_bead_roi_generation import workflow as gen_all_bead_rois
 from run_bead_roi_partition import workflow as partition_bead_rois
+from analyse_detected_bead_rois import workflow as run_all_bead_roi_detection_analysis
 from decon import workflow as run_deconvolution
 from nuc_label import workflow as run_nuclei_detection
 from looptrace.Drifter import coarse_correction_workflow as run_coarse_drift_correction, fine_correction_workflow as run_fine_drift_correction
@@ -23,8 +24,8 @@ from extract_spots_table import workflow as run_spot_bounding
 from extract_spots import workflow as run_spot_extraction
 from extract_spots_cluster_cleanup import workflow as run_spot_zipping
 from tracing import workflow as run_chromatin_tracing
-from tracing_qc import workflow as run_tracing_qc
-from analyse_detected_bead_rois import workflow as run_all_bead_roi_detection_analysis
+from looptrace.tracing_qc_support import apply_frame_names_and_spatial_information
+from run_tracing_qc import workflow as qc_label_and_filter_traces
 
 
 logger = logging.getLogger(__name__)
@@ -46,14 +47,16 @@ class LooptracePipeline(pypiper.Pipeline):
         func_args_pairs = (
             ("config_validation", run_config_validation, conf_only),
             ("psf_extraction", run_psf_extraction, conf_data_pair),
+            ("deconvolution", run_deconvolution, conf_data_pair), # Really just for denoising, no need for structural disambiguation
             ("bead_roi_generation", gen_all_bead_rois, conf_data_pair), # Find/define all the bead ROIs in each (FOV, frame) pair.
             ("bead_roi_partition", partition_bead_rois, conf_data_pair),
             # Count detected bead ROIs for each timepoint, mainly to see if anything went awry during some phase of the imaging, e.g. air bubble.
             ("bead_roi_detection_analysis", run_all_bead_roi_detection_analysis, conf_data_pair),
-            ("deconvolution", run_deconvolution, conf_data_pair), # Really just for denoising, no need for structural disambiguation
             ("nuclei_detection", run_nuclei_detection, conf_data_pair), 
             ("drift_correction__coarse", run_coarse_drift_correction, conf_data_pair), 
             ("drift_correction__fine", run_fine_drift_correction, conf_data_pair),
+            ("drift_correction_accuracy_analysis", run_drift_correction_analysis, conf_data_pair), 
+            ("drift_correction_accuracy_visualisation", run_drift_correction_accuracy_visualisation, conf_only), 
             ("spot_detection", run_spot_detection, conf_data_pair), # generates *_rois.csv (regional spots)
             ("spot_filtration", run_spot_filtration, conf_data_pair), 
             ("clean_1", run_cleanup, conf_only),
@@ -62,10 +65,10 @@ class LooptracePipeline(pypiper.Pipeline):
             ("spot_zipping", run_spot_zipping, conf_data_pair),
             ("clean_2", run_cleanup, conf_only), 
             ("tracing", run_chromatin_tracing, conf_data_pair),
-            ("tracing_QC", run_tracing_qc, conf_data_pair), 
+            ("spot_region_distances", apply_frame_names_and_spatial_information, conf_data_pair), 
+            ("tracing_QC", qc_label_and_filter_traces, conf_data_pair)
+            #("tracing_QC", run_tracing_qc, conf_data_pair), 
             ("clean_3", run_cleanup, conf_only),
-            ("drift_correction_accuracy_analysis", run_drift_correction_analysis, conf_data_pair), 
-            ("drift_correction_accuracy_visualisation", run_drift_correction_accuracy_visualisation, conf_only), 
         )
         return [pypiper.Stage(func=fxn, f_args=fxn_args, name=name) for name, fxn, fxn_args in func_args_pairs]
 
