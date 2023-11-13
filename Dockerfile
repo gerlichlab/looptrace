@@ -21,9 +21,9 @@ RUN apt-get update -y && \
     apt-get install vim -y
 
 # Copy repo code, to be built later.
-RUN cd / && mkdir looptrace && cd /looptrace
+RUN mkdir /looptrace
 WORKDIR /looptrace
-COPY . .
+COPY . /looptrace
 
 # Install miniconda.
 ## The installation home should be /opt/conda; if not, we need -p /path/to/install/home
