@@ -1,6 +1,7 @@
 # Scala project
 .bloop/
 .bsp/
+*.jar
 .metals/
 project/metals.sbt
 project/project/
