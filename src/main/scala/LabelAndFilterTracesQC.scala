@@ -20,6 +20,8 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.{ Point3D, XCoordinate, YCoordina
 object LabelAndFilterTracesQC:
     val ProgramName = "LabelAndFilterTracesQC"
 
+    type Real = Double
+    
     /** Deinition of the command-line interface */
     case class CliConfig(
         traces: os.Path = null,
@@ -154,8 +156,139 @@ object LabelAndFilterTracesQC:
                 }
         }
     }
+    
+    def workflow(
+        confFile: os.Path, 
+        tracesFile: os.Path, 
+        maxDistFromCenter: DistanceToRegion, 
+        minSignalToNoise: SignalToNoise, 
+        maxSigmaXY: SigmaXY, 
+        maxSigmaZ: SigmaZ, 
+        probeExclusions: Iterable[ProbeName], 
+        minTraceLength: NonnegativeInt, 
+        outfolder: os.Path
+        ): Unit = {
+        println(s"Reading parser configuration file: $confFile")
+        val parserConfig = readJsonFile[ParserConfig](confFile)
+        workflow(parserConfig, tracesFile, maxDistFromCenter, minSignalToNoise, maxSigmaXY, maxSigmaZ, probeExclusions, minTraceLength, outfolder)
+    }
 
-    type Real = Double
+    def workflow(
+        conf: ParserConfig, 
+        tracesFile: os.Path, 
+        maxDistFromRegion: DistanceToRegion, 
+        minSignalToNoise: SignalToNoise, 
+        maxSigmaXY: SigmaXY, 
+        maxSigmaZ: SigmaZ,
+        probeExclusions: Iterable[ProbeName], 
+        minTraceLength: NonnegativeInt, 
+        outfolder: os.Path
+        ): Unit = {
+        val delimiter = Delimiter.fromPathUnsafe(tracesFile)
+        
+        os.read.lines(tracesFile).map(delimiter.split).toList match {
+            case (Nil | (_ :: Nil)) => println("Traces file has no records, skipping QC labeling and filtering")
+            case header :: records => 
+                val maybeParse: ErrMsgsOr[Array[String] => ErrMsgsOr[QCData]] = {
+                    val maybeParseZ = buildFieldParse(conf.zPointColumn.get, safeParseDouble.andThen(_.map(ZCoordinate.apply)))(header)
+                    val maybeParseY = buildFieldParse(conf.yPointColumn.get, safeParseDouble.andThen(_.map(YCoordinate.apply)))(header)
+                    val maybeParseX = buildFieldParse(conf.xPointColumn.get, safeParseDouble.andThen(_.map(XCoordinate.apply)))(header)
+                    val maybeParseRefDist = buildFieldParse(conf.distanceToReferenceColumn, safeParseDouble.andThen(_.flatMap(NonnegativeReal.either).map(DistanceToRegion.apply)))(header)
+                    val maybeParseSignal = buildFieldParse(conf.signalColumn, safeParseDouble.andThen(_.map(Signal.apply)))(header)
+                    val maybeParseBackground = buildFieldParse(conf.backgroundColumn, safeParseDouble.andThen(_.map(Background.apply)))(header)
+                    val maybeParseSigmaXY = buildFieldParse(conf.xySigmaColumn, safeParseDouble.andThen(_.flatMap(PositiveReal.either).map(SigmaXY.apply)))(header)
+                    val maybeParseSigmaZ = buildFieldParse(conf.zSigmaColumn, safeParseDouble.andThen(_.flatMap(PositiveReal.either).map(SigmaZ.apply)))(header)
+                    val maybeParseBoxZ = buildFieldParse(conf.zBoxSizeColumn.get, safeParseInt.andThen(_.flatMap(PositiveInt.either).map(BoxSizeZ.apply)))(header)
+                    val maybeParseBoxY = buildFieldParse(conf.yBoxSizeColumn.get, safeParseInt.andThen(_.flatMap(PositiveInt.either).map(BoxSizeY.apply)))(header)
+                    val maybeParseBoxX = buildFieldParse(conf.xBoxSizeColumn.get, safeParseInt.andThen(_.flatMap(PositiveInt.either).map(BoxSizeX.apply)))(header)
+                    (maybeParseZ, maybeParseY, maybeParseX, maybeParseRefDist, maybeParseSignal, maybeParseBackground, maybeParseSigmaXY, maybeParseSigmaZ, maybeParseBoxZ, maybeParseBoxY, maybeParseBoxX).mapN(
+                        (parseZ, parseY, parseX, parseRefDist, parseSignal, parseBackground, parseSigmaXY, parseSigmaZ, parseBoxZ, parseBoxY, parseBoxX) => { (record: Array[String]) => 
+                            (record.length === header.length).either(NEL.one(s"Record has ${record.length} fields but header has ${header.length}"), ()).flatMap{
+                                    Function.const{(
+                                        parseZ(record),
+                                        parseY(record),
+                                        parseX(record),
+                                        parseRefDist(record), 
+                                        parseSignal(record), 
+                                        parseBackground(record), 
+                                        parseSigmaXY(record), 
+                                        parseSigmaZ(record), 
+                                        parseBoxZ(record), 
+                                        parseBoxY(record), 
+                                        parseBoxX(record)
+                                        ).mapN((z, y, x, refDist, a, bg, sigXY, sigZ, boxZ, boxY, boxX) => 
+                                            QCData((boxZ, boxY, boxX), Point3D(x, y, z), refDist, a, bg, sigXY, sigZ)).toEither
+                                    }
+                            }
+                        }
+                    ).toEither
+                }
+                
+                /* Throw an exception if parse construction failed, otherwise use the parser. */
+                maybeParse match {
+                    case Left(errors) => throw new Exception(s"${errors.length} errors building parser: $errors")
+                    case Right(parse) => 
+                        Alternative[List].separate(NonnegativeInt.indexed(records).map{ (rec, idx) => parse(rec).bimap(
+                            idx -> _, 
+                            qcData => 
+                                val (boxZ, boxY, boxX): (BoxSizeZ, BoxSizeY, BoxSizeX) = qcData.box
+                                val (z, y, x): (ZCoordinate, YCoordinate, XCoordinate) = qcData.centroid match { case Point3D(x, y, z) => (z, y, x) }
+                                val passDist = qcData.distanceToRegion < maxDistFromRegion
+                                val passSNR = qcData.signal.get > minSignalToNoise.get * qcData.background.get
+                                val passSigmaXY = qcData.sigmaXY < maxSigmaXY
+                                val passSigmaZ = qcData.sigmaZ < maxSigmaZ
+                                val passBoxZ = qcData.sigmaZ.get < z.get && z.get <  boxZ.get - qcData.sigmaZ.get
+                                val passBoxY = qcData.sigmaXY.get < y.get && y.get <  boxY.get - qcData.sigmaXY.get
+                                val passBoxX = qcData.sigmaXY.get < x.get && x.get <  boxX.get - qcData.sigmaXY.get
+                                rec -> QCResult(
+                                    withinRegion = passDist, 
+                                    signalNoiseRatio = passSNR, 
+                                    denseXY = passSigmaXY, 
+                                    denseZ = passSigmaZ, 
+                                    inBoundsX = passBoxX, 
+                                    inBoundsY = passBoxY, 
+                                    inBoundsZ = passBoxZ
+                                    )
+                            )
+                        }) match {
+                            /* Throw an exception if any error occurred, otherwise write 2 results files. */
+                            case (Nil, recordsWithQC) => writeResults(header, outfolder, tracesFile.baseName, delimiter)(recordsWithQC)
+                            case (badRecords, _) => throw new Exception(s"${badRecords.length} problem(s) reading records: $badRecords")
+                        }
+                }
+        }
+    }
+
+    /** Write filtered and unfiltered results files, filtered having just QC pass flag column uniformly 1, unfiltered having causal components. */
+    def writeResults(header: Array[String], outfolder: os.Path, basename: String, delimiter: Delimiter)(records: Iterable[(Array[String], QCResult)]): Unit = {
+        require(os.isDir(outfolder), s"Output folder path isn't a directory: $outfolder")
+        val (withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol) = labelsOf[QCResult]
+        Alternative[List].separate(NonnegativeInt.indexed(records.toList).map { 
+            case ((original, qcResult), lineNum) => (header.length =!= original.length).either(original -> lineNum, original -> qcResult)
+        }) match {
+            case (Nil, unfiltered) => 
+                val qcPassCol = "qcPass"
+                
+                val getQCFlagsText = (qc: QCResult) => (qc.components :+ qc.all).map(p => if p then "1" else "0")
+                val unfilteredOutputFile = outfolder / s"${basename}.unfiltered.${delimiter.ext}"
+                val unfilteredHeader = header ++ List(withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol, qcPassCol)
+                println(s"Writing unfiltered output: $unfilteredOutputFile")
+                writeTextFile(unfilteredOutputFile, unfilteredHeader :: unfiltered.map{ case (original, qc) => original ++ getQCFlagsText(qc) }, delimiter)
+                
+                val filteredOutputFile = outfolder / s"${basename}.filtered.${delimiter.ext}"
+                val filteredHeader = header :+ qcPassCol
+                println(s"Writing filtered output: $filteredOutputFile")
+                writeTextFile(filteredOutputFile, filteredHeader :: unfiltered.flatMap{ case (original, qc) => qc.all.option(original :+ "1") }, delimiter)
+            
+            case (bads, _) => throw new Exception(s"${bads.length} problem(s) with writing results: $bads")
+        }
+    }
+        
+    /** bundle of the QC pass/fail components for individual rows/records supporting traces */
+    final case class QCResult(withinRegion: Boolean, signalNoiseRatio: Boolean, denseXY: Boolean, denseZ: Boolean, inBoundsX: Boolean, inBoundsY: Boolean, inBoundsZ: Boolean):
+        final def components: Array[Boolean] = Array(withinRegion, signalNoiseRatio, denseXY, denseZ, inBoundsX, inBoundsY, inBoundsZ)
+        final def all: Boolean = components.all
+    end QCResult
 
     final case class DistanceToRegion(get: NonnegativeReal) extends AnyVal
     object DistanceToRegion:
@@ -209,134 +342,6 @@ object LabelAndFilterTracesQC:
         def y: YCoordinate = centroid.y
         def z: ZCoordinate = centroid.z
     end QCData
-
-    def workflow(
-        conf: ParserConfig, 
-        tracesFile: os.Path, 
-        maxDistFromRegion: DistanceToRegion, 
-        minSignalToNoise: SignalToNoise, 
-        maxSigmaXY: SigmaXY, 
-        maxSigmaZ: SigmaZ,
-        probeExclusions: Iterable[ProbeName], 
-        minTraceLength: NonnegativeInt, 
-        outfolder: os.Path
-        ): Unit = {
-        val delimiter = Delimiter.fromPathUnsafe(tracesFile)
-        
-        os.read.lines(tracesFile).map(delimiter.split).toList match {
-            case (Nil | (_ :: Nil)) => println("Traces file has no records, skipping QC labeling and filtering")
-            case header :: records => 
-                val maybeParse: ErrMsgsOr[Array[String] => ErrMsgsOr[QCData]] = {
-                    val maybeParseZ = buildFieldParse(conf.zPointColumn.get, safeParseDouble.andThen(_.map(ZCoordinate.apply)))(header)
-                    val maybeParseY = buildFieldParse(conf.yPointColumn.get, safeParseDouble.andThen(_.map(YCoordinate.apply)))(header)
-                    val maybeParseX = buildFieldParse(conf.xPointColumn.get, safeParseDouble.andThen(_.map(XCoordinate.apply)))(header)
-                    val maybeParseRefDist = buildFieldParse(conf.distanceToReferenceColumn, safeParseDouble.andThen(_.flatMap(NonnegativeReal.either).map(DistanceToRegion.apply)))(header)
-                    val maybeParseSignal = buildFieldParse(conf.signalColumn, safeParseDouble.andThen(_.map(Signal.apply)))(header)
-                    val maybeParseBackground = buildFieldParse(conf.backgroundColumn, safeParseDouble.andThen(_.map(Background.apply)))(header)
-                    val maybeParseSigmaXY = buildFieldParse(conf.xySigmaColumn, safeParseDouble.andThen(_.flatMap(PositiveReal.either).map(SigmaXY.apply)))(header)
-                    val maybeParseSigmaZ = buildFieldParse(conf.zSigmaColumn, safeParseDouble.andThen(_.flatMap(PositiveReal.either).map(SigmaZ.apply)))(header)
-                    val maybeParseBoxZ = buildFieldParse(conf.zBoxSizeColumn.get, safeParseInt.andThen(_.flatMap(PositiveInt.either).map(BoxSizeZ.apply)))(header)
-                    val maybeParseBoxY = buildFieldParse(conf.yBoxSizeColumn.get, safeParseInt.andThen(_.flatMap(PositiveInt.either).map(BoxSizeY.apply)))(header)
-                    val maybeParseBoxX = buildFieldParse(conf.xBoxSizeColumn.get, safeParseInt.andThen(_.flatMap(PositiveInt.either).map(BoxSizeX.apply)))(header)
-                    (maybeParseZ, maybeParseY, maybeParseX, maybeParseRefDist, maybeParseSignal, maybeParseBackground, maybeParseSigmaXY, maybeParseSigmaZ, maybeParseBoxZ, maybeParseBoxY, maybeParseBoxX).mapN(
-                        (parseZ, parseY, parseX, parseRefDist, parseSignal, parseBackground, parseSigmaXY, parseSigmaZ, parseBoxZ, parseBoxY, parseBoxX) => { (record: Array[String]) => 
-                            (record.length === header.length).either(NEL.one(s"Record has ${record.length} fields but header has ${header.length}"), ()).flatMap{
-                                    Function.const{(
-                                        parseZ(record),
-                                        parseY(record),
-                                        parseX(record),
-                                        parseRefDist(record), 
-                                        parseSignal(record), 
-                                        parseBackground(record), 
-                                        parseSigmaXY(record), 
-                                        parseSigmaZ(record), 
-                                        parseBoxZ(record), 
-                                        parseBoxY(record), 
-                                        parseBoxX(record)
-                                        ).mapN((z, y, x, refDist, a, bg, sigXY, sigZ, boxZ, boxY, boxX) => 
-                                            QCData((boxZ, boxY, boxX), Point3D(x, y, z), refDist, a, bg, sigXY, sigZ)).toEither
-                                    }
-                            }
-                        }
-                    ).toEither
-                }
-                
-                maybeParse match {
-                    case Left(errors) => throw new Exception(s"${errors.length} errors building parser: $errors")
-                    case Right(parse) => 
-                        Alternative[List].separate(NonnegativeInt.indexed(records).map{ (rec, idx) => parse(rec).bimap(
-                            idx -> _, 
-                            qcData => 
-                                val (boxZ, boxY, boxX): (BoxSizeZ, BoxSizeY, BoxSizeX) = qcData.box
-                                val (z, y, x): (ZCoordinate, YCoordinate, XCoordinate) = qcData.centroid match { case Point3D(x, y, z) => (z, y, x) }
-                                val passDist = qcData.distanceToRegion < maxDistFromRegion
-                                val passSNR = qcData.signal.get > minSignalToNoise.get * qcData.background.get
-                                val passSigmaXY = qcData.sigmaXY < maxSigmaXY
-                                val passSigmaZ = qcData.sigmaZ < maxSigmaZ
-                                val passBoxZ = qcData.sigmaZ.get < z.get && z.get <  boxZ.get - qcData.sigmaZ.get
-                                val passBoxY = qcData.sigmaXY.get < y.get && y.get <  boxY.get - qcData.sigmaXY.get
-                                val passBoxX = qcData.sigmaXY.get < x.get && x.get <  boxX.get - qcData.sigmaXY.get
-                                rec -> QCResult(
-                                    withinRegion = passDist, 
-                                    signalNoiseRatio = passSNR, 
-                                    denseXY = passSigmaXY, 
-                                    denseZ = passSigmaZ, 
-                                    inBoundsX = passBoxX, 
-                                    inBoundsY = passBoxY, 
-                                    inBoundsZ = passBoxZ
-                                    )
-                            )
-                        }) match {
-                            case (Nil, recordsWithQC) => writeResults(header, outfolder, tracesFile.baseName, delimiter)(recordsWithQC)
-                            case (badRecords, _) => throw new Exception(s"${badRecords.length} problem(s) reading records")
-                        }
-                }
-        }
-    }
-
-    def writeResults(header: Array[String], outfolder: os.Path, basename: String, delimiter: Delimiter)(records: Iterable[(Array[String], QCResult)]): Unit = {
-        require(os.isDir(outfolder), s"Output folder path isn't a directory: $outfolder")
-        val (withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol) = labelsOf[QCResult]
-        Alternative[List].separate(NonnegativeInt.indexed(records.toList).map { 
-            case ((original, qcResult), lineNum) => (header.length =!= original.length).either(original -> lineNum, original -> qcResult)
-        }) match {
-            case (Nil, unfiltered) => 
-                val qcPassCol = "qcPass"
-                
-                val getQCFlagsText = (qc: QCResult) => (qc.components :+ qc.all).map(p => if p then "1" else "0")
-                val unfilteredOutputFile = outfolder / s"${basename}.unfiltered.${delimiter.ext}"
-                val unfilteredHeader = header ++ List(withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol, qcPassCol)
-                println(s"Writing unfiltered output: $unfilteredOutputFile")
-                writeTextFile(unfilteredOutputFile, unfilteredHeader :: unfiltered.map{ case (original, qc) => original ++ getQCFlagsText(qc) }, delimiter)
-                
-                val filteredOutputFile = outfolder / s"${basename}.filtered.${delimiter.ext}"
-                val filteredHeader = header :+ qcPassCol
-                println(s"Writing filtered output: $filteredOutputFile")
-                writeTextFile(filteredOutputFile, filteredHeader :: unfiltered.flatMap{ case (original, qc) => qc.all.option(original :+ "1") }, delimiter)
-            
-            case (bads, _) => throw new Exception(s"${bads.length} problem(s) with writing results: $bads")
-        }
-    }
-    
-    def workflow(
-        confFile: os.Path, 
-        tracesFile: os.Path, 
-        maxDistFromCenter: DistanceToRegion, 
-        minSignalToNoise: SignalToNoise, 
-        maxSigmaXY: SigmaXY, 
-        maxSigmaZ: SigmaZ, 
-        probeExclusions: Iterable[ProbeName], 
-        minTraceLength: NonnegativeInt, 
-        outfolder: os.Path
-        ): Unit = {
-        println(s"Reading parser configuration file: $confFile")
-        val parserConfig = readJsonFile[ParserConfig](confFile)
-        workflow(parserConfig, tracesFile, maxDistFromCenter, minSignalToNoise, maxSigmaXY, maxSigmaZ, probeExclusions, minTraceLength, outfolder)
-    }
-    final case class QCResult(withinRegion: Boolean, signalNoiseRatio: Boolean, denseXY: Boolean, denseZ: Boolean, inBoundsX: Boolean, inBoundsY: Boolean, inBoundsZ: Boolean):
-        final def components: Array[Boolean] = Array(withinRegion, signalNoiseRatio, denseXY, denseZ, inBoundsX, inBoundsY, inBoundsZ)
-        final def all: Boolean = components.all
-    end QCResult
 
     final case class BoxSizeColumnX(get: String) extends AnyVal
     final case class BoxSizeColumnY(get: String) extends AnyVal
