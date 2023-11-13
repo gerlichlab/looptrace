@@ -1,5 +1,11 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
+import scala.util.Try
+import cats.data.ValidatedNel
+import cats.syntax.bifunctor.*
+import cats.syntax.either.*
+import cats.syntax.validated.*
+
 /** Helpers for working with the excellent uJson project */
 object UJsonHelpers:
     /** Lift floating-point to JSON number, through floating-point. */
@@ -16,3 +22,16 @@ object UJsonHelpers:
 
     /** Read given JSON file into value of target type. */
     def readJsonFile[A](jsonFile: os.Path)(using upickle.default.Reader[A]): A = upickle.default.read[A](os.read(jsonFile))
+
+    /**
+      * Try to extract an {@code A} value from JSON object, at given {@code key}.
+      *
+      * @tparam A Type of value to try to extract
+      * @param key The key at which to try to extract a value
+      * @param lift How to convert text into a value of {@code A}
+      * @param json The object from which to extract a value at given key
+      * @return Either a collection of error messages or the extracted value
+      */
+    def safeExtract[A](key: String, lift: String => A)(json: ujson.Value): ValidatedNel[String, A] = 
+            Try{ json(key).str }.toEither.bimap(_.getMessage, lift).toValidatedNel
+end UJsonHelpers

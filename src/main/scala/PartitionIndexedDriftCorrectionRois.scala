@@ -19,15 +19,13 @@ import space.CoordinateSequence
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 
 /** Split pool of detected bead ROIs into those for drift correction shift, drift correction accuracy, and unused. */
-object PartitionIndexedDriftCorrectionRois {
+object PartitionIndexedDriftCorrectionRois:
     val ProgramName = "PartitionIndexedDriftCorrectionRois"
 
     val BeadRoisPrefix = "bead_rois_"
 
     /* Type aliases */
     type RawRecord = Array[String]
-    type ErrorMessages = NEL[String]
-    type ErrMsgsOr[A] = Either[ErrorMessages, A]
     type InitFile = (PositionIndex, FrameIndex, os.Path)
     type IndexedRoi = DetectedRoi | SelectedRoi
 
@@ -43,7 +41,7 @@ object PartitionIndexedDriftCorrectionRois {
 
     def main(args: Array[String]): Unit = {
         import parserBuilder.*
-        import CliReaders.given
+        import ScoptCliReaders.given
 
         val parser = OParser.sequence(
             programName(ProgramName), 
@@ -74,7 +72,7 @@ object PartitionIndexedDriftCorrectionRois {
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
             case Some(opts) => opts.parserConfig match {
                 case None => workflow(
-                    defaultParserConfig, 
+                    ParserConfig.default, 
                     inputRoot = opts.beadRoisRoot, 
                     numShifting = opts.numShifting, 
                     numAccuracy = opts.numAccuracy, 
@@ -146,21 +144,10 @@ object PartitionIndexedDriftCorrectionRois {
     }
 
     def createParser(config: ParserConfig)(header: RawRecord): ErrMsgsOr[RawRecord => ErrMsgsOr[NonnegativeInt => DetectedRoi]] = {
-        def getRawFieldParse[A](name: String)(parse: String => Either[String, A]): ValidatedNel[String, RawRecord => ValidatedNel[String, A]] = {
-            header.indexOf(name) match {
-                case -1 => Left(f"Missing field in header: $name").toValidatedNel
-                case i => Right{ (rr: RawRecord) => Try{ rr(i) }
-                    .toEither
-                    .leftMap(_ => s"Out of bounds finding value for '$name' in record with ${rr.length} fields: $i")
-                    .flatMap(parse)
-                    .toValidatedNel
-                }.toValidatedNel
-            }
-        }
-        val maybeParseX = getRawFieldParse(config.xCol.get)(safeParseDouble.andThen(_.map(XCoordinate.apply)))
-        val maybeParseY = getRawFieldParse(config.yCol.get)(safeParseDouble.andThen(_.map(YCoordinate.apply)))
-        val maybeParseZ = getRawFieldParse(config.zCol.get)(safeParseDouble.andThen(_.map(ZCoordinate.apply)))
-        val maybeParseQC = getRawFieldParse(config.qcCol)((s: String) => Right(s.isEmpty))
+        val maybeParseX = buildFieldParse(config.xCol.get, safeParseDouble.andThen(_.map(XCoordinate.apply)))(header)
+        val maybeParseY = buildFieldParse(config.yCol.get, safeParseDouble.andThen(_.map(YCoordinate.apply)))(header)
+        val maybeParseZ = buildFieldParse(config.zCol.get, safeParseDouble.andThen(_.map(ZCoordinate.apply)))(header)
+        val maybeParseQC = buildFieldParse(config.qcCol, (s: String) => Right(s.isEmpty))(header)
         (maybeParseX, maybeParseY, maybeParseZ, maybeParseQC).mapN((x, y, z, qc) => (x, y, z, qc)).toEither.map{
             case (parseX, parseY, parseZ, parseQC) => { 
                 (record: RawRecord) => (record.length === header.length)
@@ -353,11 +340,11 @@ object PartitionIndexedDriftCorrectionRois {
             }
         }
 
+    /** Helpers for working with the parser configuration */
     object ParserConfig:
+        import UJsonHelpers.*
+
         val (xFieldName, yFieldName, zFieldName, qcFieldName, csFieldName) = labelsOf[ParserConfig]
-        
-        private def safeExtract[A](key: String, lift: String => A)(json: ujson.Value): ValidatedNel[String, A] = 
-            Try{ json(key).str }.toEither.bimap(_.getMessage, lift).toValidatedNel
         
         given jsonCodec: ReadWriter[ParserConfig] = readwriter[ujson.Value].bimap(
             pc => ujson.Obj(
@@ -376,6 +363,15 @@ object PartitionIndexedDriftCorrectionRois {
                 (xNel, yNel, zNel, qcNel, csNel).mapN(ParserConfig.apply).fold(errs => throw new ParseError(errs), identity)
             }
         )
+
+        /** A default value corresponding to what we have in looptrace Python code */
+        def default = ParserConfig(
+            XColumn("centroid-2"), 
+            YColumn("centroid-1"), 
+            ZColumn("centroid-0"), 
+            qcCol = "fail_code",
+            coordinateSequence = CoordinateSequence.Reverse  // WRITE the coordinates in (z, y, x) order to JSON.
+        )
         
         def readFile(confFile: os.Path): Either[ParseError, ParserConfig] = 
             Try{ UJsonHelpers.readJsonFile[ParserConfig](confFile) }
@@ -392,14 +388,6 @@ object PartitionIndexedDriftCorrectionRois {
     end ParserConfig
 
     /* Helper functions */
-    def defaultParserConfig = ParserConfig(
-        XColumn("centroid-2"), 
-        YColumn("centroid-1"), 
-        ZColumn("centroid-0"), 
-        qcCol = "fail_code",
-        coordinateSequence = CoordinateSequence.Reverse  // WRITE the coordinates in (z, y, x) order to JSON.
-    )
-
     def getOutputFilename(pos: PositionIndex, frame: FrameIndex, purpose: Purpose): Filename =
         Filename(s"${BeadRoisPrefix}_${pos.get}_${frame.get}.${purpose.lowercase}.json")
 
@@ -416,6 +404,5 @@ object PartitionIndexedDriftCorrectionRois {
         }).toValidatedNel
         (maybeSep, maybeHeadTail).mapN{ case (sep, (h, t)) => (sep, h, t) }
     }
-    
-    private def safeParseDouble(s: String): Either[String, Double] = Try{ s.toDouble }.toEither.leftMap(_.getMessage)
-}
+
+end PartitionIndexedDriftCorrectionRois
