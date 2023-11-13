@@ -66,8 +66,7 @@ class LooptracePipeline(pypiper.Pipeline):
             ("clean_2", run_cleanup, conf_only), 
             ("tracing", run_chromatin_tracing, conf_data_pair),
             ("spot_region_distances", apply_frame_names_and_spatial_information, conf_data_pair), 
-            ("tracing_QC", qc_label_and_filter_traces, conf_data_pair)
-            #("tracing_QC", run_tracing_qc, conf_data_pair), 
+            ("tracing_QC", qc_label_and_filter_traces, conf_data_pair),
             ("clean_3", run_cleanup, conf_only),
         )
         return [pypiper.Stage(func=fxn, f_args=fxn_args, name=name) for name, fxn, fxn_args in func_args_pairs]
