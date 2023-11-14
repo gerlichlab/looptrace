@@ -20,18 +20,18 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder) -> None:
     cmd_parts = [
         "java", 
         "-cp",
-        LOOPTRACE_JAR_PATH,
+        str(LOOPTRACE_JAR_PATH.path),
         prog_path, 
         "--tracesFile",
-        T.traces_path,
+        str(T.traces_path),
         "--maxDistanceToRegionCenter", 
-        H.config[MAX_DISTANCE_SPOT_FROM_REGION_NAME],
+        str(H.config[MAX_DISTANCE_SPOT_FROM_REGION_NAME]),
         "--minSNR",
-        H.config[SIGNAL_NOISE_RATIO_NAME],
+        str(H.config[SIGNAL_NOISE_RATIO_NAME]),
         "--maxSigmaXY",
-        H.config[SIGMA_XY_MAX_NAME],
+        str(H.config[SIGMA_XY_MAX_NAME]),
         "--maxSigmaZ",
-        H.config[SIGMA_Z_MAX_NAME],
+        str(H.config[SIGMA_Z_MAX_NAME]),
     ]
 
     exclusions_key = "illegal_frames_for_trace_support"
@@ -43,7 +43,7 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder) -> None:
     else:
         print("WARNING! No probes to exclude from trace support were provided!")
     
-    print(f"Running bead ROI partitioning: {' '.join(map(str, cmd_parts))}")
+    print(f"Running bead ROI partitioning: {' '.join(cmd_parts)}")
     subprocess.check_call(cmd_parts)
 
 
