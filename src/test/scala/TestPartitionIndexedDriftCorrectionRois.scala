@@ -41,6 +41,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.{
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.readJsonFile
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ CoordinateSequence, Point3D, XCoordinate, YCoordinate, ZCoordinate }
 import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.getOutputSubfolder
+import at.ac.oeaw.imba.gerlich.looptrace.PathHelpers.listPath
 
 /** Tests for the partitioning of regions of interest (ROIs) for drift correction */
 class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSuite, should.Matchers, PartitionRoisSuite:
@@ -536,26 +537,60 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         }
     }
 
-    test("Integration: overall behavioral properties are correct.") {
+    test("Integration: shifting <= #(usable ROIs) < shifting + accuracy ==> warnings file correctly produced; #116") {
         import SmallDataSet.*
-        
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
 
+        def genInputs = for {
+            parserConfig <- arbitrary[CoordinateSequence].map(standardParserConfig)
+            numShifting <- Gen.choose(1, maxRequestNum - 1).map(PositiveInt.unsafe)
+            numAccuracy <- Gen.choose(maxRequestNum - numShifting + 1, 10000).map(PositiveInt.unsafe)
+            maybeSubfolderName <- Gen.option(Gen.const("temporary_subfolder"))
+            pf1 <- arbitrary[(PositionIndex, FrameIndex)]
+            pf2 <- arbitrary[(PositionIndex, FrameIndex)].suchThat(_ =!= pf1)
+        } yield (parserConfig, numShifting, numAccuracy, maybeSubfolderName, pf1, pf2)
+
+        forAll (genInputs) { case (parserConfig, numShifting, numAccuracy, maybeSubfolderName, pf1, pf2) =>
+            withTempDirectory{ (tempdir: os.Path) =>
+                /* Setup the inputs. */
+                val confFile = tempdir / "parser_config.json"
+                os.write(confFile, write(parserConfig, indent = 2))
+                List(pf1 -> input1, pf2 -> input2).foreach { 
+                    case (pf, inputBundle) => 
+                        val fp = tempdir / getInputFilename.tupled(pf)
+                        os.write(fp, inputBundle.lines.mkString("\n"))
+                }
+                
+                /* Check that the workflow creates the expected warnings file. */
+                val warningsFile = tempdir / "roi_partition_warnings.json"
+                os.exists(warningsFile) shouldBe false
+                workflow(configFile = confFile, inputRoot = tempdir, numShifting = numShifting, numAccuracy = numAccuracy)
+                os.isFile(warningsFile) shouldBe true
+            }
+        }
+    }
+
+    test("Integration: golden path's overall behavioral properties are correct.") {
+        import SmallDataSet.*
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+
+        /** Generate shifting and accuracy counts that should yield no warnings and no errors. */
         def genInputs = for {
             coordseq <- arbitrary[CoordinateSequence]
             numShifting <- Gen.choose(1, maxRequestNum - 1).map(PositiveInt.unsafe)
             numAccuracy <- Gen.choose(1, maxRequestNum - numShifting).map(PositiveInt.unsafe)
             maybeSubfolderName <- Gen.option(Gen.const("temporary_subfolder"))
-        } yield (coordseq, numShifting, numAccuracy, maybeSubfolderName)
-        
-        val pf1 = PositionIndex(NonnegativeInt(2)) -> FrameIndex(NonnegativeInt(0))
-        val pf2 = PositionIndex(NonnegativeInt(1)) -> FrameIndex(NonnegativeInt(3))
+            pf1 <- arbitrary[(PositionIndex, FrameIndex)]
+            pf2 <- arbitrary[(PositionIndex, FrameIndex)].suchThat(_ =!= pf1)
+        } yield (coordseq, numShifting, numAccuracy, maybeSubfolderName, pf1, pf2)
         
         forAll (genInputs) {
-            case (coordseq, numShifting, numAccuracy, maybeSubfolderName) => 
+            case (coordseq, numShifting, numAccuracy, maybeSubfolderName, pf1, pf2) => 
                 val parserConfig = standardParserConfig(coordseq)
                 withTempDirectory{ (tempdir: os.Path) =>
-                    val confFile = tempdir / "parser_config.json"
+                    /* Setup the inputs. */
+                    val confFileName = "parser_config.json"
+                    val confFile = tempdir / confFileName
                     os.write(confFile, write(parserConfig, indent = 2))
                     val roisFolder = maybeSubfolderName.fold(tempdir)(tempdir / _)
                     os.makeDir.all(roisFolder)
@@ -565,6 +600,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                             os.write(fp, inputBundle.lines.mkString("\n"))
                             pf -> inputBundle.partition
                         }.toMap
+                    
                     workflow(configFile = confFile, inputRoot = roisFolder, numShifting = numShifting, numAccuracy = numAccuracy)
                     val shiftingOutfolder = getOutputSubfolder(roisFolder)(Purpose.Shifting)
                     val accuracyOutfolder = getOutputSubfolder(roisFolder)(Purpose.Accuracy)
@@ -608,6 +644,9 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                         val getPoint = roiFileParts(pf).getPointSafe
                         shifting.filterNot(roi => roi.centroid.some === getPoint(roi.index)) -> accuracy.filterNot(roi => roi.centroid.some === getPoint(roi.index))
                     } shouldEqual List.fill(posFramePairs.length)(List() -> List())
+
+                    // There should be no warnings, anywhere.
+                    PathHelpers.listPath(tempdir).filter(_.last === "roi_partition_warnings.json").isEmpty shouldBe true
                 }
         }
     }

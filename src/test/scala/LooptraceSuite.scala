@@ -23,9 +23,18 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
         } yield (a, b, c)
     }
 
+    given frameIndexArbitrary(using idx: Arbitrary[NonnegativeInt]): Arbitrary[FrameIndex] = idx.map(FrameIndex.apply)
+
+    given positionIndexArbitrary(using idx: Arbitrary[NonnegativeInt]): Arbitrary[PositionIndex] = idx.map(PositionIndex.apply)
+
     given roiIndexArbitrary(using idx: Arbitrary[Int]): Arbitrary[RoiIndex] = 
         Arbitrary{ Gen.choose(0, Int.MaxValue).map(RoiIndex.apply compose NonnegativeInt.unsafe) }
     
+    given coordseqArbitrary: Arbitrary[CoordinateSequence] = 
+        Arbitrary{ Gen.oneOf(CoordinateSequence.Forward, CoordinateSequence.Reverse) }
+
+    given delimiterArbitrary: Arbitrary[Delimiter] = Arbitrary{ Gen.oneOf(Delimiter.CommaSeparator, Delimiter.TabSeparator) }
+
     given xArbitrary(using num: Arbitrary[Double]): Arbitrary[XCoordinate] = num.fmap(XCoordinate.apply)
     
     given yArbitrary(using num: Arbitrary[Double]): Arbitrary[YCoordinate] = num.fmap(YCoordinate.apply)
@@ -35,8 +44,3 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
     given point3DArbitrary(using arbX: Arbitrary[Double]): Arbitrary[Point3D] = Arbitrary{
         Gen.zip(arbitrary[XCoordinate], arbitrary[YCoordinate], arbitrary[ZCoordinate]).map(Point3D.apply.tupled)
     }
-    
-    given coordseqArbitrary: Arbitrary[CoordinateSequence] = 
-        Arbitrary{ Gen.oneOf(CoordinateSequence.Forward, CoordinateSequence.Reverse) }
-
-    given delimiterArbitrary: Arbitrary[Delimiter] = Arbitrary{ Gen.oneOf(Delimiter.CommaSeparator, Delimiter.TabSeparator) }

@@ -2,7 +2,8 @@ package at.ac.oeaw.imba.gerlich
 
 import java.io.File
 import scala.util.Try
-import cats.{ Order, Show }
+import upickle.default.*
+import cats.{ Eq, Order, Show }
 import cats.data.{ NonEmptyList as NEL, ValidatedNel }
 import cats.syntax.contravariant.*
 import cats.syntax.either.*
@@ -28,6 +29,13 @@ package object looptrace {
 
     extension (p: os.Path)
         def parent: os.Path = p / os.up
+
+    extension (v: ujson.Value)
+        def int: Int = {
+            val x = v.num
+            val z = x.toInt
+            if (x === z) then z else throw new ujson.Value.InvalidData(v, "Cannot convert to integer")
+        }
 
     extension [A](arr: Array[A])
         def lookup(a: A): Option[Int] = arr.indexOf(a) match {
@@ -94,6 +102,7 @@ package object looptrace {
         def maybe(z: Int): Option[PositiveInt] = (z > 0).option{ (z: PositiveInt) }
         def unsafe(z: Int): PositiveInt = either(z).fold(msg => throw new NumberFormatException(msg), identity)
         given posIntOrder(using intOrd: Order[Int]): Order[PositiveInt] = intOrd.contramap(identity)
+        given posIntRW(using intRW: ReadWriter[Int]): ReadWriter[PositiveInt] = intRW.bimap(identity, _.int)
         extension (n: PositiveInt)
             def asNonnegative: NonnegativeInt = NonnegativeInt.unsafe(n)
     end PositiveInt
@@ -145,11 +154,15 @@ package object looptrace {
     
     final case class FrameIndex(get: NonnegativeInt) extends AnyVal
     object FrameIndex:
+        given eqForFrameIndex: Eq[FrameIndex] = Eq.fromUniversalEquals[FrameIndex]
         given showForFrameIndex: Show[FrameIndex] = Show.show(_.get.show)
+    end FrameIndex
     
     final case class PositionIndex(get: NonnegativeInt) extends AnyVal
     object PositionIndex:
+        given eqForPositionIndex: Eq[PositionIndex] = Eq.fromUniversalEquals[PositionIndex]
         given showForPositionIndex: Show[PositionIndex] = Show.show(_.get.show)
+    end PositionIndex
 
     case class ProbeName(get: String)
     object ProbeName:

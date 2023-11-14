@@ -4,6 +4,7 @@ import scala.util.Try
 import cats.data.ValidatedNel
 import cats.syntax.bifunctor.*
 import cats.syntax.either.*
+import cats.syntax.eq.*
 import cats.syntax.validated.*
 
 /** Helpers for working with the excellent uJson project */
@@ -33,5 +34,5 @@ object UJsonHelpers:
       * @return Either a collection of error messages or the extracted value
       */
     def safeExtract[A](key: String, lift: String => A)(json: ujson.Value): ValidatedNel[String, A] = 
-            Try{ json(key).str }.toEither.bimap(_.getMessage, lift).toValidatedNel
+        Try{ json(key).str }.toEither.bimap(_.getMessage, lift).toValidatedNel
 end UJsonHelpers
