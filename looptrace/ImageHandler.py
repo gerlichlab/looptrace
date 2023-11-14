@@ -112,7 +112,16 @@ class ImageHandler:
 
     @property
     def num_frames(self) -> int:
-        return len(self.frame_names)
+        n1 = self.config.get("num_frames")
+        if n1 is None: # no frame count defined, try counting names
+            return len(self.frame_names)
+        try:
+            n2 = len(self.frame_names)
+        except KeyError: # no frame names defined, use parsed count
+            return n1
+        if n1 == n2:
+            return n1
+        raise Exception(f"Declared frame count ({n1}) from config disagrees with frame name count ({n2})")
     
     @property
     def num_rounds(self) -> int:
