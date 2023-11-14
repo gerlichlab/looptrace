@@ -17,6 +17,7 @@ import scopt.OParser
 
 import space.CoordinateSequence
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
+import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 
 /** Split pool of detected bead ROIs into those for drift correction shift, drift correction accuracy, and unused. */
 object PartitionIndexedDriftCorrectionRois:
@@ -129,19 +130,34 @@ object PartitionIndexedDriftCorrectionRois:
             val problems = bads.map{ case ((p, f, _), errs) => ((p -> f) -> errs) }.toMap
             throw new Exception(s"${problems.size} (position, frame) pairs with problems.\n${problems}")
         }
-        val warnings = goods flatMap { case ((p, f, _), splitResult) => 
-            // Get the selected ROI groupings and build an optional warning.
-            val (shifting, accuracy, warnOpt) = splitResult match {
-                case RoisPartition(shifting, accuracy) => (shifting, accuracy, None)
-                case tooFew: TooFewAccuracyRois => 
-                    (tooFew.partition.shifting, tooFew.partition.accuracy, ((p, f), tooFew.problem).some)
+        val warnings: List[((PositionIndex, FrameIndex), TooFewRois)] = 
+            goods flatMap { case ((p, f, _), splitResult) => 
+                // Get the selected ROI groupings and build an optional warning.
+                val (shifting, accuracy, warnOpt) = splitResult match {
+                    case RoisPartition(shifting, accuracy) => (shifting, accuracy, None)
+                    case tooFew: TooFewAccuracyRois => 
+                        (tooFew.partition.shifting, tooFew.partition.accuracy, ((p, f), tooFew.problem).some)
+                }
+                // Write the ROIs and emit the optional warning.
+                writeRois(shifting, getOutputFilepath(outfolder)(p, f, Purpose.Shifting))
+                writeRois(accuracy, getOutputFilepath(outfolder)(p, f, Purpose.Accuracy))
+                warnOpt
             }
-            // Write the ROIs and emit the optional warning.
-            writeRois(shifting, getOutputFilepath(outfolder)(p, f, Purpose.Shifting))
-            writeRois(accuracy, getOutputFilepath(outfolder)(p, f, Purpose.Accuracy))
-            warnOpt
+        if (warnings.isEmpty) then println("No warnings from bead ROIs partition, nice!")
+        else {
+            val warningsFile = outfolder / "roi_partition_warnings.json"
+            println(s"Writing bead ROIs partition warnings file: $warningsFile")
+            os.write(warningsFile, write(warnings.map(writeWarning.tupled), indent = 2))
         }
+        println("Done!")
     }
+
+    private def writeWarning = (pf: (PositionIndex, FrameIndex), tooFew: TooFewRois) => ujson.Obj(
+        "position" -> ujson.Num(pf._1.get),
+        "frame" -> ujson.Num(pf._2.get),
+        "requested" -> ujson.Num(tooFew.requested),
+        "realized" -> ujson.Num(tooFew.realized),
+    )
 
     def createParser(config: ParserConfig)(header: RawRecord): ErrMsgsOr[RawRecord => ErrMsgsOr[NonnegativeInt => DetectedRoi]] = {
         val maybeParseX = buildFieldParse(config.xCol.get, safeParseDouble.andThen(_.map(XCoordinate.apply)))(header)
@@ -287,8 +303,8 @@ object PartitionIndexedDriftCorrectionRois:
     final case class RoisPartition(shifting: List[RoiForShifting], accuracy: List[RoiForAccuracy]) extends RoiSplitSuccess:
         final def partition = this
     
-    final case class TooFewRois(val requested: PositiveInt, val realized: Int):
-        require(requested > realized, s"Realized accuracy count ($realized) isn't less than request ($requested)")
+    final case class TooFewRois(requested: PositiveInt, realized: Int) derives ReadWriter:
+        require(requested > realized, s"Count of realized ROIs ($realized) isn't less than count of requested ($requested)")
     
     trait TooFewRoisLike[A]:
         def getTooFew: A => TooFewRois
@@ -342,8 +358,6 @@ object PartitionIndexedDriftCorrectionRois:
 
     /** Helpers for working with the parser configuration */
     object ParserConfig:
-        import UJsonHelpers.*
-
         val (xFieldName, yFieldName, zFieldName, qcFieldName, csFieldName) = labelsOf[ParserConfig]
         
         given jsonCodec: ReadWriter[ParserConfig] = readwriter[ujson.Value].bimap(
