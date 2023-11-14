@@ -18,7 +18,7 @@ def workflow(
     output_folder: Union[None, Path, ExtantFolder] = None,
     ):
     H = handler_from_cli(config_file=config_file, images_folder=images_folder)
-    prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.PartitionDriftCorrectionRois"
+    prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.PartitionIndexedDriftCorrectionRois"
     num_del = H.num_bead_rois_for_drift_correction
     num_acc = H.num_bead_rois_for_drift_correction_accuracy
     output_folder = output_folder or H.bead_rois_path
