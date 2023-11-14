@@ -27,18 +27,18 @@ def workflow(
     cmd_parts = [
         "java", 
         "-cp",
-        LOOPTRACE_JAR_PATH,
+        str(LOOPTRACE_JAR_PATH.path),
         prog_path, 
         "--beadRoisRoot",
-        H.bead_rois_path, 
+        str(H.bead_rois_path), 
         "--numShifting", 
-        num_del,
+        str(num_del),
         "--numAccuracy",
-        num_acc,
+        str(num_acc),
         "--outputFolder",
-        output_folder,
+        str(output_folder),
     ]
-    print(f"Running bead ROI partitioning: {' '.join(map(str, cmd_parts))}")
+    print(f"Running bead ROI partitioning: {' '.join(cmd_parts)}")
     subprocess.check_call(cmd_parts)
 
 
