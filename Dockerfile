@@ -15,7 +15,7 @@ RUN apt-get update -y && \
     update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 60 --slave /usr/bin/g++ g++ /usr/bin/g++-9 && \
     update-alternatives --config gcc && \
     apt-get install git wget libz-dev libbz2-dev liblzma-dev -y && \
-    apt-get install cuda-compat-11-4=470.199.02-1 -y && \
+    apt-get install cuda-compat-11-4 -y && \
     apt-get install r-base -y && \
     R -e "install.packages(c('argparse', 'data.table', 'ggplot2', 'reshape2', 'stringi'), dependencies=TRUE, repos='http://cran.rstudio.com/')" && \
     apt-get install vim -y
