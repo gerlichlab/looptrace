@@ -168,8 +168,8 @@ def multipos_nd2_to_dask(folder: str):
     out = []
     #print(image_folders)
     for image in tqdm.tqdm(image_files):
-        arr = nd2.ND2File(image, validate_frames = False).to_dask()
-        out.append(arr)
+        with nd2.ND2File(image, validate_frames = False) as imgdat:
+            out.append(imgdat.to_dask())
     out = da.stack(out)
     out = da.moveaxis(out, 2, 3)
     out = da.moveaxis(out, 0, 1)
@@ -196,20 +196,21 @@ def stack_nd2_to_dask(folder: str, position_id: int = None):
     image_points = sorted(list(set([re.findall('.+(Point\d+)', s)[0] for s in image_files])))
     pos_names = ["P"+str(i+1).zfill(4) for i in range(len(image_points))]
 
-    sample = nd2.ND2File(image_files[0])
     metadata = {}
-    metadata['voxel_size'] = [sample.voxel_size().z, sample.voxel_size().y, sample.voxel_size().x]
-    metadata['microscope'] = {
-                'objectiveMagnification': sample.metadata.channels[0].microscope.objectiveMagnification,
-                'objectiveName': sample.metadata.channels[0].microscope.objectiveMagnification,
-                'objectiveNumericalAperture':sample.metadata.channels[0].microscope.objectiveNumericalAperture,
-                'zoomMagnification': sample.metadata.channels[0].microscope.zoomMagnification,
-                'immersionRefractiveIndex': sample.metadata.channels[0].microscope.immersionRefractiveIndex,
-                'modalityFlags': sample.metadata.channels[0].microscope.modalityFlags}
-    for channel in sample.metadata.channels:
-        metadata['channel_'+str(channel.channel.index)] = {'name': channel.channel.name,
-                                'emissionLambdaNm': channel.channel.emissionLambdaNm,
-                                'excitationLambdaNm': channel.channel.excitationLambdaNm}
+    
+    with nd2.ND2File(image_files[0]) as sample:
+        metadata['voxel_size'] = [sample.voxel_size().z, sample.voxel_size().y, sample.voxel_size().x]
+        metadata['microscope'] = {
+                    'objectiveMagnification': sample.metadata.channels[0].microscope.objectiveMagnification,
+                    'objectiveName': sample.metadata.channels[0].microscope.objectiveMagnification,
+                    'objectiveNumericalAperture':sample.metadata.channels[0].microscope.objectiveNumericalAperture,
+                    'zoomMagnification': sample.metadata.channels[0].microscope.zoomMagnification,
+                    'immersionRefractiveIndex': sample.metadata.channels[0].microscope.immersionRefractiveIndex,
+                    'modalityFlags': sample.metadata.channels[0].microscope.modalityFlags}
+        for channel in sample.metadata.channels:
+            metadata['channel_'+str(channel.channel.index)] = {'name': channel.channel.name,
+                                    'emissionLambdaNm': channel.channel.emissionLambdaNm,
+                                    'excitationLambdaNm': channel.channel.excitationLambdaNm}
 
     #print(image_folders)
     pos_stack = []
@@ -221,9 +222,10 @@ def stack_nd2_to_dask(folder: str, position_id: int = None):
         for t in image_times:
             path = list(filter(lambda s: (p in s) and (t in s), image_files))[0]
             try:
-                arr = nd2.ND2File(path, validate_frames = False).to_dask()
-            except OSError:
-                print('File issue:', path)
+                with nd2.ND2File(path, validate_frames = False) as imgdat:
+                    arr = imgdat.to_dask()
+            except OSError as e:
+                print(f'Issue with ND2 file ({path}): {e}')
                 arr = da.zeros_like(pos_stack[0][0])
             t_stack.append(arr)
         pos_stack.append(da.stack(t_stack))
