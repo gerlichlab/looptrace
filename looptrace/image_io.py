@@ -378,24 +378,32 @@ def create_zarr_store(  path: str,
                         shape:tuple, 
                         dtype:str,  
                         chunks:tuple,   
-                        metadata:dict = None):
-    
+                        metadata:dict = None,
+                        voxel_size: list = [1,1,1]):
     from numcodecs import Blosc
 
-    store = zarr.DirectoryStore(path+os.sep+pos_name)
+    store = zarr.NestedDirectoryStore(path+os.sep+pos_name)
     root = zarr.group(store=store, overwrite=True)
 
-    root.attrs['multiscale'] = {'multiscales': [{'version': '0.3', 
-                                                    'name': name+'_'+pos_name+'.zarr', 
-                                                    'datasets': [{'path': '0'}],
-                                                    'axes': ['t','c','z','y','x']}]}
-    if metadata:
+    root.attrs['multiscales'] = [{'version': '0.4', 
+                                    'name': name+'_'+pos_name, 
+                                    'datasets': [{'path': '0',                     
+                                                    "coordinateTransformations": [{"type": "scale",
+                                                                                    "scale": [1.0, 1.0]+voxel_size}]},],
+                                    "axes": [
+                                        {"name": "t", "type": "time", "unit": "minute"},
+                                        {"name": "c", "type": "channel"},
+                                        {"name": "z", "type": "space", "unit": "micrometer"},
+                                        {"name": "y", "type": "space", "unit": "micrometer"},
+                                        {"name": "x", "type": "space", "unit": "micrometer"}],}]
+    if metadata is not None:
         root.attrs['metadata'] = metadata
 
     compressor = Blosc(cname='zstd', clevel=5, shuffle=Blosc.BITSHUFFLE)
 
     level_store = root.create_dataset(name = str(0), compressor=compressor, shape=shape, chunks=chunks, dtype=dtype)
     return level_store
+
 
 def zip_folder(folder, out_file, compression = zipfile.ZIP_STORED, remove_folder=False, retry_if_fails: bool = True) -> str:
     #Zips the contents of a folder and stores as filename in same dir as folder.
