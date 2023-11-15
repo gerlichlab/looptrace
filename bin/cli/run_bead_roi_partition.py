@@ -41,6 +41,7 @@ def workflow(
     ]
     if H.config.get("tolerate_too_few_rois", False):
         cmd_parts.extend([
+            "--optimisationTestingMode",
             "--referenceFrame", 
             str(Drifter(H).reference_frame),
         ])
