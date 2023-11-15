@@ -31,14 +31,8 @@ class Deconvolver:
     def __init__(self, image_handler, array_id = None):
         self.image_handler = image_handler
         self.config = image_handler.config
-        try:
-            self.pos_list = self.image_handler.image_lists[self.input_name]
-        except KeyError as e:
-            raise MissingInputException(f"Deconvolution stage is missing input images: {self.input_name}") from e
-
-        if array_id is not None:
-            self.pos_list = [self.pos_list[int(array_id)]]
-
+        self.array_id = array_id
+    
     @property
     def bead_roi_size(self) -> int:
         try:
@@ -83,6 +77,14 @@ class Deconvolver:
     def point_spread_function_strategy(self) -> Optional[PointSpreadFunctionStrategy]:
         raw_spec = self.config.get('decon_psf')
         return None if raw_spec is None else PointSpreadFunctionStrategy.from_string(raw_spec)
+
+    @property
+    def pos_list(self):
+        try:
+            ret = self.image_handler.image_lists[self.input_name]
+        except KeyError as e:
+            raise MissingInputException(f"Deconvolution stage is missing input images: {self.input_name}") from e
+        return ret if self.array_id is None else [ret[int(self.array_id)]]
 
     @property
     def position_indices(self) -> Iterable[int]:
