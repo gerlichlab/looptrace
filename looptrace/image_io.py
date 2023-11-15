@@ -372,24 +372,24 @@ def images_to_ome_zarr(images: np.ndarray or list,
 
     print('OME ZARR images generated.')
 
-def create_zarr_store(  path: str,
+def create_zarr_store(  path: Union[str, Path],
                         name: str, 
                         pos_name: str,
-                        shape:tuple, 
-                        dtype:str,  
-                        chunks:tuple,   
-                        metadata:dict = None,
-                        voxel_size: list = [1,1,1]):
+                        shape: tuple, 
+                        dtype: str,  
+                        chunks: tuple,   
+                        metadata: Optional[dict] = None,
+                        voxel_size: list = [1, 1, 1]):
     from numcodecs import Blosc
 
-    store = zarr.NestedDirectoryStore(path+os.sep+pos_name)
+    store = zarr.NestedDirectoryStore(os.path.join(path, pos_name))
     root = zarr.group(store=store, overwrite=True)
 
     root.attrs['multiscales'] = [{'version': '0.4', 
-                                    'name': name+'_'+pos_name, 
+                                    'name': name + '_' + pos_name, 
                                     'datasets': [{'path': '0',                     
                                                     "coordinateTransformations": [{"type": "scale",
-                                                                                    "scale": [1.0, 1.0]+voxel_size}]},],
+                                                                                    "scale": [1.0, 1.0] + voxel_size}]},],
                                     "axes": [
                                         {"name": "t", "type": "time", "unit": "minute"},
                                         {"name": "c", "type": "channel"},
@@ -401,7 +401,7 @@ def create_zarr_store(  path: str,
 
     compressor = Blosc(cname='zstd', clevel=5, shuffle=Blosc.BITSHUFFLE)
 
-    level_store = root.create_dataset(name = str(0), compressor=compressor, shape=shape, chunks=chunks, dtype=dtype)
+    level_store = root.create_dataset(name=str(0), compressor=compressor, shape=shape, chunks=chunks, dtype=dtype)
     return level_store
 
 
