@@ -31,12 +31,13 @@ object PartitionIndexedDriftCorrectionRois:
     type IndexedRoi = DetectedRoi | SelectedRoi
 
     final case class CliConfig(
-        beadRoisRoot: os.Path = null,
-        numShifting: PositiveInt = PositiveInt(1),
-        numAccuracy: PositiveInt = PositiveInt(1),
+        beadRoisRoot: os.Path = null, // bogus, unconditionally required
+        numShifting: PositiveInt = PositiveInt(1), // bogus, unconditionally required
+        numAccuracy: PositiveInt = PositiveInt(1), // bogus, unconditionally required
         parserConfig: Option[os.Path] = None,
         outputFolder: Option[os.Path] = None, 
-        optimisationTestingMode: Boolean = false
+        optimisationTestingMode: Boolean = false, 
+        referenceFrame: FrameIndex = FrameIndex(NonnegativeInt(Int.MaxValue)) // bogus, conditionally required
     )
 
     val parserBuilder = OParser.builder[CliConfig]
@@ -71,6 +72,11 @@ object PartitionIndexedDriftCorrectionRois:
             opt[Unit]("optimisationTestingMode")
                 .action((_, c) => c.copy(optimisationTestingMode = true))
                 .text("Indicate that program's being run in optimisation R&D / testing mode, so tolerate insufficient ROIs")
+                .children(
+                    opt[NonnegativeInt]("referenceFrame")
+                        .action((n, c) => c.copy(referenceFrame = FrameIndex(n)))
+                        .text("0-based index of the frame/timepoint to be used as reference for drift correction")
+                )
         )
 
         OParser.parse(parser, args, CliConfig()) match {
@@ -83,7 +89,7 @@ object PartitionIndexedDriftCorrectionRois:
                     numShifting = opts.numShifting, 
                     numAccuracy = opts.numAccuracy, 
                     outputFolder = opts.outputFolder, 
-                    tolerateTooFew = opts.optimisationTestingMode
+                    referenceFrame = opts.optimisationTestingMode.option(opts.referenceFrame)
                     )
             }
         }
@@ -91,10 +97,10 @@ object PartitionIndexedDriftCorrectionRois:
 
     /* Business logic */
     def workflow(configFile: os.Path, inputRoot: os.Path, numShifting: PositiveInt, numAccuracy: PositiveInt): Unit = 
-        workflow(configFile, inputRoot, numShifting, numAccuracy, None, false)
+        workflow(configFile, inputRoot, numShifting, numAccuracy, None, None)
     
     def workflow(configFile: os.Path, inputRoot: os.Path, numShifting: PositiveInt, numAccuracy: PositiveInt, outputFolder: os.Path): Unit = 
-        workflow(configFile, inputRoot, numShifting, numAccuracy, outputFolder.some, false)
+        workflow(configFile, inputRoot, numShifting, numAccuracy, outputFolder.some, None)
     
     def workflow(
         conf: os.Path | ParserConfig, 
@@ -102,7 +108,7 @@ object PartitionIndexedDriftCorrectionRois:
         numShifting: PositiveInt, 
         numAccuracy: PositiveInt, 
         outputFolder: Option[os.Path], 
-        tolerateTooFew: Boolean
+        referenceFrame: Option[FrameIndex]
         ): Unit = {
         val parserConfig = conf match {
             case pc: ParserConfig => pc
@@ -133,16 +139,29 @@ object PartitionIndexedDriftCorrectionRois:
                 }
             )
         if (bads.nonEmpty) {
-            val problems = bads.map{ case ((p, f, _), errs) => ((p -> f) -> errs) }.toMap
-            throw new Exception(s"${problems.size} (position, frame) pairs with problems.\n${problems}")
+            /* Check if we can tolerate (implicitly, by provision of reference frame) cases of too few ROIs.
+             * If so, AND we have no parser errors (just too-few-ROI errors), AND none of the errors concerns 
+             * the frame/timepoint designated as the reference, simply emit a warnings file rather than 
+             * fatally crashing with an exception.
+             */
+            (referenceFrame, Alternative[List].separate(bads.map{ // Partition the list of problems by type of error.
+                case kv@(_, _: RoisFileParseError) => kv.asLeft
+                case ((p, f, _), e: TooFewShiftingRois) => ((p, f), e).asRight
+            })) match {
+                case (Some(refFrame), (Nil, tooFewErrors)) if ( ! tooFewErrors.exists(_._1._2 === refFrame) ) => 
+                    val warningsFile = outfolder / "roi_partition_warnings.severe.json"
+                    println(s"Writing severe warnings file: $warningsFile")
+                    os.write(warningsFile, write(tooFewErrors.map(writeTooFewRois[TooFewShiftingRois].tupled), indent = 2))
+                case _ => throw new Exception(s"${bads.size} (position, frame) pairs with problems.\n${bads}")
+            }
         }
-        val warnings: List[((PositionIndex, FrameIndex), TooFewRois)] = 
+        val warnings: List[((PositionIndex, FrameIndex), TooFewAccuracyRois)] = 
             goods flatMap { case ((p, f, _), splitResult) => 
                 // Get the selected ROI groupings and build an optional warning.
                 val (shifting, accuracy, warnOpt) = splitResult match {
                     case RoisPartition(shifting, accuracy) => (shifting, accuracy, None)
                     case tooFew: TooFewAccuracyRois => 
-                        (tooFew.partition.shifting, tooFew.partition.accuracy, ((p, f), tooFew.problem).some)
+                        (tooFew.partition.shifting, tooFew.partition.accuracy, ((p, f), tooFew).some)
                 }
                 // Write the ROIs and emit the optional warning.
                 writeRois(shifting, getOutputFilepath(outfolder)(p, f, Purpose.Shifting))
@@ -153,18 +172,21 @@ object PartitionIndexedDriftCorrectionRois:
         else {
             val warningsFile = outfolder / "roi_partition_warnings.json"
             println(s"Writing bead ROIs partition warnings file: $warningsFile")
-            os.write(warningsFile, write(warnings.map(writeTooFewRois.tupled), indent = 2))
+            os.write(warningsFile, write(warnings.map(writeTooFewRois[TooFewAccuracyRois].tupled), indent = 2))
         }
         println("Done!")
     }
 
-    private def writeTooFewRois = (pf: (PositionIndex, FrameIndex), tooFew: TooFewRois) => ujson.Obj(
-        "position" -> ujson.Num(pf._1.get),
-        "frame" -> ujson.Num(pf._2.get),
-        "requested" -> ujson.Num(tooFew.requested),
-        "realized" -> ujson.Num(tooFew.realized),
-        "purpose" -> ujson.Str(tooFew.purpose.toString)
-    )
+    private def writeTooFewRois[E : TooFewRoisLike] = (pf: (PositionIndex, FrameIndex), error: E) => {
+        val tooFew = error.problem
+        ujson.Obj(
+            "position" -> ujson.Num(pf._1.get),
+            "frame" -> ujson.Num(pf._2.get),
+            "requested" -> ujson.Num(tooFew.requested),
+            "realized" -> ujson.Num(tooFew.realized),
+            "purpose" -> ujson.Str(tooFew.purpose.toString)
+            )
+    }
 
     def createParser(config: ParserConfig)(header: RawRecord): ErrMsgsOr[RawRecord => ErrMsgsOr[NonnegativeInt => DetectedRoi]] = {
         val maybeParseX = buildFieldParse(config.xCol.get, safeParseDouble.andThen(_.map(XCoordinate.apply)))(header)

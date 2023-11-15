@@ -7,6 +7,7 @@ from typing import *
 
 from gertils import ExtantFile, ExtantFolder
 from looptrace import LOOPTRACE_JAR_PATH, LOOPTRACE_JAVA_PACKAGE
+from looptrace.Drifter import Drifter
 from looptrace.ImageHandler import handler_from_cli
 
 __author__ = "Vince Reuter"
@@ -38,6 +39,11 @@ def workflow(
         "--outputFolder",
         str(output_folder),
     ]
+    if H.config.get("tolerate_too_few_rois", False):
+        cmd_parts.extend([
+            "--referenceFrame", 
+            str(Drifter(H).reference_frame),
+        ])
     print(f"Running bead ROI partitioning: {' '.join(cmd_parts)}")
     subprocess.check_call(cmd_parts)
 
