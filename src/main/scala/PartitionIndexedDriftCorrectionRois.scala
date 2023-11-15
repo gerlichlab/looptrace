@@ -147,16 +147,17 @@ object PartitionIndexedDriftCorrectionRois:
         else {
             val warningsFile = outfolder / "roi_partition_warnings.json"
             println(s"Writing bead ROIs partition warnings file: $warningsFile")
-            os.write(warningsFile, write(warnings.map(writeWarning.tupled), indent = 2))
+            os.write(warningsFile, write(warnings.map(writeTooFewRois.tupled), indent = 2))
         }
         println("Done!")
     }
 
-    private def writeWarning = (pf: (PositionIndex, FrameIndex), tooFew: TooFewRois) => ujson.Obj(
+    private def writeTooFewRois = (pf: (PositionIndex, FrameIndex), tooFew: TooFewRois) => ujson.Obj(
         "position" -> ujson.Num(pf._1.get),
         "frame" -> ujson.Num(pf._2.get),
         "requested" -> ujson.Num(tooFew.requested),
         "realized" -> ujson.Num(tooFew.realized),
+        "purpose" -> ujson.Str(tooFew.purpose.toString)
     )
 
     def createParser(config: ParserConfig)(header: RawRecord): ErrMsgsOr[RawRecord => ErrMsgsOr[NonnegativeInt => DetectedRoi]] = {
@@ -293,17 +294,17 @@ object PartitionIndexedDriftCorrectionRois:
     final case class TooFewShiftingRois(requested: PositiveInt, realized: NonnegativeInt) extends RoisSplitResult
     object TooFewShiftingRois:
         given TooFewForShifting: TooFewRoisLike[TooFewShiftingRois] with
-            def getTooFew = { case TooFewShiftingRois(requested, realized) => TooFewRois(requested, realized) }
+            def getTooFew = { case TooFewShiftingRois(requested, realized) => TooFewRois(requested, realized, Purpose.Shifting) }
     
     final case class TooFewAccuracyRois(partition: RoisPartition, requested: PositiveInt, realized: Int) extends RoiSplitSuccess
     object TooFewAccuracyRois:
         given TooFewForAccuracy: TooFewRoisLike[TooFewAccuracyRois] with
-            def getTooFew = { case TooFewAccuracyRois(_, requested, realized) => TooFewRois(requested, realized) }
+            def getTooFew = { case TooFewAccuracyRois(_, requested, realized) => TooFewRois(requested, realized, Purpose.Accuracy) }
     
     final case class RoisPartition(shifting: List[RoiForShifting], accuracy: List[RoiForAccuracy]) extends RoiSplitSuccess:
         final def partition = this
     
-    final case class TooFewRois(requested: PositiveInt, realized: Int) derives ReadWriter:
+    final case class TooFewRois(requested: PositiveInt, realized: Int, purpose: Purpose) derives ReadWriter:
         require(requested > realized, s"Count of realized ROIs ($realized) isn't less than count of requested ($requested)")
     
     trait TooFewRoisLike[A]:
@@ -340,7 +341,7 @@ object PartitionIndexedDriftCorrectionRois:
         def apply(index: NonnegativeInt, record: RawRecord, problems: ErrorMessages) = new BadRecord(index, record.toList, problems)
 
     /** How the ROIs will be used w.r.t. drift correction (either actual shift, or accuracy assessment) */
-    enum Purpose:
+    enum Purpose derives ReadWriter:
         case Shifting, Accuracy
         def lowercase = this.toString.toLowerCase
     
