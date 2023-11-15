@@ -1,5 +1,12 @@
 # `looptrace` development
 
+## Building with Docker
+1. Clone the repo: `git clone ... && cd looptrace`
+1. Checkout the appropriate commit: `git checkout ...`
+1. Start Nix shell: `nix-shell`
+1. Build the JAR: `sbt assembly`
+1. Create (and tag!) new image: `docker build -t looptrace:<new-tag> .`
+
 ## Running tests
 This project mixes a few languages, and there are tests exist in Python and in Scala.
 
