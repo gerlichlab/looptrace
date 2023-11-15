@@ -90,9 +90,9 @@ object LabelAndFilterTracesQC:
         def default = ParserConfig(
             xySigmaColumn = "sigma_xy", 
             zSigmaColumn = "sigma_z", 
-            zPointColumn = PointColumnZ("z_px"),
-            yPointColumn = PointColumnY("y_px"),
-            xPointColumn = PointColumnX("x_px"),
+            zPointColumn = PointColumnZ("z"),
+            yPointColumn = PointColumnY("y"),
+            xPointColumn = PointColumnX("x"),
             zBoxSizeColumn = BoxSizeColumnZ("spot_box_z"), 
             yBoxSizeColumn = BoxSizeColumnY("spot_box_y"), 
             xBoxSizeColumn = BoxSizeColumnX("spot_box_x"), 
