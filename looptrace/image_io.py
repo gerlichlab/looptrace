@@ -280,31 +280,6 @@ def stack_tif_to_dask(folder: str):
     #pos_names = #["P"+str(i+1).zfill(4) for i in image_points]
     return out, image_points
 
-def multifolder_nd2_to_dask(folder: str):
-    '''Wrapper function to read multiple subfolders each with nd2 stacks (should have equal positions, but different times)
-    Assumes folder should be stacked along T-axis.
-
-    Args:
-        folder (str): Input folder path
-
-    Returns:
-        list: list of dask arrays of the images
-        list: list of position names
-    '''
-
-
-    import nd2
-    image_folders = sorted([p.path for p in os.scandir(folder) if os.path.isdir(p) and not ignore_path(p)])
-    out = []
-    print(image_folders)
-    for folder in image_folders:
-        out.append(stack_nd2_to_dask(folder))
-    out = da.concatenate(out, axis=1)
-    
-    pos_names = ["P"+str(i+1).zfill(4) for i in range(out.shape[0])]
-    print('Loaded nd2 arrays of shape ', out.shape)
-    print('Positions: ', pos_names)
-    return out, pos_names
 
 def single_position_to_zarr(images: np.ndarray or list, 
                             path: str,
