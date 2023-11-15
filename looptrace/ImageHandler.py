@@ -237,7 +237,9 @@ def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[
             sample_ext = list(exts)[0]
             if sample_ext == '.nd2':
                 from .image_io import stack_nd2_to_dask
-                parse = stack_nd2_to_dask
+                def parse(p):
+                    arrays, pos_names, _ = stack_nd2_to_dask(p)
+                    return arrays, pos_names
             elif sample_ext in TIFF_EXTENSIONS:
                 from .image_io import stack_tif_to_dask
                 parse = stack_tif_to_dask
