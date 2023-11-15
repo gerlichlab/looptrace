@@ -328,7 +328,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
             if (reqShifting > numUsable) TooFewShiftingRois(reqShifting, numUsable)
             else if (reqShifting + reqAccuracy > numUsable) {
                 val expAccRealized = NonnegativeInt.unsafe(numUsable - reqShifting) // guaranteed safe by falsehood of (del > numUsable)
-                TooFewRois(reqAccuracy, expAccRealized)
+                TooFewRois(reqAccuracy, expAccRealized, Purpose.Accuracy)
             }
             else { throw new IllegalArgumentException(s"Sample size is NOT in excess of usable count: ${reqShifting + reqAccuracy} <= ${numUsable}") }
         }
