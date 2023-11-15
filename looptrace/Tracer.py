@@ -22,7 +22,10 @@ from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
 from looptrace.numeric_types import NumberLike
 
 
-IMG_SIDE_LEN_COLS = ["spot_box_z", "spot_box_y", "spot_box_x"]
+BOX_Z_COL = "spot_box_z"
+BOX_Y_COL = "spot_box_y"
+BOX_X_COL = "spot_box_x"
+IMG_SIDE_LEN_COLS = [BOX_Z_COL, BOX_Y_COL, BOX_X_COL]
 ROI_FIT_COLUMNS = ["BG", "A", "z_px", "y_px", "x_px", "sigma_z", "sigma_xy"]
 MASK_FITS_ERROR_MESSAGE = "Masking fits for tracing currently isn't supported!"
 
@@ -260,7 +263,12 @@ def find_trace_fits(
             delayed(trace_single_roi)(fit_func_spec=ff_spec, roi_img=spot_img) 
             for ff_spec, spot_img in _iter_fit_args(fit_func_spec=fit_func_spec, images=images, bg_spec=background_specification)
             )
-    return pd.DataFrame(fits, columns=ROI_FIT_COLUMNS + IMG_SIDE_LEN_COLS)
+    
+    full_cols = ROI_FIT_COLUMNS + IMG_SIDE_LEN_COLS
+    bads = [(i, row) for i, row in enumerate(fits) if len(row) != len(full_cols)]
+    if bads:
+        raise Exception(f"{len(bads)} row(s) with field count different than column count ({len(full_cols)} == len({full_cols}))")
+    return pd.DataFrame(fits, columns=full_cols)
 
 
 def trace_single_roi(
@@ -291,7 +299,8 @@ def trace_single_roi(
     Returns
     -------
     np.ndarray
-        Array-/vector-Like of values representing the optimised parameter values of the function to fit
+        Array-/vector-Like of values representing the optimised parameter values of the function to fit, 
+        and the lengths of the box defining the ROI (z, y, x)
     """
     try:
         len_z, len_y, len_x = roi_img.shape
@@ -305,11 +314,8 @@ def trace_single_roi(
     if not np.any(roi_img) or any(d < 3 for d in roi_img.shape): # Check if empty or too small for fitting.
         fit = np.array([-1] * len(ROI_FIT_COLUMNS))
     else:
-        if mask is None:
-            center = 'max'
-        else:
-            roi_img_masked = roi_img * (mask / np.max(mask))**2
-            center = list(np.unravel_index(np.argmax(roi_img_masked, axis=None), roi_img.shape))
+        center = 'max' if mask is None \
+            else list(np.unravel_index(np.argmax(roi_img * (mask/np.max(mask))**2, axis=None), roi_img.shape))
         fit = fit_func_spec.function(roi_img, sigma=1, center=center)[0]
     return fit + [len_z, len_y, len_x]
 
@@ -324,6 +330,9 @@ def apply_fine_scale_drift_correction(traces: pd.DataFrame) -> pd.DataFrame:
 
 def apply_pixels_to_nanometers(traces: pd.DataFrame, z_nm_per_px: float, xy_nm_per_px: float) -> pd.DataFrame:
     """Add columns for distance in nanometers, based on pixel-to-nanometer conversions."""
+    traces[BOX_Z_COL] = traces[BOX_Z_COL] * z_nm_per_px
+    traces[BOX_Y_COL] = traces[BOX_Y_COL] * xy_nm_per_px
+    traces[BOX_X_COL] = traces[BOX_X_COL] * xy_nm_per_px
     traces['z'] = traces['z_px_dc'] * z_nm_per_px
     traces['y'] = traces['y_px_dc'] * xy_nm_per_px
     traces['x'] = traces['x_px_dc'] * xy_nm_per_px
