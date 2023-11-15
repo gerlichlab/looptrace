@@ -177,55 +177,62 @@ def multipos_nd2_to_dask(folder: str):
     return out
 
 
-def stack_nd2_to_dask(
-    folder: Union[str, Path], 
-    position_id: Optional[int] = None, 
-    handle_error: Callable[["ImageParseException"], None] = lambda e: print(f"WARNING: {e}")
-) -> Tuple[List[Any], List[str]]:
+def stack_nd2_to_dask(folder: str, position_id: int = None):
     '''The function takes a folder path and returns a list of dask arrays and a 
     list of image folders by reading multiple nd2 images where each represents a 3D stack (split by position and time) in a single folder.
+    Extracts some useful metadata from the first file in the folder.
+    Args:
+        folder (str): Input folder path
 
     Returns:
         list: list of dask arrays of the images
+        list: names of positions
+        dict: metadata dictionary
     '''
 
     import nd2
-
-    image_files = sorted([p.path for p in os.scandir(folder) if (p.name.endswith('.nd2') and not ignore_path(p))])
+    image_files = sorted([p.path for p in os.scandir(folder) if (p.name.endswith('.nd2') and not p.name.startswith('_'))])
     image_times = sorted(list(set([re.findall('.+(Time\d+)', s)[0] for s in image_files])))
     image_points = sorted(list(set([re.findall('.+(Point\d+)', s)[0] for s in image_files])))
+    pos_names = ["P"+str(i+1).zfill(4) for i in range(len(image_points))]
+
+    sample = nd2.ND2File(image_files[0])
+    metadata = {}
+    metadata['voxel_size'] = [sample.voxel_size().z, sample.voxel_size().y, sample.voxel_size().x]
+    metadata['microscope'] = {
+                'objectiveMagnification': sample.metadata.channels[0].microscope.objectiveMagnification,
+                'objectiveName': sample.metadata.channels[0].microscope.objectiveMagnification,
+                'objectiveNumericalAperture':sample.metadata.channels[0].microscope.objectiveNumericalAperture,
+                'zoomMagnification': sample.metadata.channels[0].microscope.zoomMagnification,
+                'immersionRefractiveIndex': sample.metadata.channels[0].microscope.immersionRefractiveIndex,
+                'modalityFlags': sample.metadata.channels[0].microscope.modalityFlags}
+    for channel in sample.metadata.channels:
+        metadata['channel_'+str(channel.channel.index)] = {'name': channel.channel.name,
+                                'emissionLambdaNm': channel.channel.emissionLambdaNm,
+                                'excitationLambdaNm': channel.channel.excitationLambdaNm}
+
+    #print(image_folders)
+    pos_stack = []
     if position_id is not None:
         image_points = [image_points[position_id]]
-    
-    pos_stack = []
-    errors = {}
-    arr = None
+        pos_names = [pos_names[position_id]]
     for p in tqdm.tqdm(image_points):
         t_stack = []
         for t in image_times:
-            # TODO: need to check exactly 1 matching path here.
             path = list(filter(lambda s: (p in s) and (t in s), image_files))[0]
-            print(f"Reading: {path}")
             try:
-                with nd2.ND2File(path, validate_frames = False) as imgdat:
-                    arr = imgdat.to_dask()
-            except OSError as e:
-                print(f"Error reading file {path}: {e}")
-                print(f"Adding a zeros-like array for ({p}, {t})")
-                errors[path] = e
-                # TODO: handle case where error is before any path has succeeded.
-                arr = da.zeros_like(arr)
+                arr = nd2.ND2File(path, validate_frames = False).to_dask()
+            except OSError:
+                print('File issue:', path)
+                arr = da.zeros_like(pos_stack[0][0])
             t_stack.append(arr)
         pos_stack.append(da.stack(t_stack))
-    
-    if errors:
-        handle_error(ImageParseException(errors))
     
     out = da.stack(pos_stack)
     out = da.moveaxis(out, 2, 3)
     print('Loaded nd2 arrays of shape ', out.shape)
-    pos_names = ["P"+str(i+1).zfill(4) for i in range(out.shape[0])]
-    return out, pos_names
+    
+    return out, pos_names, metadata
 
 
 def stack_tif_to_dask(folder: str):
