@@ -51,7 +51,7 @@ def one_to_one(config_file: ExtantFile, images_folder: ExtantFolder):
     for input_folder_name, output_folder_name in H.zarr_conversions.items():
         infolder = images_folder.path / input_folder_name
         outfolder = images_folder.path / output_folder_name
-        assert not outfolder.exists, f"Output folder for ZARR conversion already exists: {outfolder}"
+        assert not outfolder.exists(), f"Output folder for ZARR conversion already exists: {outfolder}"
         num_fov = len(H.image_lists[input_folder_name])
         print(f"Converting ({num_fov} FOV): {infolder} --> {outfolder}")
         workflow(n_pos=num_fov, input_folders=(infolder, ), output_folder=outfolder)
