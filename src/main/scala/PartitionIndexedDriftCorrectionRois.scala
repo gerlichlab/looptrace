@@ -35,7 +35,8 @@ object PartitionIndexedDriftCorrectionRois:
         numShifting: PositiveInt = PositiveInt(1),
         numAccuracy: PositiveInt = PositiveInt(1),
         parserConfig: Option[os.Path] = None,
-        outputFolder: Option[os.Path] = None
+        outputFolder: Option[os.Path] = None, 
+        optimisationTestingMode: Boolean = false
     )
 
     val parserBuilder = OParser.builder[CliConfig]
@@ -66,25 +67,23 @@ object PartitionIndexedDriftCorrectionRois:
                 .text("Path to parser configuration file, definining how to look for particular columns and fields"),
             opt[os.Path]('O', "outputFolder")
                 .action((p, c) => c.copy(outputFolder = p.some))
-                .text("Path to output root; if unspecified, use the input root.")
+                .text("Path to output root; if unspecified, use the input root."),
+            opt[Unit]("optimisationTestingMode")
+                .action((_, c) => c.copy(optimisationTestingMode = true))
+                .text("Indicate that program's being run in optimisation R&D / testing mode, so tolerate insufficient ROIs")
         )
 
         OParser.parse(parser, args, CliConfig()) match {
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
-            case Some(opts) => opts.parserConfig match {
-                case None => workflow(
-                    ParserConfig.default, 
+            case Some(opts) => {
+                val conf: os.Path | ParserConfig = opts.parserConfig.getOrElse(ParserConfig.default)
+                workflow(
+                    conf,
                     inputRoot = opts.beadRoisRoot, 
                     numShifting = opts.numShifting, 
                     numAccuracy = opts.numAccuracy, 
-                    outputFolder = opts.outputFolder
-                    )
-                case Some(confFile) => workflow(
-                    configFile = confFile, 
-                    inputRoot = opts.beadRoisRoot, 
-                    numShifting = opts.numShifting, 
-                    numAccuracy = opts.numAccuracy, 
-                    outputFolder = opts.outputFolder
+                    outputFolder = opts.outputFolder, 
+                    tolerateTooFew = opts.optimisationTestingMode
                     )
             }
         }
@@ -92,19 +91,26 @@ object PartitionIndexedDriftCorrectionRois:
 
     /* Business logic */
     def workflow(configFile: os.Path, inputRoot: os.Path, numShifting: PositiveInt, numAccuracy: PositiveInt): Unit = 
-        workflow(configFile, inputRoot, numShifting, numAccuracy, None)
+        workflow(configFile, inputRoot, numShifting, numAccuracy, None, false)
     
     def workflow(configFile: os.Path, inputRoot: os.Path, numShifting: PositiveInt, numAccuracy: PositiveInt, outputFolder: os.Path): Unit = 
-        workflow(configFile, inputRoot, numShifting, numAccuracy, outputFolder.some)
+        workflow(configFile, inputRoot, numShifting, numAccuracy, outputFolder.some, false)
     
-    def workflow(configFile: os.Path, inputRoot: os.Path, numShifting: PositiveInt, numAccuracy: PositiveInt, outputFolder: Option[os.Path]): Unit = {
-        /* Configuration of input parser */
-        println(s"Reading parser config: ${configFile}")
-        val parserConfig = ParserConfig.readFileUnsafe(configFile)
-        workflow(parserConfig, inputRoot, numShifting, numAccuracy, outputFolder)
-    }
-    
-    def workflow(parserConfig: ParserConfig, inputRoot: os.Path, numShifting: PositiveInt, numAccuracy: PositiveInt, outputFolder: Option[os.Path]): Unit = {
+    def workflow(
+        conf: os.Path | ParserConfig, 
+        inputRoot: os.Path, 
+        numShifting: PositiveInt, 
+        numAccuracy: PositiveInt, 
+        outputFolder: Option[os.Path], 
+        tolerateTooFew: Boolean
+        ): Unit = {
+        val parserConfig = conf match {
+            case pc: ParserConfig => pc
+            case confFile: os.Path => 
+                println(s"Reading parser config: ${confFile}")
+                ParserConfig.readFileUnsafe(confFile)
+        }
+        
         /* Function definitions based on parsed config and CLI input */
         val writeRois = (rois: List[SelectedRoi], outpath: os.Path) => {
             println(s"Writing: $outpath")
