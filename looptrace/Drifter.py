@@ -309,7 +309,7 @@ def compute_fine_drifts(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
         
         bead_rois = drifter.image_handler.read_bead_rois_file_shifting(pos_idx=pos_idx, frame=drifter.reference_frame)
         if bead_rois.shape != beads_exp_shape:
-            raise Exception(f"Unexpected for bead ROIs shape for (pos, frame) = ({pos_idx}, {frame}): ({bead_rois.shape}), expecting {beads_exp_shape}")
+            raise Exception(f"Unexpected bead ROIs shape for reference (pos={pos_idx}, frame={frame})! ({bead_rois.shape}), expecting {beads_exp_shape}")
 
         # TODO: consider removing this or collecting all errors.
         # if bead_rois.size == 0:
@@ -335,7 +335,7 @@ def compute_fine_drifts(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
                     yield (frame, position) + coarse + finalise_fine_drift(fine_drifts)
             elif drifter.method_name == Methods.CROSS_CORRELATION_NAME.value:
                 print("Extracting reference bead images")
-                ref_bead_images = [extract_single_bead(point, ref_img, bead_roi_px=roi_px) for point in bead_rois]
+                ref_bead_subimgs = [extract_single_bead(point, ref_img, bead_roi_px=roi_px) for point in bead_rois]
                 print("Iterating over frames/timepoints/hybridisations")
                 for _, row in position_group.iterrows():
                     # This should be unique now in frame, since we're iterating within a single FOV.
@@ -345,7 +345,7 @@ def compute_fine_drifts(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
                     print(f"Computing fine drifts: ({position}, {frame})")
                     fine_drifts = Parallel(n_jobs=-1, prefer='threads')(
                         delayed(lambda point, ref_bead_img: correlate_single_bead(ref_bead_img, extract_single_bead(point, mov_img, bead_roi_px=roi_px, drift_course=coarse), 100))(*args)
-                        for args in tqdm.tqdm(zip(bead_rois, ref_bead_images))
+                        for args in tqdm.tqdm(zip(bead_rois, ref_bead_subimgs))
                         )
                     yield (frame, position) + coarse + finalise_fine_drift(fine_drifts)
             else:
