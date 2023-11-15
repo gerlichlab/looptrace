@@ -87,16 +87,17 @@ class ImageHandler:
         return _read_bead_rois_file(fp)
 
     @property
-    def decon_input_name(self) -> str:
-        return self.config['decon_input_name']
+    def decon_input_name(self) -> Optional[str]:
+        return self.config.get('decon_input_name')
     
     @property
-    def decon_output_name(self) -> str:
-        return self.config.get('decon_output_name', f"{self.decon_input_name}_decon")
+    def decon_output_name(self) -> Optional[str]:
+        return self.config.get('decon_output_name')
 
     @property
-    def decon_output_path(self) -> str:
-        return os.path.join(self.image_save_path, self.decon_output_name)
+    def decon_output_path(self) -> Optional[str]:
+        outname = self.decon_output_name
+        return outname and os.path.join(self.image_save_path, outname)
 
     @property
     def frame_names(self) -> List[str]:
@@ -149,15 +150,19 @@ class ImageHandler:
 
     @property
     def reg_input_template(self) -> str:
-        return self.config.get('reg_input_template', self.decon_output_name)
+        return self.config['reg_input_template']
 
     @property
     def reg_input_moving(self) -> str:
-        return self.config.get('reg_input_moving', self.reg_input_template)
+        return self.config['reg_input_moving']
 
     @property
     def spot_input_name(self) -> str:
-        return self.config.get('spot_input_name', self.decon_output_name)
+        return self.config['spot_input_name']
+    
+    @property
+    def zarr_conversions(self) -> Mapping[str, str]:
+        return self.config["zarr_conversions"]
 
     def load_tables(self):
         parsers = {".csv": lambda f: pd.read_csv(f, index_col=0), ".pkl": pd.read_pickle}
