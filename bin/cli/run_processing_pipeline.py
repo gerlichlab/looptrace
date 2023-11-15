@@ -53,7 +53,7 @@ class LooptracePipeline(pypiper.Pipeline):
             ("bead_roi_detection_analysis", run_all_bead_roi_detection_analysis, conf_data_pair),
             ("bead_roi_partition", partition_bead_rois, conf_data_pair),
             ("nuclei_detection", run_nuclei_detection, conf_data_pair), 
-            ("drift_correction__coarse", run_coarse_drift_correction, conf_data_pair), 
+            ("drift_correction__coarse", run_coarse_drift_correction, conf_data_pair), # actually independent of beads, using cross-correlation
             ("drift_correction__fine", run_fine_drift_correction, conf_data_pair),
             ("drift_correction_accuracy_analysis", run_drift_correction_analysis, conf_data_pair), 
             ("drift_correction_accuracy_visualisation", run_drift_correction_accuracy_visualisation, conf_only), 
