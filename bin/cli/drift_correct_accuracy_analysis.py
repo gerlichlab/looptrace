@@ -162,7 +162,6 @@ def process_single_FOV_single_reference_frame(
     bead_detection_params: BeadDetectionParameters, 
     bead_filtration_params: BeadFiltrationParameters, 
     camera_params: CameraParameters, 
-    timepoints: Optional[Iterable[int]],
     ) -> pd.DataFrame:
     """
     Compute the drift correction accuracy for a single hybridisation round / imaging frame, within a single field-of-view.
@@ -188,8 +187,6 @@ def process_single_FOV_single_reference_frame(
         The parameters relevant to which beads to use and which to discard
     camera_params : CameraParameters
         The parameters about the camera used to capture the imaging data passed here
-    timepoints : Iterable of int, optional
-        Specific hybridisation rounds/frames/timepoints to analyse; if unspecified, use all available
     
     Returns
     -------
@@ -199,10 +196,13 @@ def process_single_FOV_single_reference_frame(
     """
     image_stack = reference_image_stack_definition.image_stack
     T = reference_image_stack_definition.num_timepoints
-    iter_time = (lambda: range(T)) if timepoints is None else (lambda: iter(timepoints))
+    fov_idx = reference_image_stack_definition.index
+
+    skips = image_handler.position_frame_pairs_with_severe_problems
+    print(f"(FOV, time) pairs to skip: {skips}")
+    timepoints = [t for t in range(T) if (fov_idx, t) not in skips]
     
     # Get the bead ROIs for the current combo of FOV and frame/timepoint.
-    fov_idx = reference_image_stack_definition.index
     roi_centers = image_handler.read_bead_rois_file_accuracy(pos_idx=fov_idx, frame=bead_detection_params.reference_frame)
     if len(roi_centers) != image_handler.num_bead_rois_for_drift_correction_accuracy:
         warnings.warn(RuntimeWarning(f"Fewer ROIs available ({len(roi_centers)}) than requested ({image_handler.num_bead_rois_for_drift_correction_accuracy}) for FOV {fov_idx}"))
@@ -221,12 +221,9 @@ def process_single_FOV_single_reference_frame(
         bead_img = extract_single_bead(centroid, img, bead_roi_px=bead_roi_px, drift_course=coarse_shift)
         return fitSymmetricGaussian3D(bead_img, sigma=1, center='max')[0]
 
-    skips = image_handler.position_frame_pairs_with_severe_problems
-    print(f"(FOV, time) pairs to skip: {skips}")
-
     fits = Parallel(n_jobs=-1, prefer='threads')(
         delayed(lambda t, c, roi: [fov_idx, t, c, i] + list(proc1(frame_index=t, ref_ch=c, centroid=roi)))(t=t, c=c, roi=roi) 
-        for t in tqdm.tqdm(filter(lambda t: (fov_idx, t) not in skips, iter_time()))
+        for t in tqdm.tqdm(timepoints)
         for c in [bead_detection_params.reference_channel] 
         for i, roi in enumerate(roi_centers)
         )
@@ -237,7 +234,7 @@ def process_single_FOV_single_reference_frame(
     ref_points = fits.loc[(fits.t == bead_detection_params.reference_frame) & (fits.c == bead_detection_params.reference_channel), ['z_loc', 'y_loc', 'x_loc']].to_numpy() # Fits of fiducial beads in ref frame
     print(f"Reference point count: {len(ref_points)}")
     res = []
-    for t in tqdm.tqdm(iter_time()):
+    for t in tqdm.tqdm(timepoints):
         # TODO: update if ever allowing channel (reg_ch_template) to be List[int] rather than simple int.
         mov_points = fits.loc[(fits.t == t) & (fits.c == bead_detection_params.reference_channel), ['z_loc', 'y_loc', 'x_loc']].to_numpy() # Fits of fiducial beads in moving frame
         print(f"mov_points shape: {mov_points.shape}")
@@ -311,7 +308,6 @@ def workflow(
         images_folder: ExtantFolder, 
         drift_correction_table_file: Union[None, Path, ExtantFile] = None, 
         reference_fov: Optional[int] = None, 
-        timepoints: Optional[Iterable[int]] = None,
     ) -> pd.DataFrame:
     """
     Pull random subset of beads and compute the distance that remains even after drift correction.
@@ -326,8 +322,6 @@ def workflow(
         Path to the table of drift correction values; if unspecified, this can be inferred from config_file and images_folder
     reference_fov : int, optional
         Index (0-based) of position/field-of-view to use; if unspecified, use all FOVs
-    timepoints : Iterable of int, optional
-        Specific hybridisation rounds/frames/timepoints to analyse; if unspecified, use all available
         
     Returns
     -------
@@ -411,7 +405,6 @@ def workflow(
             bead_detection_params=bead_detection_params, 
             bead_filtration_params=bead_filtration_params, 
             camera_params=camera_params, 
-            timepoints=timepoints,
             ) 
         for spec in refspecs
         )
