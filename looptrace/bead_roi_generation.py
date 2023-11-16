@@ -115,7 +115,7 @@ def generate_all_bead_rois_from_getter(
     output_folder = output_folder.path if isinstance(output_folder, ExtantFolder) else output_folder
 
     def get_outfile(pos_idx: int, frame_idx: int) -> Path:
-        return output_folder / bead_rois_filename(pos_idx=pos_idx, frame=frame_idx)
+        return output_folder / bead_rois_filename(pos_idx=pos_idx, frame=frame_idx, purpose=None)
     
     def proc1(img: np.ndarray, outfile: Path) -> Tuple[Path, pd.DataFrame]:
         rois = params.compute_labeled_regions(img=img)

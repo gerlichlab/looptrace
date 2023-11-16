@@ -29,8 +29,10 @@ FolderLike = Union[str, Path, ExtantFolder]
 PathFilter = Callable[[Union[os.DirEntry, Path]], bool]
 
 
-def bead_rois_filename(pos_idx: int, frame: int) -> str:
-    return f"bead_rois__{pos_idx}_{frame}.csv"
+def bead_rois_filename(pos_idx: int, frame: int, purpose: Optional[str]) -> str:
+    prefix = f"bead_rois__{pos_idx}_{frame}"
+    extension = ".csv" if purpose is None else f".{purpose}.json"
+    return prefix + extension
 
 
 def _read_bead_rois_file(fp: ExtantFile) -> np.ndarray[int]:
@@ -73,10 +75,10 @@ class ImageHandler:
     def bead_rois_path(self) -> Path:
         return Path(self.analysis_path) / "bead_rois"
 
-    def get_bead_rois_file(self, pos_idx: int, frame: int, purpose: str) -> ExtantFile:
-        fn = bead_rois_filename(pos_idx=pos_idx, frame=frame)
-        fp = self.bead_rois_path / purpose / fn
-        return ExtantFile(fp)
+    def get_bead_rois_file(self, pos_idx: int, frame: int, purpose: Optional[str]) -> ExtantFile:
+        filename = bead_rois_filename(pos_idx=pos_idx, frame=frame, purpose=purpose)
+        folder = self.bead_rois_path if purpose is None else self.bead_rois_path / purpose
+        return ExtantFile(folder / filename)
 
     def read_bead_rois_file_accuracy(self, pos_idx: int, frame: int) -> np.ndarray[np.ndarray]:
         fp = self.get_bead_rois_file(pos_idx=pos_idx, frame=frame, purpose="accuracy").path
