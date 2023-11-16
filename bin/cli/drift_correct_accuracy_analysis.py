@@ -21,7 +21,7 @@ from gertils import ExtantFile, ExtantFolder
 from looptrace.Drifter import Drifter
 from looptrace.ImageHandler import ImageHandler, handler_from_cli
 from looptrace.bead_roi_generation import extract_single_bead
-from looptrace.filepaths import get_analysis_path, simplify_path
+from looptrace.filepaths import get_analysis_path
 from looptrace.gaussfit import fitSymmetricGaussian3D
 from looptrace import image_io, SIGNAL_NOISE_RATIO_NAME
 from looptrace.numeric_types import NumberLike
@@ -332,9 +332,6 @@ def workflow(
     """
     # TODO: how to handle case when output already exists
 
-    config_file = simplify_path(config_file)
-    images_folder = simplify_path(images_folder)
-
     if drift_correction_table_file is None:
         print("Determining drift correction table path...")
         H = handler_from_cli(config_file=config_file, images_folder=images_folder)
@@ -344,8 +341,8 @@ def workflow(
     if not os.path.isfile(drift_correction_table_file):
         raise FileNotFoundError(drift_correction_table_file)
 
-    print(f"Parsing looptrace configuration file: {config_file}")
-    with open(config_file, 'r') as fh:
+    print(f"Parsing looptrace configuration file: {config_file.path}")
+    with open(config_file.path, 'r') as fh:
         config = yaml.safe_load(fh)
 
     output_folder = Path(get_analysis_path(config))
@@ -386,7 +383,7 @@ def workflow(
             )
 
     # Read the actual FISH images.
-    seqfish_images_folder = images_folder / config['reg_input_moving'] # TODO: reconcile with 'reg_input_template'
+    seqfish_images_folder = images_folder.path / config['reg_input_moving'] # TODO: reconcile with 'reg_input_template'
     print(f"Reading zarr to dask: {seqfish_images_folder}")
     imgs, _ = image_io.multi_ome_zarr_to_dask(str(seqfish_images_folder))
     
@@ -422,7 +419,7 @@ def workflow(
 
 
 def run_visualisation(config_file: ExtantFile):
-    with open(simplify_path(config_file), 'r') as fh:
+    with open(config_file.path, 'r') as fh:
         config = yaml.safe_load(fh)
     output_folder = get_analysis_path(config)
     fits_file = _get_dc_fits_filepath(output_folder)
