@@ -214,25 +214,23 @@ def process_single_FOV_single_reference_frame(
     print(f"Inferred position (for reference FOV index {fov_idx}): {pos}")
     curr_fov_drift_subtable = drift_table[drift_table.position == pos]
 
-    skips = image_handler.position_frame_pairs_with_severe_problems
-    print(f"(FOV, time) pairs to skip: {skips}")
-
     # TODO: could type-refine the argument values to these parameters (which should be nonnegative).
     def proc1(frame_index: int, ref_ch: int, centroid: np.ndarray) -> Iterable[NumberLike]:
-        if (fov_idx, frame_index) in skips:
-            return
         coarse_shift = curr_fov_drift_subtable[curr_fov_drift_subtable.frame == frame_index][['z_px_course', 'y_px_course', 'x_px_course']].values[0]
         img = image_stack[frame_index, ref_ch].compute()
         bead_img = extract_single_bead(centroid, img, bead_roi_px=bead_roi_px, drift_course=coarse_shift)
         return fitSymmetricGaussian3D(bead_img, sigma=1, center='max')[0]
-    
+
+    skips = image_handler.position_frame_pairs_with_severe_problems
+    print(f"(FOV, time) pairs to skip: {skips}")
+
     fits = Parallel(n_jobs=-1, prefer='threads')(
         delayed(lambda t, c, roi: [fov_idx, t, c, i] + list(proc1(frame_index=t, ref_ch=c, centroid=roi)))(t=t, c=c, roi=roi) 
-        for t in tqdm.tqdm(iter_time())
+        for t in tqdm.tqdm(filter(lambda t: (fov_idx, t) not in skips, iter_time()))
         for c in [bead_detection_params.reference_channel] 
         for i, roi in enumerate(roi_centers)
         )
-    fits = pd.DataFrame(filter(bool, fits), columns=['reference_fov', 't', 'c', 'roi', 'BG', 'A', 'z_loc', 'y_loc', 'x_loc', 'sigma_z', 'sigma_xy'])
+    fits = pd.DataFrame(fits, columns=['reference_fov', 't', 'c', 'roi', 'BG', 'A', 'z_loc', 'y_loc', 'x_loc', 'sigma_z', 'sigma_xy'])
     fits = express_pixel_columns_as_nanometers(fits=fits, xy_cols=('y_loc', 'x_loc', 'sigma_xy'), z_cols=('z_loc', 'sigma_z'), camera_params=camera_params)
     
     # TODO: update if ever allowing channel (reg_ch_template) to be List[int] rather than simple int.
