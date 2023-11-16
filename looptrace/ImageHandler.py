@@ -38,7 +38,7 @@ def bead_rois_filename(pos_idx: int, frame: int, purpose: Optional[str]) -> str:
 def _read_bead_rois_file(fp: ExtantFile) -> np.ndarray[int]:
     with open(fp, 'r') as fh:
         data = json.load(fh)
-    return np.round(np.array(list(map(data, lambda obj: np.array(obj["centroid"]))))).astype(int)
+    return np.round(np.array(list(map(lambda obj: np.array(obj["centroid"]), data)))).astype(int)
 
 
 class ImageHandler:
