@@ -39,7 +39,7 @@ def workflow(
         "--outputFolder",
         str(output_folder),
     ]
-    if H.config.get("tolerate_too_few_rois", False):
+    if H.tolerate_too_few_rois:
         cmd_parts.extend([
             "--optimisationTestingMode",
             "--referenceFrame", 
