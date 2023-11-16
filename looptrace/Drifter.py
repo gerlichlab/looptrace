@@ -325,7 +325,7 @@ def compute_fine_drifts(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
                 
                 # Use current (FOV, time) pair if and only if it has a beads partition defined.
                 try:
-                    _ = drifter.image_handler.get_bead_rois_file(pos_idx=pos_idx, frame=frame)
+                    _ = drifter.image_handler.get_bead_rois_file(pos_idx=pos_idx, frame=frame, purpose="shifting")
                 except TypeError:
                     if drifter.image_handler.tolerate_too_few_rois:
                         print(f"WARNING: {get_no_partition_message(frame)}")
@@ -349,7 +349,7 @@ def compute_fine_drifts(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
                 
                 # Use current (FOV, time) pair if and only if it has a beads partition defined.
                 try:
-                    _ = drifter.image_handler.get_bead_rois_file(pos_idx=pos_idx, frame=frame)
+                    _ = drifter.image_handler.get_bead_rois_file(pos_idx=pos_idx, frame=frame, purpose="shifting")
                 except TypeError: # Current (FOV, time) pair doesn't have a beads partition defined.
                     if drifter.image_handler.tolerate_too_few_rois:
                         print(f"WARNING: {get_no_partition_message(frame)}")
