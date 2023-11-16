@@ -332,9 +332,9 @@ def workflow(
     """
     # TODO: how to handle case when output already exists
 
+    H = handler_from_cli(config_file=config_file, images_folder=images_folder)
     if drift_correction_table_file is None:
         print("Determining drift correction table path...")
-        H = handler_from_cli(config_file=config_file, images_folder=images_folder)
         drift_correction_table_file = Drifter(H).dc_file_path__fine
     elif isinstance(drift_correction_table_file, ExtantFile):
         drift_correction_table_file = drift_correction_table_file.path
@@ -400,6 +400,7 @@ def workflow(
         refspecs = (ReferenceImageStackDefinition(index=i, image_stack=imgs[i]) for i in range(len(drift_table.position.unique())))
     fits = (
         process_single_FOV_single_reference_frame(
+            image_handler=H,
             reference_image_stack_definition=spec, 
             drift_table=drift_table, 
             bead_detection_params=bead_detection_params, 
