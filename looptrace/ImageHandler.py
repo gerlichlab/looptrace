@@ -87,6 +87,22 @@ class ImageHandler:
     def read_bead_rois_file_shifting(self, pos_idx: int, frame: int) -> ExtantFile:
         fp = self.get_bead_rois_file(pos_idx=pos_idx, frame=frame, purpose="shifting").path
         return _read_bead_rois_file(fp)
+    
+    @property
+    def _severe_bead_roi_partition_problems_file(self) -> Optional[ExtantFile]:
+        fp = self.bead_rois_path / "roi_partition_warnings.severe.json"
+        if self.tolerate_too_few_rois:
+            return ExtantFile(fp) if fp.exists() else None
+        assert not fp.exists(), f"Severe warnings file exists but tolerance for problems is turned off: {fp}"
+
+    @property
+    def position_frame_pairs_with_severe_problems(self) -> Set[Tuple[int, int]]:
+        fp = self._severe_bead_roi_partition_problems_file
+        if fp is None:
+            return set()
+        with open(fp.path, 'r') as fh:
+            data = json.load(fh)
+        return {(obj["position"], obj["frame"]) for obj in data}
 
     @property
     def decon_input_name(self) -> Optional[str]:
