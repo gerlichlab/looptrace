@@ -73,17 +73,17 @@ class ImageHandler:
     def bead_rois_path(self) -> Path:
         return Path(self.analysis_path) / "bead_rois"
 
-    def _get_bead_rois_file(self, pos_idx: int, frame: int, purpose: str) -> ExtantFile:
+    def get_bead_rois_file(self, pos_idx: int, frame: int, purpose: str) -> ExtantFile:
         fn = bead_rois_filename(pos_idx=pos_idx, frame=frame)
         fp = self.bead_rois_path / purpose / fn
         return ExtantFile(fp)
 
     def read_bead_rois_file_accuracy(self, pos_idx: int, frame: int) -> np.ndarray[np.ndarray]:
-        fp = self._get_bead_rois_file(pos_idx=pos_idx, frame=frame, purpose="accuracy").path
+        fp = self.get_bead_rois_file(pos_idx=pos_idx, frame=frame, purpose="accuracy").path
         return _read_bead_rois_file(fp)
 
     def read_bead_rois_file_shifting(self, pos_idx: int, frame: int) -> ExtantFile:
-        fp = self._get_bead_rois_file(pos_idx=pos_idx, frame=frame, purpose="shifting").path
+        fp = self.get_bead_rois_file(pos_idx=pos_idx, frame=frame, purpose="shifting").path
         return _read_bead_rois_file(fp)
 
     @property
@@ -160,6 +160,10 @@ class ImageHandler:
     def spot_input_name(self) -> str:
         return self.config['spot_input_name']
     
+    @property
+    def tolerate_too_few_rois(self) -> bool:
+        return self.config.get("tolerate_too_few_rois", False)
+
     @property
     def zarr_conversions(self) -> Mapping[str, str]:
         return self.config["zarr_conversions"]

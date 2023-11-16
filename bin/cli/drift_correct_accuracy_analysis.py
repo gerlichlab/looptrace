@@ -27,9 +27,6 @@ from looptrace import image_io, SIGNAL_NOISE_RATIO_NAME
 from looptrace.numeric_types import NumberLike
 
 
-FALLBACK_MAX_NUM_BEAD_ROIS = 500
-
-
 def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
     """Define and parse command-line arguments."""
     parser = argparse.ArgumentParser(
@@ -47,10 +44,6 @@ def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
     parser.add_argument(
         "--drift-correction-table", type=ExtantFile.from_string, 
         help="Path to drift correction table; if unspecified, infer from the config file and images folder",
-        )
-    parser.add_argument(
-        "--max-num-bead-rois", type=int, 
-        help=f"Maximum number of bead ROIs to subsample, overriding value in config if present; if neither here nor in config, default to {FALLBACK_MAX_NUM_BEAD_ROIS}",
         )
     parser.add_argument(
         "--reference-FOV", type=int, 
@@ -208,10 +201,11 @@ def process_single_FOV_single_reference_frame(
     T = reference_image_stack_definition.num_timepoints
     iter_time = (lambda: range(T)) if timepoints is None else (lambda: iter(timepoints))
     
+    # Get the bead ROIs for the current combo of FOV and frame/timepoint.
     fov_idx = reference_image_stack_definition.index
-    rois = image_handler.read_bead_rois_file_accuracy(pos_idx=fov_idx, frame=bead_detection_params.reference_frame)
-    if rois.size != image_handler.num_bead_rois_for_drift_correction_accuracy:
-        warnings.warn(RuntimeWarning(f"Fewer ROIs available ({rois.size}) than requested ({image_handler.num_bead_rois_for_drift_correction_accuracy}) for FOV {fov_idx}"))
+    roi_centers = image_handler.read_bead_rois_file_accuracy(pos_idx=fov_idx, frame=bead_detection_params.reference_frame)
+    if roi_centers.size != image_handler.num_bead_rois_for_drift_correction_accuracy:
+        warnings.warn(RuntimeWarning(f"Fewer ROIs available ({roi_centers.size}) than requested ({image_handler.num_bead_rois_for_drift_correction_accuracy}) for FOV {fov_idx}"))
 
     bead_roi_px = bead_detection_params.roi_pixels
     
@@ -221,15 +215,15 @@ def process_single_FOV_single_reference_frame(
     curr_fov_drift_subtable = drift_table[drift_table.position == pos]
 
     # TODO: could type-refine the argument values to these parameters (which should be nonnegative).
-    def proc1(frame_index: int, ref_ch: int, roi: np.ndarray) -> Iterable[NumberLike]:
+    def proc1(frame_index: int, ref_ch: int, centroid: np.ndarray) -> Iterable[NumberLike]:
         coarse_shift = curr_fov_drift_subtable[curr_fov_drift_subtable.frame == frame_index][['z_px_course', 'y_px_course', 'x_px_course']].values[0]
         img = image_stack[frame_index, ref_ch].compute()
-        bead_img = extract_single_bead(roi, img, bead_roi_px=bead_roi_px, drift_course=coarse_shift)
+        bead_img = extract_single_bead(centroid, img, bead_roi_px=bead_roi_px, drift_course=coarse_shift)
         return fitSymmetricGaussian3D(bead_img, sigma=1, center='max')[0]
     
     fits = Parallel(n_jobs=-1, prefer='threads')(
-        delayed(lambda t, c, roi: [fov_idx, t, c, i] + list(proc1(frame_index=t, ref_ch=c, roi=roi)))(t=t, c=c, roi=roi) 
-        for t in tqdm.tqdm(iter_time()) for c in [bead_detection_params.reference_channel] for i, roi in enumerate(rois)
+        delayed(lambda t, c, roi: [fov_idx, t, c, i] + list(proc1(frame_index=t, ref_ch=c, centroid=roi)))(t=t, c=c, roi=roi) 
+        for t in tqdm.tqdm(iter_time()) for c in [bead_detection_params.reference_channel] for i, roi in enumerate(roi_centers)
         )
     fits = pd.DataFrame(fits, columns=['reference_fov', 't', 'c', 'roi', 'BG', 'A', 'z_loc', 'y_loc', 'x_loc', 'sigma_z', 'sigma_xy'])
     fits = express_pixel_columns_as_nanometers(fits=fits, xy_cols=('y_loc', 'x_loc', 'sigma_xy'), z_cols=('z_loc', 'sigma_z'), camera_params=camera_params)
@@ -311,7 +305,6 @@ def workflow(
         config_file: ExtantFile, 
         images_folder: ExtantFolder, 
         drift_correction_table_file: Union[None, Path, ExtantFile] = None, 
-        max_num_bead_rois: Optional[int] = None, 
         reference_fov: Optional[int] = None, 
         timepoints: Optional[Iterable[int]] = None,
     ) -> pd.DataFrame:
@@ -326,8 +319,6 @@ def workflow(
         Path to the folder with an experiment's imaging data
     drift_correction_table_file : gertils.ExtantFile, optional
         Path to the table of drift correction values; if unspecified, this can be inferred from config_file and images_folder
-    max_num_bead_rois : int, optional
-        Upper bound on number of beads to sample to compute the distances; if unspecified, use config value or default in this module
     reference_fov : int, optional
         Index (0-based) of position/field-of-view to use; if unspecified, use all FOVs
     timepoints : Iterable of int, optional
@@ -371,7 +362,7 @@ def workflow(
     
     # Filtration parameters
     bead_filtration_params = BeadFiltrationParameters(
-        max_num_rois=max_num_bead_rois or config.get("max_num_bead_rois_for_dc_accuracy", 500), 
+        max_num_rois=config["num_bead_rois_for_drift_correction_accuracy"],
         min_signal_to_noise=config[SIGNAL_NOISE_RATIO_NAME],
         )
     print(f"Bead filtration parameters: {bead_filtration_params}")
@@ -462,6 +453,5 @@ if __name__ == "__main__":
         config_file=opts.config_file,
         images_folder=opts.images_folder, 
         drift_correction_table_file=opts.drift_correction_table, 
-        max_num_bead_rois=opts.max_num_bead_rois,
         reference_fov=opts.reference_FOV,
     )
