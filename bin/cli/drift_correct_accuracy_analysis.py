@@ -221,9 +221,13 @@ def process_single_FOV_single_reference_frame(
         bead_img = extract_single_bead(centroid, img, bead_roi_px=bead_roi_px, drift_course=coarse_shift)
         return fitSymmetricGaussian3D(bead_img, sigma=1, center='max')[0]
     
+    skips = image_handler.position_frame_pairs_with_severe_problems
+
     fits = Parallel(n_jobs=-1, prefer='threads')(
         delayed(lambda t, c, roi: [fov_idx, t, c, i] + list(proc1(frame_index=t, ref_ch=c, centroid=roi)))(t=t, c=c, roi=roi) 
-        for t in tqdm.tqdm(iter_time()) for c in [bead_detection_params.reference_channel] for i, roi in enumerate(roi_centers)
+        for t in tqdm.tqdm(iter_time()) if (fov_idx, t) not in skips 
+        for c in [bead_detection_params.reference_channel] 
+        for i, roi in enumerate(roi_centers)
         )
     fits = pd.DataFrame(fits, columns=['reference_fov', 't', 'c', 'roi', 'BG', 'A', 'z_loc', 'y_loc', 'x_loc', 'sigma_z', 'sigma_xy'])
     fits = express_pixel_columns_as_nanometers(fits=fits, xy_cols=('y_loc', 'x_loc', 'sigma_xy'), z_cols=('z_loc', 'sigma_z'), camera_params=camera_params)
