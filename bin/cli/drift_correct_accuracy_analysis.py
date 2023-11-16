@@ -232,7 +232,7 @@ def process_single_FOV_single_reference_frame(
         for c in [bead_detection_params.reference_channel] 
         for i, roi in enumerate(roi_centers)
         )
-    fits = pd.DataFrame(map(bool, fits), columns=['reference_fov', 't', 'c', 'roi', 'BG', 'A', 'z_loc', 'y_loc', 'x_loc', 'sigma_z', 'sigma_xy'])
+    fits = pd.DataFrame(filter(bool, fits), columns=['reference_fov', 't', 'c', 'roi', 'BG', 'A', 'z_loc', 'y_loc', 'x_loc', 'sigma_z', 'sigma_xy'])
     fits = express_pixel_columns_as_nanometers(fits=fits, xy_cols=('y_loc', 'x_loc', 'sigma_xy'), z_cols=('z_loc', 'sigma_z'), camera_params=camera_params)
     
     # TODO: update if ever allowing channel (reg_ch_template) to be List[int] rather than simple int.
