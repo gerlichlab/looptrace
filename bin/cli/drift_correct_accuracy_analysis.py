@@ -204,8 +204,8 @@ def process_single_FOV_single_reference_frame(
     # Get the bead ROIs for the current combo of FOV and frame/timepoint.
     fov_idx = reference_image_stack_definition.index
     roi_centers = image_handler.read_bead_rois_file_accuracy(pos_idx=fov_idx, frame=bead_detection_params.reference_frame)
-    if roi_centers.size != image_handler.num_bead_rois_for_drift_correction_accuracy:
-        warnings.warn(RuntimeWarning(f"Fewer ROIs available ({roi_centers.size}) than requested ({image_handler.num_bead_rois_for_drift_correction_accuracy}) for FOV {fov_idx}"))
+    if len(roi_centers) != image_handler.num_bead_rois_for_drift_correction_accuracy:
+        warnings.warn(RuntimeWarning(f"Fewer ROIs available ({len(roi_centers)}) than requested ({image_handler.num_bead_rois_for_drift_correction_accuracy}) for FOV {fov_idx}"))
 
     bead_roi_px = bead_detection_params.roi_pixels
     
