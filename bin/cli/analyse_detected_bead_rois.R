@@ -119,7 +119,7 @@ message("Building (frame, FOV) bead ROI count heatmap")
 roi_counts_heatmap <- ggplot(roi_counts, aes(x = frame, y = position, fill = count)) + 
     geom_tile() + 
     xlab("timepoint") + 
-    scale_y_continuous(breaks = round(seq(0, max(position), by = 2), 1)) + 
+    scale_y_continuous(breaks = round(seq(0, max(roi_counts$position), by = 2), 1)) + 
     ggtitle("Counts, all detected bead ROIs") + 
     theme_bw()
 saveCountsPlot(fig = roi_counts_heatmap, plotTypeName = "detected.heatmap")
