@@ -47,3 +47,5 @@ trait GenericSuite:
 
     /** Execute some test code that uses a JSON file {@code os.Path} file. */
     def withTempJsonFile(initData: os.Source, suffix: String = ".json") = withTempFile(initData, suffix)(_: os.Path => Any)
+
+end GenericSuite

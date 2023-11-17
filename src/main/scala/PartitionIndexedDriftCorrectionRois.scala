@@ -191,8 +191,8 @@ object PartitionIndexedDriftCorrectionRois:
                 "purpose" -> ujson.Str(tooFew.purpose.toString)
                 ),
         json => 
-            val pNel = Try{ intToPositionIndex(json("position").int) }.toValidatedNel
-            val fNel = Try{ intToFrameIndex(json("frame").int) }.toValidatedNel
+            val pNel = Try{ PositionIndex.unsafe(json("position").int) }.toValidatedNel
+            val fNel = Try{ FrameIndex.unsafe(json("frame").int) }.toValidatedNel
             val reqdNel = Try{ PositiveInt.unsafe(json("requested").int) }.toValidatedNel
             val realNel = Try{ NonnegativeInt.unsafe(json("realized").int) }.toValidatedNel
             val purposeNel = Try{ Purpose.valueOf(json("purpose").str) }.toValidatedNel
@@ -464,10 +464,6 @@ object PartitionIndexedDriftCorrectionRois:
 
     def getOutputFilepath(root: os.Path)(pos: PositionIndex, frame: FrameIndex, purpose: Purpose): os.Path = 
         getOutputSubfolder(root)(purpose) / getOutputFilename(pos, frame, purpose).get
-
-    def intToPositionIndex = NonnegativeInt.unsafe.andThen(PositionIndex.apply)
-    
-    def intToFrameIndex = NonnegativeInt.unsafe.andThen(FrameIndex.apply)
 
     private def prepFileRead(roisFile: os.Path): ValidatedNel[String, (Delimiter, String, List[String])] = {
         val maybeSep = Delimiter.fromPath(roisFile).toRight(s"Cannot infer delimiter for file! $roisFile").toValidatedNel

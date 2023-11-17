@@ -159,12 +159,14 @@ package object looptrace {
     object FrameIndex:
         given eqForFrameIndex: Eq[FrameIndex] = Eq.fromUniversalEquals[FrameIndex]
         given showForFrameIndex: Show[FrameIndex] = Show.show(_.get.show)
+        def unsafe = NonnegativeInt.unsafe.andThen(FrameIndex.apply)
     end FrameIndex
     
     final case class PositionIndex(get: NonnegativeInt) extends AnyVal
     object PositionIndex:
         given eqForPositionIndex: Eq[PositionIndex] = Eq.fromUniversalEquals[PositionIndex]
         given showForPositionIndex: Show[PositionIndex] = Show.show(_.get.show)
+        def unsafe = NonnegativeInt.unsafe.andThen(PositionIndex.apply)
     end PositionIndex
 
     case class ProbeName(get: String)
@@ -174,6 +176,8 @@ package object looptrace {
     final case class RoiIndex(get: NonnegativeInt) extends AnyVal
     object RoiIndex:
         implicit val showForRoiIndex: Show[RoiIndex] = Show.show(_.get.show)
+        def unsafe = NonnegativeInt.unsafe.andThen(RoiIndex.apply)
+    end RoiIndex
 
     /**
       * Write a mapping, from position and frame pair to value, to JSON.
