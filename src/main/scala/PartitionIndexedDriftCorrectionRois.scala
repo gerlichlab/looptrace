@@ -27,7 +27,8 @@ object PartitionIndexedDriftCorrectionRois:
 
     /* Type aliases */
     type RawRecord = Array[String]
-    type InitFile = (PositionIndex, FrameIndex, os.Path)
+    type PosFramePair = (PositionIndex, FrameIndex)
+    type InitFile = (PosFramePair, os.Path)
     type IndexedRoi = DetectedRoi | SelectedRoi
 
     final case class CliConfig(
@@ -100,16 +101,18 @@ object PartitionIndexedDriftCorrectionRois:
         workflow(configFile, inputRoot, numShifting, numAccuracy, None, None)
     
     def workflow(configFile: os.Path, inputRoot: os.Path, numShifting: PositiveInt, numAccuracy: PositiveInt, outputFolder: os.Path): Unit = 
-        workflow(configFile, inputRoot, numShifting, numAccuracy, outputFolder.some, None)
+        workflow(configFile, inputRoot, numShifting, numAccuracy, None, outputFolder.some)
     
     def workflow(
         conf: os.Path | ParserConfig, 
         inputRoot: os.Path, 
         numShifting: PositiveInt, 
         numAccuracy: PositiveInt, 
-        outputFolder: Option[os.Path], 
-        referenceFrame: Option[FrameIndex]
+        referenceFrame: Option[FrameIndex],
+        outputFolder: Option[os.Path]
         ): Unit = {
+        import TooFewRoisLike.*
+
         val parserConfig = conf match {
             case pc: ParserConfig => pc
             case confFile: os.Path => 
@@ -146,17 +149,17 @@ object PartitionIndexedDriftCorrectionRois:
              */
             (referenceFrame, Alternative[List].separate(bads.map{ // Partition the list of problems by type of error.
                 case kv@(_, _: RoisFileParseError) => kv.asLeft
-                case ((p, f, _), e: TooFewShiftingRois) => ((p, f), e).asRight
+                case ((pf, _), e: TooFewShiftingRois) => (pf, e).asRight
             })) match {
                 case (Some(refFrame), (Nil, tooFewErrors)) if ( ! tooFewErrors.exists(_._1._2 === refFrame) ) => 
                     val warningsFile = outfolder / "roi_partition_warnings.severe.json"
                     println(s"Writing severe warnings file: $warningsFile")
-                    os.write(warningsFile, write(tooFewErrors.map(writeTooFewRois[TooFewShiftingRois].tupled), indent = 2))
+                    os.write(warningsFile, write(tooFewErrors.map{ case (pf, tooFew) => pf -> tooFew.problem}, indent = 2))
                 case _ => throw new Exception(s"${bads.size} (position, frame) pairs with problems.\n${bads}")
             }
         }
-        val warnings: List[((PositionIndex, FrameIndex), TooFewAccuracyRois)] = 
-            goods flatMap { case ((p, f, _), splitResult) => 
+        val warnings: List[(PosFramePair, TooFewAccuracyRois)] = 
+            goods flatMap { case (((p, f), _), splitResult) => 
                 // Get the selected ROI groupings and build an optional warning.
                 val (shifting, accuracy, warnOpt) = splitResult match {
                     case RoisPartition(shifting, accuracy) => (shifting, accuracy, None)
@@ -172,12 +175,34 @@ object PartitionIndexedDriftCorrectionRois:
         else {
             val warningsFile = outfolder / "roi_partition_warnings.json"
             println(s"Writing bead ROIs partition warnings file: $warningsFile")
-            os.write(warningsFile, write(warnings.map(writeTooFewRois[TooFewAccuracyRois].tupled), indent = 2))
+            os.write(warningsFile, write(warnings.map{ case (pf, tooFew) => pf -> tooFew.problem }, indent = 2))
         }
         println("Done!")
     }
 
-    private def writeTooFewRois[E : TooFewRoisLike] = (pf: (PositionIndex, FrameIndex), error: E) => {
+    given simplifiedTooFewRoisRW: ReadWriter[(PosFramePair, TooFewRois)] = readwriter[ujson.Value].bimap(
+        pair => 
+            val (pf, tooFew) = pair
+            ujson.Obj(
+                "position" -> ujson.Num(pf._1.get),
+                "frame" -> ujson.Num(pf._2.get),
+                "requested" -> ujson.Num(tooFew.requested),
+                "realized" -> ujson.Num(tooFew.realized),
+                "purpose" -> ujson.Str(tooFew.purpose.toString)
+                ),
+        json => 
+            val pNel = Try{ intToPositionIndex(json("position").int) }.toValidatedNel
+            val fNel = Try{ intToFrameIndex(json("frame").int) }.toValidatedNel
+            val reqdNel = Try{ PositiveInt.unsafe(json("requested").int) }.toValidatedNel
+            val realNel = Try{ NonnegativeInt.unsafe(json("realized").int) }.toValidatedNel
+            val purposeNel = Try{ Purpose.valueOf(json("purpose").str) }.toValidatedNel
+            (pNel, fNel, reqdNel, realNel, purposeNel).mapN(
+                (p, f, reqd, real, purpose) => (p, f) -> TooFewRois(reqd, real, purpose)
+            ).fold(errs => throw new Exception(f"${errs.size} error(s) reading simplified too-few-ROIs: ${errs.map(_.getMessage)}"), identity)
+    )
+
+    def writeTooFewRois[E : TooFewRoisLike] = (pf: PosFramePair, error: E) => {
+        import TooFewRoisLike.*
         val tooFew = error.problem
         ujson.Obj(
             "position" -> ujson.Num(pf._1.get),
@@ -219,17 +244,17 @@ object PartitionIndexedDriftCorrectionRois:
                     case "" :: rawPosIdx :: rawFrameIdx :: Nil => for {
                         position <- tryReadThruNN(PositionIndex.apply)(rawPosIdx)
                         frame <- tryReadThruNN(FrameIndex.apply)(rawFrameIdx)
-                    } yield (position, frame, filepath)
+                    } yield ((position, frame), filepath)
                     case _ => None
                 }
             } else { None }
         }
         val results = os.list(inputsFolder).filter(os.isFile).toList.flatMap(prepFileMeta)
-        val histogram = results.groupBy{ case (pos, frame, _) => pos -> frame }.filter(_._2.length > 1)
+        val histogram = results.groupBy(_._1).filter(_._2.length > 1)
         if (histogram.nonEmpty) {
             given writeFiles: (Iterable[os.Path] => ujson.Value) with
                 def apply(paths: Iterable[os.Path]) = paths.map(_.last)
-            val errMsg = s"Non-unique filenames for key(s): ${posFrameMapToJson("filepaths", histogram.view.mapValues(_.map(_._3)).toMap)}"
+            val errMsg = s"Non-unique filenames for key(s): ${posFrameMapToJson("filepaths", histogram.view.mapValues(_.map(_._2)).toMap)}"
             throw new IllegalStateException(errMsg)
         }
         results.toSet
@@ -237,7 +262,7 @@ object PartitionIndexedDriftCorrectionRois:
     
     def preparePartitions(outputFolder: os.Path, parserConfig: ParserConfig, numShifting: PositiveInt, numAccuracy: PositiveInt): 
         List[InitFile] => List[(InitFile, RoisFileParseError | RoisSplitResult)] = 
-            _.map { case init => init -> readRoisFile(parserConfig)(init._3).fold(
+            _.map { case init => init -> readRoisFile(parserConfig)(init._2).fold(
                 identity, 
                 sampleDetectedRois(numShifting = numShifting, numAccuracy = numAccuracy))
             }
@@ -338,8 +363,9 @@ object PartitionIndexedDriftCorrectionRois:
     trait TooFewRoisLike[A]:
         def getTooFew: A => TooFewRois
 
-    extension [A](a: A)(using ev: TooFewRoisLike[A])
-        def problem = ev.getTooFew(a)
+    object TooFewRoisLike:
+        extension [A](a: A)(using ev: TooFewRoisLike[A])
+            def problem = ev.getTooFew(a)
 
     object RoisSplitResult:
         def intoEither = (_: RoisSplitResult) match {
@@ -438,6 +464,10 @@ object PartitionIndexedDriftCorrectionRois:
 
     def getOutputFilepath(root: os.Path)(pos: PositionIndex, frame: FrameIndex, purpose: Purpose): os.Path = 
         getOutputSubfolder(root)(purpose) / getOutputFilename(pos, frame, purpose).get
+
+    def intToPositionIndex = NonnegativeInt.unsafe.andThen(PositionIndex.apply)
+    
+    def intToFrameIndex = NonnegativeInt.unsafe.andThen(FrameIndex.apply)
 
     private def prepFileRead(roisFile: os.Path): ValidatedNel[String, (Delimiter, String, List[String])] = {
         val maybeSep = Delimiter.fromPath(roisFile).toRight(s"Cannot infer delimiter for file! $roisFile").toValidatedNel

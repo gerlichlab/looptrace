@@ -1,7 +1,10 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
 import scala.util.{ Random, Try }
+
 import cats.data.{ NonEmptyList as NEL }
+import cats.syntax.apply.*
+import cats.syntax.either.*
 import cats.syntax.eq.*
 import cats.syntax.list.*
 import cats.syntax.option.*
@@ -19,6 +22,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.{
     ColumnName,
     InitFile,
     ParserConfig, 
+    PosFramePair,
     Purpose,
     RoisFileParseFailedRecords,
     RoisFileParseFailedSetup,
@@ -28,15 +32,19 @@ import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.{
     RoiSplitSuccess,
     TooFewAccuracyRois, 
     TooFewRois,
+    TooFewRoisLike,
     TooFewShiftingRois,
     XColumn, 
     YColumn, 
     ZColumn, 
     discoverInputs, 
     getOutputFilepath,
+    intToFrameIndex,
+    intToPositionIndex,
     readRoisFile,
     sampleDetectedRois, 
-    workflow
+    workflow, 
+    writeTooFewRois
 }
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.readJsonFile
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ CoordinateSequence, Point3D, XCoordinate, YCoordinate, ZCoordinate }
@@ -242,12 +250,13 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
     test("Input discovery works as expected for folder with no other contents.") {
         forAll (genDistinctNonnegativePairs) { case (pf1, pf2) => {
             withTempDirectory{ (p: os.Path) => 
-                val expected = Set(pf1, pf2) map { case (pos, frame) => (pos, frame, p / getInputFilename(pos, frame)) }
+                val expected = Set(pf1, pf2).map(pf => pf -> (p / getInputFilename(pf._1, pf._2)))
 
                 /* Check that inputs don't already exist, then establish them and check existence. */
-                expected.exists{ case (_, _, fp) => os.exists(fp) } shouldBe false
-                expected.foreach{ case (_, _, fp) => touchFile(fp) }
-                expected.forall{ case (_, _, fp) => os.isFile(fp) } shouldBe true
+                val expPaths = expected.map(_._2)
+                expPaths.exists(os.exists) shouldBe false
+                expPaths.foreach(touchFile(_, false))
+                expPaths.forall(os.isFile) shouldBe true
 
                 val found = discoverInputs(p) // Perform the empirical action.
                 found shouldEqual expected
@@ -283,8 +292,8 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                 ).foreach(touchFile(_, true))
             fc match {
                 case Root => root -> Set()
-                case GoodSubfolder => subGood -> Set((pos, frame, goodFile1), (pf2._1, pf2._2, goodFile2))
-                case BadSubfolder => subBad -> Set((pos, frame, wrongSubfolderFile))
+                case GoodSubfolder => subGood -> Set(((pos, frame), goodFile1), ((pf2._1, pf2._2), goodFile2))
+                case BadSubfolder => subBad -> Set(((pos, frame), wrongSubfolderFile))
             }
         }
         forAll (Gen.zip(genDistinctNonnegativePairs, Gen.oneOf(FolderChoice.values.toList))) { 
@@ -320,6 +329,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
     }
     
     test("Requesting ROIs count size greater than usable record count yields expected result.") {
+        import TooFewRoisLike.problem
         val maxRoisCount = PositiveInt(1000)
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         type Expectation = TooFewShiftingRois | TooFewRois
@@ -537,6 +547,83 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         }
     }
 
+    test("Integration: toggle for tolerance of insufficient shifting ROIs works.") {
+        /**
+         * In this test, we generate cases in which it's possible that either one or both datasets
+         * have sufficient ROI counts for the randomly generated shifting and accuracy ROI counts, 
+         * or the one or both of the datasets have insufficient ROIs for the shifting and/or 
+         * accuracy requests. The tolerance for insufficient shifting ROIs is also randomised, 
+         * and expected output files present, and expected contents, are accordingly adjusted.
+        */
+        import SmallDataSet.*
+        import TooFewAccuracyRois.given
+        import TooFewShiftingRois.given
+
+        implicit def noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+
+        def genConfig = arbitrary[CoordinateSequence].map(standardParserConfig)
+
+        type PF = PosFramePair
+        val N1 = input1.points.length
+        val N2 = input2.points.length
+
+        def genSampleSizes: Gen[(PositiveInt, PositiveInt)] = for {
+            numShifting <- Gen.choose(1, scala.math.min(N1, N2) - 1).map(PositiveInt.unsafe)
+            numAccuracy <- Gen.choose(1, scala.math.max(N1, N2) + 1).map(PositiveInt.unsafe)
+        } yield (numShifting, numAccuracy)
+        
+        def gen5PF = arbitrary[(PF, PF, PF, PF, PF)].suchThat{ case (a, b, c, d, e) => Set(a, b, c, d, e).size === 5 }
+        
+        given inputArb: Arbitrary[InputBundle] = Arbitrary{ Gen.oneOf(input1, input2) }
+        def genInputsWithPF = Gen.zip(arbitrary[(InputBundle, InputBundle, InputBundle, InputBundle, InputBundle)], gen5PF) map {
+            case ((in1, in2, in3, in4, in5), (pf1, pf2, pf3, pf4, pf5)) => ((pf1, in1), (pf2, in2), (pf3, in3), (pf4, in4), (pf5, in5))
+        }
+
+        def genInputsAndExpectation = for {
+            (numShifting, numAccuracy) <- genSampleSizes
+            (a@(pf1, in1), b@(pf2, in2), c@(pf3, in3), d@(pf4, in4), e@(pf5, in5)) <- genInputsWithPF
+            usedFrames = Set(pf1._2, pf2._2, pf3._2, pf4._2, pf5._2)
+            useOneAsRef <- Gen.oneOf(false, true)
+            refFrame <- (
+                if useOneAsRef 
+                then Gen.oneOf(usedFrames).map(_.some)
+                else Gen.option(arbitrary[FrameIndex]).suchThat(_.fold(true)(i => !usedFrames.contains(i)))
+                )
+            (fatal, nonfatal) = List(a, b, c, d, e).foldRight(List.empty[(PF, InputBundle, TooFewShiftingRois)], List.empty[(PF, InputBundle, TooFewAccuracyRois)]) { 
+                case ((pf, in), (worse, bads)) => 
+                    if in.numUsable < numShifting then ((pf, in, TooFewShiftingRois(numShifting, in.numUsable)) :: worse, bads)
+                    else if in.numUsable < numShifting + numAccuracy then 
+                        // dummy null partition here, since it should never be accessed (only care about the requested and realised counts)
+                        val err = TooFewAccuracyRois(null, numAccuracy, NonnegativeInt.unsafe(in.numUsable - numShifting))
+                        (worse, (pf, in, err) :: bads)
+                    else (worse, bads)
+                }
+            (expError, expSevere) = (fatal, refFrame) match {
+                case (Nil, _) => (None, None)
+                case (_, None) => (Exception(s"${fatal.size} (position, frame) pairs with problems.\n${fatal.map(t => t._1 -> t._3)}").some, None)
+                case (_, Some(rf)) => fatal.partition(_._1._2 === rf) match {
+                    case (Nil, tolerated) => (None, tolerated.map(t => t._1 -> t._3).some)
+                    case (untolerated, _) => (Exception(s"${untolerated.size} (position, frame) pairs with problems.\n${untolerated.map(t => t._1 -> t._3)}").some, None)
+                }
+            }
+            expWarn = (expError.isEmpty && nonfatal.nonEmpty).option{ nonfatal.map(t => t._1 -> t._3) }
+        } yield (List(a, b, c, d, e), numShifting, numAccuracy, refFrame, (expError, expSevere, expWarn))
+
+        forAll (Gen.zip(genConfig, genInputsAndExpectation), minSuccessful(1000)) { 
+            case (parserConfig, (inputsWithPF, numShifting, numAccuracy, refFrame, (expError, expSevere, expWarn))) => 
+                withTempDirectory{ (tempdir: os.Path) =>
+                    inputsWithPF.foreach(writeBundle(tempdir).tupled) // Prep the data.
+                    expError match {
+                        case Some(exc) => assertThrows[Exception]{ workflow(parserConfig, tempdir, numShifting, numAccuracy, refFrame, None) }
+                        case None => 
+                            workflow(parserConfig, tempdir, numShifting, numAccuracy, refFrame, None)
+                            assertTooFewRoisFileContents(tempdir / "roi_partition_warnings.severe.json", expSevere)
+                            assertTooFewRoisFileContents(tempdir / "roi_partition_warnings.json", expWarn)
+                    }
+                }
+        }
+    }
+
     test("Integration: shifting <= #(usable ROIs) < shifting + accuracy ==> warnings file correctly produced; #116") {
         import SmallDataSet.*
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
@@ -544,10 +631,10 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         def genInputs = for {
             parserConfig <- arbitrary[CoordinateSequence].map(standardParserConfig)
             numShifting <- Gen.choose(1, maxRequestNum - 1).map(PositiveInt.unsafe)
-            numAccuracy <- Gen.choose(maxRequestNum - numShifting + 1, 10000).map(PositiveInt.unsafe)
+            numAccuracy <- Gen.choose(maxRequestNum - numShifting + 1, TooHighRoisNum).map(PositiveInt.unsafe)
             maybeSubfolderName <- Gen.option(Gen.const("temporary_subfolder"))
-            pf1 <- arbitrary[(PositionIndex, FrameIndex)]
-            pf2 <- arbitrary[(PositionIndex, FrameIndex)].suchThat(_ =!= pf1)
+            pf1 <- arbitrary[PosFramePair]
+            pf2 <- arbitrary[PosFramePair].suchThat(_ =!= pf1)
         } yield (parserConfig, numShifting, numAccuracy, maybeSubfolderName, pf1, pf2)
 
         forAll (genInputs) { case (parserConfig, numShifting, numAccuracy, maybeSubfolderName, pf1, pf2) =>
@@ -555,11 +642,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                 /* Setup the inputs. */
                 val confFile = tempdir / "parser_config.json"
                 os.write(confFile, write(parserConfig, indent = 2))
-                List(pf1 -> input1, pf2 -> input2).foreach { 
-                    case (pf, inputBundle) => 
-                        val fp = tempdir / getInputFilename.tupled(pf)
-                        os.write(fp, inputBundle.lines.mkString("\n"))
-                }
+                List(pf1 -> input1, pf2 -> input2).foreach(writeBundle(tempdir).tupled)
                 
                 /* Check that the workflow creates the expected warnings file. */
                 val warningsFile = tempdir / "roi_partition_warnings.json"
@@ -580,8 +663,8 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
             numShifting <- Gen.choose(1, maxRequestNum - 1).map(PositiveInt.unsafe)
             numAccuracy <- Gen.choose(1, maxRequestNum - numShifting).map(PositiveInt.unsafe)
             maybeSubfolderName <- Gen.option(Gen.const("temporary_subfolder"))
-            pf1 <- arbitrary[(PositionIndex, FrameIndex)]
-            pf2 <- arbitrary[(PositionIndex, FrameIndex)].suchThat(_ =!= pf1)
+            pf1 <- arbitrary[PosFramePair]
+            pf2 <- arbitrary[PosFramePair].suchThat(_ =!= pf1)
         } yield (coordseq, numShifting, numAccuracy, maybeSubfolderName, pf1, pf2)
         
         forAll (genInputs) {
@@ -653,12 +736,19 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
 
     /** Bundles of test data to use for the integration-like tests here, doing more actual file I/O */
     object SmallDataSet:
-        case class InputBundle(lines: List[String], partition: Partition):
+        val TooHighRoisNum = 10000
+
+        final case class InputBundle(lines: List[String], partition: Partition):
             final def points = partition.points
+            final def numUsable = NonnegativeInt.unsafe(partition.numUsable)
         end InputBundle
         
-        case class Partition(points: List[Point3D], usable: Set[RoiIndex]):
+        final case class Partition(points: List[Point3D], usable: Set[RoiIndex]):
+            require(points.nonEmpty, "No points for partition!")
+            require(usable.size > 1, "Need at least 2 usable ROIs!")
+            require(usable.forall(_.get < points.length), "Illegal usability indices!") // Ensure each index corresponds to a point.
             final def getPointSafe = (i: RoiIndex) => Try{ points(i.get) }.toOption
+            final def numUsable = usable.size
             final def unusable: Set[RoiIndex] = (0 to points.size).map(intToIndex).toSet -- usable
         end Partition
 
@@ -728,7 +818,19 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
      * *******************************************************************************
      */    
     type NNPair = (NonnegativeInt, NonnegativeInt)
-    type PosFramePair = (PositionIndex, FrameIndex)
+
+    def assertTooFewRoisFileContents[A](filepath: os.Path, expected: Option[List[(PosFramePair, A)]])(using ev: TooFewRoisLike[A]) = {
+        import TooFewRoisLike.* 
+        expected match {
+            case None => os.exists(filepath) shouldBe false
+            case Some(pfTooFewPairs) => 
+                os.isFile(filepath) shouldBe true
+                val obs = readJsonFile[List[(PosFramePair, TooFewRois)]](filepath)
+                val exp = pfTooFewPairs.map{ case (pf, tooFew) => pf -> tooFew.problem }
+                obs.length shouldEqual exp.length
+                obs.toSet shouldEqual exp.toSet
+        }
+    }
 
     def genDistinctNonnegativePairs: Gen[(PosFramePair, PosFramePair)] = 
         Gen.zip(genNonnegativePair, genNonnegativePair)
@@ -740,5 +842,11 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
     def getInputFilename(pos: PositionIndex, frame: FrameIndex): String = s"bead_rois__${pos.get}_${frame.get}.csv"
     
     def getParserConfigColumnNames(conf: ParserConfig): List[String] = List(conf.xCol.get, conf.yCol.get, conf.zCol.get, conf.qcCol)
+
+    def writeBundle(folder: os.Path)(pf: PosFramePair, bundle: SmallDataSet.InputBundle): os.Path = {
+        val fp = folder / getInputFilename.tupled(pf)
+        os.write(fp, bundle.lines.mkString("\n"))
+        fp
+    }
 
 end TestPartitionIndexedDriftCorrectionRois
