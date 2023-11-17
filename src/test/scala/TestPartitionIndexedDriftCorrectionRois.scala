@@ -39,8 +39,6 @@ import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.{
     ZColumn, 
     discoverInputs, 
     getOutputFilepath,
-    intToFrameIndex,
-    intToPositionIndex,
     readRoisFile,
     sampleDetectedRois, 
     workflow, 
@@ -749,7 +747,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
             require(usable.forall(_.get < points.length), "Illegal usability indices!") // Ensure each index corresponds to a point.
             final def getPointSafe = (i: RoiIndex) => Try{ points(i.get) }.toOption
             final def numUsable = usable.size
-            final def unusable: Set[RoiIndex] = (0 to points.size).map(intToIndex).toSet -- usable
+            final def unusable: Set[RoiIndex] = (0 to points.size).map(RoiIndex.unsafe).toSet -- usable
         end Partition
 
         def input1 = InputBundle(lines1, indexPartition1)
@@ -762,7 +760,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
             (12.4, 6.4, 1151.5), 
             (12.1, 8.1, 1709.5)
             ).map(buildPoint.tupled)
-        private def indexPartition1 = Partition(points1, usable = Set(0, 2, 3, 4).map(intToIndex))
+        private def indexPartition1 = Partition(points1, usable = Set(0, 2, 3, 4).map(RoiIndex.unsafe))
         private def lines1 = """,label,centroid-0,centroid-1,centroid-2,max_intensity,area,fail_code
             101,102,11.96875,1857.9375,1076.25,26799.0,32.0,
             104,105,10.6,1919.8,1137.4,12858.0,5.0,i
@@ -784,7 +782,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                 (8.875, 1851.25, 1779.5),
                 (9.708333333333334, 1831.625, 1328.0),
                 ).map(buildPoint.tupled)
-        private def indexPartition2 = Partition(points2, usable = Set(0, 1, 2, 3, 5, 7).map(intToIndex))
+        private def indexPartition2 = Partition(points2, usable = Set(0, 1, 2, 3, 5, 7).map(RoiIndex.unsafe))
         private def lines2 = """,label,centroid-0,centroid-1,centroid-2,max_intensity,area,fail_code
             3,4,9.6875,888.375,1132.03125,25723.0,32.0,
             20,21,10.16,1390.94,1386.96,33209.0,50.0,
@@ -810,7 +808,6 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         }
         """
         private def buildPoint(x: Double, y: Double, z: Double) = Point3D(XCoordinate(x), YCoordinate(y), ZCoordinate(z))
-        private def intToIndex: Int => RoiIndex = NonnegativeInt.unsafe.andThen(RoiIndex.apply)
     end SmallDataSet
 
     /* *******************************************************************************

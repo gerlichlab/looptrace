@@ -41,7 +41,7 @@ object SelectedRoi:
             toJsonSimple(coordseq), 
             json => {
                 val rawIndex = NonnegativeInt.unsafe(json(indexKey).num.toInt)
-                val idx = RoiIndex(NonnegativeInt.unsafe(rawIndex))
+                val idx = RoiIndex.unsafe(rawIndex)
                 val coords = json(pointKey).arr.map(_.num.toDouble)
                 val pt = Point3D.fromList(coordseq)(coords.toList).fold(msg => throw new Exception(msg), identity)
                 build(idx, pt)

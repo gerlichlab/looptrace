@@ -28,7 +28,7 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
     given positionIndexArbitrary(using idx: Arbitrary[NonnegativeInt]): Arbitrary[PositionIndex] = idx.map(PositionIndex.apply)
 
     given roiIndexArbitrary(using idx: Arbitrary[Int]): Arbitrary[RoiIndex] = 
-        Arbitrary{ Gen.choose(0, Int.MaxValue).map(RoiIndex.apply compose NonnegativeInt.unsafe) }
+        Arbitrary{ Gen.choose(0, Int.MaxValue).map(RoiIndex.unsafe) }
     
     given coordseqArbitrary: Arbitrary[CoordinateSequence] = 
         Arbitrary{ Gen.oneOf(CoordinateSequence.Forward, CoordinateSequence.Reverse) }
