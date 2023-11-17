@@ -43,6 +43,9 @@ package object looptrace {
             case i => i.some
         }
 
+    extension [A](t: Try[A])
+        def toValidatedNel: ValidatedNel[Throwable, A] = t.toEither.toValidatedNel
+
     /** Find a field in a header and use the index to build a row record parser for that field. */
     def buildFieldParse[A](name: String, parse: String => Either[String, A])(header: Array[String]): ValidatedNel[String, Array[String] => ValidatedNel[String, A]] = {
         header.lookup(name).toRight(f"Missing field in header: $name").map{ i => {
