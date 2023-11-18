@@ -458,7 +458,7 @@ class Drifter():
         return Path(self.image_handler.analysis_path) / "fine_drift_temp"
 
     def fine_correction_tempfile(self, pos_idx: int) -> Path:
-        return Path(self.image_handler.analysis_path) / f"{pos_idx}.dc_fine.tmp.csv"
+        return self.fine_correction_subfolder / f"{pos_idx}.dc_fine.tmp.csv"
 
     @property
     def method_name(self) -> str:
@@ -488,7 +488,7 @@ class Drifter():
         files = [
             self.fine_correction_subfolder / fn 
             for fn in os.listdir(self.fine_correction_subfolder) 
-            if os.path.splitext(fn) == ".csv"
+            if os.path.splitext(fn)[1] == ".csv"
         ]
         files = sorted(files, key=lambda fp: int(fp.name.split(".")))
         print(f"Reading {len(files)} fine drift correction file(s):\n" + "\n".join(files))
