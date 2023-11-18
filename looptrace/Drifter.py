@@ -491,7 +491,7 @@ class Drifter():
             if os.path.splitext(fn)[1] == ".csv"
         ]
         files = sorted(files, key=lambda fp: int(fp.name.split(".")[0]))
-        print(f"Reading {len(files)} fine drift correction file(s):\n" + "\n".join(files))
+        print(f"Reading {len(files)} fine drift correction file(s):\n" + "\n".join(p.name for p in files))
         return pd.concat((pd.read_csv(fp, index_col=0) for fp in files), axis=0, ignore_index=True)
 
     @property
