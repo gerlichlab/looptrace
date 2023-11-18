@@ -447,7 +447,7 @@ class Drifter():
         return f"{pos_idx}.checkpoint"
 
     def checkpoint_filepath(self, pos_idx: int) -> Path:
-        return self.fine_correction_correction_subfolder / self._checkpoint_filename(pos_idx)
+        return self.fine_correction_subfolder / self._checkpoint_filename(pos_idx)
 
     @property
     def downsampling(self) -> int:
