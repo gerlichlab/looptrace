@@ -270,7 +270,7 @@ def fine_correction_workflow(config_file: ExtantFile, images_folder: ExtantFolde
     D = Drifter(image_handler=ImageHandler(config_file, images_folder))
     print("Computing fine drifts")
     compute_fine_drifts(D)
-    all_drifts = D.read_all_fine_drifts
+    all_drifts = D.read_all_fine_drifts()
     all_drifts.columns = FULL_DRIFT_TABLE_COLUMNS
     outfile = D.dc_file_path__fine
     print(f"Writing fine drifts: {outfile}")
