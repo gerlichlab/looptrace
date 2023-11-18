@@ -460,14 +460,6 @@ class Drifter():
     def fine_correction_tempfile(self, pos_idx: int) -> Path:
         return Path(self.image_handler.analysis_path) / f"{pos_idx}.dc_fine.tmp.csv"
 
-    # TODO: remove this when sharing bead ROI information. See #101
-    def get_reference_bead_rois_filtered_filepath(self, pos_idx: int) -> Path:
-        return self.reference_bead_rois_subfolder / f"beads.{pos_idx}.filtered.csv"
-
-    # TODO: remove this when sharing bead ROI information. See #101
-    def get_reference_bead_rois_unfiltered_filepath(self, pos_idx: int) -> Path:
-        return self.reference_bead_rois_subfolder / f"beads.{pos_idx}.unfiltered.csv"
-
     @property
     def method_name(self) -> str:
         return get_method_name(self.config) or Methods.CROSS_CORRELATION_NAME.value
@@ -501,12 +493,6 @@ class Drifter():
         files = sorted(files, key=lambda fp: int(fp.name.split(".")))
         print(f"Reading {len(files)} fine drift correction file(s):\n" + "\n".join(files))
         return pd.concat((pd.read_csv(fp, index_col=0) for fp in files), axis=0, ignore_index=True)
-
-
-    # TODO: remove this when sharing bead ROI information. See #101
-    @property
-    def reference_bead_rois_subfolder(self) -> Path:
-        return Path(self.image_handler.analysis_path) / "reference_bead_rois"
 
     @property
     def reference_channel(self) -> int:
