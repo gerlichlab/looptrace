@@ -269,7 +269,9 @@ def fine_correction_workflow(config_file: ExtantFile, images_folder: ExtantFolde
     """The workflow for the second, optional, fine drift correction"""
     D = Drifter(image_handler=ImageHandler(config_file, images_folder))
     print("Computing fine drifts")
-    all_drifts = pd.DataFrame(compute_fine_drifts(D), columns=FULL_DRIFT_TABLE_COLUMNS)
+    compute_fine_drifts(D)
+    all_drifts = D.read_all_fine_drifts
+    all_drifts.columns = FULL_DRIFT_TABLE_COLUMNS
     outfile = D.dc_file_path__fine
     print(f"Writing fine drifts: {outfile}")
     all_drifts.to_csv(outfile)
@@ -287,7 +289,7 @@ def _get_frame_and_coarse(row) -> Tuple[int, Tuple[int, int, int]]:
     return row[FRAME_COLUMN], tuple(row[COARSE_DRIFT_COLUMNS])
 
 
-def compute_fine_drifts(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
+def compute_fine_drifts(drifter: "Drifter") -> None:
     """
     Compute the fine drifts, using what's already been done for coarse drifts.
 
@@ -303,8 +305,11 @@ def compute_fine_drifts(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
     roi_px = drifter.bead_roi_px
     beads_exp_shape = (drifter.num_bead_points, 3)
     for position, position_group in iter_coarse_drifts_by_position(filepath=drifter.dc_file_path__coarse):
-        print(f"Running fine drift correction for position: {position}")
         pos_idx = drifter.full_pos_list.index(position)
+        if not drifter.overwrite and drifter.checkpoint_filepath(pos_idx=pos_idx):
+            print(f"Fine DC checkpoint exists, skipping FOV: {pos_idx}")
+            continue
+        print(f"Running fine drift correction for position {position} (index {pos_idx})")
         ref_img = drifter.get_reference_image(pos_idx)
         get_no_partition_message = lambda t: f"No bead ROIs partition for (pos={pos_idx}, frame={t})"
         
@@ -313,6 +318,7 @@ def compute_fine_drifts(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
         if bead_rois.shape != beads_exp_shape:
             raise Exception(f"Unexpected bead ROIs shape for reference (pos={pos_idx}, frame={frame})! ({bead_rois.shape}), expecting {beads_exp_shape}")
         
+        curr_position_rows = []
         if drifter.method_name == Methods.FIT_NAME.value:
             print("Computing reference bead fits")
             ref_bead_subimgs = Parallel(n_jobs=-1, prefer='threads')(delayed(extract_single_bead)(pt, ref_img, bead_roi_px=roi_px) for pt in tqdm.tqdm(bead_rois))
@@ -337,7 +343,8 @@ def compute_fine_drifts(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
                 mov_bead_subimgs = Parallel(n_jobs=-1, prefer='threads')(delayed(extract_single_bead)(pt, mov_img, bead_roi_px=roi_px, drift_course=coarse) for pt in tqdm.tqdm(bead_rois))
                 mov_bead_fits = Parallel(n_jobs=-1, prefer='threads')(delayed(fit_bead_coordinates)(mbi) for mbi in tqdm.tqdm(mov_bead_subimgs))
                 fine_drifts = [subtract_point_fits(ref, mov) for ref, mov in zip(ref_bead_fits, mov_bead_fits)]
-                yield (frame, position) + coarse + finalise_fine_drift(fine_drifts)
+                new_row = (frame, position) + coarse + finalise_fine_drift(fine_drifts)
+                curr_position_rows.append(new_row)
         elif drifter.method_name == Methods.CROSS_CORRELATION_NAME.value:
             print("Extracting reference bead images")
             ref_bead_subimgs = [extract_single_bead(point, ref_img, bead_roi_px=roi_px) for point in bead_rois]
@@ -362,9 +369,19 @@ def compute_fine_drifts(drifter: "Drifter") -> Iterable[FullDriftTableRow]:
                     delayed(lambda point, ref_bead_img: correlate_single_bead(ref_bead_img, extract_single_bead(point, mov_img, bead_roi_px=roi_px, drift_course=coarse), 100))(*args)
                     for args in tqdm.tqdm(zip(bead_rois, ref_bead_subimgs))
                     )
-                yield (frame, position) + coarse + finalise_fine_drift(fine_drifts)
+                new_row = (frame, position) + coarse + finalise_fine_drift(fine_drifts)
+                curr_position_rows.append(new_row)
         else:
             raise Exception(f"Unknown drift correction method: {drifter.method_name}")
+        
+        drifter.fine_correction_subfolder.mkdir(exist_ok=True)
+        curr_position_temp = drifter.fine_correction_tempfile(pos_idx=pos_idx)
+        print(f"Writing drift correction tempfile for FOV {pos_idx}: {curr_position_temp}")
+        pd.DataFrame(curr_position_rows).to_csv(curr_position_temp)
+        checkpoint_file = drifter.fine_correction_subfolder / f"{pos_idx}.checkpoint"
+        print(f"Touching checkpoint: {checkpoint_file}")
+        with open(checkpoint_file, 'w'): # Just create the empty file.
+            pass
 
 
 def finalise_fine_drift(drift: Iterable[np.ndarray]) -> Tuple[FloatLike, FloatLike, FloatLike]:
@@ -416,10 +433,6 @@ class Drifter():
         return self.config['bead_threshold']
 
     @property
-    def downsampling(self) -> int:
-        return self.config['course_drift_downsample']
-
-    @property
     def bead_roi_parameters(self) -> BeadRoiParameters:
         return BeadRoiParameters(
             min_intensity_for_segmentation=self.bead_threshold, 
@@ -428,6 +441,24 @@ class Drifter():
             max_region_size=self.bead_roi_max_size, 
             max_intensity_for_detection=self.bead_detection_max_intensity,
             )
+
+    @staticmethod
+    def _checkpoint_filename(pos_idx: int) -> str:
+        return f"{pos_idx}.checkpoint"
+
+    def checkpoint_filepath(self, pos_idx: int) -> Path:
+        return self.fine_correction_correction_subfolder / self._checkpoint_filename(pos_idx)
+
+    @property
+    def downsampling(self) -> int:
+        return self.config['course_drift_downsample']
+
+    @property
+    def fine_correction_subfolder(self) -> Path:
+        return Path(self.image_handler.analysis_path) / "fine_drift_temp"
+
+    def fine_correction_tempfile(self, pos_idx: int) -> Path:
+        return Path(self.image_handler.analysis_path) / f"{pos_idx}.dc_fine.tmp.csv"
 
     # TODO: remove this when sharing bead ROI information. See #101
     def get_reference_bead_rois_filtered_filepath(self, pos_idx: int) -> Path:
@@ -456,6 +487,21 @@ class Drifter():
     @property
     def num_positions(self) -> int:
         return len(self.full_pos_list)
+
+    @property
+    def overwrite(self) -> bool:
+        return self.config.get("overwrite_fine_dc", False)
+
+    def read_all_fine_drifts(self) -> pd.DataFrame:
+        files = [
+            self.fine_correction_subfolder / fn 
+            for fn in os.listdir(self.fine_correction_subfolder) 
+            if os.path.splitext(fn) == ".csv"
+        ]
+        files = sorted(files, key=lambda fp: int(fp.name.split(".")))
+        print(f"Reading {len(files)} fine drift correction file(s):\n" + "\n".join(files))
+        return pd.concat((pd.read_csv(fp, index_col=0) for fp in files), axis=0, ignore_index=True)
+
 
     # TODO: remove this when sharing bead ROI information. See #101
     @property
