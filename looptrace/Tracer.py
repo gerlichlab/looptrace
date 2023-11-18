@@ -257,10 +257,10 @@ def find_trace_fits(
                     #shift = ndi.shift(pos_imgs[background_specification.frame_index], shift=background_specification.drifts[t])
                     #spot_img = np.clip(spot_img.astype(np.int16) - shift, a_min = 0, a_max = None)
                 spot_img = finalise_spot_img(spot_img, pos_imgs)
-                fits.append(trace_single_roi(fit_func_spec=fit_func_spec, roi_img=spot_img, mask=ref_img))
+                fits.append(fit_single_roi(fit_func_spec=fit_func_spec, roi_img=spot_img, mask=ref_img))
     else:
         fits = Parallel(n_jobs=cores or -1)(
-            delayed(trace_single_roi)(fit_func_spec=ff_spec, roi_img=spot_img) 
+            delayed(fit_single_roi)(fit_func_spec=ff_spec, roi_img=spot_img) 
             for ff_spec, spot_img in _iter_fit_args(fit_func_spec=fit_func_spec, images=images, bg_spec=background_specification)
             )
     
@@ -271,7 +271,7 @@ def find_trace_fits(
     return pd.DataFrame(fits, columns=full_cols)
 
 
-def trace_single_roi(
+def fit_single_roi(
         fit_func_spec: FunctionalForm, 
         roi_img: np.ndarray, 
         mask: Optional[np.ndarray] = None, 
