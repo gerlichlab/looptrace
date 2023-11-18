@@ -306,7 +306,7 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
     beads_exp_shape = (drifter.num_bead_points, 3)
     for position, position_group in iter_coarse_drifts_by_position(filepath=drifter.dc_file_path__coarse):
         pos_idx = drifter.full_pos_list.index(position)
-        if not drifter.overwrite and drifter.checkpoint_filepath(pos_idx=pos_idx):
+        if not drifter.overwrite and drifter.checkpoint_filepath(pos_idx=pos_idx).is_file():
             print(f"Fine DC checkpoint exists, skipping FOV: {pos_idx}")
             continue
         print(f"Running fine drift correction for position {position} (index {pos_idx})")
