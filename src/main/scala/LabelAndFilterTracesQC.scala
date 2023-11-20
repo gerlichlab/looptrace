@@ -196,8 +196,8 @@ object LabelAndFilterTracesQC:
                     val maybeParseRefDist = buildFieldParse(conf.distanceToReferenceColumn, safeParseDouble.andThen(_.flatMap(NonnegativeReal.either).map(DistanceToRegion.apply)))(header)
                     val maybeParseSignal = buildFieldParse(conf.signalColumn, safeParseDouble.andThen(_.map(Signal.apply)))(header)
                     val maybeParseBackground = buildFieldParse(conf.backgroundColumn, safeParseDouble.andThen(_.map(Background.apply)))(header)
-                    val maybeParseSigmaXY = buildFieldParse(conf.xySigmaColumn, safeParseDouble.andThen(_.flatMap(PositiveReal.either).map(SigmaXY.apply)))(header)
-                    val maybeParseSigmaZ = buildFieldParse(conf.zSigmaColumn, safeParseDouble.andThen(_.flatMap(PositiveReal.either).map(SigmaZ.apply)))(header)
+                    val maybeParseSigmaXY = buildFieldParse(conf.xySigmaColumn, safeParseDouble)(header)
+                    val maybeParseSigmaZ = buildFieldParse(conf.zSigmaColumn, safeParseDouble)(header)
                     val maybeParseBoxZ = buildFieldParse(conf.zBoxSizeColumn.get, safeParseInt.andThen(_.flatMap(PositiveInt.either).map(BoxSizeZ.apply)))(header)
                     val maybeParseBoxY = buildFieldParse(conf.yBoxSizeColumn.get, safeParseInt.andThen(_.flatMap(PositiveInt.either).map(BoxSizeY.apply)))(header)
                     val maybeParseBoxX = buildFieldParse(conf.xBoxSizeColumn.get, safeParseInt.andThen(_.flatMap(PositiveInt.either).map(BoxSizeX.apply)))(header)
@@ -234,15 +234,15 @@ object LabelAndFilterTracesQC:
                                 val (boxZ, boxY, boxX): (BoxSizeZ, BoxSizeY, BoxSizeX) = qcData.box
                                 val (z, y, x): (ZCoordinate, YCoordinate, XCoordinate) = qcData.centroid match { case Point3D(x, y, z) => (z, y, x) }
                                 val passDist = qcData.distanceToRegion < maxDistFromRegion
-                                val passSNR = qcData.signal.get > minSignalToNoise.get * qcData.background.get
-                                val passSigmaXY = qcData.sigmaXY < maxSigmaXY
-                                val passSigmaZ = qcData.sigmaZ < maxSigmaZ
-                                val passBoxZ = qcData.sigmaZ.get < z.get && z.get <  boxZ.get - qcData.sigmaZ.get
-                                val passBoxY = qcData.sigmaXY.get < y.get && y.get <  boxY.get - qcData.sigmaXY.get
-                                val passBoxX = qcData.sigmaXY.get < x.get && x.get <  boxX.get - qcData.sigmaXY.get
+                                val passSNR = qcData.passesSNR(minSignalToNoise)
+                                val passSigmaXY = qcData.sigmaXY < maxSigmaXY.get
+                                val passSigmaZ = qcData.sigmaZ < maxSigmaZ.get
+                                val passBoxZ = qcData.sigmaZ < z.get && z.get <  boxZ.get - qcData.sigmaZ
+                                val passBoxY = qcData.sigmaXY < y.get && y.get <  boxY.get - qcData.sigmaXY
+                                val passBoxX = qcData.sigmaXY < x.get && x.get <  boxX.get - qcData.sigmaXY
                                 rec -> QCResult(
                                     withinRegion = passDist, 
-                                    signalNoiseRatio = passSNR, 
+                                    sufficientSNR = passSNR, 
                                     denseXY = passSigmaXY, 
                                     denseZ = passSigmaZ, 
                                     inBoundsX = passBoxX, 
@@ -264,9 +264,13 @@ object LabelAndFilterTracesQC:
         require(os.isDir(outfolder), s"Output folder path isn't a directory: $outfolder")
         val (withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol) = labelsOf[QCResult]
         Alternative[List].separate(NonnegativeInt.indexed(records.toList).map { 
-            case ((original, qcResult), lineNum) => (header.length =!= original.length).either(original -> lineNum, original -> qcResult)
+            case ((original, qcResult), lineNum) => 
+                (header.length === original.length).either(
+                    ((s"Header has ${header.length}, original has ${original.length}"), lineNum), 
+                    (original, qcResult)
+                    )
         }) match {
-            case (Nil, unfiltered) => 
+            case (Nil, unfiltered) => // success (no errors) case --> write output files
                 val qcPassCol = "qcPass"
                 
                 val getQCFlagsText = (qc: QCResult) => (qc.components :+ qc.all).map(p => if p then "1" else "0")
@@ -285,8 +289,8 @@ object LabelAndFilterTracesQC:
     }
         
     /** bundle of the QC pass/fail components for individual rows/records supporting traces */
-    final case class QCResult(withinRegion: Boolean, signalNoiseRatio: Boolean, denseXY: Boolean, denseZ: Boolean, inBoundsX: Boolean, inBoundsY: Boolean, inBoundsZ: Boolean):
-        final def components: Array[Boolean] = Array(withinRegion, signalNoiseRatio, denseXY, denseZ, inBoundsX, inBoundsY, inBoundsZ)
+    final case class QCResult(withinRegion: Boolean, sufficientSNR: Boolean, denseXY: Boolean, denseZ: Boolean, inBoundsX: Boolean, inBoundsY: Boolean, inBoundsZ: Boolean):
+        final def components: Array[Boolean] = Array(withinRegion, sufficientSNR, denseXY, denseZ, inBoundsX, inBoundsY, inBoundsZ)
         final def all: Boolean = components.all
     end QCResult
 
@@ -335,12 +339,14 @@ object LabelAndFilterTracesQC:
         distanceToRegion: DistanceToRegion, 
         signal: Signal, 
         background: Background, 
-        sigmaXY: SigmaXY, 
-        sigmaZ: SigmaZ
+        sigmaXY: Real, 
+        sigmaZ: Real
         ):
-        def x: XCoordinate = centroid.x
-        def y: YCoordinate = centroid.y
-        def z: ZCoordinate = centroid.z
+        final def x: XCoordinate = centroid.x
+        final def y: YCoordinate = centroid.y
+        final def z: ZCoordinate = centroid.z
+        final def passesSNR(minSNR: SignalToNoise): Boolean = signal.get > minSNR.get * background.get
+
     end QCData
 
     final case class BoxSizeColumnX(get: String) extends AnyVal
