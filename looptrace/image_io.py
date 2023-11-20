@@ -202,7 +202,7 @@ def stack_nd2_to_dask(folder: str, position_id: int = None):
         metadata['voxel_size'] = [sample.voxel_size().z, sample.voxel_size().y, sample.voxel_size().x]
         metadata['microscope'] = {
                     'objectiveMagnification': sample.metadata.channels[0].microscope.objectiveMagnification,
-                    'objectiveName': sample.metadata.channels[0].microscope.objectiveMagnification,
+                    'objectiveName': sample.metadata.channels[0].microscope.objectiveName,
                     'objectiveNumericalAperture':sample.metadata.channels[0].microscope.objectiveNumericalAperture,
                     'zoomMagnification': sample.metadata.channels[0].microscope.zoomMagnification,
                     'immersionRefractiveIndex': sample.metadata.channels[0].microscope.immersionRefractiveIndex,
