@@ -1,20 +1,15 @@
 """Supporting functions for the quality control of chromatin fiber traces"""
 
 import dataclasses
-import itertools
-import json
 from pathlib import Path
 from typing import *
 
-from gertils import ExtantFile
 import numpy as np
 import pandas as pd
 import yaml
 
 from looptrace import *
 from looptrace.numeric_types import NumberLike as Numeric
-
-QC_PASS_COUNT_COLUMN = "n_qc_pass"
 
 
 @dataclasses.dataclass
