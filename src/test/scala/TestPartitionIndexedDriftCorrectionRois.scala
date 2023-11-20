@@ -39,15 +39,15 @@ import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.{
     ZColumn, 
     discoverInputs, 
     getOutputFilepath,
+    getOutputSubfolder,
     readRoisFile,
     sampleDetectedRois, 
     workflow, 
     writeTooFewRois
 }
+import at.ac.oeaw.imba.gerlich.looptrace.PathHelpers.listPath
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.readJsonFile
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ CoordinateSequence, Point3D, XCoordinate, YCoordinate, ZCoordinate }
-import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.getOutputSubfolder
-import at.ac.oeaw.imba.gerlich.looptrace.PathHelpers.listPath
 
 /** Tests for the partitioning of regions of interest (ROIs) for drift correction */
 class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSuite, should.Matchers, PartitionRoisSuite:
