@@ -92,7 +92,7 @@ count_rois_cmd <- sprintf("wc -l %s", file.path(opts$input_folder, pattern))
 message("Building table from command: ", count_rois_cmd)
 roi_counts <- data.table(read.table(text = system(count_rois_cmd, intern = TRUE), stringsAsFactors = FALSE), stringsAsFactors = FALSE)
 colnames(roi_counts) <- c("count", "filename")
-message("Printing ROI counts table")
+message("Printing ROI counts table (before enrichment and sorting)")
 roi_counts
 roi_counts$filename <- sapply(roi_counts$filename, basename)
 
@@ -141,6 +141,8 @@ infiles <- Sys.glob(file.path(opts$input_folder, pattern))
 message(sprintf("Counting QC-passing bead ROIs in each of %s input files...", length(infiles)))
 roi_counts_filtered <- data.table(do.call(what = rbind, args = lapply(infiles, countPassingQC)))
 message("...done.")
+message("Printing filtered counts table (before sorting)...")
+roi_counts_filtered
 setKeyPF(roi_counts_filtered)
 
 writeDataFile(roi_counts, counts_type_name = "unfiltered")
