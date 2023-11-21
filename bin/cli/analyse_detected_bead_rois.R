@@ -90,9 +90,9 @@ setKeyPF <- function(unkeyed) { setkey(unkeyed, position, frame) }
 pattern <- sprintf("%s*.%s", opts$counts_files_prefix, opts$counts_files_extension)
 count_rois_cmd <- sprintf("wc -l %s", file.path(opts$input_folder, pattern))
 message("Building table from command: ", count_rois_cmd)
-roi_counts <- data.table(read.table(text = system(count_rois_cmd, intern = TRUE), stringsAsFactors = FALSE), stringsAsFactors = FALSE)
+roi_counts <- fread(cmd = count_rois_cmd, stringsAsFactors = FALSE)
 colnames(roi_counts) <- c("count", "filename")
-message("Printing ROI counts table (before enrichment and sorting)")
+message("Printing ROI counts table (before filepath trimming, enrichment, and sorting)")
 roi_counts
 roi_counts$filename <- sapply(roi_counts$filename, basename)
 
