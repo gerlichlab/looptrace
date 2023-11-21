@@ -53,7 +53,7 @@ countPassingQC <- function(f) {
     fn <- basename(f)
     p_and_f <- parsePositionAndFrame(fn)
     cmd_count_filtered <- sprintf("cut -d%s -f%s %s", delimiter, opts$qc_code_column, f)
-    n_qc_pass <- sum(fread(cmd_count_filtered)[[1]] == "")
+    n_qc_pass <- sum(fread(cmd = cmd_count_filtered)[[1]] == "")
     list(position = p_and_f[["position"]], frame = p_and_f[["frame"]], filename = fn, count = n_qc_pass)
 }
 
