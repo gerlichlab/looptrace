@@ -107,14 +107,6 @@ saveCountsPlot <- function(fig, plotTypeName) {
     plotfile
 }
 
-message("Building per-frame bead ROI count boxplot, all detected")
-roi_counts_boxplot <- ggplot(roi_counts, aes(x = as.factor(frame), y = count)) + 
-    geom_boxplot() + 
-    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
-    xlab("timepoint") + 
-    ggtitle("Detected bead ROI count by frame, across FOVs")
-saveCountsPlot(fig = roi_counts_boxplot, plotTypeName = "detected.boxplot")
-
 message("Building (frame, FOV) bead ROI count heatmap")
 roi_counts_heatmap <- ggplot(roi_counts, aes(x = frame, y = position, fill = count)) + 
     geom_tile() + 
