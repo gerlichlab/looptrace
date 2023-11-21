@@ -137,12 +137,20 @@ roi_counts[, .(position, frame, filename, count)] # more natural/intuitive seque
 setKeyPF(roi_counts)
 
 # Create the filtered counts table.
+## First, do the actual data parsing...
 infiles <- Sys.glob(file.path(opts$input_folder, pattern))
 message(sprintf("Counting QC-passing bead ROIs in each of %s input files...", length(infiles)))
 roi_counts_filtered <- data.table(do.call(what = rbind, args = lapply(infiles, countPassingQC)))
 message("...done.")
 message("Printing filtered counts table (before sorting)...")
 roi_counts_filtered
+## ...then, convert the values by column, according to column type...
+type_by_column = list(position = as.integer, frame = as.integer, filename = as.character, count = as.integer)
+for (col in names(type_by_column)) {
+    convert = type_by_column[[col]]
+    set(roi_counts_filtered, j = col, value = convert(roi_counts_filtered[[col]]))
+}
+## ...finally, set the key to order the rows as desired (and done for the unfiltered counts).
 setKeyPF(roi_counts_filtered)
 
 writeDataFile(roi_counts, counts_type_name = "unfiltered")
