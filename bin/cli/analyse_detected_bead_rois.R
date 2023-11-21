@@ -54,7 +54,7 @@ countPassingQC <- function(f) {
     p_and_f <- parsePositionAndFrame(fn)
     cmd_count_filtered <- sprintf("cut -d%s -f%s %s", delimiter, opts$qc_code_column, f)
     n_qc_pass <- sum(fread(cmd_count_filtered)[[1]] == "")
-    list(position = p_and_f$position, frame = p_and_f$frame, filename = fn, count = n_qc_pass)
+    list(position = p_and_f[["position"]], frame = p_and_f[["frame"]], filename = fn, count = n_qc_pass)
 }
 
 # Write the count of ROIs from each (FOV, timepoint) file, either unfiltered or filtered counts.
@@ -131,8 +131,8 @@ roi_counts
 ## Parse position and frame from each filename.
 pos_and_frame <- lapply(roi_counts$filename, parsePositionAndFrame)
 ## Finalise the table by adding the position and frame information.
-roi_counts$position <- sapply(pos_and_frame, function(e) e$position)
-roi_counts$frame <- sapply(pos_and_frame, function(e) e$frame)
+roi_counts$position <- sapply(pos_and_frame, function(e) e[["position"]])
+roi_counts$frame <- sapply(pos_and_frame, function(e) e[["frame"]])
 roi_counts[, .(position, frame, filename, count)] # more natural/intuitive sequence of columns
 setKeyPF(roi_counts)
 
