@@ -514,18 +514,19 @@ class SpotPicker:
         
         if self.config.get('spot_in_nuc', False):
             key_rois_table = self.input_name + '_rois' + NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION
-            filter_rois_table = lambda t: t.loc[t['nuc_label'] != 0]
+            use_roi = lambda r: r['nuc_label'] != 0
         else:
             key_rois_table = self.input_name + '_rois'
-            filter_rois_table = lambda t: t
+            use_roi = lambda _: True
         
         try:
             rois_table = self.image_handler.tables[key_rois_table]
         except KeyError as e:
             raise MissingRoisTableException(key_rois_table) from e
-        rois_table = filter_rois_table(rois_table)
         
-        for _, roi in tqdm.tqdm(rois_table.iterrows(), total=len(rois_table)):
+        for idx, roi in tqdm.tqdm(rois_table.iterrows(), total=len(rois_table)):
+            if not use_roi(roi):
+                continue
             pos = roi['position']
             pos_index = self.image_handler.image_lists[self.input_name].index(pos)
             dc_pos_name = self.image_handler.image_lists[self.config['reg_input_moving']][pos_index] # not unused; used for table query
@@ -553,13 +554,13 @@ class SpotPicker:
                 pad_x_min = abs(min(0,x_min))
                 pad_x_max = abs(max(0,x_max-X))
 
-                all_rois.append([pos, pos_index, roi.name, dc_frame['frame'], ref_frame, ch, 
+                all_rois.append([pos, pos_index, idx, roi.name, dc_frame['frame'], ref_frame, ch, 
                                 z_min, z_max, y_min, y_max, x_min, x_max, 
                                 pad_z_min, pad_z_max, pad_y_min, pad_y_max, pad_x_min, pad_x_max,
                                 z_drift_course, y_drift_course, x_drift_course, 
                                 dc_frame['z_px_fine'], dc_frame['y_px_fine'], dc_frame['x_px_fine']])
 
-        self.all_rois = pd.DataFrame(all_rois, columns=['position', 'pos_index', 'roi_id', 'frame', 'ref_frame', 'ch', 
+        self.all_rois = pd.DataFrame(all_rois, columns=['position', 'pos_index', 'roi_number', 'roi_id', 'frame', 'ref_frame', 'ch', 
                                 'z_min', 'z_max', 'y_min', 'y_max', 'x_min', 'x_max',
                                 'pad_z_min', 'pad_z_max', 'pad_y_min', 'pad_y_max', 'pad_x_min', 'pad_x_max', 
                                 'z_px_course', 'y_px_course', 'x_px_course',
