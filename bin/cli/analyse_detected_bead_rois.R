@@ -58,9 +58,9 @@ countPassingQC <- function(f) {
 }
 
 # Write the count of ROIs from each (FOV, timepoint) file, either unfiltered or filtered counts.
-writeDataFile <- function(counts_table, counts_type_name) {
-    data_output_file <- file.path(opts$output_folder, sprintf("%s.%s.csv", kBeadRoisPrefix, counts_type_name))
-    message(sprintf("Writing %s bead ROI counts data: %s", counts_type_name, data_output_file))
+writeDataFile <- function(counts_table) {
+    data_output_file <- file.path(opts$output_folder, sprintf("%s.csv", kBeadRoisPrefix))
+    message(sprintf("Writing bead ROI counts data: %s", data_output_file))
     write.table(counts_table, file = data_output_file, quote = FALSE, sep = ",", row.names = FALSE, col.names = TRUE)
     data_output_file
 }
@@ -150,11 +150,19 @@ for (col in names(type_by_column)) {
     convert = type_by_column[[col]]
     set(roi_counts_filtered, j = col, value = convert(roi_counts_filtered[[col]]))
 }
-## ...finally, set the key to order the rows as desired (and done for the unfiltered counts).
+## ...finally, set the key to prep the merge.
 setKeyPF(roi_counts_filtered)
 
-writeDataFile(roi_counts, counts_type_name = "unfiltered")
-writeDataFile(roi_counts_filtered, counts_type_name = "filtered")
+data_file <- {
+    data_table_merged <- merge(
+        roi_counts[, .(position, frame, count)], 
+        roi_counts_filtered[, .(position, frame, count)], 
+        by = c("position", "frame"), 
+        suffixes = c("_unfiltered", "_filtered")
+        )
+    writeDataFile(data_table_merged)
+}
+message("Wrote combined data: ", data_file)
 
 message("Building (frame, FOV) bead ROI count heatmaps")
 roi_counts_heatmap <- buildCountsHeatmap(roi_counts, "unfiltered")
