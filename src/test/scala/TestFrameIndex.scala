@@ -1,8 +1,6 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
-import scala.util.Random
 import cats.syntax.eq.*
-import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should
@@ -22,6 +20,8 @@ class TestFrameIndex extends AnyFunSuite, RefinementWrapperSuite, ScalacheckSuit
     }
 
     test("Set respects frame index equivalence.") {
-        forAll (genValuesAndNumUnique(FrameIndex.unsafe)) { case (indices, expected) => indices.toSet shouldEqual expected }
+        forAll (genValuesAndNumUnique(Gen.choose(0, 100))(FrameIndex.unsafe)) { 
+            case (indices, expected) => indices.toSet shouldEqual expected
+        }
     }
 end TestFrameIndex

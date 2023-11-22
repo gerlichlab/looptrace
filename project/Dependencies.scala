@@ -16,6 +16,7 @@ object Dependencies {
     /* Test dependencies */
     lazy val scalacheck = "org.scalacheck" %% "scalacheck" % "1.17.0"
     lazy val scalactic = "org.scalactic" %% "scalactic" % scalatestVersion
+    lazy val scalaCsv = "com.github.tototoshi" %% "scala-csv" % "1.3.10"
     lazy val scalatest = "org.scalatest" %% "scalatest" % scalatestVersion
     lazy val scalatestScalacheck = "org.scalatestplus" %% "scalacheck-1-17" % "3.2.17.0"
 

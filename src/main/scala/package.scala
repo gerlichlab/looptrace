@@ -8,11 +8,13 @@ import cats.data.{ NonEmptyList as NEL, ValidatedNel }
 import cats.syntax.contravariant.*
 import cats.syntax.either.*
 import cats.syntax.eq.*
+import cats.syntax.functor.*
 import cats.syntax.option.*
 import cats.syntax.show.*
 
 import mouse.boolean.*
 import scopt.Read
+import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.readJsonFile
 
 /** Chromatin fiber tracing with FISH probes */
 package object looptrace {
@@ -22,7 +24,7 @@ package object looptrace {
     type ErrMsgsOr[A] = Either[ErrorMessages, A]
 
     def writeTextFile(target: os.Path, data: Iterable[Array[String]], delimiter: Delimiter) = 
-        os.write(target, data.map(delimiter.join))
+        os.write(target, data.map(delimiter.join.andThen(_ ++ "\n")))
 
     extension (ps: Iterable[Boolean])
         def all: Boolean = ps.forall(identity)
@@ -63,6 +65,9 @@ package object looptrace {
     /** Try to parse the given string as a decimal value. */
     def safeParseDouble(s: String): Either[String, Double] = Try{ s.toDouble }.toEither.leftMap(_.getMessage)
     
+    /** Try to parse a positive real number from the given string. */
+    def safeParsePosNum = safeParseDouble.fmap(_.flatMap(PositiveReal.either))
+
     /** Try to parse the given string as an integer. */
     def safeParseInt(s: String): Either[String, Int] = Try{ s.toInt }.toEither.leftMap(_.getMessage)
 
@@ -161,23 +166,38 @@ package object looptrace {
         given showForFrameIndex: Show[FrameIndex] = Show.show(_.get.show)
         def unsafe = NonnegativeInt.unsafe.andThen(FrameIndex.apply)
     end FrameIndex
-    
+
     final case class PositionIndex(get: NonnegativeInt) extends AnyVal
     object PositionIndex:
         given eqForPositionIndex: Eq[PositionIndex] = Eq.fromUniversalEquals[PositionIndex]
         given showForPositionIndex: Show[PositionIndex] = Show.show(_.get.show)
+        def fromInt = NonnegativeInt.either.fmap(_.map(PositionIndex.apply))
         def unsafe = NonnegativeInt.unsafe.andThen(PositionIndex.apply)
     end PositionIndex
 
-    case class ProbeName(get: String)
+    final case class ProbeName(get: String)
     object ProbeName:
         given showForProbeName: Show[ProbeName] = Show.show(_.get)
+
+    final case class RegionId(get: FrameIndex):
+        def toInt: NonnegativeInt = get.get
+    end RegionId
+    object RegionId:
+        def fromInt(z: Int) = NonnegativeInt.either(z).map(fromNonnegative)
+        def fromNonnegative = RegionId.apply `compose` FrameIndex.apply
+    end RegionId
 
     final case class RoiIndex(get: NonnegativeInt) extends AnyVal
     object RoiIndex:
         implicit val showForRoiIndex: Show[RoiIndex] = Show.show(_.get.show)
         def unsafe = NonnegativeInt.unsafe.andThen(RoiIndex.apply)
     end RoiIndex
+
+    final case class TraceId(get: NonnegativeInt) extends AnyVal
+    object TraceId:
+        def fromInt = NonnegativeInt.either.fmap(_.map(TraceId.apply))
+    end TraceId
+    
 
     /**
       * Write a mapping, from position and frame pair to value, to JSON.

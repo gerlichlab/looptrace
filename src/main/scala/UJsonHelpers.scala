@@ -34,5 +34,9 @@ object UJsonHelpers:
       * @return Either a collection of error messages or the extracted value
       */
     def safeExtract[A](key: String, lift: String => A)(json: ujson.Value): ValidatedNel[String, A] = 
-        Try{ json(key).str }.toEither.bimap(_.getMessage, lift).toValidatedNel
+        safeExtractStr(key)(json) `map` lift
+
+    def safeExtractStr(key: String)(json: ujson.Value): ValidatedNel[String, String] = 
+        Try{ json(key).str }.toEither.leftMap(_.getMessage).toValidatedNel
+
 end UJsonHelpers
