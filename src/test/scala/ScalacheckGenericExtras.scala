@@ -5,7 +5,7 @@ import org.scalacheck.{ Arbitrary, Gen }
 import org.scalacheck.Arbitrary.arbitrary
 
 /** Fairly generalised helpers for Scalcheck */
-trait ScalacheckGenericExtras {
+trait ScalacheckGenericExtras:
 
     /** Define mapping operation by building new arbitrary after mapping over the instance's generator. */
     given arbitraryFunctor: Functor[Arbitrary] with
@@ -28,4 +28,5 @@ trait ScalacheckGenericExtras {
     /** Add nicer syntax to generators. */
     implicit class GeneratorOps[A](g: Gen[A]):
         infix def zipWith[B](b: B): Gen[(A, B)] = g.map(_ -> b)
-}
+
+end ScalacheckGenericExtras

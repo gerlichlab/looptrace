@@ -1,8 +1,6 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
-import scala.util.Random
 import cats.syntax.eq.*
-import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should
@@ -22,6 +20,8 @@ class TestPositionIndex extends AnyFunSuite, RefinementWrapperSuite, ScalacheckS
     }
 
     test("Set respects position index equivalence.") {
-        forAll (genValuesAndNumUnique(PositionIndex.unsafe)) { case (indices, expected) => indices.toSet shouldEqual expected }
+        forAll (genValuesAndNumUnique(Gen.choose(0, 100))(PositionIndex.unsafe)) { 
+            case (indices, expected) => indices.toSet shouldEqual expected
+        }
     }
 end TestPositionIndex

@@ -5,13 +5,6 @@ ThisBuild / version          := "0.1.0-SNAPSHOT"
 ThisBuild / organization     := "at.ac.oeaw.imba.gerlich"
 ThisBuild / organizationName := "Gerlich Group, IMBA, OEAW"
 
-lazy val testDependencies = Seq(
-  scalacheck, 
-  scalactic, 
-  scalatest, 
-  scalatestScalacheck
-  )
-
 lazy val root = (project in file("."))
   .settings(
     name := "looptrace",
@@ -32,7 +25,12 @@ lazy val root = (project in file("."))
       os, 
       scopt,
       uPickle,
-    ) ++ 
-    testDependencies.map(_ % Test), 
+    ) ++ Seq( // only for tests
+      scalaCsv,
+      scalacheck, 
+      scalactic, 
+      scalatest, 
+      scalatestScalacheck
+    ).map(_ % Test), 
   )
 
