@@ -312,12 +312,12 @@ def fit_single_roi(
         # TODO: check that dimension of background image matches that of main ROI image.s
         roi_img = roi_img - background
     if not np.any(roi_img) or any(d < 3 for d in roi_img.shape): # Check if empty or too small for fitting.
-        fit = np.array([-1] * len(ROI_FIT_COLUMNS))
+        fit = [-1] * len(ROI_FIT_COLUMNS)
     else:
         center = 'max' if mask is None \
             else list(np.unravel_index(np.argmax(roi_img * (mask/np.max(mask))**2, axis=None), roi_img.shape))
-        fit = fit_func_spec.function(roi_img, sigma=1, center=center)[0]
-    return fit + [len_z, len_y, len_x]
+        fit = list(fit_func_spec.function(roi_img, sigma=1, center=center)[0])
+    return np.array(fit + [len_z, len_y, len_x])
 
 
 def apply_fine_scale_drift_correction(traces: pd.DataFrame) -> pd.DataFrame:
