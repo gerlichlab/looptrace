@@ -28,6 +28,9 @@ from looptrace.wrappers import phase_xcor
 logger = logging.getLogger()
 
 
+CENTROID_COLUMNS_REMAPPING = {'centroid_weighted-0': 'zc', 'centroid_weighted-1': 'yc', 'centroid_weighted-2': 'xc'}
+
+
 def rois_from_csv(path):
     rois = pd.read_csv(path, index_col=0)
     print('Loaded existing ROIs from ', path)
@@ -255,95 +258,108 @@ def center_crop_embryo(embryo_stack, size, center=None):
         out = pad_to_shape(out, size)
     return out
 
-def detect_spots(input_img, spot_threshold=20, min_dist=None):
-    '''Spot detection by difference of gaussian filter
-    #TODO: Do not use hard-coded sigma values
 
-    Args:
-        img (ndarray): Input 3D image
-        spot_threshold (int): Threshold to use for spots. Defaults to 20.
+def detect_spots(input_img, spot_threshold=20, expand_px=10):
+    """Spot detection by difference of Gaussians filter
 
-    Returns:
-        spot_props (DataFrame): The centroids and roi_IDs of the spots found. 
-        img (ndarray): The DoG filtered image used for spot detection.
-    '''
+    Arguments
+    ---------
+    img : ndarray
+        Input 3D image
+    spot_threshold : int or float
+        Threshold to use for spots. Defaults to 20.
+    expand_px : int
+        Number of pixels by which to expand contiguous subregion, 
+        up to point of overlap with neighboring subregion of image
+        
+    Returns
+    -------
+    pd.DataFrame, np.ndarray, np.ndarray: 
+        The centroids and roi_IDs of the spots found, 
+        the image used for spot detection, and 
+        numpy array with only sufficiently large regions 
+        retained (bigger than threshold number of pixels), 
+        and dilated by expansion amount (possibly)
+    """
+    # TODO: Do not use hard-coded sigma values (second parameter to gaussian(...)).
+    # See: https://github.com/gerlichlab/looptrace/issues/124
+
     img = white_tophat(image=input_img, footprint=ball(2))
     img = gaussian(img, 0.8) - gaussian(img, 1.3)
     img = img / gaussian(input_img, 3)
     img = (img - np.mean(img)) / np.std(img)
-    labels, num_spots = ndi.label(img > spot_threshold)
-    labels = expand_labels(labels, 10)
+    labels, _ = ndi.label(img > spot_threshold)
+    labels = expand_labels(labels, expand_px)
     
-    #Make a DataFrame with the ROI info
-    spot_props=pd.DataFrame(regionprops_table(label_image = labels, 
-                                        intensity_image = input_img,
-                                        properties=('label','centroid_weighted')))
-    
-    spot_props.drop(['label'], axis=1, inplace=True)
-    spot_props.rename(columns={'centroid_weighted-0': 'zc',
-                                        'centroid_weighted-1': 'yc',
-                                        'centroid_weighted-2': 'xc'},
-                        inplace = True)
+    # Make a DataFrame with the ROI info.
+    spot_props = _reindex_to_roi_id(pd.DataFrame(regionprops_table(
+        label_image=labels, 
+        intensity_image=input_img, 
+        properties=('label', 'centroid_weighted', 'intensity_mean')
+        )).drop(['label'], axis=1).rename(columns=CENTROID_COLUMNS_REMAPPING))
 
-    if min_dist:
-        dists = squareform(pdist(spot_props[['zc', 'yc', 'xc']].to_numpy(), metric='euclidean'))
-        idx = np.nonzero(np.triu(dists < min_dist, k=1))[1]
-        spot_props = spot_props.drop(idx)
-        spot_props = spot_props.reset_index(drop=True)
+    return spot_props, img, labels
 
-    spot_props.rename(columns={'index':'roi_id'},
-                                inplace = True)
 
-    #print(f'Found {len(spot_props)} spots.', end = ' ')
-    return spot_props, img
+def detect_spots_int(input_img, spot_threshold=500, expand_px=1):
+    """Spot detection by intensity filter
 
-def detect_spots_int(input_img, spot_threshold=500, expand_px = 1, min_dist=None):
-    '''Spot detection by difference of gaussian filter
-    #TODO: Do not use hard-coded sigma values
+    Arguments
+    ---------
+    img : ndarray
+        Input 3D image
+    spot_threshold : int or float
+        Threshold to use for spots. Defaults to 500.
+    expand_px : int
+        Number of pixels by which to expand contiguous subregion, 
+        up to point of overlap with neighboring subregion of image
+        
+    Returns
+    -------
+    pd.DataFrame, np.ndarray, np.ndarray: 
+        The centroids and roi_IDs of the spots found, 
+        the image used for spot detection, and 
+        numpy array with only sufficiently large regions 
+        retained (bigger than threshold number of pixels), 
+        and dilated by expansion amount (possibly)
+    """
+    # TODO: enforce that output column names don't vary with code path walked.
+    # See: https://github.com/gerlichlab/looptrace/issues/125
 
-    Args:
-        img (ndarray): Input 3D image
-        spot_threshold (int): Threshold to use for spots. Defaults to 500.
-
-    Returns:
-        spot_props (DataFrame): The centroids and roi_IDs of the spots found. 
-        img (ndarray): The DoG filtered image used for spot detection.
-    '''
-    #img = white_tophat(image=input_img, footprint=ball(2))
+    binary = input_img > spot_threshold
+    binary = ndi.binary_fill_holes(binary)
     struct = ndi.generate_binary_structure(input_img.ndim, 2)
-    labels, n_obj = ndi.label(input_img > spot_threshold, structure=struct)
-    if n_obj > 1: #Do not need this with area filtering below.
-        #pass
+    labels, n_obj = ndi.label(binary, structure=struct)
+    if n_obj > 1: # Do not need this with area filtering below
         labels = remove_small_objects(labels, min_size=5)
     if expand_px > 0:
         labels = expand_labels(labels, expand_px)
-    if np.all(labels == 0): #If there are no labels anymore:
-        return pd.DataFrame(columns=['label', 'z_min','y_min','x_min','z_max','y_max','x_max','area','zc','yc','xc']), labels
+    if np.all(labels == 0): # No substructures (ROIs) exist after filtering.
+        spot_props = pd.DataFrame(columns=['label', 'z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'area', 'zc', 'yc', 'xc', 'intensity_mean'])
     else:
-        spot_props = regionprops_table(labels, input_img, properties=('label', 'bbox', 'area', 'centroid_weighted'))
-        spot_props = pd.DataFrame(spot_props)
-        #spot_props = spot_props.query('area > 10')
+        spot_props = _reindex_to_roi_id(
+            pd.DataFrame(regionprops_table(
+                labels, input_img, properties=('label', 'bbox', 'area', 'centroid_weighted', 'intensity_mean')
+                )).rename(
+                    columns={**CENTROID_COLUMNS_REMAPPING,
+                        'bbox-0': 'z_min',
+                        'bbox-1': 'y_min',
+                        'bbox-2': 'x_min',
+                        'bbox-3': 'z_max',
+                        'bbox-4': 'y_max',
+                        'bbox-5': 'x_max'
+                        }
+                    )
+            )
 
-        spot_props = spot_props.rename(columns={'centroid_weighted-0': 'zc',
-                                            'centroid_weighted-1': 'yc',
-                                            'centroid_weighted-2': 'xc',
-                                            'bbox-0': 'z_min',
-                                            'bbox-1': 'y_min',
-                                            'bbox-2': 'x_min',
-                                            'bbox-3': 'z_max',
-                                            'bbox-4': 'y_max',
-                                            'bbox-5': 'x_max'})
-        
-        if min_dist:
-            dists = squareform(pdist(spot_props[['zc', 'yc', 'xc']].to_numpy(), metric='euclidean'))
-            idx = np.nonzero(np.triu(dists < min_dist, k=1))[1]
-            spot_props = spot_props.drop(idx)
-        
-        spot_props = spot_props.reset_index(drop=True)
-        spot_props = spot_props.rename(columns={'index':'roi_id'})
+    return spot_props, input_img, labels
 
-        #print(f'Found {len(spot_props)} spots.', end=' ')
-        return spot_props, labels
+
+def discard_too_close(spot_props: pd.DataFrame, min_dist: Union[int, float]) -> pd.DataFrame:
+    dists = squareform(pdist(spot_props[['zc', 'yc', 'xc']].to_numpy(), metric='euclidean'))
+    idx = np.nonzero(np.triu(dists < min_dist, k=1))[1]
+    return spot_props.drop(idx)
+
 
 def roi_center_to_bbox(rois: pd.DataFrame, roi_size: Union[np.ndarray, Tuple[int, int, int]]):
     """Make bounding box coordinates around centers of regions of interest, based on box dimensions."""
@@ -711,3 +727,11 @@ def full_frame_dc_to_single_nuc_dc(old_dc_path, new_dc_position_list, new_dc_pat
     'y_px_fine','x_px_fine','orig_position', 'position'])
     new_drifts['z_px_coarse', 'y_px_coarse', 'x_px_coarse'] = 0
     new_drifts.to_csv(new_dc_path)
+
+
+def _index_as_roi_id(props_table: pd.DataFrame) -> pd.DataFrame:
+    return props_table.rename(columns={'index': 'roi_id'})
+
+
+def _reindex_to_roi_id(props_table: pd.DataFrame) -> pd.DataFrame:
+    return _index_as_roi_id(props_table.reset_index(drop=True))
