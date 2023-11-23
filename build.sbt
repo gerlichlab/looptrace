@@ -4,6 +4,7 @@ ThisBuild / scalaVersion     := "3.3.0"
 ThisBuild / version          := "0.1.0-SNAPSHOT"
 ThisBuild / organization     := "at.ac.oeaw.imba.gerlich"
 ThisBuild / organizationName := "Gerlich Group, IMBA, OEAW"
+ThisBuild / resolvers += "SciJava Public" at "https://maven.scijava.org/content/repositories/public/"
 
 lazy val root = (project in file("."))
   .settings(
@@ -21,12 +22,13 @@ lazy val root = (project in file("."))
     ),
     libraryDependencies ++= Seq(
       catsCore,
+      cdmZarr,
       mouse,
       os, 
+      scalaCsv,
       scopt,
       uPickle,
     ) ++ Seq( // only for tests
-      scalaCsv,
       scalacheck, 
       scalactic, 
       scalatest, 
