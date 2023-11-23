@@ -121,25 +121,25 @@ class SpotDetectionParameters:
     crosstalk_frame: Optional[int]
     roi_image_size: Optional[Tuple[int, int, int]]
 
-    def center_spots(self, spots_table: pd.DataFrame) -> pd.DataFrame:
+    def try_to_add_spot_box_coordinates(self, spots_table: pd.DataFrame) -> pd.DataFrame:
         if self.roi_image_size is None:
             return spots_table
         dims = tuple(map(lambda x: x // self.downsampling, self.roi_image_size))
         return ip.roi_center_to_bbox(spots_table, roi_size=dims)
 
 
-def detect_spot_single(
-        full_image: np.ndarray, 
+def detect_spot_single_fov_single_frame(
+        single_fov_img: np.ndarray, 
         frame: int, 
         fish_channel: int, 
         spot_threshold: NumberLike, 
         detection_parameters: SpotDetectionParameters
         ) -> pd.DataFrame:
-    img = full_image[frame, fish_channel, ::detection_parameters.downsampling, ::detection_parameters.downsampling, ::detection_parameters.downsampling].compute()
+    img = single_fov_img[frame, fish_channel, ::detection_parameters.downsampling, ::detection_parameters.downsampling, ::detection_parameters.downsampling].compute()
     crosstalk_frame = frame if detection_parameters.crosstalk_frame is None else detection_parameters.crosstalk_frame
     if detection_parameters.subtract_beads:
         # TODO: non-nullity requirement for crosstalk_channel is coupled to this condition, and this should be reflected in the types.
-        bead_img = full_image[
+        bead_img = single_fov_img[
             crosstalk_frame, 
             detection_parameters.crosstalk_channel, 
             ::detection_parameters.downsampling, 
@@ -148,7 +148,7 @@ def detect_spot_single(
             ].compute()
         img, _ = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
     spot_props, _ = detection_parameters.detection_function(img, spot_threshold, min_dist=detection_parameters.minimum_distance_between)
-    spot_props = detection_parameters.center_spots(spots_table=spot_props)
+    spot_props = detection_parameters.try_to_add_spot_box_coordinates(spots_table=spot_props)
     spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] = \
         spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] * detection_parameters.downsampling
     return spot_props
@@ -163,7 +163,13 @@ def build_spot_prop_table(
         ) -> pd.DataFrame:
     frame = frame_spec.frame
     print(f"Building spot properties table; position={position}, frame={frame}, channel={channel}")
-    spot_props = detect_spot_single(full_image=img, frame=frame, fish_channel=channel, spot_threshold=frame_spec.threshold, detection_parameters=detection_parameters)
+    spot_props = detect_spot_single_fov_single_frame(
+        single_fov_img=img, 
+        frame=frame, 
+        fish_channel=channel, 
+        spot_threshold=frame_spec.threshold, 
+        detection_parameters=detection_parameters,
+        )
     return finalise_single_spot_props_table(spot_props=spot_props, position=position, frame=frame, channel=channel)
 
 
@@ -418,7 +424,7 @@ class SpotPicker:
                 spot_props['position'] = preview_pos
                 spot_props = spot_props.reset_index().rename(columns={'index':'roi_id_pos'})
 
-                spot_props = params.center_spots(spots_table=spot_props)
+                spot_props = params.try_to_add_spot_box_coordinates(spots_table=spot_props)
                 
                 roi_points, _ = ip.roi_to_napari_points(spot_props, position=preview_pos)
                 try:
