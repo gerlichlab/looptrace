@@ -148,8 +148,8 @@ def filter_rois_in_nucs(rois, nuc_label_img, new_col='nuc_label', nuc_drifts=Non
         rois_shifted = new_rois.copy()
         shifts = []
         for i, row in rois_shifted.iterrows():
-            drift_target = nuc_drifts[(nuc_drifts['position'] == row['position']) & (nuc_drifts['frame'] == nuc_target_frame)][['z_px_course', 'y_px_course', 'x_px_course']].to_numpy()
-            drift_roi = spot_drifts[(spot_drifts['position'] == row['position']) & (spot_drifts['frame'] == row['frame'])][['z_px_course', 'y_px_course', 'x_px_course']].to_numpy()
+            drift_target = nuc_drifts[(nuc_drifts['position'] == row['position']) & (nuc_drifts['frame'] == nuc_target_frame)][['z_px_coarse', 'y_px_coarse', 'x_px_coarse']].to_numpy()
+            drift_roi = spot_drifts[(spot_drifts['position'] == row['position']) & (spot_drifts['frame'] == row['frame'])][['z_px_coarse', 'y_px_coarse', 'x_px_coarse']].to_numpy()
             shift = drift_target - drift_roi
             shifts.append(shift[0])
         shifts = pd.DataFrame(shifts, columns=['z','y','x'])
@@ -164,7 +164,7 @@ def filter_rois_in_nucs(rois, nuc_label_img, new_col='nuc_label', nuc_drifts=Non
 
 
 def subtract_crosstalk(source, bleed, threshold=500):
-    shift = drift_corr_course(source, bleed, downsample=1)
+    shift = drift_corr_coarse(source, bleed, downsample=1)
     bleed = ndi.shift(bleed, shift=shift, order=1)
     mask = bleed > threshold
     ratio = np.average(source[mask] / bleed[mask])
@@ -356,9 +356,9 @@ def roi_center_to_bbox(rois: pd.DataFrame, roi_size: Union[np.ndarray, Tuple[int
     return rois
 
 
-def drift_corr_course(t_img, o_img, downsample=1):
+def drift_corr_coarse(t_img, o_img, downsample=1):
     '''
-    Calculates course and fine 
+    Calculates coarse and fine 
     drift between two svih5 images by phase cross correlation.
 
     Parameters
@@ -368,14 +368,14 @@ def drift_corr_course(t_img, o_img, downsample=1):
 
     Returns
     -------
-    A list of zyx course drifts and fine drifts (compared to course)
+    A list of zyx coarse drifts and fine drifts (compared to coarse)
 
     '''        
     s = tuple(slice(None, None, downsample) for i in t_img.shape)
-    course_drift = phase_xcor(np.array(t_img[s]), np.array(o_img[s])) * downsample
-    return course_drift
+    coarse_drift = phase_xcor(np.array(t_img[s]), np.array(o_img[s])) * downsample
+    return coarse_drift
 
-def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int, n_points=50, upsampling=100):
+def drift_corr_multipoint_cc(t_img, o_img, coarse_drift, threshold, min_bead_int, n_points=50, upsampling=100):
     '''
     Function for fine scale drift correction. 
 
@@ -406,7 +406,7 @@ def drift_corr_multipoint_cc(t_img, o_img, course_drift, threshold, min_bead_int
 
         #Calculate fine scale drift for all selected fiducials.
         s_t = tuple([slice(ind-8, ind+8) for ind in point])
-        s_o = tuple([slice(ind-int(shift)-8, ind-int(shift)+8) for (ind, shift) in zip(point, course_drift)])
+        s_o = tuple([slice(ind-int(shift)-8, ind-int(shift)+8) for (ind, shift) in zip(point, coarse_drift)])
         t = t_img[s_t]
         o = o_img[s_o]
         
@@ -707,7 +707,7 @@ def full_frame_dc_to_single_nuc_dc(old_dc_path, new_dc_position_list, new_dc_pat
         pos_drifts = drifts.query('position == @pos_name')
         for j, d in pos_drifts.iterrows():
             new_drifts.append(d.values.tolist()+[p])
-    new_drifts = pd.DataFrame(new_drifts, columns = ['old_index','frame','z_px_course','y_px_course','x_px_course','z_px_fine',
+    new_drifts = pd.DataFrame(new_drifts, columns = ['old_index','frame','z_px_coarse','y_px_coarse','x_px_coarse','z_px_fine',
     'y_px_fine','x_px_fine','orig_position', 'position'])
-    new_drifts['z_px_course', 'y_px_course', 'x_px_course'] = 0
+    new_drifts['z_px_coarse', 'y_px_coarse', 'x_px_coarse'] = 0
     new_drifts.to_csv(new_dc_path)

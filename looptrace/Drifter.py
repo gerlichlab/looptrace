@@ -37,9 +37,9 @@ from looptrace.wrappers import phase_xcor
 FRAME_COLUMN = "frame"
 POSITION_COLUMN = "position"
 CoarseDriftTableRow = Tuple[int, str, NumberLike, NumberLike, NumberLike]
-Z_PX_COARSE = 'z_px_course'
-Y_PX_COARSE = 'y_px_course'
-X_PX_COARSE = 'x_px_course'
+Z_PX_COARSE = 'z_px_coarse'
+Y_PX_COARSE = 'y_px_coarse'
+X_PX_COARSE = 'x_px_coarse'
 COARSE_DRIFT_COLUMNS = [Z_PX_COARSE, Y_PX_COARSE, X_PX_COARSE]
 COARSE_DRIFT_TABLE_COLUMNS = [FRAME_COLUMN, POSITION_COLUMN] + COARSE_DRIFT_COLUMNS
 FullDriftTableRow = Tuple[int, str, NumberLike, NumberLike, NumberLike, NumberLike, NumberLike, NumberLike]
@@ -207,7 +207,7 @@ def generate_drift_function_arguments__coarse_drift_only(
     if len(full_pos_list) != len(reference_images) or len(full_pos_list) != len(moving_images):
         raise ArrayLikeLengthMismatchError(f"Full pos: {len(full_pos_list)}, ref imgs: {len(reference_images)}, mov imgs: {len(moving_images)}")
     for i, pos in takewhile(lambda i_and_p: i_and_p[0] <= stop_after, map(lambda p: (full_pos_list.index(p), p), pos_list)):
-        print(f'Running course drift correction for position: {pos}.')
+        print(f'Running coarse drift correction for position: {pos}.')
         t_img = np.array(reference_images[i][reference_frame, reference_channel, ::downsampling, ::downsampling, ::downsampling])
         for t in tqdm.tqdm(range(moving_images[i].shape[0])):
             o_img = np.array(moving_images[i][t, moving_channel, ::downsampling, ::downsampling, ::downsampling])
@@ -340,7 +340,7 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
                 
                 mov_img = drifter.get_moving_image(pos_idx=pos_idx, frame_idx=frame)
                 print(f"Computing fine drifts: ({position}, {frame})")
-                mov_bead_subimgs = Parallel(n_jobs=-1, prefer='threads')(delayed(extract_single_bead)(pt, mov_img, bead_roi_px=roi_px, drift_course=coarse) for pt in tqdm.tqdm(bead_rois))
+                mov_bead_subimgs = Parallel(n_jobs=-1, prefer='threads')(delayed(extract_single_bead)(pt, mov_img, bead_roi_px=roi_px, drift_coarse=coarse) for pt in tqdm.tqdm(bead_rois))
                 mov_bead_fits = Parallel(n_jobs=-1, prefer='threads')(delayed(fit_bead_coordinates)(mbi) for mbi in tqdm.tqdm(mov_bead_subimgs))
                 fine_drifts = [subtract_point_fits(ref, mov) for ref, mov in zip(ref_bead_fits, mov_bead_fits)]
                 new_row = (frame, position) + coarse + finalise_fine_drift(fine_drifts)
@@ -366,7 +366,7 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
                 mov_img = drifter.get_moving_image(pos_idx=pos_idx, frame_idx=frame)
                 print(f"Computing fine drifts: ({position}, {frame})")
                 fine_drifts = Parallel(n_jobs=-1, prefer='threads')(
-                    delayed(lambda point, ref_bead_img: correlate_single_bead(ref_bead_img, extract_single_bead(point, mov_img, bead_roi_px=roi_px, drift_course=coarse), 100))(*args)
+                    delayed(lambda point, ref_bead_img: correlate_single_bead(ref_bead_img, extract_single_bead(point, mov_img, bead_roi_px=roi_px, drift_coarse=coarse), 100))(*args)
                     for args in tqdm.tqdm(zip(bead_rois, ref_bead_subimgs))
                     )
                 new_row = (frame, position) + coarse + finalise_fine_drift(fine_drifts)
@@ -451,7 +451,7 @@ class Drifter():
 
     @property
     def downsampling(self) -> int:
-        return self.config['course_drift_downsample']
+        return self.config['coarse_drift_downsample']
 
     @property
     def fine_correction_subfolder(self) -> Path:
@@ -517,7 +517,7 @@ class Drifter():
         pos_index = self.pos_list.index(pos)
         pos_img = []
         for t in range(n_t):
-            shift = tuple(self.drift_table.query('position == @pos').iloc[t][['z_px_course', 'y_px_course', 'x_px_course']])
+            shift = tuple(self.drift_table.query('position == @pos').iloc[t][['z_px_coarse', 'y_px_coarse', 'x_px_coarse']])
             pos_img.append(da.roll(self.images[pos_index][t], shift = shift, axis = (1,2,3)))
         self.dc_images = da.stack(pos_img)
 
@@ -553,13 +553,13 @@ class Drifter():
             n_t = proj_img.shape[0]
             
             for t in tqdm.tqdm(range(n_t)):
-                shift = self.image_handler.tables[self.image_handler.reg_input_moving + '_drift_correction'].query('position == @pos').iloc[t][['y_px_course', 'x_px_course', 'y_px_fine', 'x_px_fine']]
+                shift = self.image_handler.tables[self.image_handler.reg_input_moving + '_drift_correction'].query('position == @pos').iloc[t][['y_px_coarse', 'x_px_coarse', 'y_px_fine', 'x_px_fine']]
                 shift = (shift[0]+shift[2], shift[1]+shift[3])
                 z[t] = ndi.shift(proj_img[t].compute(), shift=(0,)+shift, order = 2)
         
         print('DC images generated.')
     
-    def save_course_dc_images(self):
+    def save_coarse_dc_images(self):
         '''
         Makes internal coursly drift corrected images based on precalculated drift
         correction (see Drifter class for details).
@@ -576,7 +576,7 @@ class Drifter():
             pos_index = self.image_handler.image_lists['seq_images'].index(pos)
             pos_img = self.images[pos_index]
             #proj_img = da.max(pos_img, axis=2)
-            zarr_out_path = os.path.join(self.image_handler.image_save_path, self.image_handler.reg_input_moving + '_course_dc')
+            zarr_out_path = os.path.join(self.image_handler.image_save_path, self.image_handler.reg_input_moving + '_coarse_dc')
             z = image_io.create_zarr_store(path=zarr_out_path,
                                             name = self.image_handler.reg_input_moving + '_dc_images', 
                                             pos_name = pos,
@@ -587,7 +587,7 @@ class Drifter():
             n_t = pos_img.shape[0]
             
             for t in tqdm.tqdm(range(n_t)):
-                shift = self.image_handler.tables[self.image_handler.reg_input_moving + '_drift_correction'].query('position == @pos').iloc[t][['z_px_course', 'y_px_course', 'x_px_course']]
+                shift = self.image_handler.tables[self.image_handler.reg_input_moving + '_drift_correction'].query('position == @pos').iloc[t][['z_px_coarse', 'y_px_coarse', 'x_px_coarse']]
                 shift = (shift[0], shift[1], shift[2])
                 z[t] = ndi.shift(pos_img[t].compute(), shift=(0,)+shift, order = 0)
         

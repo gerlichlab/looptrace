@@ -216,9 +216,9 @@ def process_single_FOV_single_reference_frame(
 
     # TODO: could type-refine the argument values to these parameters (which should be nonnegative).
     def proc1(frame_index: int, ref_ch: int, centroid: np.ndarray) -> Iterable[NumberLike]:
-        coarse_shift = curr_fov_drift_subtable[curr_fov_drift_subtable.frame == frame_index][['z_px_course', 'y_px_course', 'x_px_course']].values[0]
+        coarse_shift = curr_fov_drift_subtable[curr_fov_drift_subtable.frame == frame_index][['z_px_coarse', 'y_px_coarse', 'x_px_coarse']].values[0]
         img = image_stack[frame_index, ref_ch].compute()
-        bead_img = extract_single_bead(centroid, img, bead_roi_px=bead_roi_px, drift_course=coarse_shift)
+        bead_img = extract_single_bead(centroid, img, bead_roi_px=bead_roi_px, drift_coarse=coarse_shift)
         return fitSymmetricGaussian3D(bead_img, sigma=1, center='max')[0]
 
     fits = Parallel(n_jobs=-1, prefer='threads')(

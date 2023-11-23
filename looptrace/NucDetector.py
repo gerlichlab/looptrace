@@ -243,20 +243,20 @@ class NucDetector:
                     X = nuc_masks[0].shape[-1]
                 
                 for k, dc_frame in sel_dc.iterrows():
-                    z_drift_course = int(dc_frame['z_px_course']) - int(ref_offset['z_px_course'])
-                    y_drift_course = int(dc_frame['y_px_course']) - int(ref_offset['y_px_course'])
-                    x_drift_course = int(dc_frame['x_px_course']) - int(ref_offset['x_px_course'])
+                    z_drift_coarse = int(dc_frame['z_px_coarse']) - int(ref_offset['z_px_coarse'])
+                    y_drift_coarse = int(dc_frame['y_px_coarse']) - int(ref_offset['y_px_coarse'])
+                    x_drift_coarse = int(dc_frame['x_px_coarse']) - int(ref_offset['x_px_coarse'])
 
                     if nuc_masks[0].ndim == 2:
                         z_min = 0
                         z_max = Z
                     else:
-                        z_min = int(roi['z_min'] - z_drift_course)
-                        z_max = int(roi['z_max'] - z_drift_course)
-                    y_min = int(roi['y_min'] - y_drift_course)
-                    y_max = int(roi['y_max'] - y_drift_course)
-                    x_min = int(roi['x_min'] - x_drift_course)
-                    x_max = int(roi['x_max'] - x_drift_course)
+                        z_min = int(roi['z_min'] - z_drift_coarse)
+                        z_max = int(roi['z_max'] - z_drift_coarse)
+                    y_min = int(roi['y_min'] - y_drift_coarse)
+                    y_max = int(roi['y_max'] - y_drift_coarse)
+                    x_min = int(roi['x_min'] - x_drift_coarse)
+                    x_max = int(roi['x_max'] - x_drift_coarse)
 
                     #Handling case of ROI extending beyond image edge after drift correction:
                     pad = ((abs(min(0,z_min)),abs(max(0,z_max-Z))),
@@ -272,10 +272,10 @@ class NucDetector:
                         slice(sy[0],sy[1]), 
                         slice(sx[0],sx[1]))
 
-                    nuc_rois.append([old_pos, new_pos, i, roi.name, dc_frame['frame'], ref_frame, ch, s, pad, z_drift_course, y_drift_course, x_drift_course, 
+                    nuc_rois.append([old_pos, new_pos, i, roi.name, dc_frame['frame'], ref_frame, ch, s, pad, z_drift_coarse, y_drift_coarse, x_drift_coarse, 
                                                                                             dc_frame['z_px_fine'], dc_frame['y_px_fine'], dc_frame['x_px_fine'], roi['intensity_mean']])
 
-        nuc_rois = pd.DataFrame(nuc_rois, columns=['orig_position','position', 'orig_pos_index', 'roi_id', 'frame', 'ref_frame', 'ch', 'roi_slice', 'pad', 'z_px_course', 'y_px_course', 'x_px_course', 
+        nuc_rois = pd.DataFrame(nuc_rois, columns=['orig_position','position', 'orig_pos_index', 'roi_id', 'frame', 'ref_frame', 'ch', 'roi_slice', 'pad', 'z_px_coarse', 'y_px_coarse', 'x_px_coarse', 
                                                                                                 'z_px_fine', 'y_px_fine', 'x_px_fine', 'nuc_class'])
         nuc_rois['nuc_class'] = nuc_rois['nuc_class'].round()
         self.nuc_rois = nuc_rois

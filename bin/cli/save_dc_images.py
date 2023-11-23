@@ -22,4 +22,4 @@ if __name__ == '__main__':
         array_id = None
 
     D = Drifter(H, array_id = array_id)
-    D.save_course_dc_images()
+    D.save_coarse_dc_images()

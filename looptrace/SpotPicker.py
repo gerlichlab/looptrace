@@ -536,16 +536,16 @@ class SpotPicker:
             ref_offset = sel_dc.query('frame == @ref_frame')
             Z, Y, X = self.images[pos_index][0, ch].shape[-3:]
             for j, dc_frame in sel_dc.iterrows():
-                z_drift_course = int(dc_frame['z_px_course']) - int(ref_offset['z_px_course'])
-                y_drift_course = int(dc_frame['y_px_course']) - int(ref_offset['y_px_course'])
-                x_drift_course = int(dc_frame['x_px_course']) - int(ref_offset['x_px_course'])
+                z_drift_coarse = int(dc_frame['z_px_coarse']) - int(ref_offset['z_px_coarse'])
+                y_drift_coarse = int(dc_frame['y_px_coarse']) - int(ref_offset['y_px_coarse'])
+                x_drift_coarse = int(dc_frame['x_px_coarse']) - int(ref_offset['x_px_coarse'])
 
-                z_min = max(roi['z_min'] - z_drift_course, 0)
-                z_max = min(roi['z_max'] - z_drift_course, Z)
-                y_min = max(roi['y_min'] - y_drift_course, 0)
-                y_max = min(roi['y_max'] - y_drift_course, Y)
-                x_min = max(roi['x_min'] - x_drift_course, 0)
-                x_max = min(roi['x_max'] - x_drift_course, X)
+                z_min = max(roi['z_min'] - z_drift_coarse, 0)
+                z_max = min(roi['z_max'] - z_drift_coarse, Z)
+                y_min = max(roi['y_min'] - y_drift_coarse, 0)
+                y_max = min(roi['y_max'] - y_drift_coarse, Y)
+                x_min = max(roi['x_min'] - x_drift_coarse, 0)
+                x_max = min(roi['x_max'] - x_drift_coarse, X)
 
                 pad_z_min = abs(min(0,z_min))
                 pad_z_max = abs(max(0,z_max-Z))
@@ -557,13 +557,13 @@ class SpotPicker:
                 all_rois.append([pos, pos_index, idx, roi.name, dc_frame['frame'], ref_frame, ch, 
                                 z_min, z_max, y_min, y_max, x_min, x_max, 
                                 pad_z_min, pad_z_max, pad_y_min, pad_y_max, pad_x_min, pad_x_max,
-                                z_drift_course, y_drift_course, x_drift_course, 
+                                z_drift_coarse, y_drift_coarse, x_drift_coarse, 
                                 dc_frame['z_px_fine'], dc_frame['y_px_fine'], dc_frame['x_px_fine']])
 
         self.all_rois = pd.DataFrame(all_rois, columns=['position', 'pos_index', 'roi_number', 'roi_id', 'frame', 'ref_frame', 'ch', 
                                 'z_min', 'z_max', 'y_min', 'y_max', 'x_min', 'x_max',
                                 'pad_z_min', 'pad_z_max', 'pad_y_min', 'pad_y_max', 'pad_x_min', 'pad_x_max', 
-                                'z_px_course', 'y_px_course', 'x_px_course',
+                                'z_px_coarse', 'y_px_coarse', 'x_px_coarse',
                                 'z_px_fine', 'y_px_fine', 'x_px_fine'])
         self.all_rois = self.all_rois.sort_values(RoiOrderingSpecification.row_order_columns()).reset_index(drop=True)
         print(self.all_rois)
@@ -684,9 +684,9 @@ class SpotPicker:
             
         return self.spot_images_path
 
-    def gen_roi_imgs_inmem_coursedc(self) -> str:
-        # Use this simplified function if the images that the spots are gathered from are already coursely drift corrected!
-        print('Generating single spot image stacks from coursely drift corrected images.')
+    def gen_roi_imgs_inmem_coarsedc(self) -> str:
+        # Use this simplified function if the images that the spots are gathered from are already coarsely drift corrected!
+        print('Generating single spot image stacks from coarsely drift corrected images.')
         rois = self.image_handler.tables[self.input_name+'_dc_rois']
         for pos, group in tqdm.tqdm(rois.groupby('position')):
             pos_index = self.image_handler.image_lists[self.input_name].index(pos)
