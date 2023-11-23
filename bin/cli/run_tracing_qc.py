@@ -23,7 +23,7 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder) -> None:
         str(LOOPTRACE_JAR_PATH.path),
         prog_path, 
         "--tracesFile",
-        str(T.traces_path),
+        str(T.traces_path_enriched),
         "--maxDistanceToRegionCenter", 
         str(H.config[MAX_DISTANCE_SPOT_FROM_REGION_NAME]),
         "--minSNR",
