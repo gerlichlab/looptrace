@@ -452,66 +452,6 @@ class SpotPicker:
 
         return outfile
 
-
-    # def rois_from_beads(self):
-    #     print('Detecting bead ROIs for tracing.')
-    #     all_rois = []
-    #     n_fields = self.config['bead_trace_fields']
-    #     n_beads = self.config['bead_trace_number']
-    #     for pos in tqdm.tqdm(random.sample(self.pos_list, k=n_fields)):
-    #         pos_index = self.image_handler.image_lists[self.input_name].index(pos)
-    #         ref_frame = self.config['bead_reference_frame']
-    #         ref_ch = self.config['bead_ch']
-    #         threshold = self.config['bead_threshold']
-    #         min_bead_int = self.config['min_bead_intensity']
-
-    #         t_img = self.images[pos_index][ref_frame, ref_ch].compute()
-    #         t_img_label, num_labels = ndi.label(t_img>threshold)
-            
-    #         spot_props = pd.DataFrame(regionprops_table(t_img_label, t_img, properties=('label', 'centroid', 'max_intensity')))
-    #         spot_props = spot_props.query('max_intensity > @min_bead_int').sample(n=n_beads, random_state=1)
-            
-    #         spot_props.drop(['label'], axis=1, inplace=True)
-    #         spot_props.rename(columns={'centroid-0': 'zc',
-    #                                     'centroid-1': 'yc',
-    #                                     'centroid-2': 'xc',
-    #                                     'index':'roi_id_pos'},
-    #                                     inplace = True)
-
-    #         spot_props['position'] = pos
-    #         spot_props['frame'] = ref_frame
-    #         spot_props['ch'] = ref_ch
-    #         print('Detected beads in position', pos, spot_props)
-    #         all_rois.append(spot_props)
-        
-    #     output = pd.concat(all_rois)
-    #     output=output.reset_index().rename(columns={'index':'roi_id'})
-    #     rois = ip.roi_center_to_bbox(output, roi_size=self._raw_roi_image_size)
-
-    #     self.image_handler.bead_rois = rois
-    #     rois.to_csv(self.roi_path + '_beads.csv')
-    #     self.image_handler.load_tables()
-    #     return rois
-    '''
-    def refilter_rois(self):
-        #TODO needs updating to new table syntax.
-        if self.detection_method_name == 'dog':
-            self.image_handler.roi_table = ip.roi_center_to_bbox(self.image_handler.roi_table.copy(), roi_size = tuple(self.config['roi_image_size']))
-        
-        self.image_handler.roi_table[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] = self.image_handler.roi_table[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']].round().astype(int)
-
-        if 'nuc_images' not in self.image_handler.images:
-            print('Please generate nuclei images first.')
-        if 'nuc_masks' in self.image_handler.images:
-            self.image_handler.roi_table = ip.filter_rois_in_nucs(self.image_handler.roi_table.copy(), np.array(self.image_handler.images['nuc_masks']), self.pos_list, new_col='nuc_label', drifts = self.image_handler.tables['nuc_images_drift_correction'], target_frame=self.config['nuc_ref_frame'])
-            
-        if 'nuc_classes' in self.image_handler.images:
-            self.image_handler.roi_table = ip.filter_rois_in_nucs(self.image_handler.roi_table.copy(), np.array(self.image_handler.images['nuc_classes']), self.pos_list, new_col='nuc_class', drifts = self.image_handler.tables['nuc_images_drift_correction'], target_frame=self.config['nuc_ref_frame'])
-
-        print('ROIs (re)assigned to nuclei.')
-        self.image_handler.roi_table.to_csv(self.roi_path)
-        self.image_handler.load_tables()
-    '''
     def make_dc_rois_all_frames(self) -> str:
         #Precalculate all ROIs for extracting spot images, based on identified ROIs and precalculated drifts between time frames.
         print('Generating list of all ROIs for tracing:')
