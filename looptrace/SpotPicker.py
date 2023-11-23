@@ -121,7 +121,7 @@ class SpotDetectionParameters:
     crosstalk_frame: Optional[int]
     roi_image_size: Optional[Tuple[int, int, int]]
 
-    def try_to_add_spot_box_coordinates(self, spots_table: pd.DataFrame) -> pd.DataFrame:
+    def try_centering_spot_box_coordinates(self, spots_table: pd.DataFrame) -> pd.DataFrame:
         if self.roi_image_size is None:
             return spots_table
         dims = tuple(map(lambda x: x // self.downsampling, self.roi_image_size))
@@ -147,8 +147,8 @@ def detect_spot_single_fov_single_frame(
             ::detection_parameters.downsampling
             ].compute()
         img, _ = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
-    spot_props, _ = detection_parameters.detection_function(img, spot_threshold, min_dist=detection_parameters.minimum_distance_between)
-    spot_props = detection_parameters.try_to_add_spot_box_coordinates(spots_table=spot_props)
+    spot_props, _, _ = detection_parameters.detection_function(img, spot_threshold)
+    spot_props = detection_parameters.try_centering_spot_box_coordinates(spots_table=spot_props)
     spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] = \
         spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] * detection_parameters.downsampling
     return spot_props
@@ -420,11 +420,11 @@ class SpotPicker:
                     bead_img = self.images[pos_index][frame, crosstalk_ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
                     img, orig = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
 
-                spot_props, filt_img = detect_func(img, spot_threshold[i], min_dist = min_dist)
+                spot_props, filt_img, _ = detect_func(img, spot_threshold[i], min_dist = min_dist)
                 spot_props['position'] = preview_pos
                 spot_props = spot_props.reset_index().rename(columns={'index':'roi_id_pos'})
 
-                spot_props = params.try_to_add_spot_box_coordinates(spots_table=spot_props)
+                spot_props = params.try_centering_spot_box_coordinates(spots_table=spot_props)
                 
                 roi_points, _ = ip.roi_to_napari_points(spot_props, position=preview_pos)
                 try:
