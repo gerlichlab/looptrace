@@ -8,6 +8,7 @@ EMBL Heidelberg
 """
 
 import dataclasses
+from pathlib import Path
 from typing import *
 
 from joblib import Parallel, delayed
@@ -17,10 +18,13 @@ import scipy.ndimage as ndi
 from tqdm import tqdm
 
 from looptrace import *
+from looptrace.ImageHandler import ImageHandler
 from looptrace.SpotPicker import RoiOrderingSpecification
 from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
 from looptrace.numeric_types import NumberLike
+from looptrace.tracing_qc_support import apply_frame_names_and_spatial_information
 
+from gertils import ExtantFile, ExtantFolder
 
 BOX_Z_COL = "spot_box_z"
 BOX_Y_COL = "spot_box_y"
@@ -44,6 +48,15 @@ class FunctionalForm:
     def __post_init__(self) -> None:
         if self.dimensionality != 3:
             raise NotImplementedError("Only currently supporting dimensionality = 3 for functional form fit")
+
+
+def run_frame_name_and_distance_application(config_file: ExtantFile, images_path: ExtantFolder) -> Tuple[pd.DataFrame, Path]:
+    T = Tracer(image_handler=ImageHandler(config_path=config_file, image_path=images_path))
+    traces = apply_frame_names_and_spatial_information(traces_file=T.traces_path, config_file=config_file.path)
+    outfile = T.traces_path_enriched
+    print(f"Writing enriched traces file: {outfile}")
+    traces.to_csv(outfile)
+    return traces, outfile
 
 
 class Tracer:
@@ -98,6 +111,10 @@ class Tracer:
     @property
     def nanometers_per_pixel_z(self) -> NumberLike:
         return self.config["z_nm"]
+
+    @property
+    def traces_path_enriched(self) -> Path:
+        return Path(self.traces_path).with_suffix(".enriched.csv")
 
     def trace_all_rois(self) -> str:
         '''

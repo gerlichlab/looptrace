@@ -25,7 +25,7 @@ from extract_spots_table import workflow as run_spot_bounding
 from extract_spots import workflow as run_spot_extraction
 from extract_spots_cluster_cleanup import workflow as run_spot_zipping
 from tracing import workflow as run_chromatin_tracing
-from looptrace.tracing_qc_support import apply_frame_names_and_spatial_information
+from looptrace.Tracer import run_frame_name_and_distance_application
 from run_tracing_qc import workflow as qc_label_and_filter_traces
 
 
@@ -67,7 +67,7 @@ class LooptracePipeline(pypiper.Pipeline):
             ("spot_zipping", run_spot_zipping, conf_data_pair),
             ("clean_2", run_cleanup, conf_only), 
             ("tracing", run_chromatin_tracing, conf_data_pair),
-            ("spot_region_distances", apply_frame_names_and_spatial_information, conf_data_pair), 
+            ("spot_region_distances", run_frame_name_and_distance_application, conf_data_pair), 
             ("tracing_QC", qc_label_and_filter_traces, conf_data_pair),
             ("clean_3", run_cleanup, conf_only),
         )
