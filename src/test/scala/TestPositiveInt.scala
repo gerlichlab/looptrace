@@ -8,8 +8,8 @@ import org.scalatest.matchers.should
 class TestPositiveInt extends AnyFunSuite, ScalacheckSuite, should.Matchers:
     test("PositiveInt correctly restricts which expressions compile.") {
         assertCompiles("PositiveInt(1)")
-        assertDoesNotCompile("PositiveInt(0)")
-        assertDoesNotCompile("PositiveInt(-1)")
+        assertTypeError("PositiveInt(0)")
+        assertTypeError("PositiveInt(-1)")
     }
 
     test("PositiveInt.maybe behaves correctly.") {
