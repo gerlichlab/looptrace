@@ -209,7 +209,8 @@ package object looptrace {
 
     final case class RoiIndex(get: NonnegativeInt) extends AnyVal
     object RoiIndex:
-        implicit val showForRoiIndex: Show[RoiIndex] = Show.show(_.get.show)
+        given ordForRoiIndex: Order[RoiIndex] = Order.by(_.get)
+        given showForRoiIndex: Show[RoiIndex] = Show.show(_.get.show)
         def fromInt = NonnegativeInt.either.fmap(_.map(RoiIndex.apply))
         def unsafe = NonnegativeInt.unsafe.andThen(RoiIndex.apply)
     end RoiIndex
