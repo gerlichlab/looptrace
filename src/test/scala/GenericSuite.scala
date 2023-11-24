@@ -49,13 +49,6 @@ trait GenericSuite:
     /** Execute some test code that uses a JSON file {@code os.Path} file. */
     def withTempJsonFile(initData: os.Source, suffix: String = ".json") = withTempFile(initData, suffix)(_: os.Path => Any)
 
-    type CsvRow = Map[String, String]
-    
-    def withCsvData(filepath: os.Path)(testCode: Iterable[CsvRow] => Any): Any = {
-        val reader = CSVReader.open(filepath.toIO)
-        try { testCode(reader.allWithHeaders()) } finally { reader.close() }
-    }
-
     def withCsvPair(f1: os.Path, f2: os.Path)(testCode: (Iterable[CsvRow], Iterable[CsvRow]) => Any): Any = {
         var reader1: CSVReader = null
         val reader2 = CSVReader.open(f2.toIO)

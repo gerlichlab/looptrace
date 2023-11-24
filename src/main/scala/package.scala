@@ -11,9 +11,11 @@ import cats.syntax.eq.*
 import cats.syntax.functor.*
 import cats.syntax.option.*
 import cats.syntax.show.*
-
 import mouse.boolean.*
+
 import scopt.Read
+import com.github.tototoshi.csv.*
+
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.readJsonFile
 
 /** Chromatin fiber tracing with FISH probes */
@@ -22,6 +24,14 @@ package object looptrace {
 
     type ErrorMessages = NEL[String]
     type ErrMsgsOr[A] = Either[ErrorMessages, A]
+
+    type CsvRow = Map[String, String]
+    
+    /** Use rows from a CSV file in arbitrary code. */
+    def withCsvData(filepath: os.Path)(code: Iterable[CsvRow] => Any): Any = {
+        val reader = CSVReader.open(filepath.toIO)
+        try { code(reader.allWithHeaders()) } finally { reader.close() }
+    }
 
     def writeTextFile(target: os.Path, data: Iterable[Array[String]], delimiter: Delimiter) = 
         os.write(target, data.map(delimiter.join.andThen(_ ++ "\n")))
@@ -44,6 +54,9 @@ package object looptrace {
             case -1 => None
             case i => i.some
         }
+
+    extension [X](xs: List[X])(using ev: Order[X])
+        def sortByCats: List[X] = xs.sorted(ev.toOrdering)
 
     extension [A](t: Try[A])
         def toValidatedNel: ValidatedNel[Throwable, A] = t.toEither.toValidatedNel
@@ -160,12 +173,18 @@ package object looptrace {
         def fromExtension(ext: String): Option[Delimiter] = Delimiter.values.filter(_.ext === ext).headOption
     end Delimiter
     
+    final case class Channel(get: NonnegativeInt) extends AnyVal
+    object Channel:
+        def fromInt = NonnegativeInt.either.fmap(_.map(Channel.apply))
+        def unsafe = NonnegativeInt.unsafe `andThen` Channel.apply
+    end Channel
+
     final case class FrameIndex(get: NonnegativeInt) extends AnyVal
     object FrameIndex:
         given eqForFrameIndex: Eq[FrameIndex] = Eq.fromUniversalEquals[FrameIndex]
         given showForFrameIndex: Show[FrameIndex] = Show.show(_.get.show)
         def fromInt = NonnegativeInt.either.fmap(_.map(FrameIndex.apply))
-        def unsafe = NonnegativeInt.unsafe.andThen(FrameIndex.apply)
+        def unsafe = NonnegativeInt.unsafe `andThen` FrameIndex.apply
     end FrameIndex
 
     final case class PositionIndex(get: NonnegativeInt) extends AnyVal
@@ -173,7 +192,7 @@ package object looptrace {
         given eqForPositionIndex: Eq[PositionIndex] = Eq.fromUniversalEquals[PositionIndex]
         given showForPositionIndex: Show[PositionIndex] = Show.show(_.get.show)
         def fromInt = NonnegativeInt.either.fmap(_.map(PositionIndex.apply))
-        def unsafe = NonnegativeInt.unsafe.andThen(PositionIndex.apply)
+        def unsafe = NonnegativeInt.unsafe `andThen` PositionIndex.apply
     end PositionIndex
 
     final case class ProbeName(get: String)
@@ -191,6 +210,7 @@ package object looptrace {
     final case class RoiIndex(get: NonnegativeInt) extends AnyVal
     object RoiIndex:
         implicit val showForRoiIndex: Show[RoiIndex] = Show.show(_.get.show)
+        def fromInt = NonnegativeInt.either.fmap(_.map(RoiIndex.apply))
         def unsafe = NonnegativeInt.unsafe.andThen(RoiIndex.apply)
     end RoiIndex
 
