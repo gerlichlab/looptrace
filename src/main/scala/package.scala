@@ -164,6 +164,7 @@ package object looptrace {
     object FrameIndex:
         given eqForFrameIndex: Eq[FrameIndex] = Eq.fromUniversalEquals[FrameIndex]
         given showForFrameIndex: Show[FrameIndex] = Show.show(_.get.show)
+        def fromInt = NonnegativeInt.either.fmap(_.map(FrameIndex.apply))
         def unsafe = NonnegativeInt.unsafe.andThen(FrameIndex.apply)
     end FrameIndex
 
