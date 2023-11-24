@@ -7,7 +7,6 @@ object Dependencies {
     
     /* Core libraries */
     lazy val catsCore = "org.typelevel" %% "cats-core" % "2.10.0"
-    lazy val cdmZarr = "edu.ucar" % "cdm-zarr" % "5.5.3"
     lazy val mouse = "org.typelevel" %% "mouse" % "1.2.1"
     lazy val os = "com.lihaoyi" %% "os-lib" % "0.9.2"
     lazy val scalaCsv = "com.github.tototoshi" %% "scala-csv" % "1.3.10"
