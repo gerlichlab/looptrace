@@ -10,20 +10,20 @@ EMBL Heidelberg
 import copy
 import dataclasses
 from enum import Enum
-from joblib import Parallel, delayed
+import json
 import logging
 import os
 from pathlib import Path
-import random
 from typing import *
+
+from joblib import Parallel, delayed
 import numpy as np
 from numpy.lib.format import open_memmap
 import pandas as pd
 from scipy import ndimage as ndi
-from skimage.measure import regionprops_table
 import tqdm
 
-from gertils import ExtantFolder, NonExtantPath
+from gertils import ExtantFile, ExtantFolder, NonExtantPath
 
 from looptrace.exceptions import MissingRoisTableException
 from looptrace.filepaths import get_spot_images_path
@@ -308,7 +308,27 @@ class SpotPicker:
             return {DetectionMethod.INTENSITY.value: ip.detect_spots_int, DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC: ip.detect_spots}[self.detection_method_name]
         except KeyError as e:
             raise ValueError(f"Illegal value for spot detection method in config: {self.detection_method_name}") from e
-        
+    
+    @property
+    def image_sizes_file(self) -> Path:
+        return Path(self.roi_path).with_suffix(".input_image_sizes.json")
+
+    @property
+    def input_image_sizes(self) -> Mapping[Tuple[int, int, int], Tuple[int, int, int]]:
+        sizes = {}
+        for p, hyperimage in enumerate(self.images):
+            num_timepoints = hyperimage.shape[0]
+            num_channels = hyperimage.shape[1]
+            for t in range(num_timepoints):
+                for c in range(num_channels):
+                    img = hyperimage[t, c]
+                    try:
+                        z, y, x = img.shape[-3:]
+                    except ValueError as e:
+                        raise SpotImageDimensionalityError(f"Failed to unpack (z, y, x) shape for (p={p}, t={t}, c={c})") from e
+                    sizes[(p, t, c)] = (z, y, x)
+        return sizes
+    
     @property
     def input_name(self):
         """Name of the input to the spot detection phase of the pipeline; in particular, a subfolder of the 'all images' folder typically passed to looptrace"""
@@ -451,7 +471,7 @@ class SpotPicker:
         output.to_csv(outfile)
 
         return outfile
-
+    
     def make_dc_rois_all_frames(self) -> str:
         #Precalculate all ROIs for extracting spot images, based on identified ROIs and precalculated drifts between time frames.
         print('Generating list of all ROIs for tracing:')
@@ -568,6 +588,16 @@ class SpotPicker:
 
         return roi_img
     
+    def _flattened_image_sizes(self) -> Iterable[Mapping[str, int]]:
+        for (p, t, c), (z, y, x) in self.input_image_sizes.items():
+            yield {"position": p, "time": t, "channel": c, "z": z, "y": y, "x": x}
+
+    def write_input_image_sizes(self) -> ExtantFile:
+        print(f"Writing spot detection input image sizes: {self.image_sizes_file}")
+        with open(self.image_sizes_file, 'w') as fh:
+            json.dump(self._flattened_image_sizes, fh, indent=4)
+        return ExtantFile(self.image_sizes_file)
+
     def write_single_fov_data(self, pos_group_name: str, pos_group_data: pd.DataFrame) -> List[str]:
         """
         Write all timepoints' 3D image arrays (1 for each hybridisation round) for each (region, trace ID) pair in the FOV.
@@ -675,3 +705,7 @@ class SpotPicker:
 
         self.image_handler.images['spot_images_fine'] = roi_array_fine
         np.savez_compressed(self.image_handler.image_save_path+os.sep+'spot_images_fine.npz', *roi_array_fine)
+
+
+class SpotImageDimensionalityError(Exception):
+    """Represent case in which something's wrong with the dimensionality of an image for spot detection."""

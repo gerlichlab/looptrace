@@ -8,6 +8,9 @@ from typing import *
 from gertils import ExtantFile, ExtantFolder
 import pypiper
 
+from looptrace.ImageHandler import handler_from_cli
+from looptrace.SpotPicker import SpotPicker
+
 from config_file_validation import workflow as run_config_validation
 from convert_datasets_to_zarr import one_to_one as run_zarr_production
 from extract_exp_psf import workflow as run_psf_extraction
@@ -33,6 +36,13 @@ logger = logging.getLogger(__name__)
 
 NO_TEE_LOGS_OPTNAME = "--do-not-tee-logs"
 PIPE_NAME = "looptrace"
+
+
+def prepare_image_dimensions_for_all_rois_filter_and_drift_correction(config_file: ExtantFile, images_folder: ExtantFolder) -> ExtantFile:
+    """Write a spot picker's image sizes so that the all ROIs construction can use this metadata."""
+    H = handler_from_cli(config_file=config_file, images_folder=images_folder)
+    S = SpotPicker(H)
+    return S.write_input_image_sizes()
 
 
 class LooptracePipeline(pypiper.Pipeline):
@@ -62,6 +72,7 @@ class LooptracePipeline(pypiper.Pipeline):
             ("spot_detection", run_spot_detection, conf_data_pair), # generates *_rois.csv (regional spots)
             ("spot_filtration", run_spot_filtration, conf_data_pair), 
             ("clean_1", run_cleanup, conf_only),
+            ("spot_bounding_preparation", prepare_image_dimensions_for_all_rois_filter_and_drift_correction, conf_data_pair),
             ("spot_bounding", run_spot_bounding, conf_data_pair), # computes pad_x_min, etc.; writes *_dc_rois.csv (much bigger, since regional spots x frames)
             ("spot_extraction", run_spot_extraction, conf_data_pair),
             ("spot_zipping", run_spot_zipping, conf_data_pair),
