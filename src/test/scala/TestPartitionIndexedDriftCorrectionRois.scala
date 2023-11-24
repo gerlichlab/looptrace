@@ -312,18 +312,18 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         assertCompiles("sampleDetectedRois(PositiveInt(1), PositiveInt(1))(List())") // negative control
         
         /* Alternatives with at least 1 positive int */
-        assertDoesNotCompile("sampleDetectedRois(PositiveInt(1), NonnegativeInt(1))(List())")
-        assertDoesNotCompile("sampleDetectedRois(NonnegativeInt(1), PositiveInt(1))(List())")
-        assertDoesNotCompile("sampleDetectedRois(PositiveInt(1), 1)(List())")
-        assertDoesNotCompile("sampleDetectedRois(1, PositiveInt(1))(List())")
+        assertTypeError("sampleDetectedRois(PositiveInt(1), NonnegativeInt(1))(List())")
+        assertTypeError("sampleDetectedRois(NonnegativeInt(1), PositiveInt(1))(List())")
+        assertTypeError("sampleDetectedRois(PositiveInt(1), 1)(List())")
+        assertTypeError("sampleDetectedRois(1, PositiveInt(1))(List())")
         
         /* Other alternatives with at least 1 nonnegative int */
-        assertDoesNotCompile("sampleDetectedRois(NonnegativeInt(1), NonnegativeInt(1))(List())")
-        assertDoesNotCompile("sampleDetectedRois(NonnegativeInt(1), 1)(List())")
-        assertDoesNotCompile("sampleDetectedRois(1, NonnegativeInt(1))(List())")
+        assertTypeError("sampleDetectedRois(NonnegativeInt(1), NonnegativeInt(1))(List())")
+        assertTypeError("sampleDetectedRois(NonnegativeInt(1), 1)(List())")
+        assertTypeError("sampleDetectedRois(1, NonnegativeInt(1))(List())")
         
         // Alternative with simple integers
-        assertDoesNotCompile("sampleDetectedRois(1, 1)(List())")
+        assertTypeError("sampleDetectedRois(1, 1)(List())")
     }
     
     test("Requesting ROIs count size greater than usable record count yields expected result.") {

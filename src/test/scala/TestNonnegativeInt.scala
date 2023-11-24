@@ -9,7 +9,7 @@ class TestNonnegativeInt extends AnyFunSuite, ScalacheckSuite, should.Matchers:
     test("NonnegativeInt correctly restricts which expressions compile.") {
         assertCompiles("NonnegativeInt(1)")
         assertCompiles("NonnegativeInt(0)")
-        assertDoesNotCompile("NonnegativeInt(-1)")
+        assertTypeError("NonnegativeInt(-1)")
     }
 
     test("NonnegativeInt.maybe behaves correctly.") {
