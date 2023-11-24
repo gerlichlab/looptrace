@@ -14,13 +14,13 @@ import at.ac.oeaw.imba.gerlich.looptrace.{ sortByCats, ScalacheckSuite }
 /** Tests for the geometric coordinate abstractions */
 class TestCoordinates extends AnyFunSuite, ScalacheckSuite, should.Matchers:
     
-    enum CoordinateKey:
-        case X, Y, Z
-
-    given arbCoordinateKey: Arbitrary[CoordinateKey] = 
-        Arbitrary{ Gen.oneOf(CoordinateKey.X, CoordinateKey.Y, CoordinateKey.Z) }
-
     test("Ordering coordinates works.") {
+        enum CoordinateKey:
+            case X, Y, Z
+
+        given arbCoordinateKey: Arbitrary[CoordinateKey] = 
+            Arbitrary{ Gen.oneOf(CoordinateKey.X, CoordinateKey.Y, CoordinateKey.Z) }
+
         forAll (Gen.zip(arbitrary[CoordinateKey], arbitrary[List[Double]])) { 
             case (CoordinateKey.X, xs) => assertOrder(xs, XCoordinate.apply)
             case (CoordinateKey.Y, ys) => assertOrder(ys, YCoordinate.apply)
