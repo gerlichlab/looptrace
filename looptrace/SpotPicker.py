@@ -314,9 +314,10 @@ class SpotPicker:
         return Path(self.roi_path).with_suffix(".input_image_sizes.json")
 
     @property
-    def input_image_sizes(self) -> Mapping[Tuple[int, int, int], Tuple[int, int, int]]:
+    def input_image_sizes(self) -> Mapping[Tuple[str, int, int, int], Tuple[int, int, int]]:
         sizes = {}
-        for p, hyperimage in enumerate(self.images):
+        for idx, name in enumerate(self.image_handler.image_lists[self.input_name]):
+            hyperimage = self.images[idx]
             num_timepoints = hyperimage.shape[0]
             num_channels = hyperimage.shape[1]
             for t in range(num_timepoints):
@@ -325,8 +326,8 @@ class SpotPicker:
                     try:
                         z, y, x = img.shape[-3:]
                     except ValueError as e:
-                        raise SpotImageDimensionalityError(f"Failed to unpack (z, y, x) shape for (p={p}, t={t}, c={c})") from e
-                    sizes[(p, t, c)] = (z, y, x)
+                        raise SpotImageDimensionalityError(f"Failed to unpack (z, y, x) shape for (p={name}, t={t}, c={c})") from e
+                    sizes[(name, idx, t, c)] = (z, y, x)
         return sizes
     
     @property
@@ -520,6 +521,7 @@ class SpotPicker:
                 pad_x_min = abs(min(0,x_min))
                 pad_x_max = abs(max(0,x_max-X))
 
+                # roi.name is the index value.
                 all_rois.append([pos, pos_index, idx, roi.name, dc_frame['frame'], ref_frame, ch, 
                                 z_min, z_max, y_min, y_max, x_min, x_max, 
                                 pad_z_min, pad_z_max, pad_y_min, pad_y_max, pad_x_min, pad_x_max,
@@ -537,32 +539,6 @@ class SpotPicker:
         self.all_rois.to_csv(outfile)
         self.image_handler.load_tables()
         return outfile
-
-    def extract_single_roi_img(self, single_roi):
-        #Function to extract single ROI lazily without loading entire stack in RAM.
-        #Depending on chunking of original data can be more or less performant.
-
-        p = single_roi['pos_index']
-        t = single_roi['frame']
-        c = single_roi['ch']
-        z = slice(single_roi['z_min'], single_roi['z_max'])
-        y = slice(single_roi['y_min'], single_roi['y_max'])
-        x = slice(single_roi['x_min'], single_roi['x_max'])
-        pad = ( (single_roi['pad_z_min'], single_roi['pad_z_max']),
-                (single_roi['pad_y_min'], single_roi['pad_y_max']),
-                (single_roi['pad_x_min'], single_roi['pad_x_max']))
-
-        try:
-            roi_img = np.array(self.images[p][t, c, z, y, x])
-
-            #If microscope drifted, ROI could be outside image. Correct for this:
-            if pad != ((0,0),(0,0),(0,0)):
-                roi_img = np.pad(roi_img, pad, mode='edge')
-
-        except ValueError: # ROI collection failed for some reason
-            roi_img = np.zeros(self._raw_roi_image_size, dtype=np.float32)
-
-        return roi_img
 
     def extract_single_roi_img_inmem(self, single_roi, images):
         # Function for extracting a single cropped region defined by ROI from a larger 3D image.
