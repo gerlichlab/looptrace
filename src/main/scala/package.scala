@@ -16,16 +16,13 @@ import mouse.boolean.*
 import scopt.Read
 import com.github.tototoshi.csv.*
 
-import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.readJsonFile
-
 /** Chromatin fiber tracing with FISH probes */
 package object looptrace {
     val VersionName = "0.1.0-SNAPSHOT"
 
+    type CsvRow = Map[String, String]
     type ErrorMessages = NEL[String]
     type ErrMsgsOr[A] = Either[ErrorMessages, A]
-
-    type CsvRow = Map[String, String]
     
     /** Use rows from a CSV file in arbitrary code. */
     def withCsvData(filepath: os.Path)(code: Iterable[CsvRow] => Any): Any = {
@@ -33,12 +30,28 @@ package object looptrace {
         try { code(reader.allWithHeaders()) } finally { reader.close() }
     }
 
+    /** Do arbitrary code with rows from a pair of CSV files. */
+    def withCsvPair(f1: os.Path, f2: os.Path)(code: (Iterable[CsvRow], Iterable[CsvRow]) => Any): Any = {
+        var reader1: CSVReader = null
+        val reader2 = CSVReader.open(f2.toIO)
+        try {
+            reader1 = CSVReader.open(f1.toIO)
+            code(reader1.allWithHeaders(), reader2.allWithHeaders())
+        } finally {
+            if (reader1 != null) { reader1.close() }
+            reader2.close()
+        }
+    }
+
+    /** Wrapper around {@code os.write} to handle writing an iterable of lines. */
     def writeTextFile(target: os.Path, data: Iterable[Array[String]], delimiter: Delimiter) = 
         os.write(target, data.map(delimiter.join.andThen(_ ++ "\n")))
 
+    /** When an iterable is all booleans, simplify the all-true check ({@code ps.forall(identity) === ps.all}) */
     extension (ps: Iterable[Boolean])
         def all: Boolean = ps.forall(identity)
 
+    /** Add a {@code .parent} accessor on a path. */
     extension (p: os.Path)
         def parent: os.Path = p / os.up
 

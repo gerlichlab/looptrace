@@ -49,16 +49,4 @@ trait GenericSuite:
     /** Execute some test code that uses a JSON file {@code os.Path} file. */
     def withTempJsonFile(initData: os.Source, suffix: String = ".json") = withTempFile(initData, suffix)(_: os.Path => Any)
 
-    def withCsvPair(f1: os.Path, f2: os.Path)(testCode: (Iterable[CsvRow], Iterable[CsvRow]) => Any): Any = {
-        var reader1: CSVReader = null
-        val reader2 = CSVReader.open(f2.toIO)
-        try {
-            reader1 = CSVReader.open(f1.toIO)
-            testCode(reader1.allWithHeaders(), reader2.allWithHeaders())
-        } finally {
-            if (reader1 != null) { reader1.close() }
-            reader2.close()
-        }
-    }
-
 end GenericSuite
