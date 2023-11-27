@@ -13,16 +13,12 @@ from gertils import ExtantFile, ExtantFolder
 
 from looptrace.ImageHandler import handler_from_cli
 from looptrace.SpotPicker import SpotPicker
-from looptrace.exceptions import MissingRoisTableException
 
 
 def workflow(config_file: ExtantFile, images_folder: ExtantFolder) -> Optional[str]:
     image_handler = handler_from_cli(config_file=config_file, images_folder=images_folder, image_save_path=None)
     picker = SpotPicker(image_handler=image_handler)
-    try:
-        return picker.make_dc_rois_all_frames()
-    except MissingRoisTableException as e:
-        print(f"ERROR -- no ROIs table -- {e}")
+    return picker.make_dc_rois_all_frames()
 
 
 if __name__ == '__main__':
