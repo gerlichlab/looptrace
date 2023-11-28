@@ -491,7 +491,7 @@ class SpotPicker:
         except KeyError as e:
             raise MissingRoisTableException(key_rois_table) from e
         
-        for idx, roi in tqdm.tqdm(rois_table.iterrows(), total=len(rois_table)):
+        for idx, (_, roi) in tqdm.tqdm(enumerate(rois_table.iterrows()), total=len(rois_table)):
             if not use_roi(roi):
                 continue
             pos = roi['position']
