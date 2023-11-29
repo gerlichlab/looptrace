@@ -43,6 +43,7 @@ object LabelAndFilterRois:
         minSpotSeparation: NonnegativeReal = NonnegativeReal(0), // unconditionally required
         unfilteredOutputFile: UnfilteredOutputFile = null, // unconditionally required
         filteredOutputFile: FilteredOutputFile = null, // unconditionally required
+        extantOutputHandler: ExtantOutputHandler = null, // unconditionally required
         filterForNuclei: Boolean = false
         )
 
@@ -88,6 +89,10 @@ object LabelAndFilterRois:
                 .required()
                 .action((f, c) => c.copy(filteredOutputFile = f))
                 .text("Path to file to which to write filtered output"),
+            opt[ExtantOutputHandler]("handleExtantOutput")
+                .required()
+                .action((h, c) => c.copy(extantOutputHandler = h))
+                .text("How to handle writing output when target already exists")
             // TODO: bring back for inclusion of the rest of the spots table extraction here in this program.
             // opt[Unit]("filterForNuclei")
             //     .action((_, c) => c.copy(filterForNuclei = true))
@@ -113,7 +118,8 @@ object LabelAndFilterRois:
                     minSpotSeparation = opts.minSpotSeparation, 
                     filterForNuclei = opts.filterForNuclei, 
                     unfilteredOutputFile = opts.unfilteredOutputFile,
-                    filteredOutputFile = opts.filteredOutputFile
+                    filteredOutputFile = opts.filteredOutputFile, 
+                    extantOutputHandler = opts.extantOutputHandler
                     )
         }
     }
@@ -127,7 +133,8 @@ object LabelAndFilterRois:
         minSpotSeparation: NonnegativeReal, 
         filterForNuclei: Boolean, 
         unfilteredOutputFile: UnfilteredOutputFile, 
-        filteredOutputFile: FilteredOutputFile
+        filteredOutputFile: FilteredOutputFile, 
+        extantOutputHandler: ExtantOutputHandler
         ): Unit = {
         
         // First, parse the probe groupings.
@@ -199,13 +206,13 @@ object LabelAndFilterRois:
                 row + (neighborColumnName -> maybeNeighbors.fold(List())(_.toList).mkString(MultiValueFieldInternalSeparator))
             }
             println(s"Writing unfiltered output file: $unfilteredOutputFile")
-            writeAllCsv(unfilteredOutputFile, header, records)
+            writeAllCsv(unfilteredOutputFile, header, records, handleExtant = extantOutputHandler)
             header
         }
         println(s"Unfiltered header: $unfilteredHeader")
 
         println(s"Writing filtered output file: $filteredOutputFile")
-        writeAllCsv(filteredOutputFile, roisHeader, roiRecordsLabeled.filter(_._2.isEmpty).map(_._1))
+        writeAllCsv(filteredOutputFile, roisHeader, roiRecordsLabeled.filter(_._2.isEmpty).map(_._1), handleExtant = extantOutputHandler)
 
         println("Done!")
     }
