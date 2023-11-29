@@ -72,7 +72,8 @@ class LooptracePipeline(pypiper.Pipeline):
             ("spot_detection", run_spot_detection, conf_data_pair), # generates *_rois.csv (regional spots)
             ("spot_filtration", run_spot_filtration, conf_data_pair), 
             ("clean_1", run_cleanup, conf_only),
-            ("spot_bounding_preparation", prepare_image_dimensions_for_all_rois_filter_and_drift_correction, conf_data_pair),
+            # TODO: add back if migrating the spot_bounding step.
+            #("spot_bounding_preparation", prepare_image_dimensions_for_all_rois_filter_and_drift_correction, conf_data_pair),
             ("spot_bounding", run_spot_bounding, conf_data_pair), # computes pad_x_min, etc.; writes *_dc_rois.csv (much bigger, since regional spots x frames)
             ("spot_extraction", run_spot_extraction, conf_data_pair),
             ("spot_zipping", run_spot_zipping, conf_data_pair),
