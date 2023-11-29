@@ -29,11 +29,17 @@ object CsvHelpers:
         result <- errors.toNel.toLeft(records).leftMap(FieldNameColumnNameMismatchException.apply)
     } yield result
     
+    def writeAllCsvSafe(writeLines: os.Source => Boolean)(header: List[String], rows: Iterable[CsvRow]): Either[IllegalArgumentException | FieldNameColumnNameMismatchException, Boolean] = 
+        prepCsvWrite(header)(rows).map(recs => (header :: recs).map(_.mkString(",") ++ "\n")).map(recs => writeLines(recs))
+
     /** Safely write rows to CSV with header, ensuring each has exactly the header's fields, and is ordered accordingly. */
-    def writeAllCsv(f: os.Path, header: List[String], rows: Iterable[CsvRow], handleExtant: ExtantOutputHandler): Boolean = {
+    def writeAllCsvSafe(f: os.Path, header: List[String], rows: Iterable[CsvRow], handleExtant: ExtantOutputHandler): Either[Throwable, Boolean] = {
         val maybeWrite: Either[Throwable, os.Source => Boolean] = handleExtant.getSimpleWriter(f)
         val maybeLines: Either[Throwable, os.Source] = prepCsvWrite(header)(rows).map(recs => (header :: recs).map(_.mkString(",") ++ "\n"))
-        (maybeWrite <*> maybeLines).fold(throw _, identity)
+        maybeWrite <*> maybeLines
     }
+
+    def writeAllCsvUnsafe(writeLines: os.Source => Boolean)(header: List[String], rows: Iterable[CsvRow]): Boolean = 
+        writeAllCsvSafe(writeLines)(header, rows).fold(throw _, identity)
 
 end CsvHelpers

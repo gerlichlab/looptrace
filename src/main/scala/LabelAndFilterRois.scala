@@ -5,6 +5,7 @@ import upickle.default.*
 import cats.{ Alternative, Eq, Functor, Order }
 import cats.data.{ NonEmptyList as NEL, NonEmptyMap, NonEmptySet, ValidatedNel }
 import cats.data.Validated.Valid
+import cats.instances.tuple.*
 import cats.syntax.all.*
 import mouse.boolean.*
 
@@ -137,6 +138,18 @@ object LabelAndFilterRois:
         extantOutputHandler: ExtantOutputHandler
         ): Unit = {
         
+        /* Create unsafe CSV writer for each output type, failing fast if either output exists and overwrite is not active.
+           In the process, bind each target output file to its corresponding named function. */
+        val (writeUnfiltered, writeFiltered) = {
+            val unfilteredNel = extantOutputHandler.getSimpleWriter(unfilteredOutputFile).toValidatedNel
+            val filteredNel = extantOutputHandler.getSimpleWriter(filteredOutputFile).toValidatedNel
+            val writeCsv = (sink: os.Source => Boolean) => writeAllCsvUnsafe(sink)(_: List[String], _: Iterable[CsvRow])
+            (unfilteredNel, filteredNel).tupled.fold(
+                es => throw new Exception(s"${es.size} existence error(s) with output: ${es.map(_.getMessage)}"), 
+                _.mapBoth(writeCsv)
+                )
+        }
+
         // First, parse the probe groupings.
         val probeGroups = {
             println(s"Parsing probe groups file: ${probeGroupsFile}")
@@ -205,13 +218,13 @@ object LabelAndFilterRois:
             val records = roiRecordsLabeled.map{ case (row, maybeNeighbors) => 
                 row + (neighborColumnName -> maybeNeighbors.fold(List())(_.toList).mkString(MultiValueFieldInternalSeparator))
             }
-            val wroteIt = writeAllCsv(unfilteredOutputFile, header, records, extantOutputHandler)
+            val wroteIt = writeUnfiltered(header, records)
             println(s"${if wroteIt then "Wrote" else "Did not write"} unfiltered output file: $filteredOutputFile")
             header
         }
         println(s"Unfiltered header: $unfilteredHeader")
 
-        val wroteIt = writeAllCsv(filteredOutputFile, roisHeader, roiRecordsLabeled.filter(_._2.isEmpty).map(_._1), extantOutputHandler)
+        val wroteIt = writeFiltered(roisHeader, roiRecordsLabeled.filter(_._2.isEmpty).map(_._1))
         println(s"${if wroteIt then "Wrote" else "Did not write"} filtered output file: $filteredOutputFile")
 
         println("Done!")

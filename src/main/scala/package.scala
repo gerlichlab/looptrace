@@ -3,14 +3,9 @@ package at.ac.oeaw.imba.gerlich
 import java.io.File
 import scala.util.Try
 import upickle.default.*
-import cats.{ Eq, Order, Show }
+import cats.{ Bifunctor, Eq, Order, Show }
 import cats.data.{ NonEmptyList as NEL, ValidatedNel }
-import cats.syntax.contravariant.*
-import cats.syntax.either.*
-import cats.syntax.eq.*
-import cats.syntax.functor.*
-import cats.syntax.option.*
-import cats.syntax.show.*
+import cats.syntax.all.*
 import mouse.boolean.*
 
 import scopt.Read
@@ -46,6 +41,9 @@ package object looptrace {
     /** Wrapper around {@code os.write} to handle writing an iterable of lines. */
     def writeTextFile(target: os.Path, data: Iterable[Array[String]], delimiter: Delimiter) = 
         os.write(target, data.map(delimiter.join.andThen(_ ++ "\n")))
+
+    extension [A, F[_, _] : Bifunctor](faa: F[A, A])
+        def mapBoth[B](f: A => B): F[B, B] = faa.bimap(f, f)
 
     /** When an iterable is all booleans, simplify the all-true check ({@code ps.forall(identity) === ps.all}) */
     extension (ps: Iterable[Boolean])
