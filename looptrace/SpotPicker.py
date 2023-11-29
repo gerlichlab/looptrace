@@ -541,30 +541,6 @@ class SpotPicker:
         self.all_rois.to_csv(outfile)
         self.image_handler.load_tables()
         return outfile
-
-    def extract_single_roi_img_inmem(self, single_roi, images):
-        # Function for extracting a single cropped region defined by ROI from a larger 3D image.
-        from math import ceil, floor
-        down = lambda x: int(floor(x))
-        up = lambda x: int(ceil(x))
-        z = slice(down(single_roi['z_min']), up(single_roi['z_max']))
-        y = slice(down(single_roi['y_min']), up(single_roi['y_max']))
-        x = slice(down(single_roi['x_min']), up(single_roi['x_max']))
-        pad = ( (single_roi['pad_z_min'], single_roi['pad_z_max']),
-                (single_roi['pad_y_min'], single_roi['pad_y_max']),
-                (single_roi['pad_x_min'], single_roi['pad_x_max']))
-
-        try:
-            roi_img = np.array(images[z, y, x])
-
-            #If microscope drifted, ROI could be outside image. Correct for this:
-            if pad != ((0,0),(0,0),(0,0)):
-                roi_img = np.pad(roi_img, pad, mode='edge')
-
-        except ValueError: # ROI collection failed for some reason
-            roi_img = np.zeros((np.abs(z.stop-z.start), np.abs(y.stop-y.start), np.abs(x.stop-x.start)), dtype=np.float32)
-
-        return roi_img
     
     def _flattened_image_sizes(self) -> Iterable[Mapping[str, int]]:
         for (p, t, c), (z, y, x) in self.input_image_sizes.items():
@@ -601,7 +577,7 @@ class SpotPicker:
             for ch, ch_group in frame_group.groupby('ch'):
                 image_stack = np.array(self.images[pos_index][int(frame), int(ch)])
                 for i, roi in ch_group.iterrows():
-                    roi_img = self.extract_single_roi_img_inmem(roi, image_stack).astype(np.uint16)
+                    roi_img = extract_single_roi_img_inmem(roi, image_stack).astype(np.uint16)
                     fp = os.path.join(self.spot_images_path, RoiOrderingSpecification.name_roi_file(pos_name=pos_group_name, roi=roi))
                     if f_id == 0:
                         array_files.append(fp)
@@ -683,6 +659,31 @@ class SpotPicker:
 
         self.image_handler.images['spot_images_fine'] = roi_array_fine
         np.savez_compressed(self.image_handler.image_save_path+os.sep+'spot_images_fine.npz', *roi_array_fine)
+
+
+def extract_single_roi_img_inmem(single_roi, images):
+    # Function for extracting a single cropped region defined by ROI from a larger 3D image.
+    from math import ceil, floor
+    down = lambda x: int(floor(x))
+    up = lambda x: int(ceil(x))
+    z = slice(down(single_roi['z_min']), up(single_roi['z_max']))
+    y = slice(down(single_roi['y_min']), up(single_roi['y_max']))
+    x = slice(down(single_roi['x_min']), up(single_roi['x_max']))
+    pad = ( (single_roi['pad_z_min'], single_roi['pad_z_max']),
+            (single_roi['pad_y_min'], single_roi['pad_y_max']),
+            (single_roi['pad_x_min'], single_roi['pad_x_max']))
+
+    try:
+        roi_img = np.array(images[z, y, x])
+
+        #If microscope drifted, ROI could be outside image. Correct for this:
+        if pad != ((0,0),(0,0),(0,0)):
+            roi_img = np.pad(roi_img, pad, mode='edge')
+
+    except ValueError: # ROI collection failed for some reason
+        roi_img = np.zeros((np.abs(z.stop-z.start), np.abs(y.stop-y.start), np.abs(x.stop-x.start)), dtype=np.float32)
+
+    return roi_img
 
 
 class SpotImageDimensionalityError(Exception):
