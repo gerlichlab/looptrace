@@ -92,7 +92,7 @@ object LabelAndFilterRois:
             opt[ExtantOutputHandler]("handleExtantOutput")
                 .required()
                 .action((h, c) => c.copy(extantOutputHandler = h))
-                .text("How to handle writing output when target already exists")
+                .text("How to handle writing output when target already exists"),
             // TODO: bring back for inclusion of the rest of the spots table extraction here in this program.
             // opt[Unit]("filterForNuclei")
             //     .action((_, c) => c.copy(filterForNuclei = true))

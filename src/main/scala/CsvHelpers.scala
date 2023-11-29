@@ -31,13 +31,11 @@ object CsvHelpers:
     
     /** Safely write rows to CSV with header, ensuring each has exactly the header's fields, and is ordered accordingly. */
     def writeAllCsv(f: os.Path, header: List[String], rows: Iterable[CsvRow], handleExtant: ExtantOutputHandler): Boolean = {
-        val maybeWrite: Either[Throwable, os.Source => Boolean] = 
-            if !os.isFile(f) then (os.write(f, (_: os.Source))).returning(true).asRight
-            else handleExtant match {
-                case ExtantOutputHandler.Skip => ((_: os.Source) => false).asRight
-                case ExtantOutputHandler.Overwrite => (os.write.over(f, (_: os.Source))).returning(true).asRight
-                case ExtantOutputHandler.Fail => FileAlreadyExistsException(f.toString).asLeft
-            }
+        val maybeWrite: Either[Throwable, os.Source => Boolean] = handleExtant match {
+            case ExtantOutputHandler.Skip if os.isFile(f) => ((_: os.Source) => false).asRight
+            case ExtantOutputHandler.Fail if os.isFile(f) => FileAlreadyExistsException(f.toString).asLeft
+            case _ => (os.write.over(f, (_: os.Source))).returning(true).asRight
+        }
         val maybeLines: Either[Throwable, os.Source] = prepCsvWrite(header)(rows).map(recs => (header :: recs).map(_.mkString(",") ++ "\n"))
         (maybeWrite <*> maybeLines).fold(throw _, identity)
     }
