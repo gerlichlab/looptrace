@@ -205,14 +205,14 @@ object LabelAndFilterRois:
             val records = roiRecordsLabeled.map{ case (row, maybeNeighbors) => 
                 row + (neighborColumnName -> maybeNeighbors.fold(List())(_.toList).mkString(MultiValueFieldInternalSeparator))
             }
-            println(s"Writing unfiltered output file: $unfilteredOutputFile")
-            writeAllCsv(unfilteredOutputFile, header, records, handleExtant = extantOutputHandler)
+            val wroteIt = writeAllCsv(unfilteredOutputFile, header, records, extantOutputHandler)
+            println(s"${if wroteIt then "Wrote" else "Did not write"} unfiltered output file: $filteredOutputFile")
             header
         }
         println(s"Unfiltered header: $unfilteredHeader")
 
-        println(s"Writing filtered output file: $filteredOutputFile")
-        writeAllCsv(filteredOutputFile, roisHeader, roiRecordsLabeled.filter(_._2.isEmpty).map(_._1), handleExtant = extantOutputHandler)
+        val wroteIt = writeAllCsv(filteredOutputFile, roisHeader, roiRecordsLabeled.filter(_._2.isEmpty).map(_._1), extantOutputHandler)
+        println(s"${if wroteIt then "Wrote" else "Did not write"} filtered output file: $filteredOutputFile")
 
         println("Done!")
     }

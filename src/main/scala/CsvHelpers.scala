@@ -30,19 +30,16 @@ object CsvHelpers:
     } yield result
     
     /** Safely write rows to CSV with header, ensuring each has exactly the header's fields, and is ordered accordingly. */
-    def writeAllCsv(f: os.Path, header: List[String], rows: Iterable[CsvRow], handleExtant: ExtantOutputHandler): Unit = {
-        val maybeWrite: Either[FileAlreadyExistsException, os.Source => Unit] = 
-            if !os.isFile(f) then { os.write(f, (_: os.Source)) }.asRight 
+    def writeAllCsv(f: os.Path, header: List[String], rows: Iterable[CsvRow], handleExtant: ExtantOutputHandler): Boolean = {
+        val maybeWrite: Either[Throwable, os.Source => Boolean] = 
+            if !os.isFile(f) then (os.write(f, (_: os.Source))).returning(true).asRight
             else handleExtant match {
-                case ExtantOutputHandler.Skip => ((_: os.Source) => ()).asRight
-                case ExtantOutputHandler.Overwrite => { os.write.over(f, (_: os.Source)) }.asRight
+                case ExtantOutputHandler.Skip => ((_: os.Source) => false).asRight
+                case ExtantOutputHandler.Overwrite => (os.write.over(f, (_: os.Source))).returning(true).asRight
                 case ExtantOutputHandler.Fail => FileAlreadyExistsException(f.toString).asLeft
             }
-        for {
-            write <- maybeWrite
-            records <- prepCsvWrite(header)(rows)
-            lines = (header :: records).map(_.mkString(",") ++ "\n")
-        } yield write(lines)
+        val maybeLines: Either[Throwable, os.Source] = prepCsvWrite(header)(rows).map(recs => (header :: recs).map(_.mkString(",") ++ "\n"))
+        (maybeWrite <*> maybeLines).fold(throw _, identity)
     }
 
 end CsvHelpers
