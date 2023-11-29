@@ -69,6 +69,7 @@ class RoiOrderingSpecification():
         str
             Name for file corresponding to this spot (regional)'s data in a single hybridisation round
         """
+        # TODO: this is brittle / fragile -- what if there are more than 99999 ROIs?
         return "_".join([pos_name, str(roi['roi_id']).zfill(5), str(roi['ref_frame'])]) + ".npy"
     
     @staticmethod
@@ -479,6 +480,7 @@ class SpotPicker:
 
         all_rois = []
         
+        # TODO: use the proximity-filtration here, in either case (nuclear filtration or not).
         if self.config.get('spot_in_nuc', False):
             key_rois_table = self.input_name + '_rois' + NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION
             use_roi = lambda r: r['nuc_label'] != 0
