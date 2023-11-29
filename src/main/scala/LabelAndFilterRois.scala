@@ -144,7 +144,7 @@ object LabelAndFilterRois:
                 case Failure(exception) => 
                     reader.close()
                     throw exception
-                case Success((head, spotRows)) => Alternative[List].separate(spotRows.toList.map(rowToRoi.throughRight)) match {
+                case Success((head, spotRows)) => Alternative[List].separate(spotRows.map(rowToRoi.throughRight)) match {
                     case (Nil, rrPairs) => head -> NonnegativeInt.indexed(rrPairs)
                     case (errors@(h :: _), _) => throw new Exception(s"${errors.length} errors converting spot file (${spotsFile}) rows to ROIs! First one: $h")
                 }
@@ -161,7 +161,7 @@ object LabelAndFilterRois:
         println("Keying drifts")
         val driftByPosTimePair = {
             type Key = (String, FrameIndex)
-            val (repeats, keyed) = NonnegativeInt.indexed(drifts.toList).foldLeft(Map.empty[Key, NonEmptySet[LineNumber]] -> Map.empty[Key, DriftRecord]){ 
+            val (repeats, keyed) = NonnegativeInt.indexed(drifts).foldLeft(Map.empty[Key, NonEmptySet[LineNumber]] -> Map.empty[Key, DriftRecord]){ 
                 case ((reps, acc), (drift, recnum)) =>  
                     val p = drift.position
                     val t = drift.time
@@ -196,7 +196,7 @@ object LabelAndFilterRois:
             val neighborColumnName = "neighbors"
             val header = roisHeader :+ neighborColumnName
             val records = roiRecordsLabeled.map{ case (row, maybeNeighbors) => 
-                row + (neighborColumnName -> maybeNeighbors.toList.mkString(MultiValueFieldInternalSeparator))
+                row + (neighborColumnName -> maybeNeighbors.fold(List())(_.toList).mkString(MultiValueFieldInternalSeparator))
             }
             println(s"Writing unfiltered output file: $unfilteredOutputFile")
             writeAllCsv(unfilteredOutputFile, header, records)
@@ -405,10 +405,6 @@ object LabelAndFilterRois:
     /** Add a continuation-like syntax for flatmapping over a function that can fail with another that canNOT fail. */
     extension [A, L, B](f: A => Either[L, B])
         infix def >>[C](g: B => C): A => Either[L, C] = f(_: A).map(g)
-
-    /** Option[NEL[A]] is isomorphic to List[A], so provide a convenience conversion. */
-    extension [A](maybeNel: Option[NEL[A]])
-        def toList: List[A] = maybeNel.fold(List())(_.toList)
 
     /** Push a value through to the right side of an {@code Either}, pairing with the wrapped value */
     extension [A, L, R](f: A => Either[L, R])
