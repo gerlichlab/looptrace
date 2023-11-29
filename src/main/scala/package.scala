@@ -55,12 +55,13 @@ package object looptrace {
     extension (p: os.Path)
         def parent: os.Path = p / os.up
 
+    def tryToInt(x: Double): Either[String, Int] = {
+        val z = x.toInt
+        (x == z).either(s"Cannot convert to integer: $x", z) // == rather than === here to allow Double/Int comparison
+    }
+    
     extension (v: ujson.Value)
-        def int: Int = {
-            val x = v.num
-            val z = x.toInt
-            if (x === z) then z else throw new ujson.Value.InvalidData(v, "Cannot convert to integer")
-        }
+        def int: Int = tryToInt(v.num).fold(msg => throw new ujson.Value.InvalidData(v, msg), identity)
 
     extension [A](arr: Array[A])
         def lookup(a: A): Option[Int] = arr.indexOf(a) match {
@@ -96,6 +97,8 @@ package object looptrace {
 
     /** Try to parse the given string as an integer. */
     def safeParseInt(s: String): Either[String, Int] = Try{ s.toInt }.toEither.leftMap(_.getMessage)
+
+    def safeParseIntThroughDouble(s: String): Either[String, Int] = ???
 
     /** Allow custom types as CLI parameters. */
     object ScoptCliReaders:
