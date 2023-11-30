@@ -26,23 +26,21 @@ tst[, `:=`(max_max = max(max), max_mean = max(mean), max_median = max(median)), 
 # where max_in_ref is the max intensity in the ROI image corresponding to the frame 
 # in which the ROI was detected, and max_all is the max intensity across all frames 
 # within that particular ROI. This plot then groups these values by ref_frame.
-pct_of_max__violin <- ggplot(tst[frame == ref_frame, .(ref_frame, pct_of_max=100*(max/max_max))], aes(x=as.factor(ref_frame), y=pct_of_max, fill=as.factor(ref_frame))) + 
+pct_of_max__violin <- ggplot(tst[frame == ref_frame, .(ref_frame, pct_of_max=100*(max/max_max))], aes(x=as.factor(ref_frame), y=pct_of_max)) + 
     geom_violin() + 
     xlab("Regional barcode") + 
     ylab("Percent of max") + 
     theme_bw() +
-    labs(fill = element_blank()) + 
     ggtitle("Regional barcode's maximum's percent of maximum across all frames per ROI")
 outfile <- get_output_file("ref_frame_pct_of_max.violin")
 message("Writing plot file: ", outfile)
 ggsave(filename = outfile, plot = pct_of_max__violin)
 
-pct_zero_max__bar <- ggplot(tst[frame == ref_frame, .(pct_zero_max=sum(max==0)/.N), by=ref_frame], aes(x=as.factor(ref_frame), y=pct_zero_max, fill=as.factor(ref_frame))) + 
+pct_zero_max__bar <- ggplot(tst[frame == ref_frame, .(pct_zero_max=sum(max==0)/.N), by=ref_frame], aes(x=as.factor(ref_frame), y=pct_zero_max)) + 
     geom_col() + 
     xlab("Regional barcode") + 
     ylab("Percent with max = 0") + 
     theme_bw() + 
-    labs(fill = element_blank()) +
     ggtitle("Percentage of ROIs with 0 max in frame of ROI detection")
 outfile <- get_output_file("ref_frame_pct_zero_max.bar")
 message("Writing plot file: ", outfile)
