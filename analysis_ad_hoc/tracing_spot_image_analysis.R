@@ -2,7 +2,7 @@ library("argparse")
 library("data.table")
 library("ggplot2")
 
-cli_parser <- argparse$ArgumentParser(description="Visualise properties about aggregates of intensities of spot images used for tracing")
+cli_parser <- ArgumentParser(description="Visualise properties about aggregates of intensities of spot images used for tracing")
 cli_parser$add_argument("-i", "--infile", required=TRUE, help="Path to input file, i.e. produced by related Python functions/program")
 cli_parser$add_argument("-O", "--outfolder", required=TRUE, help="Path to folder in which to place output files")
 cli_parser$add_argument("--regionalFrames", required=TRUE, nargs="+", help="Indices (0-based) of regional barcode timepoints/frames")
