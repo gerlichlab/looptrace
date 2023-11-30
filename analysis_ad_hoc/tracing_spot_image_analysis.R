@@ -31,7 +31,7 @@ pct_of_max__violin <- ggplot(tst[frame == ref_frame, .(ref_frame, pct_of_max=100
     xlab("Regional barcode") + 
     ylab("Percent of max") + 
     theme_bw() +
-    ggtitle("Regional barcode's maximum's percent of maximum across all frames per ROI")
+    ggtitle("Regional barcode's maximum's pct of max's max across all frames per ROI")
 outfile <- get_output_file("ref_frame_max_pct_of_max_max.violin")
 message("Writing plot file: ", outfile)
 ggsave(filename = outfile, plot = pct_of_max__violin)
@@ -41,7 +41,7 @@ pct_of_max__violin <- ggplot(tst[frame == ref_frame, .(ref_frame, pct_of_mean=10
     xlab("Regional barcode") + 
     ylab("Percent of mean") + 
     theme_bw() +
-    ggtitle("Regional barcode's mean's percent of mean's maximum across all frames per ROI")
+    ggtitle("Regional barcode's mean's pct of mean's max across all frames per ROI")
 outfile <- get_output_file("ref_frame_mean_pct_of_max_mean.violin")
 message("Writing plot file: ", outfile)
 ggsave(filename = outfile, plot = pct_of_max__violin)
@@ -51,7 +51,7 @@ pct_of_max__violin <- ggplot(tst[frame == ref_frame, .(ref_frame, pct_of_median=
     xlab("Regional barcode") + 
     ylab("Percent of median") + 
     theme_bw() +
-    ggtitle("Regional barcode's median's percent of median's max across all frames per ROI")
+    ggtitle("Regional barcode's median's pct of median's max across all frames per ROI")
 outfile <- get_output_file("ref_frame_median_pct_of_max_median.violin")
 message("Writing plot file: ", outfile)
 ggsave(filename = outfile, plot = pct_of_max__violin)
