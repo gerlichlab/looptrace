@@ -136,6 +136,7 @@ def detect_spot_single_fov_single_frame(
         spot_threshold: NumberLike, 
         detection_parameters: SpotDetectionParameters
         ) -> pd.DataFrame:
+    print(f"Computing image for spot detection based on downsampling ({detection_parameters.downsampling})")
     img = single_fov_img[frame, fish_channel, ::detection_parameters.downsampling, ::detection_parameters.downsampling, ::detection_parameters.downsampling].compute()
     crosstalk_frame = frame if detection_parameters.crosstalk_frame is None else detection_parameters.crosstalk_frame
     if detection_parameters.subtract_beads:
@@ -661,7 +662,7 @@ class SpotPicker:
         np.savez_compressed(self.image_handler.image_save_path+os.sep+'spot_images_fine.npz', *roi_array_fine)
 
 
-def extract_single_roi_img_inmem(single_roi, images):
+def extract_single_roi_img_inmem(single_roi, image_stack):
     # Function for extracting a single cropped region defined by ROI from a larger 3D image.
     from math import ceil, floor
     down = lambda x: int(floor(x))
@@ -672,17 +673,13 @@ def extract_single_roi_img_inmem(single_roi, images):
     pad = ( (single_roi['pad_z_min'], single_roi['pad_z_max']),
             (single_roi['pad_y_min'], single_roi['pad_y_max']),
             (single_roi['pad_x_min'], single_roi['pad_x_max']))
-
     try:
-        roi_img = np.array(images[z, y, x])
-
+        roi_img = np.array(image_stack[z, y, x])
         #If microscope drifted, ROI could be outside image. Correct for this:
         if pad != ((0,0),(0,0),(0,0)):
             roi_img = np.pad(roi_img, pad, mode='edge')
-
     except ValueError: # ROI collection failed for some reason
         roi_img = np.zeros((np.abs(z.stop-z.start), np.abs(y.stop-y.start), np.abs(x.stop-x.start)), dtype=np.float32)
-
     return roi_img
 
 
