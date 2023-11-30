@@ -69,8 +69,8 @@ if __name__ == "__main__":
         description="Produced aggregation statistics about the spot image files used for tracing.", 
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         )
-    parser.add_argument("looptrace_config_file", required=True, type=ExtantFile.from_string, help="Path to looptrace config file for an experiment")
-    parser.add_argument("looptrace_images_folder", required=True, type=ExtantFolder.from_string, help="Path to images folder used for looptrace experiment")
+    parser.add_argument("looptrace_config_file", type=ExtantFile.from_string, help="Path to looptrace config file for an experiment")
+    parser.add_argument("looptrace_images_folder", type=ExtantFolder.from_string, help="Path to images folder used for looptrace experiment")
     parser.add_argument("-O", "--outfile", required=True, help="Path to output file to write")
     
     args = parser.parse_args()
