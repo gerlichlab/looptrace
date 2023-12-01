@@ -355,6 +355,10 @@ class SpotPicker:
             yield pos, self.images[idx]
 
     @property
+    def padding_method(self) -> str:
+        self.config.get("padding_method", "edge")
+
+    @property
     def parallelise(self) -> bool:
         return self.config.get("parallelise_spot_detection", False)
 
@@ -580,7 +584,7 @@ class SpotPicker:
             for ch, ch_group in frame_group.groupby('ch'):
                 image_stack = np.array(self.images[pos_index][int(frame), int(ch)])
                 for i, roi in ch_group.iterrows():
-                    roi_img = extract_single_roi_img_inmem(roi, image_stack).astype(np.uint16)
+                    roi_img = extract_single_roi_img_inmem(roi, image_stack, mode=self.padding_method).astype(np.uint16)
                     fp = os.path.join(self.spot_images_path, RoiOrderingSpecification.name_roi_file(pos_name=pos_group_name, roi=roi))
                     if f_id == 0:
                         array_files.append(fp)
@@ -664,7 +668,7 @@ class SpotPicker:
         np.savez_compressed(self.image_handler.image_save_path+os.sep+'spot_images_fine.npz', *roi_array_fine)
 
 
-def extract_single_roi_img_inmem(single_roi, image_stack):
+def extract_single_roi_img_inmem(single_roi, image_stack, **padding_kwargs):
     # Function for extracting a single cropped region defined by ROI from a larger 3D image.
     from math import ceil, floor
     down = lambda x: int(floor(x))
@@ -681,7 +685,7 @@ def extract_single_roi_img_inmem(single_roi, image_stack):
         if pad != ((0,0),(0,0),(0,0)):
             # TODO: consider an alternative strategy for computation of padding values.
             # See: https://github.com/gerlichlab/looptrace/issues/139
-            roi_img = np.pad(roi_img, pad, mode='edge')
+            roi_img = np.pad(roi_img, pad, **padding_kwargs)
     except ValueError: # ROI collection failed for some reason
         roi_img = np.zeros((np.abs(z.stop-z.start), np.abs(y.stop-y.start), np.abs(x.stop-x.start)), dtype=np.float32)
     return roi_img
