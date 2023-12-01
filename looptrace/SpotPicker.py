@@ -702,17 +702,24 @@ def extract_single_roi_img_inmem(single_roi: pd.Series, image_stack: np.ndarray,
     z = slice(_down_to_int(single_roi['z_min']), _up_to_int(single_roi['z_max']))
     y = slice(_down_to_int(single_roi['y_min']), _up_to_int(single_roi['y_max']))
     x = slice(_down_to_int(single_roi['x_min']), _up_to_int(single_roi['x_max']))
+    Z, Y, X = image_stack.shape
+    if z.stop > Z or y.stop > Y or x.stop > X:
+        raise SpotImageSlicingError(f"Slice index OOB for image size {(Z, Y, X)}: {(z, y, x)}")
     roi_img = np.array(image_stack[z, y, x])
     # If microscope drifted, ROI could be outside image; correct for this if needed.
     pad = (z_pad, y_pad, x_pad)
     if pad == ((0, 0), (0, 0), (0, 0)):
         return roi_img
-    pad = tuple((_down_to_int(lo), _up_to_int(hi)) for lo, hi in (z_pad, y_pad, x_pad))
+    pad = tuple((_down_to_int(lo), _up_to_int(hi)) for lo, hi in pad)
     return np.pad(roi_img, pad, mode=pad_mode) 
 
 
 _down_to_int = lambda x: int(floor(x))
 _up_to_int = lambda x: int(ceil(x))
+
+
+class SpotImageSlicingError(Exception):
+    """Represent case in which something's wrong with spot image slicing."""
 
 
 class SpotImagePaddingError(Exception):
