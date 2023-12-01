@@ -694,20 +694,20 @@ def extract_single_roi_img_inmem(single_roi: pd.Series, image_stack: np.ndarray,
             raise SpotImagePaddingError(f"x or y has nonzero padding: x={x_pad}, y={y_pad}")
     pad = (z_pad, y_pad, x_pad)
     # Extract the unpadded image.
-    z = slice(_round_down(single_roi['z_min']), _round_up(single_roi['z_max']))
-    y = slice(_round_down(single_roi['y_min']), _round_up(single_roi['y_max']))
-    x = slice(_round_down(single_roi['x_min']), _round_up(single_roi['x_max']))
+    z = slice(_down_to_int(single_roi['z_min']), _up_to_int(single_roi['z_max']))
+    y = slice(_down_to_int(single_roi['y_min']), _up_to_int(single_roi['y_max']))
+    x = slice(_down_to_int(single_roi['x_min']), _up_to_int(single_roi['x_max']))
     roi_img = np.array(image_stack[z, y, x])
     # If microscope drifted, ROI could be outside image; correct for this if needed.
     try:
         return roi_img if pad == ((0,0),(0,0),(0,0)) else np.pad(roi_img, pad, **padding_kwargs)
-    except TypeError:
-        print(f"ERROR using pad: {pad}")
+    except TypeError as e:
+        print(f"ERROR using pad {pad}: {e}")
         raise
 
 
-_round_down = lambda x: int(floor(x))
-_round_up = lambda x: int(ceil(x))
+_down_to_int = lambda x: int(floor(x))
+_up_to_int = lambda x: int(ceil(x))
 
 
 class SpotImagePaddingError(Exception):
