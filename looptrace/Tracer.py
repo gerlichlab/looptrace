@@ -131,7 +131,7 @@ class Tracer:
             fit_func_spec=self.fit_func_spec,
             # TODO: fix this brittle / fragile / incredibly error-prone thing; #84
             # TODO: in essence, we need a better mapping between these images and the ordering of the index of the ROIs table.
-            images=(self.images[fn] for fn in sorted(self.images.files, key=RoiOrderingSpecification.get_file_key)), 
+            images=(self.images[fn] for fn in sorted(self.images.files, key=RoiOrderingSpecification.get_file_sort_key)), 
             mask_ref_frames=self.roi_table['frame'].to_list() if self.image_handler.config.get('mask_fits', False) else None, 
             background_specification=self.background_specification, 
             cores=self.config.get("tracing_cores")

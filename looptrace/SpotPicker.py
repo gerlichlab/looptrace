@@ -7,6 +7,7 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+from collections import OrderedDict
 import copy
 import dataclasses
 from enum import Enum
@@ -39,7 +40,7 @@ DETECTION_METHOD_KEY = "detection_method"
 logger = logging.getLogger()
 
 
-class RoiOrderingSpecification():
+class RoiOrderingSpecification:
     """
     Bundle of column/field names to match sorting of rows to sorting of filenames.
     
@@ -48,33 +49,27 @@ class RoiOrderingSpecification():
     an iteration to match row-by-row. This is important for fitting functional forms to the 
     individual spots, as fit parameters must match rows from the all-ROIs table.
     """
-    
+
+    @dataclasses.dataclass
+    class FilenameKey:
+        position: str
+        roi_id: int
+        ref_frame: int
+
+        @property
+        def name_roi_file(self):
+            return "_".join([self.position, str(self.roi_id).zfill(5), str(self.ref_frame)]) + ".npy"
+        
+        @classmethod
+        def from_roi(cls, roi: Union[pd.Series, Mapping[str, Any]]) -> "FilenameKey":
+            return cls(position=roi["position"], roi_id=roi["roi_id"], ref_frame=roi["ref_frame"])
+
     @staticmethod
     def row_order_columns() -> List[str]:
         return ['position', 'roi_id', 'ref_frame', 'frame']
     
     @staticmethod
-    def name_roi_file(pos_name, roi) -> str:
-        """
-        Create a name for .npy file for particular ROI; ROI must support __getitem__.
-        
-        Parameters
-        ----------
-        pos_name : str
-            The name of a position (FOV) group, e.g. P0001.zarr
-        roi : Union[pd.Series, Mapping[str, Any]]
-            Single row record from all ROIs table
-        
-        Returns
-        -------
-        str
-            Name for file corresponding to this spot (regional)'s data in a single hybridisation round
-        """
-        # TODO: this is brittle / fragile -- what if there are more than 99999 ROIs?
-        return "_".join([pos_name, str(roi['roi_id']).zfill(5), str(roi['ref_frame'])]) + ".npy"
-    
-    @staticmethod
-    def get_file_key(file_key: str) -> Tuple[str, int, int]:
+    def get_file_sort_key(file_key: str) -> Tuple[str, int, int]:
         try:
             pos, roi, ref = file_key.split("_")
         except ValueError:
@@ -575,16 +570,15 @@ class SpotPicker:
         Returns
         -------
         list of str
-            Names of the files written
+            Paths of the files written
         """
         pos_index = self.image_handler.image_lists[self.input_name].index(pos_group_name)
         f_id = 0
         n_frames = len(pos_group_data.frame.unique())
-        array_files = []
+        array_files = OrderedDict()
         for frame, frame_group in tqdm.tqdm(pos_group_data.groupby('frame')):
             for ch, ch_group in frame_group.groupby('ch'):
                 image_stack = np.array(self.images[pos_index][int(frame), int(ch)])
-                file_already_made = False
                 for _, roi in ch_group.iterrows():
                     try:
                         roi_img = extract_single_roi_img_inmem(
@@ -598,17 +592,16 @@ class SpotPicker:
                             num=roi["roi_number"], id=roi["roi_id"], t=roi["frame"], e=exc
                             ))
                         continue
-                    fp = os.path.join(self.spot_images_path, RoiOrderingSpecification.name_roi_file(pos_name=pos_group_name, roi=roi))
-                    if file_already_made:
+                    fp = os.path.join(self.spot_images_path, RoiOrderingSpecification.FilenameKey(roi).name_roi_file)
+                    if fp in array_files:
                         arr = open_memmap(fp, mode='r+')
                     else:
-                        array_files.append(fp)
                         arr = open_memmap(fp, mode='w+', dtype = roi_img.dtype, shape=(n_frames,) + roi_img.shape)
-                        file_already_made = True
+                        array_files[fp] = None
                     arr[f_id] = roi_img
                     arr.flush()
             f_id += 1
-        return array_files
+        return list(array_files.keys())
 
 
     def gen_roi_imgs_inmem(self) -> str:
