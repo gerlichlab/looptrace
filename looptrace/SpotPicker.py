@@ -504,6 +504,8 @@ class SpotPicker:
             ref_frame = roi['frame']
             ch = roi['ch']
             ref_offset = sel_dc.query('frame == @ref_frame')
+            # TODO: here we can update to iterate over channels for doing multi-channel extraction.
+            # https://github.com/gerlichlab/looptrace/issues/138
             Z, Y, X = self.images[pos_index][0, ch].shape[-3:]
             for j, dc_frame in sel_dc.iterrows():
                 z_drift_coarse = int(dc_frame['z_px_coarse']) - int(ref_offset['z_px_coarse'])
