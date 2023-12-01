@@ -352,7 +352,7 @@ class SpotPicker:
 
     @property
     def padding_method(self) -> str:
-        self.config.get("padding_method", "edge")
+        return self.config.get("padding_method", "edge")
 
     @property
     def parallelise(self) -> bool:
