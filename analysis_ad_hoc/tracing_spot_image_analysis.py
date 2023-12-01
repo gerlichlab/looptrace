@@ -1,12 +1,16 @@
 """Helper functions for analysing small spot images for tracing"""
 
 import argparse
+import itertools
+from math import floor, ceil
 from pathlib import Path
 import re
 from typing import *
 
+import joblib
 import numpy as np
 import pandas as pd
+import tqdm
 from gertils import ExtantFile, ExtantFolder
 from looptrace.ImageHandler import ImageHandler
 from looptrace.Tracer import Tracer
@@ -62,6 +66,65 @@ def get_spot_image_stats_for_experiment(conf: Union[str, Path, ExtantFile], imgs
     T = Tracer(ImageHandler(conf, imgs))
     print("Computing stats table...")
     return pd.DataFrame(get_stats_all_rois(T))
+
+
+
+
+###########################################################################################################
+# Pinning down the cause of the all-0s-spot-image phenomenon (small ROIs used for tracing)
+###########################################################################################################
+def get_bounding_box_shape(roi: Union[Dict[str, NumberLike], pd.Series]) -> Tuple[int, int, int]:
+    lo = lambda x: int(floor(x))
+    hi = lambda x: int(ceil(x))
+    return tuple(hi(roi[dim + "_max"]) - lo(roi[dim + "_min"]) for dim in ("z", "y", "x"))
+
+
+def regional_shape_matches_initial_shape(one_roi_subframe: pd.DataFrame) -> bool:
+    # Passed frame should be from DC ROIs table (*_dc_rois.csv), and should correspond to all rows from exactly 1 ROI.
+    assert len(one_roi_subframe.roi_id.unique()) == 1, f"Subframe should have single ROI ID, got {len(one_roi_subframe.roi_id.unique())}"
+    initial = get_bounding_box_shape(one_roi_subframe[one_roi_subframe.frame == 0])
+    regional = get_bounding_box_shape(one_roi_subframe[one_roi_subframe.frame == one_roi_subframe.ref_frame])
+    return initial == regional
+
+
+def build_boolean_zeros_and_shape_agreement_table__regional_frames_only(T: Tracer, dc_rois: pd.DataFrame) -> pd.DataFrame:
+    unique__roi_ref = dc_rois.drop_duplicates(subset=["roi_id", "ref_frame"])
+    def get_one_row(r: pd.Series) -> Dict[str, NumberLike]:
+        i = r["roi_id"]
+        t = r["ref_frame"]
+        shape_matches = regional_shape_matches_initial_shape(dc_rois[dc_rois.roi_id == i])
+        is_all_zeros = T.images[i][t].max() == 0
+        return {"pos_index": r["pos_index"], "roi_id": i, "ref_frame": t, "shape_match": shape_matches, "all_zeros": is_all_zeros}
+    return pd.DataFrame(joblib.Parallel(n_jobs=-1, prefer='threads')(joblib.delayed(get_one_row)(row) for _, row in unique__roi_ref.iterrows()))    
+
+
+def build_boolean_zeros_and_shape_agreement_table__regional_frames_only(T: Tracer, dc_rois: pd.DataFrame) -> pd.DataFrame:
+    unique__roi_ref = dc_rois.drop_duplicates(subset=["roi_id", "ref_frame"])
+    def get_one_roi_rows(ref_roi: pd.Series) -> Dict[str, NumberLike]:
+        pid = ref_roi["pos_index"]
+        rid = ref_roi["roi_id"]
+        sub = dc_rois[dc_rois.roi_id == rid]
+        init_shape = get_bounding_box_shape(sub[sub.frame == 0])
+        return [{
+            "pos_index": pid, 
+            "roi_id": rid, 
+            "ref_frame": ref_roi["frame"], 
+            "shape_match": get_bounding_box_shape(roi) == init_shape, 
+            "all_zeros": T.images[rid][roi["frame"]].max() == 0
+            } 
+            for _, roi in sub.iterrows()
+            ]
+    return pd.DataFrame(itertools.chain(
+        *joblib.Parallel(n_jobs=-1, prefer='threads')(joblib.delayed(get_one_roi_rows)(row) for _, row in tqdm.tqdm(unique__roi_ref.iterrows()))
+        ))
+
+
+def shape_match_all_zeros_xor(df: pd.DataFrame) -> pd.DataFrame:
+    # (a AND NOT b) OR (NOT a AND b)
+    return ((df.shape_match & ~df.all_zeros) | (~df.shape_match & df.all_zeros)).all()
+###########################################################################################################
+# Pinning down the cause of the all-0s-spot-image phenomenon (small ROIs used for tracing)
+###########################################################################################################
 
 
 if __name__ == "__main__":
