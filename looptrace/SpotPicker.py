@@ -592,7 +592,7 @@ class SpotPicker:
                             num=roi["roi_number"], id=roi["roi_id"], t=roi["frame"], e=exc
                             ))
                         continue
-                    fp = os.path.join(self.spot_images_path, RoiOrderingSpecification.FilenameKey(roi).name_roi_file)
+                    fp = os.path.join(self.spot_images_path, RoiOrderingSpecification.FilenameKey.from_roi(roi).name_roi_file)
                     if fp in array_files:
                         arr = open_memmap(fp, mode='r+')
                     else:
