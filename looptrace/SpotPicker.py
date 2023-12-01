@@ -598,7 +598,11 @@ class SpotPicker:
                     else:
                         arr = open_memmap(fp, mode='w+', dtype = roi_img.dtype, shape=(n_frames,) + roi_img.shape)
                         array_files[fp] = None
-                    arr[f_id] = roi_img
+                    try:
+                        arr[f_id] = roi_img
+                    except ValueError:
+                        print(f"ERROR adding ROI spot image to stack! ROI: {roi}")
+                        raise
                     arr.flush()
             f_id += 1
         return list(array_files.keys())
