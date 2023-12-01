@@ -12,6 +12,7 @@ import dataclasses
 from enum import Enum
 import json
 import logging
+from math import ceil, floor
 import os
 from pathlib import Path
 from typing import *
@@ -512,23 +513,23 @@ class SpotPicker:
             # https://github.com/gerlichlab/looptrace/issues/138
             Z, Y, X = self.images[pos_index][0, ch].shape[-3:]
             for _, dc_frame in sel_dc.iterrows():
-                z_drift_coarse = int(dc_frame['z_px_coarse']) - int(ref_offset['z_px_coarse'])
-                y_drift_coarse = int(dc_frame['y_px_coarse']) - int(ref_offset['y_px_coarse'])
-                x_drift_coarse = int(dc_frame['x_px_coarse']) - int(ref_offset['x_px_coarse'])
-
-                z_min = max(roi['z_min'] - z_drift_coarse, 0)
-                z_max = min(roi['z_max'] - z_drift_coarse, Z)
-                y_min = max(roi['y_min'] - y_drift_coarse, 0)
-                y_max = min(roi['y_max'] - y_drift_coarse, Y)
-                x_min = max(roi['x_min'] - x_drift_coarse, 0)
-                x_max = min(roi['x_max'] - x_drift_coarse, X)
-
-                pad_z_min = abs(min(0,z_min))
-                pad_z_max = abs(max(0,z_max-Z))
-                pad_y_min = abs(min(0,y_min))
-                pad_y_max = abs(max(0,y_max-Y))
-                pad_x_min = abs(min(0,x_min))
-                pad_x_max = abs(max(0,x_max-X))
+                def get_drift_and_bound_and_pad(dimname, dim_limit):
+                    coarse_drift = int(dc_frame[f"{dimname}_px_coarse"]) - int(ref_offset[f"{dimname}_px_coarse"])
+                    old_min = roi[f"{dimname}_min"]
+                    old_max = roi[f"{dimname}_max"]
+                    new_min = max(old_min - coarse_drift, 0)
+                    new_max = min(old_max - coarse_drift, dim_limit)
+                    pad_min = abs(min(0, old_min))
+                    pad_max = abs(max(0, old_max - dim_limit))
+                    return coarse_drift, new_min, new_max, pad_min, pad_max
+                
+                # min/max ensure that the slicing of the image array to make the small image for tracing doesn't go out of bounds.
+                # Padding ensures homogeneity of size of spot images to be used for tracing.
+                (
+                    (z_drift_coarse, z_min, z_max, pad_z_min, pad_z_max), 
+                    (y_drift_coarse, y_min, y_max, pad_y_min, pad_y_max), 
+                    (x_drift_coarse, x_min, x_max, pad_x_min, pad_x_max)
+                ) = (get_drift_and_bound_and_pad(n, lim) for n, lim in (("z", Z), ("y", Y), ("x", X)))
 
                 # roi.name is the index value.
                 all_rois.append([pos, pos_index, idx, roi.name, dc_frame['frame'], ref_frame, ch, 
@@ -583,23 +584,29 @@ class SpotPicker:
         for frame, frame_group in tqdm.tqdm(pos_group_data.groupby('frame')):
             for ch, ch_group in frame_group.groupby('ch'):
                 image_stack = np.array(self.images[pos_index][int(frame), int(ch)])
-                for i, roi in ch_group.iterrows():
-                    roi_img = extract_single_roi_img_inmem(roi, image_stack, mode=self.padding_method).astype(np.uint16)
+                file_already_made = False
+                for _, roi in ch_group.iterrows():
+                    try:
+                        roi_img = extract_single_roi_img_inmem(
+                            single_roi=roi, 
+                            image_stack=image_stack, 
+                            background_frame=self.image_handler.background_subtraction_frame, 
+                            mode=self.padding_method
+                            ).astype(np.uint16)
+                    except SpotImagePaddingError as exc:
+                        print("Skipping spot image extraction for ROI (number={num}, id={id}, time={t}): {e}".format(
+                            num=roi["roi_number"], id=roi["roi_id"], t=roi["frame"], e=exc
+                            ))
+                        continue
                     fp = os.path.join(self.spot_images_path, RoiOrderingSpecification.name_roi_file(pos_name=pos_group_name, roi=roi))
-                    if f_id == 0:
+                    if file_already_made:
+                        arr = open_memmap(fp, mode='r+')
+                    else:
                         array_files.append(fp)
                         arr = open_memmap(fp, mode='w+', dtype = roi_img.dtype, shape=(n_frames,) + roi_img.shape)
-                        arr[f_id] = roi_img
-                        arr.flush()
-                    else:
-                        arr = open_memmap(fp, mode='r+')
-                        try:
-                            arr[f_id] = roi_img
-                            arr.flush()
-                            #arr[f_id] = np.append(arr[f_id], np.expand_dims(roi_img,0).copy(), axis=0)
-                        except ValueError: #Edge case: ROI fetching has failed giving strange shaped ROI, just leave the zeros as is.
-                            pass
-                            # roi_stack = np.append(roi_stack, np.expand_dims(np.zeros_like(roi_stack[0]), 0), axis=0)
+                        file_already_made = True
+                    arr[f_id] = roi_img
+                    arr.flush()
             f_id += 1
         return array_files
 
@@ -668,27 +675,46 @@ class SpotPicker:
         np.savez_compressed(self.image_handler.image_save_path+os.sep+'spot_images_fine.npz', *roi_array_fine)
 
 
-def extract_single_roi_img_inmem(single_roi, image_stack, **padding_kwargs):
-    # Function for extracting a single cropped region defined by ROI from a larger 3D image.
-    from math import ceil, floor
-    down = lambda x: int(floor(x))
-    up = lambda x: int(ceil(x))
-    z = slice(down(single_roi['z_min']), up(single_roi['z_max']))
-    y = slice(down(single_roi['y_min']), up(single_roi['y_max']))
-    x = slice(down(single_roi['x_min']), up(single_roi['x_max']))
-    pad = ( (single_roi['pad_z_min'], single_roi['pad_z_max']),
-            (single_roi['pad_y_min'], single_roi['pad_y_max']),
-            (single_roi['pad_x_min'], single_roi['pad_x_max']))
-    try:
-        roi_img = np.array(image_stack[z, y, x])
-        #If microscope drifted, ROI could be outside image. Correct for this:
-        if pad != ((0,0),(0,0),(0,0)):
-            # TODO: consider an alternative strategy for computation of padding values.
-            # See: https://github.com/gerlichlab/looptrace/issues/139
-            roi_img = np.pad(roi_img, pad, **padding_kwargs)
-    except ValueError: # ROI collection failed for some reason
-        roi_img = np.zeros((np.abs(z.stop-z.start), np.abs(y.stop-y.start), np.abs(x.stop-x.start)), dtype=np.float32)
-    return roi_img
+def extract_single_roi_img_inmem(single_roi: pd.Series, image_stack: np.ndarray, background_frame: Optional[int], **padding_kwargs) -> np.ndarray:
+    """Function for extracting a single cropped region defined by ROI from a larger 3D image
+    
+    Parameters
+    ----------
+    single_roi : pd.Series
+        A single row iteration over the drift corrected ROIs file (1 row per timepoint per regional ROI)
+    image_stack : np.ndarray
+        The image for the current ROI, time, channel combination (corresponding to the single_roi)
+    background_frame : int or None
+        Optinally, the timepoint to be used for background subtraction and therefore excepted from the 
+        prohibition on padding in x and y
+    
+    Returns
+    -------
+    np.ndarray
+        The subimage specified by the ROI's bounding box, possibly with some padding applied
+    """
+    x_pad = (single_roi['pad_x_min'], single_roi['pad_x_max'])
+    y_pad = (single_roi['pad_y_min'], single_roi['pad_y_max'])
+    z_pad = (single_roi['pad_z_min'], single_roi['pad_z_max'])
+    if x_pad != (0, 0) or y_pad != (0, 0):
+        if background_frame is None or single_roi["frame"] != background_frame:
+            raise SpotImagePaddingError(f"x or y has nonzero padding: x={x_pad}, y={y_pad}")
+    pad = (z_pad, y_pad, x_pad)
+    # Extract the unpadded image.
+    z = slice(_round_down(single_roi['z_min']), _round_up(single_roi['z_max']))
+    y = slice(_round_down(single_roi['y_min']), _round_up(single_roi['y_max']))
+    x = slice(_round_down(single_roi['x_min']), _round_up(single_roi['x_max']))
+    roi_img = np.array(image_stack[z, y, x])
+    # If microscope drifted, ROI could be outside image; correct for this if needed.
+    return roi_img if pad == ((0,0),(0,0),(0,0)) else np.pad(roi_img, pad, **padding_kwargs)
+
+
+_round_down = lambda x: int(floor(x))
+_round_up = lambda x: int(ceil(x))
+
+
+class SpotImagePaddingError(Exception):
+    """Represent case in which something's wrong with spot image padding."""
 
 
 class SpotImageDimensionalityError(Exception):

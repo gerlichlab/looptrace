@@ -105,6 +105,15 @@ class Tracer:
         self.traces_path = finalise_suffix(traces_path)
 
     @property
+    def background_specification(self) -> BackgroundSpecification:
+        bg_frame_idx = self.image_handler.background_subtraction_frame
+        if bg_frame_idx is None:
+            return None
+        # TODO: note -- the drifts part of this is currently (2023-12-01) irrelevant, as the 'drifts' component of the background spec is unused.
+        pos_drifts = self.drift_table[self.drift_table.position.isin(self.pos_list)][['z_px_fine', 'y_px_fine', 'x_px_fine']].to_numpy()
+        return BackgroundSpecification(frame_index=bg_frame_idx, drifts=pos_drifts - pos_drifts[bg_frame_idx])
+
+    @property
     def nanometers_per_pixel_xy(self) -> NumberLike:
         return self.config["xy_nm"]
 
@@ -117,27 +126,14 @@ class Tracer:
         return Path(self.traces_path).with_suffix(".enriched.csv")
 
     def trace_all_rois(self) -> str:
-        '''
-        Fits 3D gaussian to previously detected ROIs across positions and timeframes.
-    
-        '''        
-        try:
-            #This only works for a single position at the time currently
-            bg_frame_idx = self.image_handler.config['subtract_background']
-        except KeyError:
-            bg_spec = None
-        else:
-            # TODO: note -- the drifts part of this  is currently (2023-10-12) irrelevant, as the 'drifts' component of the background spec is unused.
-            pos_drifts = self.drift_table[self.drift_table.position.isin(self.pos_list)][['z_px_fine', 'y_px_fine', 'x_px_fine']].to_numpy()
-            bg_spec = BackgroundSpecification(frame_index=bg_frame_idx, drifts=pos_drifts - pos_drifts[bg_frame_idx])
-
+        """Fits 3D gaussian to previously detected ROIs across positions and timeframes"""
         spot_fits = find_trace_fits(
             fit_func_spec=self.fit_func_spec,
             # TODO: fix this brittle / fragile / incredibly error-prone thing; #84
             # TODO: in essence, we need a better mapping between these images and the ordering of the index of the ROIs table.
             images=(self.images[fn] for fn in sorted(self.images.files, key=RoiOrderingSpecification.get_file_key)), 
             mask_ref_frames=self.roi_table['frame'].to_list() if self.image_handler.config.get('mask_fits', False) else None, 
-            background_specification=bg_spec, 
+            background_specification=self.background_specification, 
             cores=self.config.get("tracing_cores")
             )
         

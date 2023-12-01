@@ -72,6 +72,10 @@ class ImageHandler:
         return get_analysis_path(self.config)
 
     @property
+    def background_subtraction_frame(self) -> Optional[int]:
+        return self.config.get('subtract_background')
+    
+    @property
     def bead_rois_path(self) -> Path:
         return Path(self.analysis_path) / "bead_rois"
 
