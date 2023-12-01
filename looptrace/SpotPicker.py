@@ -507,7 +507,7 @@ class SpotPicker:
             # TODO: here we can update to iterate over channels for doing multi-channel extraction.
             # https://github.com/gerlichlab/looptrace/issues/138
             Z, Y, X = self.images[pos_index][0, ch].shape[-3:]
-            for j, dc_frame in sel_dc.iterrows():
+            for _, dc_frame in sel_dc.iterrows():
                 z_drift_coarse = int(dc_frame['z_px_coarse']) - int(ref_offset['z_px_coarse'])
                 y_drift_coarse = int(dc_frame['y_px_coarse']) - int(ref_offset['y_px_coarse'])
                 x_drift_coarse = int(dc_frame['x_px_coarse']) - int(ref_offset['x_px_coarse'])
@@ -679,6 +679,8 @@ def extract_single_roi_img_inmem(single_roi, image_stack):
         roi_img = np.array(image_stack[z, y, x])
         #If microscope drifted, ROI could be outside image. Correct for this:
         if pad != ((0,0),(0,0),(0,0)):
+            # TODO: consider an alternative strategy for computation of padding values.
+            # See: https://github.com/gerlichlab/looptrace/issues/139
             roi_img = np.pad(roi_img, pad, mode='edge')
     except ValueError: # ROI collection failed for some reason
         roi_img = np.zeros((np.abs(z.stop-z.start), np.abs(y.stop-y.start), np.abs(x.stop-x.start)), dtype=np.float32)
