@@ -584,8 +584,8 @@ class SpotPicker:
                         roi_img = extract_single_roi_img_inmem(
                             single_roi=roi, 
                             image_stack=image_stack, 
+                            pad_mode=self.padding_method,
                             background_frame=self.image_handler.background_subtraction_frame, 
-                            mode=self.padding_method
                             ).astype(np.uint16)
                     except SpotImagePaddingError as exc:
                         print("Skipping spot image extraction for ROI (number={num}, id={id}, time={t}): {e}".format(
@@ -668,7 +668,7 @@ class SpotPicker:
         np.savez_compressed(self.image_handler.image_save_path+os.sep+'spot_images_fine.npz', *roi_array_fine)
 
 
-def extract_single_roi_img_inmem(single_roi: pd.Series, image_stack: np.ndarray, background_frame: Optional[int], mode: str) -> np.ndarray:
+def extract_single_roi_img_inmem(single_roi: pd.Series, image_stack: np.ndarray, pad_mode: str, background_frame: Optional[int],) -> np.ndarray:
     """Function for extracting a single cropped region defined by ROI from a larger 3D image
     
     Parameters
@@ -680,7 +680,7 @@ def extract_single_roi_img_inmem(single_roi: pd.Series, image_stack: np.ndarray,
     background_frame : int or None
         Optinally, the timepoint to be used for background subtraction and therefore excepted from the 
         prohibition on padding in x and y
-    mode : str
+    pad_mode : str
         Argument for numpy.pad
     
     Returns
@@ -704,7 +704,7 @@ def extract_single_roi_img_inmem(single_roi: pd.Series, image_stack: np.ndarray,
     if pad == ((0, 0), (0, 0), (0, 0)):
         return roi_img
     pad = tuple((_down_to_int(lo), _up_to_int(hi)) for lo, hi in (z_pad, y_pad, x_pad))
-    return np.pad(roi_img, pad, mode=mode) 
+    return np.pad(roi_img, pad, mode=pad_mode) 
 
 
 _down_to_int = lambda x: int(floor(x))
