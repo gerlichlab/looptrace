@@ -699,7 +699,11 @@ def extract_single_roi_img_inmem(single_roi: pd.Series, image_stack: np.ndarray,
     x = slice(_round_down(single_roi['x_min']), _round_up(single_roi['x_max']))
     roi_img = np.array(image_stack[z, y, x])
     # If microscope drifted, ROI could be outside image; correct for this if needed.
-    return roi_img if pad == ((0,0),(0,0),(0,0)) else np.pad(roi_img, pad, **padding_kwargs)
+    try:
+        return roi_img if pad == ((0,0),(0,0),(0,0)) else np.pad(roi_img, pad, **padding_kwargs)
+    except TypeError:
+        print(f"ERROR using pad: {pad}")
+        raise
 
 
 _round_down = lambda x: int(floor(x))
