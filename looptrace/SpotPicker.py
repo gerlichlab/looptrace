@@ -711,7 +711,7 @@ def extract_single_roi_img_inmem(single_roi: pd.Series, image_stack: np.ndarray,
     pad = (z_pad, y_pad, x_pad)
     if pad == ((0, 0), (0, 0), (0, 0)):
         return roi_img
-    pad = tuple((_down_to_int(lo), _up_to_int(hi)) for lo, hi in pad)
+    pad = tuple((_up_to_int(lo), _up_to_int(hi)) for lo, hi in pad)
     return np.pad(roi_img, pad, mode=pad_mode) 
 
 
