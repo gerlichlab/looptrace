@@ -510,12 +510,12 @@ class SpotPicker:
             for _, dc_frame in sel_dc.iterrows():
                 def get_drift_and_bound_and_pad(dimname, dim_limit):
                     coarse_drift = int(dc_frame[f"{dimname}_px_coarse"]) - int(ref_offset[f"{dimname}_px_coarse"])
-                    old_min = roi[f"{dimname}_min"]
-                    old_max = roi[f"{dimname}_max"]
-                    new_min = max(old_min - coarse_drift, 0)
-                    new_max = min(old_max - coarse_drift, dim_limit)
-                    pad_min = abs(min(0, old_min))
-                    pad_max = abs(max(0, old_max - dim_limit))
+                    target_min = roi[f"{dimname}_min"] - coarse_drift
+                    target_max = roi[f"{dimname}_max"] - coarse_drift
+                    new_min = max(target_min, 0)
+                    new_max = min(target_max, dim_limit)
+                    pad_min = abs(min(0, target_min))
+                    pad_max = abs(max(0, target_max - dim_limit))
                     return coarse_drift, new_min, new_max, pad_min, pad_max
                 
                 # min/max ensure that the slicing of the image array to make the small image for tracing doesn't go out of bounds.
@@ -702,6 +702,7 @@ def extract_single_roi_img_inmem(single_roi: pd.Series, image_stack: np.ndarray,
     z = slice(_down_to_int(single_roi['z_min']), _up_to_int(single_roi['z_max']))
     y = slice(_down_to_int(single_roi['y_min']), _up_to_int(single_roi['y_max']))
     x = slice(_down_to_int(single_roi['x_min']), _up_to_int(single_roi['x_max']))
+    # Should be controlled upstream from never happening, but put in just for safety.
     Z, Y, X = image_stack.shape
     if z.stop > Z or y.stop > Y or x.stop > X:
         raise SpotImageSlicingError(f"Slice index OOB for image size {(Z, Y, X)}: {(z, y, x)}")
