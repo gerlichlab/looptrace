@@ -11,7 +11,6 @@ from collections import OrderedDict
 import copy
 import dataclasses
 from enum import Enum
-import json
 import logging
 from math import ceil, floor
 import os
@@ -25,7 +24,7 @@ import pandas as pd
 from scipy import ndimage as ndi
 import tqdm
 
-from gertils import ExtantFile, ExtantFolder, NonExtantPath
+from gertils import ExtantFolder, NonExtantPath
 
 from looptrace.exceptions import MissingRoisTableException
 from looptrace.filepaths import get_spot_images_path
@@ -308,27 +307,6 @@ class SpotPicker:
             raise ValueError(f"Illegal value for spot detection method in config: {self.detection_method_name}") from e
     
     @property
-    def image_sizes_file(self) -> Path:
-        return Path(self.roi_path).with_suffix(".input_image_sizes.json")
-
-    @property
-    def input_image_sizes(self) -> Mapping[Tuple[str, int, int, int], Tuple[int, int, int]]:
-        sizes = {}
-        for idx, name in enumerate(self.image_handler.image_lists[self.input_name]):
-            hyperimage = self.images[idx]
-            num_timepoints = hyperimage.shape[0]
-            num_channels = hyperimage.shape[1]
-            for t in range(num_timepoints):
-                for c in range(num_channels):
-                    img = hyperimage[t, c]
-                    try:
-                        z, y, x = img.shape[-3:]
-                    except ValueError as e:
-                        raise SpotImageDimensionalityError(f"Failed to unpack (z, y, x) shape for (p={name}, t={t}, c={c})") from e
-                    sizes[(name, idx, t, c)] = (z, y, x)
-        return sizes
-    
-    @property
     def input_name(self):
         """Name of the input to the spot detection phase of the pipeline; in particular, a subfolder of the 'all images' folder typically passed to looptrace"""
         return self.image_handler.spot_input_name
@@ -544,16 +522,6 @@ class SpotPicker:
         self.all_rois.to_csv(outfile)
         self.image_handler.load_tables()
         return outfile
-    
-    def _flattened_image_sizes(self) -> Iterable[Mapping[str, int]]:
-        for (p, t, c), (z, y, x) in self.input_image_sizes.items():
-            yield {"position": p, "time": t, "channel": c, "z": z, "y": y, "x": x}
-
-    def write_input_image_sizes(self) -> ExtantFile:
-        print(f"Writing spot detection input image sizes: {self.image_sizes_file}")
-        with open(self.image_sizes_file, 'w') as fh:
-            json.dump(self._flattened_image_sizes, fh, indent=4)
-        return ExtantFile(self.image_sizes_file)
 
     def write_single_fov_data(self, pos_group_name: str, pos_group_data: pd.DataFrame) -> List[str]:
         """
