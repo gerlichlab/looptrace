@@ -161,9 +161,16 @@ def image_handler(data_paths) -> ImageHandler:
         strict_load_tables=False,
         )
     analysis_folder = data_paths.analysis_folder
-    H.set_analysis_path(analysis_folder)
+    H = set_analysis_path(H, analysis_folder)
     H.load_tables() # to repopulate, after updating analysis path, the collection of tables
     return H
+
+
+def set_analysis_path(handler: ImageHandler, p: Union[str, Path, ExtantFolder]) -> ImageHandler:
+    if isinstance(p, ExtantFolder):
+        p = p.path
+    handler.config.analysis_path = str(p)
+    return handler
 
 
 @pytest.mark.parametrize("check_table", [
