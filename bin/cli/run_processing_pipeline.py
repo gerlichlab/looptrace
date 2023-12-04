@@ -38,11 +38,11 @@ NO_TEE_LOGS_OPTNAME = "--do-not-tee-logs"
 PIPE_NAME = "looptrace"
 
 
-def prepare_image_dimensions_for_all_rois_filter_and_drift_correction(config_file: ExtantFile, images_folder: ExtantFolder) -> ExtantFile:
-    """Write a spot picker's image sizes so that the all ROIs construction can use this metadata."""
-    H = handler_from_cli(config_file=config_file, images_folder=images_folder)
-    S = SpotPicker(H)
-    return S.write_input_image_sizes()
+# def prepare_image_dimensions_for_all_rois_filter_and_drift_correction(config_file: ExtantFile, images_folder: ExtantFolder) -> ExtantFile:
+#     """Write a spot picker's image sizes so that the all ROIs construction can use this metadata."""
+#     H = handler_from_cli(config_file=config_file, images_folder=images_folder)
+#     S = SpotPicker(H)
+#     return S.write_input_image_sizes()
 
 
 class LooptracePipeline(pypiper.Pipeline):
