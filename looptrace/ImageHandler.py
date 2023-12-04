@@ -154,19 +154,6 @@ class ImageHandler:
     def num_timepoints(self) -> int:
         return self.num_frames
 
-    def set_analysis_path(self, newpath: FolderLike) -> None:
-        """
-        Update the value of the image handler's analysis subfolder path.
-
-        Parameters
-        ----------
-        newpath : str
-            The new value (possibly including environment and/or user variables) for the handler's analysis subfolder path
-        """
-        if isinstance(newpath, ExtantFolder):
-            newpath = newpath.path
-        self.config["analysis_path"] = str(newpath)
-
     def out_path(self, fn_extra: str) -> str:
         return os.path.join(self.analysis_path, self.analysis_filename_prefix + fn_extra)
 
