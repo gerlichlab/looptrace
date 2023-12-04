@@ -99,8 +99,6 @@ package object looptrace {
     /** Try to parse the given string as an integer. */
     def safeParseInt(s: String): Either[String, Int] = Try{ s.toInt }.toEither.leftMap(_.getMessage)
 
-    def safeParseIntThroughDouble(s: String): Either[String, Int] = ???
-
     /** Allow custom types as CLI parameters. */
     object ScoptCliReaders:
         given pathRead(using fileRead: Read[File]): Read[os.Path] = fileRead.map(os.Path.apply)
