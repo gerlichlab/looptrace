@@ -38,14 +38,11 @@ object LabelAndFilterRois:
     case class CliConfig(
         spotsFile: os.Path = null, // unconditionally required
         driftFile: os.Path = null, // unconditionally required
-        // TODO: bring back for inclusion of the rest of the spots table extraction here in this program.
-        //imageSizesFile: os.Path = null, // unconditionally required
         probeGroupsFile: os.Path = null, // unconditionally required; specifies groups of probes which may not be too close
         minSpotSeparation: NonnegativeReal = NonnegativeReal(0), // unconditionally required
         unfilteredOutputFile: UnfilteredOutputFile = null, // unconditionally required
         filteredOutputFile: FilteredOutputFile = null, // unconditionally required
         extantOutputHandler: ExtantOutputHandler = null, // unconditionally required
-        filterForNuclei: Boolean = false
         )
 
     val parserBuilder = OParser.builder[CliConfig]
@@ -67,12 +64,6 @@ object LabelAndFilterRois:
                 .action((f, c) => c.copy(driftFile = f))
                 .validate(f => os.isFile(f).either(f"Alleged drift file isn't a file: $f", ()))
                 .text("Path to drift correction file"),
-            // TODO: bring back for inclusion of the rest of the spots table extraction here in this program.
-            // opt[os.Path]("imageSizesFile")
-            //     .required()
-            //     .action((f, c) => c.copy(imageSizesFile = f))
-            //     .validate(f => os.isFile(f).either(s"Alleged image sizes file isn't a file: $f", ()))
-            //     .text("Path to file with dimensions (z, y, x) for each (position, time, channel)"),
             opt[os.Path]("probeGroupsFile")
                 .required()
                 .action((f, c) => c.copy(probeGroupsFile = f))
@@ -94,30 +85,16 @@ object LabelAndFilterRois:
                 .required()
                 .action((h, c) => c.copy(extantOutputHandler = h))
                 .text("How to handle writing output when target already exists"),
-            // TODO: bring back for inclusion of the rest of the spots table extraction here in this program.
-            // opt[Unit]("filterForNuclei")
-            //     .action((_, c) => c.copy(filterForNuclei = true))
-            //     .text("Use only spots that are in nuclei; only use this if also doing nuclei detection first.")
         )
 
         OParser.parse(parser, args, CliConfig()) match {
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
             case Some(opts) => 
-                
-                // TODO: bring back for inclusion of the rest of the spots table extraction here in this program.
-                // val dimsSpecs = {
-                //     val context = "Parsing image dimensions specification file"
-                //     println(s"$context: ${opts.imageSizesFile}")
-                //     given rw: ReadWriter[NEL[DimensionsSpecification]] = summon[ReadWriter[List[DimensionsSpecification]]].toNel(context)
-                //     readJsonFile[NEL[DimensionsSpecification]](opts.imageSizesFile)
-                // }
-                // workflow(opts.spotsFile, opts.driftFile, dimsSpecs, opts.probeGroupsFile, opts.minSpotSeparation, opts.filterForNuclei)
                 workflow(
                     spotsFile = opts.spotsFile, 
                     driftFile = opts.driftFile, 
                     probeGroupsFile = opts.probeGroupsFile, 
                     minSpotSeparation = opts.minSpotSeparation, 
-                    filterForNuclei = opts.filterForNuclei, 
                     unfilteredOutputFile = opts.unfilteredOutputFile,
                     filteredOutputFile = opts.filteredOutputFile, 
                     extantOutputHandler = opts.extantOutputHandler
@@ -125,14 +102,11 @@ object LabelAndFilterRois:
         }
     }
 
-    // TODO: bring back for inclusion of the rest of the spots table extraction here in this program.
-    //def workflow(spotsFile: os.Path, driftFile: os.Path, dimsSpecs: NEL[DimensionsSpecification], probeGroups: List[ProbeGroup], minSpotSeparation: NonnegativeReal, filterForNuclei: Boolean): Unit = {
     def workflow(
         spotsFile: os.Path, 
         driftFile: os.Path, 
         probeGroupsFile: os.Path, 
         minSpotSeparation: NonnegativeReal, 
-        filterForNuclei: Boolean, 
         unfilteredOutputFile: UnfilteredOutputFile, 
         filteredOutputFile: FilteredOutputFile, 
         extantOutputHandler: ExtantOutputHandler
@@ -172,9 +146,8 @@ object LabelAndFilterRois:
         }
         
         /* Then, parse the drift correction records from the corresponding file. */
-        val rowToDrift = rowToDriftRecord(filterForNuclei)
         println(s"Reading drift file: $driftFile")
-        val drifts = withCsvData(driftFile){ (driftRows: Iterable[CsvRow]) => Alternative[List].separate(driftRows.toList.map(rowToDrift)) match {
+        val drifts = withCsvData(driftFile){ (driftRows: Iterable[CsvRow]) => Alternative[List].separate(driftRows.toList.map(rowToDriftRecord)) match {
             case (Nil, drifts) => drifts
             case (errors@(h :: _), _) => throw new Exception(s"${errors.length} errors converting drift file (${driftFile}) rows to records! First one: $h")
         } }.asInstanceOf[List[DriftRecord]]
@@ -233,42 +206,7 @@ object LabelAndFilterRois:
     /****************************************************************************************************************
      * Main types and business logic
      ****************************************************************************************************************/
-
-    /** Specification of all dimensions of an image: where it's from (@code PositionIndex), along with (t, c, z, y, x) - like */
-    // TODO: bring back for inclusion of the rest of the spots table extraction here in this program.
-    // final case class DimensionsSpecification(position: String, time: FrameIndex, channel: Channel, box: Box):
-    //     final def x = box.x
-    //     final def y = box.y
-    //     final def z = box.z
-    // end DimensionsSpecification
-
-    /** JSON representation of a dimensions specification */
-    // TODO: bring back for inclusion of the rest of the spots table extraction here in this program.
-    // object DimensionsSpecification:
-    //     given rwForDimensionSpecification: ReadWriter[DimensionsSpecification] = readwriter[ujson.Value].bimap(
-    //         dimspec => ujson.Obj(
-    //             "position" -> ujson.Str(dimspec.position),
-    //             "time" -> ujson.Num(dimspec.time.get), 
-    //             "channel" -> ujson.Num(dimspec.channel.get), 
-    //             "z" -> ujson.Num(dimspec.z.get), 
-    //             "y" -> ujson.Num(dimspec.y.get), 
-    //             "x" -> ujson.Num(dimspec.x.get),
-    //         ), 
-    //         json => {
-    //             val posNel = safeExtract("position", identity)(json)
-    //             val timeNel = fromJsonThruInt("time", FrameIndex.fromInt)(json)
-    //             val channelNel = fromJsonThruInt("channel", Channel.fromInt)(json)
-    //             val zNel = fromJsonThruInt("z", PositiveInt.either >> DimZ.apply)(json)
-    //             val yNel = fromJsonThruInt("y", PositiveInt.either >> DimY.apply)(json)
-    //             val xNel = fromJsonThruInt("x", PositiveInt.either >> DimX.apply)(json)
-    //             val errsOrSpec = (posNel, timeNel, channelNel, zNel, yNel, xNel).mapN(
-    //                 (pos, time, ch, z, y, x) => DimensionsSpecification(pos, time, ch, Box(x, y, z)))
-    //             errsOrSpec.fold(errs => throw new Exception(s"${errs.size} errors parsing dims spec from JSON: ${errs}"), identity)
-    //         }
-    //     )
-    // end DimensionsSpecification
-
-    final case class DriftRecord(position: String, time: Timepoint, coarse: CoarseDrift, fine: FineDrift, inNucleus: Option[Boolean])
+    final case class DriftRecord(position: String, time: Timepoint, coarse: CoarseDrift, fine: FineDrift)
 
     final case class ProbeGroup(get: NEL[FrameIndex])
     object ProbeGroup:
@@ -345,11 +283,7 @@ object LabelAndFilterRois:
         (indexNel, posNel, timeNel, channelNel, centroidNel, bboxNel).mapN(Roi.apply).toEither
     }
     
-    def rowToDriftRecord(filterForNuclei: Boolean)(row: CsvRow): ErrMsgsOr[DriftRecord] = {
-        val getNucNel: CsvRow => ValidatedNel[String, Option[Boolean]] = 
-            if filterForNuclei
-            then getFromRow("nuc_label", (s: String) => safeReadBool(s).toRight(s"Cannot parse text as boolean: $s").map(_.some))
-            else Function.const{ Valid(Option.empty[Boolean]) }
+    def rowToDriftRecord(row: CsvRow): ErrMsgsOr[DriftRecord] = {
         val posNel = getFromRow("position", (_: String).asRight)(row)
         val timeNel = getFromRow("frame", safeParseInt >>> FrameIndex.fromInt)(row)
         val coarseDriftNel = {
@@ -364,8 +298,7 @@ object LabelAndFilterRois:
             val xNel = getFromRow("y_px_fine", safeParseDouble >> XDir.apply)(row)
             (zNel, yNel, xNel).mapN(FineDrift.apply)
         }
-        val inNucNel = getNucNel(row)
-        (posNel, timeNel, coarseDriftNel, fineDriftNel, inNucNel).mapN(DriftRecord.apply).toEither
+        (posNel, timeNel, coarseDriftNel, fineDriftNel).mapN(DriftRecord.apply).toEither
     }
 
     def safeParseIntLike = safeParseDouble >>> tryToInt
