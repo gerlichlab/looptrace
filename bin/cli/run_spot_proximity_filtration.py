@@ -18,7 +18,7 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder) -> None:
     min_spot_sep = H.minimum_spot_separation
     region_groups = H.config.get("regional_spots_grouping", "NONE")
     if not isinstance(region_groups, str):
-        region_groups = ",".join(itertools.chain(*(f"{r}={i}" for i, rs in enumerate(region_groups) for r in rs)))
+        region_groups = ",".join(",".join([f"{r}={i}" for r in rs]) for i, rs in enumerate(region_groups))
     if min_spot_sep <= 0:
         print(f"No spot filtration on proximity to be done, as minimum separation = {min_spot_sep}")
     else:
