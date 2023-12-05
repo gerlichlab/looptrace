@@ -43,6 +43,7 @@ object UJsonHelpers:
     def safeExtract[A](key: String, lift: String => A)(json: ujson.Value): ValidatedNel[String, A] = 
         safeExtractStr(key)(json) `map` lift
     
+    /** Try to extract a text value at the given key in the given (presumed Object) JSON value. */
     def safeExtractStr(key: String)(json: ujson.Value): ValidatedNel[String, String] = 
         Try{ json(key).str }.toEither.leftMap(_.getMessage).toValidatedNel
 
