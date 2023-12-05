@@ -17,8 +17,7 @@ from looptrace.SpotPicker import SpotPicker
 
 def workflow(config_file: ExtantFile, images_folder: ExtantFolder, already_registered: bool = False) -> str:
     image_handler = handler_from_cli(config_file=config_file, images_folder=images_folder, image_save_path=None)
-    array_id = os.environ.get("SLURM_ARRAY_TASK_ID")
-    picker = SpotPicker(image_handler=image_handler, array_id=None if array_id is None else int(array_id))
+    picker = SpotPicker(image_handler=image_handler)
     return picker.gen_roi_imgs_inmem_coarsedc() if already_registered else picker.gen_roi_imgs_inmem()
 
 
