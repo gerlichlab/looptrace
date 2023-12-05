@@ -226,7 +226,7 @@ class ImageHandler:
         self.tables = {}
         for fp in table_files:
             try:
-                tn = os.path.splitext(fp.name)[0].split(self.config['analysis_prefix'])[1]
+                tn = os.path.splitext(fp.name)[0].split(self.analysis_filename_prefix)[1]
             except IndexError:
                 logger.warning(f"Cannot parse table name from filename: {fp.name}")
                 continue
