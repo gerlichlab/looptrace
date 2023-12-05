@@ -571,9 +571,6 @@ class SpotPicker:
         # Not the most elegant, but depending on the chunking of the original data it is often more performant than loading subsegments.
 
         rois = self.image_handler.tables[self.input_name+'_dc_rois']
-        if self.array_id is not None:
-            pos_name = self.image_handler.image_lists[self.input_name][self.array_id]
-            rois = rois[rois.position == pos_name]
 
         if not os.path.isdir(self.spot_images_path):
             os.mkdir(self.spot_images_path)
