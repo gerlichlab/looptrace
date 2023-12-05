@@ -237,7 +237,7 @@ def coarse_correction_workflow(config_file: ExtantFile, images_folder: ExtantFol
         pos_halt_point = sys.maxsize
         update_outfile = lambda fp: fp
     else:
-        update_outfile = lambda fp: str(Path(fp).with_suffix(f".halt_after_{pos_halt_point}.csv"))
+        update_outfile = lambda fp: fp.with_suffix(f".halt_after_{pos_halt_point}.csv")
     all_args = generate_drift_function_arguments__coarse_drift_only(
         full_pos_list=D.full_pos_list, 
         pos_list=D.pos_list, 
@@ -390,7 +390,7 @@ def finalise_fine_drift(drift: Iterable[np.ndarray]) -> Tuple[FloatLike, FloatLi
 
 class Drifter():
 
-    def __init__(self, image_handler: ImageHandler, array_id: Union[None, int, str] = None):
+    def __init__(self, image_handler: ImageHandler):
         '''
         Initialize Drifter class with config read in from YAML file.
         '''
@@ -405,17 +405,7 @@ class Drifter():
         self.images_moving = images[self.image_handler.reg_input_moving]
         self.full_pos_list = self.image_handler.image_lists[self.image_handler.reg_input_moving]
         self.pos_list = self.full_pos_list
-        
-        if array_id is not None:
-            raise NotImplementedError("Running drift correction as an array job isn't currently supported!")
-            self.dc_file_path = self.image_handler.out_path(self.image_handler.reg_input_moving + '_drift_correction.csv'[:-4] + '_' + str(array_id).zfill(4) + '.csv')
-            self.pos_list = [self.pos_list[int(array_id)]]
-        else:
-            get_file_path = lambda ext: self.image_handler.out_path(self.image_handler.reg_input_moving + '_drift_correction' + ext)
-            self.dc_file_path = get_file_path(".csv")
-            self.dc_file_path__coarse = get_file_path("_coarse.csv")
-            self.dc_file_path__fine = get_file_path("_fine.csv")
-
+    
     @property
     def bead_detection_max_intensity(self) -> Optional[int]:
         return self.config.get("max_bead_intensity")
@@ -448,6 +438,14 @@ class Drifter():
 
     def checkpoint_filepath(self, pos_idx: int) -> Path:
         return self.fine_correction_subfolder / self._checkpoint_filename(pos_idx)
+
+    @property
+    def dc_file_path__coarse(self) -> Path:
+        return self.image_handler.drift_correction_file__coarse
+
+    @property
+    def dc_file_path__fine(self) -> Path:
+        return self.image_handler.drift_correction_file__fine
 
     @property
     def downsampling(self) -> int:

@@ -8,7 +8,7 @@ import yaml
 from gertils import ExtantFile
 
 from looptrace.Deconvolver import REQ_GPU_KEY
-from looptrace import Drifter
+from looptrace import Drifter, MINIMUM_SPOT_SEPARATION_KEY
 from looptrace.SpotPicker import DetectionMethod, CROSSTALK_SUBTRACTION_KEY, DETECTION_METHOD_KEY as SPOT_DETECTION_METHOD_KEY
 from looptrace.Tracer import MASK_FITS_ERROR_MESSAGE
 
@@ -40,21 +40,36 @@ def find_config_file_errors(config_file: ExtantFile) -> List[ConfigFileError]:
     """
     with open(config_file.path, 'r') as fh:
         conf_data = yaml.safe_load(fh)
+    
     errors = []
+    
     if not conf_data.get(REQ_GPU_KEY, False):
         errors.append(ConfigFileError(f"Requiring GPUs for deconvolution with key {REQ_GPU_KEY} is currently required."))
+    
     dc_method = Drifter.get_method_name(conf_data)
     if dc_method and not Drifter.Methods.is_valid_name(dc_method):
         errors.append(ConfigFileError(f"Invalid drift correction method ({dc_method}); choose from: {', '.join(Drifter.Methods.values())}"))
+    
     if conf_data.get(CROSSTALK_SUBTRACTION_KEY, False):
         errors.append(ConfigFileError(f"Crosstalk subtraction ('{CROSSTALK_SUBTRACTION_KEY}') isn't currently supported."))
+    
     spot_detection_method = conf_data.get(SPOT_DETECTION_METHOD_KEY)
     if spot_detection_method is None:
         errors.append(ConfigFileError(f"No spot detection method ('{SPOT_DETECTION_METHOD_KEY}') specified!"))
     elif spot_detection_method == DetectionMethod.INTENSITY.value:
         errors.append(ConfigFileError(f"Prohibited (or unsupported) spot detection method: '{spot_detection_method}'"))
+    
+    try:
+        min_sep = conf_data[MINIMUM_SPOT_SEPARATION_KEY]
+    except KeyError:
+        errors.append(ConfigFileError(f"No minimum spot separation ('{MINIMUM_SPOT_SEPARATION_KEY}') specified!"))
+    else:
+        if not isinstance(min_sep, (int, float)) or min_sep < 0:
+            errors.append(ConfigFileError(f"Illegal minimum spot separation ('{MINIMUM_SPOT_SEPARATION_KEY}') value: {min_sep}"))
+
     if conf_data.get("mask_fits", False):
         errors.append(ConfigFileError(MASK_FITS_ERROR_MESSAGE))
+    
     return errors
 
 

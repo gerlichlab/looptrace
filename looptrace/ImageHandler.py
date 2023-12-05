@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
+from looptrace import MINIMUM_SPOT_SEPARATION_KEY
 from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, get_analysis_path, simplify_path
 from looptrace.image_io import ignore_path, NPZ_wrapper, TIFF_EXTENSIONS
 from gertils import ExtantFile, ExtantFolder
@@ -122,9 +123,32 @@ class ImageHandler:
         return outname and os.path.join(self.image_save_path, outname)
 
     @property
+    def drift_corrected_all_timepoints_rois_file(self) -> Path:
+        return Path(self.out_path(self.spot_input_name + '_dc_rois' + ".csv"))
+
+    @property
+    def drift_correction_file__coarse(self) -> Path:
+        return self._get_dc_filepath("_coarse.csv")
+
+    @property
+    def drift_correction_file__fine(self) -> Path:
+        return self._get_dc_filepath("_fine.csv")
+
+    def _get_dc_filepath(self, suffix: str) -> Path:
+        return Path(self.out_path(self.reg_input_moving + '_drift_correction' + suffix))
+
+    @property
     def frame_names(self) -> List[str]:
         return self.config["frame_name"]
     
+    @property
+    def minimum_spot_separation(self) -> Union[int, float]:
+        return self.config[MINIMUM_SPOT_SEPARATION_KEY]
+
+    @property
+    def nuclei_labeled_spots_file_path(self) -> Path:
+        return self.proximity_filtered_spots_file_path.with_suffix(".nuclei_labeled.csv")
+
     @property
     def num_bead_rois_for_drift_correction(self) -> int:
         return self.config["bead_points"]
@@ -156,6 +180,18 @@ class ImageHandler:
 
     def out_path(self, fn_extra: str) -> str:
         return os.path.join(self.analysis_path, self.analysis_filename_prefix + fn_extra)
+
+    @property
+    def proximity_labeled_spots_file_path(self) -> Path:
+        return self.raw_spots_file.with_suffix(".proximity_labeled_unfiltered.csv")
+
+    @property
+    def proximity_filtered_spots_file_path(self) -> Path:
+        return self.raw_spots_file.with_suffix(".proximity_filtered.csv")
+
+    @property
+    def raw_spots_file(self) -> Path:
+        return Path(self.out_path(self.spot_input_name + "_rois" + ".csv"))
 
     @property
     def reg_input_template(self) -> str:

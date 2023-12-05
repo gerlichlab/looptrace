@@ -48,7 +48,7 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Driver for computing all fiducial bead ROIs for a particular imaging experiment")
+    parser = argparse.ArgumentParser(description="Driver for filtering tracing supports")
     parser.add_argument("config_path", type=ExtantFile.from_string, help="Config file path")
     parser.add_argument("image_path", type=ExtantFolder.from_string, help="Path to folder with images to read.")
     args = parser.parse_args()

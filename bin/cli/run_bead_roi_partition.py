@@ -50,7 +50,7 @@ def workflow(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Driver for computing all fiducial bead ROIs for a particular imaging experiment")
+    parser = argparse.ArgumentParser(description="Driver for computing partition of all fiducial bead ROIs for a particular imaging experiment")
     parser.add_argument("config_path", type=ExtantFile.from_string, help="Config file path")
     parser.add_argument("image_path", type=ExtantFolder.from_string, help="Path to folder with images to read.")
     parser.add_argument("-O", "--output-folder", type=Path, help="Path to folder in which to place output")

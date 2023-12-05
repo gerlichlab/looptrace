@@ -16,8 +16,9 @@ from typing import *
 
 from gertils import ExtantFile, ExtantFolder
 
+from looptrace import MINIMUM_SPOT_SEPARATION_KEY
 from looptrace.ImageHandler import handler_from_cli
-from looptrace.SpotPicker import SpotPicker, CROSSTALK_SUBTRACTION_KEY, DETECTION_METHOD_KEY, DetectionMethod
+from looptrace.SpotPicker import DetectionMethod, SpotPicker, CROSSTALK_SUBTRACTION_KEY, DETECTION_METHOD_KEY
 
 __author__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 
@@ -44,7 +45,7 @@ class Parameters:
         "downsampling": "spot_downsample", 
         "only_in_nuclei": "spot_in_nuc", 
         "subtract_crosstalk": CROSSTALK_SUBTRACTION_KEY, 
-        "minimum_spot_separation": "min_spot_dist",
+        "minimum_spot_separation": MINIMUM_SPOT_SEPARATION_KEY,
     }
 
     @classmethod
