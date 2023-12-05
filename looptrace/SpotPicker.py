@@ -28,12 +28,13 @@ from gertils import ExtantFolder, NonExtantPath
 
 from looptrace.exceptions import MissingRoisTableException
 from looptrace.filepaths import get_spot_images_path
-from looptrace import image_processing_functions as ip
+from looptrace import MINIMUM_SPOT_SEPARATION_KEY, image_processing_functions as ip
 from looptrace.numeric_types import NumberLike
 
 CROSSTALK_SUBTRACTION_KEY = "subtract_crosstalk"
 DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC = 'dog'
 NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION = ".nuclei_labeled"
+NUCLEI_LABELED_SPOTS_FILE_EXTENSION = NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION + ".csv"
 DETECTION_METHOD_KEY = "detection_method"
 
 logger = logging.getLogger()
@@ -271,26 +272,12 @@ def generate_detection_specifications(positions: Iterable["FieldOfViewRepresenta
 
 class SpotPicker:
     """Encapsulation of data and roles for detection of fluorescent spots in imaging data"""
-    def __init__(self, image_handler, array_id = None):
+    def __init__(self, image_handler):
         self.image_handler = image_handler
         self.config = image_handler.config
         self.images = self.image_handler.images[self.input_name]
         self.pos_list = self.image_handler.image_lists[self.input_name]
-        roi_file_ext = ".csv"
-        self.dc_roi_path = self.image_handler.out_path(self.input_name + '_dc_rois' + roi_file_ext)
-        self.array_id = array_id
-        if self.array_id is not None:
-            self.pos_list = [self.pos_list[int(self.array_id)]]
-            roi_filename_differentiator = '_rois_' + str(self.array_id).zfill(4)
-            #center_filename_differentiator = '_centers_' + str(self.array_id).zfill(4)
-        else:
-            roi_filename_differentiator = '_rois'
-            #center_filename_differentiator = '_centers'
-        #self.roi_centers_filepath = self.image_handler.out_path(self.input_name + center_filename_differentiator + roi_file_ext)
-        self.roi_path = self.image_handler.out_path(self.input_name + roi_filename_differentiator + roi_file_ext)
-        #self.roi_path_filtered = self.roi_path.replace(roi_file_ext, ".filtered" + roi_file_ext)
-        #self.roi_path_unfiltered = self.roi_path.replace(roi_file_ext, ".unfiltered" + roi_file_ext)
-
+    
     @property
     def crosstalk_frame(self) -> Optional[int]:
         return self.config.get('crosstalk_frame')
@@ -391,7 +378,7 @@ class SpotPicker:
             subtract_beads = False
             crosstalk_ch = None # dummy that should cause errors; never accessed if subtract_beads is False
 
-        min_dist = self.config.get('min_spot_dist')
+        min_dist = self.image_handler.minimum_spot_separation
 
         # Determine the detection method and parameters threshold.
         spot_threshold = self.spot_threshold
@@ -444,11 +431,9 @@ class SpotPicker:
             parallelise=self.parallelise,
             )
         
-        logger.info(f"Writing initial spot ROIs: {self.roi_path}")
-        n_spots = len(output)
-        (logger.warning if n_spots == 0 else logger.info)(f'Found {n_spots} spots.')
-        outfile = outfile or self.roi_path
-        print(f"Writing ROIs: {outfile}")
+        outfile = outfile or self.image_handler.raw_spots_file
+        n_spots = output.shape[0]
+        (logger.warning if n_spots == 0 else logger.info)(f"Writing initial spot ROIs with {n_spots} spot(s): {outfile}")
         output.to_csv(outfile)
 
         return outfile
@@ -461,11 +446,12 @@ class SpotPicker:
         
         # TODO: use the proximity-filtration here, in either case (nuclear filtration or not).
         if self.config.get('spot_in_nuc', False):
-            key_rois_table = self.input_name + '_rois' + NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION
+            spotfile = self.image_handler.nuclei_labeled_spots_file_path
             use_roi = lambda r: r['nuc_label'] != 0
         else:
-            key_rois_table = self.input_name + '_rois'
+            spotfile = self.image_handler.proximity_filtered_spots_file_path
             use_roi = lambda _: True
+        key_rois_table, _ = os.path.splitext(spotfile.name)
         
         try:
             rois_table = self.image_handler.tables[key_rois_table]
@@ -518,7 +504,8 @@ class SpotPicker:
                                 'z_px_fine', 'y_px_fine', 'x_px_fine'])
         self.all_rois = self.all_rois.sort_values(RoiOrderingSpecification.row_order_columns()).reset_index(drop=True)
         print(self.all_rois)
-        outfile = self.dc_roi_path
+        outfile = self.image_handler.drift_corrected_all_timepoints_rois_file
+        print(f"Writing all ROIs file: {outfile}")
         self.all_rois.to_csv(outfile)
         self.image_handler.load_tables()
         return outfile

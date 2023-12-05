@@ -19,7 +19,8 @@ from decon import workflow as run_deconvolution
 from looptrace.Drifter import coarse_correction_workflow as run_coarse_drift_correction, fine_correction_workflow as run_fine_drift_correction
 from drift_correct_accuracy_analysis import workflow as run_drift_correction_analysis, run_visualisation as run_drift_correction_accuracy_visualisation
 from detect_spots import workflow as run_spot_detection
-from assign_spots_to_nucs import workflow as run_spot_filtration
+from run_spot_proximity_filtration import workflow as run_spot_proximity_filtration
+from assign_spots_to_nucs import workflow as run_spot_nucleus_filtration
 from cluster_analysis_cleanup import workflow as run_cleanup
 from extract_spots_table import workflow as run_spot_bounding
 from extract_spots import workflow as run_spot_extraction
@@ -60,7 +61,8 @@ class LooptracePipeline(pypiper.Pipeline):
             ("drift_correction_accuracy_visualisation", run_drift_correction_accuracy_visualisation, conf_only), 
             ("deconvolution", run_deconvolution, conf_data_pair), # Really just for denoising, no need for structural disambiguation
             ("spot_detection", run_spot_detection, conf_data_pair), # generates *_rois.csv (regional spots)
-            ("spot_filtration", run_spot_filtration, conf_data_pair), 
+            ("spot_proximity_filtration", run_spot_proximity_filtration, conf_data_pair),
+            ("spot_nucleus_filtration", run_spot_nucleus_filtration, conf_data_pair), 
             ("clean_1", run_cleanup, conf_only),
             ("spot_bounding", run_spot_bounding, conf_data_pair), # computes pad_x_min, etc.; writes *_dc_rois.csv (much bigger, since regional spots x frames)
             ("spot_extraction", run_spot_extraction, conf_data_pair),

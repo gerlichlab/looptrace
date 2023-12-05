@@ -3,8 +3,8 @@ package at.ac.oeaw.imba.gerlich
 import java.io.File
 import scala.util.Try
 import upickle.default.*
-import cats.{ Bifunctor, Eq, Order, Show }
-import cats.data.{ NonEmptyList as NEL, ValidatedNel }
+import cats.{ Bifunctor, Order, Show }
+import cats.data.{ NonEmptyList as NEL, NonEmptySet, ValidatedNel }
 import cats.syntax.all.*
 import mouse.boolean.*
 
@@ -19,6 +19,12 @@ package object looptrace {
     type ErrorMessages = NEL[String]
     type ErrMsgsOr[A] = Either[ErrorMessages, A]
     
+    /** Nonempty set wrapped in {@code Right} if no duplicates, or {@code Left}-wrapped pairs of element and repeat count */
+    def safeNelToNes[A : Order](xs: NEL[A]): Either[NEL[(A, Int)], NonEmptySet[A]] = {
+        val histogram = xs.groupByNem(identity).toNel.map(_.map(_.size))
+        histogram.filter(_._2 > 1).toNel.toLeft(histogram.map(_._1).toNes)
+    }
+
     /** Use rows from a CSV file in arbitrary code. */
     def withCsvData(filepath: os.Path)(code: Iterable[CsvRow] => Any): Any = {
         val reader = CSVReader.open(filepath.toIO)
@@ -60,6 +66,9 @@ package object looptrace {
     
     extension (v: ujson.Value)
         def int: Int = tryToInt(v.num).fold(msg => throw new ujson.Value.InvalidData(v, msg), identity)
+
+    extension (v: ujson.Value)
+        def safeInt = Try{ v.int }.toEither
 
     extension [A](arr: Array[A])
         def lookup(a: A): Option[Int] = arr.indexOf(a) match {
@@ -196,7 +205,7 @@ package object looptrace {
 
     final case class FrameIndex(get: NonnegativeInt) extends AnyVal
     object FrameIndex:
-        given eqForFrameIndex: Eq[FrameIndex] = Eq.fromUniversalEquals[FrameIndex]
+        given orderForFrameIndex: Order[FrameIndex] = Order.by(_.get)
         given showForFrameIndex: Show[FrameIndex] = Show.show(_.get.show)
         def fromInt = NonnegativeInt.either.fmap(_.map(FrameIndex.apply))
         def unsafe = NonnegativeInt.unsafe `andThen` FrameIndex.apply
@@ -204,7 +213,7 @@ package object looptrace {
 
     final case class PositionIndex(get: NonnegativeInt) extends AnyVal
     object PositionIndex:
-        given eqForPositionIndex: Eq[PositionIndex] = Eq.fromUniversalEquals[PositionIndex]
+        given orderForPositionIndex: Order[PositionIndex] = Order.by(_.get)
         given showForPositionIndex: Show[PositionIndex] = Show.show(_.get.show)
         def fromInt = NonnegativeInt.either.fmap(_.map(PositionIndex.apply))
         def unsafe = NonnegativeInt.unsafe `andThen` PositionIndex.apply

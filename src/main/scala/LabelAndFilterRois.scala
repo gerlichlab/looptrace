@@ -5,11 +5,10 @@ import upickle.default.*
 import cats.{ Alternative, Eq, Functor, Order }
 import cats.data.{ NonEmptyList as NEL, NonEmptyMap, NonEmptySet, ValidatedNel }
 import cats.data.Validated.Valid
-import cats.instances.tuple.*
 import cats.syntax.all.*
 import mouse.boolean.*
 
-import scopt.OParser
+import scopt.{ OParser, Read }
 import com.github.tototoshi.csv.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ Coordinate, EuclideanDistance, Metric, Point3D, XCoordinate, YCoordinate, ZCoordinate }
@@ -38,7 +37,7 @@ object LabelAndFilterRois:
     case class CliConfig(
         spotsFile: os.Path = null, // unconditionally required
         driftFile: os.Path = null, // unconditionally required
-        probeGroupsFile: os.Path = null, // unconditionally required; specifies groups of probes which may not be too close
+        probeGroups: List[ProbeGroup] = null, // unconditionally required
         minSpotSeparation: NonnegativeReal = NonnegativeReal(0), // unconditionally required
         unfilteredOutputFile: UnfilteredOutputFile = null, // unconditionally required
         filteredOutputFile: FilteredOutputFile = null, // unconditionally required
@@ -50,6 +49,47 @@ object LabelAndFilterRois:
     def main(args: Array[String]): Unit = {
         import ScoptCliReaders.given
         import parserBuilder.*
+
+        given readProbeGroups: Read[List[ProbeGroup]] = {
+            def readAsEmpty[A]: String => Either[String, List[A]] = arg => arg match {
+                case "NONE" => List.empty[A].asRight
+                case _ => s"Cannot parse argument as specification of empty list: $arg".asLeft
+            }
+            val readAsFile = (s: String) => 
+                Try{ readJsonFile[List[ProbeGroup]](summon[Read[os.Path]].reads(s)) }.toEither.leftMap(_.getMessage)
+            val readAsMap = (s: String) => {
+                Try{ summon[Read[Map[Int, Int]]].reads(s) }
+                    .toEither
+                    .leftMap(_.getMessage)
+                    .flatMap(
+                        _.toList.foldRight(List.empty[Int] -> Map.empty[Int, NEL[FrameIndex]]){
+                            // finds negative values and groups the probes (key) by group (value), inverting the mapping and collecting
+                            case ((probe, groupIndex), (neg, acc)) => FrameIndex.fromInt(probe).fold(
+                                _ => (probe :: neg, acc),
+                                frame => (neg, acc + (groupIndex -> acc.get(groupIndex).fold(NEL.one(frame))(frame :: _)))
+                                )
+                        } match {
+                            case (Nil, rawGroups) => 
+                                val (histogram, groups) = rawGroups.values.foldRight(Map.empty[NonnegativeInt, Int] -> List.empty[ProbeGroup]){
+                                    case (g, (hist, gs)) => {
+                                        val subHist = g.map(_.get).groupBy(identity).view.mapValues(_.size).toMap
+                                        (hist |+| subHist, ProbeGroup(g.toNes) :: gs)
+                                    }
+                                }
+                                histogram.filter(_._2 > 1).toList.toNel.toLeft(groups).leftMap{ reps => s"Repeated frames in grouping: $reps" }
+                            case (negatives, _) => s"Negative frame(s) in grouping: $negatives".asLeft
+                        }
+                    )
+            }
+            Read.reads{ s => 
+                // Preserve the first successful result and return it, otherwise accumulate the error messages.
+                // So start with an empty list as a Left, then add error messages while staying in Left, or preserving the value in Right.
+                // TODO: try to replace this with a defined structure, something like Validated + Alternative in Haskell.
+                List(readAsMap, readAsFile, readAsEmpty).foldRight(Either.left[List[String], List[ProbeGroup]](List.empty[String])){ 
+                    case (safeRead, maybeResult) => maybeResult.leftFlatMap(errors => safeRead(s).leftMap(_ :: errors))
+                }.fold(msgs => throw new IllegalArgumentException(s"Cannot parse arg ($arg) as probe grouping. Errors: $msgs"), identity)
+            }
+        }
 
         val parser = OParser.sequence(
             programName(ProgramName), 
@@ -64,11 +104,10 @@ object LabelAndFilterRois:
                 .action((f, c) => c.copy(driftFile = f))
                 .validate(f => os.isFile(f).either(f"Alleged drift file isn't a file: $f", ()))
                 .text("Path to drift correction file"),
-            opt[os.Path]("probeGroupsFile")
+            opt[List[ProbeGroup]]("probeGroups")
                 .required()
-                .action((f, c) => c.copy(probeGroupsFile = f))
-                .validate(f => os.isFile(f).either(f"Alleged probe groups file isn't a file: $f", ()))
-                .text("Path to grouping of probes prohibited from being too close; should be simple list-of-lists in JSON"),
+                .action((gs, c) => c.copy(probeGroups = gs))
+                .text("Either mapping from probe ID to grouping ID, or path to JSON file (list of lists), or 'NONE' to indicate no grouping"),
             opt[NonnegativeReal]("minSpotSeparation")
                 .required()
                 .action((px, c) => c.copy(minSpotSeparation = px))
@@ -89,23 +128,22 @@ object LabelAndFilterRois:
 
         OParser.parse(parser, args, CliConfig()) match {
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
-            case Some(opts) => 
-                workflow(
-                    spotsFile = opts.spotsFile, 
-                    driftFile = opts.driftFile, 
-                    probeGroupsFile = opts.probeGroupsFile, 
-                    minSpotSeparation = opts.minSpotSeparation, 
-                    unfilteredOutputFile = opts.unfilteredOutputFile,
-                    filteredOutputFile = opts.filteredOutputFile, 
-                    extantOutputHandler = opts.extantOutputHandler
-                    )
+            case Some(opts) => workflow(
+                spotsFile = opts.spotsFile, 
+                driftFile = opts.driftFile, 
+                probeGroups = opts.probeGroups, 
+                minSpotSeparation = opts.minSpotSeparation, 
+                unfilteredOutputFile = opts.unfilteredOutputFile,
+                filteredOutputFile = opts.filteredOutputFile, 
+                extantOutputHandler = opts.extantOutputHandler
+                )
         }
     }
 
     def workflow(
         spotsFile: os.Path, 
         driftFile: os.Path, 
-        probeGroupsFile: os.Path, 
+        probeGroups: List[ProbeGroup],
         minSpotSeparation: NonnegativeReal, 
         unfilteredOutputFile: UnfilteredOutputFile, 
         filteredOutputFile: FilteredOutputFile, 
@@ -122,12 +160,6 @@ object LabelAndFilterRois:
                 es => throw new Exception(s"${es.size} existence error(s) with output: ${es.map(_.getMessage)}"), 
                 _.mapBoth(writeCsv)
                 )
-        }
-
-        // First, parse the probe groupings.
-        val probeGroups = {
-            println(s"Parsing probe groups file: ${probeGroupsFile}")
-            readJsonFile[List[ProbeGroup]](probeGroupsFile)
         }
 
         /* Then, parse the ROI records from the (regional barcode) spots file. */
@@ -208,14 +240,18 @@ object LabelAndFilterRois:
      ****************************************************************************************************************/
     final case class DriftRecord(position: String, time: Timepoint, coarse: CoarseDrift, fine: FineDrift)
 
-    final case class ProbeGroup(get: NEL[FrameIndex])
+    final case class ProbeGroup(get: NonEmptySet[FrameIndex])
     object ProbeGroup:
         given rwForProbeGroup: ReadWriter[ProbeGroup] = readwriter[ujson.Value].bimap(
             group => ujson.Arr(group.get.toList.map(name => ujson.Num(name.get))*), 
-            json => ProbeGroup(json.arr.toList.toNel
-                .getOrElse{ throw new Exception("Empty collection can't parse as probe group!") }
-                .map{ v => FrameIndex.unsafe(v.int) }
-                )
+            json => json.arr
+                .toList
+                .toNel
+                .toRight("Empty collection can't parse as probe group!")
+                .flatMap(_.traverse(_.safeInt.flatMap(FrameIndex.fromInt)))
+                .flatMap(safeNelToNes)
+                .leftMap(repeats => s"Repeat values for probe group: $repeats")
+                .fold(msg => throw new ujson.Value.InvalidData(json, msg), ProbeGroup.apply)
         )
     end ProbeGroup
 
