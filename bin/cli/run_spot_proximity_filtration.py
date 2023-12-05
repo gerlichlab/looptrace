@@ -16,7 +16,7 @@ __author__ = "Vince Reuter"
 def workflow(config_file: ExtantFile, images_folder: ExtantFolder) -> None:
     H = handler_from_cli(config_file=config_file, images_folder=images_folder)
     min_spot_sep = H.minimum_spot_separation
-    region_groups = H.get("regional_spots_grouping", "NONE")
+    region_groups = H.config.get("regional_spots_grouping", "NONE")
     if not isinstance(region_groups, str):
         region_groups = ",".join(itertools.chain(*(f"{r}={i}" for i, rs in enumerate(region_groups) for r in rs)))
     if min_spot_sep <= 0:
@@ -52,4 +52,4 @@ if __name__ == "__main__":
     parser.add_argument("config_path", type=ExtantFile.from_string, help="Config file path")
     parser.add_argument("image_path", type=ExtantFolder.from_string, help="Path to folder with images to read.")
     args = parser.parse_args()
-    workflow(config_file=args.config_path, images_folder=args.image_path, )
+    workflow(config_file=args.config_path, images_folder=args.image_path)
