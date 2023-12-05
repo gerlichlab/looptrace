@@ -452,6 +452,7 @@ class SpotPicker:
             spotfile = self.image_handler.proximity_filtered_spots_file_path
             use_roi = lambda _: True
         key_rois_table, _ = os.path.splitext(spotfile.name)
+        key_rois_table = key_rois_table.lstrip(self.image_handler.analysis_prefix).lstrip(os.path.expanduser(os.path.expandvars(self.image_handler.analysis_prefix)))
         
         try:
             rois_table = self.image_handler.tables[key_rois_table]
