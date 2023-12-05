@@ -11,9 +11,10 @@ import mouse.boolean.*
 import scopt.{ OParser, Read }
 import com.github.tototoshi.csv.*
 
-import at.ac.oeaw.imba.gerlich.looptrace.space.{ Coordinate, EuclideanDistance, Metric, Point3D, XCoordinate, YCoordinate, ZCoordinate }
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.{ fromJsonThruInt, safeExtract, readJsonFile }
+import at.ac.oeaw.imba.gerlich.looptrace.space.{ Coordinate, EuclideanDistance, Metric, Point3D, XCoordinate, YCoordinate, ZCoordinate }
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
 
 /**
  * Measure data across all timepoints in the regions identified during spot detection.
@@ -165,16 +166,13 @@ object LabelAndFilterRois:
         /* Then, parse the ROI records from the (regional barcode) spots file. */
         val (roisHeader, rowRoiPairs): (List[String], List[((CsvRow, Roi), LineNumber)]) = {
             println(s"Reading ROIs file: $spotsFile")
-            val reader = CSVReader.open(spotsFile.toIO)
-            Try{ reader.allWithOrderedHeaders() } match {
-                case Failure(exception) => 
-                    reader.close()
-                    throw exception
-                case Success((head, spotRows)) => Alternative[List].separate(spotRows.map(rowToRoi.throughRight)) match {
+            safeReadAllWithOrderedHeaders(spotsFile).fold(
+                throw _, 
+                (head, spotRows) => Alternative[List].separate(spotRows.map(rowToRoi.throughRight)) match {
                     case (Nil, rrPairs) => head -> NonnegativeInt.indexed(rrPairs)
                     case (errors@(h :: _), _) => throw new Exception(s"${errors.length} errors converting spot file (${spotsFile}) rows to ROIs! First one: $h")
                 }
-            }
+            )
         }
         
         /* Then, parse the drift correction records from the corresponding file. */
@@ -291,23 +289,23 @@ object LabelAndFilterRois:
     }
 
     def rowToRoi(row: CsvRow): ErrMsgsOr[Roi] = {
-        val indexNel = getFromRow("", safeParseInt >>> RoiIndex.fromInt)(row)
-        val posNel = getFromRow("position", (_: String).asRight)(row)
-        val timeNel = getFromRow("frame", safeParseInt >>> FrameIndex.fromInt)(row)
-        val channelNel = getFromRow("ch", safeParseInt >>> Channel.fromInt)(row)
+        val indexNel = safeGetFromRow("", safeParseInt >>> RoiIndex.fromInt)(row)
+        val posNel = safeGetFromRow("position", (_: String).asRight)(row)
+        val timeNel = safeGetFromRow("frame", safeParseInt >>> FrameIndex.fromInt)(row)
+        val channelNel = safeGetFromRow("ch", safeParseInt >>> Channel.fromInt)(row)
         val centroidNel = {
-            val zNel = getFromRow("zc", safeParseDouble >> ZCoordinate.apply)(row)
-            val yNel = getFromRow("yc", safeParseDouble >> YCoordinate.apply)(row)
-            val xNel = getFromRow("xc", safeParseDouble >> XCoordinate.apply)(row)
+            val zNel = safeGetFromRow("zc", safeParseDouble >> ZCoordinate.apply)(row)
+            val yNel = safeGetFromRow("yc", safeParseDouble >> YCoordinate.apply)(row)
+            val xNel = safeGetFromRow("xc", safeParseDouble >> XCoordinate.apply)(row)
             (zNel, yNel, xNel).mapN((z, y, x) => Point3D(x, y, z))
         }
         val bboxNel = {
-            val zMinNel = getFromRow("z_min", safeParseDouble >> ZCoordinate.apply)(row)
-            val zMaxNel = getFromRow("z_max", safeParseDouble >> ZCoordinate.apply)(row)
-            val yMinNel = getFromRow("y_min", safeParseDouble >> YCoordinate.apply)(row)
-            val yMaxNel = getFromRow("y_max", safeParseDouble >> YCoordinate.apply)(row)
-            val xMinNel = getFromRow("x_min", safeParseDouble >> XCoordinate.apply)(row)
-            val xMaxNel = getFromRow("x_max", safeParseDouble >> XCoordinate.apply)(row)
+            val zMinNel = safeGetFromRow("z_min", safeParseDouble >> ZCoordinate.apply)(row)
+            val zMaxNel = safeGetFromRow("z_max", safeParseDouble >> ZCoordinate.apply)(row)
+            val yMinNel = safeGetFromRow("y_min", safeParseDouble >> YCoordinate.apply)(row)
+            val yMaxNel = safeGetFromRow("y_max", safeParseDouble >> YCoordinate.apply)(row)
+            val xMinNel = safeGetFromRow("x_min", safeParseDouble >> XCoordinate.apply)(row)
+            val xMaxNel = safeGetFromRow("x_max", safeParseDouble >> XCoordinate.apply)(row)
             (zMinNel, zMaxNel, yMinNel, yMaxNel, xMinNel, xMaxNel).mapN(
                 (zMin, zMax, yMin, yMax, xMin, xMax) => BoundingBox(
                     sideX = Interval(xMin, xMax),
@@ -320,18 +318,18 @@ object LabelAndFilterRois:
     }
     
     def rowToDriftRecord(row: CsvRow): ErrMsgsOr[DriftRecord] = {
-        val posNel = getFromRow("position", (_: String).asRight)(row)
-        val timeNel = getFromRow("frame", safeParseInt >>> FrameIndex.fromInt)(row)
+        val posNel = safeGetFromRow("position", (_: String).asRight)(row)
+        val timeNel = safeGetFromRow("frame", safeParseInt >>> FrameIndex.fromInt)(row)
         val coarseDriftNel = {
-            val zNel = getFromRow("z_px_coarse", safeParseIntLike >> ZDir.apply)(row)
-            val yNel = getFromRow("y_px_coarse", safeParseIntLike >> YDir.apply)(row)
-            val xNel = getFromRow("x_px_coarse", safeParseIntLike >> XDir.apply)(row)
+            val zNel = safeGetFromRow("z_px_coarse", safeParseIntLike >> ZDir.apply)(row)
+            val yNel = safeGetFromRow("y_px_coarse", safeParseIntLike >> YDir.apply)(row)
+            val xNel = safeGetFromRow("x_px_coarse", safeParseIntLike >> XDir.apply)(row)
             (zNel, yNel, xNel).mapN(CoarseDrift.apply)
         }
         val fineDriftNel = {
-            val zNel = getFromRow("z_px_fine", safeParseDouble >> ZDir.apply)(row)
-            val yNel = getFromRow("x_px_fine", safeParseDouble >> YDir.apply)(row)
-            val xNel = getFromRow("y_px_fine", safeParseDouble >> XDir.apply)(row)
+            val zNel = safeGetFromRow("z_px_fine", safeParseDouble >> ZDir.apply)(row)
+            val yNel = safeGetFromRow("x_px_fine", safeParseDouble >> YDir.apply)(row)
+            val xNel = safeGetFromRow("y_px_fine", safeParseDouble >> XDir.apply)(row)
             (zNel, yNel, xNel).mapN(FineDrift.apply)
         }
         (posNel, timeNel, coarseDriftNel, fineDriftNel).mapN(DriftRecord.apply).toEither
@@ -374,9 +372,6 @@ object LabelAndFilterRois:
     
     final case class BoundingBox(sideX: Interval[XCoordinate], sideY: Interval[YCoordinate], sideZ: Interval[ZCoordinate])
 
-    def getFromRow[A](key: String, lift: String => Either[String, A])(row: CsvRow) =
-        (Try{ row(key) }.toEither.leftMap(_.getMessage) >>= lift).toValidatedNel
-
     def safeReadBool = (_: String) match {
         case "1" => true.some
         case "0" => false.some
@@ -386,14 +381,6 @@ object LabelAndFilterRois:
     extension [A](rw: ReadWriter[List[A]])
         def toNel(context: String): ReadWriter[NEL[A]] = 
             rw.bimap(_.toList, _.toNel.getOrElse{ throw new Exception(s"$context: No elements to read as nonempty list!") })
-
-    /** Add a continuation-like syntax for flatmapping over a function that can fail with another that can fail. */
-    extension [A, L, B, R](f: A => Either[L, B])
-        infix def >>>[L1 >: L](g: B => Either[L1, R]): A => Either[L1, R] = f(_: A).flatMap(g)
-    
-    /** Add a continuation-like syntax for flatmapping over a function that can fail with another that canNOT fail. */
-    extension [A, L, B](f: A => Either[L, B])
-        infix def >>[C](g: B => C): A => Either[L, C] = f(_: A).map(g)
 
     /** Push a value through to the right side of an {@code Either}, pairing with the wrapped value */
     extension [A, L, R](f: A => Either[L, R])
