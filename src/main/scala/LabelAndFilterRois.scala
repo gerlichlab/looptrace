@@ -29,6 +29,7 @@ object LabelAndFilterRois:
     /* Type aliases */
     type LineNumber = NonnegativeInt
     type PosInt = PositiveInt
+    type RoiIdxPair = (Roi, NonnegativeInt)
     type Timepoint = FrameIndex
     
     /* Distinguish, at the type level, the semantic meaning of each output target. */
@@ -85,6 +86,7 @@ object LabelAndFilterRois:
         import ThresholdSemantic.given
         import parserBuilder.*
 
+        /** Parse a direct spec of an empty list, content of JSON file path, or CLI-arg-like mapping spec of probe groups. */
         given readProbeGroups: scopt.Read[List[ProbeGroup]] = {
             def readAsEmpty[A]: String => Either[String, List[A]] = arg => arg match {
                 case "NONE" => List.empty[A].asRight
@@ -224,7 +226,7 @@ object LabelAndFilterRois:
             case (Nil, drifts) => drifts
             case (errors@(h :: _), _) => throw new Exception(s"${errors.length} errors converting drift file (${driftFile}) rows to records! First one: $h")
         } }.asInstanceOf[List[DriftRecord]]
-        println("Keying drifts")
+        println("Keying drifts...")
         val driftByPosTimePair = {
             type Key = (String, FrameIndex)
             val (repeats, keyed) = NonnegativeInt.indexed(drifts).foldLeft(Map.empty[Key, NonEmptySet[LineNumber]] -> Map.empty[Key, DriftRecord]){ 
@@ -241,19 +243,20 @@ object LabelAndFilterRois:
         }
         
         /* For each ROI (by line number), look up its (too-proximal, according to distance threshold) neighbors. */
-        println("Building neighbors lookup")
+        println("Building neighbors lookup...")
         // TODO: allow empty grouping here. https://github.com/gerlichlab/looptrace/issues/147
-        val lookupNeighbors: LineNumber => Option[NonEmptySet[LineNumber]] = (probeGroups.toNel match {
-            case None => { (_: LineNumber) => None }.asRight // Never any proximal neighbors if no groups defined.
-            case Some(groups) => 
-                // TODO: allow empty grouping here. https://github.com/gerlichlab/looptrace/issues/147
-                buildNeighboringRoisFinder(rowRoiPairs.map{ case ((_, roi), idx) => roi -> idx}, minSpotSeparation)(groups).map(_.get)
-        }).fold(errMsg => throw new Exception(errMsg), identity)
+        val lookupNeighbors: LineNumber => Option[NonEmptySet[LineNumber]] = {
+            val numberedRois = rowRoiPairs.map{ case ((_, roi), idx) => roi -> idx}
+            buildNeighboringRoisFinder(numberedRois, minSpotSeparation)(probeGroups)
+                .map(_.get)
+                .fold(errMsg => throw new Exception(errMsg), identity)
+        }
 
-        println("Pairing neighbors with ROIs")
+        println("Pairing neighbors with ROIs...")
         val roiRecordsLabeled = rowRoiPairs.map{ case ((row, _), linenum) => row -> lookupNeighbors(linenum).map(_.toNonEmptyList.sorted) }
 
         /* Write the unfiltered output and print out the header */
+        println("Starting on output writing...")
         val unfilteredHeader = {
             val neighborColumnName = "neighbors"
             val header = roisHeader :+ neighborColumnName
@@ -277,7 +280,14 @@ object LabelAndFilterRois:
      ****************************************************************************************************************/
     final case class DriftRecord(position: String, time: Timepoint, coarse: CoarseDrift, fine: FineDrift)
 
+    /**
+      * Designation of regional barcode frame/probe/timepoint indices which are prohibited from being in (configurably) close proximity.
+      *
+      * @param get The actual collection of indices
+      */
     final case class ProbeGroup(get: NonEmptySet[FrameIndex])
+    
+    /** Helpers for working with frame/probe/timepoint index groupings */
     object ProbeGroup:
         given rwForProbeGroup: ReadWriter[ProbeGroup] = readwriter[ujson.Value].bimap(
             group => ujson.Arr(group.get.toList.map(name => ujson.Num(name.get))*), 
@@ -292,16 +302,26 @@ object LabelAndFilterRois:
         )
     end ProbeGroup
 
+    /** Representation of a single record from the regional barcode spots detection */
     final case class Roi(index: RoiIndex, position: String, time: FrameIndex, channel: Channel, centroid: Point3D, boundingBox: BoundingBox)
 
-    def buildNeighborsLookup[A : Order, B : Eq, D](getPoint: A => Point3D)(things: Iterable[A], minDist: DistanceThreshold)(key: A => Option[B]): Map[A, NonEmptySet[A]] = {
+    /**
+      * Construct a mapping from single record to collection of proximal neighbors, for filtration
+      *
+      * @tparam A The type of key for an individual row/record
+      * @param getPoint How to extract a 3D point from the key
+      * @param things The collection in which to determine groups of pairwise proximity.
+      * @param minDist The definition of proximity
+      * @return A mapping from single item to nonempty set of all items neighbors; items with no proximal neigbors are absent
+      */
+    def buildNeighborsLookupFlat[A : Order, D](getPoint: A => Point3D)(things: Iterable[A], minDist: DistanceThreshold): Map[A, NonEmptySet[A]] = {
         import ProximityComparable.proximal
         given proxComp: ProximityComparable[A] = DistanceThreshold.defineProximityPointwise(minDist)(getPoint)
         // Find all pairs of values more within the threshold of proximity w.r.t. one another.
-        val closePairs: List[(A, A)] = things.groupBy(key).filter(_._1.nonEmpty).values.toList.flatMap(_.toList.combinations(2).flatMap{
+        val closePairs: List[(A, A)] = things.toList.combinations(2).flatMap{
             case a1 :: a2 :: Nil => (a1 `proximal` a2).option(a1 -> a2)
             case xs => throw new Exception(s"${xs.length} (not 2!) element(s) when taking pairwise combinations")
-        })
+        }.toList
         // BIDIRECTIONALLY add the pair to the mapping, as we need the redundancy in order to remove BOTH spots.
         // https://github.com/gerlichlab/looptrace/issues/148
         closePairs.foldLeft(Map.empty[A, NonEmptySet[A]]){ case (acc, (a1, a2)) => 
@@ -311,24 +331,40 @@ object LabelAndFilterRois:
         }
     }
 
+    def buildNeighborsLookupKeyed[A : Order, K : Order, D](getPoint: A => Point3D)(kvPairs: Iterable[(K, A)], minDist: DistanceThreshold): Map[A, NonEmptySet[A]] = {
+        // In the reduction, we don't care if on collision the Semigroup instance for Map will combine values or will overwrite them, 
+        // since the partition on keys here guarantees no collisions between resulting submaps that are being combined.
+        kvPairs.groupBy(_._1).values.map{ subKVs => buildNeighborsLookupFlat(getPoint)(subKVs.map(_._2), minDist) }.reduce(_ |+| _)
+    }
+
     // TODO: allow empty grouping here. https://github.com/gerlichlab/looptrace/issues/147
-    def buildNeighboringRoisFinder(rois: List[(Roi, NonnegativeInt)], minDist: DistanceThreshold)(grouping: NEL[ProbeGroup]): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
+    def buildNeighboringRoisFinder(rois: List[RoiIdxPair], minDist: DistanceThreshold)(grouping: List[ProbeGroup]): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
         given ordByIndex: Order[Roi] = Order.by(_.index)
-        val (groupIds, repeatedFrames) = NonnegativeInt.indexed(grouping.toList)
-            .flatMap((g, i) => g.get.toList.map(_ -> i))
-            .foldLeft(Map.empty[FrameIndex, NonnegativeInt] -> Map.empty[FrameIndex, Int]){ 
-                case ((ids, repeats), (frame, gid)) =>
-                    if ids `contains` frame
-                    then (ids, repeats + (frame -> (repeats.getOrElse(frame, 0) + 1)))
-                    else (ids + (frame -> gid), repeats)
+        val getPoint = (_: RoiIdxPair)._1.centroid
+        val groupedRoiIdxPairs: Either[String, Map[RoiIdxPair, NonEmptySet[RoiIdxPair]]] = 
+            if grouping.isEmpty 
+            then buildNeighborsLookupFlat(getPoint)(rois, minDist).asRight
+            else {
+                val (groupIds, repeatedFrames) = NonnegativeInt.indexed(grouping)
+                    .flatMap((g, i) => g.get.toList.map(_ -> i))
+                    .foldLeft(Map.empty[FrameIndex, NonnegativeInt] -> Map.empty[FrameIndex, Int]){ 
+                        case ((ids, repeats), (frame, gid)) =>
+                            if ids `contains` frame
+                            then (ids, repeats + (frame -> (repeats.getOrElse(frame, 0) + 1)))
+                            else (ids + (frame -> gid), repeats)
+                    }
+                if (repeatedFrames.nonEmpty) // Probe groupings isn't a partition, because there's overlap between the declared equivalence classes.
+                then s"${repeatedFrames.size} repeated frame(s): $repeatedFrames".asLeft
+                else {
+                    // TODO: check that the union of the (now checked as disjoint) equivalence classes implied by the probe groupings cover the set of regional barcodes frames.
+                    val (groupless, keyedRois) = Alternative[List].separate(rois.map{ case pair@(roi, _) => groupIds.get(roi.time).toRight(pair).map(_ -> pair) })
+                    groupless.nonEmpty.either(
+                        s"${groupless.length} ROIs without value declared in grouping. ${groupless.map(_._1.time).toSet.size} undeclared timepoints: ${groupless.map(_._1.time).toSet}", 
+                        buildNeighborsLookupKeyed(getPoint)(keyedRois, minDist)
+                        )
+                }
             }
-        repeatedFrames.isEmpty.either(
-            s"${repeatedFrames.size} repeated frame(s): $repeatedFrames", 
-            {
-                val neighborsByRoi = buildNeighborsLookup((_: (Roi, NonnegativeInt))._1.centroid)(rois, minDist)((r, _) => groupIds.get(r.time))
-                neighborsByRoi.map{ case ((_, idx), indexedNeighbors) => idx -> indexedNeighbors.map(_._2) }
-            }
-            )
+        groupedRoiIdxPairs.map(_.map{ case ((_, idx), indexedNeighbors) => idx -> indexedNeighbors.map(_._2) })
     }
 
     def rowToRoi(row: CsvRow): ErrMsgsOr[Roi] = {

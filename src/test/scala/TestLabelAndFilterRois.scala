@@ -11,4 +11,6 @@ class TestLabelAndFilterRois extends AnyFunSuite, GenericSuite, ScalacheckSuite,
     test("Spot distance comparison uses drift correction.") { pending }
     test("Spot distance comparison responds to change of proximity comparison strategy.") { pending }
     test("In each pair of proximal spots, BOTH are filtered. #148") { pending }
+    test("Probe grouping must partition regional barcode frames: A probe grouping declaration that does not cover regional barcodes set is an error.") { pending }
+    test("Probe grouping must partition regional barcode frames: A probe grouping declaration with an overlap (probe/frame repeated between groups) an error.") { pending }
 end TestLabelAndFilterRois

@@ -58,6 +58,13 @@ class TestDistanceThresholds extends AnyFunSuite, LooptraceSuite, ScalacheckSuit
         }
     }
 
+    test("Piecewise proximity gets examples right.") {
+        //forAll (Table(("t", "a", "b"), (PiecewiseDistance.DisjunctiveThreshold(2.0)))) { }
+        pending
+    }
+
+    test("Euclidean proximity gets examples right.") { pending }
+
     extension [A](g: Gen[A])
         def toArbitrary: Arbitrary[A] = Arbitrary(g)
 
