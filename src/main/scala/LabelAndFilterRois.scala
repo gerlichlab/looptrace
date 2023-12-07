@@ -8,12 +8,12 @@ import cats.data.Validated.Valid
 import cats.syntax.all.*
 import mouse.boolean.*
 
-import scopt.{ OParser, Read }
+import scopt.{ OParser }
 import com.github.tototoshi.csv.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.{ fromJsonThruInt, safeExtract, readJsonFile }
-import at.ac.oeaw.imba.gerlich.looptrace.space.{ Coordinate, EuclideanDistance, Metric, Point3D, XCoordinate, YCoordinate, ZCoordinate }
+import at.ac.oeaw.imba.gerlich.looptrace.space.{ Coordinate, DistanceThreshold, EuclideanDistance, PiecewiseDistance, Point3D, ProximityComparable, XCoordinate, YCoordinate, ZCoordinate }
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
 
 /**
@@ -26,20 +26,53 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
 object LabelAndFilterRois:
     val ProgramName = "LabelAndFilterRois"
 
+    /* Type aliases */
     type LineNumber = NonnegativeInt
     type PosInt = PositiveInt
     type Timepoint = FrameIndex
     
+    /* Distinguish, at the type level, the semantic meaning of each output target. */
     opaque type FilteredOutputFile <: os.Path = os.Path
     opaque type UnfilteredOutputFile <: os.Path = os.Path
 
+    // Delimiter between fields within a multi-valued field (i.e., multiple values in 1 CSV column)
     val MultiValueFieldInternalSeparator = "|"
 
-    case class CliConfig(
+    /** How a threshold on spot separation is to be used/interpreted/implemented */
+    enum ThresholdSemantic:
+        case Euclidean, EachAxis
+    end ThresholdSemantic
+
+    /** Helpers for working with spot separation semantic values */
+    object ThresholdSemantic:
+        /** How to parse a spot separation semantic from a command-line argument */
+        given readForDistanceThresholdSemantic: scopt.Read[ThresholdSemantic] = scopt.Read.reads(
+            (_: String) match {
+                case ("Euclidean" | "EUCLIDEAN" | "euclidean" | "eucl" | "EUCL" | "euc" | "EUC") => Euclidean
+                case ("each" | "EACH" | "axis" | "AXIS" | "EachAxis" | "PIECEWISE" | "Piecewise") => EachAxis
+                case s => throw new IllegalArgumentException(s"Cannot parse as threshold semantic: $s")
+            }
+        )
+    end ThresholdSemantic
+    
+    /**
+      * The command-line configuration/interface definition
+      *
+      * @param spotsFile Path to the (enriched, filtered) traces file to label and filter
+      * @param driftFile Path to the file with drift correction information for all ROIs, across all timepoints
+      * @param probeGroups Specification of which regional barcode probes 
+      * @param minSpotSeparation
+      * @param spotSeparationThresholdType
+      * @param unfilteredOutputFile
+      * @param filteredOutputFile
+      * @param extantOutputHandler
+      */
+    final case class CliConfig(
         spotsFile: os.Path = null, // unconditionally required
         driftFile: os.Path = null, // unconditionally required
         probeGroups: List[ProbeGroup] = null, // unconditionally required
-        minSpotSeparation: NonnegativeReal = NonnegativeReal(0), // unconditionally required
+        spotSeparationThresholdValue: NonnegativeReal = NonnegativeReal(0), // unconditionally required
+        spotSeparationThresholdType: ThresholdSemantic = null, // unconditionally required
         unfilteredOutputFile: UnfilteredOutputFile = null, // unconditionally required
         filteredOutputFile: FilteredOutputFile = null, // unconditionally required
         extantOutputHandler: ExtantOutputHandler = null, // unconditionally required
@@ -49,17 +82,18 @@ object LabelAndFilterRois:
 
     def main(args: Array[String]): Unit = {
         import ScoptCliReaders.given
+        import ThresholdSemantic.given
         import parserBuilder.*
 
-        given readProbeGroups: Read[List[ProbeGroup]] = {
+        given readProbeGroups: scopt.Read[List[ProbeGroup]] = {
             def readAsEmpty[A]: String => Either[String, List[A]] = arg => arg match {
                 case "NONE" => List.empty[A].asRight
                 case _ => s"Cannot parse argument as specification of empty list: $arg".asLeft
             }
             val readAsFile = (s: String) => 
-                Try{ readJsonFile[List[ProbeGroup]](summon[Read[os.Path]].reads(s)) }.toEither.leftMap(_.getMessage)
+                Try{ readJsonFile[List[ProbeGroup]](summon[scopt.Read[os.Path]].reads(s)) }.toEither.leftMap(_.getMessage)
             val readAsMap = (s: String) => {
-                Try{ summon[Read[Map[Int, Int]]].reads(s) }
+                Try{ summon[scopt.Read[Map[Int, Int]]].reads(s) }
                     .toEither
                     .leftMap(_.getMessage)
                     .flatMap(
@@ -82,12 +116,12 @@ object LabelAndFilterRois:
                         }
                     )
             }
-            Read.reads{ s => 
+            scopt.Read.reads{ arg => 
                 // Preserve the first successful result and return it, otherwise accumulate the error messages.
                 // So start with an empty list as a Left, then add error messages while staying in Left, or preserving the value in Right.
                 // TODO: try to replace this with a defined structure, something like Validated + Alternative in Haskell.
                 List(readAsMap, readAsFile, readAsEmpty).foldRight(Either.left[List[String], List[ProbeGroup]](List.empty[String])){ 
-                    case (safeRead, maybeResult) => maybeResult.leftFlatMap(errors => safeRead(s).leftMap(_ :: errors))
+                    case (safeRead, maybeResult) => maybeResult.leftFlatMap(errors => safeRead(arg).leftMap(_ :: errors))
                 }.fold(msgs => throw new IllegalArgumentException(s"Cannot parse arg ($arg) as probe grouping. Errors: $msgs"), identity)
             }
         }
@@ -109,10 +143,14 @@ object LabelAndFilterRois:
                 .required()
                 .action((gs, c) => c.copy(probeGroups = gs))
                 .text("Either mapping from probe ID to grouping ID, or path to JSON file (list of lists), or 'NONE' to indicate no grouping"),
-            opt[NonnegativeReal]("minSpotSeparation")
+            opt[NonnegativeReal]("spotSeparationThresholdValue")
                 .required()
-                .action((px, c) => c.copy(minSpotSeparation = px))
-                .text("Minimum number of pixels required between centroids of a pair of spots; discard otherwise"),
+                .action((d, c) => c.copy(spotSeparationThresholdValue = d))
+                .text("Minimum separation between centroids of a pair of spots, discard otherwise; contextualised by --spotSeparationThresholdType"),
+            opt[ThresholdSemantic]("spotSeparationThresholdType")
+                .required()
+                .action((s, c) => c.copy(spotSeparationThresholdType = s))
+                .text("How to use the raw numeric value given for minimum spot separation"),
             opt[UnfilteredOutputFile]("unfilteredOutputFile")
                 .required()
                 .action((f, c) => c.copy(unfilteredOutputFile = f))
@@ -129,15 +167,20 @@ object LabelAndFilterRois:
 
         OParser.parse(parser, args, CliConfig()) match {
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
-            case Some(opts) => workflow(
-                spotsFile = opts.spotsFile, 
-                driftFile = opts.driftFile, 
-                probeGroups = opts.probeGroups, 
-                minSpotSeparation = opts.minSpotSeparation, 
-                unfilteredOutputFile = opts.unfilteredOutputFile,
-                filteredOutputFile = opts.filteredOutputFile, 
-                extantOutputHandler = opts.extantOutputHandler
-                )
+            case Some(opts) => 
+                val threshold: DistanceThreshold = opts.spotSeparationThresholdType match {
+                    case ThresholdSemantic.EachAxis => PiecewiseDistance.DisjunctiveThreshold(opts.spotSeparationThresholdValue)
+                    case ThresholdSemantic.Euclidean => EuclideanDistance.Threshold(opts.spotSeparationThresholdValue)
+                }
+                workflow(
+                    spotsFile = opts.spotsFile, 
+                    driftFile = opts.driftFile, 
+                    probeGroups = opts.probeGroups, 
+                    minSpotSeparation = threshold, 
+                    unfilteredOutputFile = opts.unfilteredOutputFile,
+                    filteredOutputFile = opts.filteredOutputFile, 
+                    extantOutputHandler = opts.extantOutputHandler
+                    )
         }
     }
 
@@ -145,7 +188,7 @@ object LabelAndFilterRois:
         spotsFile: os.Path, 
         driftFile: os.Path, 
         probeGroups: List[ProbeGroup],
-        minSpotSeparation: NonnegativeReal, 
+        minSpotSeparation: DistanceThreshold, 
         unfilteredOutputFile: UnfilteredOutputFile, 
         filteredOutputFile: FilteredOutputFile, 
         extantOutputHandler: ExtantOutputHandler
@@ -199,15 +242,11 @@ object LabelAndFilterRois:
         
         /* For each ROI (by line number), look up its (too-proximal, according to distance threshold) neighbors. */
         println("Building neighbors lookup")
+        // TODO: allow empty grouping here. https://github.com/gerlichlab/looptrace/issues/147
         val lookupNeighbors: LineNumber => Option[NonEmptySet[LineNumber]] = (probeGroups.toNel match {
-            case None => { (_: LineNumber) => None }.asRight
+            case None => { (_: LineNumber) => None }.asRight // Never any proximal neighbors if no groups defined.
             case Some(groups) => 
-                // Use the drift-corrected centroid of each ROI as the basis for evaluation of whether it's too proximal to other points.
-                given met: Metric[(Roi, LineNumber), EuclideanDistance, EuclideanDistance.Threshold] = EuclideanDistance.getMetric{
-                    case (roi, _) => 
-                        val drift = driftByPosTimePair(roi.position -> roi.time)
-                        shiftPoint(drift.coarse)(roi.centroid)
-                }
+                // TODO: allow empty grouping here. https://github.com/gerlichlab/looptrace/issues/147
                 buildNeighboringRoisFinder(rowRoiPairs.map{ case ((_, roi), idx) => roi -> idx}, minSpotSeparation)(groups).map(_.get)
         }).fold(errMsg => throw new Exception(errMsg), identity)
 
@@ -255,20 +294,25 @@ object LabelAndFilterRois:
 
     final case class Roi(index: RoiIndex, position: String, time: FrameIndex, channel: Channel, centroid: Point3D, boundingBox: BoundingBox)
 
-    def buildNeighborsLookup[A : Order, B : Eq, D, T](things: Iterable[A], minDist: T)(key: A => Option[B])(using met: Metric[A, D, T]): Map[A, NonEmptySet[A]] = {
+    def buildNeighborsLookup[A : Order, B : Eq, D](getPoint: A => Point3D)(things: Iterable[A], minDist: DistanceThreshold)(key: A => Option[B]): Map[A, NonEmptySet[A]] = {
+        import ProximityComparable.proximal
+        given proxComp: ProximityComparable[A] = DistanceThreshold.defineProximityPointwise(minDist)(getPoint)
+        // Find all pairs of values more within the threshold of proximity w.r.t. one another.
         val closePairs: List[(A, A)] = things.groupBy(key).filter(_._1.nonEmpty).values.toList.flatMap(_.toList.combinations(2).flatMap{
-            case a1 :: a2 :: Nil => met.within(minDist)(a1, a2).option(a1 -> a2)
+            case a1 :: a2 :: Nil => (a1 `proximal` a2).option(a1 -> a2)
             case xs => throw new Exception(s"${xs.length} (not 2!) element(s) when taking pairwise combinations")
         })
+        // BIDIRECTIONALLY add the pair to the mapping, as we need the redundancy in order to remove BOTH spots.
+        // https://github.com/gerlichlab/looptrace/issues/148
         closePairs.foldLeft(Map.empty[A, NonEmptySet[A]]){ case (acc, (a1, a2)) => 
             val v1 = acc.get(a1).fold(NonEmptySet.one[A])(_.add)(a2)
             val v2 = acc.get(a2).fold(NonEmptySet.one[A])(_.add)(a1)
             acc ++ Map(a1 -> v1, a2 -> v2)
         }
     }
-    
-    def buildNeighboringRoisFinder(rois: List[(Roi, NonnegativeInt)], minDist: NonnegativeReal)(grouping: NEL[ProbeGroup])(
-        using met: Metric[(Roi, NonnegativeInt), EuclideanDistance, EuclideanDistance.Threshold]): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
+
+    // TODO: allow empty grouping here. https://github.com/gerlichlab/looptrace/issues/147
+    def buildNeighboringRoisFinder(rois: List[(Roi, NonnegativeInt)], minDist: DistanceThreshold)(grouping: NEL[ProbeGroup]): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
         given ordByIndex: Order[Roi] = Order.by(_.index)
         val (groupIds, repeatedFrames) = NonnegativeInt.indexed(grouping.toList)
             .flatMap((g, i) => g.get.toList.map(_ -> i))
@@ -281,8 +325,7 @@ object LabelAndFilterRois:
         repeatedFrames.isEmpty.either(
             s"${repeatedFrames.size} repeated frame(s): $repeatedFrames", 
             {
-                val distanceTolerance = EuclideanDistance.Threshold(minDist)
-                val neighborsByRoi = buildNeighborsLookup(rois, distanceTolerance)((r, _) => groupIds.get(r.time))
+                val neighborsByRoi = buildNeighborsLookup((_: (Roi, NonnegativeInt))._1.centroid)(rois, minDist)((r, _) => groupIds.get(r.time))
                 neighborsByRoi.map{ case ((_, idx), indexedNeighbors) => idx -> indexedNeighbors.map(_._2) }
             }
             )
