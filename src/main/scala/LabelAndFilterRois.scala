@@ -357,7 +357,11 @@ object LabelAndFilterRois:
                 then s"${repeatedFrames.size} repeated frame(s): $repeatedFrames".asLeft
                 else {
                     // TODO: check that the union of the (now checked as disjoint) equivalence classes implied by the probe groupings cover the set of regional barcodes frames.
-                    val (groupless, keyedRois) = Alternative[List].separate(rois.map{ case pair@(roi, _) => groupIds.get(roi.time).toRight(pair).map(_ -> pair) })
+                    val (groupless, keyedRois) = Alternative[List].separate(rois.map{ case pair@(roi, _) => 
+                        groupIds.get(roi.time)
+                            .toRight(pair)
+                            .map(groupIndex => ((roi.position, groupIndex), pair))
+                    })
                     groupless.nonEmpty.either(
                         s"${groupless.length} ROIs without value declared in grouping. ${groupless.map(_._1.time).toSet.size} undeclared timepoints: ${groupless.map(_._1.time).toSet}", 
                         buildNeighborsLookupKeyed(getPoint)(keyedRois, minDist)
