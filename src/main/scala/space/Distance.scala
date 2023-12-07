@@ -1,18 +1,69 @@
 package at.ac.oeaw.imba.gerlich.looptrace.space
 
-import scala.math.{ pow, sqrt }
-import cats.Order
+import scala.math.{ abs, pow, sqrt }
+import cats.{ Contravariant, Order }
+import cats.syntax.all.*
 import at.ac.oeaw.imba.gerlich.looptrace.{ NonnegativeInt, NonnegativeReal }
 
-/** Computing distances of type {@code S} between {@code A}s, and comparing to a value of type {@code T} */
-trait Metric[A, D, T]:
-    def distanceBetween(a1: A, a2: A): D
-    protected def within(t: T)(d: D): Boolean
-    final def within(t: T)(a1: A, a2: A): Boolean = within(t)(distanceBetween(a1, a2))
-end Metric
+/** Something that can compare two {@code A} values w.r.t. threshold value of type {@code T} */
+trait ProximityComparable[A]:
+    /** Are the two {@code A} values within threshold {@code T} of each other? */
+    def proximal: (A, A) => Boolean
+end ProximityComparable
+
+/** Helpers for working with proximity comparisons */
+object ProximityComparable:
+    extension [A](a1: A)(using ev: ProximityComparable[A])
+        infix def proximal(a2: A): Boolean = ev.proximal(a1, a2)
+
+    given contravariantForProximityComparable: Contravariant[ProximityComparable] = 
+        new Contravariant[ProximityComparable] {
+            override def contramap[A, B](fa: ProximityComparable[A])(f: B => A) = new ProximityComparable[B] {
+                override def proximal = (b1, b2) => fa.proximal(f(b1), f(b2))
+            }
+        }
+end ProximityComparable
+
+/** A threshold on distances, which should be nonnegative, to be semantically contextualised by the subtype */
+sealed trait DistanceThreshold{ def get: NonnegativeReal }
+
+/** Helpers for working with distance thresholds */
+object DistanceThreshold:
+    def defineProximityPointwise(threshold: DistanceThreshold): ProximityComparable[Point3D] = threshold match {
+        case t: EuclideanDistance.Threshold => new ProximityComparable[Point3D] {
+            override def proximal = (a, b) => 
+                val d = EuclideanDistance.between(a, b)
+                if (d.isInfinite) { throw new EuclideanDistance.OverflowException(s"Cannot compute finite distance between $a and $b") }
+                d `lt` t
+        }
+        case t: PiecewiseDistance.DisjunctiveThreshold => new ProximityComparable[Point3D] {
+            override def proximal = PiecewiseDistance.within(t)
+        }
+    }
+
+    def defineProximityPointwise[A](threshold: DistanceThreshold): (A => Point3D) => ProximityComparable[A] = 
+        defineProximityPointwise(threshold).contramap
+end DistanceThreshold
+
+/** Helpers for working with distances in by-component / piecewise fashion */
+object PiecewiseDistance:
+    /** Distance threshold in which predicate comparing values to this threshold operates disjunctively over components */
+    final case class DisjunctiveThreshold(get: NonnegativeReal) extends DistanceThreshold
+    
+    /** Are points closer than given threshold along any axis? */
+    def within(threshold: DisjunctiveThreshold)(a: Point3D, b: Point3D): Boolean = {
+        val t = threshold.get
+        (a, b) match {
+            case (
+                Point3D(XCoordinate(x1), YCoordinate(y1), ZCoordinate(z1)), 
+                Point3D(XCoordinate(x2), YCoordinate(y2), ZCoordinate(z2))
+            ) => abs(x1 - x2) < t || abs(y1 - y2) < t || abs(z1 - z2) < t
+        }
+    }
+end PiecewiseDistance
 
 /** Semantic wrapper to denote that a nonnegative real number represents a Euclidean distance */
-final case class EuclideanDistance private(get: NonnegativeReal):
+final case class EuclideanDistance private(get: NonnegativeReal) extends AnyVal:
     final def lessThan(t: EuclideanDistance.Threshold): Boolean = get < t.get
     final def lt = lessThan
     final def greaterThan = !lessThan(_: EuclideanDistance.Threshold)
@@ -21,21 +72,21 @@ final case class EuclideanDistance private(get: NonnegativeReal):
     final def eq = equalTo
     final def lteq(t: EuclideanDistance.Threshold) = lt(t) || eq(t)
     final def gteq(t: EuclideanDistance.Threshold) = gt(t) || eq(t)
+    final def isFinite = get.isFinite
+    final def isInfinite = !isFinite
 end EuclideanDistance
 
 /** Helpers for working with Euclidean distances */
 object EuclideanDistance:
     given orderForEuclDist: Order[EuclideanDistance] = Order.by(_.get)
 
-    def getMetric[A](p: A => Point3D): Metric[A, EuclideanDistance, Threshold] = 
-        new Metric[A, EuclideanDistance, Threshold] {
-            override def distanceBetween(a1: A, a2: A) = byPoints(p)(a1, a2)
-            override def within(t: Threshold)(d: EuclideanDistance) = d `lt` t
-        }
+    /** When something goes wrong with a distance computation or comparison */
+    final case class OverflowException(message: String) extends Exception(message)
 
-    final case class Threshold(get: NonnegativeReal) extends AnyVal
-
-    // TODO: account for overflow cases.
+    /** Comparison basis for Euclidean distance between points */
+    final case class Threshold(get: NonnegativeReal) extends DistanceThreshold
+    
+    // TODO: account for infinity/null-numeric cases.
     def between(a: Point3D, b: Point3D): EuclideanDistance = (a, b) match {
         case (Point3D(x1, y1, z1), Point3D(x2, y2, z2)) => 
             val d = NonnegativeReal.unsafe(
@@ -43,7 +94,7 @@ object EuclideanDistance:
             )
             new EuclideanDistance(d)
     }
-
+    
     /** Use a lens of a 3D point from arbitrary type {@code A} to compute distance between {@code A} values. */
-    def byPoints[A](p: A => Point3D) = (a1: A, a2: A) => between(p(a1), p(a2))
+    def between[A](p: A => Point3D)(a1: A, a2: A): EuclideanDistance = between(p(a1), p(a2))
 end EuclideanDistance

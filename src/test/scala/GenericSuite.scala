@@ -10,14 +10,16 @@ trait GenericSuite:
     /***********************/
     /* Arbitrary instances */
     /***********************/
-    given nonnegativeIntArbitray: Arbitrary[NonnegativeInt] = Arbitrary { genNonnegativeInt }
-    given positiveIntArbitrary: Arbitrary[PositiveInt] = Arbitrary{ genPositiveInt }
+    given nonnegativeIntArbitray: Arbitrary[NonnegativeInt] = Arbitrary(genNonnegativeInt)
+    given positiveIntArbitrary: Arbitrary[PositiveInt] = Arbitrary(genPositiveInt)
+    given nonnegativeRealArbitrary: Arbitrary[NonnegativeReal] = Arbitrary(genNonnegativeReal)
 
     /********************/
     /* Generators       */
     /********************/
     def genJsonInt: Gen[ujson.Num] = arbitrary[Int].map(ujson.Num.apply compose (_.toDouble))
     def genNonnegativeInt: Gen[NonnegativeInt] = Gen.choose(0, Int.MaxValue).map(NonnegativeInt.unsafe)
+    def genNonnegativeReal: Gen[NonnegativeReal] = Gen.choose(0.0, Double.MaxValue).map(NonnegativeReal.unsafe)
     def genPositiveInt: Gen[PositiveInt] = Gen.posNum[Int].map(PositiveInt.unsafe)
 
     /********************/
