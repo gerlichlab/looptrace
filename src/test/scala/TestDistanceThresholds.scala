@@ -8,8 +8,9 @@ import org.scalatest.matchers.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 
 /** Tests for distance thresholds */
-class TestDistanceThresholds extends AnyFunSuite, LooptraceSuite, ScalacheckSuite, should.Matchers:
+class TestDistanceThresholds extends AnyFunSuite, DistanceSuite, LooptraceSuite, ScalacheckSuite, should.Matchers:
 
+    /** Compare points in 3D space for proximity. */
     type PointProximity = ProximityComparable[Point3D]
 
     test("Positive: Disjunctive component proximity implies Euclidean proximity.") {
@@ -65,18 +66,12 @@ class TestDistanceThresholds extends AnyFunSuite, LooptraceSuite, ScalacheckSuit
 
     test("Euclidean proximity gets examples right.") { pending }
 
-    extension [A](g: Gen[A])
-        def toArbitrary: Arbitrary[A] = Arbitrary(g)
-
     extension (t: DistanceThreshold)
         def toProximityComparable: ProximityComparable[Point3D] = DistanceThreshold.defineProximityPointwise(t)
 
     extension (t: NonnegativeReal)
         def toThresholdPair = PiecewiseDistance.DisjunctiveThreshold(t) -> EuclideanDistance.Threshold(t)
     
-    // Prevent overflow in Euclidean.
-    private def genReasonableCoordinate: Gen[Double] = Gen.choose(-1e16, 1e16)
-
     private def minDistPiecewise(a: Point3D, b: Point3D): Double = 
         List(a.x.get - b.x.get, a.y.get - b.y.get, a.z.get - b.z.get).map(abs).sorted.head
 end TestDistanceThresholds
