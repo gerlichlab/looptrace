@@ -28,36 +28,6 @@ import scala.util.NotGiven
 object LabelAndFilterRois:
     val ProgramName = "LabelAndFilterRois"
 
-    /* Type aliases */
-    type LineNumber = NonnegativeInt
-    type PosInt = PositiveInt
-    type RoiIdxPair = (Roi, NonnegativeInt)
-    type Timepoint = FrameIndex
-    
-    /* Distinguish, at the type level, the semantic meaning of each output target. */
-    opaque type FilteredOutputFile <: os.Path = os.Path
-    opaque type UnfilteredOutputFile <: os.Path = os.Path
-
-    // Delimiter between fields within a multi-valued field (i.e., multiple values in 1 CSV column)
-    val MultiValueFieldInternalSeparator = "|"
-
-    /** How a threshold on spot separation is to be used/interpreted/implemented */
-    enum ThresholdSemantic:
-        case Euclidean, EachAxis
-    end ThresholdSemantic
-
-    /** Helpers for working with spot separation semantic values */
-    object ThresholdSemantic:
-        /** How to parse a spot separation semantic from a command-line argument */
-        given readForDistanceThresholdSemantic: scopt.Read[ThresholdSemantic] = scopt.Read.reads(
-            (_: String) match {
-                case ("Euclidean" | "EUCLIDEAN" | "euclidean" | "eucl" | "EUCL" | "euc" | "EUC") => Euclidean
-                case ("each" | "EACH" | "axis" | "AXIS" | "EachAxis" | "PIECEWISE" | "Piecewise") => EachAxis
-                case s => throw new IllegalArgumentException(s"Cannot parse as threshold semantic: $s")
-            }
-        )
-    end ThresholdSemantic
-    
     /**
       * The command-line configuration/interface definition
       *
@@ -459,8 +429,11 @@ object LabelAndFilterRois:
     }
     
     /****************************************************************************************************************
-     * Ancillary types and functions
+     * Ancillary definitions
      ****************************************************************************************************************/
+
+    // Delimiter between fields within a multi-valued field (i.e., multiple values in 1 CSV column)
+    val MultiValueFieldInternalSeparator = "|"
 
     sealed trait Direction[A : Numeric] { def get: A }
     final case class XDir[A : Numeric](get: A) extends Direction[A]
@@ -497,11 +470,32 @@ object LabelAndFilterRois:
         end Interval
     end BoundingBox
 
-    def safeReadBool = (_: String) match {
-        case "1" => true.some
-        case "0" => false.some
-        case _ => None
-    }
+    /** How a threshold on spot separation is to be used/interpreted/implemented */
+    enum ThresholdSemantic:
+        case Euclidean, EachAxis
+    end ThresholdSemantic
+
+    /** Helpers for working with spot separation semantic values */
+    object ThresholdSemantic:
+        /** How to parse a spot separation semantic from a command-line argument */
+        given readForDistanceThresholdSemantic: scopt.Read[ThresholdSemantic] = scopt.Read.reads(
+            (_: String) match {
+                case ("Euclidean" | "EUCLIDEAN" | "euclidean" | "eucl" | "EUCL" | "euc" | "EUC") => Euclidean
+                case ("each" | "EACH" | "axis" | "AXIS" | "EachAxis" | "PIECEWISE" | "Piecewise") => EachAxis
+                case s => throw new IllegalArgumentException(s"Cannot parse as threshold semantic: $s")
+            }
+        )
+    end ThresholdSemantic
+    
+    /* Type aliases */
+    type LineNumber = NonnegativeInt
+    type PosInt = PositiveInt
+    type RoiIdxPair = (Roi, NonnegativeInt)
+    type Timepoint = FrameIndex
+    
+    /* Distinguish, at the type level, the semantic meaning of each output target. */
+    opaque type FilteredOutputFile <: os.Path = os.Path
+    opaque type UnfilteredOutputFile <: os.Path = os.Path
 
     extension [A](rw: ReadWriter[List[A]])
         def toNel(context: String): ReadWriter[NEL[A]] = 
