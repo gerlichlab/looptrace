@@ -1,6 +1,6 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
-import cats.Functor
+import cats.{ Applicative, Functor }
 import org.scalacheck.{ Arbitrary, Gen }
 import org.scalacheck.Arbitrary.arbitrary
 
@@ -8,9 +8,17 @@ import org.scalacheck.Arbitrary.arbitrary
 trait ScalacheckGenericExtras:
 
     /** Define mapping operation by building new arbitrary after mapping over the instance's generator. */
-    given arbitraryFunctor: Functor[Arbitrary] with
-        def map[A, B](arb: Arbitrary[A])(f: A => B): Arbitrary[B] = 
+    given functorForArbitrary: Functor[Arbitrary] with
+        override def map[A, B](arb: Arbitrary[A])(f: A => B): Arbitrary[B] = 
             Arbitrary{ arbitrary[A](arb).map(f) }
+
+    /** Use Gen.flatMap to define {@code Applicative.ap}, and {@code Gen.const} to define {@code Applicative.pure}. */
+    given applicativeForGen: Applicative[Gen] with
+        override def pure[A](a: A) = Gen.const(a)
+        override def ap[A, B](ff: Gen[A => B])(fa: Gen[A]): Gen[B] = for {
+            f <- ff
+            a <- fa
+        } yield f(a)
 
     /** Zip together 2 arbitrary instances */
     given arbZip2[A, B](using Arbitrary[A], Arbitrary[B]): Arbitrary[(A, B)] = Arbitrary{
@@ -30,12 +38,13 @@ trait ScalacheckGenericExtras:
     }
 
     /** Add nicer syntax to arbitrary instances. */
-    implicit class ArbitraryOps[A](arb: Arbitrary[A]):
+    extension [A](arb: Arbitrary[A])
         def gen: Gen[A] = arb.arbitrary
         infix def suchThat(p: A => Boolean): Arbitrary[A] = Arbitrary{ gen `suchThat` p }
 
     /** Add nicer syntax to generators. */
-    implicit class GeneratorOps[A](g: Gen[A]):
+    extension [A](g: Gen[A])
+        def toArbitrary: Arbitrary[A] = Arbitrary(g)
         infix def zipWith[B](b: B): Gen[(A, B)] = g.map(_ -> b)
 
 end ScalacheckGenericExtras
