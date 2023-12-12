@@ -197,8 +197,13 @@ package object looptrace {
         def fromExtension(ext: String): Option[Delimiter] = Delimiter.values.filter(_.ext === ext).headOption
     end Delimiter
     
+    /** Type wrapper around the index of an imaging channel */
     final case class Channel(get: NonnegativeInt) extends AnyVal
+    
+    /** Helpers for working with the representation of an imaging channel */
     object Channel:
+        /** Order channels by the wrapped value. */
+        given orderForChannel: Order[Channel] = Order.by(_.get)
         def fromInt = NonnegativeInt.either.fmap(_.map(Channel.apply))
         def unsafe = NonnegativeInt.unsafe `andThen` Channel.apply
     end Channel
@@ -233,7 +238,7 @@ package object looptrace {
 
     final case class RoiIndex(get: NonnegativeInt) extends AnyVal
     object RoiIndex:
-        given ordForRoiIndex: Order[RoiIndex] = Order.by(_.get)
+        given orderForRoiIndex: Order[RoiIndex] = Order.by(_.get)
         given showForRoiIndex: Show[RoiIndex] = Show.show(_.get.show)
         def fromInt = NonnegativeInt.either.fmap(_.map(RoiIndex.apply))
         def unsafe = NonnegativeInt.unsafe.andThen(RoiIndex.apply)

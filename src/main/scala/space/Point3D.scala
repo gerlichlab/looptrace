@@ -1,6 +1,7 @@
 package at.ac.oeaw.imba.gerlich.looptrace.space
 
 import scala.util.Try
+import cats.Order
 import cats.data.{ NonEmptyList as NEL }
 import cats.syntax.either.*
 import upickle.default.*
@@ -25,6 +26,9 @@ object CoordinateSequence:
 /** Helpers for working with points in 3D space */
 object Point3D:
     import CoordinateSequence.*
+
+    /** Order component-wise, (z, y, x) */
+    given orderForPoint3D: Order[Point3D] = Order.by(pt => (pt.z, pt.y, pt.x))
 
     /** Try to parse a list of coordinates into a point, failing if wrong dimensionality. */
     def fromList(coordseq: CoordinateSequence)(pt: List[Double]): Either[String, Point3D] = {
