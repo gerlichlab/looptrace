@@ -372,7 +372,7 @@ class SpotPicker:
 
         # Fetch some settings.        
         try:
-            subtract_beads = self.config['subtract_crosstalk']
+            subtract_beads = self.config[CROSSTALK_SUBTRACTION_KEY]
             crosstalk_ch = self.config['crosstalk_ch']
         except KeyError: #Legacy config.
             subtract_beads = False
