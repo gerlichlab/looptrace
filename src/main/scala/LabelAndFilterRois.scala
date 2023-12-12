@@ -2,9 +2,10 @@ package at.ac.oeaw.imba.gerlich.looptrace
 
 import scala.util.{ Failure, Success, Try }
 import upickle.default.*
-import cats.{ Alternative, Eq, Functor, Order }
+import cats.{ Alternative, Eq, Functor, Monoid, Order }
 import cats.data.{ NonEmptyList as NEL, NonEmptyMap, NonEmptySet, ValidatedNel }
 import cats.data.Validated.Valid
+import cats.instances.tuple.*
 import cats.syntax.all.*
 import mouse.boolean.*
 
@@ -15,6 +16,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.{ fromJsonThruInt, safeExtract, readJsonFile }
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ Coordinate, DistanceThreshold, EuclideanDistance, PiecewiseDistance, Point3D, ProximityComparable, XCoordinate, YCoordinate, ZCoordinate }
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
+import scala.util.NotGiven
 
 /**
  * Measure data across all timepoints in the regions identified during spot detection.
@@ -304,7 +306,7 @@ object LabelAndFilterRois:
 
     /** Representation of a single record from the regional barcode spots detection */
     final case class Roi(index: RoiIndex, position: String, time: FrameIndex, channel: Channel, centroid: Point3D, boundingBox: BoundingBox)
-
+        
     /**
       * Construct a mapping from single record to collection of proximal neighbors, for filtration
       *
@@ -331,19 +333,41 @@ object LabelAndFilterRois:
         }
     }
 
-    def buildNeighborsLookupKeyed[A : Order, K : Order, D](getPoint: A => Point3D)(kvPairs: Iterable[(K, A)], minDist: DistanceThreshold): Map[A, NonEmptySet[A]] = {
+    /**
+      * Create a mapping from item to other items within given distance threshold of that item.
+      * 
+      * An item is not considered its own neigbor, and this is omitting from the result any item with no proximal neighbors.
+      *
+      * @tparam A The type items of interest, for which to compute sets of proximal neighbors
+      * @tparam K The type of value on which to group the items
+      * @param getPoint How to get a point in 3D space from each arbitrary item
+      * @param kvPairs The pairs of keying value and actual item
+      * @param minDist The threshold distance by which to define two points as proximal
+      * @return A mapping from item to set of proximal (closer than given distance threshold) neighbors, omitting each item with no neighbors
+      */
+    def buildNeighborsLookupKeyed[A : Order, K : Order](getPoint: A => Point3D)(kvPairs: Iterable[(K, A)], minDist: DistanceThreshold): Map[A, NonEmptySet[A]] = {
         // In the reduction, we don't care if on collision the Semigroup instance for Map will combine values or will overwrite them, 
         // since the partition on keys here guarantees no collisions between resulting submaps that are being combined.
-        kvPairs.groupBy(_._1).values.map{ subKVs => buildNeighborsLookupFlat(getPoint)(subKVs.map(_._2), minDist) }.reduce(_ |+| _)
+        Monoid.combineAll(kvPairs.groupBy(_._1).values.map{ subKVs => buildNeighborsLookupFlat(getPoint)(subKVs.map(_._2), minDist) })
     }
 
-    // TODO: allow empty grouping here. https://github.com/gerlichlab/looptrace/issues/147
+    /**
+      * Create a mapping from record number (ROI) to set of record numbers encoding neighboring ROIs.
+      * 
+      * A ROI is not considered its own neigbor, and this is omitting from the result any item with no proximal neighbors.
+      * 
+      * @param rois Pair of {@code Roi} and its record number (0-based) from a CSV file
+      * @param minDist The threshold on distance, beneath which two points are to be considered proximal
+      * @param grouping The grouping of regional barcode timepoint/frame/probe indices, optional
+      * @return A mapping from item to set of proximal (closer than given distance threshold) neighbors, omitting each item with no neighbors; 
+      *         otherwise, a {@code Left}-wrapped error message about what went wrong
+      */
     def buildNeighboringRoisFinder(rois: List[RoiIdxPair], minDist: DistanceThreshold)(grouping: List[ProbeGroup]): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
-        given ordByIndex: Order[Roi] = Order.by(_.index)
+        given orderForRoiIdxPair: Order[RoiIdxPair] = Order.by(_._2)
         val getPoint = (_: RoiIdxPair)._1.centroid
         val groupedRoiIdxPairs: Either[String, Map[RoiIdxPair, NonEmptySet[RoiIdxPair]]] = 
             if grouping.isEmpty 
-            then buildNeighborsLookupFlat(getPoint)(rois, minDist).asRight
+            then buildNeighborsLookupKeyed(getPoint)(rois.map{ case t@(r, _) => r.position -> t }, minDist).asRight
             else {
                 val (groupIds, repeatedFrames) = NonnegativeInt.indexed(grouping)
                     .flatMap((g, i) => g.get.toList.map(_ -> i))
@@ -371,6 +395,7 @@ object LabelAndFilterRois:
         groupedRoiIdxPairs.map(_.map{ case ((_, idx), indexedNeighbors) => idx -> indexedNeighbors.map(_._2) })
     }
 
+    /** Parse a {@code ROI} value from an in-memory representation of a single line from a CSV file. */
     def rowToRoi(row: CsvRow): ErrMsgsOr[Roi] = {
         val indexNel = safeGetFromRow("", safeParseInt >>> RoiIndex.fromInt)(row)
         val posNel = safeGetFromRow("position", (_: String).asRight)(row)
@@ -391,15 +416,21 @@ object LabelAndFilterRois:
             val xMaxNel = safeGetFromRow("x_max", safeParseDouble >> XCoordinate.apply)(row)
             (zMinNel, zMaxNel, yMinNel, yMaxNel, xMinNel, xMaxNel).mapN(
                 (zMin, zMax, yMin, yMax, xMin, xMax) => BoundingBox(
-                    sideX = Interval(xMin, xMax),
-                    sideY = Interval(yMin, yMax),
-                    sideZ = Interval(zMin, zMax)
+                    sideX = BoundingBox.Interval(xMin, xMax),
+                    sideY = BoundingBox.Interval(yMin, yMax),
+                    sideZ = BoundingBox.Interval(zMin, zMax)
                 )
             )
         }
         (indexNel, posNel, timeNel, channelNel, centroidNel, bboxNel).mapN(Roi.apply).toEither
     }
     
+    /** 
+     * Try to arse a single line of a CSV file to a representation of a drift correction record.
+     * 
+     * @param row The simply-parsed (all {@code String}) representation of a line from a CSV
+     * @return Either a {@code Left}-wrapped nonempty collection of error messages, or a {@code Right}-wrapped record
+     */
     def rowToDriftRecord(row: CsvRow): ErrMsgsOr[DriftRecord] = {
         val posNel = safeGetFromRow("position", (_: String).asRight)(row)
         val timeNel = safeGetFromRow("frame", safeParseInt >>> FrameIndex.fromInt)(row)
@@ -418,7 +449,8 @@ object LabelAndFilterRois:
         (posNel, timeNel, coarseDriftNel, fineDriftNel).mapN(DriftRecord.apply).toEither
     }
 
-    def safeParseIntLike = safeParseDouble >>> tryToInt
+    /** Try to read an integer from a string, failing if it's non-numeric or if conversion to {@code Int} would be lossy. */
+    def safeParseIntLike: String => Either[String, Int] = safeParseDouble >>> tryToInt
 
     /** Shift a point by a particular coarse drift correction. */
     def shiftPoint(drift: CoarseDrift)(point: Point3D) = (drift, point) match { 
@@ -449,11 +481,21 @@ object LabelAndFilterRois:
     
     final case class Box(x: DimX, y: DimY, z: DimZ)
     
-    final case class Interval[C <: Coordinate](lo: C, hi: C):
-        require(lo < hi, s"Lower bound not less than upper bound: ($lo, $hi)")
-    end Interval
-    
-    final case class BoundingBox(sideX: Interval[XCoordinate], sideY: Interval[YCoordinate], sideZ: Interval[ZCoordinate])
+    final case class BoundingBox(sideX: BoundingBox.Interval[XCoordinate], sideY: BoundingBox.Interval[YCoordinate], sideZ: BoundingBox.Interval[ZCoordinate])
+
+    object BoundingBox:
+        given orderForBoundingBox: Order[BoundingBox] = Order.by{ 
+            case BoundingBox(
+                BoundingBox.Interval(XCoordinate(loX), XCoordinate(hiX)), 
+                BoundingBox.Interval(YCoordinate(loY), YCoordinate(hiY)), 
+                BoundingBox.Interval(ZCoordinate(loZ), ZCoordinate(hiZ))
+            ) => (loX, loY, loZ, hiX, hiY, hiZ)
+        }
+
+        final case class Interval[C <: Coordinate](lo: C, hi: C):
+            require(lo < hi, s"Lower bound not less than upper bound: ($lo, $hi)")
+        end Interval
+    end BoundingBox
 
     def safeReadBool = (_: String) match {
         case "1" => true.some
