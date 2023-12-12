@@ -386,7 +386,7 @@ object LabelAndFilterRois:
                             .toRight(pair)
                             .map(groupIndex => ((roi.position, groupIndex), pair))
                     })
-                    groupless.nonEmpty.either(
+                    groupless.isEmpty.either(
                         s"${groupless.length} ROIs without value declared in grouping. ${groupless.map(_._1.time).toSet.size} undeclared timepoints: ${groupless.map(_._1.time).toSet}", 
                         buildNeighborsLookupKeyed(getPoint)(keyedRois, minDist)
                         )
