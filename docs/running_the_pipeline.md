@@ -22,6 +22,8 @@ Looptrace uses a configuration file to define values for processing parameters a
 The path to the configuration file is a required parameter to [run the pipeline](#general-workflow), and it should be created (or copied and edited) before running anything.
 
 ### Requirements and suggestions
+* Check that each channel setting (often with a `_ch` or `_channel` suffix) matches what's been used in the imaging experiment which generated the data to be processed.
+* Check that `spot_wavelength` and `objective_na` have been adjusted to match the microscope and fluorophores used.
 * `analysis_path` should be an _absolute_ path but may use environment and/or user variables.
 * `analysis_path` should specify the path to a folder that exists before the pipeline is run.
 * `require_gpu` should be set to `True`.
@@ -49,8 +51,7 @@ Judge in accordance with how many beads you anticipate having per image.
     * For `sigma_xy_max`, 150 is often a good setting.
     * For `sigma_z_max`, 400 is often a good setting.
     * For `max_dist`, 800 is often a good setting.
-* Check that each channel setting (often with a `_ch` or `_channel` suffix) matches what's been used in the imaging experiment which generated the data to be processed.
-* Check that `spot_wavelength` and `objective_na` have been adjusted to match the microscope and fluorophores used.
+* If you want the Numpy arrays representing the spot images for tracing (the `*.npy` files) to be kept even after zipping, set `keep_spot_images_folder` to `True`.
 * Check that the list of `spot_frame` values corresponds to the timepoints (0-based) use for regional barcode imaging.
 * Check that the list of `frame_name` values corresponds to how you'd like the probes/frames/timepoints to be labeled.
 * Check that the list of `illegal_frames_for_trace_support` values is correct, most likely any pre-imaging timepoint names, "blank" timepoints, and all regional barcode timepoint names.
