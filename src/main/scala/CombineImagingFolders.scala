@@ -78,7 +78,7 @@ object CombineImagingFolders:
 
     def workflow(inputFolders: Iterable[os.Path], filenameFieldSep: String, extToUse: Extension, script: os.Path, targetFolder: os.Path, execute: Boolean): Unit = {
         val infolders = if (inputFolders.size < 2) then throw new IllegalArgumentException("Need at least 2 input folders!") else inputFolders.toList.toNel.get
-        prepareUpdatedTimepoints(infolders, extToUse, targetFolder) flatMap { updates => 
+        prepareUpdatedTimepoints(infolders, extToUse, filenameFieldSep = filenameFieldSep, targetFolder = targetFolder) flatMap { updates => 
             val (errors, srcDstPairs) = Alternative[List].separate(updates.toList.map(makeSrcDstPair(targetFolder, filenameFieldSep).tupled))
             errors.toNel.toLeft(srcDstPairs)
         } match {
@@ -121,11 +121,11 @@ object CombineImagingFolders:
             fn => oldPath -> (targetFolder / fn)
         )
     
-    def prepareUpdatedTimepoints(inputFolders: NEL[os.Path], extToUse: Extension, targetFolder: os.Path): 
+    def prepareUpdatedTimepoints(inputFolders: NEL[os.Path], extToUse: Extension, filenameFieldSep: String, targetFolder: os.Path): 
         Either[NEL[UnparseablePathException] | NEL[UnusableSubfolderException], List[(Timepoint, os.Path)]] = {
         val keepFile = (_: os.Path).ext === extToUse
         Alternative[List]
-            .separate(inputFolders.toList.map{ p => prepareSubfolder(keepFile)(p).map(p -> _) })
+            .separate(inputFolders.toList.map{ p => prepareSubfolder(keepFile)(p, filenameFieldSep).map(p -> _) })
             .bimap(
                 _.toNel.map(_.flatten), 
                 folderContentPairs => 
@@ -155,11 +155,11 @@ object CombineImagingFolders:
             .map(maxTime => NonnegativeInt.add(maxTime.get, NonnegativeInt(1)))
 
     /** Select files to use, and map to {@code Right}-wrapped collection of pairs of time and path, or {@code Left}-wrapped errors. */
-    def prepareSubfolder(keepFile: os.Path => Boolean)(folder: os.Path): Either[NEL[UnparseablePathException], List[(Timepoint, os.Path)]] = {
+    def prepareSubfolder(keepFile: os.Path => Boolean)(folder: os.Path, filenameFieldSep: String): Either[NEL[UnparseablePathException], List[(Timepoint, os.Path)]] = {
         val (bads, goods) = 
             Alternative[List].separate(os.list(folder).toList
                 .filter(f => os.isFile(f) && keepFile(f))
-                .map(p => Timepoint.parse(p.last).bimap(UnparseablePathException(p, _), _ -> p))
+                .map(p => Timepoint.parse(p.last, filenameFieldSep).bimap(UnparseablePathException(p, _), _._1 -> p))
             )
         bads.toNel.toLeft(goods)
     }
@@ -174,14 +174,13 @@ object CombineImagingFolders:
     }
 
     /** Change the timepoint of the given filename to the given target. */
-    def updateFileTimepoint(fn: Filename, newTime: Timepoint, sep: String): Either[String, Filename] = {
-        val fields = sep.split(fn)
-        fields.zipWithIndex.toList.flatMap{ case (s, idx) => Timepoint.parse(s).toOption.map(_ -> idx) } match {
-            case (oldTime, i) :: Nil => (oldTime =!= newTime).either(
+    def updateFileTimepoint(fn: Filename, newTime: Timepoint, filenameFieldSep: String): Either[String, Filename] = {
+        val fields = fn.split(filenameFieldSep)
+        Timepoint.parse(fn = fn, filenameFieldSep = filenameFieldSep).flatMap{ (oldTime, i) => 
+            (oldTime =!= newTime).either(
                 s"Old time matches new time! $oldTime", 
-                (fields.take(i) ++ Array(Timepoint.print(newTime)) ++ fields.takeRight(fields.length - i - 1)) mkString sep
-                )
-            case times => s"${times.length} timepoints detected from filename ($fn): $times".asLeft
+                (fields.take(i) ++ Array(Timepoint.print(newTime)) ++ fields.takeRight(fields.length - i - 1)) `mkString` filenameFieldSep
+            )
         }
     }
 
@@ -197,6 +196,14 @@ object CombineImagingFolders:
         
         def fromInt = NonnegativeInt.either >> Timepoint.apply
         
+        def parse(fn: Filename, filenameFieldSep: String): Either[String, (Timepoint, Int)] = {
+            val fields = fn.split(filenameFieldSep)
+            fields.zipWithIndex.toList.flatMap{ (s, idx) => parse(s).toOption.map(_ -> idx) } match {
+                case pair :: Nil => pair.asRight
+                case times => s"${times.length} timepoints detected from filename ($fn): $times".asLeft
+            }
+        }
+
         /** Parse timepoint from text (typically, a chunk of a delimited filename). */
         def parse(s: String): Either[String, Timepoint] = 
             // Read first to Double and then to Int, to ensure no decimal gets through via truncation.
