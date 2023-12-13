@@ -207,7 +207,8 @@ object CombineImagingFolders:
         /** Parse timepoint from text (typically, a chunk of a delimited filename). */
         def parse(s: String): Either[String, Timepoint] = 
             // Read first to Double and then to Int, to ensure no decimal gets through via truncation.
-            Try{ s.stripPrefix(Prefix).toDouble }.toEither.leftMap(_.getMessage) 
+            s.startsWith(Prefix).either(s"Timepoint parse input lacks correct prefix ($Prefix): $s", ())
+                >>= Function.const{ Try{ s.stripPrefix(Prefix).toDouble }.toEither.leftMap(_.getMessage) }
                 >>= tryToInt
                 >>= fromInt
 
