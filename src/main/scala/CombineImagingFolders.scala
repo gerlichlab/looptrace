@@ -158,7 +158,7 @@ object CombineImagingFolders:
     def prepareSubfolder(keepFile: os.Path => Boolean)(folder: os.Path): Either[NEL[UnparseablePathException], List[(Timepoint, os.Path)]] = {
         val (bads, goods) = 
             Alternative[List].separate(os.list(folder).toList
-                .filter(keepFile)
+                .filter(f => os.isFile(f) && keepFile(f))
                 .map(p => Timepoint.parse(p.last).bimap(UnparseablePathException(p, _), _ -> p))
             )
         bads.toNel.toLeft(goods)
