@@ -125,12 +125,14 @@ package object looptrace {
         inline def apply(z: Int): NonnegativeInt = 
             inline if z < 0 then compiletime.error("Negative integer where nonnegative is required!")
             else (z: NonnegativeInt)
+        def add(n1: NonnegativeInt, n2: NonnegativeInt): NonnegativeInt = unsafe(n1 + n2)
         def either(z: Int): Either[String, NonnegativeInt] = maybe(z).toRight(s"Cannot refine as nonnegative: $z")
         def indexed[A](xs: List[A]): List[(A, NonnegativeInt)] = {
             // guaranteed nonnegative by construction here
             xs.zipWithIndex.map{ case (x, i) => x -> unsafe(i) }
         }
         def maybe(z: Int): Option[NonnegativeInt] = (z >= 0).option{ (z: NonnegativeInt) }
+        def seqTo(n: NonnegativeInt): IndexedSeq[NonnegativeInt] = (0 to n).map(unsafe)
         def unsafe(z: Int): NonnegativeInt = either(z).fold(msg => throw new NumberFormatException(msg), identity)
         given nonnegativeIntOrder(using intOrd: Order[Int]): Order[NonnegativeInt] = intOrd.contramap(identity)
     end NonnegativeInt
