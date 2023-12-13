@@ -94,7 +94,7 @@ object CombineImagingFolders:
                 // TODO: handle case in which output folder doesn't yet exist.
                 checkSrcDstPairs(pairs)
                 println(s"Writing script: $script")
-                os.write(script, "#!/bin/bash" :: pairs.map((src, dst) => s"mv '$src' '$dst'\n"))
+                os.write(script, ("#!/bin/bash" :: pairs.map((src, dst) => s"mv '$src' '$dst'")).map(_ ++ "\n"))
                 if (execute) {
                     println(s"Executing ${pairs.length} moves")
                     pairs.foreach(os.move(_, _))
@@ -217,7 +217,7 @@ object CombineImagingFolders:
                 >>= tryToInt
                 >>= fromInt
 
-        def print(t: Timepoint): String = "%05d".format(t.get)
+        def print(t: Timepoint): String = Prefix ++ "%05d".format(t.get)
     end Timepoint
 
     final case class UnparseablePathException(path: os.Path, message: String) extends Throwable
