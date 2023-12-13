@@ -42,7 +42,7 @@ object CombineImagingFolders:
                     case Nil => ().asRight
                     case missing => s"${missing.length} missing input folders: $missing".asLeft
                 })
-                .text("Paths to folders to combine, single-space-separated in desired order"), 
+                .text("Paths to folders to combine, comma-separated in desired order"), 
             opt[os.Path]('O', "targetFolder")
                 .required()
                 .action((p, c) => c.copy(targetFolder = p))
@@ -77,7 +77,7 @@ object CombineImagingFolders:
     }
 
     def workflow(inputFolders: Iterable[os.Path], filenameFieldSep: String, extToUse: Extension, script: os.Path, targetFolder: os.Path, execute: Boolean): Unit = {
-        val infolders = if (inputFolders.size > 1) then throw new IllegalArgumentException("Need at least 2 input folders!") else inputFolders.toList.toNel.get
+        val infolders = if (inputFolders.size < 2) then throw new IllegalArgumentException("Need at least 2 input folders!") else inputFolders.toList.toNel.get
         prepareUpdatedTimepoints(infolders, extToUse, targetFolder) flatMap { updates => 
             val (errors, srcDstPairs) = Alternative[List].separate(updates.toList.map(makeSrcDstPair(targetFolder, filenameFieldSep).tupled))
             errors.toNel.toLeft(srcDstPairs)
@@ -86,6 +86,7 @@ object CombineImagingFolders:
                 val numErrsPreview = 3
                 throw new Exception(s"${errors.length} errors! First $numErrsPreview max: ${errors.take(numErrsPreview)}")
             case Right(pairs) => 
+                // TODO: handle case in which output folder doesn't yet exist.
                 checkSrcDstPairs(pairs)
                 println(s"Writing script: $script")
                 os.write(script, "#!/bin/bash" :: pairs.map((src, dst) => s"mv $src $dst\n"))
