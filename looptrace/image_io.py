@@ -199,18 +199,23 @@ def stack_nd2_to_dask(folder: str, position_id: int = None):
     metadata = {}
     
     with nd2.ND2File(image_files[0]) as sample:
-        metadata['voxel_size'] = [sample.voxel_size().z, sample.voxel_size().y, sample.voxel_size().x]
+        voxels = sample.voxel_size()
+        metadata['voxel_size'] = [voxels.z, voxels.y, voxels.x]
+        microscope = sample.metadata.channels[0].microscope
         metadata['microscope'] = {
-                    'objectiveMagnification': sample.metadata.channels[0].microscope.objectiveMagnification,
-                    'objectiveName': sample.metadata.channels[0].microscope.objectiveName,
-                    'objectiveNumericalAperture':sample.metadata.channels[0].microscope.objectiveNumericalAperture,
-                    'zoomMagnification': sample.metadata.channels[0].microscope.zoomMagnification,
-                    'immersionRefractiveIndex': sample.metadata.channels[0].microscope.immersionRefractiveIndex,
-                    'modalityFlags': sample.metadata.channels[0].microscope.modalityFlags}
+            'objectiveMagnification': microscope.objectiveMagnification,
+            'objectiveName': microscope.objectiveName,
+            'objectiveNumericalAperture':microscope.objectiveNumericalAperture,
+            'zoomMagnification': microscope.zoomMagnification,
+            'immersionRefractiveIndex': microscope.immersionRefractiveIndex,
+            'modalityFlags': microscope.modalityFlags
+            }
         for channel in sample.metadata.channels:
-            metadata['channel_'+str(channel.channel.index)] = {'name': channel.channel.name,
-                                    'emissionLambdaNm': channel.channel.emissionLambdaNm,
-                                    'excitationLambdaNm': channel.channel.excitationLambdaNm}
+            metadata['channel_' + str(channel.channel.index)] = {
+                'name': channel.channel.name,
+                'emissionLambdaNm': channel.channel.emissionLambdaNm,
+                'excitationLambdaNm': channel.channel.excitationLambdaNm,
+                }
 
     #print(image_folders)
     pos_stack = []
