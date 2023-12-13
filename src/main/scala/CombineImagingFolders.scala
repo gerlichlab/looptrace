@@ -78,7 +78,12 @@ object CombineImagingFolders:
 
     def workflow(inputFolders: Iterable[os.Path], filenameFieldSep: String, extToUse: Extension, script: os.Path, targetFolder: os.Path, execute: Boolean): Unit = {
         val infolders = if (inputFolders.size < 2) then throw new IllegalArgumentException("Need at least 2 input folders!") else inputFolders.toList.toNel.get
-        prepareUpdatedTimepoints(infolders, extToUse, filenameFieldSep = filenameFieldSep, targetFolder = targetFolder) flatMap { updates => 
+        prepareUpdatedTimepoints(
+            infolders, 
+            extToUse = extToUse, 
+            filenameFieldSep = filenameFieldSep, 
+            targetFolder = targetFolder
+        ) flatMap { updates => 
             val (errors, srcDstPairs) = Alternative[List].separate(updates.toList.map(makeSrcDstPair(targetFolder, filenameFieldSep).tupled))
             errors.toNel.toLeft(srcDstPairs)
         } match {
@@ -89,7 +94,7 @@ object CombineImagingFolders:
                 // TODO: handle case in which output folder doesn't yet exist.
                 checkSrcDstPairs(pairs)
                 println(s"Writing script: $script")
-                os.write(script, "#!/bin/bash" :: pairs.map((src, dst) => s"mv $src $dst\n"))
+                os.write(script, "#!/bin/bash" :: pairs.map((src, dst) => s"mv '$src' '$dst'\n"))
                 if (execute) {
                     println(s"Executing ${pairs.length} moves")
                     pairs.foreach(os.move(_, _))
