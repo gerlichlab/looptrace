@@ -110,17 +110,16 @@ class ImageHandler:
         return {(obj["position"], obj["frame"]) for obj in data}
 
     @property
-    def decon_input_name(self) -> Optional[str]:
-        return self.config.get('decon_input_name')
+    def decon_input_name(self) -> str:
+        return self.config['decon_input_name']
     
     @property
-    def decon_output_name(self) -> Optional[str]:
-        return self.config.get('decon_output_name')
+    def decon_output_name(self) -> str:
+        return self.config['decon_output_name']
 
     @property
     def decon_output_path(self) -> Optional[str]:
-        outname = self.decon_output_name
-        return outname and os.path.join(self.image_save_path, outname)
+        return os.path.join(self.image_save_path, self.decon_output_name)
 
     @property
     def drift_corrected_all_timepoints_rois_file(self) -> Path:
