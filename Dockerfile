@@ -16,7 +16,7 @@ RUN apt-get update -y && \
     update-alternatives --config gcc && \
     apt-get install git wget libz-dev libbz2-dev liblzma-dev -y && \
     apt-get install cuda-compat-11-4 -y && \
-    apt-get install openjdk-17-jre -y && \
+    apt-get install openjdk-19-jre-headless -y && \
     apt-get install r-base -y && \
     R -e "install.packages(c('argparse', 'data.table', 'ggplot2', 'reshape2', 'stringi'), dependencies=TRUE, repos='http://cran.rstudio.com/')" && \
     apt-get install vim -y

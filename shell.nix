@@ -1,8 +1,8 @@
 {
   pkgs ? import (builtins.fetchGit {
     url = "https://github.com/NixOS/nixpkgs/";
-    ref = "nixos-23.05";
-    rev = "4ecab3273592f27479a583fb6d975d4aba3486fe";
+    ref = "nixos-23.11";
+    rev = "0a7b3c727a888ac4d1409c46fa2bffb25cb0ee90";
   }) {}, 
   pipeline ? false,
   analysis ? false, 
@@ -11,7 +11,7 @@
   pyDev ? true, 
   scalaDev ? true, 
   absolutelyOnlyR ? false,
-  jdk ? "jdk17",
+  jdk ? "jdk19_headless",
 }:
 let baseBuildInputs = with pkgs; [ poetry stdenv.cc.cc.lib zlib ] ++ [ pkgs.${jdk} ];
     py310 = pkgs.python310.withPackages (ps: with ps; [ numpy pandas ]);
