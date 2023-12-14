@@ -84,7 +84,9 @@ object CombineImagingFolders:
             filenameFieldSep = filenameFieldSep, 
             targetFolder = targetFolder
         ) flatMap { updates => 
-            val (errors, srcDstPairs) = Alternative[List].separate(updates.toList.map(makeSrcDstPair(targetFolder, filenameFieldSep).tupled))
+            val (errors, srcDstPairs) = 
+                if updates.isEmpty then List() -> List() 
+                else Alternative[List].separate(updates.toList.map(makeSrcDstPair(targetFolder, filenameFieldSep).tupled))
             errors.toNel.toLeft(srcDstPairs)
         } match {
             case Left(errors) => 
@@ -138,14 +140,23 @@ object CombineImagingFolders:
                         folderContentPairs.map{ (subfolder, contents) => 
                             ensureNonemptyAndContinuous(contents).bimap(
                                 UnparseablePathException(subfolder, _), 
-                                n => contents.map(_.leftMap(t => Timepoint(NonnegativeInt.add(n, t.get))))
+                                _ -> contents
                                 )
                         }
                     )
                     unusables.toNel.toLeft(prepped)
             ) match {
-                case (Some(errors), _) => errors.asLeft
-                case (None, nested) => nested.map(_.flatten)
+                case (Some(unusableSubfolderErrors), _) => unusableSubfolderErrors.asLeft
+                case (None, preppedSubfolders) => preppedSubfolders.map{
+                    case Nil => Nil
+                    case (_, result) :: Nil => result
+                    case subs@((n1, first) :: rest) => rest.foldLeft(n1 -> first.toVector){
+                        case ((accCount, timePathPairs), (n, sub)) => 
+                            val newCount = NonnegativeInt.add(accCount, n)
+                            val newPairs = timePathPairs ++ sub.map(_.leftMap(t => Timepoint(NonnegativeInt.add(t.get, accCount))))
+                            newCount -> newPairs
+                    }._2.toList
+                }
             }
     }
 
