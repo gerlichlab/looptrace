@@ -25,7 +25,7 @@ RUN apt-get update -y && \
 RUN mkdir /looptrace
 WORKDIR /looptrace
 COPY . /looptrace
-RUN mv /looptrace/target/scala-3.3.0/looptrace-assembly-0.2.0-SNAPSHOT.jar /looptrace/looptrace
+RUN mv /looptrace/target/scala-3.3.1/looptrace-assembly-0.2.0-SNAPSHOT.jar /looptrace/looptrace
 
 # Install miniconda.
 ## The installation home should be /opt/conda; if not, we need -p /path/to/install/home
