@@ -47,7 +47,12 @@ def find_config_file_errors(config_file: ExtantFile) -> List[ConfigFileError]:
         errors.append(ConfigFileError(
             f"Conversion of image folders should be specified as mapping from src to dst folder, with key {ZARR_CONVERSIONS_KEY}."
             ))
-
+    
+    errors.extend([
+        ConfigFileError(f"Missing or null value for key: {k}") 
+        for k in ("decon_input_name", "decon_output_name") if not conf_data.get(k)
+        ])
+    
     if not conf_data.get(REQ_GPU_KEY, False):
         errors.append(ConfigFileError(f"Requiring GPUs for deconvolution with key {REQ_GPU_KEY} is currently required."))
     
