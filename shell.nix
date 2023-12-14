@@ -15,7 +15,7 @@
 let baseBuildInputs = with pkgs; [ poetry stdenv.cc.cc.lib zlib ] ++ [ pkgs.${jdk} ];
     py310 = pkgs.python310.withPackages (ps: with ps; [ numpy pandas ]);
     myR = pkgs.rWrapper.override{ 
-      packages = with pkgs.rPackages; [ argparse data_table ggplot2 reshape2 stringi ] ++ 
+      packages = with pkgs.rPackages; [ argparse data_table ggplot2 stringi ] ++ 
         (if rDev then [ pkgs.rPackages.languageserver ] else [ ]);
     };
     poetryExtras = [] ++ 
