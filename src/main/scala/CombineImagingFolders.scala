@@ -228,10 +228,13 @@ object CombineImagingFolders:
         def print(t: Timepoint): String = Prefix ++ "%05d".format(t.get)
     end Timepoint
 
-    final case class UnparseablePathException(path: os.Path, message: String) extends Throwable
+    final case class UnparseablePathException(path: os.Path, message: String) 
+        extends Exception(s"$path: $message")
     
-    final case class UnusableTimepointUpdateException(path: os.Path, time: Timepoint, message: String) extends Throwable
+    final case class UnusableTimepointUpdateException(path: os.Path, time: Timepoint, message: String) 
+        extends Exception(s"($path, $time): $message")
 
-    final case class UnusableSubfolderException(path: os.Path, message: String) extends Throwable
+    final case class UnusableSubfolderException(path: os.Path, message: String) 
+        extends Exception(s"$path: $message")
 
 end CombineImagingFolders
