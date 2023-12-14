@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from looptrace import MINIMUM_SPOT_SEPARATION_KEY
+from looptrace import MINIMUM_SPOT_SEPARATION_KEY, ZARR_CONVERSIONS_KEY
 from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, get_analysis_path, simplify_path
 from looptrace.image_io import ignore_path, NPZ_wrapper, TIFF_EXTENSIONS
 from gertils import ExtantFile, ExtantFolder
@@ -211,7 +211,7 @@ class ImageHandler:
 
     @property
     def zarr_conversions(self) -> Mapping[str, str]:
-        return self.config["zarr_conversions"]
+        return self.config.get(ZARR_CONVERSIONS_KEY, dict())
 
     def load_tables(self):
         parsers = {".csv": lambda f: pd.read_csv(f, index_col=0), ".pkl": pd.read_pickle}
