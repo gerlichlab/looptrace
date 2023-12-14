@@ -1,8 +1,7 @@
 {
   pkgs ? import (builtins.fetchGit {
     url = "https://github.com/NixOS/nixpkgs/";
-    ref = "nixos-23.11";
-    rev = "0a7b3c727a888ac4d1409c46fa2bffb25cb0ee90";
+    ref = "refs/tags/23.11";
   }) {}, 
   pipeline ? false,
   analysis ? false, 
