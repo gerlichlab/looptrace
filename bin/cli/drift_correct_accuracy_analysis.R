@@ -2,7 +2,6 @@
 library("argparse")
 library("data.table")
 library("ggplot2")
-library("reshape2")
 
 # Define some key constants.
 ## Measurement names and other column names
