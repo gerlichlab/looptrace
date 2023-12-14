@@ -23,13 +23,15 @@ The path to the configuration file is a required parameter to [run the pipeline]
 
 ### Requirements and suggestions
 * Check that each channel setting (often with a `_ch` or `_channel` suffix) matches what's been used in the imaging experiment which generated the data to be processed.
-* Check that `spot_wavelength` and `objective_na` have been adjusted to match the microscope and fluorophores used.
+* `xy_nm` and `z_nm` should be adjusted to match your microscope settings (number of nanomerters per step in xy or in z).
 * `analysis_path` should be an _absolute_ path but may use environment and/or user variables.
 * `analysis_path` should specify the path to a folder that exists before the pipeline is run.
-* `require_gpu` should be set to `True`.
+* `zarr_conversions` should be a singleton mapping from subfolder in the images folder (`-I` / `--images-folder` when [running from the command-line](#general-workflow)) to new subfolder (1-to-1): the keys are names of subfolders with raw image files (e.g., `.nd2`), and each value will be the new folder with that image data, just reformatted as `.zarr`.
+* Check that `spot_wavelength` and `objective_na` have been adjusted to match the microscope and fluorophores used.
 * `decon_psf` should be set to `gen`.
-* `xy_nm` and `z_nm` should be adjusted to match your microscope settings (number of nanomerters per step in xy or in z).
-* `reg_input_template` and `reg_input_moving` should likely match and should correspond to adding a `_decon` suffix to the value of `decon_input_name`.
+* `require_gpu` should be set to `True`.
+* `decon_input_name` should likely be the single value in the `zarr_conversions` mapping.
+* `reg_input_template` and `reg_input_moving` should likely match each other and should correspond to adding a `_decon` suffix to the value of `decon_input_name`.
 * `reg_ref_frame` should be set to something approximately equal to the middle of the imaging timecourse (i.e, midway between first and last timepoint).
 * `bead_points` should be set to 100 or 200 (number of beads to use for drift correction).
 Having bead count fewer than the value will impede processing, but higher values _may_ given a bit better drift correction.
