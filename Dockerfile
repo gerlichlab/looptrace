@@ -16,7 +16,6 @@ RUN apt-get update -y && \
     update-alternatives --config gcc && \
     apt-get install git wget libz-dev libbz2-dev liblzma-dev -y && \
     apt-get install cuda-compat-11-4 -y && \
-    apt-get install openjdk-19-jre-headless -y && \
     apt-get install r-base -y && \
     R -e "install.packages(c('argparse', 'data.table', 'ggplot2', 'reshape2', 'stringi'), dependencies=TRUE, repos='http://cran.rstudio.com/')" && \
     apt-get install vim -y
@@ -26,6 +25,12 @@ RUN mkdir /looptrace
 WORKDIR /looptrace
 COPY . /looptrace
 RUN mv /looptrace/target/scala-3.3.1/looptrace-assembly-0.2.0-SNAPSHOT.jar /looptrace/looptrace
+
+# Install minimal Java 21 runtime, in proposed repo for Ubuntu 20 (focal) as of 2023-12-14.
+RUN /bin/bash /looptrace/setup_image/allow-proposed-repos.sh && \
+    /bin/bash /looptrace/setup_image/make-proposed-repos-selective.sh && \
+    apt-get update -y && \
+    apt-get install openjdk-21-jre-headless/focal-proposed -y
 
 # Install miniconda.
 ## The installation home should be /opt/conda; if not, we need -p /path/to/install/home

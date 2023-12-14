@@ -10,7 +10,7 @@
   pyDev ? true, 
   scalaDev ? true, 
   absolutelyOnlyR ? false,
-  jdk ? "jdk19_headless",
+  jdk ? "jdk21_headless",
 }:
 let baseBuildInputs = with pkgs; [ poetry stdenv.cc.cc.lib zlib ] ++ [ pkgs.${jdk} ];
     py310 = pkgs.python310.withPackages (ps: with ps; [ numpy pandas ]);
