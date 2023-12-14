@@ -192,11 +192,8 @@ object CombineImagingFolders:
     /** Change the timepoint of the given filename to the given target. */
     def updateFileTimepoint(fn: Filename, newTime: Timepoint, filenameFieldSep: String): Either[String, Filename] = {
         val fields = fn.split(filenameFieldSep)
-        Timepoint.parse(fn = fn, filenameFieldSep = filenameFieldSep).flatMap{ (oldTime, i) => 
-            (oldTime =!= newTime).either(
-                s"Old time matches new time! $oldTime", 
-                (fields.take(i) ++ Array(Timepoint.print(newTime)) ++ fields.takeRight(fields.length - i - 1)) `mkString` filenameFieldSep
-            )
+        Timepoint.parse(fn = fn, filenameFieldSep = filenameFieldSep).map{ (oldTime, i) => 
+            (fields.take(i) ++ Array(Timepoint.print(newTime)) ++ fields.takeRight(fields.length - i - 1)) `mkString` filenameFieldSep
         }
     }
 
