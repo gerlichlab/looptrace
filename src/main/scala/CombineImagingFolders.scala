@@ -96,7 +96,7 @@ object CombineImagingFolders:
                 // TODO: handle case in which output folder doesn't yet exist.
                 checkSrcDstPairs(pairs)
                 println(s"Writing script: $script")
-                os.write(script, ("#!/bin/bash" :: pairs.map((src, dst) => s"mv '$src' '$dst'")).map(_ ++ "\n"))
+                os.write(script, pairs.map((src, dst) => s"mv '$src' '$dst'\n"))
                 if (execute) {
                     println(s"Executing ${pairs.length} moves")
                     pairs.foreach(os.move(_, _))
