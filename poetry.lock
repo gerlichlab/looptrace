@@ -4616,7 +4616,7 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [extras]
 analysis = ["matplotlib", "numba", "seaborn"]
 deconvolution = ["flowdec"]
-dev = ["czifile", "matplotlib", "nd2", "numba", "pytest", "pytest-skip-slow", "seaborn", "tifffile"]
+dev = ["czifile", "joblib", "matplotlib", "nd2", "numba", "pytest", "pytest-skip-slow", "seaborn", "tifffile"]
 interactive = ["napari", "napari-plot-profile", "pyqt6"]
 legacy-support = ["imagecodecs"]
 nuclei = ["cellpose"]
@@ -4626,4 +4626,4 @@ polymer = ["numba"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "32afb676bfd85248b3612168937b6a086d0f9e622610e820c630fae437da2ec5"
+content-hash = "294ba565012b739e0bd056b78a0396ff7d9c97c00d1f26741d3dcc0dc2ce2543"
