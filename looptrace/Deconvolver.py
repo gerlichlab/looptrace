@@ -217,7 +217,7 @@ class Deconvolver:
             pos_img = self.image_handler.images[self.input_name][pos_index]
             z = create_zarr_store(path=self.output_path,
                     name = self.output_name, 
-                    pos_name = pos + '.zarr',
+                    pos_name = pos if pos.endswith(".zarr") else pos + ".zarr",
                     shape = (pos_img.shape[0], len(decon_ch) + len(non_decon_ch),) + pos_img.shape[-3:], 
                     dtype = np.uint16, 
                     chunks = (1, 1, 1, pos_img.shape[-2], pos_img.shape[-1]))
