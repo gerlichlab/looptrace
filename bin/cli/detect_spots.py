@@ -86,8 +86,7 @@ def workflow(
         print(f"Writing config JSON: {write_config_path}")
         with open(write_config_path, 'w') as fh:
             json.dump(image_handler.config, fh, indent=4)
-    array_id = os.environ.get("SLURM_ARRAY_TASK_ID")
-    S = SpotPicker(image_handler=image_handler, array_id=None if array_id is None else int(array_id))
+    S = SpotPicker(image_handler)
     return S.rois_from_spots(outfile=outfile)
 
 
