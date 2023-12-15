@@ -270,6 +270,17 @@ def generate_detection_specifications(positions: Iterable["FieldOfViewRepresenta
                 yield DetectionSpec3D(position=position_definition, frame=frame_spec, channel=ch)
 
 
+def get_drift_and_bound_and_pad(roi_min: NumberLike, roi_max: NumberLike, dim_limit: int, frame_drift: NumberLike, ref_drift: NumberLike):
+    coarse_drift = int(frame_drift) - int(ref_drift)
+    target_min = roi_min - coarse_drift
+    target_max = roi_max - coarse_drift
+    new_min = max(target_min, 0)
+    new_max = min(target_max, dim_limit)
+    pad_min = abs(min(0, target_min))
+    pad_max = abs(max(0, target_max - dim_limit))
+    return coarse_drift, new_min, new_max, pad_min, pad_max
+
+
 class SpotPicker:
     """Encapsulation of data and roles for detection of fluorescent spots in imaging data"""
     def __init__(self, image_handler):
@@ -444,7 +455,6 @@ class SpotPicker:
 
         all_rois = []
         
-        # TODO: use the proximity-filtration here, in either case (nuclear filtration or not).
         if self.config.get('spot_in_nuc', False):
             spotfile = self.image_handler.nuclei_labeled_spots_file_path
             use_roi = lambda r: r['nuc_label'] != 0
@@ -475,23 +485,20 @@ class SpotPicker:
             # https://github.com/gerlichlab/looptrace/issues/138
             Z, Y, X = self.images[pos_index][0, ch].shape[-3:]
             for _, dc_frame in sel_dc.iterrows():
-                def get_drift_and_bound_and_pad(dimname, dim_limit):
-                    coarse_drift = int(dc_frame[f"{dimname}_px_coarse"]) - int(ref_offset[f"{dimname}_px_coarse"])
-                    target_min = roi[f"{dimname}_min"] - coarse_drift
-                    target_max = roi[f"{dimname}_max"] - coarse_drift
-                    new_min = max(target_min, 0)
-                    new_max = min(target_max, dim_limit)
-                    pad_min = abs(min(0, target_min))
-                    pad_max = abs(max(0, target_max - dim_limit))
-                    return coarse_drift, new_min, new_max, pad_min, pad_max
-                
                 # min/max ensure that the slicing of the image array to make the small image for tracing doesn't go out of bounds.
                 # Padding ensures homogeneity of size of spot images to be used for tracing.
                 (
                     (z_drift_coarse, z_min, z_max, pad_z_min, pad_z_max), 
                     (y_drift_coarse, y_min, y_max, pad_y_min, pad_y_max), 
                     (x_drift_coarse, x_min, x_max, pad_x_min, pad_x_max)
-                ) = (get_drift_and_bound_and_pad(n, lim) for n, lim in (("z", Z), ("y", Y), ("x", X)))
+                ) = (get_drift_and_bound_and_pad(
+                    roi_min=roi[f"{dim}_min"], 
+                    roi_max=roi[f"{dim}_max"], 
+                    dim_limit=lim, 
+                    frame_drift=dc_frame[f"{dim}_px_coarse"], 
+                    ref_drift=ref_offset[f"{dim}_px_coarse"]
+                    ) for dim, lim in (("z", Z), ("y", Y), ("x", X))
+                    )
 
                 # roi.name is the index value.
                 all_rois.append([pos, pos_index, idx, roi.name, dc_frame['frame'], ref_frame, ch, 
