@@ -1,9 +1,10 @@
 package at.ac.oeaw.imba.gerlich.looptrace.space
 
-import scala.math.{ abs, pow, sqrt }
+import scala.math.{ pow, sqrt }
 import cats.{ Contravariant, Order }
 import cats.syntax.all.*
 import at.ac.oeaw.imba.gerlich.looptrace.{ NonnegativeInt, NonnegativeReal }
+import at.ac.oeaw.imba.gerlich.looptrace.{ all, any }
 
 /** Something that can compare two {@code A} values w.r.t. threshold value of type {@code T} */
 trait ProximityComparable[A]:
@@ -36,9 +37,10 @@ object DistanceThreshold:
                 if (d.isInfinite) { throw new EuclideanDistance.OverflowException(s"Cannot compute finite distance between $a and $b") }
                 d `lt` t
         }
-        case t: PiecewiseDistance.DisjunctiveThreshold => new ProximityComparable[Point3D] {
-            override def proximal = PiecewiseDistance.within(t)
-        }
+        case t: (PiecewiseDistance.ConjunctiveThreshold | PiecewiseDistance.DisjunctiveThreshold) => 
+            new ProximityComparable[Point3D] {
+                override def proximal = PiecewiseDistance.within(t)
+            }
     }
 
     def defineProximityPointwise[A](threshold: DistanceThreshold): (A => Point3D) => ProximityComparable[A] = 
@@ -50,14 +52,20 @@ object PiecewiseDistance:
     /** Distance threshold in which predicate comparing values to this threshold operates disjunctively over components */
     final case class DisjunctiveThreshold(get: NonnegativeReal) extends DistanceThreshold
     
+    /** Distance threshold in which predicate comparing values to this threshold operates conjunctively over components */
+    final case class ConjunctiveThreshold(get: NonnegativeReal) extends DistanceThreshold
+
     /** Are points closer than given threshold along any axis? */
-    def within(threshold: DisjunctiveThreshold)(a: Point3D, b: Point3D): Boolean = {
-        val t = threshold.get
-        (a, b) match {
+    def within(threshold: ConjunctiveThreshold | DisjunctiveThreshold)(a: Point3D, b: Point3D): Boolean = {
+        val comps = (a, b) match {
             case (
                 Point3D(XCoordinate(x1), YCoordinate(y1), ZCoordinate(z1)), 
                 Point3D(XCoordinate(x2), YCoordinate(y2), ZCoordinate(z2))
-            ) => abs(x1 - x2) < t || abs(y1 - y2) < t || abs(z1 - z2) < t
+            ) => List(x1 - x2, y1 - y2, z1 - z2).map(_.abs < threshold.get)
+        }
+        threshold match {
+            case _: ConjunctiveThreshold => comps.all
+            case _: DisjunctiveThreshold => comps.any
         }
     }
 end PiecewiseDistance

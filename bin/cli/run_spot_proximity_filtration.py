@@ -37,7 +37,7 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder) -> None:
             "--spotSeparationThresholdValue", 
             str(H.minimum_spot_separation),
             "--spotSeparationThresholdType",
-            "EachAxis",
+            "EachAxisAND",
             "--unfilteredOutputFile",
             str(H.proximity_labeled_spots_file_path),
             "--filteredOutputFile",

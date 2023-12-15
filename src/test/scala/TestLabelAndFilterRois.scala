@@ -5,6 +5,7 @@ import cats.*
 import cats.data.{ NonEmptySet }
 import cats.syntax.all.*
 import cats.data.NonEmptySet
+import mouse.boolean.*
 import org.scalacheck.{ Arbitrary, Gen, Shrink }
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
@@ -30,16 +31,17 @@ import at.ac.oeaw.imba.gerlich.looptrace.LabelAndFilterRois.{
     RoiIdxPair
 }
 import at.ac.oeaw.imba.gerlich.looptrace.space.DistanceThreshold
+import cats.data.NonEmptySeq
 
 /** Tests for the filtration of the individual supports (single FISH probes) of chromatin fiber traces */
 class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite, ScalacheckSuite, should.Matchers:
 
-    test("ROIs parse correctly from CSV") { pending }
-
-    test("Spot distance comparison requires drift correction") { pending }
-    
     test("Spot distance comparison uses drift correction.") { pending }
     
+    test("The collection of ROIs parsed from filtered output is identical to that of the subset of input that has no proximal neighbors.") { pending }
+
+    test("The collection of ROIs parsed from input is identical to the collection of ROIs parsed from unfiltered, labeled output.") { pending }
+
     test("Spot distance comparison responds to change of proximity comparison strategy #146.") { pending }
 
     // This tests for both the ability to specify nothing for the grouping, and for the correctness of the definition of the partitioning (trivial) when no grouping is specified.
@@ -47,7 +49,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         pending
     }
     
-    test("In each pair of proximal spots, BOTH are filtered. #148") { pending }
+    test("In each pair of proximal spots, BOTH are filtered OUT. #148") { pending }
     
     test("Probe grouping must partition regional barcode frames: A probe grouping declaration that does not cover regional barcodes set is an error.") { pending }
     
@@ -98,7 +100,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("When probe groupings are all singletons, no ROI has any neighbors") {
+    test("All-singleton probe groupings guarantees no neighbors.") {
         def genRois: Gen[List[Roi]] = for {
             n <- Gen.choose(0, 10)
             regions <- Gen.pick(n, 0 until 100)
@@ -114,28 +116,60 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    // Checks that each row with nonempty neighbors will get full attribution in neighbors column
-    test("Any ROI which appears in a neighbors set also has its own neighbors set") { pending }
+    test("Coincident ROIs in the same FOV are all mutually neighbors exactly when distance threshold is strictly positive.") { pending }
 
-    test("A ROI is never among its own neighbors.") { pending }
+    test("Fewer than 2 ROIs means the neighbors mapping is always empty.") {
+        pending
+    }
 
-    private def canonicalRoi: Roi = {
-        /* Values with which to build each ROI */
-        val x1 = XCoordinate(1)
-        val y1 = YCoordinate(2)
-        val z1 = ZCoordinate(3)
-        val pt1 = Point3D(x1, y1, z1)
-        val xIntv1 = buildInterval(x1, NonnegativeReal(2))(XCoordinate.apply)
-        val yIntv1 = buildInterval(y1, NonnegativeReal(2))(YCoordinate.apply)
-        val zIntv1 = buildInterval(z1, NonnegativeReal(1))(ZCoordinate.apply)
-        val bb1 = BoundingBox(xIntv1, yIntv1, zIntv1)
-        Roi(RoiIndex(NonnegativeInt(0)), "P0001.zarr", FrameIndex(NonnegativeInt(0)), Channel(NonnegativeInt(0)), pt1, bb1)
+    test("A ROI is never among its own neighbors.") {
+        forAll (genThresholdAndRoisToFacilitateCollisions) { case (threshold, rois) => 
+            buildNeighboringRoisFinder(NonnegativeInt.indexed(rois), threshold)(List()) match {
+                case Left(errMsg) => fail(s"Expected success, but got error message: $errMsg")
+                case Right(neighbors) => neighbors.toList.filter{ case (k, vs) => vs `contains` k } shouldEqual List()
+            }
+        }
+    }
+
+    test("Neighbor relation is bidirectional relation, so each of a ROI's neighbors has the ROI among its own neighbors.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        forAll (genThresholdAndRoisToFacilitateCollisions) { case (threshold, rois) => 
+            buildNeighboringRoisFinder(NonnegativeInt.indexed(rois), threshold)(List()) match {
+                case Left(errMsg) => fail(s"Expected success, but got error message: $errMsg")
+                case Right(neighbors) => 
+                    val (fails, _) = Alternative[List].separate(neighbors.toList.flatMap{ 
+                        case curr@(k, vs) => vs.toList.map{ v => neighbors(v).contains(k).either(curr -> (v -> neighbors(v)), ()) }
+                    })
+                    fails shouldEqual List()
+            }
+        }
+    }
+
+    def genThresholdAndRoisToFacilitateCollisions: Gen[(DistanceThreshold, List[Roi])] = {
+        val maxMinDistThreshold = NonnegativeReal(10) // Relatively small value to also use as upper bound on coordinates
+        for {
+            threshold <- genThreshold(genNonNegReal(maxMinDistThreshold))
+            numRois <- Gen.choose(5, 10)
+            centroids <- {
+                given tmpArb: Arbitrary[Double] = Arbitrary(genNonNegReal(NonnegativeReal(5)))
+                Gen.listOfN(numRois, arbitrary[Point3D])
+            }
+        } yield (threshold, centroids.map(canonicalRoi))
     }
 
     private def buildInterval[C <: Coordinate: [C] =>> NotGiven[C =:= Coordinate]](c: C, margin: NonnegativeReal)(lift: Double => C): BoundingBox.Interval[C] = 
         BoundingBox.Interval[C].apply.tupled((c.get - margin, c.get + margin).mapBoth(lift))
 
-    private def genThreshold(x: NonnegativeReal): Gen[DistanceThreshold] = genThreshold(Gen.const(x))
+    private def canonicalRoi: Roi = canonicalRoi(Point3D(XCoordinate(1), YCoordinate(2), ZCoordinate(3)))
+
+    private def canonicalRoi(point: Point3D): Roi = 
+        point match { case Point3D(x, y, z) => 
+            val xIntv = buildInterval(x, NonnegativeReal(2))(XCoordinate.apply)
+            val yIntv = buildInterval(y, NonnegativeReal(2))(YCoordinate.apply)
+            val zIntv = buildInterval(z, NonnegativeReal(1))(ZCoordinate.apply)
+            val box = BoundingBox(xIntv, yIntv, zIntv)
+            Roi(RoiIndex(NonnegativeInt(0)), "P0001.zarr", FrameIndex(NonnegativeInt(0)), Channel(NonnegativeInt(0)), point, box)
+        }
 
     private def genThreshold: Gen[NonnegativeReal] => Gen[DistanceThreshold] = genThresholdType <*> _
 

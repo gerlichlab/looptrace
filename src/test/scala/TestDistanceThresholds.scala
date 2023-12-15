@@ -1,6 +1,7 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
 import scala.math.{ abs, min, pow, sqrt }
+import cats.syntax.all.*
 import org.scalacheck.{ Arbitrary, Gen, Shrink }
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
@@ -12,66 +13,82 @@ class TestDistanceThresholds extends AnyFunSuite, DistanceSuite, LooptraceSuite,
 
     /** Compare points in 3D space for proximity. */
     type PointProximity = ProximityComparable[Point3D]
+    type PtPair = (Point3D, Point3D)
 
-    test("Positive: Disjunctive component proximity implies Euclidean proximity.") {
+    test("Positive: Conjunctive component proximity implies disjunctive component proximity.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
-        def genPiecewiseProximalPoints: Gen[(NonnegativeReal, Point3D, Point3D)] = {
+        def genProximalPoints: Gen[(NonnegativeReal, Point3D, Point3D)] = {
             for {
                 (a, b) <- {
                     given arbRawCoord: Arbitrary[Double] = genReasonableCoordinate.toArbitrary // Prevent Euclidean overflow.
                     arbitrary[(Point3D, Point3D)]
                 }
-                tMin = minDistPiecewise(a, b) + 1
+                tMin = extremePiecewiseDistance(_.max)(a, b) + 1
                 t <- Gen.choose(tMin, Double.MaxValue).map(NonnegativeReal.unsafe)
             } yield (t, a, b)
         }
 
-        forAll (genPiecewiseProximalPoints) { case (t, a, b) =>
-            val (piecewise, euclidean) = t.toThresholdPair.mapBoth(_.toProximityComparable)
-            piecewise.proximal(a, b) shouldBe true
-            euclidean.proximal(a, b) shouldBe true
+        forAll (genProximalPoints) { case (t, a, b) =>
+            val thresholds = List(PiecewiseDistance.ConjunctiveThreshold(t), PiecewiseDistance.DisjunctiveThreshold(t))
+            forAll (Table("comparison", thresholds.map(_.toProximityComparable)*)) { _.proximal(a, b) shouldBe true }
+        }
+    }
+
+    test("Positive: Disjunctive component proximity implies Euclidean proximity.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        def genProximalPoints: Gen[(NonnegativeReal, Point3D, Point3D)] = {
+            for {
+                (a, b) <- {
+                    given arbRawCoord: Arbitrary[Double] = genReasonableCoordinate.toArbitrary // Prevent Euclidean overflow.
+                    arbitrary[(Point3D, Point3D)]
+                }
+                tMin = extremePiecewiseDistance(_.min)(a, b) + 1
+                t <- Gen.choose(tMin, Double.MaxValue).map(NonnegativeReal.unsafe)
+            } yield (t, a, b)
+        }
+
+        forAll (genProximalPoints) { case (t, a, b) =>
+            val thresholds = List(PiecewiseDistance.DisjunctiveThreshold(t), EuclideanDistance.Threshold(t))
+            forAll (Table("comparison", thresholds.map(_.toProximityComparable)*)) { _.proximal(a, b) shouldBe true }
         }
     }
 
     test("Threshold of 0 always gives false for proximity.") {
         given arbitraryCoordinate: Arbitrary[Double] = genReasonableCoordinate.toArbitrary // Prevent Euclidean overflow.
-        forAll { (a: Point3D, b: Point3D) => 
-            val (piecewise, euclidean) = NonnegativeReal(0.0).toThresholdPair.mapBoth(_.toProximityComparable)
-            /* First, test each strategy with the 2 different points. */
-            piecewise.proximal(a, b) shouldBe false
-            euclidean.proximal(a, b) shouldBe false
-            /* Then, test each strategy with the identical points. */
-            piecewise.proximal(a, a) shouldBe false
-            euclidean.proximal(a, a) shouldBe false
-            piecewise.proximal(b, b) shouldBe false
-            euclidean.proximal(b, b) shouldBe false
+        val comparisonsStrategies = NonnegativeReal(0.0).toAllProximityComparables
+        val pointUseStrategies: List[PtPair => PtPair] = List(p => p._1 -> p._1, p => p._1 -> p._2, p => p._2 -> p._2)
+        forAll (Table(
+            "comparisonAndPointUse", 
+            comparisonsStrategies.flatMap(cmp => pointUseStrategies.map(cmp -> _))*)) { 
+            case (cmp, getPts) => forAll { (pts: PtPair) => cmp.proximal.tupled(pts) shouldBe false }
         }
     }
 
     test("A point is always proximal with itself when the threshold is positive.") {
+        val pointPairStrategies: List[Point3D => PtPair] = List(p => p -> p, p => p -> p.copy())
         forAll (Gen.posNum[Double].map(NonnegativeReal.unsafe), arbitrary[Point3D]) { case (t, p) => 
-            val (piecewise, euclidean) = t.toThresholdPair.mapBoth(_.toProximityComparable)
-            val pCopy = p.copy()
-            piecewise.proximal(p, p) shouldBe true
-            piecewise.proximal(p, pCopy) shouldBe true
-            euclidean.proximal(p, p) shouldBe true
-            euclidean.proximal(p, pCopy) shouldBe true
+            forAll (Table(
+                "comparisonAndPointUse", 
+                t.toAllProximityComparables.flatMap{ cmp => pointPairStrategies.map(cmp -> _) }*
+            )) { case (cmp, toPair) => cmp.proximal.tupled(toPair(p)) shouldBe true }
         }
     }
 
-    test("Piecewise proximity gets examples right.") {
+    test("Each type proximity gets examples right.") {
         //forAll (Table(("t", "a", "b"), (PiecewiseDistance.DisjunctiveThreshold(2.0)))) { }
         pending
     }
-
-    test("Euclidean proximity gets examples right.") { pending }
 
     extension (t: DistanceThreshold)
         def toProximityComparable: ProximityComparable[Point3D] = DistanceThreshold.defineProximityPointwise(t)
 
     extension (t: NonnegativeReal)
-        def toThresholdPair = PiecewiseDistance.DisjunctiveThreshold(t) -> EuclideanDistance.Threshold(t)
+        def toAllProximityComparables = List(
+            PiecewiseDistance.ConjunctiveThreshold(t).toProximityComparable,
+            PiecewiseDistance.DisjunctiveThreshold(t).toProximityComparable,
+            EuclideanDistance.Threshold(t).toProximityComparable
+        )
     
-    private def minDistPiecewise(a: Point3D, b: Point3D): Double = 
-        List(a.x.get - b.x.get, a.y.get - b.y.get, a.z.get - b.z.get).map(abs).sorted.head
+    private def extremePiecewiseDistance(f: List[Double] => Double)(a: Point3D, b: Point3D): Double = 
+        f(List(a.x.get - b.x.get, a.y.get - b.y.get, a.z.get - b.z.get) `map` abs)
 end TestDistanceThresholds

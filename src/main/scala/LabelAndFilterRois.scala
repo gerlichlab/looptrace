@@ -34,18 +34,18 @@ object LabelAndFilterRois:
       * @param spotsFile Path to the (enriched, filtered) traces file to label and filter
       * @param driftFile Path to the file with drift correction information for all ROIs, across all timepoints
       * @param probeGroups Specification of which regional barcode probes 
-      * @param minSpotSeparation
-      * @param spotSeparationThresholdType
-      * @param unfilteredOutputFile
-      * @param filteredOutputFile
-      * @param extantOutputHandler
+      * @param minSpotSeparation Number of units of separation required for points to not be considered proximal
+      * @param buildDistanceThreshold How to use the minSpotSeparation value
+      * @param unfilteredOutputFile Path to which to write unfiltered (but proximity-labeled) output
+      * @param filteredOutputFile Path to which to write proximity-filtered (unlabeled) output
+      * @param extantOutputHandler How to handle if an output target already exists
       */
     final case class CliConfig(
         spotsFile: os.Path = null, // unconditionally required
         driftFile: os.Path = null, // unconditionally required
         probeGroups: List[ProbeGroup] = null, // unconditionally required
         spotSeparationThresholdValue: NonnegativeReal = NonnegativeReal(0), // unconditionally required
-        spotSeparationThresholdType: ThresholdSemantic = null, // unconditionally required
+        buildDistanceThreshold: NonnegativeReal => DistanceThreshold = null, // unconditionally required
         unfilteredOutputFile: UnfilteredOutputFile = null, // unconditionally required
         filteredOutputFile: FilteredOutputFile = null, // unconditionally required
         extantOutputHandler: ExtantOutputHandler = null, // unconditionally required
@@ -121,9 +121,9 @@ object LabelAndFilterRois:
                 .required()
                 .action((d, c) => c.copy(spotSeparationThresholdValue = d))
                 .text("Minimum separation between centroids of a pair of spots, discard otherwise; contextualised by --spotSeparationThresholdType"),
-            opt[ThresholdSemantic]("spotSeparationThresholdType")
+            opt[NonnegativeReal => DistanceThreshold]("spotSeparationThresholdType")
                 .required()
-                .action((s, c) => c.copy(spotSeparationThresholdType = s))
+                .action((f, c) => c.copy(buildDistanceThreshold = f))
                 .text("How to use the raw numeric value given for minimum spot separation"),
             opt[UnfilteredOutputFile]("unfilteredOutputFile")
                 .required()
@@ -142,10 +142,7 @@ object LabelAndFilterRois:
         OParser.parse(parser, args, CliConfig()) match {
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
             case Some(opts) => 
-                val threshold: DistanceThreshold = opts.spotSeparationThresholdType match {
-                    case ThresholdSemantic.EachAxis => PiecewiseDistance.DisjunctiveThreshold(opts.spotSeparationThresholdValue)
-                    case ThresholdSemantic.Euclidean => EuclideanDistance.Threshold(opts.spotSeparationThresholdValue)
-                }
+                val threshold = opts.buildDistanceThreshold(opts.spotSeparationThresholdValue)
                 workflow(
                     spotsFile = opts.spotsFile, 
                     driftFile = opts.driftFile, 
@@ -470,18 +467,14 @@ object LabelAndFilterRois:
         end Interval
     end BoundingBox
 
-    /** How a threshold on spot separation is to be used/interpreted/implemented */
-    enum ThresholdSemantic:
-        case Euclidean, EachAxis
-    end ThresholdSemantic
-
     /** Helpers for working with spot separation semantic values */
     object ThresholdSemantic:
         /** How to parse a spot separation semantic from a command-line argument */
-        given readForDistanceThresholdSemantic: scopt.Read[ThresholdSemantic] = scopt.Read.reads(
+        given readForDistanceThresholdSemantic: scopt.Read[NonnegativeReal => DistanceThreshold] = scopt.Read.reads(
             (_: String) match {
-                case ("Euclidean" | "EUCLIDEAN" | "euclidean" | "eucl" | "EUCL" | "euc" | "EUC") => Euclidean
-                case ("each" | "EACH" | "axis" | "AXIS" | "EachAxis" | "PIECEWISE" | "Piecewise") => EachAxis
+                case ("EachAxisAND" | "PiecewiseAND") => PiecewiseDistance.ConjunctiveThreshold.apply
+                case ("EachAxisOR" | "PiecewiseOR") => PiecewiseDistance.DisjunctiveThreshold.apply
+                case ("Euclidean" | "EUCLIDEAN" | "euclidean" | "eucl" | "EUCL" | "euc" | "EUC") => EuclideanDistance.Threshold.apply
                 case s => throw new IllegalArgumentException(s"Cannot parse as threshold semantic: $s")
             }
         )
