@@ -56,7 +56,7 @@ zarr = "^2.4.12"
 [tool.poetry.extras]
 analysis = ["matplotlib", "numba", "seaborn"]
 deconvolution = ["flowdec"]
-dev = ["czifile", "matplotlib", "nd2", "numba", "pytest", "pytest-skip-slow", "seaborn", "tifffile"]
+dev = ["czifile", "matplotlib", "joblib", "nd2", "numba", "pytest", "pytest-skip-slow", "seaborn", "tifffile"]
 interactive = ["napari", "napari-plot-profile", "pyqt6"]
 legacy-support = ["imagecodecs"]
 nuclei = ["cellpose"]
