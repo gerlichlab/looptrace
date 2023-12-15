@@ -54,6 +54,7 @@ package object looptrace {
     /** When an iterable is all booleans, simplify the all-true check ({@code ps.forall(identity) === ps.all}) */
     extension (ps: Iterable[Boolean])
         def all: Boolean = ps.forall(identity)
+        def any: Boolean = ps.exists(identity)
 
     /** Add a {@code .parent} accessor on a path. */
     extension (p: os.Path)
