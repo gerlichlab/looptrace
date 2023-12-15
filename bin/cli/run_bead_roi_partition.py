@@ -28,7 +28,7 @@ def workflow(
     cmd_parts = [
         "java", 
         "-cp",
-        str(LOOPTRACE_JAR_PATH.path),
+        str(LOOPTRACE_JAR_PATH),
         prog_path, 
         "--beadRoisRoot",
         str(H.bead_rois_path), 

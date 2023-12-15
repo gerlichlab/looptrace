@@ -20,7 +20,7 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder) -> None:
     cmd_parts = [
         "java", 
         "-cp",
-        str(LOOPTRACE_JAR_PATH.path),
+        str(LOOPTRACE_JAR_PATH),
         prog_path, 
         "--tracesFile",
         str(T.traces_path_enriched),

@@ -1,7 +1,6 @@
 """Run the labeling and filtering of the trace supports."""
 
 import argparse
-import itertools
 import subprocess
 from typing import *
 
@@ -26,7 +25,7 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder) -> None:
         cmd_parts = [
             "java", 
             "-cp",
-            str(LOOPTRACE_JAR_PATH.path),
+            str(LOOPTRACE_JAR_PATH),
             prog_path, 
             "--spotsFile",
             str(H.raw_spots_file),

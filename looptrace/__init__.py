@@ -1,7 +1,7 @@
 """Chromatin tracing in Python, from microscopy images of FISH probes"""
 
+from pathlib import Path
 import pkg_resources
-from gertils import ExtantFile
 
 __all__ = [
     "LOOPTRACE_JAR_PATH", 
@@ -16,8 +16,7 @@ __all__ = [
 
 
 # This is put into place by the docker build, as declared in the Dockerfile.
-LOOPTRACE_JAR_PATH = ExtantFile.from_string(pkg_resources.resource_filename(__name__, "looptrace-assembly-0.2.0-SNAPSHOT.jar"))
-
+LOOPTRACE_JAR_PATH = Path(pkg_resources.resource_filename(__name__, "looptrace-assembly-0.2.0-SNAPSHOT.jar"))
 LOOPTRACE_JAVA_PACKAGE = "at.ac.oeaw.imba.gerlich.looptrace"
 
 MAX_DISTANCE_SPOT_FROM_REGION_NAME = "max_dist"
