@@ -192,12 +192,8 @@ def stack_nd2_to_dask(folder: str, position_id: int = None):
 
     import nd2
     image_files = sorted([p.path for p in os.scandir(folder) if (p.name.endswith('.nd2') and not p.name.startswith('_'))])
-    image_times = sorted(list(set([re.findall('.+(Time\d+)', s)[0] for s in image_files])))
-    image_points = sorted(list(set([re.findall('.+(Point\d+)', s)[0] for s in image_files])))
-    pos_names = ["P"+str(i+1).zfill(4) for i in range(len(image_points))]
-
-    metadata = {}
     
+    metadata = {}
     with nd2.ND2File(image_files[0]) as sample:
         voxels = sample.voxel_size()
         metadata['voxel_size'] = [voxels.z, voxels.y, voxels.x]
@@ -216,12 +212,16 @@ def stack_nd2_to_dask(folder: str, position_id: int = None):
                 'emissionLambdaNm': channel.channel.emissionLambdaNm,
                 'excitationLambdaNm': channel.channel.excitationLambdaNm,
                 }
+    
+    image_times = sorted(list(set([re.findall('.+(Time\d+)', s)[0] for s in image_files])))
+    image_points = sorted(list(set([re.findall('.+(Point\d+)', s)[0] for s in image_files])))
+    pos_names = ["P" + str(i + 1).zfill(4) for i in range(len(image_points))]
 
-    #print(image_folders)
-    pos_stack = []
     if position_id is not None:
         image_points = [image_points[position_id]]
         pos_names = [pos_names[position_id]]
+
+    pos_stack = []
     for p in tqdm.tqdm(image_points):
         t_stack = []
         for t in image_times:
