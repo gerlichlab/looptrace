@@ -1,6 +1,7 @@
 """Validation of the main looptrace configuration file"""
 
 import argparse
+from pathlib import Path
 from typing import *
 
 import yaml
@@ -8,7 +9,7 @@ import yaml
 from gertils import ExtantFile
 
 from looptrace.Deconvolver import REQ_GPU_KEY
-from looptrace import Drifter, MINIMUM_SPOT_SEPARATION_KEY, ZARR_CONVERSIONS_KEY
+from looptrace import Drifter, LOOPTRACE_JAR_PATH, MINIMUM_SPOT_SEPARATION_KEY, ZARR_CONVERSIONS_KEY
 from looptrace.SpotPicker import DetectionMethod, CROSSTALK_SUBTRACTION_KEY, DETECTION_METHOD_KEY as SPOT_DETECTION_METHOD_KEY
 from looptrace.Tracer import MASK_FITS_ERROR_MESSAGE
 
@@ -22,6 +23,14 @@ class ConfigFileCrash(Exception):
     """Class aggregating nonempty collection of config file errors"""
     def __init__(self, errors: Iterable[ConfigFileError]):
         super().__init__(f"{len(errors)} error(s):\n{'; '.join(map(str, errors))}")
+
+
+class MissingJarError(Exception):
+    """For when the project's JAR is not an extant file"""
+    def __init__(self, path: Path):
+        super().__init__(str(path))
+        if path.is_file():
+            raise ValueError(f"Alleged missing JAR is a file: {path}")
 
 
 def find_config_file_errors(config_file: ExtantFile) -> List[ConfigFileError]:
@@ -84,6 +93,8 @@ def find_config_file_errors(config_file: ExtantFile) -> List[ConfigFileError]:
 
 
 def workflow(config_file: ExtantFile) -> None:
+    if not LOOPTRACE_JAR_PATH.is_file():
+        raise MissingJarError(LOOPTRACE_JAR_PATH)
     errors = find_config_file_errors(config_file=config_file)
     if errors:
         raise ConfigFileCrash(errors=errors)

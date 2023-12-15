@@ -8,7 +8,7 @@ from typing import *
 from gertils import ExtantFile, ExtantFolder
 import pypiper
 
-from config_file_validation import workflow as run_config_validation
+from pipeline_precheck import workflow as pretest
 from convert_datasets_to_zarr import one_to_one as run_zarr_production
 from extract_exp_psf import workflow as run_psf_extraction
 from run_bead_roi_generation import workflow as gen_all_bead_rois
@@ -47,7 +47,7 @@ class LooptracePipeline(pypiper.Pipeline):
         conf_data_pair = (self.config_file, self.images_folder)
         conf_only = (self.config_file, )
         func_args_pairs = (
-            ("config_validation", run_config_validation, conf_only),
+            ("pipeline_precheck", pretest, conf_only),
             ("zarr_production", run_zarr_production, conf_data_pair),
             ("psf_extraction", run_psf_extraction, conf_data_pair),
             ("deconvolution", run_deconvolution, conf_data_pair), # Really just for denoising, no need for structural disambiguation
