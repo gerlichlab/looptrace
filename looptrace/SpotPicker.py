@@ -682,7 +682,7 @@ def extract_single_roi_img_inmem(single_roi: pd.Series, image_stack: np.ndarray,
     try:
         return np.pad(roi_img, pad, mode=pad_mode)
     except ValueError:
-        print(f"Cannot pad spot image! shape={roi_img.shape}, (z, y, x)={(z, y, x)}, pad={pad}, mode={pad_mode}")
+        print(f"Cannot pad spot image!\nroi={single_roi}\nshape={roi_img.shape}\n(z, y, x)={(z, y, x)}\npad={pad}\nmode={pad_mode}\n")
         raise
 
 
