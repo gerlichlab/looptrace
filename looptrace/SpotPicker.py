@@ -649,6 +649,11 @@ def extract_single_roi_img_inmem(single_roi: pd.Series, image_stack: np.ndarray,
     pad_mode : str
         Argument for numpy.pad
     
+    Raises
+    ------
+    looptrace.SpotPicker.SpotImagePaddingError
+        If anything goes wrong with the image padding    
+    
     Returns
     -------
     np.ndarray
@@ -674,19 +679,27 @@ def extract_single_roi_img_inmem(single_roi: pd.Series, image_stack: np.ndarray,
     if pad == ((0, 0), (0, 0), (0, 0)):
         return roi_img
     pad = tuple((_up_to_int(lo), _up_to_int(hi)) for lo, hi in pad)
-    return np.pad(roi_img, pad, mode=pad_mode) 
+    try:
+        return np.pad(roi_img, pad, mode=pad_mode)
+    except ValueError:
+        print(f"Cannot pad spot image! shape={roi_img.shape}, (z, y, x)={(z, y, x)}, pad={pad}, mode={pad_mode}")
+        raise
 
 
 _down_to_int = lambda x: int(floor(x))
 _up_to_int = lambda x: int(ceil(x))
 
 
+class SpotImageExtractionError(Exception):
+    """Represent case in which something's wrong with spot image extraction."""
+
+
+class SpotImagePaddingError(SpotImageExtractionError):
+    """Represent case in which something's wrong with spot image padding."""
+
+
 class SpotImageSlicingError(Exception):
     """Represent case in which something's wrong with spot image slicing."""
-
-
-class SpotImagePaddingError(Exception):
-    """Represent case in which something's wrong with spot image padding."""
 
 
 class SpotImageDimensionalityError(Exception):
