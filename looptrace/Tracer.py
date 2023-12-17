@@ -218,7 +218,7 @@ def pair_rois_with_fits(rois: pd.DataFrame, fits: pd.DataFrame) -> pd.DataFrame:
         If the indexes of the frames to combine don't match
     """
     if rois.shape[0] != fits.shape[0]:
-        raise ValueError("ROIs table has {rois.shape[0]} rows, but fits table has {fits.shape[0]}; these should match.")
+        raise ValueError(f"ROIs table has {rois.shape[0]} rows, but fits table has {fits.shape[0]}; these should match.")
     if any(rois.index != fits.index):
         raise ValueError("Indexes of spots table and fits table don't match!")
     # TODO: fix this brittle / fragile / incredibly error-prone thing; #84
