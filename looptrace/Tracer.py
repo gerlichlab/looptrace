@@ -152,17 +152,17 @@ def _iter_fit_args(
         bg_spec: Optional[BackgroundSpecification]
         ) -> Iterable[Tuple[FunctionalForm, np.ndarray]]:
     if bg_spec is None:
-        # Iterating here over regional spots (pos_imgs)
-        for pos_imgs in images:
+        # Iterating here over regional spots (single_roi_timecourse)
+        for single_roi_timecourse in images:
             # Iterating here over individal timepoints / hybridisation rounds for each regional 
-            for spot_img in pos_imgs:
+            for spot_img in single_roi_timecourse:
                 yield fit_func_spec, spot_img
     else:
-        # Iterating here over regional spots (pos_imgs)
-        for pos_imgs in images:
-            bg_img = pos_imgs[bg_spec.frame_index].astype(np.int16)
+        # Iterating here over regional spots (single_roi_timecourse)
+        for single_roi_timecourse in images:
+            bg_img = single_roi_timecourse[bg_spec.frame_index].astype(np.int16)
             # Iterating here over individal timepoints / hybridisation rounds for each regiona
-            for spot_img in pos_imgs:
+            for spot_img in single_roi_timecourse:
                 yield fit_func_spec, spot_img.astype(np.int16) - bg_img
 
 
@@ -217,6 +217,8 @@ def pair_rois_with_fits(rois: pd.DataFrame, fits: pd.DataFrame) -> pd.DataFrame:
     ValueError
         If the indexes of the frames to combine don't match
     """
+    if rois.shape[0] != fits.shape[0]:
+        raise ValueError("ROIs table has {rois.shape[0]} rows, but fits table has {fits.shape[0]}; these should match.")
     if any(rois.index != fits.index):
         raise ValueError("Indexes of spots table and fits table don't match!")
     # TODO: fix this brittle / fragile / incredibly error-prone thing; #84
@@ -264,14 +266,14 @@ def find_trace_fits(
             def finalise_spot_img(img, fov_imgs):
                 return img.astype(np.int16) - fov_imgs[background_specification.frame_index].astype(np.int16)
         fits = []
-        for p, pos_imgs in tqdm(enumerate(images), total=len(images)):
-            ref_img = pos_imgs[mask_ref_frames[p]]
+        for p, single_roi_timecourse in tqdm(enumerate(images), total=len(images)):
+            ref_img = single_roi_timecourse[mask_ref_frames[p]]
             #print(ref_img.shape)
-            for t, spot_img in enumerate(pos_imgs):
+            for t, spot_img in enumerate(single_roi_timecourse):
                 #if background_specification is not None:
-                    #shift = ndi.shift(pos_imgs[background_specification.frame_index], shift=background_specification.drifts[t])
+                    #shift = ndi.shift(single_roi_timecourse[background_specification.frame_index], shift=background_specification.drifts[t])
                     #spot_img = np.clip(spot_img.astype(np.int16) - shift, a_min = 0, a_max = None)
-                spot_img = finalise_spot_img(spot_img, pos_imgs)
+                spot_img = finalise_spot_img(spot_img, single_roi_timecourse)
                 fits.append(fit_single_roi(fit_func_spec=fit_func_spec, roi_img=spot_img, mask=ref_img))
     else:
         fits = Parallel(n_jobs=cores or -1)(
