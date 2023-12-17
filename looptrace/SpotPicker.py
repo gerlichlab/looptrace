@@ -653,8 +653,10 @@ def extract_single_roi_img_inmem(single_roi: pd.Series, image_stack: np.ndarray,
     ------
     looptrace.SpotPicker.SpotImagePaddingError
         If anything goes wrong with the image padding
-    looptrace.SpotPicker.SpotImageSlicingError
-        If any of the axis slices go beyong the image limit or specify an empty slice
+    looptrace.SpotPicker.SpotImageSliceOOB
+        If any of the axis slices go beyong the image limit
+    looptrace.SpotPicker.SpotImageSliceEmpty
+        If any of the axis slices specify an empty slice
     
     Returns
     -------
