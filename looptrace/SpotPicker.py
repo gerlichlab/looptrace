@@ -275,7 +275,7 @@ def get_drift_and_bound_and_pad(roi_min: NumberLike, roi_max: NumberLike, dim_li
     target_min = roi_min - coarse_drift
     target_max = roi_max - coarse_drift
     new_min = min(max(target_min, 0), dim_limit)
-    new_max = min(target_max, dim_limit)
+    new_max = max(min(target_max, dim_limit), 0)
     pad_min = abs(min(0, target_min))
     pad_max = abs(max(0, target_max - dim_limit))
     return coarse_drift, new_min, new_max, pad_min, pad_max
