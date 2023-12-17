@@ -552,7 +552,7 @@ class SpotPicker:
                             pad_mode=self.padding_method,
                             background_frame=self.image_handler.background_subtraction_frame, 
                             ).astype(np.uint16)
-                    except SpotImagePaddingError as exc:
+                    except (SpotImagePaddingError, SpotImageSliceEmpty) as exc:
                         print("Skipping spot image extraction for ROI (number={num}, id={id}, time={t}): {e}".format(
                             num=roi["roi_number"], id=roi["roi_id"], t=roi["frame"], e=exc
                             ))
@@ -674,9 +674,9 @@ def extract_single_roi_img_inmem(single_roi: pd.Series, image_stack: np.ndarray,
     # Should be controlled upstream from never happening, but put in just for safety.
     Z, Y, X = image_stack.shape
     if z.stop > Z or y.stop > Y or x.stop > X:
-        raise SpotImageSlicingError(f"Slice index OOB for image size {(Z, Y, X)}: {(z, y, x)}")
+        raise SpotImageSliceOOB(f"Slice index OOB for image size {(Z, Y, X)}: {(z, y, x)}")
     if z.start == z.stop or y.start == y.stop or x.start == x.stop:
-        raise SpotImageSlicingError(f"Slice would result in at least one empty dimension: {(z, y, x)}")
+        raise SpotImageSliceEmpty(f"Slice would result in at least one empty dimension: {(z, y, x)}")
     roi_img = np.array(image_stack[z, y, x])
     # If microscope drifted, ROI could be outside image; correct for this if needed.
     pad = (z_pad, y_pad, x_pad)
@@ -702,7 +702,11 @@ class SpotImagePaddingError(SpotImageExtractionError):
     """Represent case in which something's wrong with spot image padding."""
 
 
-class SpotImageSlicingError(Exception):
+class SpotImageSliceOOB(Exception):
+    """Represent case in which something's wrong with spot image slicing."""
+
+
+class SpotImageSliceEmpty(Exception):
     """Represent case in which something's wrong with spot image slicing."""
 
 
