@@ -28,7 +28,7 @@ from gertils import ExtantFolder, NonExtantPath
 
 from looptrace.exceptions import MissingRoisTableException
 from looptrace.filepaths import get_spot_images_path
-from looptrace import MINIMUM_SPOT_SEPARATION_KEY, image_processing_functions as ip
+from looptrace import image_processing_functions as ip
 from looptrace.numeric_types import NumberLike
 
 CROSSTALK_SUBTRACTION_KEY = "subtract_crosstalk"
@@ -274,7 +274,7 @@ def get_drift_and_bound_and_pad(roi_min: NumberLike, roi_max: NumberLike, dim_li
     coarse_drift = int(frame_drift) - int(ref_drift)
     target_min = roi_min - coarse_drift
     target_max = roi_max - coarse_drift
-    new_min = max(target_min, 0)
+    new_min = min(max(target_min, 0), dim_limit)
     new_max = min(target_max, dim_limit)
     pad_min = abs(min(0, target_min))
     pad_max = abs(max(0, target_max - dim_limit))
@@ -652,7 +652,9 @@ def extract_single_roi_img_inmem(single_roi: pd.Series, image_stack: np.ndarray,
     Raises
     ------
     looptrace.SpotPicker.SpotImagePaddingError
-        If anything goes wrong with the image padding    
+        If anything goes wrong with the image padding
+    looptrace.SpotPicker.SpotImageSlicingError
+        If any of the axis slices go beyong the image limit or specify an empty slice
     
     Returns
     -------
@@ -673,6 +675,8 @@ def extract_single_roi_img_inmem(single_roi: pd.Series, image_stack: np.ndarray,
     Z, Y, X = image_stack.shape
     if z.stop > Z or y.stop > Y or x.stop > X:
         raise SpotImageSlicingError(f"Slice index OOB for image size {(Z, Y, X)}: {(z, y, x)}")
+    if z.start == z.stop or y.start == y.stop or x.start == x.stop:
+        raise SpotImageSlicingError(f"Slice would result in at least one empty dimension: {(z, y, x)}")
     roi_img = np.array(image_stack[z, y, x])
     # If microscope drifted, ROI could be outside image; correct for this if needed.
     pad = (z_pad, y_pad, x_pad)
