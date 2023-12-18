@@ -300,12 +300,12 @@ def get_drift_and_bound_and_pad(roi_min: NumberLike, roi_max: NumberLike, dim_li
             pad_max = 0
     elif target_min >= dim_limit: # Interval "above" image
         new_min, new_max = dim_limit, dim_limit
-        pad_min = target_max - target_min
+        pad_min = round(target_max - target_min)
         pad_max = 0
     else: # Interval "below" image
         new_min, new_max = 0, 0
         pad_min = 0
-        pad_max = target_max - target_min
+        pad_max = round(target_max - target_min)
     return coarse_drift, new_min, new_max, pad_min, pad_max
 
 
