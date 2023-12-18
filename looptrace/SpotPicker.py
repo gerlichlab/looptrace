@@ -707,7 +707,7 @@ def extract_single_roi_img_inmem(
     pad = (z_pad, y_pad, x_pad)
     if pad != ((0, 0), (0, 0), (0, 0)):
         pad = tuple((_up_to_int(lo), _up_to_int(hi)) for lo, hi in pad)
-        kwargs = {"mode": "constant", "constant_values": 0} if any(roi_img.shape == 0) else {"mode": pad_mode}
+        kwargs = {"mode": "constant", "constant_values": 0} if any(x == 0 for x in roi_img.shape) else {"mode": pad_mode}
         try:
             roi_img = np.pad(roi_img, pad, **kwargs)
         except ValueError:
