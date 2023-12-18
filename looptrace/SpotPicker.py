@@ -7,7 +7,7 @@ Ellenberg group
 EMBL Heidelberg
 """
 
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 import copy
 import dataclasses
 from enum import Enum
@@ -40,7 +40,7 @@ DETECTION_METHOD_KEY = "detection_method"
 
 logger = logging.getLogger()
 
-SkipReasonsMapping = Mapping[Tuple[int, int, int], str]
+SkipReasonsMapping = Mapping[int, Mapping[int, Mapping[int, str]]]
 
 
 class RoiOrderingSpecification:
@@ -567,13 +567,13 @@ class SpotPicker:
         Returns
         -------
         List[str], SkipReasonsMapping
-            Paths of the files written, and mapping from (ref_frame, ROI, frame) to reason to not use spot image there
+            Paths of the files written, and mapping from ref frame to mapping from ROI ID to mapping from frame to skip reason
         """
         pos_index = self.image_handler.image_lists[self.input_name].index(pos_group_name)
         f_id = 0
         n_frames = len(pos_group_data.frame.unique())
         array_files = OrderedDict()
-        skip_spot_image_reasons = OrderedDict()
+        skip_spot_image_reasons = defaultdict(defaultdict(dict))
         for frame, frame_group in tqdm.tqdm(pos_group_data.groupby('frame')):
             for ch, ch_group in frame_group.groupby('ch'):
                 image_stack = np.array(self.images[pos_index][int(frame), int(ch)])
@@ -588,14 +588,9 @@ class SpotPicker:
                     fn_key = RoiOrderingSpecification.FilenameKey.from_roi(roi)
                     if error is not None:
                         print("Placeholder extraced for ROI (number={num}, id={id}, time={t}): {e}".format(
-                            num=roi["roi_number"], id=fn_key.roi_id, t=roi["frame"], e=error
+                            num=roi["roi_number"], id=fn_key.roi_id, t=frame, e=error
                             ))
-                        skip_key = (fn_key.roi_id, fn_key.ref_frame, roi["frame"])
-                        if skip_key in skip_spot_image_reasons:
-                            raise Exception(
-                                f"Skip key already exists! This implies non-uniqueness of (ref_frame, ROI ID, frame): {skip_key}"
-                                )
-                        skip_spot_image_reasons[skip_key] = str(error)
+                        skip_spot_image_reasons[fn_key.ref_frame][fn_key.roi_id][frame] = str(error)
                     fp = os.path.join(self.spot_images_path, fn_key.name_roi_file)
                     if fp in array_files:
                         arr = open_memmap(fp, mode='r+')
@@ -626,7 +621,7 @@ class SpotPicker:
             _, skip_reasons = self.write_single_fov_data(pos_group_name=pos, pos_group_data=pos_group)
             skip_spot_image_reasons[pos] = skip_reasons
         
-        print(f"Writing skip reasons file: {self.extraction_skip_reasons_json_file}")
+        print(f"Writing spot image extraction skip reasons file: {self.extraction_skip_reasons_json_file}")
         with open(self.extraction_skip_reasons_json_file, 'w') as fh:
             json.dump(skip_spot_image_reasons, fh)
 
