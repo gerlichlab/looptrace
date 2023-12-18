@@ -573,7 +573,7 @@ class SpotPicker:
         f_id = 0
         n_frames = len(pos_group_data.frame.unique())
         array_files = OrderedDict()
-        skip_spot_image_reasons = defaultdict(defaultdict(dict))
+        skip_spot_image_reasons = defaultdict(lambda: defaultdict(dict))
         for frame, frame_group in tqdm.tqdm(pos_group_data.groupby('frame')):
             for ch, ch_group in frame_group.groupby('ch'):
                 image_stack = np.array(self.images[pos_index][int(frame), int(ch)])
