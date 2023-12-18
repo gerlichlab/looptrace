@@ -588,9 +588,6 @@ class SpotPicker:
                     roi_img = roi_img.astype(np.uint16)
                     fn_key = RoiOrderingSpecification.FilenameKey.from_roi(roi)
                     if error is not None:
-                        print("Placeholder extraced for ROI (number={num}, id={id}, time={t}): {e}".format(
-                            num=roi["roi_number"], id=fn_key.roi_id, t=frame, e=error
-                            ))
                         skip_spot_image_reasons[fn_key.ref_frame][fn_key.roi_id][frame] = str(error)
                     fp = os.path.join(self.spot_images_path, fn_key.name_roi_file)
                     if fp in array_files:
