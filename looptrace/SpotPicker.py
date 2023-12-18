@@ -561,7 +561,8 @@ class SpotPicker:
                         image_stack=image_stack, 
                         pad_mode=self.padding_method,
                         background_frame=self.image_handler.background_subtraction_frame, 
-                        ).astype(np.uint16)
+                        )
+                    roi_img = roi_img.astype(np.uint16)
                     fn_key = RoiOrderingSpecification.FilenameKey.from_roi(roi)
                     if error is not None:
                         print("Placeholder extraced for ROI (number={num}, id={id}, time={t}): {e}".format(
