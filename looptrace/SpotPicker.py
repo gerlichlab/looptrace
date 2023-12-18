@@ -280,10 +280,21 @@ def get_drift_and_bound_and_pad(roi_min: NumberLike, roi_max: NumberLike, dim_li
     coarse_drift = int(frame_drift) - int(ref_drift)
     target_min = roi_min - coarse_drift
     target_max = roi_max - coarse_drift
-    new_min = min(max(target_min, 0), dim_limit)
-    new_max = max(min(target_max, dim_limit), 0)
-    pad_min = abs(min(0, target_min))
-    pad_max = abs(max(0, target_max - dim_limit))
+    if target_min >= dim_limit:
+        new_min = dim_limit
+        new_max = new_min
+        pad_min = (target_max - target_min) / 2
+        pad_max = pad_min
+    elif target_max <= 0:
+        new_max = 0
+        new_min = new_max
+        pad_min = (target_max - target_min) / 2
+        pad_max = pad_min
+    else:
+        new_min = max(target_min, 0)
+        new_max = min(target_max, dim_limit)
+        pad_min = abs(min(0, target_min))
+        pad_max = abs(max(0, target_max - dim_limit))
     return coarse_drift, new_min, new_max, pad_min, pad_max
 
 
