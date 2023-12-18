@@ -280,18 +280,30 @@ def get_drift_and_bound_and_pad(roi_min: NumberLike, roi_max: NumberLike, dim_li
     coarse_drift = int(frame_drift) - int(ref_drift)
     target_min = roi_min - coarse_drift
     target_max = roi_max - coarse_drift
-    if target_min < dim_limit and target_max > 0:
-        new_min = max(target_min, 0)
-        new_max = min(target_max, dim_limit)
-        pad_min = abs(min(0, target_min))
-        pad_max = abs(max(0, target_max - dim_limit))
-    else:
-        if target_min >= dim_limit:
-            new_min, new_max = dim_limit, dim_limit
+    if target_min < dim_limit and target_max > 0: # At least one bound within image
+        if target_min < 0:
+            new_min = 0
+            new_max = target_max
+            pad_min = 0 - target_min
+            pad_max = 0
+        elif target_max > dim_limit:
+            new_min = target_min
+            new_max = dim_limit
+            pad_min = 0
+            pad_max = target_max - dim_limit
         else:
-            new_min, new_max = 0, 0
-        pad_min = (target_max - target_min) / 2
-        pad_max = pad_min + 1 # Account for "inclusion of middle" for legit points.
+            new_min = target_min
+            new_max = target_max
+            pad_min = 0
+            pad_max = 0
+    elif target_min >= dim_limit: # Interval "above" image
+        new_min, new_max = dim_limit, dim_limit
+        pad_min = target_max - target_min
+        pad_max = 0
+    else: # Interval "below" image
+        new_min, new_max = 0, 0
+        pad_min = 0
+        pad_max = target_max - target_min
     return coarse_drift, new_min, new_max, pad_min, pad_max
 
 
@@ -693,13 +705,12 @@ def extract_single_roi_img_inmem(
     """
     Z, Y, X = image_stack.shape
     # Compute padding for each dimension.
-    x_pad = (single_roi['pad_x_min'], single_roi['pad_x_max'])
-    y_pad = (single_roi['pad_y_min'], single_roi['pad_y_max'])
-    z_pad = (single_roi['pad_z_min'], single_roi['pad_z_max'])
+    z_pad, y_pad, x_pad = ((single_roi[f"pad_{dim}_min"], single_roi[f"pad_{dim}_max"]) for dim in ("z", "y", "x"))
     # Compute bounds for extracting the unpadded image.
-    z = slice(_down_to_int(single_roi['z_min']), _up_to_int(single_roi['z_max']))
-    y = slice(_down_to_int(single_roi['y_min']), _up_to_int(single_roi['y_max']))
-    x = slice(_down_to_int(single_roi['x_min']), _up_to_int(single_roi['x_max']))
+    # Because of inclusiveness of lower and exclusiveness of upper bound, truncate decimals here.
+    z = slice(_down_to_int(single_roi['z_min']), _down_to_int(single_roi['z_max']))
+    y = slice(_down_to_int(single_roi['y_min']), _down_to_int(single_roi['y_max']))
+    x = slice(_down_to_int(single_roi['x_min']), _down_to_int(single_roi['x_max']))
     # Determine any error.
     error = None
     if z.stop > Z or y.stop > Y or x.stop > X:
@@ -714,7 +725,13 @@ def extract_single_roi_img_inmem(
     # If microscope drifted, ROI could be outside image; correct for this if needed.
     pad = (z_pad, y_pad, x_pad)
     if pad != ((0, 0), (0, 0), (0, 0)):
-        pad = tuple((_up_to_int(lo), _up_to_int(hi)) for lo, hi in pad)
+        # Because of truncation of decimals for the axis slicing intervals, round up on lower and down on upper here.
+        # Specifically, at most one side of the padding interval should be nonzero.
+        # If the nonzero padding is on the upper side, the upper slice bound was maxed and we've already gained the 
+        # decimal part of the interval by rounding down the lower interval bound.
+        # If the nonzero padding is on the lower side, the lower slice bound was 0 and we've lost gained the 
+        # decimal part of the interval by rounding down the lower interval bound; gain back by rounding up lower padding.
+        pad = tuple((_up_to_int(lo), _down_to_int(hi)) for lo, hi in pad) 
         kwargs = {"mode": "constant", "constant_values": 0} if any(x == 0 for x in roi_img.shape) else {"mode": pad_mode}
         try:
             roi_img = np.pad(roi_img, pad, **kwargs)
