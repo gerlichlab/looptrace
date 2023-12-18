@@ -281,17 +281,19 @@ def get_drift_and_bound_and_pad(roi_min: NumberLike, roi_max: NumberLike, dim_li
     target_min = roi_min - coarse_drift
     target_max = roi_max - coarse_drift
     if target_min < dim_limit and target_max > 0: # At least one bound within image
-        if target_min < 0:
+        if target_min < 0: # Lower out-of-bounds, upper in-bounds
+            if target_max > dim_limit:
+                raise SpotImageSliceOOB(f"Interval for a dimension encompasses entire dimension: ({target_min} < 0, {target_max} > {dim_limit})")
             new_min = 0
             new_max = target_max
             pad_min = 0 - target_min
             pad_max = 0
-        elif target_max > dim_limit:
+        elif target_max > dim_limit: # Lower in-bounds, upper out-of-bounds
             new_min = target_min
             new_max = dim_limit
             pad_min = 0
             pad_max = target_max - dim_limit
-        else:
+        else: # Lower and upper in-bounds
             new_min = target_min
             new_max = target_max
             pad_min = 0
