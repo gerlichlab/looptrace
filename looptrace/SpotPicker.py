@@ -11,6 +11,7 @@ from collections import OrderedDict
 import copy
 import dataclasses
 from enum import Enum
+import json
 import logging
 from math import ceil, floor
 import os
@@ -39,6 +40,8 @@ DETECTION_METHOD_KEY = "detection_method"
 
 logger = logging.getLogger()
 
+SkipReasonsMapping = Mapping[Tuple[int, int, int], str]
+
 
 class RoiOrderingSpecification:
     """
@@ -55,27 +58,30 @@ class RoiOrderingSpecification:
         position: str
         roi_id: int
         ref_frame: int
-
-        @property
-        def name_roi_file(self):
-            return "_".join([self.position, str(self.roi_id).zfill(5), str(self.ref_frame)]) + ".npy"
         
         @classmethod
         def from_roi(cls, roi: Union[pd.Series, Mapping[str, Any]]) -> "FilenameKey":
             return cls(position=roi["position"], roi_id=roi["roi_id"], ref_frame=roi["ref_frame"])
 
+        @property
+        def name_roi_file(self):
+            return "_".join([self.position, str(self.roi_id).zfill(5), str(self.ref_frame)]) + ".npy"
+        
+        def to_tuple(self) -> (str, int, int):
+            return self.position, self.roi_id, self.ref_frame
+
     @staticmethod
     def row_order_columns() -> List[str]:
         return ['position', 'roi_id', 'ref_frame', 'frame']
     
-    @staticmethod
-    def get_file_sort_key(file_key: str) -> Tuple[str, int, int]:
+    @classmethod
+    def get_file_sort_key(cls, file_key: str) -> FilenameKey:
         try:
             pos, roi, ref = file_key.split("_")
         except ValueError:
             print(f"Failed to get key for file key: {file_key}")
             raise
-        return pos, int(roi), int(ref)
+        return cls.FilenameKey(pos, int(roi), int(ref))
 
 
 def finalise_single_spot_props_table(spot_props: pd.DataFrame, position: str, frame: int, channel: int) -> pd.DataFrame:
@@ -305,6 +311,10 @@ class SpotPicker:
             raise ValueError(f"Illegal value for spot detection method in config: {self.detection_method_name}") from e
     
     @property
+    def extraction_skip_reasons_json_file(self) -> Path:
+        return self.image_handler.spot_image_extraction_skip_reasons_json_file
+    
+    @property
     def input_name(self):
         """Name of the input to the spot detection phase of the pipeline; in particular, a subfolder of the 'all images' folder typically passed to looptrace"""
         return self.image_handler.spot_input_name
@@ -520,7 +530,7 @@ class SpotPicker:
         self.image_handler.load_tables()
         return outfile
 
-    def write_single_fov_data(self, pos_group_name: str, pos_group_data: pd.DataFrame) -> List[str]:
+    def write_single_fov_data(self, pos_group_name: str, pos_group_data: pd.DataFrame) -> Tuple[List[str], SkipReasonsMapping]:
         """
         Write all timepoints' 3D image arrays (1 for each hybridisation round) for each (region, trace ID) pair in the FOV.
 
@@ -534,30 +544,36 @@ class SpotPicker:
         
         Returns
         -------
-        list of str
-            Paths of the files written
+        List[str], SkipReasonsMapping
+            Paths of the files written, and mapping from (ref_frame, ROI, frame) to reason to not use spot image there
         """
         pos_index = self.image_handler.image_lists[self.input_name].index(pos_group_name)
         f_id = 0
         n_frames = len(pos_group_data.frame.unique())
         array_files = OrderedDict()
+        skip_spot_image_reasons = OrderedDict()
         for frame, frame_group in tqdm.tqdm(pos_group_data.groupby('frame')):
             for ch, ch_group in frame_group.groupby('ch'):
                 image_stack = np.array(self.images[pos_index][int(frame), int(ch)])
                 for _, roi in ch_group.iterrows():
-                    try:
-                        roi_img = extract_single_roi_img_inmem(
-                            single_roi=roi, 
-                            image_stack=image_stack, 
-                            pad_mode=self.padding_method,
-                            background_frame=self.image_handler.background_subtraction_frame, 
-                            ).astype(np.uint16)
-                    except (SpotImagePaddingError, SpotImageSliceEmpty) as exc:
-                        print("Skipping spot image extraction for ROI (number={num}, id={id}, time={t}): {e}".format(
-                            num=roi["roi_number"], id=roi["roi_id"], t=roi["frame"], e=exc
+                    roi_img, error = extract_single_roi_img_inmem(
+                        single_roi=roi, 
+                        image_stack=image_stack, 
+                        pad_mode=self.padding_method,
+                        background_frame=self.image_handler.background_subtraction_frame, 
+                        ).astype(np.uint16)
+                    fn_key = RoiOrderingSpecification.FilenameKey.from_roi(roi)
+                    if error is not None:
+                        print("Placeholder extraced for ROI (number={num}, id={id}, time={t}): {e}".format(
+                            num=roi["roi_number"], id=fn_key.roi_id, t=roi["frame"], e=error
                             ))
-                        continue
-                    fp = os.path.join(self.spot_images_path, RoiOrderingSpecification.FilenameKey.from_roi(roi).name_roi_file)
+                        skip_key = (fn_key.roi_id, fn_key.ref_frame, roi["frame"])
+                        if skip_key in skip_spot_image_reasons:
+                            raise Exception(
+                                f"Skip key already exists! This implies non-uniqueness of (ref_frame, ROI ID, frame): {skip_key}"
+                                )
+                        skip_spot_image_reasons[skip_key] = str(error)
+                    fp = os.path.join(self.spot_images_path, fn_key.name_roi_file)
                     if fp in array_files:
                         arr = open_memmap(fp, mode='r+')
                     else:
@@ -570,7 +586,7 @@ class SpotPicker:
                         raise
                     arr.flush()
             f_id += 1
-        return list(array_files.keys())
+        return list(array_files.keys()), skip_spot_image_reasons
 
 
     def gen_roi_imgs_inmem(self) -> str:
@@ -582,9 +598,15 @@ class SpotPicker:
         if not os.path.isdir(self.spot_images_path):
             os.mkdir(self.spot_images_path)
 
+        skip_spot_image_reasons = OrderedDict()
         for pos, pos_group in tqdm.tqdm(rois.groupby('position')):
-            self.write_single_fov_data(pos_group_name=pos, pos_group_data=pos_group)
-            
+            _, skip_reasons = self.write_single_fov_data(pos_group_name=pos, pos_group_data=pos_group)
+            skip_spot_image_reasons[pos] = skip_reasons
+        
+        print(f"Writing skip reasons file: {self.extraction_skip_reasons_json_file}")
+        with open(self.extraction_skip_reasons_json_file, 'w') as fh:
+            json.dump(skip_spot_image_reasons, fh)
+
         return self.spot_images_path
 
     def gen_roi_imgs_inmem_coarsedc(self) -> str:
@@ -634,7 +656,12 @@ class SpotPicker:
         np.savez_compressed(self.image_handler.image_save_path+os.sep+'spot_images_fine.npz', *roi_array_fine)
 
 
-def extract_single_roi_img_inmem(single_roi: pd.Series, image_stack: np.ndarray, pad_mode: str, background_frame: Optional[int],) -> np.ndarray:
+def extract_single_roi_img_inmem(
+    single_roi: pd.Series, 
+    image_stack: np.ndarray, 
+    pad_mode: str, 
+    background_frame: Optional[int],
+    ) -> Tuple[np.ndarray, Union[None, "SpotImagePaddingError", "SpotImageSliceOOB", "SpotImageSliceEmpty"]]:
     """Function for extracting a single cropped region defined by ROI from a larger 3D image
     
     Parameters
@@ -649,47 +676,42 @@ def extract_single_roi_img_inmem(single_roi: pd.Series, image_stack: np.ndarray,
     pad_mode : str
         Argument for numpy.pad
     
-    Raises
-    ------
-    looptrace.SpotPicker.SpotImagePaddingError
-        If anything goes wrong with the image padding
-    looptrace.SpotPicker.SpotImageSliceOOB
-        If any of the axis slices go beyong the image limit
-    looptrace.SpotPicker.SpotImageSliceEmpty
-        If any of the axis slices specify an empty slice
-    
     Returns
     -------
-    np.ndarray
-        The subimage specified by the ROI's bounding box, possibly with some padding applied
+    np.ndarray, Optional[Union[SpotImagePaddingError, SpotImageSliceOOB, SpotImageSliceEmpty]]
+        The subimage specified by the ROI's bounding box, possibly with some padding applied; 
+        also, an optional exception, indicating to ignore this dummy subimage if this value is not None
     """
+    Z, Y, X = image_stack.shape
+    # Compute padding for each dimension.
     x_pad = (single_roi['pad_x_min'], single_roi['pad_x_max'])
     y_pad = (single_roi['pad_y_min'], single_roi['pad_y_max'])
     z_pad = (single_roi['pad_z_min'], single_roi['pad_z_max'])
-    if x_pad != (0, 0) or y_pad != (0, 0):
-        if background_frame is None or single_roi["frame"] != background_frame:
-            raise SpotImagePaddingError(f"x or y has nonzero padding: x={x_pad}, y={y_pad}")
-    # Extract the unpadded image.
+    # Compute bounds for extracting the unpadded image.
     z = slice(_down_to_int(single_roi['z_min']), _up_to_int(single_roi['z_max']))
     y = slice(_down_to_int(single_roi['y_min']), _up_to_int(single_roi['y_max']))
     x = slice(_down_to_int(single_roi['x_min']), _up_to_int(single_roi['x_max']))
-    # Should be controlled upstream from never happening, but put in just for safety.
-    Z, Y, X = image_stack.shape
+    # Determine any error.
+    error = None
     if z.stop > Z or y.stop > Y or x.stop > X:
-        raise SpotImageSliceOOB(f"Slice index OOB for image size {(Z, Y, X)}: {(z, y, x)}")
-    if z.start == z.stop or y.start == y.stop or x.start == x.stop:
-        raise SpotImageSliceEmpty(f"Slice would result in at least one empty dimension: {(z, y, x)}")
-    roi_img = np.array(image_stack[z, y, x])
+        error = SpotImageSliceOOB(f"Slice index OOB for image size {(Z, Y, X)}: {(z, y, x)}")
+    elif z.start == z.stop or y.start == y.stop or x.start == x.stop:
+        error = SpotImageSliceEmpty(f"Slice would result in at least one empty dimension: {(z, y, x)}")
+    elif x_pad != (0, 0) or y_pad != (0, 0):
+        if background_frame is None or single_roi["frame"] != background_frame:
+            error = SpotImagePaddingError(f"x or y has nonzero padding: x={x_pad}, y={y_pad}")
+    # Determine the final ROI (sub)image of a spot for tracing.
+    roi_img = np.array(image_stack[z, y, x]) if error is None else np.zeros((z.stop - z.start, y.stop - y.start, x.stop - x.start))
     # If microscope drifted, ROI could be outside image; correct for this if needed.
     pad = (z_pad, y_pad, x_pad)
-    if pad == ((0, 0), (0, 0), (0, 0)):
-        return roi_img
-    pad = tuple((_up_to_int(lo), _up_to_int(hi)) for lo, hi in pad)
-    try:
-        return np.pad(roi_img, pad, mode=pad_mode)
-    except ValueError:
-        print(f"Cannot pad spot image!\nroi={single_roi}\nshape={roi_img.shape}\n(z, y, x)={(z, y, x)}\npad={pad}\nmode={pad_mode}\n")
-        raise
+    if pad != ((0, 0), (0, 0), (0, 0)):
+        pad = tuple((_up_to_int(lo), _up_to_int(hi)) for lo, hi in pad)
+        try:
+            roi_img = np.pad(roi_img, pad, mode=pad_mode)
+        except ValueError:
+            print(f"Cannot pad spot image!\nroi={single_roi}\nshape={roi_img.shape}\n(z, y, x)={(z, y, x)}\npad={pad}\nmode={pad_mode}\n")
+            raise
+    return roi_img, error
 
 
 _down_to_int = lambda x: int(floor(x))

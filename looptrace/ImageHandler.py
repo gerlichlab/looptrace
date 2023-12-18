@@ -201,6 +201,10 @@ class ImageHandler:
         return self.config['reg_input_moving']
 
     @property
+    def spot_image_extraction_skip_reasons_json_file(self) -> Path:
+        return Path(self.out_path("_spot_image_extraction_skip_reasons.json"))
+
+    @property
     def spot_input_name(self) -> str:
         return self.config['spot_input_name']
     

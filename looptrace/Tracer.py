@@ -8,6 +8,7 @@ EMBL Heidelberg
 """
 
 import dataclasses
+import json
 from pathlib import Path
 from typing import *
 
@@ -19,7 +20,7 @@ from tqdm import tqdm
 
 from looptrace import *
 from looptrace.ImageHandler import ImageHandler
-from looptrace.SpotPicker import RoiOrderingSpecification
+from looptrace.SpotPicker import RoiOrderingSpecification, SkipReasonsMapping
 from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
 from looptrace.numeric_types import NumberLike
 from looptrace.tracing_qc_support import apply_frame_names_and_spatial_information
@@ -131,7 +132,7 @@ class Tracer:
             fit_func_spec=self.fit_func_spec,
             # TODO: fix this brittle / fragile / incredibly error-prone thing; #84
             # TODO: in essence, we need a better mapping between these images and the ordering of the index of the ROIs table.
-            images=(self.images[fn] for fn in sorted(self.images.files, key=RoiOrderingSpecification.get_file_sort_key)), 
+            images=(self.images[fn] for fn in sorted(self.images.files, key=lambda fn: RoiOrderingSpecification.get_file_sort_key(fn).to_tuple)), 
             mask_ref_frames=self.roi_table['frame'].to_list() if self.image_handler.config.get('mask_fits', False) else None, 
             background_specification=self.background_specification, 
             cores=self.config.get("tracing_cores")
@@ -227,12 +228,12 @@ def pair_rois_with_fits(rois: pd.DataFrame, fits: pd.DataFrame) -> pd.DataFrame:
 
 
 def find_trace_fits(
-        fit_func_spec: FunctionalForm, 
-        images: Iterable[np.ndarray], 
-        mask_ref_frames: Optional[List[int]], 
-        background_specification: Optional[BackgroundSpecification], 
-        cores: Optional[int] = None
-        ) -> pd.DataFrame:
+    fit_func_spec: FunctionalForm, 
+    images: Iterable[np.ndarray], 
+    mask_ref_frames: Optional[List[int]], 
+    background_specification: Optional[BackgroundSpecification], 
+    cores: Optional[int] = None
+    ) -> pd.DataFrame:
     """
     Fit distributions to each of the regional spots, but over all hybridisation rounds.
 
