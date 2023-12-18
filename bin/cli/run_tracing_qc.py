@@ -43,7 +43,7 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder) -> None:
     else:
         print("WARNING! No probes to exclude from trace support were provided!")
     
-    print(f"Running bead ROI partitioning: {' '.join(cmd_parts)}")
+    print(f"Running QC filtering of tracing supports: {' '.join(cmd_parts)}")
     subprocess.check_call(cmd_parts)
 
 
