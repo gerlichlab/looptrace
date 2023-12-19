@@ -6,6 +6,7 @@
   pipeline ? false,
   analysis ? false, 
   interactive ? false,
+  test ? false,
   rDev ? true,
   pyDev ? true, 
   scalaDev ? true, 
@@ -19,10 +20,12 @@ let baseBuildInputs = with pkgs; [ poetry stdenv.cc.cc.lib zlib ] ++ [ pkgs.${jd
         (if rDev then [ pkgs.rPackages.languageserver ] else [ ]);
     };
     poetryExtras = [] ++ 
-      (if pipeline then [ "pipeline" ] else []) ++
-      (if analysis then [ "analysis" ] else []) ++ 
-      (if interactive then [ "interactive" ] else []) ++
-      (if pyDev then ["dev"] else []);
+      (if test then ["test"] else (
+        (if pipeline then [ "pipeline" ] else []) ++
+        (if analysis then [ "analysis" ] else []) ++ 
+        (if interactive then [ "interactive" ] else []) ++
+        (if pyDev then ["dev"] else [])
+      ));
     poetryInstallExtras = (
       if poetryExtras == [] then ""
       else pkgs.lib.concatStrings [ " -E " (pkgs.lib.concatStringsSep " -E " poetryExtras) ]
