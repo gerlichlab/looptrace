@@ -62,6 +62,7 @@ legacy-support = ["imagecodecs"]
 nuclei = ["cellpose"]
 pipeline = ["cellpose", "czifile", "flowdec", "joblib", "nd2", "piper", "tensorflow", "tensorrt", "tifffile"]
 polymer = ["numba"]
+test = ["piper", "pytest"]
 
 [build-system]
 requires = ["poetry-core"]

@@ -20,6 +20,9 @@ from looptrace.exceptions import GpusUnavailableException, MissingInputException
 from looptrace.point_spread_function import PointSpreadFunctionStrategy
 
 
+DECON_CHANNEL_KEY = "decon_ch"
+DECON_ITER_KEY = "decon_iter"
+NON_DECON_CHANNEL_KEY = "non_decon_ch"
 REQ_GPU_KEY = "require_gpu"
 
 
@@ -167,16 +170,19 @@ class Deconvolver:
         from looptrace.image_io import create_zarr_store
         from looptrace.image_processing_functions import decon_RL_setup
 
-        decon_ch = self.config['decon_ch']
+        decon_ch = self.config[DECON_CHANNEL_KEY]
         if not isinstance(decon_ch, list):
             decon_ch = [decon_ch]
-        non_decon_ch = self.config['non_decon_ch']
+        non_decon_ch = self.config[NON_DECON_CHANNEL_KEY]
         if not isinstance(non_decon_ch, list):
             non_decon_ch = [non_decon_ch]
-        n_iter = self.config['decon_iter']
+        n_iter = self.config[DECON_ITER_KEY]
         if n_iter == 0:
             print("Deconvolution iterations set to 0, doing nothing")
             return
+
+        positions = self.pos_list
+        print(f"Will deconvolve {positions} field of views: {positions}")
 
         num_gpus_avail = count_tensorflow_gpus()
         if num_gpus_avail is None or num_gpus_avail == 0:
@@ -191,8 +197,16 @@ class Deconvolver:
         # TODO: better error handling for type-like errors, e.g. if comma is used for decimal 
         #       and as a result the value for a distance is parsed as string rather than number
         print("Setting up for Richardson-Lucy deconvolution...")
-        algo, psf, fd_data = decon_RL_setup(size_x=15, size_y=15, size_z=15, pz=0., wavelength=self.config['spot_wavelength']/1000,
-            na=self.config['objective_na'], res_lateral=self.config['xy_nm']/1000, res_axial=self.config['z_nm']/1000)
+        algo, psf, fd_data = decon_RL_setup(
+            size_x=15, 
+            size_y=15, 
+            size_z=15, 
+            pz=0., 
+            wavelength=self.config['spot_wavelength'] / 1000,
+            na=self.config['objective_na'], 
+            res_lateral=self.config['xy_nm'] / 1000, 
+            res_axial=self.config['z_nm'] / 1000,
+            )
 
         psf_type = self.config.get('decon_psf', 'gen')
 
@@ -211,7 +225,7 @@ class Deconvolver:
 
         array_paths = []
         
-        for pos in tqdm.tqdm(self.pos_list):
+        for pos in tqdm.tqdm(positions):
             print(f"Deconvolving position: {pos}")
             pos_index = self.position_names.index(pos)
             pos_img = self.image_handler.images[self.input_name][pos_index]

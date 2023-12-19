@@ -1,6 +1,5 @@
 """Tests for the main processing pipeline"""
 
-import copy
 from dataclasses import dataclass
 import itertools
 import logging
@@ -11,8 +10,7 @@ import pytest
 import yaml
 from gertils import PathWrapperException
 
-from looptrace.exceptions import MissingInputException
-from conftest import import_pipeline_script
+from conftest import import_pipeline_script, prep_images_folder, prep_output_folder
 
 looptrace_pipeline = import_pipeline_script()
 
@@ -70,30 +68,6 @@ class CliSpecMinimal:
         return str((self.config_file, self.images_folder, self.output_folder))
 
 
-def prep_config_file(folder: Path, create: bool) -> Path:
-    fp = folder / "config.yaml"
-    if create:
-        fp.write_text("", encoding='utf-8')
-    assert (create and fp.is_file()) or (not create and not fp.is_file())
-    return fp
-
-
-def _prep_subfolder(folder: Path, name: str, create: bool) -> Path:
-    fp = folder / name
-    if create:
-        fp.mkdir()
-    assert (create and fp.is_dir()) or (not create and not fp.is_dir())
-    return fp
-
-
-def prep_images_folder(folder: Path, create: bool) -> Path:
-    return _prep_subfolder(folder=folder, name="images", create=create)
-
-
-def prep_output_folder(folder: Path, create: bool) -> Path:
-    return _prep_subfolder(folder=folder, name="output", create=create)
-
-
 CONFIG_FILE_SPECS = [
     CliOptProvision(opt, lambda p: p / "config.yaml", (lambda p: p.write_text("", encoding='utf-8')) if create else None) 
     for opt, create in itertools.product((None, "-C", "--config-file"), (False, True))
@@ -129,28 +103,6 @@ def test_required_inputs(tmp_path, cli, expect_success):
             pytest.fail("When testing, unexpected success is a failure!")
 
 
-@pytest.fixture
-def prepped_minimal_config_data(tmp_path, seq_images_path):
-    analysis_path = tmp_path / "analysis"
-    analysis_path.mkdir()
-    seq_images_path.mkdir(parents=True)
-    return {
-        "analysis_path": str(analysis_path),
-        "analysis_prefix": "TESTING__",
-        "decon_input_name": "seq_images_raw_decon"
-    }
-
-
-@pytest.fixture
-def images_all_path(tmp_path):
-    return tmp_path / "images_all"
-
-
-@pytest.fixture
-def seq_images_path(images_all_path):
-    return images_all_path / "seq_images_raw"
-
-
 @pytest.mark.parametrize("config_file_option", ["-C", "--config-file"])
 @pytest.mark.parametrize("images_folder_option", ["-I", "--images-folder"])
 @pytest.mark.parametrize("output_folder_option", ["-O", "--output-folder"])
@@ -171,23 +123,6 @@ def test_logging(tmp_path, prepped_minimal_config_data, caplog, config_file_opti
     # See: https://github.com/databio/pypiper/issues/186
     looptrace_pipeline.init(opts).manager.stop_pipeline()
     assert f"Building {looptrace_pipeline.PIPE_NAME} pipeline from {conf_path}, to use images from {imgs_path}" in caplog.text
-
-
-def test_no_deconvolution_input(tmp_path, prepped_minimal_config_data):
-    conf_path = tmp_path / "config.yaml"
-    with open(conf_path, 'w') as fh:
-        yaml.dump(prepped_minimal_config_data, fh)
-    imgs_path = prep_images_folder(tmp_path, create=True)
-    output_folder = prep_output_folder(tmp_path, create=True)
-    cmdl = [
-        "--config-file", str(conf_path), 
-        "--images-folder", str(imgs_path), 
-        "--output-folder", str(output_folder), 
-        looptrace_pipeline.NO_TEE_LOGS_OPTNAME, 
-        "--start-point", "deconvolution",
-        ]
-    with pytest.raises(MissingInputException):
-        looptrace_pipeline.main(cmdl)
 
 
 @pytest.mark.skip("not implemented")
