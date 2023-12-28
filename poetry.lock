@@ -4665,9 +4665,9 @@ legacy-support = ["imagecodecs"]
 nuclei = ["cellpose"]
 pipeline = ["cellpose", "czifile", "flowdec", "joblib", "nd2", "piper", "tensorflow", "tensorrt", "tifffile"]
 polymer = ["numba"]
-test = ["hypothesis", "piper", "pytest", "pytest-skip-slow"]
+test = ["hypothesis", "joblib", "nd2", "piper", "pytest", "pytest-skip-slow"]
 
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "bf26908ef16103d9f2762810aa3cf5730372bc389ede247c64e29817fbc8c8e0"
+content-hash = "ae0fcb1b11a9a254e50167da6b1dbd67d6cfe66c6d8b4cd5736174056d442164"
