@@ -8,7 +8,6 @@ EMBL Heidelberg
 
 import copy
 import itertools
-import multiprocessing as mp
 from operator import itemgetter
 import os
 from pathlib import Path
@@ -24,38 +23,12 @@ import numpy as np
 import tqdm
 import zarr
 
+from looptrace.integer_naming import get_position_name_1
 
+
+POSITION_EXTRACTION_REGEX = r"(Point\d+)"
+TIME_EXTRACTION_REGEX = r"(Time\d+)"
 TIFF_EXTENSIONS = [".tif", ".tiff"]
-
-
-def _save_filepath_data_pair(t: Tuple[Path, np.ndarray]):
-    fp, arr = t
-    np.save(fp, arr, allow_pickle=True)
-    return fp
-
-
-def split_npz(npz_file: Path, outdir: Path, cores: Optional[int] = None) -> Iterable[Path]:
-    print(f"Reading NPZ: {npz_file}")
-    all_data = np.load(npz_file, allow_pickle=True)
-    args = ((outdir / fn, data) for fn, data in all_data.items())
-    if 1 == (cores or 1):
-        print("Using 1 core to split NPZ")
-        filepaths = list(map(_save_filepath_data_pair, args))
-    else:
-        print(f"Cores to split NPZ: {cores}")
-        with mp.Pool(cores) as workers:
-            filepaths = list(workers.starmap(_save_filepath_data_pair, args))
-    return filepaths
-
-
-def standardise_npz(npz_file: Path) -> Path:
-    """Convert manually written (here in looptrace) zipped numpy arrays to canonical form."""
-    print(f"Reading NPZ: {npz_file}")
-    data = np.load(npz_file, allow_pickle=True)
-    newfile = npz_file.with_suffix(".standardised.npz")
-    print(f"Writing new NPZ file: {newfile}")
-    np.savez(newfile, **data.items())
-    return newfile
 
 
 def ignore_path(p: Union[str, os.DirEntry, Path]) -> bool:
@@ -177,69 +150,12 @@ def multipos_nd2_to_dask(folder: str):
     return out
 
 
-def stack_nd2_to_dask(folder: str, position_id: int = None):
-    '''The function takes a folder path and returns a list of dask arrays and a 
-    list of image folders by reading multiple nd2 images where each represents a 3D stack (split by position and time) in a single folder.
-    Extracts some useful metadata from the first file in the folder.
-    Args:
-        folder (str): Input folder path
+def parse_positions_from_text(s: str) -> List[str]:
+    return re.findall(POSITION_EXTRACTION_REGEX, s)
 
-    Returns:
-        list: list of dask arrays of the images
-        list: names of positions
-        dict: metadata dictionary
-    '''
 
-    import nd2
-    image_files = sorted([p.path for p in os.scandir(folder) if (p.name.endswith('.nd2') and not p.name.startswith('_'))])
-    
-    metadata = {}
-    with nd2.ND2File(image_files[0]) as sample:
-        voxels = sample.voxel_size()
-        metadata['voxel_size'] = [voxels.z, voxels.y, voxels.x]
-        microscope = sample.metadata.channels[0].microscope
-        metadata['microscope'] = {
-            'objectiveMagnification': microscope.objectiveMagnification,
-            'objectiveName': microscope.objectiveName,
-            'objectiveNumericalAperture':microscope.objectiveNumericalAperture,
-            'zoomMagnification': microscope.zoomMagnification,
-            'immersionRefractiveIndex': microscope.immersionRefractiveIndex,
-            'modalityFlags': microscope.modalityFlags
-            }
-        for channel in sample.metadata.channels:
-            metadata['channel_' + str(channel.channel.index)] = {
-                'name': channel.channel.name,
-                'emissionLambdaNm': channel.channel.emissionLambdaNm,
-                'excitationLambdaNm': channel.channel.excitationLambdaNm,
-                }
-    
-    image_times = sorted(list(set([re.findall('.+(Time\d+)', s)[0] for s in image_files])))
-    image_points = sorted(list(set([re.findall('.+(Point\d+)', s)[0] for s in image_files])))
-    pos_names = ["P" + str(i + 1).zfill(4) for i in range(len(image_points))]
-
-    if position_id is not None:
-        image_points = [image_points[position_id]]
-        pos_names = [pos_names[position_id]]
-
-    pos_stack = []
-    for p in tqdm.tqdm(image_points):
-        t_stack = []
-        for t in image_times:
-            path = list(filter(lambda s: (p in s) and (t in s), image_files))[0]
-            try:
-                with nd2.ND2File(path, validate_frames = False) as imgdat:
-                    arr = imgdat.to_dask()
-            except OSError as e:
-                print(f'Issue with ND2 file ({path}): {e}')
-                arr = da.zeros_like(pos_stack[0][0])
-            t_stack.append(arr)
-        pos_stack.append(da.stack(t_stack))
-    
-    out = da.stack(pos_stack)
-    out = da.moveaxis(out, 2, 3)
-    print('Loaded nd2 arrays of shape ', out.shape)
-    
-    return out, pos_names, metadata
+def parse_times_from_text(s: str) -> List[str]:
+    return re.findall(TIME_EXTRACTION_REGEX, s)
 
 
 def stack_tif_to_dask(folder: str):
@@ -256,13 +172,12 @@ def stack_tif_to_dask(folder: str):
     
     image_files = sorted([p.path for p in os.scandir(folder) if _has_tiff_extension(p)])
     try:
-        image_times = sorted(list(set([re.findall('.+(Time\d+)', s)[0] for s in image_files])))
+        image_times = sorted(list(set([parse_times_from_text(s)[0] for s in image_files])))
     except IndexError:
         time_dim = False
     else:
         time_dim = True
-    image_points = sorted(list(set([re.findall('.+(Point\d+)', s)[0] for s in image_files])))
-    #print(image_folders)
+    image_points = sorted(list(set([parse_positions_from_text(s)[0] for s in image_files])))
     out = []
     for p in tqdm.tqdm(image_points):
         if time_dim:
@@ -278,11 +193,6 @@ def stack_tif_to_dask(folder: str):
             arr = da.moveaxis(arr, 0, 1)
             t_stack = [arr]
         out.append(da.stack(t_stack))
-    
-    #out = da.stack(pos_stack)
-    #out = da.moveaxis(out, 2, 3)
-    #print('Loaded nd2 arrays of shape ', out.shape)
-    #pos_names = #["P"+str(i+1).zfill(4) for i in image_points]
     return out, image_points
 
 
@@ -311,7 +221,7 @@ def single_position_to_zarr(images: np.ndarray or list,
         '''
         z[idx] = img
     
-    store = zarr.DirectoryStore(path+os.sep+pos_name+'.zarr')
+    store = zarr.DirectoryStore(os.path.join(path, pos_name + ".zarr"))
     root = zarr.group(store=store, overwrite=True)
 
     size = {}
@@ -369,7 +279,7 @@ def images_to_ome_zarr(images: np.ndarray or list,
 
     if 'p' in axes:
         for i, pos_img in enumerate(images):
-            pos_name = 'P'+str(i+1).zfill(4)
+            pos_name = get_position_name_1(i)
             single_position_to_zarr(pos_img, path, name, pos_name, dtype, axes[1:], chunk_axes, chunk_split, metadata)
     else:
         single_position_to_zarr(images, path, name, pos_name, dtype, axes, chunk_axes, chunk_split, metadata)

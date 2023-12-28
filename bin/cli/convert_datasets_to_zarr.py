@@ -15,7 +15,7 @@ import numpy as np
 import tqdm
 
 from gertils import ExtantFile, ExtantFolder
-from looptrace import image_io
+from looptrace import image_io, nd2io
 from looptrace.ImageHandler import handler_from_cli
 
 
@@ -23,7 +23,7 @@ def workflow(n_pos: int, input_folders: Iterable[Path], output_folder: Path) -> 
     for pos_id in tqdm.tqdm(range(int(n_pos))):
         imgs = []
         for f in input_folders:
-            folder_imgs, _, folder_metadata = image_io.stack_nd2_to_dask(f, position_id=pos_id)
+            folder_imgs, _, folder_metadata = nd2io.stack_nd2_to_dask(f, position_id=pos_id)
             imgs.append(folder_imgs[0])
         imgs = da.concatenate(imgs, axis=0)
         print(folder_metadata)
