@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Set up Poetry
-        uses: snok/setup-poetry@v1    # v1.3.4 at time of adoption
+        uses: snok/install-poetry@v1    # v1.3.4 at time of adoption
         with:
           poetry-version: "1.7.1"
       - uses: actions/cache@v2
