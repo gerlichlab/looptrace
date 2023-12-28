@@ -183,6 +183,7 @@ def set_analysis_path(handler: ImageHandler, p: Union[str, Path, ExtantFolder]) 
         (lambda df: 1 < len(df[(df[COARSE_SHIFT_COLUMNS] == 0).apply(lambda r: r.all(), axis=1)].frame.unique()), "exists_nonreference_frame_with_all_zero_shift")
     ]
 ])
+@pytest.mark.slow
 def test_data_precheck(coarse_drift_table, check_table):
     assert check_table(coarse_drift_table)
 
