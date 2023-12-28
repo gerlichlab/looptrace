@@ -1,0 +1,8 @@
+name: Python CI
+
+on: [push, pull_request]
+
+jobs:
+  pytest:
+    uses: ./.github/workflows/python-tests.yml
+
