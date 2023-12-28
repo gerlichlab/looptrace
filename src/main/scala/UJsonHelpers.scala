@@ -1,7 +1,7 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
 import scala.util.Try
-import cats.data.ValidatedNel
+import cats.data.{ NonEmptyList as NEL, ValidatedNel }
 import cats.syntax.all.*
 
 /** Helpers for working with the excellent uJson project */
@@ -43,6 +43,9 @@ object UJsonHelpers:
     def safeExtract[A](key: String, lift: String => A)(json: ujson.Value): ValidatedNel[String, A] = 
         safeExtractStr(key)(json) `map` lift
     
+    def safeExtractE[A](key: String, lift: String => Either[String, A])(json: ujson.Value): ValidatedNel[String, A] = 
+        (safeExtractStr(key)(json).toEither >>= lift.fmap(_.leftMap(NEL.one))).toValidated
+
     /** Try to extract a text value at the given key in the given (presumed Object) JSON value. */
     def safeExtractStr(key: String)(json: ujson.Value): ValidatedNel[String, String] = 
         Try{ json(key).str }.toEither.leftMap(_.getMessage).toValidatedNel
