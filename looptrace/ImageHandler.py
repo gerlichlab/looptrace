@@ -288,7 +288,7 @@ def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[
                 print(f"WARNING -- multiple ({len(exts)}) extensions found in folder {image_path}: {', '.join(exts)}")
             sample_ext = list(exts)[0]
             if sample_ext == '.nd2':
-                from .image_io import stack_nd2_to_dask
+                from .nd2io import stack_nd2_to_dask
                 def parse(p):
                     arrays, pos_names, _ = stack_nd2_to_dask(p)
                     return arrays, pos_names
