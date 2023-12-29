@@ -329,10 +329,10 @@ object LabelAndFilterRois:
       * @return A mapping from item to set of proximal (closer than given distance threshold) neighbors, omitting each item with no neighbors; 
       *         otherwise, a {@code Left}-wrapped error message about what went wrong
       */
-    def buildNeighboringRoisFinder(rois: List[RoiIdxPair], minDist: DistanceThreshold)(grouping: List[ProbeGroup]): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
-        given orderForRoiIdxPair: Order[RoiIdxPair] = Order.by(_._2)
-        val getPoint = (_: RoiIdxPair)._1.centroid
-        val groupedRoiIdxPairs: Either[String, Map[RoiIdxPair, NonEmptySet[RoiIdxPair]]] = 
+    def buildNeighboringRoisFinder(rois: List[RoiLinenumPair], minDist: DistanceThreshold)(grouping: List[ProbeGroup]): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
+        given orderForRoiLinenumPair: Order[RoiLinenumPair] = Order.by(_._2)
+        val getPoint = (_: RoiLinenumPair)._1.centroid
+        val groupedRoiLinenumPairs: Either[String, Map[RoiLinenumPair, NonEmptySet[RoiLinenumPair]]] = 
             if grouping.isEmpty 
             then buildNeighborsLookupKeyed(getPoint)(rois.map{ case t@(r, _) => r.position -> t }, minDist).asRight
             else {
@@ -359,7 +359,7 @@ object LabelAndFilterRois:
                         )
                 }
             }
-        groupedRoiIdxPairs.map(_.map{ case ((_, idx), indexedNeighbors) => idx -> indexedNeighbors.map(_._2) })
+        groupedRoiLinenumPairs.map(_.map{ case ((_, idx), indexedNeighbors) => idx -> indexedNeighbors.map(_._2) })
     }
 
     /** Parse a {@code ROI} value from an in-memory representation of a single line from a CSV file. */
@@ -483,7 +483,7 @@ object LabelAndFilterRois:
     /* Type aliases */
     type LineNumber = NonnegativeInt
     type PosInt = PositiveInt
-    type RoiIdxPair = (Roi, NonnegativeInt)
+    type RoiLinenumPair = (Roi, NonnegativeInt)
     type Timepoint = FrameIndex
     
     /* Distinguish, at the type level, the semantic meaning of each output target. */

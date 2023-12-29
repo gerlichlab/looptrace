@@ -13,6 +13,7 @@ import org.scalatest.matchers.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ 
     Coordinate, 
+    DistanceThreshold,
     EuclideanDistance, 
     PiecewiseDistance, 
     Point3D, 
@@ -28,10 +29,9 @@ import at.ac.oeaw.imba.gerlich.looptrace.LabelAndFilterRois.{
     LineNumber, 
     ProbeGroup,
     Roi, 
-    RoiIdxPair
+    RoiLinenumPair
 }
-import at.ac.oeaw.imba.gerlich.looptrace.space.DistanceThreshold
-import cats.data.NonEmptySeq
+
 
 /** Tests for the filtration of the individual supports (single FISH probes) of chromatin fiber traces */
 class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite, ScalacheckSuite, should.Matchers:
@@ -41,6 +41,8 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
     test("The collection of ROIs parsed from filtered output is identical to that of the subset of input that has no proximal neighbors.") { pending }
 
     test("The collection of ROIs parsed from input is identical to the collection of ROIs parsed from unfiltered, labeled output.") { pending }
+
+    test("Spot distance comparison operates in real space, NOT downsampled space. #143") { pending }
 
     test("Spot distance comparison responds to change of proximity comparison strategy #146.") { pending }
 
@@ -55,7 +57,9 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
     
     test("Probe grouping must partition regional barcode frames: A probe grouping declaration with an overlap (probe/frame repeated between groups) an error.") { pending }
 
-    test("ROI grouping by frame/probe/timepoint is specific to field-of-view, so that ROIs from different FOVs don't affect each other for filtering.") {
+    test("More proximal neighbors from different FOVs don't pair, while less proximal ones from the same FOV do pair. #150") { pending }
+
+    test("ROI grouping by frame/probe/timepoint is specific to field-of-view, so that ROIs from different FOVs don't affect each other for filtering. #150") {
         
         /* Create all partitions of 5 as 2 and 3, mapping each partition to a position value for ROIs to be made. */
         val roiIndices = 0 until 5
@@ -63,12 +67,12 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             group => roiIndices.toList.map(i => s"P000${if group.contains(i) then 1 else 2}.zarr")
         }
         
-        /* Assert property for all partitions (on position) of 5 ROIs into a group of 2 and group of 3 */
+        /* Assert property for all partitions (on position) of 5 ROIs into a group of 2 and group of 3. */
         forAll (Table("positions", partitions.toList*)) { case positionAssigments =>
             /* Build ROIs with position assigned as randomised, and with index within list. */
             val roisWithIndex = NonnegativeInt.indexed(positionAssigments).map(_.leftMap{ pos => canonicalRoi.copy(position = pos) })
             /* Create the expected neighboring ROIs grouping, based on fact that all ROIs within each position group are coincident. */
-            given orderForPair: Order[RoiIdxPair] = Order.by(_._2)
+            given orderForPair: Order[RoiLinenumPair] = Order.by(_._2)
             val expected = roisWithIndex.groupBy(_._1.position).values.map(_.map(_._2)).foldLeft(Map.empty[LineNumber, NonEmptySet[LineNumber]]){
                 case (result, indexGroup) => 
                     val neighbors: NonEmptySet[LineNumber] = indexGroup.toNel.get.toNes
