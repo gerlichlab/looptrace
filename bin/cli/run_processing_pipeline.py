@@ -32,48 +32,58 @@ from run_tracing_qc import workflow as qc_label_and_filter_traces
 
 logger = logging.getLogger(__name__)
 
+DECON_STAGE_NAME = "deconvolution"
 NO_TEE_LOGS_OPTNAME = "--do-not-tee-logs"
 PIPE_NAME = "looptrace"
+SPOT_DETECTION_STAGE_NAME = "spot_detection"
+TRACING_QC_STAGE_NAME = "tracing_QC"
 
 
 class LooptracePipeline(pypiper.Pipeline):
+    """Main looptrace processing pipeline"""
 
     def __init__(self, config_file: ExtantFile, images_folder: ExtantFolder, output_folder: ExtantFolder, **pl_mgr_kwargs: Any) -> None:
         self.config_file = config_file
         self.images_folder = images_folder
         super(LooptracePipeline, self).__init__(name=PIPE_NAME, outfolder=str(output_folder.path), **pl_mgr_kwargs)
 
-    def stages(self) -> List[Callable]:
-        conf_data_pair = (self.config_file, self.images_folder)
-        conf_only = (self.config_file, )
-        func_args_pairs = (
-            ("pipeline_precheck", pretest, conf_only),
-            ("zarr_production", run_zarr_production, conf_data_pair),
-            ("psf_extraction", run_psf_extraction, conf_data_pair),
-            ("deconvolution", run_deconvolution, conf_data_pair), # Really just for denoising, no need for structural disambiguation
-            ("drift_correction__coarse", run_coarse_drift_correction, conf_data_pair), 
-            #("nuclei_detection", run_nuclei_detection, conf_data_pair), 
-            ("bead_roi_generation", gen_all_bead_rois, conf_data_pair), # Find/define all the bead ROIs in each (FOV, frame) pair.
+    @staticmethod
+    def name_fun_getargs_bundles() -> List[Tuple[str, callable, Callable[[Tuple[ExtantFile, ExtantFolder]], Union[Tuple[ExtantFile], Tuple[ExtantFile, ExtantFolder]]]]]:
+        take1 = lambda config, _: (config, )
+        take2 = lambda config, images: (config, images)
+        return [
+            ("pipeline_precheck", pretest, take1),
+            ("zarr_production", run_zarr_production, take2),
+            ("psf_extraction", run_psf_extraction, take2),
+            (DECON_STAGE_NAME, run_deconvolution, take2), # Really just for denoising, no need for structural disambiguation
+            ("drift_correction__coarse", run_coarse_drift_correction, take2), 
+            #("nuclei_detection", run_nuclei_detection, take2), 
+            ("bead_roi_generation", gen_all_bead_rois, take2), # Find/define all the bead ROIs in each (FOV, frame) pair.
             # Count detected bead ROIs for each timepoint, mainly to see if anything went awry during some phase of the imaging, e.g. air bubble.
-            ("bead_roi_detection_analysis", run_all_bead_roi_detection_analysis, conf_data_pair),
-            ("bead_roi_partition", partition_bead_rois, conf_data_pair),
-            ("drift_correction__fine", run_fine_drift_correction, conf_data_pair),
-            ("drift_correction_accuracy_analysis", run_drift_correction_analysis, conf_data_pair), 
-            ("drift_correction_accuracy_visualisation", run_drift_correction_accuracy_visualisation, conf_only), 
-            ("spot_detection", run_spot_detection, conf_data_pair), # generates *_rois.csv (regional spots)
-            ("spot_proximity_filtration", run_spot_proximity_filtration, conf_data_pair),
-            ("spot_nucleus_filtration", run_spot_nucleus_filtration, conf_data_pair), 
-            ("clean_1", run_cleanup, conf_only),
-            ("spot_bounding", run_spot_bounding, conf_data_pair), # computes pad_x_min, etc.; writes *_dc_rois.csv (much bigger, since regional spots x frames)
-            ("spot_extraction", run_spot_extraction, conf_data_pair),
-            ("spot_zipping", run_spot_zipping, conf_data_pair),
-            ("clean_2", run_cleanup, conf_only), 
-            ("tracing", run_chromatin_tracing, conf_data_pair),
-            ("spot_region_distances", run_frame_name_and_distance_application, conf_data_pair), 
-            ("tracing_QC", qc_label_and_filter_traces, conf_data_pair),
-            ("clean_3", run_cleanup, conf_only),
-        )
-        return [pypiper.Stage(func=fxn, f_args=fxn_args, name=name) for name, fxn, fxn_args in func_args_pairs]
+            ("bead_roi_detection_analysis", run_all_bead_roi_detection_analysis, take2),
+            ("bead_roi_partition", partition_bead_rois, take2),
+            ("drift_correction__fine", run_fine_drift_correction, take2),
+            ("drift_correction_accuracy_analysis", run_drift_correction_analysis, take2), 
+            ("drift_correction_accuracy_visualisation", run_drift_correction_accuracy_visualisation, take1), 
+            (SPOT_DETECTION_STAGE_NAME, run_spot_detection, take2), # generates *_rois.csv (regional spots)
+            ("spot_proximity_filtration", run_spot_proximity_filtration, take2),
+            ("spot_nucleus_filtration", run_spot_nucleus_filtration, take2), 
+            ("clean_1", run_cleanup, take1),
+            ("spot_bounding", run_spot_bounding, take2), # computes pad_x_min, etc.; writes *_dc_rois.csv (much bigger, since regional spots x frames)
+            ("spot_extraction", run_spot_extraction, take2),
+            ("spot_zipping", run_spot_zipping, take2),
+            ("clean_2", run_cleanup, take1), 
+            ("tracing", run_chromatin_tracing, take2),
+            ("spot_region_distances", run_frame_name_and_distance_application, take2), 
+            (TRACING_QC_STAGE_NAME, qc_label_and_filter_traces, take2),
+            ("clean_3", run_cleanup, take1),
+        ]
+
+    def stages(self) -> List[Callable]:
+        return [
+            pypiper.Stage(func=fxn, f_args=get_args(self.config_file, self.images_folder), name=name) 
+            for name, fxn, get_args in self.name_fun_getargs_bundles()
+        ]
 
 
 def parse_cli(args: Iterable[str]) -> argparse.Namespace:
