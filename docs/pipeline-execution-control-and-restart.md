@@ -1,14 +1,15 @@
 
 # Controlling pipeline execution
 ## Overview
-The main `looptrace` processing pipeline is built with [pypiper]().
+The main `looptrace` processing pipeline is built with [pypiper](https://pypi.org/project/piper/).
 One feature of such a pipeline is that it may be started and stopped at arbitrary points.
 To do so, the start and end points must be specified by name of processing stage.
 
 To __start__ the pipeline from a specific point, use `--start-point <stage name>`.
+
 To __stop__ the pipeline...
-    ...just _before_ a specific point, use `--stop-before <stage name>`.
-    ...just _after_ a specific point, use `--stop-after <stage name>`.
+    * ...just _before_ a specific point, use `--stop-before <stage name>`.
+    * ...just _after_ a specific point, use `--stop-after <stage name>`.
 
 ## Restarting the pipeline...
 When experimenting with different parameter settings for one or more stages, it's common to want to restart the pipeline from a specific point.
@@ -22,9 +23,11 @@ This is critical since the semaphore / checkpoint files will influence pipeline 
 You should copy to this folder any checkpoint files of any stages upstream of the one from which you want the restart to begin.
 Even though `--start-point` should allow the restart to begin from where's desired, if that's forgotten the checkpoint files should save you.
 
-Generate (`touch`) an empty `.checkpoint` file for each you'd like to skip.
+Generate an empty checkpoint file for each you'd like to skip. 
+Simply create (`touch`) each such file `<stage>.checkpoint` in the desired pypiper output folder.
+Below are the sequential pipeline stage names.
 
-### Pipeline stages
+### Pipeline stage names
 * pipeline_precheck
 * zarr_production
 * psf_extraction
