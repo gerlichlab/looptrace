@@ -79,13 +79,16 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
     test("Spot distance comparison is accurate, uses drift correction--coarse, fine, or both, and is invariant under order of drifts.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         
+        // Header for spots (ROIs) file
         val header = ",position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max"
 
+        // Generate permutations of lines to test invariance under input order.
         def genLinesPermutation(linesBlock: String): Gen[Array[String]] = {
             val lines = linesBlock.stripMargin.split("\n")
             Gen.const(lines.head +: Random.shuffle(lines.tail).toArray)
         }
 
+        // The ROIs data for each test iteration
         val spotsText = """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
             |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
             |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
@@ -105,11 +108,13 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             |15,P0001.zarr,30,0,14.4,589.5,1779.3,2,18,572,604,1763,1795
             |""".stripMargin
         
+        // Constructors of a definition of pairwise point proximity
         val thresholdBuilders = List(
             EuclideanDistance.Threshold.apply, 
             PiecewiseDistance.ConjunctiveThreshold.apply, 
             )
         
+        // Pairs of threshold and (filtered) output expectation under zero drift
         val zeroDriftExpectations =
             // When min separation is infinitely small, nothing is proximal and everything is kept.
             thresholdBuilders.map(tt => tt(NonnegativeReal(0.0)) -> spotsText) ::: 
@@ -194,35 +199,34 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 |""".stripMargin, 
         )
         
-        val nonzeroDriftLines = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
-            |0,27,P0001.zarr,-2.0,8.0,-24.0,0.3048142040458287,0.2167426082715708,0.46295638298323727
-            |1,28,P0001.zarr,-2.0,8.0,-20.0,0.6521556133243969,-0.32279031643811845,0.8467576764912169
-            |2,29,P0001.zarr,0.0,6.0,-16.0,-0.32831460930799267,0.5707716296861373,0.768359957646404
-            |3,30,P0001.zarr,0.0,6.0,-12.0,-0.6267951175716121,0.24476613641147094,0.5547602737043816
-            |""".stripMargin
+        object DriftFileTexts:
+            val allZero = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
+                |0,27,P0001.zarr,0,0,0,0,0,0
+                |1,28,P0001.zarr,0,0,0,0,0,0
+                |2,29,P0001.zarr,0.0,0,0,0,0,0
+                |3,30,P0001.zarr,0.0,0,0,0,0,0
+                |""".stripMargin
+            val nonZero = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
+                |0,27,P0001.zarr,-2.0,8.0,-24.0,0.3048142040458287,0.2167426082715708,0.46295638298323727
+                |1,28,P0001.zarr,-2.0,8.0,-20.0,0.6521556133243969,-0.32279031643811845,0.8467576764912169
+                |2,29,P0001.zarr,0.0,6.0,-16.0,-0.32831460930799267,0.5707716296861373,0.768359957646404
+                |3,30,P0001.zarr,0.0,6.0,-12.0,-0.6267951175716121,0.24476613641147094,0.5547602737043816
+                |""".stripMargin
+            val zeroCoarse = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
+                |0,27,P0001.zarr,0.0,0.0,0.0,0.3048142040458287,0.2167426082715708,0.46295638298323727
+                |1,28,P0001.zarr,0.0,0.0,0.0,0.6521556133243969,-0.32279031643811845,0.8467576764912169
+                |2,29,P0001.zarr,0.0,0.0,0.0,-0.32831460930799267,0.5707716296861373,0.768359957646404
+                |3,30,P0001.zarr,0.0,0.0,0.0,-0.6267951175716121,0.24476613641147094,0.5547602737043816
+                |""".stripMargin
+            val zeroFine = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
+                |0,27,P0001.zarr,-2.0,8.0,-24.0,0,0,0
+                |1,28,P0001.zarr,-2.0,8.0,-20.0,0,0,0
+                |2,29,P0001.zarr,0.0,6.0,-16.0,0,0,0
+                |3,30,P0001.zarr,0.0,6.0,-12.0,0,0,0
+                |""".stripMargin
+        end DriftFileTexts
 
-        val zeroCoarseDriftLines = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
-            |0,27,P0001.zarr,0.0,0.0,0.0,0.3048142040458287,0.2167426082715708,0.46295638298323727
-            |1,28,P0001.zarr,0.0,0.0,0.0,0.6521556133243969,-0.32279031643811845,0.8467576764912169
-            |2,29,P0001.zarr,0.0,0.0,0.0,-0.32831460930799267,0.5707716296861373,0.768359957646404
-            |3,30,P0001.zarr,0.0,0.0,0.0,-0.6267951175716121,0.24476613641147094,0.5547602737043816
-            |""".stripMargin
-
-        val zeroFineDriftLines = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
-            |0,27,P0001.zarr,-2.0,8.0,-24.0,0,0,0
-            |1,28,P0001.zarr,-2.0,8.0,-20.0,0,0,0
-            |2,29,P0001.zarr,0.0,6.0,-16.0,0,0,0
-            |3,30,P0001.zarr,0.0,6.0,-12.0,0,0,0
-            |""".stripMargin
-
-        val zeroDriftLines = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
-            |0,27,P0001.zarr,0,0,0,0,0,0
-            |1,28,P0001.zarr,0,0,0,0,0,0
-            |2,29,P0001.zarr,0.0,0,0,0,0,0
-            |3,30,P0001.zarr,0.0,0,0,0,0,0
-            |""".stripMargin
-
-        forAll (Table(("driftLines", "threshold", "expectOutput"), zeroDriftExpectations.map((t, exp) => (zeroCoarseDriftLines, t, exp))*)) { 
+        forAll (Table(("driftLines", "threshold", "expectOutput"), zeroDriftExpectations.map((t, exp) => (DriftFileTexts.allZero, t, exp))*)) { 
             (driftLines, threshold, expectOutput) => forAll (genLinesPermutation(driftLines), arbitrary[ExtantOutputHandler]) { 
                 (driftLines, handleOutput) => withTempDirectory{ (tmpdir: os.Path) => 
                     val expLines = expectOutput.stripMargin.split("\n").toList
