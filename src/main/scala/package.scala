@@ -80,9 +80,6 @@ package object looptrace {
     extension [I, O](f: I => Unit)
         def returning(o: O): I => O = f `andThen` Function.const(o)
 
-    extension [X](xs: List[X])(using ev: Order[X])
-        def sortByCats: List[X] = xs.sorted(ev.toOrdering)
-
     extension [A](t: Try[A])
         def toValidatedNel: ValidatedNel[Throwable, A] = t.toEither.toValidatedNel
 

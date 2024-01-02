@@ -197,17 +197,25 @@ object LabelAndFilterRois:
         } }.asInstanceOf[List[DriftRecord]]
         println("Keying drifts...")
         val driftByPosTimePair = {
-            type Key = (String, FrameIndex)
-            val (repeats, keyed) = NonnegativeInt.indexed(drifts).foldLeft(Map.empty[Key, NonEmptySet[LineNumber]] -> Map.empty[Key, DriftRecord]){ 
-                case ((reps, acc), (drift, recnum)) =>  
-                    val p = drift.position
-                    val t = drift.time
-                    val k = p -> t
-                    if acc `contains` k 
-                    then (reps + (k -> reps.get(k).fold(NonEmptySet.one[LineNumber])(_.add)(recnum)), acc)
-                    else (reps, acc + (k -> drift))
+            val (recordNumbersByKey, keyed) = 
+                NonnegativeInt.indexed(drifts)
+                    .foldLeft(Map.empty[(String, FrameIndex), NonEmptySet[LineNumber]] -> Map.empty[(String, FrameIndex), DriftRecord]){ 
+                        case ((reps, acc), (drift, recnum)) =>  
+                            val p = drift.position
+                            val t = drift.time
+                            val k = p -> t
+                            reps.get(k) match {
+                                case None => (reps + (k -> NonEmptySet.one(recnum)), acc + (k -> drift))
+                                case Some(prevLineNums) => (reps + (k -> prevLineNums.add(recnum)), acc)
+                            }
+                    }
+            val repeats = recordNumbersByKey.filter(_._2.size > 1)
+            if (repeats.nonEmpty) { 
+                val simpleReps = repeats.toList.map{ 
+                    case ((p, FrameIndex(t)), lineNums) => (p, t) -> lineNums.toList.sorted
+                }.sortBy(_._1)
+                throw new Exception(s"${simpleReps.length} repeated (pos, time) pairs: ${simpleReps}")
             }
-            if (repeats.nonEmpty) { throw new Exception(s"${repeats.size} repeated (pos, time) pairs: ${repeats}") }
             keyed
         }
         
@@ -488,7 +496,11 @@ object LabelAndFilterRois:
     
     /* Distinguish, at the type level, the semantic meaning of each output target. */
     opaque type FilteredOutputFile <: os.Path = os.Path
+    object FilteredOutputFile:
+        def fromPath(p: os.Path): FilteredOutputFile = p : FilteredOutputFile
     opaque type UnfilteredOutputFile <: os.Path = os.Path
+    object UnfilteredOutputFile:
+        def fromPath(p: os.Path): UnfilteredOutputFile = p : UnfilteredOutputFile
 
     extension [A](rw: ReadWriter[List[A]])
         def toNel(context: String): ReadWriter[NEL[A]] = 

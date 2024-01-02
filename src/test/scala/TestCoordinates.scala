@@ -1,15 +1,15 @@
 package at.ac.oeaw.imba.gerlich.looptrace.space
 
 import scala.util.{ NotGiven, Random }
+import cats.Order
 import cats.syntax.order.*
 import org.scalacheck.{ Arbitrary, Gen }
 import org.scalacheck.Arbitrary.arbitrary
-import org.scalacheck.Gen
 
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should
 
-import at.ac.oeaw.imba.gerlich.looptrace.{ sortByCats, ScalacheckSuite }
+import at.ac.oeaw.imba.gerlich.looptrace.ScalacheckSuite
 
 /** Tests for the geometric coordinate abstractions */
 class TestCoordinates extends AnyFunSuite, ScalacheckSuite, should.Matchers:
@@ -79,5 +79,8 @@ class TestCoordinates extends AnyFunSuite, ScalacheckSuite, should.Matchers:
         val builtFirst = Random.shuffle(values).map(build).sortByCats
         orderedFirst shouldEqual builtFirst
     }
+
+    extension [X](xs: List[X])(using ev: Order[X])
+        def sortByCats: List[X] = xs.sorted(ev.toOrdering)
 
 end TestCoordinates

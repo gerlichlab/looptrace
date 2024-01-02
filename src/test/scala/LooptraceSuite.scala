@@ -21,6 +21,9 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
     given arbitraryForEuclideanThreshold(using arbT: Arbitrary[NonnegativeReal]): Arbitrary[EuclideanDistance.Threshold] = 
         arbT.map(EuclideanDistance.Threshold.apply)
 
+    given arbitraryForExtantOutputHandler: Arbitrary[ExtantOutputHandler] = 
+        Arbitrary{ Gen.oneOf(ExtantOutputHandler.values.toIndexedSeq) }
+
     given arbitraryForFrameIndex(using idx: Arbitrary[NonnegativeInt]): Arbitrary[FrameIndex] = idx.map(FrameIndex.apply)
 
     given arbitraryForPositionIndex(using idx: Arbitrary[NonnegativeInt]): Arbitrary[PositionIndex] = idx.map(PositionIndex.apply)
