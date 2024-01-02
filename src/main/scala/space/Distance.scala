@@ -61,10 +61,6 @@ object PiecewiseDistance:
     /** Distance threshold in which predicate comparing values to this threshold operates conjunctively over components */
     final case class ConjunctiveThreshold(get: NonnegativeReal) extends DistanceThreshold
 
-    /** Helpers for working with conjunctive distance threshold */
-    object ConjunctiveThreshold:
-        def infinite = ConjunctiveThreshold(NonnegativeReal(Double.PositiveInfinity))
-
     /** Are points closer than given threshold along any axis? */
     def within(threshold: ConjunctiveThreshold)(a: Point3D, b: Point3D): Boolean = ((a, b) match {
         case (

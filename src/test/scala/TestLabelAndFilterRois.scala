@@ -106,20 +106,10 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             |13,P0001.zarr,30,0,9,995,1780,1,17,679,711,564,596
             |14,P0001.zarr,30,0,8,993.2,1781,3,19,977,1009,1705,1737
             |15,P0001.zarr,30,0,14.4,589.5,1779.3,2,18,572,604,1763,1795
-            |""".stripMargin
-        
-        // Constructors of a definition of pairwise point proximity
-        val thresholdBuilders = List(
-            EuclideanDistance.Threshold.apply, 
-            PiecewiseDistance.ConjunctiveThreshold.apply, 
-            )
+            |"""
         
         // Pairs of threshold and (filtered) output expectation under zero drift
         val zeroDriftExpectations =
-            // When min separation is infinitely small, nothing is proximal and everything is kept.
-            thresholdBuilders.map(tt => tt(NonnegativeReal(0.0)) -> spotsText) ::: 
-            // When threshold is infinite, everything is proximal and nothing is kept.
-            thresholdBuilders.map(tt => tt(NonnegativeReal(Double.MaxValue)) -> header) ::: 
             List(
                 PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(1.0)) -> 
                 """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
@@ -172,7 +162,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 |13,P0001.zarr,30,0,9,995,1780,1,17,679,711,564,596
                 |14,P0001.zarr,30,0,8,993.2,1781,3,19,977,1009,1705,1737
                 |15,P0001.zarr,30,0,14.4,589.5,1779.3,2,18,572,604,1763,1795
-                |""".stripMargin, 
+                |""", 
                 EuclideanDistance.Threshold(NonnegativeReal.unsafe(sqrt(8.0))) -> 
                 """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
                 |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
@@ -185,7 +175,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
                 |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
                 |15,P0001.zarr,30,0,14.4,589.5,1779.3,2,18,572,604,1763,1795
-                |""".stripMargin, 
+                |""", 
                 EuclideanDistance.Threshold(NonnegativeReal.unsafe(sqrt(12.0))) -> 
                 """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
                 |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
@@ -196,42 +186,146 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 |6,P0001.zarr,29,0,10,589,1799,2,18,433,465,1283,1315
                 |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
                 |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
-                |""".stripMargin, 
+                |""", 
         )
         
+        // Drift file data
         object DriftFileTexts:
             val allZero = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
                 |0,27,P0001.zarr,0,0,0,0,0,0
                 |1,28,P0001.zarr,0,0,0,0,0,0
                 |2,29,P0001.zarr,0.0,0,0,0,0,0
                 |3,30,P0001.zarr,0.0,0,0,0,0,0
-                |""".stripMargin
+                |"""
             val nonZero = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
                 |0,27,P0001.zarr,-2.0,8.0,-24.0,0.3048142040458287,0.2167426082715708,0.46295638298323727
                 |1,28,P0001.zarr,-2.0,8.0,-20.0,0.6521556133243969,-0.32279031643811845,0.8467576764912169
                 |2,29,P0001.zarr,0.0,6.0,-16.0,-0.32831460930799267,0.5707716296861373,0.768359957646404
                 |3,30,P0001.zarr,0.0,6.0,-12.0,-0.6267951175716121,0.24476613641147094,0.5547602737043816
-                |""".stripMargin
+                |"""
             val zeroCoarse = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
                 |0,27,P0001.zarr,0.0,0.0,0.0,0.3048142040458287,0.2167426082715708,0.46295638298323727
                 |1,28,P0001.zarr,0.0,0.0,0.0,0.6521556133243969,-0.32279031643811845,0.8467576764912169
                 |2,29,P0001.zarr,0.0,0.0,0.0,-0.32831460930799267,0.5707716296861373,0.768359957646404
                 |3,30,P0001.zarr,0.0,0.0,0.0,-0.6267951175716121,0.24476613641147094,0.5547602737043816
-                |""".stripMargin
+                |"""
             val zeroFine = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
                 |0,27,P0001.zarr,-2.0,8.0,-24.0,0,0,0
                 |1,28,P0001.zarr,-2.0,8.0,-20.0,0,0,0
                 |2,29,P0001.zarr,0.0,6.0,-16.0,0,0,0
                 |3,30,P0001.zarr,0.0,6.0,-12.0,0,0,0
-                |""".stripMargin
+                |"""
         end DriftFileTexts
 
-        forAll (Table(("driftLines", "threshold", "expectOutput"), zeroDriftExpectations.map((t, exp) => (DriftFileTexts.allZero, t, exp))*)) { 
+        val extremeArguments: List[(String, DistanceThreshold, String)] = for {
+            drift <- List(
+                DriftFileTexts.allZero, 
+                DriftFileTexts.nonZero, 
+                DriftFileTexts.zeroCoarse, 
+                DriftFileTexts.zeroFine,
+                )
+            build <- List(EuclideanDistance.Threshold.apply, PiecewiseDistance.ConjunctiveThreshold.apply)
+            (value, expected) <- List(
+                // When min separation is infinitely small, nothing is proximal and everything is kept.
+                NonnegativeReal(0.0) -> spotsText, 
+                // When threshold is infinitely large, everything is proximal and nothing is kept.
+                NonnegativeReal(Double.MaxValue) -> header,
+                )
+        } yield (drift, build(value), expected)
+        
+        val zeroDriftArguments = zeroDriftExpectations.map((t, exp) => (DriftFileTexts.allZero, t, exp))
+        
+        val fineDriftOnlyArguments = List(
+            PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(0.25)) -> 
+            """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
+            |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
+            |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
+            |2,P0001.zarr,27,0,3,1878,314,0,11,1870,1886,47,347
+            |3,P0001.zarr,28,0,5.5,1380,1457,-1,14,1364,1396,1441,1473
+            |4,P0001.zarr,28,0,7,1378,1459.5,0,15,8,40,1343,1375
+            |6,P0001.zarr,29,0,10,589,1799,2,18,433,465,1283,1315
+            |7,P0001.zarr,29,0,12,588,1779,2,18,572,604,1763,1795
+            |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
+            |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
+            |11,P0001.zarr,30,0,10.1,549,1280.8,2,18,433,465,1283,1315
+            |12,P0001.zarr,30,0,10,548.5,1280.6,2,18,572,604,1763,1795
+            |13,P0001.zarr,30,0,9,995,1780,1,17,679,711,564,596
+            |14,P0001.zarr,30,0,8,993.2,1781,3,19,977,1009,1705,1737
+            |15,P0001.zarr,30,0,14.4,589.5,1779.3,2,18,572,604,1763,1795
+            |""",
+            EuclideanDistance.Threshold(NonnegativeReal(0.5)) -> 
+            """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
+            |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
+            |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
+            |2,P0001.zarr,27,0,3,1878,314,0,11,1870,1886,47,347
+            |3,P0001.zarr,28,0,5.5,1380,1457,-1,14,1364,1396,1441,1473
+            |4,P0001.zarr,28,0,7,1378,1459.5,0,15,8,40,1343,1375
+            |6,P0001.zarr,29,0,10,589,1799,2,18,433,465,1283,1315
+            |7,P0001.zarr,29,0,12,588,1779,2,18,572,604,1763,1795
+            |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
+            |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
+            |11,P0001.zarr,30,0,10.1,549,1280.8,2,18,433,465,1283,1315
+            |12,P0001.zarr,30,0,10,548.5,1280.6,2,18,572,604,1763,1795
+            |13,P0001.zarr,30,0,9,995,1780,1,17,679,711,564,596
+            |14,P0001.zarr,30,0,8,993.2,1781,3,19,977,1009,1705,1737
+            |15,P0001.zarr,30,0,14.4,589.5,1779.3,2,18,572,604,1763,1795
+            |""",
+            PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(0.75)) -> 
+            """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
+            |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
+            |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
+            |2,P0001.zarr,27,0,3,1878,314,0,11,1870,1886,47,347
+            |3,P0001.zarr,28,0,5.5,1380,1457,-1,14,1364,1396,1441,1473
+            |4,P0001.zarr,28,0,7,1378,1459.5,0,15,8,40,1343,1375
+            |6,P0001.zarr,29,0,10,589,1799,2,18,433,465,1283,1315
+            |7,P0001.zarr,29,0,12,588,1779,2,18,572,604,1763,1795
+            |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
+            |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
+            |13,P0001.zarr,30,0,9,995,1780,1,17,679,711,564,596
+            |14,P0001.zarr,30,0,8,993.2,1781,3,19,977,1009,1705,1737
+            |15,P0001.zarr,30,0,14.4,589.5,1779.3,2,18,572,604,1763,1795
+            |""",
+            EuclideanDistance.Threshold(NonnegativeReal(1.0)) -> 
+            """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
+            |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
+            |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
+            |2,P0001.zarr,27,0,3,1878,314,0,11,1870,1886,47,347
+            |3,P0001.zarr,28,0,5.5,1380,1457,-1,14,1364,1396,1441,1473
+            |4,P0001.zarr,28,0,7,1378,1459.5,0,15,8,40,1343,1375
+            |6,P0001.zarr,29,0,10,589,1799,2,18,433,465,1283,1315
+            |7,P0001.zarr,29,0,12,588,1779,2,18,572,604,1763,1795
+            |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
+            |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
+            |13,P0001.zarr,30,0,9,995,1780,1,17,679,711,564,596
+            |14,P0001.zarr,30,0,8,993.2,1781,3,19,977,1009,1705,1737
+            |15,P0001.zarr,30,0,14.4,589.5,1779.3,2,18,572,604,1763,1795
+            |""",
+            PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(4.0)) -> 
+            """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
+            |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
+            |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
+            |2,P0001.zarr,27,0,3,1878,314,0,11,1870,1886,47,347
+            |6,P0001.zarr,29,0,10,589,1799,2,18,433,465,1283,1315
+            |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
+            |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
+            |""",
+            EuclideanDistance.Threshold(NonnegativeReal(4.0)) -> 
+            """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
+            |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
+            |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
+            |2,P0001.zarr,27,0,3,1878,314,0,11,1870,1886,47,347
+            |6,P0001.zarr,29,0,10,589,1799,2,18,433,465,1283,1315
+            |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
+            |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
+            |""",
+        ).map((t, exp) => (DriftFileTexts.zeroCoarse, t, exp))
+
+        forAll (Table(("driftLines", "threshold", "expectOutput"), (extremeArguments ::: zeroDriftArguments ::: fineDriftOnlyArguments)*)) { 
             (driftLines, threshold, expectOutput) => forAll (genLinesPermutation(driftLines), arbitrary[ExtantOutputHandler]) { 
                 (driftLines, handleOutput) => withTempDirectory{ (tmpdir: os.Path) => 
                     val expLines = expectOutput.stripMargin.split("\n").toList
                     val spotsFile = tmpdir / "rois.csv"
-                    os.write(spotsFile, spotsText)
+                    os.write(spotsFile, spotsText.stripMargin)
                     val driftFile = tmpdir / "drift.csv"
                     os.write(driftFile, driftLines.map(_ ++ "\n"))
                     val filteredFile = FilteredOutputFile.fromPath(tmpdir / "filteredOutput.csv")
