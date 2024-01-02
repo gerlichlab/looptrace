@@ -29,26 +29,7 @@ class TestDistanceThresholds extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
 
         forAll (genProximalPoints) { case (t, a, b) =>
-            val thresholds = List(PiecewiseDistance.ConjunctiveThreshold(t), PiecewiseDistance.DisjunctiveThreshold(t))
-            forAll (Table("comparison", thresholds.map(_.toProximityComparable)*)) { _.proximal(a, b) shouldBe true }
-        }
-    }
-
-    test("Positive: Disjunctive component proximity implies Euclidean proximity.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
-        def genProximalPoints: Gen[(NonnegativeReal, Point3D, Point3D)] = {
-            for {
-                (a, b) <- {
-                    given arbRawCoord: Arbitrary[Double] = genReasonableCoordinate.toArbitrary // Prevent Euclidean overflow.
-                    arbitrary[(Point3D, Point3D)]
-                }
-                tMin = extremePiecewiseDistance(_.min)(a, b) + 1
-                t <- Gen.choose(tMin, Double.MaxValue).map(NonnegativeReal.unsafe)
-            } yield (t, a, b)
-        }
-
-        forAll (genProximalPoints) { case (t, a, b) =>
-            val thresholds = List(PiecewiseDistance.DisjunctiveThreshold(t), EuclideanDistance.Threshold(t))
+            val thresholds = List(PiecewiseDistance.ConjunctiveThreshold(t))
             forAll (Table("comparison", thresholds.map(_.toProximityComparable)*)) { _.proximal(a, b) shouldBe true }
         }
     }
@@ -75,7 +56,6 @@ class TestDistanceThresholds extends AnyFunSuite, DistanceSuite, LooptraceSuite,
     }
 
     test("Each type proximity gets examples right.") {
-        //forAll (Table(("t", "a", "b"), (PiecewiseDistance.DisjunctiveThreshold(2.0)))) { }
         pending
     }
 
@@ -85,7 +65,6 @@ class TestDistanceThresholds extends AnyFunSuite, DistanceSuite, LooptraceSuite,
     extension (t: NonnegativeReal)
         def toAllProximityComparables = List(
             PiecewiseDistance.ConjunctiveThreshold(t).toProximityComparable,
-            PiecewiseDistance.DisjunctiveThreshold(t).toProximityComparable,
             EuclideanDistance.Threshold(t).toProximityComparable
         )
     

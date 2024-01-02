@@ -1,6 +1,7 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
-import scala.util.NotGiven
+import scala.math.sqrt
+import scala.util.{ NotGiven, Random }
 import cats.*
 import cats.data.NonEmptySet
 import cats.syntax.all.*
@@ -71,21 +72,186 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("Spot distance comparison uses drift correction.") {
-        val spotsLines = """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
-            |0,P0001.zarr,27,0,18.594063700840934,104.97590586866923,1052.9315138200425,10.594063700840934,26.594063700840934,88.97590586866923,120.97590586866923,1036.9315138200425,1068.9315138200425
-            |1,P0001.zarr,27,0,18.45511019130035,1739.9764501391553,264.9779910476261,10.45511019130035,26.45511019130035,1723.9764501391553,1755.9764501391553,248.97799104762612,280.9779910476261
-            |2,P0001.zarr,27,0,3.448146886449433,1878.0134803495575,31.018454661114163,-4.5518531135505675,11.448146886449432,1862.0134803495575,1894.0134803495575,15.018454661114163,47.01845466111416
-            |3,P0001.zarr,27,0,6.639437282025158,1380.9842529095968,1457.0201320584663,-1.360562717974842,14.639437282025158,1364.9842529095968,1396.9842529095968,1441.0201320584663,1473.0201320584663
-            |4,P0001.zarr,27,0,7.366868362813202,24.020457573537264,1359.9764542079788,-0.6331316371867981,15.366868362813202,8.020457573537264,40.020457573537264,1343.9764542079788,1375.9764542079788
-            |5,P0001.zarr,27,0,10.747546275311462,1783.8272962050191,1084.549558284529,2.7475462753114623,18.747546275311464,1767.8272962050191,1799.8272962050191,1068.549558284529,1100.549558284529
-            |6,P0001.zarr,27,0,10.725314672914088,449.96301449433514,1299.2491602470323,2.725314672914088,18.725314672914088,433.96301449433514,465.96301449433514,1283.2491602470323,1315.2491602470323
-            |7,P0001.zarr,27,0,10.657296048712963,588.8341492975928,1779.0925104235198,2.657296048712963,18.657296048712965,572.8341492975928,604.8341492975928,1763.0925104235198,1795.0925104235198
-            |8,P0001.zarr,27,0,9.115923958076873,695.0466327278888,580.433214468191,1.1159239580768734,17.115923958076873,679.0466327278888,711.0466327278888,564.433214468191,596.433214468191
-            |9,P0001.zarr,27,0,11.441984962283017,993.628498457172,1721.5149988651165,3.4419849622830174,19.441984962283016,977.628498457172,1009.628498457172,1705.5149988651165,1737.5149988651165
+    test("Spots cancel each other regardless of frame.") { pending }
+
+    test("Spots never cancel each other if they're from different FOVs.") { pending }
+
+    test("Spot distance comparison is accurate, uses drift correction--coarse, fine, or both, and is invariant under order of drifts.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        
+        val header = ",position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max"
+
+        def genLinesPermutation(linesBlock: String): Gen[Array[String]] = {
+            val lines = linesBlock.stripMargin.split("\n")
+            Gen.const(lines.head +: Random.shuffle(lines.tail).toArray)
+        }
+
+        val spotsText = """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
+            |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
+            |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
+            |2,P0001.zarr,27,0,3,1878,314,0,11,1870,1886,47,347
+            |3,P0001.zarr,28,0,5.5,1380,1457,-1,14,1364,1396,1441,1473
+            |4,P0001.zarr,28,0,7,1378,1459.5,0,15,8,40,1343,1375
+            |5,P0001.zarr,28,0,10,1783,1084,2,18,1767,1799,1068,1100
+            |6,P0001.zarr,29,0,10,589,1799,2,18,433,465,1283,1315
+            |7,P0001.zarr,29,0,12,588,1779,2,18,572,604,1763,1795
+            |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
+            |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
+            |10,P0001.zarr,30,0,10,1783,1084,2,18,1767,1799,1068,1100
+            |11,P0001.zarr,30,0,10.1,549,1280.8,2,18,433,465,1283,1315
+            |12,P0001.zarr,30,0,10,548.5,1280.6,2,18,572,604,1763,1795
+            |13,P0001.zarr,30,0,9,995,1780,1,17,679,711,564,596
+            |14,P0001.zarr,30,0,8,993.2,1781,3,19,977,1009,1705,1737
+            |15,P0001.zarr,30,0,14.4,589.5,1779.3,2,18,572,604,1763,1795
             |""".stripMargin
         
-        pending
+        val thresholdBuilders = List(
+            EuclideanDistance.Threshold.apply, 
+            PiecewiseDistance.ConjunctiveThreshold.apply, 
+            )
+        
+        val zeroDriftExpectations =
+            // When min separation is infinitely small, nothing is proximal and everything is kept.
+            thresholdBuilders.map(tt => tt(NonnegativeReal(0.0)) -> spotsText) ::: 
+            // When threshold is infinite, everything is proximal and nothing is kept.
+            thresholdBuilders.map(tt => tt(NonnegativeReal(Double.MaxValue)) -> header) ::: 
+            List(
+                PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(1.0)) -> 
+                """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
+                |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
+                |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
+                |2,P0001.zarr,27,0,3,1878,314,0,11,1870,1886,47,347
+                |3,P0001.zarr,28,0,5.5,1380,1457,-1,14,1364,1396,1441,1473
+                |4,P0001.zarr,28,0,7,1378,1459.5,0,15,8,40,1343,1375
+                |6,P0001.zarr,29,0,10,589,1799,2,18,433,465,1283,1315
+                |7,P0001.zarr,29,0,12,588,1779,2,18,572,604,1763,1795
+                |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
+                |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
+                |13,P0001.zarr,30,0,9,995,1780,1,17,679,711,564,596
+                |14,P0001.zarr,30,0,8,993.2,1781,3,19,977,1009,1705,1737
+                |15,P0001.zarr,30,0,14.4,589.5,1779.3,2,18,572,604,1763,1795
+                |""",
+                PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(2.0)) -> 
+                """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
+                |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
+                |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
+                |2,P0001.zarr,27,0,3,1878,314,0,11,1870,1886,47,347
+                |3,P0001.zarr,28,0,5.5,1380,1457,-1,14,1364,1396,1441,1473
+                |4,P0001.zarr,28,0,7,1378,1459.5,0,15,8,40,1343,1375
+                |6,P0001.zarr,29,0,10,589,1799,2,18,433,465,1283,1315
+                |7,P0001.zarr,29,0,12,588,1779,2,18,572,604,1763,1795
+                |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
+                |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
+                |15,P0001.zarr,30,0,14.4,589.5,1779.3,2,18,572,604,1763,1795
+                |""", 
+                PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(3.0)) -> 
+                """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
+                |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
+                |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
+                |2,P0001.zarr,27,0,3,1878,314,0,11,1870,1886,47,347
+                |6,P0001.zarr,29,0,10,589,1799,2,18,433,465,1283,1315
+                |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
+                |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
+                |""",
+                EuclideanDistance.Threshold(NonnegativeReal(1.0)) -> 
+                """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
+                |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
+                |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
+                |2,P0001.zarr,27,0,3,1878,314,0,11,1870,1886,47,347
+                |3,P0001.zarr,28,0,5.5,1380,1457,-1,14,1364,1396,1441,1473
+                |4,P0001.zarr,28,0,7,1378,1459.5,0,15,8,40,1343,1375
+                |6,P0001.zarr,29,0,10,589,1799,2,18,433,465,1283,1315
+                |7,P0001.zarr,29,0,12,588,1779,2,18,572,604,1763,1795
+                |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
+                |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
+                |13,P0001.zarr,30,0,9,995,1780,1,17,679,711,564,596
+                |14,P0001.zarr,30,0,8,993.2,1781,3,19,977,1009,1705,1737
+                |15,P0001.zarr,30,0,14.4,589.5,1779.3,2,18,572,604,1763,1795
+                |""".stripMargin, 
+                EuclideanDistance.Threshold(NonnegativeReal.unsafe(sqrt(8.0))) -> 
+                """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
+                |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
+                |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
+                |2,P0001.zarr,27,0,3,1878,314,0,11,1870,1886,47,347
+                |3,P0001.zarr,28,0,5.5,1380,1457,-1,14,1364,1396,1441,1473
+                |4,P0001.zarr,28,0,7,1378,1459.5,0,15,8,40,1343,1375
+                |6,P0001.zarr,29,0,10,589,1799,2,18,433,465,1283,1315
+                |7,P0001.zarr,29,0,12,588,1779,2,18,572,604,1763,1795
+                |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
+                |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
+                |15,P0001.zarr,30,0,14.4,589.5,1779.3,2,18,572,604,1763,1795
+                |""".stripMargin, 
+                EuclideanDistance.Threshold(NonnegativeReal.unsafe(sqrt(12.0))) -> 
+                """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
+                |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
+                |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
+                |2,P0001.zarr,27,0,3,1878,314,0,11,1870,1886,47,347
+                |3,P0001.zarr,28,0,5.5,1380,1457,-1,14,1364,1396,1441,1473
+                |4,P0001.zarr,28,0,7,1378,1459.5,0,15,8,40,1343,1375
+                |6,P0001.zarr,29,0,10,589,1799,2,18,433,465,1283,1315
+                |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
+                |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
+                |""".stripMargin, 
+        )
+        
+        val nonzeroDriftLines = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
+            |0,27,P0001.zarr,-2.0,8.0,-24.0,0.3048142040458287,0.2167426082715708,0.46295638298323727
+            |1,28,P0001.zarr,-2.0,8.0,-20.0,0.6521556133243969,-0.32279031643811845,0.8467576764912169
+            |2,29,P0001.zarr,0.0,6.0,-16.0,-0.32831460930799267,0.5707716296861373,0.768359957646404
+            |3,30,P0001.zarr,0.0,6.0,-12.0,-0.6267951175716121,0.24476613641147094,0.5547602737043816
+            |""".stripMargin
+
+        val zeroCoarseDriftLines = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
+            |0,27,P0001.zarr,0.0,0.0,0.0,0.3048142040458287,0.2167426082715708,0.46295638298323727
+            |1,28,P0001.zarr,0.0,0.0,0.0,0.6521556133243969,-0.32279031643811845,0.8467576764912169
+            |2,29,P0001.zarr,0.0,0.0,0.0,-0.32831460930799267,0.5707716296861373,0.768359957646404
+            |3,30,P0001.zarr,0.0,0.0,0.0,-0.6267951175716121,0.24476613641147094,0.5547602737043816
+            |""".stripMargin
+
+        val zeroFineDriftLines = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
+            |0,27,P0001.zarr,-2.0,8.0,-24.0,0,0,0
+            |1,28,P0001.zarr,-2.0,8.0,-20.0,0,0,0
+            |2,29,P0001.zarr,0.0,6.0,-16.0,0,0,0
+            |3,30,P0001.zarr,0.0,6.0,-12.0,0,0,0
+            |""".stripMargin
+
+        val zeroDriftLines = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
+            |0,27,P0001.zarr,0,0,0,0,0,0
+            |1,28,P0001.zarr,0,0,0,0,0,0
+            |2,29,P0001.zarr,0.0,0,0,0,0,0
+            |3,30,P0001.zarr,0.0,0,0,0,0,0
+            |""".stripMargin
+
+        forAll (Table(("driftLines", "threshold", "expectOutput"), zeroDriftExpectations.map((t, exp) => (zeroCoarseDriftLines, t, exp))*)) { 
+            (driftLines, threshold, expectOutput) => forAll (genLinesPermutation(driftLines), arbitrary[ExtantOutputHandler]) { 
+                (driftLines, handleOutput) => withTempDirectory{ (tmpdir: os.Path) => 
+                    val expLines = expectOutput.stripMargin.split("\n").toList
+                    val spotsFile = tmpdir / "rois.csv"
+                    os.write(spotsFile, spotsText)
+                    val driftFile = tmpdir / "drift.csv"
+                    os.write(driftFile, driftLines.map(_ ++ "\n"))
+                    val filteredFile = FilteredOutputFile.fromPath(tmpdir / "filteredOutput.csv")
+                    val unfilteredFile = UnfilteredOutputFile.fromPath(tmpdir / "unfilteredOutput.csv")
+                    os.exists(filteredFile) shouldBe false
+                    os.exists(unfilteredFile) shouldBe false
+                    runLabelAndFilter(
+                        spotsFile = spotsFile, 
+                        driftFile = driftFile, 
+                        probeGroups = List(), 
+                        minSpotSeparation = threshold, 
+                        filteredOutputFile = filteredFile, 
+                        unfilteredOutputFile = unfilteredFile, 
+                        extantOutputHandler = handleOutput,
+                        )
+                    os.isFile(filteredFile) shouldBe true
+                    os.isFile(unfilteredFile) shouldBe true
+                    val obsLines = os.read.lines(filteredFile).toList
+
+                    obsLines.length shouldEqual expLines.length
+                    obsLines.zip(expLines).filter(_ =!= _) shouldEqual List()
+                }
+            }
+        }
     }
     
     test("Any (position, time) repeat in drift file is an error, and drift must be fine not just coarse.") {
@@ -283,7 +449,6 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
 
     private def genThresholdType = Gen.oneOf(
         PiecewiseDistance.ConjunctiveThreshold.apply, 
-        PiecewiseDistance.DisjunctiveThreshold.apply, 
         EuclideanDistance.Threshold.apply,
         )
 

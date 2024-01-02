@@ -481,7 +481,6 @@ object LabelAndFilterRois:
         given readForDistanceThresholdSemantic: scopt.Read[NonnegativeReal => DistanceThreshold] = scopt.Read.reads(
             (_: String) match {
                 case ("EachAxisAND" | "PiecewiseAND") => PiecewiseDistance.ConjunctiveThreshold.apply
-                case ("EachAxisOR" | "PiecewiseOR") => PiecewiseDistance.DisjunctiveThreshold.apply
                 case ("Euclidean" | "EUCLIDEAN" | "euclidean" | "eucl" | "EUCL" | "euc" | "EUC") => EuclideanDistance.Threshold.apply
                 case s => throw new IllegalArgumentException(s"Cannot parse as threshold semantic: $s")
             }

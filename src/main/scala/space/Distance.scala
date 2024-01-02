@@ -1,7 +1,7 @@
 package at.ac.oeaw.imba.gerlich.looptrace.space
 
 import scala.math.{ pow, sqrt }
-import cats.{ Contravariant, Order }
+import cats.*
 import cats.syntax.all.*
 import at.ac.oeaw.imba.gerlich.looptrace.{ NonnegativeInt, NonnegativeReal }
 import at.ac.oeaw.imba.gerlich.looptrace.{ all, any }
@@ -30,6 +30,14 @@ sealed trait DistanceThreshold{ def get: NonnegativeReal }
 
 /** Helpers for working with distance thresholds */
 object DistanceThreshold:
+    given showForDistanceThreshold: Show[DistanceThreshold] = Show.show{ (t: DistanceThreshold) => 
+        val typeName = t match {
+            case _: EuclideanDistance.Threshold => "Euclidean"
+            case _: PiecewiseDistance.ConjunctiveThreshold => "Conjunctive"
+        }
+        s"${typeName}Threshold(${t.get})"
+    }
+
     def defineProximityPointwise(threshold: DistanceThreshold): ProximityComparable[Point3D] = threshold match {
         case t: EuclideanDistance.Threshold => new ProximityComparable[Point3D] {
             override def proximal = (a, b) => 
@@ -37,7 +45,7 @@ object DistanceThreshold:
                 if (d.isInfinite) { throw new EuclideanDistance.OverflowException(s"Cannot compute finite distance between $a and $b") }
                 d `lt` t
         }
-        case t: (PiecewiseDistance.ConjunctiveThreshold | PiecewiseDistance.DisjunctiveThreshold) => 
+        case t: PiecewiseDistance.ConjunctiveThreshold => 
             new ProximityComparable[Point3D] {
                 override def proximal = PiecewiseDistance.within(t)
             }
@@ -49,25 +57,21 @@ end DistanceThreshold
 
 /** Helpers for working with distances in by-component / piecewise fashion */
 object PiecewiseDistance:
-    /** Distance threshold in which predicate comparing values to this threshold operates disjunctively over components */
-    final case class DisjunctiveThreshold(get: NonnegativeReal) extends DistanceThreshold
     
     /** Distance threshold in which predicate comparing values to this threshold operates conjunctively over components */
     final case class ConjunctiveThreshold(get: NonnegativeReal) extends DistanceThreshold
 
+    /** Helpers for working with conjunctive distance threshold */
+    object ConjunctiveThreshold:
+        def infinite = ConjunctiveThreshold(NonnegativeReal(Double.PositiveInfinity))
+
     /** Are points closer than given threshold along any axis? */
-    def within(threshold: ConjunctiveThreshold | DisjunctiveThreshold)(a: Point3D, b: Point3D): Boolean = {
-        val comps = (a, b) match {
-            case (
-                Point3D(XCoordinate(x1), YCoordinate(y1), ZCoordinate(z1)), 
-                Point3D(XCoordinate(x2), YCoordinate(y2), ZCoordinate(z2))
-            ) => List(x1 - x2, y1 - y2, z1 - z2).map(_.abs < threshold.get)
-        }
-        threshold match {
-            case _: ConjunctiveThreshold => comps.all
-            case _: DisjunctiveThreshold => comps.any
-        }
-    }
+    def within(threshold: ConjunctiveThreshold)(a: Point3D, b: Point3D): Boolean = ((a, b) match {
+        case (
+            Point3D(XCoordinate(x1), YCoordinate(y1), ZCoordinate(z1)), 
+            Point3D(XCoordinate(x2), YCoordinate(y2), ZCoordinate(z2))
+        ) => List(x1 - x2, y1 - y2, z1 - z2)
+    }).forall(diff => diff.abs < threshold.get)
 end PiecewiseDistance
 
 /** Semantic wrapper to denote that a nonnegative real number represents a Euclidean distance */
