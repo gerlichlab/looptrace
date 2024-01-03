@@ -218,15 +218,20 @@ object LabelAndFilterRois:
             }
             keyed
         }
-        
+
         /* For each ROI (by line number), look up its (too-proximal, according to distance threshold) neighbors. */
         println("Building neighbors lookup...")
         // TODO: allow empty grouping here. https://github.com/gerlichlab/looptrace/issues/147
         val lookupNeighbors: LineNumber => Option[NonEmptySet[LineNumber]] = {
-            val numberedRois = rowRoiPairs.map{ case ((_, roi), idx) => roi -> idx}
-            buildNeighboringRoisFinder(numberedRois, minSpotSeparation)(probeGroups)
-                .map(_.get)
-                .fold(errMsg => throw new Exception(errMsg), identity)
+            val shiftedRoisNumbered = rowRoiPairs.map{ case ((_, oldRoi), idx) => 
+                val posTimePair = oldRoi.position -> oldRoi.time
+                val newRoi = applyDrift(oldRoi, driftByPosTimePair(posTimePair))
+                newRoi -> idx
+            }
+            buildNeighboringRoisFinder(shiftedRoisNumbered, minSpotSeparation)(probeGroups) match {
+                case Left(errMsg) => throw new Exception(errMsg)
+                case Right(neighborsByRecordNumber) => neighborsByRecordNumber.get
+            }
         }
 
         println("Pairing neighbors with ROIs...")
@@ -255,7 +260,14 @@ object LabelAndFilterRois:
     /****************************************************************************************************************
      * Main types and business logic
      ****************************************************************************************************************/
-    final case class DriftRecord(position: String, time: Timepoint, coarse: CoarseDrift, fine: FineDrift)
+    final case class DriftRecord(position: String, time: Timepoint, coarse: CoarseDrift, fine: FineDrift):
+        def total = 
+            // For justification of additivity, see: https://github.com/gerlichlab/looptrace/issues/194
+            TotalDrift(
+                ZDir(coarse.z.get + fine.z.get), 
+                YDir(coarse.y.get + fine.y.get), 
+                XDir(coarse.x.get + fine.x.get)
+                )
 
     /**
       * Designation of regional barcode frame/probe/timepoint indices which are prohibited from being in (configurably) close proximity.
@@ -281,7 +293,15 @@ object LabelAndFilterRois:
 
     /** Representation of a single record from the regional barcode spots detection */
     final case class Roi(index: RoiIndex, position: String, time: FrameIndex, channel: Channel, centroid: Point3D, boundingBox: BoundingBox)
-        
+    
+    private def applyDrift(roi: Roi, drift: DriftRecord): Roi = {
+        require(
+            roi.position === drift.position && roi.time === drift.time, 
+            s"ROI and drift don't match on (FOV, time): (${roi.position -> roi.time} and (${drift.position -> drift.time})"
+            )
+        roi.copy(centroid = Movement.shiftBy(drift.total)(roi.centroid), boundingBox = Movement.shiftBy(drift.total)(roi.boundingBox))
+    }
+
     /**
       * Construct a mapping from single record to collection of proximal neighbors, for filtration
       *
@@ -440,6 +460,22 @@ object LabelAndFilterRois:
     // Delimiter between fields within a multi-valued field (i.e., multiple values in 1 CSV column)
     val MultiValueFieldInternalSeparator = "|"
 
+    object Movement:
+        def shiftBy(del: XDir[Double])(c: XCoordinate): XCoordinate = XCoordinate(c.get + del.get)
+        def shiftBy(del: YDir[Double])(c: YCoordinate): YCoordinate = YCoordinate(c.get + del.get)
+        def shiftBy(del: ZDir[Double])(c: ZCoordinate): ZCoordinate = ZCoordinate(c.get + del.get)
+        def shiftBy(del: XDir[Double])(intv: BoundingBox.Interval[XCoordinate]): BoundingBox.Interval[XCoordinate] =
+            BoundingBox.Interval(shiftBy(del)(intv.lo), shiftBy(del)(intv.hi))
+        def shiftBy(del: YDir[Double])(intv: BoundingBox.Interval[YCoordinate]): BoundingBox.Interval[YCoordinate] =
+            BoundingBox.Interval(shiftBy(del)(intv.lo), shiftBy(del)(intv.hi))
+        def shiftBy(del: ZDir[Double])(intv: BoundingBox.Interval[ZCoordinate]): BoundingBox.Interval[ZCoordinate] =
+            BoundingBox.Interval(shiftBy(del)(intv.lo), shiftBy(del)(intv.hi))
+        def shiftBy(drift: TotalDrift)(pt: Point3D): Point3D = 
+            Point3D(shiftBy(drift.x)(pt.x), shiftBy(drift.y)(pt.y), shiftBy(drift.z)(pt.z))
+        def shiftBy(drift: TotalDrift)(box: BoundingBox): BoundingBox = 
+            BoundingBox(shiftBy(drift.x)(box.sideX), shiftBy(drift.y)(box.sideY), shiftBy(drift.z)(box.sideZ))
+    end Movement
+
     sealed trait Direction[A : Numeric] { def get: A }
     final case class XDir[A : Numeric](get: A) extends Direction[A]
     final case class YDir[A : Numeric](get: A) extends Direction[A]
@@ -452,14 +488,13 @@ object LabelAndFilterRois:
     end Drift
     final case class CoarseDrift(z: ZDir[Int], y: YDir[Int], x: XDir[Int]) extends Drift[Int]
     final case class FineDrift(z: ZDir[Double], y: YDir[Double], x: XDir[Double]) extends Drift[Double]
+    final case class TotalDrift(z: ZDir[Double], y: YDir[Double], x: XDir[Double]) extends Drift[Double]
 
-    final case class DimX(get: PosInt)
-    final case class DimY(get: PosInt)
-    final case class DimZ(get: PosInt)
-    
-    final case class Box(x: DimX, y: DimY, z: DimZ)
-    
-    final case class BoundingBox(sideX: BoundingBox.Interval[XCoordinate], sideY: BoundingBox.Interval[YCoordinate], sideZ: BoundingBox.Interval[ZCoordinate])
+    final case class BoundingBox(
+        sideX: BoundingBox.Interval[XCoordinate], 
+        sideY: BoundingBox.Interval[YCoordinate], 
+        sideZ: BoundingBox.Interval[ZCoordinate]
+        )
 
     object BoundingBox:
         given orderForBoundingBox: Order[BoundingBox] = Order.by{ 
