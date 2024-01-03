@@ -277,7 +277,28 @@ def generate_detection_specifications(positions: Iterable["FieldOfViewRepresenta
                 yield DetectionSpec3D(position=position_definition, frame=frame_spec, channel=ch)
 
 
-def get_drift_and_bound_and_pad(roi_min: NumberLike, roi_max: NumberLike, dim_limit: int, frame_drift: NumberLike, ref_drift: NumberLike):
+def get_one_dim_drift_and_bound_and_pad(roi_min: NumberLike, roi_max: NumberLike, dim_limit: int, frame_drift: NumberLike, ref_drift: NumberLike) -> Tuple[int, NumberLike, NumberLike, NumberLike, NumberLike]:
+    """
+    Get the coarse drift, interval, and padding for a single dimension (z, y, or x) for a single ROI.
+
+    Parameters
+    ----------
+    roi_min : NumberLike
+        The lower bound in the current dimension for this ROI
+    roi_max : NumberLike
+        The upper bound in the current dimension for this ROI
+    dim_limit : int
+        The number of "pixels" value in this dimension (e.g., 2044/2048 for xy, ~30-40 for z)
+    frame_drift : NumberLike
+        Coarse drift in the current dimension, of the current timepoint 
+    ref_drift : NumberLike
+        Coarse drift in the current dimension, of the reference timepoint 
+
+    Returns
+    -------
+    int, NumberLike, NumberLike, NumberLike, NumberLike
+        Coarse drift for current dimension, ROI min in dimension, ROI max in dimension, lower padding in dimension, upper padding in dimension
+    """
     coarse_drift = int(frame_drift) - int(ref_drift)
     target_min = roi_min - coarse_drift
     target_max = roi_max - coarse_drift
@@ -524,7 +545,7 @@ class SpotPicker:
                     (z_drift_coarse, z_min, z_max, pad_z_min, pad_z_max), 
                     (y_drift_coarse, y_min, y_max, pad_y_min, pad_y_max), 
                     (x_drift_coarse, x_min, x_max, pad_x_min, pad_x_max)
-                ) = (get_drift_and_bound_and_pad(
+                ) = (get_one_dim_drift_and_bound_and_pad(
                     roi_min=roi[f"{dim}_min"], 
                     roi_max=roi[f"{dim}_max"], 
                     dim_limit=lim, 
