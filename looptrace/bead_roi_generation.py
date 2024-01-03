@@ -59,12 +59,13 @@ def extract_single_bead(
     np.ndarray
         A numpy array representing the subspace of the given image corresponding to the bead ROI
     """
-    roi_px = bead_roi_px // 2
     # TODO: assert that both point and the drift vector are 3D.
     # NB: here we subtract the coarse drift from the point. This is because of discussion in #194.
     #     Essentially, per scikit-learn and phase_cross_correlation, offset = ref_img - mov_img
     #     Therefore, mov_img = ref_img - offset, so to get coordinates in the "moving" space, 
     #     we subtract the shift from the reference point.
+    # See: https://github.com/gerlichlab/looptrace/issues/194
+    roi_px = bead_roi_px // 2
     coords = point if drift_coarse is None else (x - int(dx) for x, dx in zip(point, drift_coarse))
     s = tuple([slice(p - roi_px, p + roi_px) for p in coords])
     bead = img[s]
