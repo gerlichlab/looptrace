@@ -53,8 +53,7 @@ def get_method_name(config: Mapping[str, Any]) -> Optional[str]:
 
 
 class Methods(Enum):
-    # TODO: reinstate pending #194
-    #CROSS_CORRELATION_NAME = "cc"
+    CROSS_CORRELATION_NAME = "cc"
     FIT_NAME = "fit"
 
     @classmethod
@@ -84,9 +83,8 @@ class Methods(Enum):
         as arguments to the first function in this returned pair
         """
         method_lookup = {
-            # TODO: reinstate pending #194
-            #Methods.CROSS_CORRELATION_NAME.value: (correlate_single_bead, lambda img_pair: img_pair + (100, )), 
-            Methods.FIT_NAME.value: (fit_shift_single_bead, lambda img_pair: img_pair),
+            Methods.CROSS_CORRELATION_NAME.value: (correlate_single_bead, lambda img_pair: img_pair + (100, )), 
+            Methods.FIT_NAME.value: (fit_shift_single_bead, lambda img_pair: img_pair)
         }
         try:
             return method_lookup[method_name]
@@ -348,8 +346,6 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
                 new_row = (frame, position) + coarse + finalise_fine_drift(fine_drifts)
                 curr_position_rows.append(new_row)
         elif drifter.method_name == Methods.CROSS_CORRELATION_NAME.value:
-            # TODO: reinstate pending #194
-            raise NotImplementedError("Cross-correlation is not currently supported as a drift correction method.")
             print("Extracting reference bead images")
             ref_bead_subimgs = [extract_single_bead(point, ref_img, bead_roi_px=roi_px) for point in bead_rois]
             print("Iterating over frames/timepoints/hybridisations")
@@ -464,7 +460,7 @@ class Drifter():
 
     @property
     def method_name(self) -> str:
-        return get_method_name(self.config) or Methods.FIT_NAME.value
+        return get_method_name(self.config) or Methods.CROSS_CORRELATION_NAME.value
 
     @property
     def min_bead_intensity(self) -> int:
