@@ -127,6 +127,9 @@ def fit_bead_coordinates(bead_img: np.ndarray) -> Iterable[FloatLike]:
 
 
 def subtract_point_fits(ref_fit: np.ndarray, mov_fit: np.ndarray) -> np.ndarray:
+    # This should accord with the relation of reference image, offset image, and offset (drift) in phase_cross_correlation.
+    # https://github.com/gerlichlab/looptrace/issues/194
+    # https://scikit-image.org/docs/stable/auto_examples/registration/plot_register_translation.html#image-registration
     try:
         diff = ref_fit - mov_fit
     except TypeError: # One or both of the fits is null.
