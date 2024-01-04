@@ -4,7 +4,6 @@ import scala.util.{ Failure, Success, Try }
 import upickle.default.*
 import cats.{ Alternative, Eq, Functor, Monoid, Order }
 import cats.data.{ NonEmptyList as NEL, NonEmptyMap, NonEmptySet, ValidatedNel }
-import cats.data.Validated.Valid
 import cats.instances.tuple.*
 import cats.syntax.all.*
 import mouse.boolean.*
@@ -14,9 +13,17 @@ import com.github.tototoshi.csv.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.{ fromJsonThruInt, safeExtract, readJsonFile }
-import at.ac.oeaw.imba.gerlich.looptrace.space.{ Coordinate, DistanceThreshold, EuclideanDistance, PiecewiseDistance, Point3D, ProximityComparable, XCoordinate, YCoordinate, ZCoordinate }
+import at.ac.oeaw.imba.gerlich.looptrace.space.{
+    Coordinate, 
+    DistanceThreshold, 
+    EuclideanDistance, 
+    PiecewiseDistance, 
+    Point3D, ProximityComparable, 
+    XCoordinate, 
+    YCoordinate, 
+    ZCoordinate
+}
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
-import scala.util.NotGiven
 
 /**
  * Measure data across all timepoints in the regions identified during spot detection.
@@ -120,7 +127,7 @@ object LabelAndFilterRois:
             opt[NonnegativeReal]("spotSeparationThresholdValue")
                 .required()
                 .action((d, c) => c.copy(spotSeparationThresholdValue = d))
-                .text("Minimum separation between centroids of a pair of spots, discard otherwise; contextualised by --spotSeparationThresholdType"),
+                .text("Min separation between centers of pair of spots, discard otherwise; contextualised by --spotSeparationThresholdType"),
             opt[NonnegativeReal => DistanceThreshold]("spotSeparationThresholdType")
                 .required()
                 .action((f, c) => c.copy(buildDistanceThreshold = f))
@@ -183,20 +190,27 @@ object LabelAndFilterRois:
                 throw _, 
                 (head, spotRows) => Alternative[List].separate(spotRows.map(rowToRoi.throughRight)) match {
                     case (Nil, rrPairs) => head -> NonnegativeInt.indexed(rrPairs)
-                    case (errors@(h :: _), _) => throw new Exception(s"${errors.length} errors converting spot file (${spotsFile}) rows to ROIs! First one: $h")
+                    case (errors@(h :: _), _) => throw new Exception(
+                        s"${errors.length} errors converting spot file (${spotsFile}) rows to ROIs! First one: $h"
+                        )
                 }
             )
         }
         
         /* Then, parse the drift correction records from the corresponding file. */
-        val drifts = withCsvData(driftFile){ (driftRows: Iterable[CsvRow]) => Alternative[List].separate(driftRows.toList.map(rowToDriftRecord)) match {
-            case (Nil, drifts) => drifts
-            case (errors@(h :: _), _) => throw new Exception(s"${errors.length} errors converting drift file (${driftFile}) rows to records! First one: $h")
-        } }.asInstanceOf[List[DriftRecord]]
+        val drifts = withCsvData(driftFile){
+            (driftRows: Iterable[CsvRow]) => Alternative[List].separate(driftRows.toList.map(rowToDriftRecord)) match {
+                case (Nil, drifts) => drifts
+                case (errors@(h :: _), _) => throw new Exception(
+                    s"${errors.length} errors converting drift file (${driftFile}) rows to records! First one: $h"
+                    )
+            }
+        }.asInstanceOf[List[DriftRecord]]
         val driftByPosTimePair = {
+            type Key = (PositionName, FrameIndex)
             val (recordNumbersByKey, keyed) = 
                 NonnegativeInt.indexed(drifts)
-                    .foldLeft(Map.empty[(PositionName, FrameIndex), NonEmptySet[LineNumber]] -> Map.empty[(PositionName, FrameIndex), DriftRecord]){ 
+                    .foldLeft(Map.empty[Key, NonEmptySet[LineNumber]] -> Map.empty[Key, DriftRecord]){ 
                         case ((reps, acc), (drift, recnum)) =>  
                             val p = drift.position
                             val t = drift.time
@@ -230,7 +244,9 @@ object LabelAndFilterRois:
             }
         }
 
-        val roiRecordsLabeled = rowRoiPairs.map{ case ((row, _), linenum) => row -> lookupNeighbors(linenum).map(_.toNonEmptyList.sorted) }
+        val roiRecordsLabeled = rowRoiPairs.map{ 
+            case ((row, _), linenum) => row -> lookupNeighbors(linenum).map(_.toNonEmptyList.sorted)
+        }
 
         /* Write the unfiltered output and print out the header */
         val unfilteredHeader = {
@@ -330,7 +346,9 @@ object LabelAndFilterRois:
       * @param minDist The threshold distance by which to define two points as proximal
       * @return A mapping from item to set of proximal (closer than given distance threshold) neighbors, omitting each item with no neighbors
       */
-    def buildNeighborsLookupKeyed[A : Order, K : Order](getPoint: A => Point3D)(kvPairs: Iterable[(K, A)], minDist: DistanceThreshold): Map[A, NonEmptySet[A]] = {
+    def buildNeighborsLookupKeyed[A : Order, K : Order](
+        getPoint: A => Point3D)(kvPairs: Iterable[(K, A)], minDist: DistanceThreshold
+        ): Map[A, NonEmptySet[A]] = {
         // In the reduction, we don't care if on collision the Semigroup instance for Map will combine values or will overwrite them, 
         // since the partition on keys here guarantees no collisions between resulting submaps that are being combined.
         Monoid.combineAll(kvPairs.groupBy(_._1).values.map{ subKVs => buildNeighborsLookupFlat(getPoint)(subKVs.map(_._2), minDist) })
@@ -347,7 +365,9 @@ object LabelAndFilterRois:
       * @return A mapping from item to set of proximal (closer than given distance threshold) neighbors, omitting each item with no neighbors; 
       *         otherwise, a {@code Left}-wrapped error message about what went wrong
       */
-    def buildNeighboringRoisFinder(rois: List[RoiLinenumPair], minDist: DistanceThreshold)(grouping: List[ProbeGroup]): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
+    def buildNeighboringRoisFinder(
+        rois: List[RoiLinenumPair], minDist: DistanceThreshold)(grouping: List[ProbeGroup]
+        ): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
         given orderForRoiLinenumPair: Order[RoiLinenumPair] = Order.by(_._2)
         val getPoint = (_: RoiLinenumPair)._1.centroid
         val groupedRoiLinenumPairs: Either[String, Map[RoiLinenumPair, NonEmptySet[RoiLinenumPair]]] = 
@@ -365,14 +385,18 @@ object LabelAndFilterRois:
                 if (repeatedFrames.nonEmpty) // Probe groupings isn't a partition, because there's overlap between the declared equivalence classes.
                 then s"${repeatedFrames.size} repeated frame(s): $repeatedFrames".asLeft
                 else {
-                    // TODO: check that the union of the (now checked as disjoint) equivalence classes implied by the probe groupings cover the set of regional barcodes frames.
+                    // TODO: check that the union of the (now checked as disjoint) equivalence classes 
+                    //       implied by the probe groupings cover the set of regional barcodes frames.
                     val (groupless, keyedRois) = Alternative[List].separate(rois.map{ case pair@(roi, _) => 
                         groupIds.get(roi.time)
                             .toRight(pair)
                             .map(groupIndex => ((roi.position, groupIndex), pair))
                     })
                     groupless.isEmpty.either(
-                        s"${groupless.length} ROIs without value declared in grouping. ${groupless.map(_._1.time).toSet.size} undeclared timepoints: ${groupless.map(_._1.time).toSet}", 
+                        {
+                            val times = groupless.map(_._1.time).toSet
+                            s"${groupless.length} ROIs without value declared in grouping. ${times.size} undeclared timepoints: $times"
+                        }, 
                         buildNeighborsLookupKeyed(getPoint)(keyedRois, minDist)
                         )
                 }
