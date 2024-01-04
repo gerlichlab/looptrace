@@ -3,7 +3,7 @@ package at.ac.oeaw.imba.gerlich.looptrace
 import scala.math.sqrt
 import scala.util.{ NotGiven, Random, Try }
 import cats.*
-import cats.data.NonEmptySet
+import cats.data.{ NonEmptyList, NonEmptySet }
 import cats.syntax.all.*
 import mouse.boolean.*
 
@@ -41,6 +41,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.LabelAndFilterRois.{
     YDir, 
     ZDir,
 }
+import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.safeReadAllWithOrderedHeaders
 
 
 /** Tests for the filtration of the individual supports (single FISH probes) of chromatin fiber traces */
@@ -505,7 +506,36 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             Gen.zip(genX, genX, genX).map((z, y, x) => FineDrift(ZDir(z), YDir(y), XDir(x)))
         }
 
-        pending
+        forAll (genSpotsAndDrifts(genCoarseDrift, genFineDrift), genThreshold(arbitrary[NonnegativeReal]), arbitrary[ExtantOutputHandler]) {
+            case ((spots, driftRows), threshold, handleOutput) => 
+                withTempDirectory{ (tmpdir: os.Path) => 
+                    val spotsFile = tmpdir / "spots.csv"
+                    os.write(spotsFile, getSpotsFileLines(spots.toList).map(_ ++ "\n"))
+                    val driftFile = tmpdir / "drift.csv"
+                    os.write(driftFile, getDriftFileLines(driftRows).map(_ ++ "\n"))
+                    val unfilteredFile: UnfilteredOutputFile = UnfilteredOutputFile.fromPath(tmpdir / "unfiltered.csv")
+                    val filteredFile: FilteredOutputFile = FilteredOutputFile.fromPath(tmpdir / "filtered.csv")
+                    runLabelAndFilter(
+                        spotsFile = spotsFile, 
+                        driftFile = driftFile, 
+                        probeGroups = List(), 
+                        minSpotSeparation = threshold, 
+                        unfilteredOutputFile = unfilteredFile,
+                        filteredOutputFile = filteredFile,
+                        extantOutputHandler = handleOutput,
+                        )
+                    val (headUnfiltered, rowsUnfiltered) = safeReadAllWithOrderedHeaders(unfilteredFile) match {
+                        case Left(e) => fail("Could not read unfiltered file: $e")
+                        case Right((head, rows)) => head -> rows
+                    }
+                    val (headFiltered, rowsFiltered) = safeReadAllWithOrderedHeaders(filteredFile) match {
+                        case Left(e) => fail("Could not read filtered file: $e")
+                        case Right((head, rows)) => head -> rows
+                    }
+                    headUnfiltered shouldEqual headFiltered :+ "neighbors"
+                    rowsFiltered shouldEqual rowsUnfiltered.filter(_("neighbors") === "").map(_ - "neighbors")
+                }
+        }
     }
 
     test("Any ROI without drift is an error. #196") {
@@ -526,16 +556,13 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             Gen.zip(genX, genX, genX).map((z, y, x) => FineDrift(ZDir(z), YDir(y), XDir(x)))
         }
 
-        forAll (genSpotsAndDrifts(genCoarseDrift, genFineDrift), genThreshold(arbitrary[NonnegativeReal]), arbitrary[ExtantOutputHandler]) { 
+        forAll (genSpotsAndDriftsWithDrop(genCoarseDrift, genFineDrift), genThreshold(arbitrary[NonnegativeReal]), arbitrary[ExtantOutputHandler]) { 
             case ((spots, driftRows, numDropped), threshold, handleOutput) => 
-                val driftLines = headDriftFile :: driftRows.zipWithIndex.map{ case ((pos, time, coarse, fine), i) => 
-                    s"$i,${time.get},${pos.get},${coarse.z.get},${coarse.y.get},${coarse.x.get},${fine.z.get},${fine.y.get},${fine.x.get}"
-                }
                 withTempDirectory{ (tmpdir: os.Path) => 
                     val spotsFile = tmpdir / "spots.csv"
-                    os.write(spotsFile, getSpotsFileLines(spots).map(_ ++ "\n"))
+                    os.write(spotsFile, getSpotsFileLines(spots.toList).map(_ ++ "\n"))
                     val driftFile = tmpdir / "drift.csv"
-                    os.write(driftFile, driftLines.map(_ ++ "\n"))
+                    os.write(driftFile, getDriftFileLines(driftRows).map(_ ++ "\n"))
                     def call() = runLabelAndFilter(
                         spotsFile = spotsFile, 
                         driftFile = driftFile, 
@@ -733,13 +760,11 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         } yield (threshold, centroids.map(canonicalRoi))
     }
 
-    private def buildInterval[C <: Coordinate: [C] =>> NotGiven[C =:= Coordinate]](
-        c: C, margin: NonnegativeReal)(lift: Double => C): BoundingBox.Interval[C] = 
-        BoundingBox.Interval[C].apply.tupled((c.get - margin, c.get + margin).mapBoth(lift))
-
     private def canonicalRoi: Roi = canonicalRoi(Point3D(XCoordinate(1), YCoordinate(2), ZCoordinate(3)))
-
-    private def canonicalRoi(point: Point3D): Roi = 
+    private def canonicalRoi(point: Point3D): Roi = {
+        def buildInterval[C <: Coordinate: [C] =>> NotGiven[C =:= Coordinate]](
+            c: C, margin: NonnegativeReal)(lift: Double => C): BoundingBox.Interval[C] = 
+            BoundingBox.Interval[C].apply.tupled((c.get - margin, c.get + margin).mapBoth(lift))
         point match { case Point3D(x, y, z) => 
             val xIntv = buildInterval(x, NonnegativeReal(2))(XCoordinate.apply)
             val yIntv = buildInterval(y, NonnegativeReal(2))(YCoordinate.apply)
@@ -754,20 +779,34 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 box,
                 )
         }
+    }
 
     def genSpotsAndDrifts(genCoarse: Gen[CoarseDrift], genFine: Gen[FineDrift])(
         using arbMargin: Arbitrary[BoundingBox.Margin], arbPoint: Arbitrary[Point3D]
-        ): Gen[(List[RegionalBarcodeSpotRoi], List[(PositionName, FrameIndex, CoarseDrift, FineDrift)], Int)] = {
+        ): Gen[(NonEmptyList[RegionalBarcodeSpotRoi], List[(PositionName, FrameIndex, CoarseDrift, FineDrift)])] = {
         // Order shouldn't matter, but that invariant's tested elsewhere.
         given ordPosTime: Ordering[DriftKey] = Order[DriftKey].toOrdering
         for {
-            spots <- Gen.listOf(arbitrary[RegionalBarcodeSpotRoi]).suchThat(_.nonEmpty)
-            posTimePairs = spots.map(roi => roi.position -> roi.time).toSet
+            spots <- Gen.listOf(arbitrary[RegionalBarcodeSpotRoi]).suchThat(_.nonEmpty).map(_.toNel.get)
+            posTimePairs = spots.toList.map(roi => roi.position -> roi.time).toSet
             driftRows <- posTimePairs.toList.traverse{ 
                 (p, t) => Gen.zip(genCoarse, genFine).map((coarse, fine) => (p, t, coarse, fine))
             }
-            numDropped <- Gen.choose(0, driftRows.size)
-        } yield (spots, driftRows.drop(numDropped).sortBy(r => r._1 -> r._2), numDropped)
+        } yield (spots, driftRows.sortBy(r => r._1 -> r._2))
+    }
+
+    def genSpotsAndDriftsWithDrop(genCoarse: Gen[CoarseDrift], genFine: Gen[FineDrift])(
+        using arbMargin: Arbitrary[BoundingBox.Margin], arbPoint: Arbitrary[Point3D]
+        ): Gen[(NonEmptyList[RegionalBarcodeSpotRoi], List[(PositionName, FrameIndex, CoarseDrift, FineDrift)], Int)] = {
+        // Order shouldn't matter, but that invariant's tested elsewhere.
+        given ordPosTime: Ordering[DriftKey] = Order[DriftKey].toOrdering
+        genSpotsAndDrifts(genCoarse, genFine).flatMap{ (spots, driftRows) => 
+            Gen.choose(0, driftRows.size).map{ numDropped => 
+                // Shuffle and the re-sort so that removed rows aren't always from the beginning.
+                val rows = Random.shuffle(driftRows).toList.drop(numDropped)
+                (spots, rows.sortBy(r => r._1 -> r._2), numDropped)
+            }
+        }
     }
 
     private def genThreshold: Gen[NonnegativeReal] => Gen[DistanceThreshold] = genThresholdType <*> _
@@ -781,6 +820,11 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         Gen.choose[Double](lo, hi).map(NonnegativeReal.unsafe `andThen` BoundingBox.Margin.apply).toArbitrary
 
     private def getArbForPoint3D(lo: Double, hi: Double): Arbitrary[Point3D] = point3DArbitrary(using Gen.choose(lo, hi).toArbitrary)
+
+    private def getDriftFileLines(driftRows: List[(PositionName, FrameIndex, CoarseDrift, FineDrift)]): List[String] = 
+        headDriftFile :: driftRows.zipWithIndex.map{ case ((pos, time, coarse, fine), i) => 
+            s"$i,${time.get},${pos.get},${coarse.z.get},${coarse.y.get},${coarse.x.get},${fine.z.get},${fine.y.get},${fine.x.get}"
+        }
 
     private def getSpotsFileLines(rois: List[RegionalBarcodeSpotRoi]): List[String] = headSpotsFile :: rois.map{ r => 
         val (x, y, z) = r.centroid match { case Point3D(x, y, z) => (x.get, y.get, z.get) }
