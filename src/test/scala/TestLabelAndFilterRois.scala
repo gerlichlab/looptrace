@@ -372,7 +372,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             |10,P0001.zarr,30,0,10,1783,1084,2,18,1767,1799,1068,1100
             |15,P0001.zarr,30,0,14.4,589.5,1779.3,2,18,572,604,1763,1795
             |""", 
-            PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(16.0)) -> 
+            PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(17.0)) -> 
             """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
             |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
             |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
