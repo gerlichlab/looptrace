@@ -191,7 +191,7 @@ object LabelAndFilterRois:
                 (head, spotRows) => Alternative[List].separate(spotRows.map(rowToRoi.throughRight)) match {
                     case (Nil, rrPairs) => head -> NonnegativeInt.indexed(rrPairs)
                     case (errors@(h :: _), _) => throw new Exception(
-                        s"${errors.length} errors converting spot file (${spotsFile}) rows to ROIs! First one: $h"
+                        s"${errors.length} error(s) converting spot file (${spotsFile}) rows to ROIs! First one: $h"
                         )
                 }
             )
@@ -203,15 +203,14 @@ object LabelAndFilterRois:
                 (driftRows: Iterable[CsvRow]) => Alternative[List].separate(driftRows.toList.map(rowToDriftRecord)) match {
                     case (Nil, drifts) => drifts
                     case (errors@(h :: _), _) => throw new Exception(
-                        s"${errors.length} errors converting drift file (${driftFile}) rows to records! First one: $h"
+                        s"${errors.length} error(s) converting drift file (${driftFile}) rows to records! First one: $h"
                         )
                 }
             }.asInstanceOf[List[DriftRecord]]
-            
-            type Key = (PositionName, FrameIndex)
+
             val (recordNumbersByKey, keyed) = 
                 NonnegativeInt.indexed(drifts)
-                    .foldLeft(Map.empty[Key, NonEmptySet[LineNumber]] -> Map.empty[Key, DriftRecord]){ 
+                    .foldLeft(Map.empty[DriftKey, NonEmptySet[LineNumber]] -> Map.empty[DriftKey, DriftRecord]){ 
                         case ((reps, acc), (drift, recnum)) =>  
                             val p = drift.position
                             val t = drift.time
@@ -236,7 +235,8 @@ object LabelAndFilterRois:
         val lookupNeighbors: LineNumber => Option[NonEmptySet[LineNumber]] = {
             val shiftedRoisNumbered = rowRoiPairs.map{ case ((_, oldRoi), idx) => 
                 val posTimePair = oldRoi.position -> oldRoi.time
-                val newRoi = applyDrift(oldRoi, driftByPosTimePair(posTimePair))
+                val drift = driftByPosTimePair.getOrElse(posTimePair, throw new DriftRecordNotFoundError(posTimePair))
+                val newRoi = applyDrift(oldRoi, drift)
                 newRoi -> idx
             }
             buildNeighboringRoisFinder(shiftedRoisNumbered, minSpotSeparation)(probeGroups) match {
@@ -277,6 +277,8 @@ object LabelAndFilterRois:
                 YDir(coarse.y.get + fine.y.get), 
                 XDir(coarse.x.get + fine.x.get)
                 )
+
+    final case class DriftRecordNotFoundError(key: DriftKey) extends NoSuchElementException(s"key not found: ($key)")
 
     /**
       * Designation of regional barcode frame/probe/timepoint indices which are prohibited from being in (configurably) close proximity.
@@ -514,6 +516,7 @@ object LabelAndFilterRois:
     end ThresholdSemantic
     
     /* Type aliases */
+    type DriftKey = (PositionName, FrameIndex)
     type LineNumber = NonnegativeInt
     type PosInt = PositiveInt
     type Roi = RegionalBarcodeSpotRoi

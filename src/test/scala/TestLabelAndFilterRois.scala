@@ -1,7 +1,7 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
 import scala.math.sqrt
-import scala.util.{ NotGiven, Random }
+import scala.util.{ NotGiven, Random, Try }
 import cats.*
 import cats.data.NonEmptySet
 import cats.syntax.all.*
@@ -27,12 +27,19 @@ import at.ac.oeaw.imba.gerlich.looptrace.LabelAndFilterRois.{
     buildNeighborsLookupKeyed, 
     buildNeighboringRoisFinder, 
     workflow as runLabelAndFilter,
+    CoarseDrift, 
+    DriftKey,
+    DriftRecordNotFoundError,
     FilteredOutputFile,
+    FineDrift,
     LineNumber, 
     ProbeGroup,
     Roi, 
     RoiLinenumPair, 
     UnfilteredOutputFile,
+    XDir,
+    YDir, 
+    ZDir,
 }
 
 
@@ -453,7 +460,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         
         forAll (Table(
             ("driftLines", "expected", "mapMessage"), 
-            (coarseDriftLines, 1, "[0-9]+ errors converting drift file .+ rows to records!".r.findAllMatchIn(_: String).toList.length), 
+            (coarseDriftLines, 1, "[0-9]+ error\\(s\\) converting drift file .+ rows to records!".r.findAllMatchIn(_: String).toList.length), 
             (fineDriftLines, s"2 repeated (pos, time) pairs: ${List(("P0001.zarr", 2) -> List(2, 4), ("P0002.zarr", 0) -> List(6, 7, 8))}", identity[String])
             )) { (driftLines, expected, mapMessage) => 
             forAll (Gen.zip(genThreshold(arbitrary[NonnegativeReal]), arbitrary[ExtantOutputHandler])) { (threshold, outputHandler) =>
@@ -479,7 +486,71 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("Any ROI without drift is an error.") { pending }
+    test("The filtered output file is the unfiltered file minus the records with neighbors, and the neighbors column.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+
+        /* Generate reasonable ROIs (controlling centroid and bounding box). */
+        given arbMargin: Arbitrary[BoundingBox.Margin] = getArbForMargin(NonnegativeReal(1.0), NonnegativeReal(32.0))
+        given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-2048.0, 2048.0)
+        // Generate a reasonable distance threshold.
+        given arbThreshold: Arbitrary[DistanceThreshold] = genThreshold(Gen.choose(1.0, 10.0).map(NonnegativeReal.unsafe)).toArbitrary
+        
+        /* Generate drifts. */
+        def genCoarseDrift: Gen[CoarseDrift] = {
+            val genInt = Gen.choose(-100, 100)
+            Gen.zip(genInt, genInt, genInt).map((z, y, x) => CoarseDrift(ZDir(z), YDir(y), XDir(x)))
+        }
+        def genFineDrift: Gen[FineDrift] = {
+            val genX = Gen.choose[Double](-1, 1)
+            Gen.zip(genX, genX, genX).map((z, y, x) => FineDrift(ZDir(z), YDir(y), XDir(x)))
+        }
+
+        pending
+    }
+
+    test("Any ROI without drift is an error. #196") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+
+        /* Generate reasonable ROIs (controlling centroid and bounding box). */
+        given arbMargin: Arbitrary[BoundingBox.Margin] = getArbForMargin(NonnegativeReal(1.0), NonnegativeReal(32.0))
+        given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-2048.0, 2048.0)
+        given arbThreshold: Arbitrary[DistanceThreshold] = genThreshold(arbitrary[NonnegativeReal]).toArbitrary
+        
+        /* Generate drifts. */
+        def genCoarseDrift: Gen[CoarseDrift] = {
+            val genInt = Gen.choose(-10000, 10000)
+            Gen.zip(genInt, genInt, genInt).map((z, y, x) => CoarseDrift(ZDir(z), YDir(y), XDir(x)))
+        }
+        def genFineDrift: Gen[FineDrift] = {
+            val genX = Gen.choose[Double](-100, 100)
+            Gen.zip(genX, genX, genX).map((z, y, x) => FineDrift(ZDir(z), YDir(y), XDir(x)))
+        }
+
+        forAll (genSpotsAndDrifts(genCoarseDrift, genFineDrift), genThreshold(arbitrary[NonnegativeReal]), arbitrary[ExtantOutputHandler]) { 
+            case ((spots, driftRows, numDropped), threshold, handleOutput) => 
+                val driftLines = headDriftFile :: driftRows.zipWithIndex.map{ case ((pos, time, coarse, fine), i) => 
+                    s"$i,${time.get},${pos.get},${coarse.z.get},${coarse.y.get},${coarse.x.get},${fine.z.get},${fine.y.get},${fine.x.get}"
+                }
+                withTempDirectory{ (tmpdir: os.Path) => 
+                    val spotsFile = tmpdir / "spots.csv"
+                    os.write(spotsFile, getSpotsFileLines(spots).map(_ ++ "\n"))
+                    val driftFile = tmpdir / "drift.csv"
+                    os.write(driftFile, driftLines.map(_ ++ "\n"))
+                    def call() = runLabelAndFilter(
+                        spotsFile = spotsFile, 
+                        driftFile = driftFile, 
+                        probeGroups = List(), 
+                        minSpotSeparation = threshold, 
+                        unfilteredOutputFile = UnfilteredOutputFile.fromPath(tmpdir / "unfiltered.csv"),
+                        filteredOutputFile = FilteredOutputFile.fromPath(tmpdir / "filtered.csv"),
+                        extantOutputHandler = handleOutput,
+                        )
+                    if numDropped === 0
+                    then Try(call()).fold(err => fail(s"Expected success but failed: $err"), _ => succeed)
+                    else assertThrows[DriftRecordNotFoundError](call())
+                }
+        }
+    }
 
     test("Processing doesn't alter ROIs: the collection of ROIs parsed from input is identical to the collection of ROIs parsed from unfiltered, labeled output.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
@@ -491,16 +562,8 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             |3,30,P0001.zarr,-2.0,2.0,-12.0,-0.6267951175716121,0.24476613641147094,0.5547602737043816
             |""".stripMargin
         val timepoints = List(27, 28, 29, 30).map(FrameIndex.unsafe)
-
-        /* Control the generation of ROIs to match the drift file text. */
-        given arbPos: Arbitrary[PositionName] = Gen.const(PositionName("P0001.zarr")).toArbitrary
-        given arbFrameIndex: Arbitrary[FrameIndex] = Gen.oneOf(timepoints).toArbitrary
         
-        /* Generate reasonable ROIs (controlling centroid and bounding box). */
-        given arbMargin: Arbitrary[BoundingBox.Margin] = getArbForMargin(NonnegativeReal(1.0), NonnegativeReal(32.0))
-        given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-2048.0, 2048.0)
-
-        given arbThreshold: Arbitrary[DistanceThreshold] = genThreshold(Gen.choose(1.0, 10000.0).map(NonnegativeReal.unsafe)).toArbitrary
+        // Choose from probe groupings available given the timepoints used in drift file.
         given arbGrouping: Arbitrary[List[ProbeGroup]] = Gen.oneOf(List(
                 List(), 
                 List(NonEmptySet.one(27), NonEmptySet.one(29), NonEmptySet.of(28, 30)), 
@@ -511,17 +574,21 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             .map(_.map(timeSets => ProbeGroup(timeSets.map(FrameIndex.unsafe))))
             ).toArbitrary
 
+        /* Control the generation of ROIs to match the drift file text. */
+        given arbPos: Arbitrary[PositionName] = Gen.const(PositionName("P0001.zarr")).toArbitrary
+        given arbFrameIndex: Arbitrary[FrameIndex] = Gen.oneOf(timepoints).toArbitrary
+        
+        /* Generate reasonable ROIs (controlling centroid and bounding box). */
+        given arbMargin: Arbitrary[BoundingBox.Margin] = getArbForMargin(NonnegativeReal(1.0), NonnegativeReal(32.0))
+        given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-2048.0, 2048.0)
+
+        // Generate a reasonable distance threshold.
+        given arbThreshold: Arbitrary[DistanceThreshold] = genThreshold(Gen.choose(1.0, 10000.0).map(NonnegativeReal.unsafe)).toArbitrary
+        
         forAll { (rois: List[RegionalBarcodeSpotRoi], threshold: DistanceThreshold, grouping: List[ProbeGroup], handleOutput: ExtantOutputHandler) =>
-            val spotsFileLines = headSpotsFile :: rois.map{ r => 
-                val (x, y, z) = r.centroid match { case Point3D(x, y, z) => (x.get, y.get, z.get) }
-                val (loX, hiX, loY, hiY, loZ, hiZ) = r.boundingBox match { 
-                    case BoundingBox(sideX, sideY, sideZ) => (sideX.lo.get, sideX.hi.get, sideY.lo.get, sideY.hi.get, sideZ.lo.get, sideZ.hi.get)
-                }
-                s"${r.index.get},${r.position.get},${r.time.get},${r.channel.get},$x,$y,$z,$loX,$hiX,$loY,$hiY,$loZ,$hiZ"
-            }
             withTempDirectory{ (tmpdir: os.Path) => 
                 val spotsFile = tmpdir / "spots.csv"
-                os.write(spotsFile, spotsFileLines.map(_ ++ "\n"))
+                os.write(spotsFile, getSpotsFileLines(rois).map(_ ++ "\n"))
                 val driftFile = tmpdir / "drift.csv"
                 os.write(driftFile, driftFileText)
                 val filtFile: FilteredOutputFile = FilteredOutputFile.fromPath(tmpdir / "filtered.csv")
@@ -688,6 +755,21 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 )
         }
 
+    def genSpotsAndDrifts(genCoarse: Gen[CoarseDrift], genFine: Gen[FineDrift])(
+        using arbMargin: Arbitrary[BoundingBox.Margin], arbPoint: Arbitrary[Point3D]
+        ): Gen[(List[RegionalBarcodeSpotRoi], List[(PositionName, FrameIndex, CoarseDrift, FineDrift)], Int)] = {
+        // Order shouldn't matter, but that invariant's tested elsewhere.
+        given ordPosTime: Ordering[DriftKey] = Order[DriftKey].toOrdering
+        for {
+            spots <- Gen.listOf(arbitrary[RegionalBarcodeSpotRoi]).suchThat(_.nonEmpty)
+            posTimePairs = spots.map(roi => roi.position -> roi.time).toSet
+            driftRows <- posTimePairs.toList.traverse{ 
+                (p, t) => Gen.zip(genCoarse, genFine).map((coarse, fine) => (p, t, coarse, fine))
+            }
+            numDropped <- Gen.choose(0, driftRows.size)
+        } yield (spots, driftRows.drop(numDropped).sortBy(r => r._1 -> r._2), numDropped)
+    }
+
     private def genThreshold: Gen[NonnegativeReal] => Gen[DistanceThreshold] = genThresholdType <*> _
 
     private def genThresholdType = Gen.oneOf(
@@ -700,7 +782,18 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
 
     private def getArbForPoint3D(lo: Double, hi: Double): Arbitrary[Point3D] = point3DArbitrary(using Gen.choose(lo, hi).toArbitrary)
 
+    private def getSpotsFileLines(rois: List[RegionalBarcodeSpotRoi]): List[String] = headSpotsFile :: rois.map{ r => 
+        val (x, y, z) = r.centroid match { case Point3D(x, y, z) => (x.get, y.get, z.get) }
+        val (loX, hiX, loY, hiY, loZ, hiZ) = r.boundingBox match { 
+            case BoundingBox(sideX, sideY, sideZ) => (sideX.lo.get, sideX.hi.get, sideY.lo.get, sideY.hi.get, sideZ.lo.get, sideZ.hi.get)
+        }
+        s"${r.index.get},${r.position.get},${r.time.get},${r.channel.get},$x,$y,$z,$loX,$hiX,$loY,$hiY,$loZ,$hiZ"
+    }
+
     // Header for spots (ROIs) file
     private def headSpotsFile = ",position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max"
+
+    // Header for drift correction file
+    private def headDriftFile = ",frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine"
 
 end TestLabelAndFilterRois
