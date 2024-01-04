@@ -30,6 +30,9 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
 
     given arbitraryForPositionIndex(using idx: Arbitrary[NonnegativeInt]): Arbitrary[PositionIndex] = idx.map(PositionIndex.apply)
 
+    given arbitraryForPositionName: Arbitrary[PositionName] = 
+        Arbitrary{ Gen.alphaNumStr.suchThat(_.nonEmpty).map(PositionName.apply) }
+
     given arbitraryForRoiIndex(using idx: Arbitrary[Int]): Arbitrary[RoiIndex] = 
         Arbitrary{ Gen.choose(0, Int.MaxValue).map(RoiIndex.unsafe) }
     
@@ -43,28 +46,29 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
         Gen.zip(arbitrary[XCoordinate], arbitrary[YCoordinate], arbitrary[ZCoordinate]).map(Point3D.apply.tupled)
     }
 
-    given arbitraryForRegionalBarcodeSpotRoi(
-        using arbRoiIdx: Arbitrary[RoiIndex], 
+    given arbitraryForRegionalBarcodeSpotRoi(using
+        arbRoiIdx: Arbitrary[RoiIndex], 
+        arbPosName: Arbitrary[PositionName], 
         arbFrameIdx: Arbitrary[FrameIndex], 
         arbCh: Arbitrary[Channel], 
-        arbPt: Arbitrary[Point3D], 
+        arbPt: Arbitrary[Point3D],
         arbMargin: Arbitrary[BoundingBox.Margin],
         ): Arbitrary[RegionalBarcodeSpotRoi] = {
         def buildBox(pt: Point3D)(xMargin: BoundingBox.Margin, yMargin: BoundingBox.Margin, zMargin: BoundingBox.Margin): BoundingBox = {
-            def buildInterval[C <: Coordinate : [C] =>> NotGiven[C =:= Coordinate]](lift: Double => C)(center: Double, margin: Double): BoundingBox.Interval[C] = 
-                BoundingBox.Interval.apply[C].tupled((center - margin, center + margin).mapBoth(lift))
-            val ix = buildInterval(XCoordinate.apply)(pt.x.get, xMargin.get)
-            val iy = buildInterval(YCoordinate.apply)(pt.y.get, yMargin.get)
-            val iz = buildInterval(ZCoordinate.apply)(pt.z.get, zMargin.get)
+            def buildInterval[C <: Coordinate : [C] =>> NotGiven[C =:= Coordinate]](lift: Double => C)(center: Double, margin: BoundingBox.Margin): BoundingBox.Interval[C] = 
+                BoundingBox.Interval.apply[C].tupled((center - margin.get, center + margin.get).mapBoth(lift))
+            val ix = buildInterval(XCoordinate.apply)(pt.x.get, xMargin)
+            val iy = buildInterval(YCoordinate.apply)(pt.y.get, yMargin)
+            val iz = buildInterval(ZCoordinate.apply)(pt.z.get, zMargin)
             BoundingBox(ix, iy, iz)
         }
         def genRoi: Gen[RegionalBarcodeSpotRoi] = for {
             idx <- arbitrary[RoiIndex]
-            pos <- Gen.alphaNumStr
+            pos <- arbitrary[PositionName]
             t <- arbitrary[FrameIndex]
             ch <- arbitrary[Channel]
             pt <- arbitrary[Point3D]
-            box <- arbitrary[(BoundingBox.Margin, BoundingBox.Margin, BoundingBox.Margin)].map(buildBox(pt))
+            box <- arbitrary[(BoundingBox.Margin, BoundingBox.Margin, BoundingBox.Margin)].map(buildBox(pt).tupled)
         } yield RegionalBarcodeSpotRoi(index = idx, position = pos, time = t, channel = ch, centroid = pt, boundingBox = box)
         Arbitrary(genRoi)
     }

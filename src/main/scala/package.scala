@@ -224,6 +224,11 @@ package object looptrace {
         def unsafe = NonnegativeInt.unsafe `andThen` PositionIndex.apply
     end PositionIndex
 
+    final case class PositionName(get: String) extends AnyVal
+    object PositionName:
+        given orderForPositionName: Order[PositionName] = Order.by(_.get)
+    end PositionName
+
     final case class ProbeName(get: String)
     object ProbeName:
         given showForProbeName: Show[ProbeName] = Show.show(_.get)

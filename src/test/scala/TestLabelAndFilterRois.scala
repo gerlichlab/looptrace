@@ -74,9 +74,6 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
     test("Spot distance comparison is accurate, uses drift correction--coarse, fine, or both--can switch distance measure (#146), and is invariant under order of drifts.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         
-        // Header for spots (ROIs) file
-        val header = ",position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max"
-
         // Generate permutations of lines to test invariance under input order.
         def genLinesPermutation(linesBlock: String): Gen[Array[String]] = {
             val lines = linesBlock.stripMargin.split("\n")
@@ -144,7 +141,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 // When min separation is infinitely small, nothing is proximal and everything is kept.
                 NonnegativeReal(0.0) -> spotsText, 
                 // When threshold is infinitely large, everything is proximal and nothing is kept.
-                NonnegativeReal(Double.MaxValue) -> header,
+                NonnegativeReal(Double.MaxValue) -> headSpotsFile,
                 )
         } yield (drift, build(value), expected)
         
@@ -482,7 +479,65 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("Processing doesn't alter ROIs: the collection of ROIs parsed from input is identical to the collection of ROIs parsed from unfiltered, labeled output.") { pending }
+    test("Any ROI without drift is an error.") { pending }
+
+    test("Processing doesn't alter ROIs: the collection of ROIs parsed from input is identical to the collection of ROIs parsed from unfiltered, labeled output.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+
+        val driftFileText = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
+            |0,27,P0001.zarr,-2.0,8.0,-24.0,0.3048142040458287,0.2167426082715708,0.46295638298323727
+            |1,28,P0001.zarr,2.0,4.0,-20.0,0.6521556133243969,-0.32279031643811845,0.8467576764912169
+            |2,29,P0001.zarr,0.0,6.0,-16.0,-0.32831460930799267,0.5707716296861373,0.768359957646404
+            |3,30,P0001.zarr,-2.0,2.0,-12.0,-0.6267951175716121,0.24476613641147094,0.5547602737043816
+            |""".stripMargin
+        val timepoints = List(27, 28, 29, 30).map(FrameIndex.unsafe)
+
+        /* Control the generation of ROIs to match the drift file text. */
+        given arbPos: Arbitrary[PositionName] = Gen.const(PositionName("P0001.zarr")).toArbitrary
+        given arbFrameIndex: Arbitrary[FrameIndex] = Gen.oneOf(timepoints).toArbitrary
+        
+        /* Generate reasonable ROIs (controlling centroid and bounding box). */
+        given arbMargin: Arbitrary[BoundingBox.Margin] = getArbForMargin(NonnegativeReal(1.0), NonnegativeReal(32.0))
+        given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-2048.0, 2048.0)
+
+        given arbThreshold: Arbitrary[DistanceThreshold] = genThreshold(Gen.choose(1.0, 10000.0).map(NonnegativeReal.unsafe)).toArbitrary
+        given arbGrouping: Arbitrary[List[ProbeGroup]] = Gen.oneOf(List(
+                List(), 
+                List(NonEmptySet.one(27), NonEmptySet.one(29), NonEmptySet.of(28, 30)), 
+                List(NonEmptySet.of(27, 30), NonEmptySet.of(28, 29)),
+                List(NonEmptySet.of(27, 28, 30), NonEmptySet.one(29)), 
+                List(NonEmptySet.of(27, 28, 29, 30)),
+            )
+            .map(_.map(timeSets => ProbeGroup(timeSets.map(FrameIndex.unsafe))))
+            ).toArbitrary
+
+        forAll { (rois: List[RegionalBarcodeSpotRoi], threshold: DistanceThreshold, grouping: List[ProbeGroup], handleOutput: ExtantOutputHandler) =>
+            val spotsFileLines = headSpotsFile :: rois.map{ r => 
+                val (x, y, z) = r.centroid match { case Point3D(x, y, z) => (x.get, y.get, z.get) }
+                val (loX, hiX, loY, hiY, loZ, hiZ) = r.boundingBox match { 
+                    case BoundingBox(sideX, sideY, sideZ) => (sideX.lo.get, sideX.hi.get, sideY.lo.get, sideY.hi.get, sideZ.lo.get, sideZ.hi.get)
+                }
+                s"${r.index.get},${r.position.get},${r.time.get},${r.channel.get},$x,$y,$z,$loX,$hiX,$loY,$hiY,$loZ,$hiZ"
+            }
+            withTempDirectory{ (tmpdir: os.Path) => 
+                val spotsFile = tmpdir / "spots.csv"
+                os.write(spotsFile, spotsFileLines.map(_ ++ "\n"))
+                val driftFile = tmpdir / "drift.csv"
+                os.write(driftFile, driftFileText)
+                val filtFile: FilteredOutputFile = FilteredOutputFile.fromPath(tmpdir / "filtered.csv")
+                val unfiltFile: UnfilteredOutputFile = UnfilteredOutputFile.fromPath(tmpdir / "unfiltered.csv")
+                runLabelAndFilter(
+                    spotsFile = spotsFile, 
+                    driftFile = driftFile, 
+                    probeGroups = grouping, 
+                    minSpotSeparation = threshold, 
+                    unfilteredOutputFile = unfiltFile, 
+                    filteredOutputFile = filtFile, 
+                    extantOutputHandler = handleOutput,
+                    )
+            }
+        }
+    }
 
     // This tests for both the ability to specify nothing for the grouping, and for the correctness of the definition of the partitioning (trivial) when no grouping is specified.
     test("Spot distance comparison considers all ROIs as one big group if no grouping is provided. #147") {
@@ -502,7 +557,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         /* Create all partitions of 5 as 2 and 3, mapping each partition to a position value for ROIs to be made. */
         val roiIndices = 0 until 5
         val partitions = roiIndices.combinations(3).map{
-            group => roiIndices.toList.map(i => s"P000${if group.contains(i) then 1 else 2}.zarr")
+            group => roiIndices.toList.map(i => PositionName(s"P000${if group.contains(i) then 1 else 2}.zarr"))
         }
         
         /* Assert property for all partitions (on position) of 5 ROIs into a group of 2 and group of 3. */
@@ -561,10 +616,8 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
     test("Fewer than 2 ROIs means the neighbors mapping is always empty.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         def genRoiDistanceAndProbeGroup: Gen[(RegionalBarcodeSpotRoi, DistanceThreshold, List[ProbeGroup])] = {
-            given arbMargin: Arbitrary[BoundingBox.Margin] = Gen.choose(1.0, 32.0)
-                .map(NonnegativeReal.unsafe `andThen` BoundingBox.Margin.apply)
-                .toArbitrary
-            given arbPoint: Arbitrary[Point3D] = point3DArbitrary(using Gen.choose(-2048.0, 2048.0).toArbitrary)
+            given arbMargin: Arbitrary[BoundingBox.Margin] = getArbForMargin(NonnegativeReal(1.0), NonnegativeReal(32.0))
+            given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-2048.0, 2048.0)
             for {
                 roi <- arbitrary[RegionalBarcodeSpotRoi]
                 threshold <- genThreshold(arbitrary[NonnegativeReal])
@@ -627,7 +680,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             val box = BoundingBox(xIntv, yIntv, zIntv)
             RegionalBarcodeSpotRoi(
                 RoiIndex(NonnegativeInt(0)), 
-                "P0001.zarr", 
+                PositionName("P0001.zarr"), 
                 FrameIndex(NonnegativeInt(0)), 
                 Channel(NonnegativeInt(0)), 
                 point, 
@@ -641,5 +694,13 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         PiecewiseDistance.ConjunctiveThreshold.apply, 
         EuclideanDistance.Threshold.apply,
         )
+
+    private def getArbForMargin(lo: NonnegativeReal, hi: NonnegativeReal): Arbitrary[BoundingBox.Margin] = 
+        Gen.choose[Double](lo, hi).map(NonnegativeReal.unsafe `andThen` BoundingBox.Margin.apply).toArbitrary
+
+    private def getArbForPoint3D(lo: Double, hi: Double): Arbitrary[Point3D] = point3DArbitrary(using Gen.choose(lo, hi).toArbitrary)
+
+    // Header for spots (ROIs) file
+    private def headSpotsFile = ",position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max"
 
 end TestLabelAndFilterRois

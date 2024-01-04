@@ -196,7 +196,7 @@ object LabelAndFilterRois:
         val driftByPosTimePair = {
             val (recordNumbersByKey, keyed) = 
                 NonnegativeInt.indexed(drifts)
-                    .foldLeft(Map.empty[(String, FrameIndex), NonEmptySet[LineNumber]] -> Map.empty[(String, FrameIndex), DriftRecord]){ 
+                    .foldLeft(Map.empty[(PositionName, FrameIndex), NonEmptySet[LineNumber]] -> Map.empty[(PositionName, FrameIndex), DriftRecord]){ 
                         case ((reps, acc), (drift, recnum)) =>  
                             val p = drift.position
                             val t = drift.time
@@ -209,7 +209,7 @@ object LabelAndFilterRois:
             val repeats = recordNumbersByKey.filter(_._2.size > 1)
             if (repeats.nonEmpty) { 
                 val simpleReps = repeats.toList.map{ 
-                    case ((p, FrameIndex(t)), lineNums) => (p, t) -> lineNums.toList.sorted
+                    case ((PositionName(p), FrameIndex(t)), lineNums) => (p, t) -> lineNums.toList.sorted
                 }.sortBy(_._1)
                 throw new Exception(s"${simpleReps.length} repeated (pos, time) pairs: ${simpleReps}")
             }
@@ -252,7 +252,7 @@ object LabelAndFilterRois:
     /****************************************************************************************************************
      * Main types and business logic
      ****************************************************************************************************************/
-    final case class DriftRecord(position: String, time: Timepoint, coarse: CoarseDrift, fine: FineDrift):
+    final case class DriftRecord(position: PositionName, time: Timepoint, coarse: CoarseDrift, fine: FineDrift):
         def total = 
             // For justification of additivity, see: https://github.com/gerlichlab/looptrace/issues/194
             TotalDrift(
@@ -383,7 +383,7 @@ object LabelAndFilterRois:
     /** Parse a {@code ROI} value from an in-memory representation of a single line from a CSV file. */
     def rowToRoi(row: CsvRow): ErrMsgsOr[Roi] = {
         val indexNel = safeGetFromRow("", safeParseInt >>> RoiIndex.fromInt)(row)
-        val posNel = safeGetFromRow("position", (_: String).asRight)(row)
+        val posNel = safeGetFromRow("position", PositionName.apply(_).asRight)(row)
         val timeNel = safeGetFromRow("frame", safeParseInt >>> FrameIndex.fromInt)(row)
         val channelNel = safeGetFromRow("ch", safeParseInt >>> Channel.fromInt)(row)
         val centroidNel = {
@@ -419,7 +419,7 @@ object LabelAndFilterRois:
      * @return Either a {@code Left}-wrapped nonempty collection of error messages, or a {@code Right}-wrapped record
      */
     def rowToDriftRecord(row: CsvRow): ErrMsgsOr[DriftRecord] = {
-        val posNel = safeGetFromRow("position", (_: String).asRight)(row)
+        val posNel = safeGetFromRow("position", PositionName.apply(_).asRight)(row)
         val timeNel = safeGetFromRow("frame", safeParseInt >>> FrameIndex.fromInt)(row)
         val coarseDriftNel = {
             val zNel = safeGetFromRow("z_px_coarse", safeParseIntLike >> ZDir.apply)(row)
