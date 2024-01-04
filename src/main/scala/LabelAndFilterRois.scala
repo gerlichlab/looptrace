@@ -283,9 +283,6 @@ object LabelAndFilterRois:
         )
     end ProbeGroup
 
-    /** Representation of a single record from the regional barcode spots detection */
-    final case class Roi(index: RoiIndex, position: String, time: FrameIndex, channel: Channel, centroid: Point3D, boundingBox: BoundingBox)
-    
     /** Add the given total drift (coarse + fine) to the given ROI, updating its centroid and its bounding box accordingly. */
     private def applyDrift(roi: Roi, drift: DriftRecord): Roi = {
         require(
@@ -410,7 +407,9 @@ object LabelAndFilterRois:
                 )
             )
         }
-        (indexNel, posNel, timeNel, channelNel, centroidNel, bboxNel).mapN(Roi.apply).toEither
+        (indexNel, posNel, timeNel, channelNel, centroidNel, bboxNel)
+            .mapN(RegionalBarcodeSpotRoi.apply)
+            .toEither
     }
     
     /** 
@@ -477,26 +476,6 @@ object LabelAndFilterRois:
     final case class FineDrift(z: ZDir[Double], y: YDir[Double], x: XDir[Double]) extends Drift[Double]
     final case class TotalDrift(z: ZDir[Double], y: YDir[Double], x: XDir[Double]) extends Drift[Double]
 
-    final case class BoundingBox(
-        sideX: BoundingBox.Interval[XCoordinate], 
-        sideY: BoundingBox.Interval[YCoordinate], 
-        sideZ: BoundingBox.Interval[ZCoordinate]
-        )
-
-    object BoundingBox:
-        given orderForBoundingBox: Order[BoundingBox] = Order.by{ 
-            case BoundingBox(
-                BoundingBox.Interval(XCoordinate(loX), XCoordinate(hiX)), 
-                BoundingBox.Interval(YCoordinate(loY), YCoordinate(hiY)), 
-                BoundingBox.Interval(ZCoordinate(loZ), ZCoordinate(hiZ))
-            ) => (loX, loY, loZ, hiX, hiY, hiZ)
-        }
-
-        final case class Interval[C <: Coordinate](lo: C, hi: C):
-            require(lo < hi, s"Lower bound not less than upper bound: ($lo, $hi)")
-        end Interval
-    end BoundingBox
-
     /** Helpers for working with spot separation semantic values */
     object ThresholdSemantic:
         /** How to parse a spot separation semantic from a command-line argument */
@@ -512,6 +491,7 @@ object LabelAndFilterRois:
     /* Type aliases */
     type LineNumber = NonnegativeInt
     type PosInt = PositiveInt
+    type Roi = RegionalBarcodeSpotRoi
     type RoiLinenumPair = (Roi, NonnegativeInt)
     type Timepoint = FrameIndex
     

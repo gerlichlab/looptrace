@@ -27,7 +27,6 @@ import at.ac.oeaw.imba.gerlich.looptrace.LabelAndFilterRois.{
     buildNeighborsLookupKeyed, 
     buildNeighboringRoisFinder, 
     workflow as runLabelAndFilter,
-    BoundingBox, 
     FilteredOutputFile,
     LineNumber, 
     ProbeGroup,
@@ -72,11 +71,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("Spots cancel each other regardless of frame.") { pending }
-
-    test("Spots never cancel each other if they're from different FOVs.") { pending }
-
-    test("Spot distance comparison is accurate, uses drift correction--coarse, fine, or both, and is invariant under order of drifts.") {
+    test("Spot distance comparison is accurate, uses drift correction--coarse, fine, or both--can switch distance measure (#146), and is invariant under order of drifts.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         
         // Header for spots (ROIs) file
@@ -487,26 +482,20 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("The collection of ROIs parsed from filtered output is identical to that of the subset of input that has no proximal neighbors.") { pending }
-
-    test("The collection of ROIs parsed from input is identical to the collection of ROIs parsed from unfiltered, labeled output.") { pending }
-
-    test("Spot distance comparison operates in real space, NOT downsampled space. #143") { pending }
-
-    test("Spot distance comparison responds to change of proximity comparison strategy #146.") { pending }
+    test("Processing doesn't alter ROIs: the collection of ROIs parsed from input is identical to the collection of ROIs parsed from unfiltered, labeled output.") { pending }
 
     // This tests for both the ability to specify nothing for the grouping, and for the correctness of the definition of the partitioning (trivial) when no grouping is specified.
     test("Spot distance comparison considers all ROIs as one big group if no grouping is provided. #147") {
         pending
     }
     
-    test("In each pair of proximal spots, BOTH are filtered OUT. #148") { pending }
-    
     test("Probe grouping must partition regional barcode frames: A probe grouping declaration that does not cover regional barcodes set is an error.") { pending }
     
     test("Probe grouping must partition regional barcode frames: A probe grouping declaration with an overlap (probe/frame repeated between groups) an error.") { pending }
 
     test("More proximal neighbors from different FOVs don't pair, while less proximal ones from the same FOV do pair. #150") { pending }
+
+    test("Spots can cancel each other regardless of frame, but never if they're from different FOVs (#150)") { pending }
 
     test("ROI grouping by frame/probe/timepoint is specific to field-of-view, so that ROIs from different FOVs don't affect each other for filtering. #150") {
         
@@ -569,10 +558,24 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("Coincident ROIs in the same FOV are all mutually neighbors exactly when distance threshold is strictly positive.") { pending }
-
     test("Fewer than 2 ROIs means the neighbors mapping is always empty.") {
-        pending
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        def genRoiDistanceAndProbeGroup: Gen[(RegionalBarcodeSpotRoi, DistanceThreshold, List[ProbeGroup])] = {
+            given arbMargin: Arbitrary[BoundingBox.Margin] = Gen.choose(1.0, 32.0)
+                .map(NonnegativeReal.unsafe `andThen` BoundingBox.Margin.apply)
+                .toArbitrary
+            given arbPoint: Arbitrary[Point3D] = point3DArbitrary(using Gen.choose(-2048.0, 2048.0).toArbitrary)
+            for {
+                roi <- arbitrary[RegionalBarcodeSpotRoi]
+                threshold <- genThreshold(arbitrary[NonnegativeReal])
+                grouping <- Gen.oneOf(List(ProbeGroup(NonEmptySet.one(roi.time))), List())
+            } yield (roi, threshold, grouping)
+        }
+        
+        forAll (genRoiDistanceAndProbeGroup) { (roi, threshold, grouping) => 
+            val rois = NonnegativeInt.indexed(List(roi))
+            buildNeighboringRoisFinder(rois, threshold)(grouping) shouldEqual Right(Map())
+        }
     }
 
     test("A ROI is never among its own neighbors.") {
@@ -610,7 +613,8 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         } yield (threshold, centroids.map(canonicalRoi))
     }
 
-    private def buildInterval[C <: Coordinate: [C] =>> NotGiven[C =:= Coordinate]](c: C, margin: NonnegativeReal)(lift: Double => C): BoundingBox.Interval[C] = 
+    private def buildInterval[C <: Coordinate: [C] =>> NotGiven[C =:= Coordinate]](
+        c: C, margin: NonnegativeReal)(lift: Double => C): BoundingBox.Interval[C] = 
         BoundingBox.Interval[C].apply.tupled((c.get - margin, c.get + margin).mapBoth(lift))
 
     private def canonicalRoi: Roi = canonicalRoi(Point3D(XCoordinate(1), YCoordinate(2), ZCoordinate(3)))
@@ -621,7 +625,14 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             val yIntv = buildInterval(y, NonnegativeReal(2))(YCoordinate.apply)
             val zIntv = buildInterval(z, NonnegativeReal(1))(ZCoordinate.apply)
             val box = BoundingBox(xIntv, yIntv, zIntv)
-            Roi(RoiIndex(NonnegativeInt(0)), "P0001.zarr", FrameIndex(NonnegativeInt(0)), Channel(NonnegativeInt(0)), point, box)
+            RegionalBarcodeSpotRoi(
+                RoiIndex(NonnegativeInt(0)), 
+                "P0001.zarr", 
+                FrameIndex(NonnegativeInt(0)), 
+                Channel(NonnegativeInt(0)), 
+                point, 
+                box,
+                )
         }
 
     private def genThreshold: Gen[NonnegativeReal] => Gen[DistanceThreshold] = genThresholdType <*> _

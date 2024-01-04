@@ -20,23 +20,6 @@ trait ScalacheckGenericExtras:
             a <- fa
         } yield f(a)
 
-    /** Zip together 2 arbitrary instances */
-    given arbZip2[A, B](using Arbitrary[A], Arbitrary[B]): Arbitrary[(A, B)] = Arbitrary{
-        for {
-            a <- arbitrary[A]
-            b <- arbitrary[B]
-        } yield (a, b)
-    }
-
-    /** Zip together 3 arbitrary instances */
-    given arbZip3[A, B, C](using Arbitrary[A], Arbitrary[B], Arbitrary[C]): Arbitrary[(A, B, C)] = Arbitrary{
-        for {
-            a <- arbitrary[A]
-            b <- arbitrary[B]
-            c <- arbitrary[C]
-        } yield (a, b, c)
-    }
-
     /** Add nicer syntax to arbitrary instances. */
     extension [A](arb: Arbitrary[A])
         def gen: Gen[A] = arb.arbitrary
