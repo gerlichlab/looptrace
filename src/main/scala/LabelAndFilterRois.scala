@@ -198,15 +198,16 @@ object LabelAndFilterRois:
         }
         
         /* Then, parse the drift correction records from the corresponding file. */
-        val drifts = withCsvData(driftFile){
-            (driftRows: Iterable[CsvRow]) => Alternative[List].separate(driftRows.toList.map(rowToDriftRecord)) match {
-                case (Nil, drifts) => drifts
-                case (errors@(h :: _), _) => throw new Exception(
-                    s"${errors.length} errors converting drift file (${driftFile}) rows to records! First one: $h"
-                    )
-            }
-        }.asInstanceOf[List[DriftRecord]]
         val driftByPosTimePair = {
+            val drifts = withCsvData(driftFile){
+                (driftRows: Iterable[CsvRow]) => Alternative[List].separate(driftRows.toList.map(rowToDriftRecord)) match {
+                    case (Nil, drifts) => drifts
+                    case (errors@(h :: _), _) => throw new Exception(
+                        s"${errors.length} errors converting drift file (${driftFile}) rows to records! First one: $h"
+                        )
+                }
+            }.asInstanceOf[List[DriftRecord]]
+            
             type Key = (PositionName, FrameIndex)
             val (recordNumbersByKey, keyed) = 
                 NonnegativeInt.indexed(drifts)
