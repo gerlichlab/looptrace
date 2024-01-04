@@ -179,7 +179,6 @@ object LabelAndFilterRois:
 
         /* Then, parse the ROI records from the (regional barcode) spots file. */
         val (roisHeader, rowRoiPairs): (List[String], List[((CsvRow, Roi), LineNumber)]) = {
-            println(s"Reading ROIs file: $spotsFile")
             safeReadAllWithOrderedHeaders(spotsFile).fold(
                 throw _, 
                 (head, spotRows) => Alternative[List].separate(spotRows.map(rowToRoi.throughRight)) match {
@@ -190,12 +189,10 @@ object LabelAndFilterRois:
         }
         
         /* Then, parse the drift correction records from the corresponding file. */
-        println(s"Reading drift file: $driftFile")
         val drifts = withCsvData(driftFile){ (driftRows: Iterable[CsvRow]) => Alternative[List].separate(driftRows.toList.map(rowToDriftRecord)) match {
             case (Nil, drifts) => drifts
             case (errors@(h :: _), _) => throw new Exception(s"${errors.length} errors converting drift file (${driftFile}) rows to records! First one: $h")
         } }.asInstanceOf[List[DriftRecord]]
-        println("Keying drifts...")
         val driftByPosTimePair = {
             val (recordNumbersByKey, keyed) = 
                 NonnegativeInt.indexed(drifts)
@@ -220,7 +217,6 @@ object LabelAndFilterRois:
         }
 
         /* For each ROI (by line number), look up its (too-proximal, according to distance threshold) neighbors. */
-        println("Building neighbors lookup...")
         // TODO: allow empty grouping here. https://github.com/gerlichlab/looptrace/issues/147
         val lookupNeighbors: LineNumber => Option[NonEmptySet[LineNumber]] = {
             val shiftedRoisNumbered = rowRoiPairs.map{ case ((_, oldRoi), idx) => 
@@ -234,11 +230,9 @@ object LabelAndFilterRois:
             }
         }
 
-        println("Pairing neighbors with ROIs...")
         val roiRecordsLabeled = rowRoiPairs.map{ case ((row, _), linenum) => row -> lookupNeighbors(linenum).map(_.toNonEmptyList.sorted) }
 
         /* Write the unfiltered output and print out the header */
-        println("Starting on output writing...")
         val unfilteredHeader = {
             val neighborColumnName = "neighbors"
             val header = roisHeader :+ neighborColumnName
@@ -249,12 +243,10 @@ object LabelAndFilterRois:
             println(s"${if wroteIt then "Wrote" else "Did not write"} unfiltered output file: $filteredOutputFile")
             header
         }
-        println(s"Unfiltered header: $unfilteredHeader")
-
+        
         val wroteIt = writeFiltered(roisHeader, roiRecordsLabeled.filter(_._2.isEmpty).map(_._1))
         println(s"${if wroteIt then "Wrote" else "Did not write"} filtered output file: $filteredOutputFile")
 
-        println("Done!")
     }
 
     /****************************************************************************************************************
@@ -294,12 +286,13 @@ object LabelAndFilterRois:
     /** Representation of a single record from the regional barcode spots detection */
     final case class Roi(index: RoiIndex, position: String, time: FrameIndex, channel: Channel, centroid: Point3D, boundingBox: BoundingBox)
     
+    /** Add the given total drift (coarse + fine) to the given ROI, updating its centroid and its bounding box accordingly. */
     private def applyDrift(roi: Roi, drift: DriftRecord): Roi = {
         require(
             roi.position === drift.position && roi.time === drift.time, 
             s"ROI and drift don't match on (FOV, time): (${roi.position -> roi.time} and (${drift.position -> drift.time})"
             )
-        roi.copy(centroid = Movement.shiftBy(drift.total)(roi.centroid), boundingBox = Movement.shiftBy(drift.total)(roi.boundingBox))
+        roi.copy(centroid = Movement.addDrift(drift.total)(roi.centroid), boundingBox = Movement.addDrift(drift.total)(roi.boundingBox))
     }
 
     /**
@@ -447,12 +440,6 @@ object LabelAndFilterRois:
     /** Try to read an integer from a string, failing if it's non-numeric or if conversion to {@code Int} would be lossy. */
     def safeParseIntLike: String => Either[String, Int] = safeParseDouble >>> tryToInt
 
-    /** Shift a point by a particular coarse drift correction. */
-    def shiftPoint(drift: CoarseDrift)(point: Point3D) = (drift, point) match { 
-        case (CoarseDrift(ZDir(delZ), YDir(delY), XDir(delX)), Point3D(XCoordinate(x), YCoordinate(y), ZCoordinate(z))) =>
-            Point3D(XCoordinate(x - delX), YCoordinate(y - delY), ZCoordinate(z - delZ))
-    }
-    
     /****************************************************************************************************************
      * Ancillary definitions
      ****************************************************************************************************************/
@@ -470,9 +457,9 @@ object LabelAndFilterRois:
             BoundingBox.Interval(shiftBy(del)(intv.lo), shiftBy(del)(intv.hi))
         def shiftBy(del: ZDir[Double])(intv: BoundingBox.Interval[ZCoordinate]): BoundingBox.Interval[ZCoordinate] =
             BoundingBox.Interval(shiftBy(del)(intv.lo), shiftBy(del)(intv.hi))
-        def shiftBy(drift: TotalDrift)(pt: Point3D): Point3D = 
+        def addDrift(drift: TotalDrift)(pt: Point3D): Point3D = 
             Point3D(shiftBy(drift.x)(pt.x), shiftBy(drift.y)(pt.y), shiftBy(drift.z)(pt.z))
-        def shiftBy(drift: TotalDrift)(box: BoundingBox): BoundingBox = 
+        def addDrift(drift: TotalDrift)(box: BoundingBox): BoundingBox = 
             BoundingBox(shiftBy(drift.x)(box.sideX), shiftBy(drift.y)(box.sideY), shiftBy(drift.z)(box.sideZ))
     end Movement
 
