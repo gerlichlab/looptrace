@@ -634,13 +634,170 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
     }
 
     // This tests for both the ability to specify nothing for the grouping, and for the correctness of the definition of the partitioning (trivial) when no grouping is specified.
-    test("Spot distance comparison considers all ROIs as one big group if no grouping is provided. #147") {
-        pending
+    test("Spot distance comparison is generally correct and considers all ROIs as one big group if no grouping is provided. #147") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+
+        // Generate a reasonable margin on side of each centroid coordinate for ROI bounding boxes.
+        given arbMargin: Arbitrary[BoundingBox.Margin] = getArbForMargin(NonnegativeReal(1.0), NonnegativeReal(32.0))
+
+        /* Collection of points to consider for proximity-based filtration */
+        val pt1 = Point3D(XCoordinate(-1.0), YCoordinate(1.0), ZCoordinate(2.0))
+        val pt2 = Point3D(XCoordinate(-0.5), YCoordinate(0.5), ZCoordinate(3.0))
+        val pt3 = Point3D(XCoordinate(-2.2), YCoordinate(-1.2), ZCoordinate(1.0))
+        val pt4 = Point3D(XCoordinate(-1.2), YCoordinate(0.7), ZCoordinate(0.0))
+        val pt5 = Point3D(XCoordinate(0.0), YCoordinate(-3.2), ZCoordinate(-2.0))
+
+        /* Inputs and expected outputs */
+        val inputTable = Table(
+            ("threshold", "pointTimePairs", "grouping", "expected"), 
+            (
+                EuclideanDistance.Threshold(NonnegativeReal(2.25)), 
+                List(pt1 -> 2, pt2 -> 3, pt3 -> 3, pt4 -> 1, pt5 -> 1), 
+                List(NonEmptySet.of(2, 3), NonEmptySet.one(1)), // 2 proximal points in same group, one separate
+                Map(0 -> NonEmptySet.one(1), 1 -> NonEmptySet.one(0)),
+            ), 
+            (
+                PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(1.5)),
+                List(pt1 -> 2, pt2 -> 3, pt3 -> 3, pt4 -> 1, pt5 -> 1), 
+                List(NonEmptySet.of(2, 3), NonEmptySet.one(1)), // all proximal points in same group
+                Map(0 -> NonEmptySet.one(1), 1 -> NonEmptySet.one(0)),
+            ),
+            (
+                EuclideanDistance.Threshold(NonnegativeReal(2.25)),
+                List(pt1 -> 3, pt2 -> 3, pt3 -> 3, pt4 -> 3, pt5 -> 1), 
+                List(NonEmptySet.one(3), NonEmptySet.one(1)), // all proximal points all in same group
+                Map(0 -> NonEmptySet.of(1, 3), 1 -> NonEmptySet.one(0), 3 -> NonEmptySet.one(0)),
+            ), 
+            (
+                PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(1.5)),
+                List(pt1 -> 2, pt2 -> 3, pt3 -> 3, pt4 -> 1, pt5 -> 1), 
+                List(NonEmptySet.one(2), NonEmptySet.of(1, 3)), // proximal points no longer grouped together
+                Map.empty[Int, NonEmptySet[Int]],
+            ),
+            (
+                PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(1.5)),
+                List(pt1 -> 2, pt2 -> 3, pt3 -> 3, pt4 -> 1, pt5 -> 1), // proximal points no longer grouped together
+                List(NonEmptySet.one(3), NonEmptySet.of(1, 2)), 
+                Map.empty[Int, NonEmptySet[Int]],
+            ),
+            (
+                EuclideanDistance.Threshold(NonnegativeReal(3)), 
+                List(pt1 -> 1, pt2 -> 2, pt3 -> 3, pt4 -> 4, pt5 -> 5), 
+                List(), // All points are considered as one big group.
+                Map(0 -> NonEmptySet.of(1, 2, 3), 1 -> NonEmptySet.one(0), 2 -> NonEmptySet.of(0, 3), 3 -> NonEmptySet.of(0, 2)),
+            ),
+            (
+                EuclideanDistance.Threshold(NonnegativeReal(3)), 
+                List(pt1 -> 1, pt2 -> 2, pt3 -> 3, pt4 -> 4, pt5 -> 5), 
+                List(NonEmptySet.of(1, 2), NonEmptySet.of(3, 4, 5)),
+                Map(0 -> NonEmptySet.one(1), 1 -> NonEmptySet.one(0), 2 -> NonEmptySet.one(3), 3 -> NonEmptySet.one(2)),
+            ),
+            (
+                EuclideanDistance.Threshold(NonnegativeReal(3)), 
+                List(pt1 -> 1, pt2 -> 2, pt3 -> 3, pt4 -> 4, pt5 -> 5), 
+                List(NonEmptySet.of(2, 4), NonEmptySet.of(1, 3, 5)),
+                Map(0 -> NonEmptySet.one(2), 2 -> NonEmptySet.one(0)),
+            ),
+            (
+                EuclideanDistance.Threshold(NonnegativeReal(Double.PositiveInfinity)), 
+                List(pt1 -> 1, pt2 -> 2, pt3 -> 3, pt4 -> 4, pt5 -> 5), 
+                List(NonEmptySet.of(2, 4), NonEmptySet.of(1, 3, 5)),
+                Map(
+                    0 -> NonEmptySet.of(2, 4), 
+                    1 -> NonEmptySet.one(3), 
+                    2 -> NonEmptySet.of(0, 4), 
+                    3 -> NonEmptySet.one(1), 
+                    4 -> NonEmptySet.of(0, 2),
+                ),
+            ),
+            (
+                EuclideanDistance.Threshold(NonnegativeReal(Double.PositiveInfinity)), 
+                List(pt1 -> 1, pt2 -> 2, pt3 -> 3, pt4 -> 4, pt5 -> 5), 
+                List(NonEmptySet.of(1, 2, 3), NonEmptySet.of(4, 5)),
+                Map(
+                    0 -> NonEmptySet.of(1, 2), 
+                    1 -> NonEmptySet.of(0, 2), 
+                    2 -> NonEmptySet.of(0, 1), 
+                    3 -> NonEmptySet.one(4), 
+                    4 -> NonEmptySet.one(3),
+                ),
+            ),
+            (
+                PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(Double.PositiveInfinity)), 
+                List(pt1 -> 1, pt2 -> 2, pt3 -> 3, pt4 -> 4, pt5 -> 5), 
+                List(NonEmptySet.of(1, 2, 3, 4), NonEmptySet.one(5)),
+                Map(
+                    0 -> NonEmptySet.of(1, 2, 3), 
+                    1 -> NonEmptySet.of(0, 2, 3), 
+                    2 -> NonEmptySet.of(0, 1, 3), 
+                    3 -> NonEmptySet.of(0, 1, 2), 
+                ),
+            ),
+            (
+                PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(Double.PositiveInfinity)), 
+                List(pt1 -> 1, pt2 -> 2, pt3 -> 3, pt4 -> 4, pt5 -> 5), 
+                List(NonEmptySet.of(3, 4), NonEmptySet.of(1, 2, 5)),
+                Map(
+                    0 -> NonEmptySet.of(1, 4), 
+                    1 -> NonEmptySet.of(0, 4), 
+                    2 -> NonEmptySet.one(3), 
+                    3 -> NonEmptySet.one(2), 
+                    4 -> NonEmptySet.of(0, 1),
+                ),
+            ),
+            (
+                PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(2.5)), 
+                List(pt1 -> 11, pt2 -> 22, pt3 -> 33, pt4 -> 44, pt5 -> 55), 
+                List(),
+                Map(
+                    0 -> NonEmptySet.of(1, 2, 3), 
+                    1 -> NonEmptySet.of(0, 2), 
+                    2 -> NonEmptySet.of(0, 1, 3), 
+                    3 -> NonEmptySet.of(0, 2), 
+                ),
+            ),
+            (
+                PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(2.5)), 
+                List(pt1 -> 11, pt2 -> 22, pt3 -> 33, pt4 -> 44, pt5 -> 55), 
+                List(NonEmptySet.of(22, 44), NonEmptySet.one(11), NonEmptySet.of(33, 55)),
+                Map(),
+            ),
+            (
+                PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(2.5)), 
+                List(pt1 -> 11, pt2 -> 22, pt3 -> 33, pt4 -> 44, pt5 -> 55), 
+                List(NonEmptySet.of(22, 55), NonEmptySet.one(11), NonEmptySet.of(33, 44)),
+                Map(2 -> NonEmptySet.one(3), 3 -> NonEmptySet.one(2)),
+            ),
+            )
+        forAll (inputTable) { case (threshold, pointTimePairs, rawGrouping, rawExpectation) => 
+            def genRois: Gen[List[RegionalBarcodeSpotRoi]] = for {
+                posName <- arbitrary[PositionName]
+                ch <- arbitrary[Channel]
+                rois <- NonnegativeInt.indexed(pointTimePairs).traverse{ case ((pt, time), i) => 
+                    arbitrary[(BoundingBox.Margin, BoundingBox.Margin, BoundingBox.Margin)].map{ (offX, offY, offZ) => 
+                        val intvX = buildInterval(pt.x, offX)(XCoordinate.apply)
+                        val intvY = buildInterval(pt.y, offY)(YCoordinate.apply)
+                        val intvZ = buildInterval(pt.z, offZ)(ZCoordinate.apply)
+                        val bbox = BoundingBox(intvX, intvY, intvZ)
+                        RegionalBarcodeSpotRoi(RoiIndex(i), posName, FrameIndex.unsafe(time), ch, pt, bbox)
+                    }
+                }
+            } yield rois
+            forAll (genRois) { rois => 
+                val grouping = rawGrouping.map{ sub => ProbeGroup(sub.map(FrameIndex.unsafe)) }
+                buildNeighboringRoisFinder(NonnegativeInt.indexed(rois), threshold)(grouping) match {
+                    case Left(err) => fail(s"Expected success but got error: $err")
+                    case Right(observation) => 
+                        val expectation = rawExpectation.map{ (k, vs) => NonnegativeInt.unsafe(k) -> vs.map(NonnegativeInt.unsafe) }
+                        observation shouldEqual expectation
+                }
+            }
+        }
     }
-    
-    test("Probe grouping must partition regional barcode frames: A probe grouping declaration that does not cover regional barcodes set is an error.") { pending }
-    
-    test("Probe grouping must partition regional barcode frames: A probe grouping declaration with an overlap (probe/frame repeated between groups) an error.") { pending }
+
+    test("Probe grouping is a partition: A probe grouping that does not COVER regional barcodes set is an error.") { pending }
+
+    test("Probe grouping is a partition: A probe grouping that is not DISJOINT (probe/frame repeated between groups) is an error.") { pending }
 
     test("More proximal neighbors from different FOVs don't pair, while less proximal ones from the same FOV do pair. #150") { pending }
 
@@ -748,27 +905,22 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    def genThresholdAndRoisToFacilitateCollisions: Gen[(DistanceThreshold, List[Roi])] = {
-        val maxMinDistThreshold = NonnegativeReal(10) // Relatively small value to also use as upper bound on coordinates
-        for {
-            threshold <- genThreshold(genNonNegReal(maxMinDistThreshold))
-            numRois <- Gen.choose(5, 10)
-            centroids <- {
-                given tmpArb: Arbitrary[Double] = Arbitrary(genNonNegReal(NonnegativeReal(5)))
-                Gen.listOfN(numRois, arbitrary[Point3D])
-            }
-        } yield (threshold, centroids.map(canonicalRoi))
+    test("ROIs from different channels can never exclude one another. #138") {
+        // TODO: implement with multi-channel adaptations for IF.
+        // See: https://github.com/gerlichlab/looptrace/issues/138
+        pending
     }
-
+    
+    /****************************************************************************************************************
+     * Ancillary definitions
+     ****************************************************************************************************************/
+    
     private def canonicalRoi: Roi = canonicalRoi(Point3D(XCoordinate(1), YCoordinate(2), ZCoordinate(3)))
     private def canonicalRoi(point: Point3D): Roi = {
-        def buildInterval[C <: Coordinate: [C] =>> NotGiven[C =:= Coordinate]](
-            c: C, margin: NonnegativeReal)(lift: Double => C): BoundingBox.Interval[C] = 
-            BoundingBox.Interval[C].apply.tupled((c.get - margin, c.get + margin).mapBoth(lift))
         point match { case Point3D(x, y, z) => 
-            val xIntv = buildInterval(x, NonnegativeReal(2))(XCoordinate.apply)
-            val yIntv = buildInterval(y, NonnegativeReal(2))(YCoordinate.apply)
-            val zIntv = buildInterval(z, NonnegativeReal(1))(ZCoordinate.apply)
+            val xIntv = buildInterval(x, BoundingBox.Margin(NonnegativeReal(2)))(XCoordinate.apply)
+            val yIntv = buildInterval(y, BoundingBox.Margin(NonnegativeReal(2)))(YCoordinate.apply)
+            val zIntv = buildInterval(z, BoundingBox.Margin(NonnegativeReal(1)))(ZCoordinate.apply)
             val box = BoundingBox(xIntv, yIntv, zIntv)
             RegionalBarcodeSpotRoi(
                 RoiIndex(NonnegativeInt(0)), 
@@ -781,7 +933,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    def genSpotsAndDrifts(genCoarse: Gen[CoarseDrift], genFine: Gen[FineDrift])(
+    private def genSpotsAndDrifts(genCoarse: Gen[CoarseDrift], genFine: Gen[FineDrift])(
         using arbMargin: Arbitrary[BoundingBox.Margin], arbPoint: Arbitrary[Point3D]
         ): Gen[(NonEmptyList[RegionalBarcodeSpotRoi], List[(PositionName, FrameIndex, CoarseDrift, FineDrift)])] = {
         // Order shouldn't matter, but that invariant's tested elsewhere.
@@ -795,7 +947,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         } yield (spots, driftRows.sortBy(r => r._1 -> r._2))
     }
 
-    def genSpotsAndDriftsWithDrop(genCoarse: Gen[CoarseDrift], genFine: Gen[FineDrift])(
+    private def genSpotsAndDriftsWithDrop(genCoarse: Gen[CoarseDrift], genFine: Gen[FineDrift])(
         using arbMargin: Arbitrary[BoundingBox.Margin], arbPoint: Arbitrary[Point3D]
         ): Gen[(NonEmptyList[RegionalBarcodeSpotRoi], List[(PositionName, FrameIndex, CoarseDrift, FineDrift)], Int)] = {
         // Order shouldn't matter, but that invariant's tested elsewhere.
@@ -807,6 +959,22 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 (spots, rows.sortBy(r => r._1 -> r._2), numDropped)
             }
         }
+    }
+    
+    private def buildInterval[C <: Coordinate: [C] =>> NotGiven[C =:= Coordinate]](
+        c: C, margin: BoundingBox.Margin)(lift: Double => C): BoundingBox.Interval[C] = 
+        BoundingBox.Interval[C].apply.tupled((c.get - margin.get, c.get + margin.get).mapBoth(lift))
+
+    private def genThresholdAndRoisToFacilitateCollisions: Gen[(DistanceThreshold, List[Roi])] = {
+        val maxMinDistThreshold = NonnegativeReal(10) // Relatively small value to also use as upper bound on coordinates
+        for {
+            threshold <- genThreshold(genNonNegReal(maxMinDistThreshold))
+            numRois <- Gen.choose(5, 10)
+            centroids <- {
+                given tmpArb: Arbitrary[Double] = Arbitrary(genNonNegReal(NonnegativeReal(5)))
+                Gen.listOfN(numRois, arbitrary[Point3D])
+            }
+        } yield (threshold, centroids.map(canonicalRoi))
     }
 
     private def genThreshold: Gen[NonnegativeReal] => Gen[DistanceThreshold] = genThresholdType <*> _
