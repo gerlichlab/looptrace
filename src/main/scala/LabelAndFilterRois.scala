@@ -382,7 +382,7 @@ object LabelAndFilterRois:
                     .foldLeft(Map.empty[FrameIndex, NonnegativeInt] -> Map.empty[FrameIndex, Int]){ 
                         case ((ids, repeats), (frame, gid)) =>
                             if ids `contains` frame
-                            then (ids, repeats + (frame -> (repeats.getOrElse(frame, 0) + 1)))
+                            then (ids, repeats + (frame -> (repeats.getOrElse(frame, 1) + 1)))
                             else (ids + (frame -> gid), repeats)
                     }
                 if (repeatedFrames.nonEmpty) // Probe groupings isn't a partition, because there's overlap between the declared equivalence classes.
