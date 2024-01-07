@@ -871,9 +871,53 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("More proximal neighbors from different FOVs don't pair, while less proximal ones from the same FOV do pair. #150") { pending }
+    test("More proximal neighbors from different FOVs don't pair, while less proximal ones from the same FOV do pair. #150") {
+        // The ROIs data for each test iteration
+        val spotsText = """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
+            |0,P0001.zarr,27,0,12,104,1000,4,20,100,108,996,1004
+            |1,P0002.zarr,27,0,11,108,1002,3,21,100,116,998,1006
+            |2,P0002.zarr,28,0,10,98,999,2,18,100,120,990,1008
+            |3,P0001.zarr,28,0,11,99,998,3,19,99,108,988,1008
+            |4,P0001.zarr,29,0,13,101,1004,5,21,90,112,996,1012
+            |5,P0002.zarr,29,0,12,102,1003,1,23,91,113,995,1011
+            |"""
+        
+        val allZeroDrift = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
+            |0,27,P0001.zarr,0,0,0,0,0,0
+            |1,28,P0001.zarr,0,0,0,0,0,0
+            |2,29,P0001.zarr,0.0,0,0,0,0,0
+            |3,27,P0002.zarr,0,0,0,0,0,0
+            |4,28,P0002.zarr,0,0,0,0,0,0
+            |5,29,P0002.zarr,0.0,0,0,0,0,0
+            |"""
 
-    test("Spots can cancel each other regardless of frame, but never if they're from different FOVs (#150)") { pending }
+        forAll (genThresholdType.map(_(NonnegativeReal(Double.PositiveInfinity))), arbitrary[ExtantOutputHandler]) { (threshold, handleOutput) => 
+            withTempDirectory{ (tmpdir: os.Path) =>
+                val spotsFile = tmpdir / "spots.csv"
+                os.write(spotsFile, spotsText.stripMargin)
+                val driftFile = tmpdir / "drift.csv"
+                os.write(driftFile, allZeroDrift.stripMargin)
+                val unfiltFile: UnfilteredOutputFile = UnfilteredOutputFile.fromPath(tmpdir / "unfiltered.csv")
+                val filtFile: FilteredOutputFile = FilteredOutputFile.fromPath(tmpdir / "filtered.csv")
+                runLabelAndFilter(
+                    spotsFile = spotsFile, 
+                    driftFile = driftFile, 
+                    probeGroups = List(),
+                    minSpotSeparation = threshold,
+                    unfilteredOutputFile = unfiltFile, 
+                    filteredOutputFile = filtFile, 
+                    extantOutputHandler = handleOutput,
+                    )
+                safeReadAllWithOrderedHeaders(unfiltFile) match {
+                    case Left(err) => throw err
+                    case Right((_, rows)) => 
+                        val observedNeighbors = rows.map(_("neighbors").split("\\|").toList.map(_.toInt).sorted)
+                        val expectedNeighbors = List(List(3, 4), List(2, 5), List(1, 5), List(0, 4), List(0, 3), List(1, 2))
+                        observedNeighbors shouldEqual expectedNeighbors
+                }
+            }
+        }
+    }
 
     test("ROI grouping by frame/probe/timepoint is specific to field-of-view, so that ROIs from different FOVs don't affect each other for filtering. #150") {
         /* Create all partitions of 5 as 2 and 3, mapping each partition to a position value for ROIs to be made. */

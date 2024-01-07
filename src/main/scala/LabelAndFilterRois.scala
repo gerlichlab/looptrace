@@ -171,6 +171,10 @@ object LabelAndFilterRois:
         filteredOutputFile: FilteredOutputFile, 
         extantOutputHandler: ExtantOutputHandler
         ): Unit = {
+        require(
+            unfilteredOutputFile.toIO.getPath =!= filteredOutputFile.toIO.getPath, 
+            s"Unfiltered and filtered outputs match: ${(unfilteredOutputFile, filteredOutputFile)}"
+        )
         
         /* Create unsafe CSV writer for each output type, failing fast if either output exists and overwrite is not active.
            In the process, bind each target output file to its corresponding named function. */
