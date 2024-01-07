@@ -95,7 +95,7 @@ class TestPartition extends AnyFunSuite, ScalaCheckPropertyChecks, should.Matche
             factorial(n) / (factorial(k) * factorial(n - k))
         }
 
-    def factorial(n: Int): Int = {
+    private def factorial(n: Int): Int = {
         require(n >= 0, s"Cannot take factorial of a negative number: $n")
         (1 to n).product
     }

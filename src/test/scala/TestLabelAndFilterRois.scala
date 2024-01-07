@@ -1,6 +1,5 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
-import scala.math.sqrt
 import scala.util.{ NotGiven, Random, Try }
 import cats.*
 import cats.data.{ NonEmptyList, NonEmptySet }
@@ -795,7 +794,47 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("Probe grouping is a partition: A probe grouping that does not COVER regional barcodes set is an error.") { pending }
+    test("Probe grouping is a partition: A probe grouping that is NONEMPTY but does NOT COVER regional barcodes set is an error.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+
+        // Generate a reasonable margin on side of each centroid coordinate for ROI bounding boxes.
+        given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-2048.0, 2048.0)
+        given arbMargin: Arbitrary[BoundingBox.Margin] = getArbForMargin(NonnegativeReal(1.0), NonnegativeReal(32.0))
+        
+        def genSmallRoisAndGrouping: Gen[(List[RegionalBarcodeSpotRoi], NonEmptyList[FrameIndex], NonEmptyList[ProbeGroup])] = for {
+            // First, generate ROIs timepoints, such that they're few in number (so quicker test), and
+            // the number of unique timepoints is at least 2 (at least 1 to be uncovered by the grouping).
+            rois <- {
+                given arbTime: Arbitrary[FrameIndex] = Gen.oneOf(List(7, 8, 9).map(FrameIndex.unsafe)).toArbitrary
+                Gen.choose(2, 10).flatMap(Gen.listOfN(_, arbitrary[RegionalBarcodeSpotRoi]))
+            }.suchThat(_.map(_.time).toSet.size > 1)
+            times = rois.map(_.time).toSet
+            numGroups <- Gen.choose(1, times.size)
+            rawFullGrouping <- Gen.oneOf(collections.partition(numGroups, times))
+            (skipped, grouping) <- rawFullGrouping
+                .traverse(_.toList.traverse(x => arbitrary[Boolean].map(_.either(x, x))))
+                .map(_.foldLeft(List.empty[FrameIndex] -> List.empty[ProbeGroup]){ 
+                    // Collect the timepoints to skip, and build up the probe/timepoint grouping.
+                    case ((drops, acc), subMaybes) => 
+                        val (newSkips, newKeeps) = Alternative[List].separate(subMaybes)
+                        (newSkips ::: drops, newKeeps.toNel.fold(acc){ sub => ProbeGroup(sub.toNes) :: acc })
+                })
+                .suchThat{ (skips, group) => skips.nonEmpty && group.nonEmpty } // At least 1 time is skipped, and grouping is nontrivial.
+                .map(_.bimap(_.toNel.get, _.toNel.get))                         // safe b/c of .suchThat(...) filter
+        } yield (rois, skipped, grouping)
+        
+        forAll (genSmallRoisAndGrouping, genThreshold(arbitrary[NonnegativeReal])) { 
+            case ((rois, uncoveredTimepoints, grouping), threshold) =>
+                buildNeighboringRoisFinder(NonnegativeInt.indexed(rois), threshold)(grouping.toList) match {
+                    case Left(obsErrMsg) => 
+                        val numGroupless = rois.filter{ r => uncoveredTimepoints.toNes.contains(r.time) }.length
+                        val timesText = uncoveredTimepoints.map(_.get).toList.sorted.mkString(", ")
+                        val expErrMsg = s"$numGroupless ROIs without timepoint declared in grouping. ${uncoveredTimepoints.size} undeclared timepoints: $timesText"
+                        obsErrMsg shouldEqual expErrMsg
+                    case Right(_) => fail("Expected error message about invalid partition (non-covering), but didn't get it.")
+                }
+        }
+    }
 
     test("Probe grouping is a partition: A probe grouping that is not DISJOINT (probe/frame repeated between groups) is an error.") { pending }
 
@@ -804,7 +843,6 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
     test("Spots can cancel each other regardless of frame, but never if they're from different FOVs (#150)") { pending }
 
     test("ROI grouping by frame/probe/timepoint is specific to field-of-view, so that ROIs from different FOVs don't affect each other for filtering. #150") {
-        
         /* Create all partitions of 5 as 2 and 3, mapping each partition to a position value for ROIs to be made. */
         val roiIndices = 0 until 5
         val partitions = roiIndices.combinations(3).map{
@@ -823,7 +861,6 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                     val subResult = indexGroup.map(i => i -> (neighbors - i).toNes.get).toMap
                     result |+| subResult
             }
-            
             /* Only bother with 10 successes since threshold really should be irrelevant, and we're testing also over a table. */
             forAll (genThreshold(arbitrary[NonnegativeReal]), minSuccessful(10)) {
                 t => buildNeighboringRoisFinder(roisWithIndex, t)(List()) match {
@@ -939,7 +976,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         // Order shouldn't matter, but that invariant's tested elsewhere.
         given ordPosTime: Ordering[DriftKey] = Order[DriftKey].toOrdering
         for {
-            spots <- Gen.listOf(arbitrary[RegionalBarcodeSpotRoi]).suchThat(_.nonEmpty).map(_.toNel.get)
+            spots <- Gen.nonEmptyListOf(arbitrary[RegionalBarcodeSpotRoi]).map(_.toNel.get)
             posTimePairs = spots.toList.map(roi => roi.position -> roi.time).toSet
             driftRows <- posTimePairs.toList.traverse{ 
                 (p, t) => Gen.zip(genCoarse, genFine).map((coarse, fine) => (p, t, coarse, fine))

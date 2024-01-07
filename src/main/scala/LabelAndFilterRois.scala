@@ -388,8 +388,6 @@ object LabelAndFilterRois:
                 if (repeatedFrames.nonEmpty) // Probe groupings isn't a partition, because there's overlap between the declared equivalence classes.
                 then s"${repeatedFrames.size} repeated frame(s): $repeatedFrames".asLeft
                 else {
-                    // TODO: check that the union of the (now checked as disjoint) equivalence classes 
-                    //       implied by the probe groupings cover the set of regional barcodes frames.
                     val (groupless, keyedRois) = Alternative[List].separate(rois.map{ case pair@(roi, _) => 
                         groupIds.get(roi.time)
                             .toRight(pair)
@@ -398,7 +396,8 @@ object LabelAndFilterRois:
                     groupless.isEmpty.either(
                         {
                             val times = groupless.map(_._1.time).toSet
-                            s"${groupless.length} ROIs without value declared in grouping. ${times.size} undeclared timepoints: $times"
+                            val timesText = times.toList.map(_.get).sorted.mkString(", ")
+                            s"${groupless.length} ROIs without timepoint declared in grouping. ${times.size} undeclared timepoints: $timesText"
                         }, 
                         buildNeighborsLookupKeyed(getPoint)(keyedRois, minDist)
                         )
