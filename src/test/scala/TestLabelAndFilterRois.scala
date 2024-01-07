@@ -836,7 +836,40 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("Probe grouping is a partition: A probe grouping that is not DISJOINT (probe/frame repeated between groups) is an error.") { pending }
+    test("Probe grouping is a partition: A probe grouping that is not DISJOINT (probe/frame repeated between groups) is an error.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+
+        // Generate a reasonable margin on side of each centroid coordinate for ROI bounding boxes.
+        given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-2048.0, 2048.0)
+        given arbMargin: Arbitrary[BoundingBox.Margin] = getArbForMargin(NonnegativeReal(1.0), NonnegativeReal(32.0))
+        
+        extension [X : Order](xs: Set[X])
+            def unsafeToNes: NonEmptySet[X] = xs.toList.toNel.get.toNes
+
+        def genSmallRoisAndGrouping: Gen[(List[RegionalBarcodeSpotRoi], NonEmptySet[FrameIndex], NonEmptyList[ProbeGroup])] = for {
+            // First, generate ROIs timepoints, such that they're few in number (so quicker test).
+            rois <- {
+                given arbTime: Arbitrary[FrameIndex] = Gen.oneOf(List(7, 8, 9).map(FrameIndex.unsafe)).toArbitrary
+                Gen.choose(1, 10).flatMap(Gen.listOfN(_, arbitrary[RegionalBarcodeSpotRoi]))
+            }
+            times = rois.map(_.time).toSet
+            numGroups <- Gen.choose(1, times.size)
+            legitGroup <- Gen.oneOf(collections.partition(numGroups, times))
+            repeated <- Gen.nonEmptyListOf(Gen.oneOf(times)).map(_.toSet)
+            grouping = (repeated :: legitGroup).map(sub => ProbeGroup(sub.unsafeToNes))
+        } yield (rois, repeated.unsafeToNes, grouping.toNel.get)
+        
+        forAll (genSmallRoisAndGrouping, genThreshold(arbitrary[NonnegativeReal])) { 
+            case ((rois, repeatedTimepoints, grouping), threshold) =>
+                buildNeighboringRoisFinder(NonnegativeInt.indexed(rois), threshold)(grouping.toList) match {
+                    case Left(obsErrMsg) => 
+                        val repTimesText = repeatedTimepoints.toList.map(t => t.get -> 2).sortBy(_._1).mkString(", ")
+                        val expErrMsg = s"${repeatedTimepoints.size} repeated frame(s): $repTimesText"
+                        obsErrMsg shouldEqual expErrMsg
+                    case Right(_) => fail("Expected error message about invalid partition (non-disjoint), but didn't get it.")
+                }
+        }
+    }
 
     test("More proximal neighbors from different FOVs don't pair, while less proximal ones from the same FOV do pair. #150") { pending }
 

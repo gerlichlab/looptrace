@@ -386,7 +386,7 @@ object LabelAndFilterRois:
                             else (ids + (frame -> gid), repeats)
                     }
                 if (repeatedFrames.nonEmpty) // Probe groupings isn't a partition, because there's overlap between the declared equivalence classes.
-                then s"${repeatedFrames.size} repeated frame(s): $repeatedFrames".asLeft
+                then s"${repeatedFrames.size} repeated frame(s): ${repeatedFrames.toList.map(_.leftMap(_.get)).sortBy(_._1).mkString(", ")}".asLeft
                 else {
                     val (groupless, keyedRois) = Alternative[List].separate(rois.map{ case pair@(roi, _) => 
                         groupIds.get(roi.time)
