@@ -349,14 +349,14 @@ object LabelAndFilterTracesQC:
                 
                 /* Unfiltered output */
                 val getQCFlagsText = (qc: QCResult) => (qc.components :+ qc.all).map(p => if p then "1" else "0")
-                val unfilteredOutputFile = outfolder / s"${basename}.unfiltered.${delimiter.ext}"
+                val unfilteredOutputFile = outfolder / s"${basename}.unfiltered.${delimiter.ext}" // would need to update ImageHandler.traces_file_qc_unfiltered if changed
                 val unfilteredHeader = actualHeader ++ List(withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol, QcPassColumn)
                 val unfilteredRows = unfiltered.map{ case (_, (original, qc)) => finaliseOriginal(original) ++ getQCFlagsText(qc) }
                 println(s"Writing unfiltered output: $unfilteredOutputFile")
                 writeTextFile(unfilteredOutputFile, unfilteredHeader :: unfilteredRows, delimiter)
 
                 /* Filtered output */
-                val filteredOutputFile = outfolder / s"${basename}.filtered.${delimiter.ext}"
+                val filteredOutputFile = outfolder / s"${basename}.filtered.${delimiter.ext}" // would need to update ImageHandler.traces_file_qc_filtered if changed
                 val filteredHeader = actualHeader :+ QcPassColumn
                 val filteredRows = unfiltered.flatMap{ 
                     case (groupId, (original, qc)) => qc.all.option{ (groupId, finaliseOriginal(original) :+ "1") }

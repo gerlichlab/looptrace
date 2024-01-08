@@ -61,7 +61,7 @@ def run_frame_name_and_distance_application(config_file: ExtantFile, images_path
 
 class Tracer:
 
-    def __init__(self, image_handler, trace_beads=False, array_id=None):
+    def __init__(self, image_handler, trace_beads=False):
         '''
         Initialize Tracer class with config read in from YAML file.
         '''
@@ -73,7 +73,7 @@ class Tracer:
         self.pos_list = self.image_handler.image_lists[image_handler.spot_input_name]
         if trace_beads:
             self.roi_table = image_handler.tables[image_handler.spot_input_name + '_bead_rois']
-            finalise_suffix = lambda p: p.replace(".csv", "_beads.csv")
+            finalise_suffix = lambda p: Path(str(p).replace(".csv", "_beads.csv"))
         else:
             self.roi_table = image_handler.tables[image_handler.spot_input_name + '_rois']
             finalise_suffix = lambda p: p
@@ -88,21 +88,12 @@ class Tracer:
             self.fit_func_spec = fit_func_specs[fit_func_value]
         except KeyError as e:
             raise Exception(f"Unknown fitting function ('{fit_func_value}'); choose from: {', '.join(fit_func_specs.keys())}") from e
-
-        self.array_id = array_id
-        if self.array_id is not None:
-            self.pos_list = [self.pos_list[int(self.array_id)]]
-            self.roi_table = self.roi_table[self.roi_table.position.isin(self.pos_list)]
-            self.all_rois = self.all_rois[self.all_rois.position.isin(self.pos_list)].reset_index(drop=True)
-            traces_path = self.image_handler.out_path('traces.csv'[:-4] + '_' + str(self.array_id).zfill(4) + '.csv')
-            self.images = self.images[self.roi_table.index.to_list()]
-        else:
-            traces_path = self.image_handler.out_path('traces.csv')
         
         # will be concatenated horizontally with fits; idempotent if already effectively unindexed
         self.all_rois = self.all_rois.reset_index(drop=True)
         
-        self.traces_path = finalise_suffix(traces_path)
+        self.traces_path = finalise_suffix(image_handler.traces_path)
+        self.traces_path_enriched = finalise_suffix(image_handler.traces_path_enriched)
 
     @property
     def background_specification(self) -> BackgroundSpecification:
@@ -120,10 +111,6 @@ class Tracer:
     @property
     def nanometers_per_pixel_z(self) -> NumberLike:
         return self.config["z_nm"]
-
-    @property
-    def traces_path_enriched(self) -> Path:
-        return Path(self.traces_path).with_suffix(".enriched.csv")
 
     def trace_all_rois(self) -> str:
         """Fits 3D gaussian to previously detected ROIs across positions and timeframes"""

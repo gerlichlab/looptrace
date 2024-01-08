@@ -213,6 +213,29 @@ class ImageHandler:
         return self.config.get("tolerate_too_few_rois", False)
 
     @property
+    def traces_path(self) -> Path:
+        # Written by Tracer.py
+        return Path(self.out_path('traces.csv'))
+
+    @property
+    def traces_path_enriched(self) -> Path:
+        # Written by Tracer.py, consumed by the label-and-filter traces QC program.
+        # Still contains things like blank timepoints and regional barcode timepoints
+        return Path(self.traces_path).with_suffix(".enriched.csv")
+    
+    @property
+    def traces_file_qc_filtered(self) -> Path:
+        # Written by the label-and-filter traces QC program, consumed by the spots plotter
+        # Should not contain things like blank timepoints and regional barcode timepoints
+        return self.traces_path.with_suffix(".enriched.filtered.csv")
+
+    @property
+    def traces_file_qc_unfiltered(self) -> Path:
+        # Written by the label-and-filter traces QC program, consumed by the spots plotter
+        # Should not contain things like blank timepoints and regional barcode timepoints
+        return self.traces_path.with_suffix(".enriched.unfiltered.csv")
+
+    @property
     def zarr_conversions(self) -> Mapping[str, str]:
         return self.config.get(ZARR_CONVERSIONS_KEY, dict())
 

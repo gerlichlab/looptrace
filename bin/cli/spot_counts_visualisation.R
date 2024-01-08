@@ -11,6 +11,7 @@ cli_parser <- ArgumentParser(description="Visualise bead ROI detection results")
 cli_parser$add_argument("--unfiltered-spots-file", required = TRUE, help = "Path to unfiltered detected spots file")
 cli_parser$add_argument("--filtered-spots-file", required = TRUE, help = "Path to filtered detected spots file")
 cli_parser$add_argument("-o", "--output-folder", required = TRUE, help = "Path to folder in which to place output files")
+cli_parser$add_argument("--spot-file-type", choices = c("regional", "locus_specific"), help = "Which kind of spots files are being provided")
 ## Parse the CLI arguments.s
 opts <- cli_parser$parse_args()
 
@@ -19,8 +20,14 @@ kPlotTitlePrefix <- "Counts of detected spots"
 kPlotColor <- c("lightcoral", "indianred4")
 
 # Save a bead ROIs counts plot in the current output folder (by CLI), with a particular prefix for the name to indicate content and type.
-saveCountsPlot <- function(fig, plot_type_name) {
-    plotfile <- file.path(opts$output_folder, sprintf("%s.%s.png", kSpotCountPrefix, plot_type_name))
+#
+# Args:
+#   fig: the plot to save to disk
+#   filtered_or_not: either 'filtered' or 'unfiltered', indicating whether the spots had been filtered
+#   spot_type_name: either 'regional' or 'locus_specific', indicating the type of spots data used
+saveCountsPlot <- function(fig, spot_type_name, plot_type_name) {
+    fn <- sprintf("%s.%s.%s.png", spot_type_name, kSpotCountPrefix, plot_type_name)
+    plotfile <- file.path(opts$output_folder, fn)
     message("Saving plot: ", plotfile)
     ggsave(filename = plotfile, plot = fig)
     plotfile
@@ -37,13 +44,18 @@ buildCountsHeatmap <- function(spots_table) {
 }
 
 # Create a heatmap and save the plot to an appropriately named file in the current output folder.
-plotAndWriteToFile <- function(spots_table, filtered_or_not) {
+#
+# Args:
+#   spots_table: data table with (regional or locus-specific) detected spots data
+#   filtered_or_not: either 'filtered' or 'unfiltered', indicating whether the spots have been filtered
+#   spot_type_name: either 'regional' or 'locus_specific', indicating the type of spots data passed
+plotAndWriteToFile <- function(spots_table, filtered_or_not, spot_type_name) {
     if ( ! (filtered_or_not %in% c("filtered", "unfiltered"))) {
         stop("Illegal value for filtered/not argument: ", filtered_or_not)
     }
     p <- buildCountsHeatmap(spots_table)
     p <- p + ggtitle(sprintf("%s, %s", kPlotTitlePrefix, filtered_or_not))
-    saveCountsPlot(fig = p, plot_type_name = sprintf("%s.heatmap", filtered_or_not))
+    saveCountsPlot(fig = p, spot_type_name = spot_type_name, plot_type_name = sprintf("%s.heatmap", filtered_or_not))
 }
 
 ############################################################################################
@@ -58,8 +70,8 @@ filteredSpots <- fread(opts$filtered_spots_file)
 
 # Then, build the charts and save them to disk.
 message("Creating and saving plots...")
-plotAndWriteToFile(spots_table = unfilteredSpots, filtered_or_not = "unfiltered")
-plotAndWriteToFile(spots_table = filteredSpots, filtered_or_not = "filtered")
+plotAndWriteToFile(spots_table = unfilteredSpots, filtered_or_not = "unfiltered", spot_type_name = opts$spot_file_type)
+plotAndWriteToFile(spots_table = filteredSpots, filtered_or_not = "filtered", spot_type_name = opts$spot_file_type)
 
 # Create a side-by-side grouped barchart, with unfiltered count next to filtered count for each timepoint.
 unfilteredSpots$filter_status <- FALSE
@@ -72,6 +84,6 @@ combinedBarchart <- ggplot(spotCountsCombined, aes(x = as.factor(frame), y = cou
     scale_fill_manual(name = element_blank(), values = kPlotColor, labels = c("unfiltered", "filtered")) + 
     labs(fill = element_blank()) + 
     theme_bw()
-saveCountsPlot(fig = combinedBarchart, plot_type_name = "combined.bargraph")
+saveCountsPlot(fig = combinedBarchart, spot_type_name = opts$spot_file_type, plot_type_name = "combined.bargraph")
 
 message("Done!")

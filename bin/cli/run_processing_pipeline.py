@@ -1,6 +1,7 @@
 """Simple end-to-end processing pipeline for chromatin tracing data"""
 
 import argparse
+from enum import Enum
 import logging
 import os
 from pathlib import Path
@@ -21,7 +22,6 @@ from decon import workflow as run_deconvolution
 #from nuc_label import workflow as run_nuclei_detection
 from looptrace.Drifter import coarse_correction_workflow as run_coarse_drift_correction, fine_correction_workflow as run_fine_drift_correction
 from looptrace.ImageHandler import ImageHandler
-from looptrace.filepaths import get_analysis_path
 from drift_correct_accuracy_analysis import workflow as run_drift_correction_analysis, run_visualisation as run_drift_correction_accuracy_visualisation
 from detect_spots import workflow as run_spot_detection
 from run_spot_proximity_filtration import workflow as run_spot_proximity_filtration
@@ -44,19 +44,53 @@ SPOT_DETECTION_STAGE_NAME = "spot_detection"
 TRACING_QC_STAGE_NAME = "tracing_QC"
 
 
-def plot_detected_spot_counts(config_file: ExtantFile) -> None:
+class SpotType(Enum):
+    REGIONAL = "regional"
+    LOCUS_SPECIFIC = "locus_specific"
+
+
+def plot_spot_counts(config_file: ExtantFile, spot_type: "SpotType") -> None:
+    """Plot the unfiltered and filtered counts of spots (regional or locus-specific).
+    
+    Plot heatmaps stratifying spot counts by timepoint and by field-of-view, and 
+    plot grouped (by timepoint) barchart with unfiltered and filtered side-by-side 
+    for each timepoint, with count summed across all fields of view.
+
+    Arguments
+    ---------
+    config_file : ExtantFile
+        Path to looptrace processing configuration file, used to build a 
+        looptrace.ImageHandlerfor pointing to the relevant filepaths
+    spot_type : SpotType
+        Enumeration value indicating the type of spot counts data to plot
+    
+    Raises
+    ------
+    FileNotFoundError: if the path to the analysis script to run isn't found as a file
+    ValueError: if the given spot_type value isn't recognised
+    """
     H = ImageHandler(config_path=config_file)
     output_folder = H.analysis_path
-    analysis_script_file = Path(os.path.dirname(__file__)) / "spot_detection_counts_visualisation.R"
+    analysis_script_file = Path(os.path.dirname(__file__)) / "spot_counts_visualisation.R"
     if not analysis_script_file.is_file():
         raise FileNotFoundError(f"Missing regional spot counts plot script: {analysis_script_file}")
+    if spot_type == SpotType.REGIONAL:
+        unfiltered = H.raw_spots_file
+        filtered = H.proximity_filtered_spots_file_path
+    elif spot_type == SpotType.LOCUS_SPECIFIC:
+        unfiltered = H.traces_file_qc_unfiltered
+        filtered = H.traces_file_qc_filtered
+    else:
+        raise ValueError(f"Illegal spot_type for plotting spot counts: {spot_type}")
     analysis_cmd_parts = [
         "Rscript", 
         str(analysis_script_file), 
         "--unfiltered-spots-file", 
-        str(H.raw_spots_file),
+        str(unfiltered),
         "--filtered-spots-file",
-        str(H.proximity_filtered_spots_file_path),
+        str(filtered),
+        "--spot-file-type", 
+        spot_type.value,
         "-o", 
         output_folder, 
         ]
@@ -75,6 +109,7 @@ class LooptracePipeline(pypiper.Pipeline):
     @staticmethod
     def name_fun_getargs_bundles() -> List[Tuple[str, callable, Callable[[Tuple[ExtantFile, ExtantFolder]], Union[Tuple[ExtantFile], Tuple[ExtantFile, ExtantFolder]]]]]:
         take1 = lambda config_file, _: (config_file, )
+        take1_with_spot_type = lambda spot_type: (lambda config_file, _2: take1(config_file, _2) + (spot_type, ))
         take2 = lambda config_file, images_folder: (config_file, images_folder)
         return [
             ("pipeline_precheck", pretest, take1),
@@ -92,23 +127,21 @@ class LooptracePipeline(pypiper.Pipeline):
             ("drift_correction_accuracy_visualisation", run_drift_correction_accuracy_visualisation, take1), 
             (SPOT_DETECTION_STAGE_NAME, run_spot_detection, take2), # generates *_rois.csv (regional spots)
             ("spot_proximity_filtration", run_spot_proximity_filtration, take2),
-            ("spot_detection_counts_visualisation", plot_detected_spot_counts, take1), 
+            ("regional_spot_counts_visualisation", plot_spot_counts, take1_with_spot_type(SpotType.REGIONAL)), 
             ("spot_nucleus_filtration", run_spot_nucleus_filtration, take2), 
-            ("clean_1", run_cleanup, take1),
             ("spot_bounding", run_spot_bounding, take2), # computes pad_x_min, etc.; writes *_dc_rois.csv (much bigger, since regional spots x frames)
             ("spot_extraction", run_spot_extraction, take2),
             ("spot_zipping", run_spot_zipping, take2),
-            ("clean_2", run_cleanup, take1), 
             ("tracing", run_chromatin_tracing, take2),
             ("spot_region_distances", run_frame_name_and_distance_application, take2), 
             (TRACING_QC_STAGE_NAME, qc_label_and_filter_traces, take2),
-            ("clean_3", run_cleanup, take1),
+            ("locus_specific_spot_counts_visualisation", plot_spot_counts, take1_with_spot_type(SpotType.LOCUS_SPECIFIC)), 
         ]
 
     def stages(self) -> List[Callable]:
         return [
-            pypiper.Stage(func=fxn, f_args=get_args(self.config_file, self.images_folder), name=name) 
-            for name, fxn, get_args in self.name_fun_getargs_bundles()
+            pypiper.Stage(func=fxn, f_args=get_args_from_conf_and_imgs(self.config_file, self.images_folder), name=name) 
+            for name, fxn, get_args_from_conf_and_imgs in self.name_fun_getargs_bundles()
         ]
 
 

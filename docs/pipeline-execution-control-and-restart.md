@@ -41,14 +41,12 @@ Below are the sequential pipeline stage names.
 * drift_correction_accuracy_visualisation
 * spot_detection
 * spot_proximity_filtration
-* spot_detection_counts_visualisation
+* regional_spot_counts_visualisation
 * spot_nucleus_filtration
-* clean_1
 * spot_bounding
 * spot_extraction
 * spot_zipping
-* clean_2
 * tracing
 * spot_region_distances
 * tracing_QC
-* clean_3
+* locus_specific_spot_counts_visualisation
