@@ -150,7 +150,7 @@ class ImageHandler:
 
     @property
     def num_bead_rois_for_drift_correction(self) -> int:
-        return self.config["bead_points"]
+        return self.config["num_bead_rois_for_drift_correction"]
 
     @property
     def num_bead_rois_for_drift_correction_accuracy(self) -> int:

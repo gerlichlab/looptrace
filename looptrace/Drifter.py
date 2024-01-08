@@ -306,7 +306,7 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
         Data for each row of the fine/full drift correction table
     """
     roi_px = drifter.bead_roi_px
-    beads_exp_shape = (drifter.num_bead_points, 3)
+    beads_exp_shape = (drifter.num_bead_rois_for_drift_correction, 3)
     for position, position_group in iter_coarse_drifts_by_position(filepath=drifter.dc_file_path__coarse):
         pos_idx = drifter.full_pos_list.index(position)
         if not drifter.overwrite and drifter.checkpoint_filepath(pos_idx=pos_idx).is_file():
@@ -474,7 +474,7 @@ class Drifter():
         return self.config['reg_ch_moving']
 
     @property
-    def num_bead_points(self) -> int:
+    def num_bead_rois_for_drift_correction(self) -> int:
         return self.image_handler.num_bead_rois_for_drift_correction
 
     @property
