@@ -52,7 +52,7 @@ class TestPartition extends AnyFunSuite, ScalaCheckPropertyChecks, should.Matche
             // https://www.cs.wm.edu/~wm/CS243/ln11.pdf
             val numExp = (0 to (k - 1)).map{
                 j => math.pow(-1, j) * (k `choose` j) * math.pow(k - j, n)
-            }.sum / (1 to k).product
+            }.sum / factorial(k)
             partition(k, xs).length shouldEqual numExp
         }
     }
