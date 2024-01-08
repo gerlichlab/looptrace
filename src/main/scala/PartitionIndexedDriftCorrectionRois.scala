@@ -116,7 +116,7 @@ object PartitionIndexedDriftCorrectionRois:
         val writeRois = (rois: List[SelectedRoi], outpath: os.Path) => {
             println(s"Writing: $outpath")
             val jsonObjs = rois.map { r => SelectedRoi.toJsonSimple(parserConfig.coordinateSequence)(r) }
-            os.makeDir.all(os.Path(outpath.toNIO.getParent))
+            os.makeDir.all(outpath.parent)
             os.write.over(outpath, ujson.write(jsonObjs, indent = 4))
         }
         
