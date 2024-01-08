@@ -33,7 +33,7 @@ The path to the configuration file is a required parameter to [run the pipeline]
 * `decon_input_name` should likely be the single value in the `zarr_conversions` mapping.
 * `reg_input_template` and `reg_input_moving` should likely match each other and should correspond to adding a `_decon` suffix to the value of `decon_input_name`.
 * `reg_ref_frame` should be set to something approximately equal to the middle of the imaging timecourse (i.e, midway between first and last timepoint).
-* `bead_points` should be set to 100 or 200 (number of beads to use for drift correction).
+* `num_bead_rois_for_drift_correction` should be set to 100 or 200 (number of beads to use for drift correction).
 Having bead count fewer than the value will impede processing, but higher values _may_ given a bit better drift correction.
 Judge in accordance with how many beads you anticipate having per image.
 * `num_bead_rois_for_drift_correction_accuracy` should be set to 100.
