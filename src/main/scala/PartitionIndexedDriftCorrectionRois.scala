@@ -104,7 +104,6 @@ object PartitionIndexedDriftCorrectionRois:
         referenceFrame: Option[FrameIndex],
         outputFolder: Option[os.Path]
         ): Unit = {
-        import TooFewRoisLike.*
 
         val parserConfig = conf match {
             case pc: ParserConfig => pc
@@ -195,7 +194,6 @@ object PartitionIndexedDriftCorrectionRois:
     )
 
     def writeTooFewRois[E : TooFewRoisLike] = (pf: PosFramePair, error: E) => {
-        import TooFewRoisLike.*
         val tooFew = error.problem
         ujson.Obj(
             "position" -> ujson.Num(pf._1.get),
@@ -353,12 +351,12 @@ object PartitionIndexedDriftCorrectionRois:
     final case class TooFewRois(requested: PositiveInt, realized: Int, purpose: Purpose) derives ReadWriter:
         require(requested > realized, s"Count of realized ROIs ($realized) isn't less than count of requested ($requested)")
     
+    /** A type which admits a {@code TooFewRois} value */
     trait TooFewRoisLike[A]:
         def getTooFew: A => TooFewRois
 
-    object TooFewRoisLike:
-        extension [A](a: A)(using ev: TooFewRoisLike[A])
-            def problem = ev.getTooFew(a)
+    extension [A](a: A)(using ev: TooFewRoisLike[A])
+        def problem = ev.getTooFew(a)
 
     object RoisSplitResult:
         def intoEither = (_: RoisSplitResult) match {
