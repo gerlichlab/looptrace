@@ -2,6 +2,9 @@
 
 import argparse
 import logging
+import os
+from pathlib import Path
+import subprocess
 import sys
 from typing import *
 
@@ -17,6 +20,8 @@ from analyse_detected_bead_rois import workflow as run_all_bead_roi_detection_an
 from decon import workflow as run_deconvolution
 #from nuc_label import workflow as run_nuclei_detection
 from looptrace.Drifter import coarse_correction_workflow as run_coarse_drift_correction, fine_correction_workflow as run_fine_drift_correction
+from looptrace.ImageHandler import ImageHandler
+from looptrace.filepaths import get_analysis_path
 from drift_correct_accuracy_analysis import workflow as run_drift_correction_analysis, run_visualisation as run_drift_correction_accuracy_visualisation
 from detect_spots import workflow as run_spot_detection
 from run_spot_proximity_filtration import workflow as run_spot_proximity_filtration
@@ -39,6 +44,26 @@ SPOT_DETECTION_STAGE_NAME = "spot_detection"
 TRACING_QC_STAGE_NAME = "tracing_QC"
 
 
+def plot_detected_spot_counts(config_file: ExtantFile) -> None:
+    H = ImageHandler(config_path=config_file)
+    output_folder = H.analysis_path
+    analysis_script_file = Path(os.path.dirname(__file__)) / "spot_detection_counts_visualisation.R"
+    if not analysis_script_file.is_file():
+        raise FileNotFoundError(f"Missing regional spot counts plot script: {analysis_script_file}")
+    analysis_cmd_parts = [
+        "Rscript", 
+        str(analysis_script_file), 
+        "--unfiltered-spots-file", 
+        str(H.raw_spots_file),
+        "--filtered-spots-file",
+        str(H.proximity_filtered_spots_file_path),
+        "-o", 
+        output_folder, 
+        ]
+    print(f"Analysis command: {' '.join(analysis_cmd_parts)}")
+    return subprocess.check_call(analysis_cmd_parts)
+
+
 class LooptracePipeline(pypiper.Pipeline):
     """Main looptrace processing pipeline"""
 
@@ -49,8 +74,8 @@ class LooptracePipeline(pypiper.Pipeline):
 
     @staticmethod
     def name_fun_getargs_bundles() -> List[Tuple[str, callable, Callable[[Tuple[ExtantFile, ExtantFolder]], Union[Tuple[ExtantFile], Tuple[ExtantFile, ExtantFolder]]]]]:
-        take1 = lambda config, _: (config, )
-        take2 = lambda config, images: (config, images)
+        take1 = lambda config_file, _: (config_file, )
+        take2 = lambda config_file, images_folder: (config_file, images_folder)
         return [
             ("pipeline_precheck", pretest, take1),
             ("zarr_production", run_zarr_production, take2),
@@ -67,6 +92,7 @@ class LooptracePipeline(pypiper.Pipeline):
             ("drift_correction_accuracy_visualisation", run_drift_correction_accuracy_visualisation, take1), 
             (SPOT_DETECTION_STAGE_NAME, run_spot_detection, take2), # generates *_rois.csv (regional spots)
             ("spot_proximity_filtration", run_spot_proximity_filtration, take2),
+            ("spot_detection_counts_visualisation", plot_detected_spot_counts, take1), 
             ("spot_nucleus_filtration", run_spot_nucleus_filtration, take2), 
             ("clean_1", run_cleanup, take1),
             ("spot_bounding", run_spot_bounding, take2), # computes pad_x_min, etc.; writes *_dc_rois.csv (much bigger, since regional spots x frames)

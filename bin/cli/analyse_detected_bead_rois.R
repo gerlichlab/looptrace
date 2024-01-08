@@ -19,6 +19,7 @@ cli_parser$add_argument("--counts-files-extension", default = "csv", help = "Ext
 cli_parser$add_argument("--do-not-modify-counts", action = "store_true", help = "Indicate that counts are real counts not line counts (no header, e.g.)")
 cli_parser$add_argument("--position-frame-delimiter", default = "_", help = "Delimiter between position and frame in filename")
 cli_parser$add_argument("--qc-code-column", type = "integer", default = 7, help="Column index (1-based) of the field with the QC value (empty for QC pass) in each bead ROIs file")
+## Parse the CLI arguments.
 opts <- cli_parser$parse_args()
 
 kBeadRoisPrefix <- "bead_roi_counts"
