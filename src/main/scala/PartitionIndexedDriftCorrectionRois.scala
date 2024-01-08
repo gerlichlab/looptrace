@@ -3,14 +3,7 @@ package at.ac.oeaw.imba.gerlich.looptrace
 import scala.util.{ Random, Try }
 import cats.Alternative
 import cats.data.{ NonEmptyList as NEL, ValidatedNel }
-import cats.syntax.apply.*
-import cats.syntax.either.*
-import cats.syntax.eq.*
-import cats.syntax.flatMap.*
-import cats.syntax.functor.*
-import cats.syntax.list.*
-import cats.syntax.option.*
-import cats.syntax.validated.*
+import cats.syntax.all.*
 import mouse.boolean.*
 import upickle.default.*
 import scopt.OParser
