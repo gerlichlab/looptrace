@@ -1,4 +1,12 @@
-"""Helper functions for analysing small spot images for tracing"""
+"""
+Helper functions for analysing small spot images for tracing
+
+These functions parse--from filename--context attributes, 
+like ROI ID and regional barcode imaging timepoint ,of a 
+stack of spot images for tracing (1 per timepoint, originating 
+from a single regional barcode spot). The also compute 
+aggregates (mean, median, max) of image pixes intensities.
+"""
 
 import argparse
 import itertools
