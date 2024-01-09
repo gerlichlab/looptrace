@@ -1,4 +1,4 @@
-
+<!--- DO NOT EDIT THIS GENERATED DOCUMENT DIRECTLY; instead, edit generate_excution_control_document.py --->
 # Controlling pipeline execution
 ## Overview
 The main `looptrace` processing pipeline is built with [pypiper](https://pypi.org/project/piper/).

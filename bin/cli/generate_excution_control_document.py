@@ -1,6 +1,7 @@
 """Script to generate the pipeline execution control documentation"""
 
 import argparse
+import os
 import sys
 from typing import *
 
@@ -24,7 +25,7 @@ def _parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
     return parser.parse_args(cmdl)
 
 
-DOCTEXT = f"""
+DOCTEXT = f"""<!--- DO NOT EDIT THIS GENERATED DOCUMENT DIRECTLY; instead, edit {os.path.basename(__file__)} --->
 # Controlling pipeline execution
 ## Overview
 The main `looptrace` processing pipeline is built with [pypiper](https://pypi.org/project/piper/).
