@@ -6,7 +6,7 @@ from typing import *
 
 __author__ = "Vince Reuter"
 
-from run_processing_pipeline import DECON_STAGE_NAME, SPOT_DETECTION_STAGE_NAME, TRACING_QC_STAGE_NAME, LooptracePipeline
+from run_processing_pipeline import DECON_STAGE_NAME, PIPE_NAME, SPOT_DETECTION_STAGE_NAME, TRACING_QC_STAGE_NAME, LooptracePipeline
 
 
 def _parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
@@ -24,18 +24,21 @@ def _parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
     return parser.parse_args(cmdl)
 
 
-DOCTEXT = """
+DOCTEXT = f"""
 # Controlling pipeline execution
 ## Overview
 The main `looptrace` processing pipeline is built with [pypiper](https://pypi.org/project/piper/).
 One feature of such a pipeline is that it may be started and stopped at arbitrary points.
 To do so, the start and end points must be specified by name of processing stage.
 
-To __start__ the pipeline from a specific point, use `--start-point <stage name>`.
+To __start__ the pipeline from a specific point, use `--start-point <stage name>`. Example:
+```python
+python run_processing_pipeline.py -C conf.yaml -I images_folder -O pypiper_output --start-point {SPOT_DETECTION_STAGE_NAME} --stop-before {TRACING_QC_STAGE_NAME}
+```
 
-To __stop__ the pipeline...
-    * ...just _before_ a specific point, use `--stop-before <stage name>`.
-    * ...just _after_ a specific point, use `--stop-after <stage name>`.
+To __stop__ the pipeline...<br>
+* ...just _before_ a specific point, use `--stop-before <stage name>`.
+* ...just _after_ a specific point, use `--stop-after <stage name>`.
 
 ## Restarting the pipeline...
 When experimenting with different parameter settings for one or more stages, it's common to want to restart the pipeline from a specific point.
@@ -50,7 +53,7 @@ You should copy to this folder any checkpoint files of any stages upstream of th
 Even though `--start-point` should allow the restart to begin from where's desired, if that's forgotten the checkpoint files should save you.
 
 Generate an empty checkpoint file for each you'd like to skip. 
-Simply create (`touch`) each such file `<stage>.checkpoint` in the desired pypiper output folder.
+Simply create (`touch`) each such file `{PIPE_NAME}_<stage>.checkpoint` in the desired pypiper output folder.
 Below are the sequential pipeline stage names.
 
 ### Pipeline stage names
