@@ -1,0 +1,5 @@
+linters: with_defaults(
+  indentation_linter: intentation_linter(
+    intent = 4L      
+  )
+)
