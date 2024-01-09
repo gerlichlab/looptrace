@@ -77,9 +77,11 @@ def plot_spot_counts(config_file: ExtantFile, spot_type: "SpotType") -> None:
     if spot_type == SpotType.REGIONAL:
         unfiltered = H.raw_spots_file
         filtered = H.proximity_filtered_spots_file_path
+        probe_name_extra = ["--probe-names", " ".join(H.frame_names)]
     elif spot_type == SpotType.LOCUS_SPECIFIC:
         unfiltered = H.traces_file_qc_unfiltered
         filtered = H.traces_file_qc_filtered
+        probe_name_extra = []
     else:
         raise ValueError(f"Illegal spot_type for plotting spot counts: {spot_type}")
     analysis_cmd_parts = [
@@ -93,7 +95,7 @@ def plot_spot_counts(config_file: ExtantFile, spot_type: "SpotType") -> None:
         spot_type.value,
         "-o", 
         output_folder, 
-        ]
+        ] + probe_name_extra
     print(f"Analysis command: {' '.join(analysis_cmd_parts)}")
     return subprocess.check_call(analysis_cmd_parts)
 
