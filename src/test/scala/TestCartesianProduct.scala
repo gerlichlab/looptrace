@@ -1,6 +1,6 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
-import scala.collection.SortedSet
+import scala.collection.immutable.SortedSet
 import cats.syntax.all.*
 import org.scalacheck.{ Arbitrary, Gen, Shrink }
 import org.scalacheck.Arbitrary.arbitrary
