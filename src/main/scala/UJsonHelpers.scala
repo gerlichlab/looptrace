@@ -1,10 +1,18 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
 import scala.util.Try
-import cats.data.{ NonEmptyList as NEL, ValidatedNel }
+import cats.data.*
 import cats.syntax.all.*
+import mouse.boolean.*
 
-/** Helpers for working with the excellent uJson project */
+import at.ac.oeaw.imba.gerlich.looptrace.collections.*
+import upickle.core.Visitor
+
+/**
+ * Helpers for working with the excellent uJson project 
+ * 
+ * @author Vince Reuter
+ */
 object UJsonHelpers:
     /** Lift floating-point to JSON number, through floating-point. */
     given liftDouble: (Double => ujson.Num) = ujson.Num.apply
@@ -14,6 +22,62 @@ object UJsonHelpers:
     
     /** Lift floating-point to JSON number. */
     given liftStr: (String => ujson.Str) = ujson.Str.apply
+
+    /** Entity which admits a {@code String}-keyed mapping to {@code ujson.Value} */
+    trait JsonMappable[A]:
+        /** Define an instance by saying how to make a string-keyed mapping from an {@code A} */
+        def toJsonMap: A => JsonMappable.JMap
+    end JsonMappable
+
+    object UPickleCatsInstances:
+        import cats.*
+        import upickle.default.*
+        given contravariantForJsonWriter[T]: Contravariant[Writer] with
+            override def contramap[A, B](wa: Writer[A])(f: B => A): Writer[B] = 
+                new Writer[B] { override def write0[V](out: Visitor[?, V], v: B): V = wa.write0(out, f(v)) }
+    end UPickleCatsInstances
+
+    object JsonMappable:
+        type JMap = Map[String, ujson.Value]
+        object JMap:
+            def empty: JMap = Map()
+        
+        /** A JMap is already itself a JMap, so just return itself. */
+        given jsonMappableForJsonMap: JsonMappable[JMap] with
+            override def toJsonMap = identity
+        
+        extension [A](a: A)(using ev: JsonMappable[A])
+            def toJsonMap: JMap = ev.toJsonMap(a)
+            def toJsonObject: ujson.Obj = this.toJsonObject(a.toJsonMap)
+        
+        /** Combine 2 maps from text key to JSON value, succeeding iff no keyset overlap, 
+         * otherwise collecting overlapping keys.
+         */
+        def combineSafely = (m1: JMap, m2: JMap) => {
+            val result = m1 ++ m2
+            (result.size === m1.size + m2.size).either((m1.keySet & m2.keySet).toNonEmptySetUnsafe, result)
+        }
+
+        /** Combine arbitrarily numerous maps from text key to JSON value, 
+         * succeeding iff no keyset overlap, otherwise collecting overlapping keys.
+         */
+        def combineSafely(ms: List[JMap]): Either[NonEmptySet[String], JMap] = 
+            ms.foldRight(JMap.empty.asRight[NonEmptySet[String]]){ 
+                case (m, acc) => acc.leftMap(_ ++ m.keySet).flatMap(combineSafely(m, _))
+            }
+
+        /** Create an instance with the given function as the characteristic/defining function. */
+        def instance[A]: (A => JsonMappable.JMap) => JsonMappable[A] = 
+          f => new JsonMappable[A] { override def toJsonMap: A => JMap = f }
+        
+        private final def toJsonObject(m: JMap): ujson.Obj = m.toList.match {
+            case kv :: tail => ujson.Obj(kv, tail*)
+            case Nil => ujson.Obj()
+        }
+    end JsonMappable
+    
+    /** Error type for when key sets overlap but shouldn't */
+    class RepeatedKeysException[A](keys: NonEmptySet[A]) extends Throwable
 
     /**
       * Try to parse an {@code A} value from the value at the given key, using {@code Int} as intermediary.
@@ -44,7 +108,7 @@ object UJsonHelpers:
         safeExtractStr(key)(json) `map` lift
     
     def safeExtractE[A](key: String, lift: String => Either[String, A])(json: ujson.Value): ValidatedNel[String, A] = 
-        (safeExtractStr(key)(json).toEither >>= lift.fmap(_.leftMap(NEL.one))).toValidated
+        (safeExtractStr(key)(json).toEither >>= lift.fmap(_.leftMap(NonEmptyList.one))).toValidated
 
     /** Try to extract a text value at the given key in the given (presumed Object) JSON value. */
     def safeExtractStr(key: String)(json: ujson.Value): ValidatedNel[String, String] = 
