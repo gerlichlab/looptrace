@@ -17,6 +17,7 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.{
+    AbsoluteMinimumShifting,
     BadRecord,
     BeadRoisPrefix, 
     ColumnName,
@@ -31,7 +32,6 @@ import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.{
     RoisSplitResult,
     RoiSplitSuccess,
     TooFewAccuracyRois, 
-    TooFewRois,
     TooFewRoisLike,
     TooFewShiftingRois,
     XColumn, 
@@ -53,10 +53,13 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.{ CoordinateSequence, Point3D, XC
 class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSuite, should.Matchers, PartitionRoisSuite:
     import SelectedRoi.*
     
-    /* *******************************************************************************
-     * Main test cases                                                                 
-     * *******************************************************************************
-     */
+    test("Any case of too few shifting ROIs is also a case of too few accuracy ROIs.") { pending }
+
+    test("Types properly restrict compilation.") { pending }
+
+    test("Cannot mixup shifting and accuracy count values") { pending }
+
+    test("Cannot mixup requested and realized values") { pending }
 
     test("Parser config roundtrips through JSON.") {
         forAll { (original: ParserConfig) => 
@@ -327,16 +330,16 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
     }
     
     test("Requesting ROIs count size greater than usable record count yields expected result.") {
-        import TooFewRoisLike.problem
         val maxRoisCount = PositiveInt(1000)
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
-        type Expectation = TooFewShiftingRois | TooFewRois
+        type Expectation = TooFewShiftingRois | TooFewAccuracyRois
 
         def getExpectation(reqShifting: PositiveInt, reqAccuracy: PositiveInt, numUsable: NonnegativeInt): Expectation = {
-            if (reqShifting > numUsable) TooFewShiftingRois(reqShifting, numUsable)
-            else if (reqShifting + reqAccuracy > numUsable) {
+            if (numUsable < AbsoluteMinimumShifting) TooFewShiftingRois(reqShifting, numUsable)
+            else if (numUsable < reqShifting) TooFewAccuracyRoisRescued()
+            else if (numUsable < reqShifting + reqAccuracy) {
                 val expAccRealized = NonnegativeInt.unsafe(numUsable - reqShifting) // guaranteed safe by falsehood of (del > numUsable)
-                TooFewRois(reqAccuracy, expAccRealized, Purpose.Accuracy)
+                TooFewAccuracyRoisHealthy(reqAccuracy, expAccRealized, Purpose.Accuracy)
             }
             else { throw new IllegalArgumentException(s"Sample size is NOT in excess of usable count: ${reqShifting + reqAccuracy} <= ${numUsable}") }
         }
