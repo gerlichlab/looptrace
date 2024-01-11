@@ -143,13 +143,13 @@ package object looptrace {
         inline def apply(z: Int): PositiveInt = 
             inline if z <= 0 then compiletime.error("Non-positive integer where positive is required!")
             else (z: PositiveInt)
+        extension (n: PositiveInt)
+            def asNonnegative: NonnegativeInt = NonnegativeInt.unsafe(n)
         def either(z: Int): Either[String, PositiveInt] = maybe(z).toRight(s"Cannot refine as positive: $z")
         def maybe(z: Int): Option[PositiveInt] = (z > 0).option{ (z: PositiveInt) }
         def unsafe(z: Int): PositiveInt = either(z).fold(msg => throw new NumberFormatException(msg), identity)
         given posIntOrder(using intOrd: Order[Int]): Order[PositiveInt] = intOrd.contramap(identity)
         given posIntRW(using intRW: ReadWriter[Int]): ReadWriter[PositiveInt] = intRW.bimap(identity, _.int)
-        extension (n: PositiveInt)
-            def asNonnegative: NonnegativeInt = NonnegativeInt.unsafe(n)
     end PositiveInt
 
     /** Refinement for positive real values */
