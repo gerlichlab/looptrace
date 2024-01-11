@@ -433,6 +433,10 @@ object PartitionIndexedDriftCorrectionRois:
                 NonEmptyList.one(Problem.accuracy(requestedAccuracy, partition.numAccuracy))
         
         final case class Partition private(shifting: NonEmptySet[RoiForShifting], accuracy: Set[RoiForAccuracy]) extends HasPartition:
+            require(
+                (shifting.toSortedSet.map(roi => roi.index -> roi.centroid) & accuracy.map(roi => roi.index -> roi.centroid)).isEmpty, 
+                s"ROIs for shifting overlap with ones for accuracy: ${(shifting.toSortedSet.map(roi => roi.index -> roi.centroid) & accuracy.map(roi => roi.index -> roi.centroid))}"
+                )
             require(shifting.length >= AbsoluteMinimumShifting, s"Not enough shifting ROIs: ${shifting.length} < $AbsoluteMinimumShifting")
             final def partition = this
             final lazy val numShifting: ShiftingCount = ShiftingCount.unsafe(shifting.length)
@@ -440,7 +444,7 @@ object PartitionIndexedDriftCorrectionRois:
         end Partition
 
         object Partition:
-            given orderForShiftingRoi: Order[RoiForShifting] = Order.by(roi => roi.index -> roi.centroid)
+            given orderForShiftingRoi: Order[RoiForShifting] = Order.by(simplifySelectedRoi)
             def build(reqShifting: ShiftingCount, shifting: List[RoiForShifting], reqAccuracy: PositiveInt, accuracy: List[RoiForAccuracy]): Result = {
                 if shifting.length < AbsoluteMinimumShifting
                 then RoisSplit.TooFewShifting(reqShifting, NonnegativeInt.unsafe(shifting.length), reqAccuracy)
@@ -505,5 +509,8 @@ object PartitionIndexedDriftCorrectionRois:
         }).toValidatedNel
         (maybeSep, maybeHeadTail).mapN{ case (sep, (h, t)) => (sep, h, t) }
     }
+
+    private def simplifySelectedRoi(roi: SelectedRoi): (RoiIndex, Point3D) = roi.index -> roi.centroid
+    given orderingForSelectedRoiSimplification: Ordering[(RoiIndex, Point3D)] = Order[(RoiIndex, Point3D)].toOrdering
 
 end PartitionIndexedDriftCorrectionRois
