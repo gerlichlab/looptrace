@@ -7,10 +7,11 @@ import cats.data.*
 import cats.syntax.all.*
 import mouse.boolean.*
 import upickle.default.*
-import scopt.OParser
+import scopt.{ OParser, Read }
 
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
+import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.ShiftingCount.asPositive
 
 /** Split pool of detected bead ROIs into those for drift correction shift, drift correction accuracy, and unused. */
 object PartitionIndexedDriftCorrectionRois:
@@ -27,9 +28,8 @@ object PartitionIndexedDriftCorrectionRois:
 
     final case class CliConfig(
         beadRoisRoot: os.Path = null, // bogus, unconditionally required
-        numShifting: PositiveInt = PositiveInt(1), // bogus, unconditionally required
+        numShifting: ShiftingCount = ShiftingCount(10), // bogus, unconditionally required
         numAccuracy: PositiveInt = PositiveInt(1), // bogus, unconditionally required
-        parserConfig: Option[os.Path] = None,
         outputFolder: Option[os.Path] = None, 
         optimisationTestingMode: Boolean = false, 
         referenceFrame: FrameIndex = FrameIndex(NonnegativeInt(Int.MaxValue)) // bogus, conditionally required
@@ -40,6 +40,8 @@ object PartitionIndexedDriftCorrectionRois:
     def main(args: Array[String]): Unit = {
         import parserBuilder.*
         import ScoptCliReaders.given
+        given readForShiftingCount(using intRead: Read[Int]): Read[ShiftingCount] = 
+            intRead.map(ShiftingCount.unsafe)
 
         val parser = OParser.sequence(
             programName(ProgramName), 
@@ -49,7 +51,7 @@ object PartitionIndexedDriftCorrectionRois:
                 .action((p, c) => c.copy(beadRoisRoot = p))
                 .validate(p => os.isDir(p).either(s"Alleged bead ROIs root isn't an extant folder: $p", ()))
                 .text("Path to the folder with the detected bead ROIs"),
-            opt[PositiveInt]("numShifting")
+            opt[ShiftingCount]("numShifting")
                 .required()
                 .action((n, c) => c.copy(numShifting = n))
                 .text("Number of ROIs to use for shifting"),
@@ -57,10 +59,6 @@ object PartitionIndexedDriftCorrectionRois:
                 .required()
                 .action((n, c) => c.copy(numAccuracy = n))
                 .text("Number of ROIs to use for accuracy"),
-            opt[os.Path]("parserConfig")
-                .action((p, c) => c.copy(parserConfig = p.some))
-                .validate(p => os.isFile(p).either(s"Alleged parser config isn't an extant file: $p", ()))
-                .text("Path to parser configuration file, definining how to look for particular columns and fields"),
             opt[os.Path]('O', "outputFolder")
                 .action((p, c) => c.copy(outputFolder = p.some))
                 .text("Path to output root; if unspecified, use the input root."),
@@ -77,9 +75,7 @@ object PartitionIndexedDriftCorrectionRois:
         OParser.parse(parser, args, CliConfig()) match {
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
             case Some(opts) => {
-                val conf: os.Path | ParserConfig = opts.parserConfig.getOrElse(ParserConfig.default)
                 workflow(
-                    conf,
                     inputRoot = opts.beadRoisRoot, 
                     numShifting = opts.numShifting, 
                     numAccuracy = opts.numAccuracy, 
@@ -90,28 +86,14 @@ object PartitionIndexedDriftCorrectionRois:
         }
     }
 
-    /* Business logic */
-    def workflow(configFile: os.Path, inputRoot: os.Path, numShifting: PositiveInt, numAccuracy: PositiveInt): Unit = 
-        workflow(configFile, inputRoot, numShifting, numAccuracy, None, None)
-    
-    def workflow(configFile: os.Path, inputRoot: os.Path, numShifting: PositiveInt, numAccuracy: PositiveInt, outputFolder: os.Path): Unit = 
-        workflow(configFile, inputRoot, numShifting, numAccuracy, None, outputFolder.some)
-    
+    /* Business logic */    
     def workflow(
-        conf: os.Path | ParserConfig, 
         inputRoot: os.Path, 
-        numShifting: PositiveInt, 
+        numShifting: ShiftingCount, 
         numAccuracy: PositiveInt, 
         referenceFrame: Option[FrameIndex],
         outputFolder: Option[os.Path]
         ): Unit = {
-
-        val parserConfig = conf match {
-            case pc: ParserConfig => pc
-            case confFile: os.Path => 
-                println(s"Reading parser config: ${confFile}")
-                ParserConfig.readFileUnsafe(confFile)
-        }
 
         /* Actions */
         val inputFiles = discoverInputs(inputRoot)
@@ -122,7 +104,7 @@ object PartitionIndexedDriftCorrectionRois:
         // Write a specific subtype of selected ROI, but not a mix and not the general (non-leaf) type.
         def writeRois[R <: SelectedRoi : [R] =>> NotGiven[R =:= SelectedRoi]](rois: List[R], outpath: os.Path): Unit = {
             println(s"Writing: $outpath")
-            val jsonObjs = rois.map(SelectedRoi.toJsonSimple(parserConfig.coordinateSequence))
+            val jsonObjs = rois.map(SelectedRoi.toJsonSimple(ParserConfig.coordinateSequence))
             os.makeDir.all(outpath.parent)
             os.write.over(outpath, ujson.write(jsonObjs.toList, indent = 4))
         }
@@ -136,7 +118,7 @@ object PartitionIndexedDriftCorrectionRois:
         
         val (bads, goods): (List[(InitFile, RoisSplit.Failure)], List[(InitFile, RoisSplit.HasPartition)]) = 
             Alternative[List].separate(
-                preparePartitions(outfolder, parserConfig, numShifting = numShifting, numAccuracy = numAccuracy)(inputFiles.toList) map {
+                preparePartitions(outfolder, numShifting = numShifting, numAccuracy = numAccuracy)(inputFiles.toList) map {
                     case (initFile, result) => (result match {
                         case p: RoisSplit.Partition => p.asRight      // ideal
                         case a: RoisSplit.TooFewAccuracyRois => a.asRight // OK
@@ -221,17 +203,11 @@ object PartitionIndexedDriftCorrectionRois:
             val fNel = Try{ FrameIndex.unsafe(json("frame").int) }.toValidatedNel
             val reqdNel = Try{ PositiveInt.unsafe(json("requested").int) }.toValidatedNel
             val realNel = Try{ NonnegativeInt.unsafe(json("realized").int) }.toValidatedNel
-            val purposeNel = 
-                Try{ read[Purpose](json("purpose")) }
-                    .toEither
-                    .flatMap{ p => (p === Purpose.Shifting).either(
-                        ujson.Value.InvalidData(json, s"Expected purpose ${Purpose.Shifting} but got $p"), 
-                        p
-                        )
-                    }
-                    .toValidatedNel
+            val purposeNel = Try{ read[Purpose](json("purpose")) }.toEither.flatMap{ p => 
+                (p === Purpose.Shifting).either(ujson.Value.InvalidData(json, s"Expected purpose ${Purpose.Shifting} but got $p"), p)
+            }.toValidatedNel
             (pNel, fNel, reqdNel, realNel, purposeNel).mapN(
-                (p, f, requested, realized, purpose) => (p, f) -> RoisSplit.Problem(requested, realized, purpose)
+                (p, f, requested, realized, _) => (p, f) -> RoisSplit.Problem.shifting(requested, realized)
             ) match {
                 case Validated.Invalid(errs) => 
                     val msg = f"${errs.size} error(s) reading pair of ((pos, frame), too-few-shifting): ${errs.map(_.getMessage)}"
@@ -241,11 +217,11 @@ object PartitionIndexedDriftCorrectionRois:
         )
     }
 
-    def createParser(config: ParserConfig)(header: RawRecord): ErrMsgsOr[RawRecord => ErrMsgsOr[NonnegativeInt => DetectedRoi]] = {
-        val maybeParseX = buildFieldParse(config.xCol.get, safeParseDouble.andThen(_.map(XCoordinate.apply)))(header)
-        val maybeParseY = buildFieldParse(config.yCol.get, safeParseDouble.andThen(_.map(YCoordinate.apply)))(header)
-        val maybeParseZ = buildFieldParse(config.zCol.get, safeParseDouble.andThen(_.map(ZCoordinate.apply)))(header)
-        val maybeParseQC = buildFieldParse(config.qcCol, (s: String) => Right(s.isEmpty))(header)
+    def createParser(header: RawRecord): ErrMsgsOr[RawRecord => ErrMsgsOr[NonnegativeInt => DetectedRoi]] = {
+        val maybeParseX = buildFieldParse(ParserConfig.xCol.get, safeParseDouble.andThen(_.map(XCoordinate.apply)))(header)
+        val maybeParseY = buildFieldParse(ParserConfig.yCol.get, safeParseDouble.andThen(_.map(YCoordinate.apply)))(header)
+        val maybeParseZ = buildFieldParse(ParserConfig.zCol.get, safeParseDouble.andThen(_.map(ZCoordinate.apply)))(header)
+        val maybeParseQC = buildFieldParse(ParserConfig.qcCol, (s: String) => Right(s.isEmpty))(header)
         (maybeParseX, maybeParseY, maybeParseZ, maybeParseQC).mapN((x, y, z, qc) => (x, y, z, qc)).toEither.map{
             case (parseX, parseY, parseZ, parseQC) => { 
                 (record: RawRecord) => (record.length === header.length)
@@ -288,9 +264,9 @@ object PartitionIndexedDriftCorrectionRois:
         results.toSet
     }
     
-    def preparePartitions(outputFolder: os.Path, parserConfig: ParserConfig, numShifting: PositiveInt, numAccuracy: PositiveInt): 
+    def preparePartitions(outputFolder: os.Path, numShifting: ShiftingCount, numAccuracy: PositiveInt): 
         List[InitFile] => List[(InitFile, RoisFileParseError | RoisSplit.Result)] = _.map { 
-            case init@(_, roisFile) => init -> readRoisFile(parserConfig)(roisFile).fold(
+            case init@(_, roisFile) => init -> readRoisFile(roisFile).fold(
                 identity, 
                 sampleDetectedRois(numShifting = numShifting, numAccuracy = numAccuracy)
                 )
@@ -303,17 +279,16 @@ object PartitionIndexedDriftCorrectionRois:
       * 1. Given path isn't a file
       * 2. Field delimiter can't be inferred from given path's extension
       * 3. Given file is empty
-      * 4. One or more columns required (by the parserConfig) to parse aren't in file'e header (first line)
+      * 4. One or more columns required (by {@code ParserConfig}) to parse aren't in file'e header (first line)
       * 5. Any record fails to parse
       * 
-      * @param parserConfig How to parse the file
       * @param roisFile The file to parse
       * @return A collection of ROIs, representing what was detected for a particular (FOV, frame) combo
       */
-    def readRoisFile(parserConfig: ParserConfig)(roisFile: os.Path): Either[RoisFileParseError, Iterable[DetectedRoi]] = {
+    def readRoisFile(roisFile: os.Path): Either[RoisFileParseError, Iterable[DetectedRoi]] = {
         prepFileRead(roisFile)
             .toEither
-            .flatMap{ case (sep, head, lines) => createParser(parserConfig)(sep `split` head).map(_ -> lines.map(sep.split)) }
+            .flatMap{ case (sep, head, lines) => createParser(sep `split` head).map(_ -> lines.map(sep.split)) }
             .leftMap(RoisFileParseFailedSetup.apply)
             .flatMap { case (parse, rawRecords) => 
                 Alternative[List].separate(
@@ -336,7 +311,7 @@ object PartitionIndexedDriftCorrectionRois:
       * @param rois Collection of detected bead ROIs, from a single (FOV, frame) pair
       * @return An explanation of failure if partition isn't possible, or a partition with perhaps a warning
       */
-    def sampleDetectedRois(numShifting: PositiveInt, numAccuracy: PositiveInt)(rois: Iterable[DetectedRoi]): RoisSplit.Result = {
+    def sampleDetectedRois(numShifting: ShiftingCount, numAccuracy: PositiveInt)(rois: Iterable[DetectedRoi]): RoisSplit.Result = {
         val sampleSize = numShifting + numAccuracy
         if (sampleSize < numShifting || sampleSize < numAccuracy) {
             val msg = s"Appears overflow occurred computing sample size: ${numShifting} + ${numAccuracy} = ${sampleSize}"
@@ -408,7 +383,7 @@ object PartitionIndexedDriftCorrectionRois:
             def realizedShifting: NonnegativeInt
             def realizedAccuracy: NonnegativeInt
 
-        final case class Problem(numRequested: PositiveInt, numRealized: NonnegativeInt, purpose: Purpose):
+        final case class Problem private(numRequested: PositiveInt, numRealized: NonnegativeInt, purpose: Purpose):
             /* Validation of reasonableness of arguments given that this is an alleged error / problem value being created */
             if (numRealized > numRequested) throw new IllegalArgumentException(s"Realized more ROIs than requested: $numRealized > $numRequested")
             if (numRealized === numRequested.asNonnegative) throw new IllegalArgumentException(s"Alleged too few ROIs, but $numRealized = $numRequested")
@@ -421,28 +396,32 @@ object PartitionIndexedDriftCorrectionRois:
                     "purpose" -> ujson.Str(problem.purpose.toString)
                 )
             }
+            def accuracy(numRequested: PositiveInt, numRealized: NonnegativeInt): Problem = 
+                new Problem(numRequested, numRealized, Purpose.Accuracy)
+            def shifting(numRequested: ShiftingCount, numRealized: NonnegativeInt): Problem = 
+                new Problem(numRequested.asPositive, numRealized, Purpose.Shifting)
         end Problem
 
         final case class TooFewShiftingRois(
-            requestedShifting: PositiveInt, 
+            requestedShifting: ShiftingCount, 
             realizedShifting: NonnegativeInt, 
             requestedAccuracy: PositiveInt,
             ) extends Problematic with PartitionCounts:
             require(requestedShifting > realizedShifting, s"Alleged too few shifting ROIs, but $realizedShifting >= $requestedShifting")
-            def shiftingProblem = Problem(requestedShifting, realizedShifting, Purpose.Shifting)
-            def accuracyProblem = Problem(requestedAccuracy, NonnegativeInt(0), Purpose.Accuracy)
+            def shiftingProblem = Problem.shifting(requestedShifting, realizedShifting)
+            def accuracyProblem = Problem.accuracy(requestedAccuracy, NonnegativeInt(0))
             override def problems: NonEmptyList[Problem] = NonEmptyList.of(shiftingProblem, accuracyProblem)
             def realizedAccuracy = NonnegativeInt(0)
         
         final case class TooFewAccuracyRoisRescued(
             partition: Partition, 
-            requestedShifting: PositiveInt, 
+            requestedShifting: ShiftingCount, 
             requestedAccuracy: PositiveInt,
             ) extends HasPartition with Problematic:
             import ShiftingCount.asNonnegative
             override def problems: NonEmptyList[Problem] = NonEmptyList.of(
-                Problem(requestedShifting, realizedShifting.asNonnegative, Purpose.Shifting), 
-                Problem(requestedAccuracy, realizedAccuracy, Purpose.Accuracy),
+                Problem.shifting(requestedShifting, realizedShifting.asNonnegative), 
+                Problem.accuracy(requestedAccuracy, realizedAccuracy),
                 )
             def realizedShifting = partition.numShifting
             def realizedAccuracy = partition.numAccuracy
@@ -452,7 +431,7 @@ object PartitionIndexedDriftCorrectionRois:
             requestedAccuracy: PositiveInt,
             ) extends HasPartition with Problematic:
             override def problems: NonEmptyList[Problem] = 
-                NonEmptyList.one(Problem(requestedAccuracy, partition.numAccuracy, Purpose.Accuracy))
+                NonEmptyList.one(Problem.accuracy(requestedAccuracy, partition.numAccuracy))
         
         final case class Partition private(shifting: NonEmptyList[RoiForShifting], accuracy: List[RoiForAccuracy]) extends HasPartition:
             require(shifting.length >= AbsoluteMinimumShifting, s"Not enough shifting ROIs: ${shifting.length} < $AbsoluteMinimumShifting")
@@ -462,7 +441,7 @@ object PartitionIndexedDriftCorrectionRois:
         end Partition
 
         object Partition:
-            def build(reqShifting: PositiveInt, shifting: List[RoiForShifting], reqAccuracy: PositiveInt, accuracy: List[RoiForAccuracy]): Result = {
+            def build(reqShifting: ShiftingCount, shifting: List[RoiForShifting], reqAccuracy: PositiveInt, accuracy: List[RoiForAccuracy]): Result = {
                 if shifting.length < AbsoluteMinimumShifting
                 then RoisSplit.TooFewShiftingRois(reqShifting, NonnegativeInt.unsafe(shifting.length), reqAccuracy)
                 else 
@@ -496,73 +475,28 @@ object PartitionIndexedDriftCorrectionRois:
         given eqForPurpose: Eq[Purpose] = Eq.fromUniversalEquals[Purpose]
     
     final case class Filename(get: String)
-    
-    final case class ParserConfig(xCol: XColumn, yCol: YColumn, zCol: ZColumn, qcCol: String, coordinateSequence: CoordinateSequence):
-        {
-            val textLikeMembers = Map("x" -> xCol.get, "y" -> yCol.get, "z" -> zCol.get, "qc" -> qcCol)
-            textLikeMembers.toList.groupBy(_._2).view.mapValues(_.map(_._1)).toList.filter(_._2.length > 1) match {
-                case Nil => ()
-                case reps => throw new IllegalArgumentException(
-                    s"${reps.size} repeat(s) among text-like columns for parsing config: ${reps mkString ","}")
-            }
-        }
 
     /** Helpers for working with the parser configuration */
     object ParserConfig:
-        val (xFieldName, yFieldName, zFieldName, qcFieldName, csFieldName) = labelsOf[ParserConfig]
-        
-        given jsonCodec: ReadWriter[ParserConfig] = readwriter[ujson.Value].bimap(
-            pc => ujson.Obj(
-                xFieldName -> ColumnName.toJson(pc.xCol), 
-                yFieldName -> ColumnName.toJson(pc.yCol), 
-                zFieldName -> ColumnName.toJson(pc.zCol), 
-                qcFieldName -> ujson.Str(pc.qcCol), 
-                csFieldName -> CoordinateSequence.toJson(pc.coordinateSequence)
-            ), 
-            json => {
-                val xNel = safeExtract(xFieldName, XColumn.apply)(json)
-                val yNel = safeExtract(yFieldName, YColumn.apply)(json)
-                val zNel = safeExtract(zFieldName, ZColumn.apply)(json)
-                val qcNel = safeExtract(qcFieldName, identity)(json)
-                val csNel = safeExtract(csFieldName, CoordinateSequence.fromJsonSafe(_).fold(throw _, identity))(json)
-                (xNel, yNel, zNel, qcNel, csNel).mapN(ParserConfig.apply).fold(errs => throw new ParseError(errs), identity)
-            }
-        )
-
-        /** A default value corresponding to what we have in looptrace Python code */
-        def default = ParserConfig(
-            XColumn("centroid-2"), 
-            YColumn("centroid-1"), 
-            ZColumn("centroid-0"), 
-            qcCol = "fail_code",
-            coordinateSequence = CoordinateSequence.Reverse  // WRITE the coordinates in (z, y, x) order to JSON.
-        )
-        
-        def readFile(confFile: os.Path): Either[ParseError, ParserConfig] = 
-            Try{ UJsonHelpers.readJsonFile[ParserConfig](confFile) }
-                .toEither
-                .leftMap{
-                    case e: ParseError => e
-                    case e: java.nio.file.NoSuchFileException => 
-                        ParseError(NonEmptyList.one(s"Alleged config path isn't a file: $confFile"))
-                    case e: ujson.IncompleteParseException => 
-                        ParseError(NonEmptyList.one(s"Empty config file ($confFile)? Got error: ${e.getMessage}"))
-                }
-
-        def readFileUnsafe(confFile: os.Path): ParserConfig = readFile(confFile).fold(throw _, identity)
-
-        final case class ParseError(errorMessages: NonEmptyList[String]) extends Exception(s"${errorMessages.size} errors: ${errorMessages}")
+        val xCol = XColumn("centroid-2")
+        val yCol = YColumn("centroid-1")
+        val zCol = ZColumn("centroid-0")
+        val qcCol = "fail_code"
+        val coordinateSequence = CoordinateSequence.Reverse
     end ParserConfig
 
-    /* Helper functions */
+    /** Encode FOV, timepoint, and intended purpose of ROI in filename. */
     def getOutputFilename(pos: PositionIndex, frame: FrameIndex, purpose: Purpose): Filename =
         Filename(s"${BeadRoisPrefix}_${pos.get}_${frame.get}.${purpose.lowercase}.json")
 
+    /** Name ROIs subfolder according to how the selected ROIs are to be used. */
     def getOutputSubfolder(root: os.Path) = root / (_: Purpose).lowercase
 
+    /** Name ROIs subfolder according to how the selected ROIs are to be used, and encode the purpose in the filename also. */
     def getOutputFilepath(root: os.Path)(pos: PositionIndex, frame: FrameIndex, purpose: Purpose): os.Path = 
         getOutputSubfolder(root)(purpose) / getOutputFilename(pos, frame, purpose).get
 
+    /** Infer delimiter and get header + data lines. */
     private def prepFileRead(roisFile: os.Path): ValidatedNel[String, (Delimiter, String, List[String])] = {
         val maybeSep = Delimiter.fromPath(roisFile).toRight(s"Cannot infer delimiter for file! $roisFile").toValidatedNel
         val maybeHeadTail = (os.read.lines(roisFile).toList match {
