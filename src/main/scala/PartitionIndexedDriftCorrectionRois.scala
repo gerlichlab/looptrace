@@ -102,18 +102,18 @@ object PartitionIndexedDriftCorrectionRois:
         println(s"Will use output folder: $outfolder")
         
         // Write a specific subtype of selected ROI, but not a mix and not the general (non-leaf) type.
-        def writeRois[R <: SelectedRoi : [R] =>> NotGiven[R =:= SelectedRoi]](rois: List[R], outpath: os.Path): Unit = {
+        def writeRois[R <: SelectedRoi : [R] =>> NotGiven[R =:= SelectedRoi]](rois: Set[R], outpath: os.Path): Unit = {
             println(s"Writing: $outpath")
-            val jsonObjs = rois.map(SelectedRoi.toJsonSimple(ParserConfig.coordinateSequence))
+            val jsonObjs = rois.toList.map(SelectedRoi.toJsonSimple(ParserConfig.coordinateSequence))
             os.makeDir.all(outpath.parent)
-            os.write.over(outpath, ujson.write(jsonObjs.toList, indent = 4))
+            os.write.over(outpath, ujson.write(jsonObjs, indent = 4))
         }
         /* Function definitions based on parsed config and CLI input */
         // Shifting ROIs cannot be empty.
-        val writeRoisForShifting = (pf: PosFramePair, rois: NonEmptyList[RoiForShifting]) =>
-            writeRois(rois.toList, getOutputFilepath(outfolder)(pf._1, pf._2, Purpose.Shifting))
+        val writeRoisForShifting = (pf: PosFramePair, rois: NonEmptySet[RoiForShifting]) =>
+            writeRois(rois.toSortedSet, getOutputFilepath(outfolder)(pf._1, pf._2, Purpose.Shifting))
         // Accuracy ROIs could be empty.
-        val writeRoisForAccuracy = (pf: PosFramePair, rois: List[RoiForAccuracy]) => 
+        val writeRoisForAccuracy = (pf: PosFramePair, rois: Set[RoiForAccuracy]) => 
             writeRois(rois, getOutputFilepath(outfolder)(pf._1, pf._2, Purpose.Accuracy))
         
         val (bads, goods): (List[(InitFile, RoisSplit.Failure)], List[(InitFile, RoisSplit.HasPartition)]) = 
@@ -121,8 +121,8 @@ object PartitionIndexedDriftCorrectionRois:
                 preparePartitions(outfolder, numShifting = numShifting, numAccuracy = numAccuracy)(inputFiles.toList) map {
                     case (initFile, result) => (result match {
                         case p: RoisSplit.Partition => p.asRight      // ideal
-                        case a: RoisSplit.TooFewAccuracyRois => a.asRight // OK
-                        case s: RoisSplit.TooFewShiftingRois => s.asLeft  // bad
+                        case a: RoisSplit.TooFewAccuracy => a.asRight // OK
+                        case s: RoisSplit.TooFewShifting => s.asLeft  // bad
                         case e: RoisFileParseError => e.asLeft  // worst
                     }).bimap(initFile -> _, initFile -> _)
                 }
@@ -135,14 +135,14 @@ object PartitionIndexedDriftCorrectionRois:
              */
             (referenceFrame, Alternative[List].separate(bads.map{ // Partition the list of problems by type of error.
                 case kv@(_, _: RoisFileParseError) => kv.asLeft
-                case ((pf, _), e: RoisSplit.TooFewShiftingRois) => (pf, e).asRight
+                case ((pf, _), e: RoisSplit.TooFewShifting) => (pf, e).asRight
             })) match {
                 case (Some(refFrame), (Nil, tooFewErrors)) if ( ! tooFewErrors.exists(_._1._2 === refFrame) ) => 
                     // In this case, we can just write warnings since none of the timepoints with too few ROIs 
                     // is the reference frame (i.e., there's at least the minimal number of bead ROIs required 
                     // for drift correction (absolute minimum, though not necessarily the user-defined minimum) 
                     // in the reference timepoint in every FOV.
-                    given writer: JsonWriter[(PosFramePair, RoisSplit.Problem)] = readWriterForKeyedTooFewShiftingRoisProblem
+                    given writer: JsonWriter[(PosFramePair, RoisSplit.Problem)] = readWriterForKeyedTooFewShiftingProblem
                     val warningsFile = outfolder / "roi_partition_warnings.severe.json"
                     println(s"Writing severe warnings file: $warningsFile")
                     val (problemsToWrite, problemsToPropagate) = tooFewErrors.map{ 
@@ -177,44 +177,6 @@ object PartitionIndexedDriftCorrectionRois:
             os.write(warningsFile, write(problems, indent = 2))
         }
         println("Done!")
-    }
-
-    /** Write, to JSON, a pair of (FOV, image time) and a case of too-few-ROIs for accuracy analysis for drift correction. */
-    private def jsonWriterForKeyedRoisProblem: JsonWriter[(PosFramePair, RoisSplit.Problem)] = {
-        import JsonMappable.*
-        import PosFramePair.given
-        import UJsonHelpers.UPickleCatsInstances.given
-        writer[ujson.Value].contramap{ (pair, problem) => combineUnsafely(List(pair.toJsonMap, problem.toJsonMap)) }
-    }
-
-    /** Combine all given maps iff there's no overlap of sets of keys. */
-    def combineUnsafely(ms: List[JsonMappable.JMap]): JsonMappable.JMap = 
-        JsonMappable.combineSafely(ms).fold(reps => throw RepeatedKeysException(reps), identity)
-
-    /** Write, to JSON, a pair of (FOV, image time) and a case of too-few-ROIs for shifting for drift correction. */
-    private def readWriterForKeyedTooFewShiftingRoisProblem: ReadWriter[(PosFramePair, RoisSplit.Problem)] = {
-        import JsonMappable.*
-        import PosFramePair.given
-        import UJsonHelpers.UPickleCatsInstances.given
-        readwriter[ujson.Value].bimap(
-        (pair, problem) => combineUnsafely(List(pair.toJsonMap, problem.toJsonMap)), 
-        json => 
-            val pNel = Try{ PositionIndex.unsafe(json("position").int) }.toValidatedNel
-            val fNel = Try{ FrameIndex.unsafe(json("frame").int) }.toValidatedNel
-            val reqdNel = Try{ PositiveInt.unsafe(json("requested").int) }.toValidatedNel
-            val realNel = Try{ NonnegativeInt.unsafe(json("realized").int) }.toValidatedNel
-            val purposeNel = Try{ read[Purpose](json("purpose")) }.toEither.flatMap{ p => 
-                (p === Purpose.Shifting).either(ujson.Value.InvalidData(json, s"Expected purpose ${Purpose.Shifting} but got $p"), p)
-            }.toValidatedNel
-            (pNel, fNel, reqdNel, realNel, purposeNel).mapN(
-                (p, f, requested, realized, _) => (p, f) -> RoisSplit.Problem.shifting(requested, realized)
-            ) match {
-                case Validated.Invalid(errs) => 
-                    val msg = f"${errs.size} error(s) reading pair of ((pos, frame), too-few-shifting): ${errs.map(_.getMessage)}"
-                    throw new Exception(msg)
-                case Validated.Valid(instance) => instance
-            }
-        )
     }
 
     def createParser(header: RawRecord): ErrMsgsOr[RawRecord => ErrMsgsOr[NonnegativeInt => DetectedRoi]] = {
@@ -329,6 +291,47 @@ object PartitionIndexedDriftCorrectionRois:
         )
     }
 
+    /***********************/
+    /* Helper types        */
+    /***********************/
+    
+    /** Write, to JSON, a pair of (FOV, image time) and a case of too-few-ROIs for accuracy analysis for drift correction. */
+    private def jsonWriterForKeyedRoisProblem: JsonWriter[(PosFramePair, RoisSplit.Problem)] = {
+        import JsonMappable.*
+        import PosFramePair.given
+        import UJsonHelpers.UPickleCatsInstances.given
+        writer[ujson.Value].contramap{ (pair, problem) => combineUnsafely(List(pair.toJsonMap, problem.toJsonMap)) }
+    }
+
+    /** Combine all given maps iff there's no overlap of sets of keys. */
+    def combineUnsafely(ms: List[JsonMappable.JMap]): JsonMappable.JMap = 
+        JsonMappable.combineSafely(ms).fold(reps => throw RepeatedKeysException(reps), identity)
+
+    /** Write, to JSON, a pair of (FOV, image time) and a case of too-few-ROIs for shifting for drift correction. */
+    private def readWriterForKeyedTooFewShiftingProblem: ReadWriter[(PosFramePair, RoisSplit.Problem)] = {
+        import JsonMappable.*
+        import PosFramePair.given
+        import UJsonHelpers.UPickleCatsInstances.given
+        readwriter[ujson.Value].bimap(
+        (pair, problem) => combineUnsafely(List(pair.toJsonMap, problem.toJsonMap)), 
+        json => 
+            val pNel = Try{ PositionIndex.unsafe(json("position").int) }.toValidatedNel
+            val fNel = Try{ FrameIndex.unsafe(json("frame").int) }.toValidatedNel
+            val reqdNel = Try{ PositiveInt.unsafe(json("requested").int) }.toValidatedNel
+            val realNel = Try{ NonnegativeInt.unsafe(json("realized").int) }.toValidatedNel
+            val purposeNel = Try{ read[Purpose](json("purpose")) }.toEither.flatMap{ p => 
+                (p === Purpose.Shifting).either(ujson.Value.InvalidData(json, s"Expected purpose ${Purpose.Shifting} but got $p"), p)
+            }.toValidatedNel
+            (pNel, fNel, reqdNel, realNel, purposeNel).mapN(
+                (p, f, requested, realized, _) => (p, f) -> RoisSplit.Problem.shifting(requested, realized)
+            ) match {
+                case Validated.Invalid(errs) => 
+                    val msg = f"${errs.size} error(s) reading pair of ((pos, frame), too-few-shifting): ${errs.map(_.getMessage)}"
+                    throw new Exception(msg)
+                case Validated.Valid(instance) => instance
+            }
+        )
+    }
     /** Refinement type for nonnegative integers */
     opaque type ShiftingCount <: Int = Int
     
@@ -348,10 +351,6 @@ object PartitionIndexedDriftCorrectionRois:
         def maybe(z: Int): Option[ShiftingCount] = (z >= AbsoluteMinimumShifting).option{ (z: ShiftingCount) }
         def unsafe(z: Int): ShiftingCount = either(z).fold(msg => throw new NumberFormatException(msg), identity)
     end ShiftingCount
-
-    /***********************/
-    /* Helper types        */
-    /***********************/
     
     /** Tools for working with a fundamental grouping entity -- pair of FOV and imaging timepoint */
     object PosFramePair:
@@ -365,11 +364,11 @@ object PartitionIndexedDriftCorrectionRois:
     final case class RoisFileParseFailedRecords(get: NonEmptyList[BadRecord]) extends RoisFileParseError
     
     object RoisSplit:
-        type Failure = RoisFileParseError | TooFewShiftingRois
+        type Failure = RoisFileParseError | TooFewShifting
         type RoiSplitOutcome = Either[Failure, HasPartition]
-        type Result = TooFewShiftingRois | HasPartition
-        type TooFewAccuracyRois = TooFewAccuracyRoisHealthy | TooFewAccuracyRoisRescued
-        type TooFew = TooFewShiftingRois | TooFewAccuracyRois
+        type Result = TooFewShifting | HasPartition
+        type TooFewAccuracy = TooFewAccuracyHealthy | TooFewAccuracyRescued
+        type TooFew = TooFewShifting | TooFewAccuracy
 
         sealed trait HasPartition:
             def partition: Partition
@@ -402,7 +401,7 @@ object PartitionIndexedDriftCorrectionRois:
                 new Problem(numRequested.asPositive, numRealized, Purpose.Shifting)
         end Problem
 
-        final case class TooFewShiftingRois(
+        final case class TooFewShifting(
             requestedShifting: ShiftingCount, 
             realizedShifting: NonnegativeInt, 
             requestedAccuracy: PositiveInt,
@@ -413,7 +412,7 @@ object PartitionIndexedDriftCorrectionRois:
             override def problems: NonEmptyList[Problem] = NonEmptyList.of(shiftingProblem, accuracyProblem)
             def realizedAccuracy = NonnegativeInt(0)
         
-        final case class TooFewAccuracyRoisRescued(
+        final case class TooFewAccuracyRescued(
             partition: Partition, 
             requestedShifting: ShiftingCount, 
             requestedAccuracy: PositiveInt,
@@ -426,30 +425,31 @@ object PartitionIndexedDriftCorrectionRois:
             def realizedShifting = partition.numShifting
             def realizedAccuracy = partition.numAccuracy
 
-        final case class TooFewAccuracyRoisHealthy(
+        final case class TooFewAccuracyHealthy(
             partition: Partition, 
             requestedAccuracy: PositiveInt,
             ) extends HasPartition with Problematic:
             override def problems: NonEmptyList[Problem] = 
                 NonEmptyList.one(Problem.accuracy(requestedAccuracy, partition.numAccuracy))
         
-        final case class Partition private(shifting: NonEmptyList[RoiForShifting], accuracy: List[RoiForAccuracy]) extends HasPartition:
+        final case class Partition private(shifting: NonEmptySet[RoiForShifting], accuracy: Set[RoiForAccuracy]) extends HasPartition:
             require(shifting.length >= AbsoluteMinimumShifting, s"Not enough shifting ROIs: ${shifting.length} < $AbsoluteMinimumShifting")
             final def partition = this
             final lazy val numShifting: ShiftingCount = ShiftingCount.unsafe(shifting.length)
-            final lazy val numAccuracy = NonnegativeInt.unsafe(accuracy.length)
+            final lazy val numAccuracy = NonnegativeInt.unsafe(accuracy.size)
         end Partition
 
         object Partition:
+            given orderForShiftingRoi: Order[RoiForShifting] = Order.by(roi => roi.index -> roi.centroid)
             def build(reqShifting: ShiftingCount, shifting: List[RoiForShifting], reqAccuracy: PositiveInt, accuracy: List[RoiForAccuracy]): Result = {
                 if shifting.length < AbsoluteMinimumShifting
-                then RoisSplit.TooFewShiftingRois(reqShifting, NonnegativeInt.unsafe(shifting.length), reqAccuracy)
+                then RoisSplit.TooFewShifting(reqShifting, NonnegativeInt.unsafe(shifting.length), reqAccuracy)
                 else 
-                    val partition = new Partition(shifting.toNel.get, accuracy)
+                    val partition = new Partition(shifting.toNel.get.toNes, accuracy.toSet)
                     if partition.numShifting < reqShifting
-                    then TooFewAccuracyRoisRescued(partition, reqShifting, reqAccuracy)
+                    then TooFewAccuracyRescued(partition, reqShifting, reqAccuracy)
                     else if partition.numAccuracy < reqAccuracy
-                    then TooFewAccuracyRoisHealthy(partition, reqAccuracy)
+                    then TooFewAccuracyHealthy(partition, reqAccuracy)
                     else partition
             }
         end Partition
