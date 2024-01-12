@@ -376,12 +376,6 @@ object PartitionIndexedDriftCorrectionRois:
         sealed trait Problematic:
             def problems: NonEmptyList[Problem]
 
-        sealed trait PartitionCounts:
-            def requestedShifting: ShiftingCount
-            def requestedAccuracy: ShiftingCount
-            def realizedShifting: NonnegativeInt
-            def realizedAccuracy: NonnegativeInt
-
         final case class Problem private(numRequested: PositiveInt, numRealized: NonnegativeInt, purpose: Purpose):
             /* Validation of reasonableness of arguments given that this is an alleged error / problem value being created */
             if (numRealized > numRequested) throw new IllegalArgumentException(s"Realized more ROIs than requested: $numRealized > $numRequested")
@@ -405,7 +399,7 @@ object PartitionIndexedDriftCorrectionRois:
             requestedShifting: ShiftingCount, 
             realizedShifting: NonnegativeInt, 
             requestedAccuracy: PositiveInt,
-            ) extends Problematic with PartitionCounts:
+            ) extends Problematic:
             require(requestedShifting > realizedShifting, s"Alleged too few shifting ROIs, but $realizedShifting >= $requestedShifting")
             def shiftingProblem = Problem.shifting(requestedShifting, realizedShifting)
             def accuracyProblem = Problem.accuracy(requestedAccuracy, NonnegativeInt(0))
@@ -417,6 +411,11 @@ object PartitionIndexedDriftCorrectionRois:
             requestedShifting: ShiftingCount, 
             requestedAccuracy: PositiveInt,
             ) extends HasPartition with Problematic:
+            require(partition.numShifting < requestedShifting, s"Alleged too few shifting ROIs, but ${partition.numShifting} >= $requestedShifting")
+            require(
+                partition.numAccuracy === NonnegativeInt(0), 
+                s"Accuracy ROIs count should be 0 when there are too few shifting ROIs; got ${partition.numAccuracy}"
+                )
             import ShiftingCount.asNonnegative
             override def problems: NonEmptyList[Problem] = NonEmptyList.of(
                 Problem.shifting(requestedShifting, realizedShifting.asNonnegative), 
@@ -429,8 +428,14 @@ object PartitionIndexedDriftCorrectionRois:
             partition: Partition, 
             requestedAccuracy: PositiveInt,
             ) extends HasPartition with Problematic:
+            require(
+                partition.numAccuracy < requestedAccuracy, 
+                s"Alleged too few accuracy ROIs but ${partition.numAccuracy} >= $requestedAccuracy"
+                )
             override def problems: NonEmptyList[Problem] = 
                 NonEmptyList.one(Problem.accuracy(requestedAccuracy, partition.numAccuracy))
+            def realizedShifting = partition.numShifting
+            def realizedAccuracy = partition.numAccuracy
         
         final case class Partition private(shifting: NonEmptySet[RoiForShifting], accuracy: Set[RoiForAccuracy]) extends HasPartition:
             require(
