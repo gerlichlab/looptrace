@@ -474,7 +474,10 @@ object PartitionIndexedDriftCorrectionRois:
                 }
             }
 
-            case class RepeatedRoisWithinPartError private[Partition](shifting: Map[RoiForShifting, Int], accuracy: Map[RoiForAccuracy, Int]) extends Throwable
+            case class RepeatedRoisWithinPartError private[Partition](shifting: Map[RoiForShifting, Int], accuracy: Map[RoiForAccuracy, Int]) extends Throwable:
+                require(shifting.nonEmpty || accuracy.nonEmpty, s"Cannot build a ROI repeats exception with 2 empty maps!")
+                require(shifting.forall(_._2 > 1), s"Cannot allege that a 'repeat' occurs fewer than two times: ${shifting.filter(_._2 < 2)}")
+                require(accuracy.forall(_._2 > 1), s"Cannot allege that a 'repeat' occurs fewer than two times: ${accuracy.filter(_._2 < 2)}")
         end Partition
     end RoisSplit
     
