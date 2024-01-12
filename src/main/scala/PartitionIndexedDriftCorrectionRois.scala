@@ -449,18 +449,32 @@ object PartitionIndexedDriftCorrectionRois:
         end Partition
 
         object Partition:
-            given orderForShiftingRoi: Order[RoiForShifting] = Order.by(simplifySelectedRoi)
+            import at.ac.oeaw.imba.gerlich.looptrace.collections.*
             def build(reqShifting: ShiftingCount, shifting: List[RoiForShifting], reqAccuracy: PositiveInt, accuracy: List[RoiForAccuracy]): Result = {
-                if shifting.length < AbsoluteMinimumShifting
-                then RoisSplit.TooFewShifting(reqShifting, NonnegativeInt.unsafe(shifting.length), reqAccuracy)
-                else 
-                    val partition = new Partition(shifting.toNel.get.toNes, accuracy.toSet)
-                    if partition.numShifting < reqShifting
-                    then TooFewAccuracyRescued(partition, reqShifting, reqAccuracy)
-                    else if partition.numAccuracy < reqAccuracy
-                    then TooFewAccuracyHealthy(partition, reqAccuracy)
-                    else partition
+                // Derive {@code Ordering} from an {@code Order} instance already in scope.
+                given orderForShiftingRoi: Order[RoiForShifting] = Order.by(simplifySelectedRoi)
+                given orderForAccuracyRoi: Order[RoiForAccuracy] = Order.by(simplifySelectedRoi)
+                given orderingFromOrder[A](using ord: Order[A]): Ordering[A] = ord.toOrdering
+                (shifting.toNel, NonnegativeInt.unsafe(shifting.length)) match {
+                    case (Some(shiftNel), numShifting) if numShifting >= AbsoluteMinimumShifting => 
+                        val shiftingCounts = shiftNel.toList.groupBy(identity).view.mapValues(_.length).toMap
+                        val accuracyCounts = accuracy.toList.groupBy(identity).view.mapValues(_.length).toMap
+                        val shiftingRepeats = shiftingCounts.filter(_._2 > 1)
+                        val accuracyRepeats = accuracyCounts.filter(_._2 > 1)
+                        if (shiftingRepeats.nonEmpty || accuracyRepeats.nonEmpty) {
+                            throw RepeatedRoisWithinPartError(shiftingRepeats.toMap, accuracyRepeats.toMap)
+                        }
+                        val partition = new Partition(shiftingCounts.keySet.toNonEmptySetUnsafe, accuracyCounts.keySet)
+                        if (partition.numShifting < reqShifting) {
+                            TooFewAccuracyRescued(partition, reqShifting, reqAccuracy)
+                        } else if (partition.numAccuracy < reqAccuracy) {
+                            TooFewAccuracyHealthy(partition, reqAccuracy)
+                        } else { partition }
+                    case (_, numShifting) => RoisSplit.TooFewShifting(reqShifting, numShifting, reqAccuracy)
+                }
             }
+
+            case class RepeatedRoisWithinPartError private[Partition](shifting: Map[RoiForShifting, Int], accuracy: Map[RoiForAccuracy, Int]) extends Throwable
         end Partition
     end RoisSplit
     
