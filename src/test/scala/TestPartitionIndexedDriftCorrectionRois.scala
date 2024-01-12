@@ -38,22 +38,106 @@ import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.{
 import at.ac.oeaw.imba.gerlich.looptrace.PathHelpers.listPath
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.readJsonFile
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ CoordinateSequence, Point3D, XCoordinate, YCoordinate, ZCoordinate }
+import scala.collection.immutable.ArraySeq.ofInt
 
 /** Tests for the partitioning of regions of interest (ROIs) for drift correction */
 class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSuite, should.Matchers, PartitionRoisSuite:
     import SelectedRoi.*
     
-    test("ShiftingCount appropriately constrains the domain.") { pending }
+    test("Partition.RepeatedRoisWithinPartError is accessible but cannot be directly built.") {
+        /* Make the lines shorter by aliasing these constructors. */
+        import RoisSplit.Partition.RepeatedRoisWithinPartError as RepRoisError
+        import XCoordinate.apply as x, YCoordinate.apply as y, ZCoordinate.apply as z
 
-    test("Cannot request to sample fewer than minimum number of ROIs, won't compile.") { pending }
+        /* Certainly not buildable with empty mappings */
+        assertCompiles("import RepRoisError.apply") // accessibility, negative control
+        assertTypeError("RepRoisError(Map(), Map())")
+        
+        /* Even fails with the value restriction (> 1) satisfied, since the constructor's private. */
+        assertCompiles("RoiForShifting(RoiIndex(NonnegativeInt(0)), Point3D(x(1.0), y(0.0), z(2.0)))") // Ensure the first snippet to use is error-free.
+        assertCompiles("RoiForShifting(RoiIndex(NonnegativeInt(1)), Point3D(x(0.0), y(-1.0), z(1.0)))") // Ensure the other snippet to use is error-free.
+        assertTypeError("RepRoisError(Map(RoiForShifting(RoiIndex(NonnegativeInt(0)), Point3D(x(1.0), y(0.0), z(2.0))) -> 2), Map(RoiForShifting(RoiIndex(NonnegativeInt(1)), Point3D(x(0.0), y(-1.0), z(1.0))) -> 2))")
+    }
 
-    test("Any case of too few shifting ROIs is also a case of too few accuracy ROIs.") { pending }
+    test("ShiftingCount appropriately constrains the domain.") {
+        assertDoesNotCompile("ShiftingCount(9)")
+        assertCompiles("ShiftingCount(10)")
+        ShiftingCount.maybe(AbsoluteMinimumShifting - 1) shouldBe Option.empty[ShiftingCount]
+        ShiftingCount.maybe(AbsoluteMinimumShifting : Int) shouldBe AbsoluteMinimumShifting.some
+        ShiftingCount.either(AbsoluteMinimumShifting - 1) match {
+            case Left(obsMsg) => 
+                val expMsg = s"Cannot use ${AbsoluteMinimumShifting - 1} as shifting count (min. $AbsoluteMinimumShifting)"
+                obsMsg shouldEqual expMsg
+            case Right(sc) => fail(s"Expected failure but got $sc")
+        }
+        intercept[NumberFormatException]{ 
+            ShiftingCount.unsafe(AbsoluteMinimumShifting - 1)
+        }.getMessage shouldEqual s"Cannot use ${AbsoluteMinimumShifting - 1} as shifting count (min. $AbsoluteMinimumShifting)"
+        ShiftingCount.unsafe(AbsoluteMinimumShifting : Int) shouldBe ShiftingCount(10)
+    }
 
-    test("Types properly restrict compilation.") { pending }
+    test("RoisSplit.TooFewShifting requires ShiftingCount, NonnegativeInt, and PositiveInt.") {
+        /* "Negative" (no error) case as control */
+        assertCompiles("RoisSplit.TooFewShifting(ShiftingCount(100), NonnegativeInt(100), PositiveInt(100))")
+        /* Relaxing the first argument */
+        assertTypeError("RoisSplit.TooFewShifting(PositiveInt(100), NonnegativeInt(100), PositiveInt(100))")
+        assertTypeError("RoisSplit.TooFewShifting(NonnegativeInt(100), NonnegativeInt(100), PositiveInt(100))")
+        assertTypeError("RoisSplit.TooFewShifting(100, NonnegativeInt(100), PositiveInt(100))")
+        /* Relaxing the second argument */
+        assertTypeError("RoisSplit.TooFewShifting(ShiftingCount(100), 100, PositiveInt(100))")
+        /* Relaxing the third argument */
+        assertTypeError("RoisSplit.TooFewShifting(ShiftingCount(100), NonnegativeInt(100), Nonnegative(100))")
+        assertTypeError("RoisSplit.TooFewShifting(ShiftingCount(100), NonnegativeInt(100), 100)")
+        /* Permuting the arguments */
+        assertTypeError("RoisSplit.TooFewShifting(ShiftingCount(100), PositiveInt(100), NonnegativeInt(100))")
+        assertTypeError("RoisSplit.TooFewShifting(NonnegativeInt(100), ShiftingCount(100), PositiveInt(100))")
+        assertTypeError("RoisSplit.TooFewShifting(NonnegativeInt(100), PositiveInt(100), ShiftingCount(100))")
+        assertTypeError("RoisSplit.TooFewShifting(PositiveInt(100), NonnegativeInt(100), ShiftingCount(100))")
+        assertTypeError("RoisSplit.TooFewShifting(PositiveInt(100), ShiftingCount(100), NonnegativeInt(100))")
+    }
 
-    test("Cannot mixup shifting and accuracy count values") { pending }
+    test("Attempt to partition ROIs when there are repeats in parts fails expectedly.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        type RoisAndReps[R] = (List[R], Map[R, Int])
+        def genRoisAndReps[R](base: List[R]): Gen[RoisAndReps[R]] = 
+            if base.isEmpty then List() -> Map()
+            // Add 1 to each count to represent the value being duplicated.
+            else Gen.resize(5, Gen.listOf(Gen.oneOf(base))).fproduct(_.groupBy(identity).view.mapValues(_.length + 1).toMap)
+        def genWithRepeats: Gen[(RoisAndReps[RoiForShifting], RoisAndReps[RoiForAccuracy])] = {
+            val maxNumRois = 50
+            for {
+                // NB: relying on randomness of Point3D and zero-probability of collision there to mitigate risk that repeats 
+                //     are generated in the baseX collections, which would throw off the counting of expected repeats.
+                baseShifting <- Gen.choose(AbsoluteMinimumShifting, maxNumRois).flatMap(Gen.listOfN(_, arbitrary[RoiForShifting]))
+                baseAccuracy <- Gen.resize(maxNumRois - baseShifting.length, Gen.listOf(arbitrary[RoiForAccuracy]))
+                (shifting, accuracy) <- (genRoisAndReps(baseShifting), genRoisAndReps(baseAccuracy))
+                    .tupled
+                    .suchThat((del, acc) => del._2.nonEmpty || acc._2.nonEmpty)
+                    .map{ case ((repDel, expDel), (repAcc, expAcc)) => (
+                        Random.shuffle(repDel ::: baseShifting).toList -> expDel, 
+                        Random.shuffle(repAcc ::: baseAccuracy).toList -> expAcc
+                        )
+                    }
+            } yield (shifting, accuracy)
+        }
+        def genNumShift = Gen.choose(AbsoluteMinimumShifting, Int.MaxValue).map(ShiftingCount.unsafe)
 
-    test("Cannot mixup requested and realized values") { pending }
+        forAll (genWithRepeats, genNumShift, arbitrary[PositiveInt]) { 
+            case (((shiftingRois, expShiftingReps), (accuracyRois, expAccuracyReps)), numShifting, numAccuracy) => 
+                val error = intercept[RoisSplit.Partition.RepeatedRoisWithinPartError]{
+                    RoisSplit.Partition.build(numShifting, shiftingRois, numAccuracy, accuracyRois)
+                }
+                error.shifting shouldEqual expShiftingReps
+                error.accuracy shouldEqual expAccuracyReps
+        }
+    }
+
+    test("Partition's constructor is private, but the result types' constructors are public") {
+        assertCompiles("RoisSplit.TooFewShifting.apply")
+        assertCompiles("RoisSplit.TooFewAccuracyRescued.apply")
+        assertCompiles("RoisSplit.TooFewAccuracyHealthy.apply")
+        assertTypeError("RoisSplit.Partition.apply")
+    }
 
     test("ROI request sizes must be correct integer subtypes.") {
         assertCompiles("sampleDetectedRois(ShiftingCount(10), PositiveInt(10))(List())") // negative control
@@ -185,15 +269,6 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                         case Left(bads) => bads shouldEqual RoisFileParseFailedRecords(expBadRecords)
                 }
         }
-    }
-
-    test("Header-only file parses but yields empty record collection.") {
-        forAll(minSuccessful(1000)) { (delimiter: Delimiter) => 
-            val headLine = delimiter.join(ColumnNamesToParse.toArray) ++ "\n"
-            withTempFile(headLine, delimiter){ (roisFile: os.Path) => 
-                readRoisFile(roisFile) shouldEqual Right(List())
-            }
-        } 
     }
 
     test("Input discovery works as expected for folder with no other contents.") {
@@ -350,30 +425,18 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         }
     }
 
-    // test("An ROI is never used for more than one purpose.") {
-    //     val maxRoisCount = PositiveInt(1000)
-    //     def genGoodInput: Gen[(PositiveInt, PositiveInt, Iterable[DetectedRoi])] = for {
-    //         numUsable <- Gen.choose(2, maxRoisCount - 1)
-    //         usable <- Gen.listOfN(numUsable, genDetectedRoiFixedUse(true))
-    //         numUnusable <- Gen.choose(1, maxRoisCount - numUsable)
-    //         unusable <- Gen.listOfN(numUnusable, genDetectedRoiFixedUse(false))
-    //         numShifting <- Gen.choose(1, numUsable - 1).map(PositiveInt.unsafe)
-    //         numAccuracy <- Gen.choose(1, maxRoisCount).map(PositiveInt.unsafe)
-    //     } yield (numShifting, numAccuracy, Random.shuffle(usable ++ unusable))
-        
-    //     def simplifyRoi(roi: RoiForShifting | RoiForAccuracy): (RoiIndex, Point3D) = roi.index -> roi.centroid
+    test("Any case of too few shifting ROIs is also a case of too few accuracy ROIs.") {
+        val posFramePairs = for {
+            p <- List(0, 1, 2)
+            t <- List(0, 1, 2)
+        } yield (PositionIndex.unsafe(p), FrameIndex.unsafe(t))
+        pending
+    }
 
-    //     forAll (genGoodInput, minSuccessful(1000)) { case (numShifting, numAccuracy, rois) => 
-    //         sampleDetectedRois(numShifting, numAccuracy)(rois) match {
-    //             case result: RoisSplit.Failure => fail(s"Expected successful partition but got failure: $result")
-    //             case result: RoisSplit.HasPartition => 
-    //                 val part = result.partition
-    //                 part.shifting.length shouldEqual part.shifting.toNes.size // no duplicates within shifting
-    //                 part.accuracy.length shouldEqual part.accuracy.toSet.size // no duplicates within accuracy
-    //                 (part.shifting.map(simplifyRoi).toSet & part.accuracy.map(simplifyRoi).toSet) shouldEqual Set()
-    //         }
-    //     }
-    // }
+    test("An ROI is never used for more than one purpose.") {
+        // TODO: with Partition now defined in terms of Sets, this should be an integration test.
+        pending
+    }
 
     // test("Integration: toggle for tolerance of insufficient shifting ROIs works.") {
     //     /**
