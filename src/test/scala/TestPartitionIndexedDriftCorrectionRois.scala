@@ -32,6 +32,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.{
     getOutputFilepath,
     getOutputSubfolder,
     readRoisFile,
+    readWriterForKeyedTooFewProblem,
     sampleDetectedRois, 
     workflow, 
 }
@@ -41,7 +42,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.{ CoordinateSequence, Point3D, XC
 import scala.collection.immutable.ArraySeq.ofInt
 
 /** Tests for the partitioning of regions of interest (ROIs) for drift correction */
-class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSuite, should.Matchers, PartitionRoisSuite:
+class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSuite, ScalacheckGenericExtras, should.Matchers, PartitionRoisSuite:
     import SelectedRoi.*
     
     test("Partition.RepeatedRoisWithinPartError is accessible but cannot be directly built.") {
@@ -337,9 +338,6 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
     test("Sampling result accords with expectation based on relation between usable ROI count and requested ROI counts.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         type InputsAndValidate = (ShiftingCount, PositiveInt, List[DetectedRoi], RoisSplit.Result => Any)
-        extension (roi: DetectedRoi)
-            def setUsable: DetectedRoi = roi.copy(isUsable = true)
-            def setUnusable: DetectedRoi = roi.copy(isUsable = false)
         
         def genFewerThanAbsoluteMinimum: Gen[InputsAndValidate] = for {
             numShifting <- Gen.choose[Int](AbsoluteMinimumShifting, maxNumRoisSmallTests).map(ShiftingCount.unsafe)
@@ -426,11 +424,46 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
     }
 
     test("Any case of too few shifting ROIs is also a case of too few accuracy ROIs.") {
-        val posFramePairs = for {
-            p <- List(0, 1, 2)
-            t <- List(0, 1, 2)
-        } yield (PositionIndex.unsafe(p), FrameIndex.unsafe(t))
-        pending
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        val posTimePairs = Random.shuffle(
+            (0 to 2).flatMap{ p => (0 to 2).map(p -> _) }
+        ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
+        type PosTimeRois = (PosFramePair, List[DetectedRoi])
+        def genDetected(ptPairs: List[PosFramePair])(lo: Int, hi: Int): Gen[List[PosTimeRois]] = 
+            ptPairs.traverse{ pt => 
+                Gen.choose(lo, hi)
+                    .flatMap(Gen.listOfN(_, arbitrary[DetectedRoi].map(_.setUsable))) // Make all usable.
+                    .map(pt -> _) }
+        val maxReqShifting = 2 * AbsoluteMinimumShifting
+        def genArgs: Gen[(List[PosTimeRois], ShiftingCount, List[PosTimeRois])] = for {
+            nTooFewShift <- Gen.choose(1, posTimePairs.length)
+            (tooFewPosFramePairs, enoughPosFramePairs) = posTimePairs.splitAt(nTooFewShift)
+            tooFew <- genDetected(tooFewPosFramePairs)(AbsoluteMinimumShifting + 1, maxReqShifting - 1)
+            numReqShifting <- Gen.choose(tooFew.map(_._2.length).max + 1, maxReqShifting).map(ShiftingCount.unsafe)
+            enough <- genDetected(enoughPosFramePairs)(maxReqShifting, 2 * maxReqShifting)
+        } yield (tooFew, numReqShifting, enough)
+        forAll (genArgs, arbitrary[PositiveInt]) { 
+            case ((tooFew, reqShifting, enough), reqAccuracy) =>
+                tooFew.map(_._2.length).max < reqShifting shouldBe true
+                withTempDirectory{ (tempdir: os.Path) => 
+                    (tooFew ::: enough).foreach{ case ((p, t), rois) => 
+                        writeMinimalInputRoisCsv(rois, tempdir / getInputFilename(p, t))
+                    }
+                    val warningsFile = tempdir / "roi_partition_warnings.json"
+                    os.exists(warningsFile) shouldBe false
+                    workflow(tempdir, reqShifting, reqAccuracy, None, None)
+                    os.exists(warningsFile) shouldBe true
+                    given reader: Reader[(PosFramePair, RoisSplit.Problem)] = 
+                        readWriterForKeyedTooFewProblem
+                    val warnings = readJsonFile[List[(PosFramePair, RoisSplit.Problem)]](warningsFile)
+                    val obsWarnShifting = warnings.filter(_._2.purpose === Purpose.Shifting)
+                    obsWarnShifting.length shouldEqual tooFew.length
+                    obsWarnShifting.map(_._1).toSet shouldEqual tooFew.map(_._1).toSet
+                    obsWarnShifting.map(_._2.numRequested) shouldEqual List.fill(obsWarnShifting.length)(reqShifting)
+                    tooFew.map(_.map(_.length)).toMap shouldEqual obsWarnShifting.map(_.map(_.numRealized)).toMap
+                    // TODO: check the accuracies for the too-few-shifting cases.
+                }
+        }
     }
 
     test("An ROI is never used for more than one purpose.") {
@@ -688,6 +721,10 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
 
     val ColumnNamesToParse = List(ParserConfig.xCol.get, ParserConfig.yCol.get, ParserConfig.zCol.get, ParserConfig.qcCol)
     
+    extension (roi: DetectedRoi)
+        def setUsable: DetectedRoi = roi.copy(isUsable = true)
+        def setUnusable: DetectedRoi = roi.copy(isUsable = false)
+
     // def assertTooFewRoisFileContents[A](filepath: os.Path, expected: Option[List[(PosFramePair, A)]]) = {
     //     expected match {
     //         case None => os.exists(filepath) shouldBe false
@@ -715,6 +752,15 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         val fp = folder / getInputFilename.tupled(pf)
         os.write(fp, bundle.lines.mkString("\n"))
         fp
+    }
+
+    def writeMinimalInputRoisCsv(rois: List[DetectedRoi], f: os.Path): Unit = {
+        val (header, getPointFields) = (
+            Array("", ParserConfig.xCol.get, ParserConfig.yCol.get, ParserConfig.zCol.get, ParserConfig.qcCol),
+            (p: Point3D) => Array(p.x.get, p.y.get, p.z.get).map(_.toString)
+        )
+        val records = NonnegativeInt.indexed(rois).map{ (r, i) => i.toString +: getPointFields(r.centroid) :+ "" }
+        os.write(f, (header +: records).map(_.mkString(",") ++ "\n"))
     }
 
 end TestPartitionIndexedDriftCorrectionRois

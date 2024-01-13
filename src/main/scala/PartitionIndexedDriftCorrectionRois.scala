@@ -142,7 +142,7 @@ object PartitionIndexedDriftCorrectionRois:
                     // is the reference frame (i.e., there's at least the minimal number of bead ROIs required 
                     // for drift correction (absolute minimum, though not necessarily the user-defined minimum) 
                     // in the reference timepoint in every FOV.
-                    given writer: JsonWriter[(PosFramePair, RoisSplit.Problem)] = readWriterForKeyedTooFewShiftingProblem
+                    given writer: JsonWriter[(PosFramePair, RoisSplit.Problem)] = readWriterForKeyedTooFewProblem
                     val warningsFile = outfolder / "roi_partition_warnings.severe.json"
                     println(s"Writing severe warnings file: $warningsFile")
                     val (problemsToWrite, problemsToPropagate) = tooFewErrors.map{ 
@@ -308,28 +308,31 @@ object PartitionIndexedDriftCorrectionRois:
         JsonMappable.combineSafely(ms).fold(reps => throw RepeatedKeysException(reps), identity)
 
     /** Write, to JSON, a pair of (FOV, image time) and a case of too-few-ROIs for shifting for drift correction. */
-    private def readWriterForKeyedTooFewShiftingProblem: ReadWriter[(PosFramePair, RoisSplit.Problem)] = {
+    private[looptrace] def readWriterForKeyedTooFewProblem: ReadWriter[(PosFramePair, RoisSplit.Problem)] = {
         import JsonMappable.*
         import PosFramePair.given
         import UJsonHelpers.UPickleCatsInstances.given
         readwriter[ujson.Value].bimap(
-        (pair, problem) => combineUnsafely(List(pair.toJsonMap, problem.toJsonMap)), 
-        json => 
-            val pNel = Try{ PositionIndex.unsafe(json("position").int) }.toValidatedNel
-            val fNel = Try{ FrameIndex.unsafe(json("frame").int) }.toValidatedNel
-            val reqdNel = Try{ PositiveInt.unsafe(json("requested").int) }.toValidatedNel
-            val realNel = Try{ NonnegativeInt.unsafe(json("realized").int) }.toValidatedNel
-            val purposeNel = Try{ read[Purpose](json("purpose")) }.toEither.flatMap{ p => 
-                (p === Purpose.Shifting).either(ujson.Value.InvalidData(json, s"Expected purpose ${Purpose.Shifting} but got $p"), p)
-            }.toValidatedNel
-            (pNel, fNel, reqdNel, realNel, purposeNel).mapN(
-                (p, f, requested, realized, _) => (p, f) -> RoisSplit.Problem.shifting(requested, realized)
-            ) match {
-                case Validated.Invalid(errs) => 
-                    val msg = f"${errs.size} error(s) reading pair of ((pos, frame), too-few-shifting): ${errs.map(_.getMessage)}"
-                    throw new Exception(msg)
-                case Validated.Valid(instance) => instance
-            }
+            (pair, problem) => combineUnsafely(List(pair.toJsonMap, problem.toJsonMap)), 
+            json => 
+                val pNel = Try{ PositionIndex.unsafe(json("position").int) }.toValidatedNel
+                val fNel = Try{ FrameIndex.unsafe(json("frame").int) }.toValidatedNel
+                val reqdNel = Try{ PositiveInt.unsafe(json("requested").int) }.toValidatedNel
+                val realNel = Try{ NonnegativeInt.unsafe(json("realized").int) }.toValidatedNel
+                val purposeNel = Try{ read[Purpose](json("purpose")) }.toValidatedNel
+                (pNel, fNel, reqdNel, realNel, purposeNel).mapN(
+                    (p, f, requested, realized, purpose) => 
+                        val problem = purpose match {
+                            case Purpose.Shifting => RoisSplit.Problem.shifting(requested, realized)
+                            case Purpose.Accuracy => RoisSplit.Problem.accuracy(requested, realized)
+                        }
+                        (p -> f) -> problem
+                ) match {
+                    case Validated.Invalid(errs) => 
+                        val msg = f"${errs.size} error(s) reading pair of ((pos, frame), too-few-shifting): ${errs.map(_.getMessage)}"
+                        throw new Exception(msg)
+                    case Validated.Valid(instance) => instance
+                }
         )
     }
     /** Refinement type for nonnegative integers */
