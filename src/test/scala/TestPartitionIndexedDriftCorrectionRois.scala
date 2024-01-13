@@ -423,7 +423,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         }
     }
 
-    test("Any case of too few shifting ROIs is also a case of too few accuracy ROIs.") {
+    test("Cases of TooFewHealthyRoisRescued are correct and generate expected (implied) too-few-accuracy-ROIs records.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 2).flatMap{ p => (0 to 2).map(p -> _) }
@@ -446,22 +446,35 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
             case ((tooFew, reqShifting, enough), reqAccuracy) =>
                 tooFew.map(_._2.length).max < reqShifting shouldBe true
                 withTempDirectory{ (tempdir: os.Path) => 
+                    /* First, write the input data files. */
                     (tooFew ::: enough).foreach{ case ((p, t), rois) => 
                         writeMinimalInputRoisCsv(rois, tempdir / getInputFilename(p, t))
                     }
+                    /* Pretest and workflow execution */
                     val warningsFile = tempdir / "roi_partition_warnings.json"
                     os.exists(warningsFile) shouldBe false
                     workflow(tempdir, reqShifting, reqAccuracy, None, None)
+                    /* Check the effect of having run the workflow */
+                    // First, check the existence of the warnings file and parse it.
                     os.exists(warningsFile) shouldBe true
                     given reader: Reader[(PosFramePair, RoisSplit.Problem)] = 
                         readWriterForKeyedTooFewProblem
                     val warnings = readJsonFile[List[(PosFramePair, RoisSplit.Problem)]](warningsFile)
                     val obsWarnShifting = warnings.filter(_._2.purpose === Purpose.Shifting)
+                    val obsWarnAccuracy = warnings.filter(_._2.purpose === Purpose.Accuracy)
+                    // Then, check the too-few-shifting (but rescued) records.
                     obsWarnShifting.length shouldEqual tooFew.length
                     obsWarnShifting.map(_._1).toSet shouldEqual tooFew.map(_._1).toSet
                     obsWarnShifting.map(_._2.numRequested) shouldEqual List.fill(obsWarnShifting.length)(reqShifting)
                     tooFew.map(_.map(_.length)).toMap shouldEqual obsWarnShifting.map(_.map(_.numRealized)).toMap
-                    // TODO: check the accuracies for the too-few-shifting cases.
+                    /* Finally, check the too-few-accuracy records. */
+                    // Each too-few-shifting (rescued) record generates a too-few-accuracy record.
+                    obsWarnAccuracy.length >= tooFew.length shouldBe true
+                    val correspondingObsWarnAccuracy = obsWarnShifting.map(_._1).flatMap(obsWarnAccuracy.toMap.get)
+                    correspondingObsWarnAccuracy.length shouldEqual tooFew.length
+                    // Each too-few-accuracy record has the correct requested and realized counts.
+                    correspondingObsWarnAccuracy.map(_.numRequested) shouldEqual List.fill(tooFew.length)(reqAccuracy)
+                    correspondingObsWarnAccuracy.map(_.numRealized) shouldEqual List.fill(tooFew.length)(NonnegativeInt(0))
                 }
         }
     }
