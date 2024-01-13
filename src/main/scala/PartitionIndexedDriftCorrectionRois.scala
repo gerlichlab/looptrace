@@ -454,7 +454,7 @@ object PartitionIndexedDriftCorrectionRois:
         object Partition:
             import at.ac.oeaw.imba.gerlich.looptrace.collections.*
             def build(reqShifting: ShiftingCount, shifting: List[RoiForShifting], reqAccuracy: PositiveInt, accuracy: List[RoiForAccuracy]): Result = {
-                // Derive {@code Ordering} from an {@code Order} instance already in scope.
+                // Derive Ordering instance from an Order instance already in scope.
                 given orderForShiftingRoi: Order[RoiForShifting] = Order.by(simplifySelectedRoi)
                 given orderForAccuracyRoi: Order[RoiForAccuracy] = Order.by(simplifySelectedRoi)
                 given orderingFromOrder[A](using ord: Order[A]): Ordering[A] = ord.toOrdering
