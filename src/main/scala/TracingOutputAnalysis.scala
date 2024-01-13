@@ -10,7 +10,16 @@ import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
 
-/** Tools for analysing chromatin fiber tracing (typically *_traces*.csv) */
+/**
+ * Tools for analysing chromatin fiber tracing (typically *_traces*.csv)
+ * 
+ * Originally developed for Neos, to count the number of locus-specific spots 
+ * kept on a per-(ref_frame, frame) basis. That is, how many locus-specific 
+ * spots are available (after QC filtering) per specific target (using a 
+ * two-stage multiplex).
+ * 
+ * @author Vince Reuter
+ */
 object TracingOutputAnalysis:
     
     /** Pairing or regional and locus-specific FISH spot, a common key by which to group and/or filter records */
