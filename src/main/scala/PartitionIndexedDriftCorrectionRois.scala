@@ -149,17 +149,21 @@ object PartitionIndexedDriftCorrectionRois:
                         (pf, tooFew) => (pf -> tooFew.shiftingProblem, pf -> tooFew.accuracyProblem) 
                     }.unzip
                     os.write(warningsFile, write(problemsToWrite, indent = 2))
-                case _ => 
+                    problemsToPropagate
+                case (_, (Nil, tooFewErrors)) => 
                     // In this case, there's either at least one FOV in which the reference timepoint for drift correction 
                     // lacks enough bead ROIs to meet even the absolute minimum, or there is no reference frame, in which 
-                    // case any frame lacking the minimum number of bead ROIs is a problem; either is exceptional.
+                    // case any frame lacking the minimum number of bead ROIs is a problem; either way, it's exceptional.
+                    throw RoisSplit.TooFewShiftingException(tooFewErrors.toNel.get)
+                case _ => 
+                    // Here we have all parse errors or mixed error types and can't combine them.
                     throw new Exception(s"${bads.size} (position, frame) pairs with problems.\n${bads}")
             }
         } else { List.empty[(PosFramePair, RoisSplit.Problem)] }
         // NB: since possibly multiple problems per (pos, frame) pair (e.g., too few shifting and too few accuracy), 
         //     don't convert this to Map, since key collision is potentially problematic.
         val problems: List[(PosFramePair, RoisSplit.Problem)] = 
-            goods.flatMap{ case ((pf, _), splitResult) => 
+            zeroAccuracyProblems ::: goods.flatMap{ case ((pf, _), splitResult) => 
                 /* Write the ROIs and emit the optional warning. */
                 val partition = splitResult.partition
                 writeRoisForShifting(pf, partition.shifting)
@@ -482,6 +486,9 @@ object PartitionIndexedDriftCorrectionRois:
                 require(shifting.forall(_._2 > 1), s"Cannot allege that a 'repeat' occurs fewer than two times: ${shifting.filter(_._2 < 2)}")
                 require(accuracy.forall(_._2 > 1), s"Cannot allege that a 'repeat' occurs fewer than two times: ${accuracy.filter(_._2 < 2)}")
         end Partition
+
+        final case class TooFewShiftingException(errors: NonEmptyList[(PosFramePair, TooFewShifting)]) 
+            extends Exception(s"${errors.length} (FOV, time) pairs with insufficient ROIs for drift correction: $errors")
     end RoisSplit
     
     sealed trait ColumnName { def get: String }
