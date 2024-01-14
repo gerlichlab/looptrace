@@ -631,7 +631,31 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         }
     }
 
-    test("When there are no accuracy ROIs available, a JSON file is still written but is empty.") { pending }
+    test("When shifting request takes up all usable ROIs available, JSON files are still written for accuracy but are empty.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        val posTimePairs = Random.shuffle(
+            (0 to 2).flatMap{ p => (0 to 2).map(p -> _) }
+        ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
+        def genArgs = for {
+            rois <- posTimePairs.traverse{ pt => 
+                Gen.choose[Int](AbsoluteMinimumShifting, maxNumRoisSmallTests)
+                    .flatMap(Gen.listOfN(_, arbitrary[DetectedRoi].map(_.setUsable)))
+                    .map(pt -> _)
+            }
+            numShifting <- Gen.choose(rois.map(_._2.length).min, 1000).map(ShiftingCount.unsafe)
+            numAccuracy <- Gen.choose(1, 1000).map(PositiveInt.unsafe)
+        } yield (numShifting, numAccuracy, rois)
+        forAll (genArgs) { (numReqShifting, numReqAccuracy, allFovTimeRois) =>
+            withTempDirectory{ (tempdir: os.Path) => 
+                /* First, write the input data files and do pretest */
+                allFovTimeRois.foreach{ case ((p, t), rois) => writeMinimalInputRoisCsv(rois, tempdir / getInputFilename(p, t)) }
+                val expAccuracyFiles = allFovTimeRois.map{ case ((p, t), _) => getOutputFilepath(tempdir)(p, t, Purpose.Accuracy) }
+                expAccuracyFiles.exists(os.exists) shouldBe false                
+                workflow(tempdir, numReqShifting, numReqAccuracy, None, None)
+                expAccuracyFiles.filterNot(os.isFile) shouldEqual List()
+            }
+        }
+    }
 
     test("No unusable ROI is ever used.") { pending }
 
@@ -643,23 +667,27 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
      */
     type NNPair = (NonnegativeInt, NonnegativeInt)
 
+    /** Minimal detected bead ROIs field consumed by the partitioning program under test */
     val ColumnNamesToParse = List(ParserConfig.xCol.get, ParserConfig.yCol.get, ParserConfig.zCol.get, ParserConfig.qcCol)
     
+    /** Syntax additions on a detected ROI to set its usability flag */
     extension (roi: DetectedRoi)
         def setUsable: DetectedRoi = roi.copy(isUsable = true)
         def setUnusable: DetectedRoi = roi.copy(isUsable = false)
 
+    /** Generate a pair of pairs of nonnegative integers such that the first pair isn't the same as the second. */
     def genDistinctNonnegativePairs: Gen[(PosFramePair, PosFramePair)] = 
-        Gen.zip(genNonnegativePair, genNonnegativePair)
+        Gen.zip(arbitrary[(NonnegativeInt, NonnegativeInt)], arbitrary[(NonnegativeInt, NonnegativeInt)])
             .suchThat{ case (p1, p2) => p1 =!= p2 }
             .map { case ((p1, f1), (p2, f2)) => (PositionIndex(p1) -> FrameIndex(f1), PositionIndex(p2) -> FrameIndex(f2)) }
     
-    def genNonnegativePair: Gen[NNPair] = Gen.zip(genNonnegativeInt, genNonnegativeInt)    
-
+    /** Infer detected bead ROIs filename for particular field of view (@code pos) and timepoint ({@code frame}). */
     def getInputFilename(pos: PositionIndex, frame: FrameIndex): String = s"bead_rois__${pos.get}_${frame.get}.csv"
     
-    def maxNumRoisSmallTests: ShiftingCount = ShiftingCount(20)
+    /** Limit the number of ROIs generated to keep test cases (relatively) small even without shrinking. */
+    def maxNumRoisSmallTests: ShiftingCount = ShiftingCount.unsafe(2 * AbsoluteMinimumShifting)
 
+    /** Write the ROIs to file, with minimal data required to parse the fields consumed by the partition program under test here. */
     def writeMinimalInputRoisCsv(rois: List[DetectedRoi], f: os.Path): Unit = {
         val (header, getPointFields) = (
             Array("", ParserConfig.xCol.get, ParserConfig.yCol.get, ParserConfig.zCol.get, ParserConfig.qcCol),
