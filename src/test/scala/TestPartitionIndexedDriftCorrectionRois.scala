@@ -39,7 +39,6 @@ import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.{
 import at.ac.oeaw.imba.gerlich.looptrace.PathHelpers.listPath
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.readJsonFile
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ CoordinateSequence, Point3D, XCoordinate, YCoordinate, ZCoordinate }
-import scala.collection.immutable.ArraySeq.ofInt
 
 /** Tests for the partitioning of regions of interest (ROIs) for drift correction */
 class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSuite, ScalacheckGenericExtras, should.Matchers, PartitionRoisSuite:
@@ -479,10 +478,63 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         }
     }
 
-    test("An ROI is never used for more than one purpose.") {
-        // TODO: with Partition now defined in terms of Sets, this should be an integration test.
-        pending
+    test("A ROI is never used for more than one purpose.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        val posTimePairs = Random.shuffle(
+            (0 to 2).flatMap{ p => (0 to 2).map(p -> _) }
+        ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
+        type PosTimeRois = (PosFramePair, List[DetectedRoi])
+        val maxReqShifting = 2 * AbsoluteMinimumShifting
+        def genArgs: Gen[(ShiftingCount, PositiveInt, List[PosTimeRois])] = for {
+            numReqShifting <- Gen.choose(AbsoluteMinimumShifting, maxReqShifting).map(ShiftingCount.unsafe)
+            numReqAccuracy <- Gen.choose(1, maxNumRoisSmallTests).map(PositiveInt.unsafe)
+            rois <- posTimePairs.traverse{ pt => 
+                Gen.choose(numReqShifting, 2 * (numReqShifting + numReqAccuracy))
+                    .flatMap(Gen.listOfN(_, arbitrary[DetectedRoi]))
+                    .map(pt -> _)
+            }
+        } yield (numReqShifting, numReqAccuracy, rois)
+        forAll (genArgs) { (reqShifting, reqAccuracy, ptRoisPairs) => 
+            withTempDirectory{ (tempdir: os.Path) => 
+                /* First, write the input data files. */
+                ptRoisPairs.foreach{ case ((p, t), rois) => 
+                    writeMinimalInputRoisCsv(rois, tempdir / getInputFilename(p, t))
+                }
+                /* Pretest and workflow execution */
+                val shiftingFolder = tempdir / Purpose.Shifting.toString.toLowerCase
+                val accuracyFolder = tempdir / Purpose.Accuracy.toString.toLowerCase
+                os.exists(shiftingFolder) shouldBe false
+                os.exists(accuracyFolder) shouldBe false
+                workflow(tempdir, reqShifting, reqAccuracy, None, None)
+                /* Make actual output assertions. */
+                val expFilesShifting = ptRoisPairs.map{
+                    case ((p, t), _) => (p -> t) -> getOutputFilepath(tempdir)(p, t, Purpose.Shifting)
+                }.toMap
+                val obsFilesShifting = os.list(shiftingFolder).filter(os.isFile).toSet
+                obsFilesShifting shouldEqual expFilesShifting.values.toSet
+                val obsFilesAccuracy = ptRoisPairs
+                    .map{ case ((p, t), _) => (p -> t) -> getOutputFilepath(tempdir)(p, t, Purpose.Accuracy) }
+                    .filter((_, fp) => os.isFile(fp))
+                    .toMap
+                given rwForShifting: ReadWriter[RoiForShifting] = 
+                    SelectedRoi.simpleShiftingRW(ParserConfig.coordinateSequence)
+                given rwForAccuracy: ReadWriter[RoiForAccuracy] = 
+                    SelectedRoi.simpleAccuracyRW(ParserConfig.coordinateSequence)
+                val obsRoisShifting = expFilesShifting.view.mapValues(readJsonFile[List[RoiForShifting]]).toMap
+                val obsRoisAccuracy = obsFilesAccuracy.view.mapValues(readJsonFile[List[RoiForAccuracy]]).toMap
+                val observedIntersections = obsRoisShifting.toList.flatMap{ 
+                    (pt, shiftingRois) => obsRoisAccuracy
+                        .get(pt)
+                        .map{ accuracyRois => (pt, accuracyRois.toSet & shiftingRois.toSet) }
+                }
+                // For all intersections that exist (the (FOV, time) pair had both shifting and accuracy ROIs), 
+                // the intersection between shifting and accuracy must be nonempty (no ROI re-use).
+                observedIntersections.filter(_._2 =!= Set()) shouldEqual List()
+            }
+        }
     }
+
+    test("When there are no accuracy ROIs available, a JSON file is stil written but is empty.") { pending }
 
     // test("Integration: toggle for tolerance of insufficient shifting ROIs works.") {
     //     /**
