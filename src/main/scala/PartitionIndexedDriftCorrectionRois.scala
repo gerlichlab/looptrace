@@ -121,9 +121,9 @@ object PartitionIndexedDriftCorrectionRois:
                 preparePartitions(outfolder, numShifting = numShifting, numAccuracy = numAccuracy)(inputFiles.toList) map {
                     case (initFile, result) => (result match {
                         case p: RoisSplit.Partition => p.asRight      // ideal
-                        case a: RoisSplit.TooFewAccuracy => a.asRight // OK
+                        case a: RoisSplit.TooFewAccuracy => a.asRight // OK (healthy or rescued)
                         case s: RoisSplit.TooFewShifting => s.asLeft  // bad
-                        case e: RoisFileParseError => e.asLeft  // worst
+                        case e: RoisFileParseError => e.asLeft        // worst
                     }).bimap(initFile -> _, initFile -> _)
                 }
             )
@@ -177,7 +177,7 @@ object PartitionIndexedDriftCorrectionRois:
         else {
             val warningsFile = outfolder / "roi_partition_warnings.json"
             println(s"Writing bead ROIs partition warnings file: $warningsFile")
-            given writer: JsonWriter[(PosFramePair, RoisSplit.Problem)] = jsonWriterForKeyedRoisProblem
+            given writer: JsonWriter[(PosFramePair, RoisSplit.Problem)] = readWriterForKeyedTooFewProblem
             os.write(warningsFile, write(problems, indent = 2))
         }
         println("Done!")
@@ -299,14 +299,6 @@ object PartitionIndexedDriftCorrectionRois:
     /* Helper types        */
     /***********************/
     
-    /** Write, to JSON, a pair of (FOV, image time) and a case of too-few-ROIs for accuracy analysis for drift correction. */
-    private def jsonWriterForKeyedRoisProblem: JsonWriter[(PosFramePair, RoisSplit.Problem)] = {
-        import JsonMappable.*
-        import PosFramePair.given
-        import UJsonHelpers.UPickleCatsInstances.given
-        writer[ujson.Value].contramap{ (pair, problem) => combineUnsafely(List(pair.toJsonMap, problem.toJsonMap)) }
-    }
-
     /** Combine all given maps iff there's no overlap of sets of keys. */
     def combineUnsafely(ms: List[JsonMappable.JMap]): JsonMappable.JMap = 
         JsonMappable.combineSafely(ms).fold(reps => throw RepeatedKeysException(reps), identity)
@@ -333,8 +325,8 @@ object PartitionIndexedDriftCorrectionRois:
                         (p -> f) -> problem
                 ) match {
                     case Validated.Invalid(errs) => 
-                        val msg = f"${errs.size} error(s) reading pair of ((pos, frame), too-few-shifting): ${errs.map(_.getMessage)}"
-                        throw new Exception(msg)
+                        val msg = f"${errs.size} error(s) reading pair of ((pos, frame), too-few-ROIs): ${errs.map(_.getMessage)}"
+                        throw new ujson.Value.InvalidData(json, msg)
                     case Validated.Valid(instance) => instance
                 }
         )
