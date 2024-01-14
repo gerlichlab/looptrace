@@ -2,7 +2,8 @@ package at.ac.oeaw.imba.gerlich.looptrace
 
 import scala.util.{ Random, Try }
 
-import cats.data.{ NonEmptyList as NEL }
+import cats.Order
+import cats.data.{ NonEmptyList as NEL, NonEmptySet }
 import cats.syntax.all.*
 import mouse.boolean.*
 import upickle.default.*
@@ -456,8 +457,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                     /* Check the effect of having run the workflow */
                     // First, check the existence of the warnings file and parse it.
                     os.exists(warningsFile) shouldBe true
-                    given reader: Reader[(PosFramePair, RoisSplit.Problem)] = 
-                        readWriterForKeyedTooFewProblem
+                    given reader: Reader[(PosFramePair, RoisSplit.Problem)] = readWriterForKeyedTooFewProblem
                     val warnings = readJsonFile[List[(PosFramePair, RoisSplit.Problem)]](warningsFile)
                     val obsWarnShifting = warnings.filter(_._2.purpose === Purpose.Shifting)
                     val obsWarnAccuracy = warnings.filter(_._2.purpose === Purpose.Accuracy)
@@ -604,28 +604,36 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                     case Nil => os.exists(warningsFile) shouldBe false
                     case _ => 
                         os.exists(warningsFile) shouldBe true
-                        given rwForWarnings: ReadWriter[(PosFramePair, RoisSplit.Problem)] = readWriterForKeyedTooFewProblem
+                        given readerForWarnings: Reader[(PosFramePair, RoisSplit.Problem)] = readWriterForKeyedTooFewProblem
                         val warnings = readJsonFile[List[(PosFramePair, RoisSplit.Problem)]](warningsFile)
                         val obsWarnShifting = warnings.filter(_._2.purpose === Purpose.Shifting)
                         val obsWarnAccuracy = warnings.filter(_._2.purpose === Purpose.Accuracy)
-                        val obsRealizedShifting = obsWarnShifting.map((pt, problem) => pt -> problem.numRealized)
-                        val expRealizedShifting = tooFewShifting.map((pt, rois) => pt -> NonnegativeInt.unsafe(rois.length))                        
-                        val expRealizedAccuracy = 
+                        val expWarnShifting = tooFewShifting.map{ (pt, rois) => 
+                            pt -> RoisSplit.Problem.shifting(numReqShifting, NonnegativeInt.unsafe(rois.length))
+                        }
+                        val expWarnAccuracy = 
                             // Each (FOV, time) pair with too few shifting generates 0 accuracy records, and each (FOV, time) pair 
                             // can also generates a too-few-accuracy record realizing its rois count less shifting request.
-                            tooFewShifting.map((pt, _) => pt -> NonnegativeInt(0)) ::: 
-                            tooFewAccuracy.map((pt, rois) => pt -> NonnegativeInt.unsafe(rois.length - numReqShifting))
-                        val obsRealizedAccuracy = obsWarnAccuracy.map{ (pt, problem) => pt -> problem.numRealized }
+                            tooFewShifting.map{ (pt, _) => pt -> RoisSplit.Problem.accuracy(numReqAccuracy, NonnegativeInt(0)) } ::: 
+                            tooFewAccuracy.map{ (pt, rois) => pt -> RoisSplit.Problem.accuracy(numReqAccuracy, NonnegativeInt.unsafe(rois.length - numReqShifting)) }
                         /* Check the warning counts. */
                         obsWarnShifting.length shouldEqual tooFewShifting.length
                         obsWarnAccuracy.length shouldEqual (tooFewShifting.length + tooFewAccuracy.length)
-                        /* Check the .requested count for each problem. */
-                        obsWarnShifting.map(_._2.numRequested) shouldEqual List.fill(obsWarnShifting.length)(numReqShifting)
-                        obsWarnAccuracy.map(_._2.numRequested) shouldEqual List.fill(obsWarnAccuracy.length)(numReqAccuracy)
-                        /* Check the .realized count for each problem. */
-                        obsRealizedAccuracy.length shouldEqual expRealizedAccuracy.length
-                        obsRealizedShifting.toMap shouldEqual expRealizedShifting.toMap
-                        obsRealizedAccuracy.groupBy(_._1).view.mapValues(_.map(_._2).toSet).toMap shouldEqual expRealizedAccuracy.groupBy(_._1).view.mapValues(_.map(_._2).toSet).toMap
+                        /* Check the actual problems. */
+                        obsWarnShifting.toMap shouldEqual expWarnShifting.toMap
+                        def collapseKeyedProblems: List[(PosFramePair, RoisSplit.Problem)] => Map[PosFramePair, NonEmptySet[RoisSplit.Problem]] = {
+                            import at.ac.oeaw.imba.gerlich.looptrace.collections.*
+                            given orderForPurpose: Order[Purpose] = Order.by{
+                                case Purpose.Shifting => 0
+                                case Purpose.Accuracy => 1
+                            }
+                            given orderForProblem: Order[RoisSplit.Problem] = Order.by{
+                                problem => (problem.purpose, problem.numRequested, problem.numRealized)
+                            }
+                            given orderingForProblem: Ordering[RoisSplit.Problem] = orderForProblem.toOrdering
+                            _.groupBy(_._1).view.mapValues(_.map(_._2).toSet.toNonEmptySetUnsafe).toMap
+                        }
+                        collapseKeyedProblems(obsWarnAccuracy) shouldEqual collapseKeyedProblems(expWarnAccuracy)
                 }
             }
         }
@@ -642,17 +650,22 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                     .flatMap(Gen.listOfN(_, arbitrary[DetectedRoi].map(_.setUsable)))
                     .map(pt -> _)
             }
-            numShifting <- Gen.choose(rois.map(_._2.length).min, 1000).map(ShiftingCount.unsafe)
+            numShifting <- Gen.choose(rois.map(_._2.length).max, 1000).map(ShiftingCount.unsafe)
             numAccuracy <- Gen.choose(1, 1000).map(PositiveInt.unsafe)
         } yield (numShifting, numAccuracy, rois)
-        forAll (genArgs) { (numReqShifting, numReqAccuracy, allFovTimeRois) =>
+        forAll (genArgs, minSuccessful(500)) { (numReqShifting, numReqAccuracy, allFovTimeRois) =>
             withTempDirectory{ (tempdir: os.Path) => 
-                /* First, write the input data files and do pretest */
+                /* First, write the input data files and do pretest. */
                 allFovTimeRois.foreach{ case ((p, t), rois) => writeMinimalInputRoisCsv(rois, tempdir / getInputFilename(p, t)) }
-                val expAccuracyFiles = allFovTimeRois.map{ case ((p, t), _) => getOutputFilepath(tempdir)(p, t, Purpose.Accuracy) }
-                expAccuracyFiles.exists(os.exists) shouldBe false                
+                val expAccuracyFiles = allFovTimeRois.map{ case ((p, t), _) => (p -> t) -> getOutputFilepath(tempdir)(p, t, Purpose.Accuracy) }
+                expAccuracyFiles.exists((_, f) => os.exists(f)) shouldBe false
+                /* Then, execute workflow. */
                 workflow(tempdir, numReqShifting, numReqAccuracy, None, None)
-                expAccuracyFiles.filterNot(os.isFile) shouldEqual List()
+                /* Finally, make assertions. */
+                expAccuracyFiles.filterNot((_, f) => os.isFile(f)) shouldEqual List()
+                given roiReader: Reader[RoiForAccuracy] = simpleAccuracyRW(ParserConfig.coordinateSequence)
+                // Every (FOV, time) pair should have an accuracy ROIs file, but it should be empty.
+                expAccuracyFiles.map{ (pt, f) => pt -> readJsonFile[List[RoiForAccuracy]](f) } shouldEqual expAccuracyFiles.map(_._1 -> List())
             }
         }
     }
