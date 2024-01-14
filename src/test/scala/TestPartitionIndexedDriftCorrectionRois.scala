@@ -483,11 +483,10 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         val posTimePairs = Random.shuffle(
             (0 to 2).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
-        type PosTimeRois = (PosFramePair, List[DetectedRoi])
         val maxReqShifting = 2 * AbsoluteMinimumShifting
-        def genArgs: Gen[(ShiftingCount, PositiveInt, List[PosTimeRois])] = for {
+        def genArgs: Gen[(ShiftingCount, PositiveInt, List[(PosFramePair, List[DetectedRoi])])] = for {
             numReqShifting <- Gen.choose(AbsoluteMinimumShifting, maxReqShifting).map(ShiftingCount.unsafe)
-            numReqAccuracy <- Gen.choose(1, maxNumRoisSmallTests).map(PositiveInt.unsafe)
+            numReqAccuracy <- Gen.choose(1, 100).map(PositiveInt.unsafe)
             rois <- posTimePairs.traverse{ pt => 
                 Gen.choose(numReqShifting, 2 * (numReqShifting + numReqAccuracy))
                     .flatMap(Gen.listOfN(_, arbitrary[DetectedRoi]))
@@ -501,8 +500,8 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                     writeMinimalInputRoisCsv(rois, tempdir / getInputFilename(p, t))
                 }
                 /* Pretest and workflow execution */
-                val shiftingFolder = tempdir / Purpose.Shifting.toString.toLowerCase
-                val accuracyFolder = tempdir / Purpose.Accuracy.toString.toLowerCase
+                val shiftingFolder = getOutputSubfolder(tempdir)(Purpose.Shifting)
+                val accuracyFolder = getOutputSubfolder(tempdir)(Purpose.Accuracy)
                 os.exists(shiftingFolder) shouldBe false
                 os.exists(accuracyFolder) shouldBe false
                 workflow(tempdir, reqShifting, reqAccuracy, None, None)
@@ -534,11 +533,105 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         }
     }
 
-    test("Any case of ROI count fewer than absolute minimum triggers expected exception.") { pending }
+    test("Any case of ROI count fewer than absolute minimum triggers expected exception.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        val posTimePairs = Random.shuffle(
+            (0 to 2).flatMap{ p => (0 to 2).map(p -> _) }
+        ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
+        def genDetected(lo: Int, hi: Int) = (_: List[PosFramePair]).traverse{ pt => 
+            Gen.choose(lo, hi).flatMap(Gen.listOfN(_, arbitrary[DetectedRoi])).map(pt -> _)
+        }
+        def genArgs = for {
+            numTooFew <- Gen.choose(1, posTimePairs.length)
+            numReqShifting <- Gen.choose(AbsoluteMinimumShifting, 50).map(ShiftingCount.unsafe)
+            numReqAccuracy <- Gen.choose(1, 50).map(PositiveInt.unsafe)
+            (posTimePairsForTooFew, posTimePairsForEnough) = Random.shuffle(posTimePairs).splitAt(numTooFew)
+            tooFew <- genDetected(1, AbsoluteMinimumShifting - 1)(posTimePairsForTooFew)
+            enough <- genDetected(AbsoluteMinimumShifting, 2 * (numReqShifting + numReqAccuracy))(posTimePairsForEnough)
+        } yield (numReqShifting, numReqAccuracy, tooFew, enough)
+        forAll (genArgs) { (numReqShifting, numReqAccuracy, tooFew, enough) => 
+            withTempDirectory{ (tempdir: os.Path) => 
+                /* First, write the input data files. */
+                (tooFew ::: enough).foreach{ case ((p, t), rois) => 
+                    writeMinimalInputRoisCsv(rois, tempdir / getInputFilename(p, t))
+                }
+                /* Make actual output assertions. */
+                // First, the expected exception should occur.
+                val exception = intercept[RoisSplit.TooFewShiftingException]{
+                    workflow(tempdir, numReqShifting, numReqAccuracy, None, None)
+                }
+                // Second, the expected exception should have the correct (FOV, time) fail points.
+                val obsBadPosTimePairs = exception.errors.map(_._1).toList
+                val expBadPosTimePairs = tooFew.map(_._1)
+                obsBadPosTimePairs.length shouldEqual expBadPosTimePairs.length
+                obsBadPosTimePairs.toSet shouldEqual expBadPosTimePairs.toSet
+            }
+        }
+    }
 
-    test("Warnings file is correct and produced IF AND ONLY IF there is at least one case of too-few-ROIs.") { pending }
+    test("Warnings file is correct and produced IF AND ONLY IF there is at least one case of too-few-ROIs.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        val posTimePairs = Random.shuffle(
+            (0 to 2).flatMap{ p => (0 to 2).map(p -> _) }
+        ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
+        def genDetected(lo: Int, hi: Int) = (_: List[PosFramePair]).traverse{ pt => 
+            Gen.choose(lo, hi).flatMap(Gen.listOfN(_, arbitrary[DetectedRoi])).map(pt -> _)
+        }
+        def genArgs = for {
+            numTooFewReqShifting <- Gen.oneOf(Gen.const(0), Gen.choose(1, posTimePairs.length))
+            numTooFewReqAccuracy <- Gen.oneOf(Gen.const(0), Gen.choose(posTimePairs.length - numTooFewReqShifting, posTimePairs.length))
+            // Add one here to the lower bound to leave open--ALWAYS--the possibility of generating too few shifting.
+            numReqShifting <- Gen.choose[Int](AbsoluteMinimumShifting + 1, maxNumRoisSmallTests).map(ShiftingCount.unsafe)
+            numReqAccuracy <- Gen.choose(1, maxNumRoisSmallTests).map(PositiveInt.unsafe)
+            numReq = numReqShifting + numReqAccuracy
+            (posTimePairsTooFewShifting, rest) = Random.shuffle(posTimePairs).splitAt(numTooFewReqShifting)
+            (posTimePairsTooFewAccuracy, posTimePairsEnough) = rest.splitAt(numTooFewReqAccuracy)
+            tooFewShifting <- genDetected(AbsoluteMinimumShifting, numReqShifting - 1)(posTimePairsTooFewShifting)
+            tooFewAccuracy <- genDetected(numReqShifting, numReq - 1)(posTimePairsTooFewAccuracy)
+            enough <- genDetected(numReq, 2 * numReq)(posTimePairsEnough)
+        } yield (numReqShifting, numReqAccuracy, tooFewShifting, tooFewAccuracy, enough)
+        forAll (genArgs, minSuccessful(200)) { (numReqShifting, numReqAccuracy, tooFewShifting, tooFewAccuracy, enough) => 
+            val tooFew = tooFewShifting ::: tooFewAccuracy
+            withTempDirectory{ (tempdir: os.Path) => 
+                /* First, write the input data files and do pretest */
+                (tooFew ::: enough).foreach{ case ((p, t), rois) => writeMinimalInputRoisCsv(rois, tempdir / getInputFilename(p, t)) }
+                val warningsFile = tempdir / "roi_partition_warnings.json"
+                os.exists(warningsFile) shouldBe false
+                /* Run the workflow */
+                workflow(tempdir, numReqShifting, numReqAccuracy, None, None)
+                /* Make actual output assertions. */
+                tooFew match {
+                    case Nil => os.exists(warningsFile) shouldBe false
+                    case _ => 
+                        os.exists(warningsFile) shouldBe true
+                        given rwForWarnings: ReadWriter[(PosFramePair, RoisSplit.Problem)] = readWriterForKeyedTooFewProblem
+                        val warnings = readJsonFile[List[(PosFramePair, RoisSplit.Problem)]](warningsFile)
+                        val obsWarnShifting = warnings.filter(_._2.purpose === Purpose.Shifting)
+                        val obsWarnAccuracy = warnings.filter(_._2.purpose === Purpose.Accuracy)
+                        val obsRealizedShifting = obsWarnShifting.map((pt, problem) => pt -> problem.numRealized)
+                        val expRealizedShifting = tooFewShifting.map((pt, rois) => pt -> NonnegativeInt.unsafe(rois.length))                        
+                        val expRealizedAccuracy = 
+                            // Each (FOV, time) pair with too few shifting generates 0 accuracy records, and each (FOV, time) pair 
+                            // can also generates a too-few-accuracy record realizing its rois count less shifting request.
+                            tooFewShifting.map((pt, _) => pt -> NonnegativeInt(0)) ::: 
+                            tooFewAccuracy.map((pt, rois) => pt -> NonnegativeInt.unsafe(rois.length - numReqShifting))
+                        val obsRealizedAccuracy = obsWarnAccuracy.map{ (pt, problem) => pt -> problem.numRealized }
+                        /* Check the warning counts. */
+                        obsWarnShifting.length shouldEqual tooFewShifting.length
+                        obsWarnAccuracy.length shouldEqual (tooFewShifting.length + tooFewAccuracy.length)
+                        /* Check the .requested count for each problem. */
+                        obsWarnShifting.map(_._2.numRequested) shouldEqual List.fill(obsWarnShifting.length)(numReqShifting)
+                        obsWarnAccuracy.map(_._2.numRequested) shouldEqual List.fill(obsWarnAccuracy.length)(numReqAccuracy)
+                        /* Check the .realized count for each problem. */
+                        obsRealizedAccuracy.length shouldEqual expRealizedAccuracy.length
+                        obsRealizedShifting.toMap shouldEqual expRealizedShifting.toMap
+                        obsRealizedAccuracy.groupBy(_._1).view.mapValues(_.map(_._2).toSet).toMap shouldEqual expRealizedAccuracy.groupBy(_._1).view.mapValues(_.map(_._2).toSet).toMap
+                }
+            }
+        }
+    }
 
-    test("When there are no accuracy ROIs available, a JSON file is stil written but is empty.") { pending }
+    test("When there are no accuracy ROIs available, a JSON file is still written but is empty.") { pending }
 
     test("No unusable ROI is ever used.") { pending }
 
