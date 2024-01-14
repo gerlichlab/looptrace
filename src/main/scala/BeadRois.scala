@@ -1,5 +1,6 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
+import scala.util.NotGiven
 import upickle.default.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ Coordinate, CoordinateSequence, Point3D }
 
@@ -36,7 +37,9 @@ object SelectedRoi:
         )
 
     /** Serialise the index as a simple integer, and centroid as a simple array of Double, sequenced as requested. */
-    def simpleJsonReadWriter[R <: SelectedRoi](coordseq: CoordinateSequence, build: (RoiIndex, Point3D) => R): ReadWriter[R] = {
+    private def simpleJsonReadWriter[R <: SelectedRoi : [R] =>> NotGiven[R =:= SelectedRoi]](
+        coordseq: CoordinateSequence, build: (RoiIndex, Point3D) => R
+        ): ReadWriter[R] = {
         readwriter[ujson.Value].bimap[R](
             toJsonSimple(coordseq), 
             json => {
