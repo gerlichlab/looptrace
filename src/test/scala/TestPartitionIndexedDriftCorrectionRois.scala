@@ -743,9 +743,8 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
     
     /** Syntax additions on a detected ROI to set its usability flag */
     extension (roi: DetectedRoi)
-        def setUsability = (use: Boolean) => roi.copy(isUsable = use)
-        def setUsable: DetectedRoi = setUsability(true)
-        def setUnusable: DetectedRoi = setUsability(false)
+        def setUsable: DetectedRoi = roi.copy(isUsable = true)
+        def setUnusable: DetectedRoi = roi.copy(isUsable = false)
 
     /** Generate a pair of pairs of nonnegative integers such that the first pair isn't the same as the second. */
     def genDistinctNonnegativePairs: Gen[(PosFramePair, PosFramePair)] = 
