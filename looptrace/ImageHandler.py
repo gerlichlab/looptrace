@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from looptrace import MINIMUM_SPOT_SEPARATION_KEY, ZARR_CONVERSIONS_KEY
+from looptrace import MINIMUM_SPOT_SEPARATION_KEY, TRACING_SUPPORT_EXCLUSIONS_KEY, ZARR_CONVERSIONS_KEY
 from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, get_analysis_path, simplify_path
 from looptrace.image_io import ignore_path, NPZ_wrapper, TIFF_EXTENSIONS
 from gertils import ExtantFile, ExtantFolder
@@ -140,6 +140,13 @@ class ImageHandler:
     def frame_names(self) -> List[str]:
         return self.config["frame_name"]
     
+    @property
+    def illegal_frames_for_trace_support(self) -> List[str]:
+        exclusions = self.config[TRACING_SUPPORT_EXCLUSIONS_KEY]
+        if not isinstance(exclusions, list):
+            raise TypeError(f"Probes to exclude ('{TRACING_SUPPORT_EXCLUSIONS_KEY}' in config) should be list, not {type(exclusions).__name__}")
+        return exclusions
+
     @property
     def minimum_spot_separation(self) -> Union[int, float]:
         return self.config[MINIMUM_SPOT_SEPARATION_KEY]

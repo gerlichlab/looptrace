@@ -12,29 +12,25 @@ from typing import *
 from gertils import ExtantFile, ExtantFolder
 import pypiper
 
-from looptrace import LOOPTRACE_JAR_PATH, LOOPTRACE_JAVA_PACKAGE
+from looptrace import *
 
 from pipeline_precheck import workflow as pretest
 from convert_datasets_to_zarr import one_to_one as run_zarr_production
 from extract_exp_psf import workflow as run_psf_extraction
 from run_bead_roi_generation import workflow as gen_all_bead_rois
-from run_bead_roi_partition import workflow as partition_bead_rois
 from analyse_detected_bead_rois import workflow as run_all_bead_roi_detection_analysis
 from decon import workflow as run_deconvolution
 #from nuc_label import workflow as run_nuclei_detection
-from looptrace.Drifter import coarse_correction_workflow as run_coarse_drift_correction, fine_correction_workflow as run_fine_drift_correction
+from looptrace.Drifter import Drifter, coarse_correction_workflow as run_coarse_drift_correction, fine_correction_workflow as run_fine_drift_correction
 from looptrace.ImageHandler import ImageHandler
 from drift_correct_accuracy_analysis import workflow as run_drift_correction_analysis, run_visualisation as run_drift_correction_accuracy_visualisation
 from detect_spots import workflow as run_spot_detection
-from run_spot_proximity_filtration import workflow as run_spot_proximity_filtration
 from assign_spots_to_nucs import workflow as run_spot_nucleus_filtration
-from cluster_analysis_cleanup import workflow as run_cleanup
 from extract_spots_table import workflow as run_spot_bounding
 from extract_spots import workflow as run_spot_extraction
 from extract_spots_cluster_cleanup import workflow as run_spot_zipping
 from tracing import workflow as run_chromatin_tracing
 from looptrace.Tracer import run_frame_name_and_distance_application
-from run_tracing_qc import workflow as qc_label_and_filter_traces
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +44,70 @@ TRACING_QC_STAGE_NAME = "tracing_QC"
 class SpotType(Enum):
     REGIONAL = "regional"
     LOCUS_SPECIFIC = "locus_specific"
+
+
+def partition_bead_rois(config_file: ExtantFile, images_folder: ExtantFolder):
+    """Run the bead ROIs partitioning program / pipeline step."""
+    H = ImageHandler(config_path=config_file, image_path=images_folder)
+    prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.PartitionIndexedDriftCorrectionRois"
+    cmd_parts = [
+        "java", 
+        "-cp",
+        str(LOOPTRACE_JAR_PATH),
+        prog_path, 
+        "--beadRoisRoot",
+        str(H.bead_rois_path), 
+        "--numShifting", 
+        str(H.num_bead_rois_for_drift_correction),
+        "--numAccuracy",
+        str(H.num_bead_rois_for_drift_correction_accuracy),
+        "--outputFolder",
+        str(H.bead_rois_path),
+    ]
+    if H.tolerate_too_few_rois:
+        cmd_parts.extend([
+            "--optimisationTestingMode",
+            "--referenceFrame", 
+            str(Drifter(H).reference_frame),
+        ])
+    print(f"Running bead ROI partitioning: {' '.join(cmd_parts)}")
+    subprocess.check_call(cmd_parts)
+
+
+def run_spot_proximity_filtration(config_file: ExtantFile, images_folder: ExtantFolder) -> None:
+    H = ImageHandler(config_path=config_file, image_path=images_folder)
+    min_spot_sep = H.minimum_spot_separation
+    region_groups = H.config.get("regional_spots_grouping", "NONE")
+    if not isinstance(region_groups, str):
+        region_groups = ",".join(",".join([f"{r}={i}" for r in rs]) for i, rs in enumerate(region_groups))
+    if min_spot_sep <= 0:
+        print(f"No spot filtration on proximity to be done, as minimum separation = {min_spot_sep}")
+        return
+    prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.LabelAndFilterRois"
+    cmd_parts = [
+        "java", 
+        "-cp",
+        str(LOOPTRACE_JAR_PATH),
+        prog_path, 
+        "--spotsFile",
+        str(H.raw_spots_file),
+        "--driftFile", 
+        str(H.drift_correction_file__fine),
+        "--probeGroups",
+        region_groups,
+        "--spotSeparationThresholdValue", 
+        str(H.minimum_spot_separation),
+        "--spotSeparationThresholdType",
+        "EachAxisAND",
+        "--unfilteredOutputFile",
+        str(H.proximity_labeled_spots_file_path),
+        "--filteredOutputFile",
+        str(H.proximity_filtered_spots_file_path),
+        "--handleExtantOutput",
+        "OVERWRITE" # TODO: parameterise this, see: https://github.com/gerlichlab/looptrace/issues/142
+    ]
+    print(f"Running spot filtering on proximity: {' '.join(cmd_parts)}")
+    subprocess.check_call(cmd_parts)
 
 
 def plot_spot_counts(config_file: ExtantFile, spot_type: "SpotType") -> None:
@@ -101,6 +161,35 @@ def plot_spot_counts(config_file: ExtantFile, spot_type: "SpotType") -> None:
     return subprocess.check_call(cmd_parts)
 
 
+def qc_label_and_filter_traces(config_file: ExtantFile, images_folder: ExtantFolder) -> None:
+    H = ImageHandler(config_path=config_file, image_path=images_folder)
+    prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.LabelAndFilterTracesQC"
+    cmd_parts = [
+        "java", 
+        "-cp",
+        str(LOOPTRACE_JAR_PATH),
+        prog_path, 
+        "--tracesFile",
+        str(H.traces_path_enriched),
+        "--maxDistanceToRegionCenter", 
+        str(H.config[MAX_DISTANCE_SPOT_FROM_REGION_NAME]),
+        "--minSNR",
+        str(H.config[SIGNAL_NOISE_RATIO_NAME]),
+        "--maxSigmaXY",
+        str(H.config[SIGMA_XY_MAX_NAME]),
+        "--maxSigmaZ",
+        str(H.config[SIGMA_Z_MAX_NAME]),
+    ]
+
+    exclusions = H.illegal_frames_for_trace_support
+    if not exclusions:
+        raise ValueError("No probes to exclude from trace support were provided!")
+    cmd_parts.extend(["--exclusions", ','.join(H.illegal_frames_for_trace_support)]) # format required for parsing by scopt
+    
+    print(f"Running QC filtering of tracing supports: {' '.join(cmd_parts)}")
+    subprocess.check_call(cmd_parts)
+
+
 def run_simple_distance_computation(config_file: ExtantFile) -> None:
     """Run the simple pairwise distances computation program.
 
@@ -119,7 +208,7 @@ def run_simple_distance_computation(config_file: ExtantFile) -> None:
         "-O", 
         H.analysis_path,
         "--handleExtantOutput",
-        "Overwrite",
+        "OVERWRITE", # TODO: parameterise this, see: https://github.com/gerlichlab/looptrace/issues/142
         "--sort",
     ]
     print(f"Running distance computation command: {' '.join(cmd_parts)}")
