@@ -12,6 +12,8 @@ from typing import *
 from gertils import ExtantFile, ExtantFolder
 import pypiper
 
+from looptrace import LOOPTRACE_JAR_PATH, LOOPTRACE_JAVA_PACKAGE
+
 from pipeline_precheck import workflow as pretest
 from convert_datasets_to_zarr import one_to_one as run_zarr_production
 from extract_exp_psf import workflow as run_psf_extraction
@@ -33,7 +35,6 @@ from extract_spots_cluster_cleanup import workflow as run_spot_zipping
 from tracing import workflow as run_chromatin_tracing
 from looptrace.Tracer import run_frame_name_and_distance_application
 from run_tracing_qc import workflow as qc_label_and_filter_traces
-
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,7 @@ def plot_spot_counts(config_file: ExtantFile, spot_type: "SpotType") -> None:
         probe_name_extra = []
     else:
         raise ValueError(f"Illegal spot_type for plotting spot counts: {spot_type}")
-    analysis_cmd_parts = [
+    cmd_parts = [
         "Rscript", 
         str(analysis_script_file), 
         "--unfiltered-spots-file", 
@@ -96,8 +97,33 @@ def plot_spot_counts(config_file: ExtantFile, spot_type: "SpotType") -> None:
         "-o", 
         output_folder, 
         ] + probe_name_extra
-    print(f"Analysis command: {' '.join(analysis_cmd_parts)}")
-    return subprocess.check_call(analysis_cmd_parts)
+    print(f"Running spot count plotting command: {' '.join(cmd_parts)}")
+    return subprocess.check_call(cmd_parts)
+
+
+def run_simple_distance_computation(config_file: ExtantFile) -> None:
+    """Run the simple pairwise distances computation program.
+
+    Arguments
+    ---------
+    config_file : ExtantFile
+    """
+    H = ImageHandler(config_path=config_file)
+    cmd_parts = [
+        "java", 
+        "-cp",
+        str(LOOPTRACE_JAR_PATH),
+        f"{LOOPTRACE_JAVA_PACKAGE}.PartitionIndexedDriftCorrectionRois",
+        "--tracesFile",
+        str(H.traces_file_qc_filtered),
+        "-O", 
+        H.analysis_path,
+        "--handleExtantOutput",
+        "Overwrite",
+        "--sort",
+    ]
+    print(f"Running distance computation command: {' '.join(cmd_parts)}")
+    return subprocess.check_call(cmd_parts)
 
 
 class LooptracePipeline(pypiper.Pipeline):
@@ -138,6 +164,7 @@ class LooptracePipeline(pypiper.Pipeline):
             ("spot_region_distances", run_frame_name_and_distance_application, take2), 
             (TRACING_QC_STAGE_NAME, qc_label_and_filter_traces, take2),
             ("locus_specific_spot_counts_visualisation", plot_spot_counts, take1_with_spot_type(SpotType.LOCUS_SPECIFIC)), 
+            ("pairwise_distances", run_simple_distance_computation, take1),
         ]
 
     def stages(self) -> List[Callable]:
