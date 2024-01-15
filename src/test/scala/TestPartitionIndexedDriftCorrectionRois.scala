@@ -666,16 +666,16 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                 Gen.zip(arbitrary[XCoordinate], arbitrary[YCoordinate], arbitrary[ZCoordinate]).map(Point3D.apply.tupled).toArbitrary
             }
             for {
-                usable <- genUsableRois(AbsoluteMinimumShifting, AbsoluteMinimumShifting)
-                unusable <- genUnusableRois(1, AbsoluteMinimumShifting)
+                usable <- genUsableRois(AbsoluteMinimumShifting, 50)
+                unusable <- genUnusableRois(1, 50)
             } yield Random.shuffle(usable ::: unusable).toList
         }
         val posTimePairs = Random.shuffle(
-            (0 to 0).flatMap{ p => (0 to 0).map(p -> _) }
+            (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
         def genArgs = for {
-            numShifting <- Gen.choose(AbsoluteMinimumShifting, 2 * maxNumRoisSmallTests).map(ShiftingCount.unsafe)
-            numAccuracy <- Gen.choose(1, 2 * maxNumRoisSmallTests).map(PositiveInt.unsafe)
+            numShifting <- Gen.choose(AbsoluteMinimumShifting, 50).map(ShiftingCount.unsafe)
+            numAccuracy <- Gen.choose(1, 50).map(PositiveInt.unsafe)
             rois <- posTimePairs.traverse{ pt => genSinglePosTimeRois.map(pt -> _) }
         } yield (numShifting, numAccuracy, rois)
         val simplifyRoi = (roi: RoiLike) => roi.index -> roi.centroid
@@ -715,19 +715,9 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                     }.unzip
                     (usable.toMap, unusable.toMap)
                 }
-                obsRoisAll.filter(_._2.isEmpty) shouldEqual Map()
 
-                // DEBUG
-                given ev: Ordering[(RoiIndex, Point3D)] = Order[(RoiIndex, Point3D)].toOrdering
-                println("OBS")
-                obsRoisAll.foreach((k, v) => 
-                    println(k)
-                    v.toList.sorted.foreach(println)
-                    println("USABLE")
-                    obsRoisUsable(k).toList.sorted.foreach(println)
-                    println("UNUSABLE")
-                    obsRoisUnusable(k).toList.sorted.foreach(println)
-                )
+                /* Each (FOV, time) */
+                obsRoisAll.filter(_._2.isEmpty) shouldEqual Map()
                 obsRoisAll.map((pt, rois) => pt -> (rois & obsRoisUnusable(pt)) ) shouldEqual obsRoisAll.map((pt, _) => pt -> Set())
                 obsRoisAll.map((pt, rois) => pt -> (rois -- obsRoisUsable(pt)) ) shouldEqual obsRoisAll.map((pt, _) => pt -> Set())
             }
