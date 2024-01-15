@@ -4,11 +4,15 @@ import scala.util.NotGiven
 import upickle.default.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ Coordinate, CoordinateSequence, Point3D }
 
+sealed trait RoiLike:
+    def index: RoiIndex
+    def centroid: Point3D
+
 /** Type representing a detected fiducial bead region of interest (ROI) */
-final case class DetectedRoi(index: RoiIndex, centroid: Point3D, isUsable: Boolean)
+final case class DetectedRoi(index: RoiIndex, centroid: Point3D, isUsable: Boolean) extends RoiLike
 
 /** A region of interest (ROI) selected for use in some process */
-sealed trait SelectedRoi {
+sealed trait SelectedRoi extends RoiLike {
     def index: RoiIndex
     def centroid: Point3D
 }

@@ -437,6 +437,7 @@ object PartitionIndexedDriftCorrectionRois:
             def realizedAccuracy = partition.numAccuracy
         
         final case class Partition private(shifting: NonEmptySet[RoiForShifting], accuracy: Set[RoiForAccuracy]) extends HasPartition:
+            given ev: Ordering[(RoiIndex, Point3D)] = Order[(RoiIndex, Point3D)].toOrdering
             require(
                 (shifting.toSortedSet.map(roi => roi.index -> roi.centroid) & accuracy.map(roi => roi.index -> roi.centroid)).isEmpty, 
                 s"ROIs for shifting overlap with ones for accuracy: ${(shifting.toSortedSet.map(roi => roi.index -> roi.centroid) & accuracy.map(roi => roi.index -> roi.centroid))}"
@@ -450,10 +451,7 @@ object PartitionIndexedDriftCorrectionRois:
         object Partition:
             import at.ac.oeaw.imba.gerlich.looptrace.collections.*
             def build(reqShifting: ShiftingCount, shifting: List[RoiForShifting], reqAccuracy: PositiveInt, accuracy: List[RoiForAccuracy]): Result = {
-                // Derive Ordering instance from an Order instance already in scope.
-                given orderForShiftingRoi: Order[RoiForShifting] = Order.by(simplifySelectedRoi)
-                given orderForAccuracyRoi: Order[RoiForAccuracy] = Order.by(simplifySelectedRoi)
-                given orderingFromOrder[A](using ord: Order[A]): Ordering[A] = ord.toOrdering
+                given orderingForSelectedRoi: Ordering[RoiForShifting] = orderSelectedRoisSimplified[RoiForShifting]
                 (shifting.toNel, NonnegativeInt.unsafe(shifting.length)) match {
                     case (Some(shiftNel), numShifting) if numShifting >= AbsoluteMinimumShifting => 
                         val shiftingCounts = shiftNel.toList.groupBy(identity).view.mapValues(_.length).toMap
@@ -534,7 +532,7 @@ object PartitionIndexedDriftCorrectionRois:
         (maybeSep, maybeHeadTail).mapN{ case (sep, (h, t)) => (sep, h, t) }
     }
 
-    private def simplifySelectedRoi(roi: SelectedRoi): (RoiIndex, Point3D) = roi.index -> roi.centroid
-    given orderingForSelectedRoiSimplification: Ordering[(RoiIndex, Point3D)] = Order[(RoiIndex, Point3D)].toOrdering
+    private[looptrace] def orderSelectedRoisSimplified[R <: SelectedRoi]: Ordering[R] = 
+        Order[(RoiIndex, Point3D)].contramap((roi: R) => roi.index -> roi.centroid).toOrdering
 
 end PartitionIndexedDriftCorrectionRois
