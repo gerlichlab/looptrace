@@ -116,6 +116,7 @@ object PartitionIndexedDriftCorrectionRois:
         val writeRoisForAccuracy = (pf: PosFramePair, rois: Set[RoiForAccuracy]) => 
             writeRois(rois, getOutputFilepath(outfolder)(pf._1, pf._2, Purpose.Accuracy))
         
+        // Here, actually do the partition.
         val (bads, goods): (List[(InitFile, RoisSplit.Failure)], List[(InitFile, RoisSplit.HasPartition)]) = 
             Alternative[List].separate(
                 preparePartitions(outfolder, numShifting = numShifting, numAccuracy = numAccuracy)(inputFiles.toList) map {
@@ -127,6 +128,8 @@ object PartitionIndexedDriftCorrectionRois:
                     }).bimap(initFile -> _, initFile -> _)
                 }
             )
+        
+        // Here, write (severe) warnings (if in development mode) or raise an exception.
         val zeroAccuracyProblems = if (bads.nonEmpty) {
             /* Check if we can tolerate (implicitly, by provision of reference frame) cases of too few ROIs.
              * If so, AND we have no parser errors (just too-few-ROI errors), AND none of the errors concerns 
@@ -183,22 +186,26 @@ object PartitionIndexedDriftCorrectionRois:
         println("Done!")
     }
 
-    def createParser(header: RawRecord): ErrMsgsOr[RawRecord => ErrMsgsOr[NonnegativeInt => DetectedRoi]] = {
+    def createParser(header: RawRecord): ErrMsgsOr[RawRecord => ErrMsgsOr[DetectedRoi]] = {
+        import at.ac.oeaw.imba.gerlich.looptrace.syntax.* // for >>> and >>, generally
+        val maybeParseIndex = buildFieldParse(ParserConfig.indexCol.get, safeParseInt >>> RoiIndex.fromInt)(header)
         val maybeParseX = buildFieldParse(ParserConfig.xCol.get, safeParseDouble.andThen(_.map(XCoordinate.apply)))(header)
         val maybeParseY = buildFieldParse(ParserConfig.yCol.get, safeParseDouble.andThen(_.map(YCoordinate.apply)))(header)
         val maybeParseZ = buildFieldParse(ParserConfig.zCol.get, safeParseDouble.andThen(_.map(ZCoordinate.apply)))(header)
+        // The QC flag parser maps empty String to true and nonempty String to false (nonempty indicates QC fail reasons.)
         val maybeParseQC = buildFieldParse(ParserConfig.qcCol, (s: String) => Right(s.isEmpty))(header)
-        (maybeParseX, maybeParseY, maybeParseZ, maybeParseQC).mapN((x, y, z, qc) => (x, y, z, qc)).toEither.map{
-            case (parseX, parseY, parseZ, parseQC) => { 
+        (maybeParseIndex, maybeParseX, maybeParseY, maybeParseZ, maybeParseQC).tupled.toEither.map{
+            case (parseIndex, parseX, parseY, parseZ, parseQC) => { 
                 (record: RawRecord) => (record.length === header.length)
                     .either(NonEmptyList.one(s"Header has ${header.length} fields but record has ${record.length}"), ())
                     .flatMap{ _ => 
+                        val maybeIndex = parseIndex(record)
                         val maybeX = parseX(record)
                         val maybeY = parseY(record)
                         val maybeZ = parseZ(record)
                         val maybeQC = parseQC(record)
-                        (maybeX, maybeY, maybeZ, maybeQC).mapN((x, y, z, qcPass) => 
-                            { (i: NonnegativeInt) => DetectedRoi(RoiIndex(i), Point3D(x, y, z), qcPass) }
+                        (maybeIndex, maybeX, maybeY, maybeZ, maybeQC).mapN(
+                            (i, x, y, z, qcPass) => DetectedRoi(i, Point3D(x, y, z), qcPass)
                         ).toEither
                     }
             }
@@ -259,7 +266,7 @@ object PartitionIndexedDriftCorrectionRois:
             .flatMap { case (parse, rawRecords) => 
                 Alternative[List].separate(
                     NonnegativeInt.indexed(rawRecords)
-                        .map{ case (rr, i) => parse(rr).bimap(errs => BadRecord(i, rr, errs), _(i)) }
+                        .map{ case (rr, i) => parse(rr).leftMap(errs => BadRecord(i, rr, errs)) }
                 ) match { case (bads, rois) => bads.toNel.toLeft(rois).leftMap(RoisFileParseFailedRecords.apply) }
             }
     }
@@ -502,8 +509,13 @@ object PartitionIndexedDriftCorrectionRois:
     
     final case class Filename(get: String)
 
+    object PandasCsvIndexColumn:
+        /** Empty string corresponds to column before first comma in pandas format. */
+        def get: String = ""
+
     /** Helpers for working with the parser configuration */
     object ParserConfig:
+        val indexCol = PandasCsvIndexColumn
         val xCol = XColumn("centroid-2")
         val yCol = YColumn("centroid-1")
         val zCol = ZColumn("centroid-0")
