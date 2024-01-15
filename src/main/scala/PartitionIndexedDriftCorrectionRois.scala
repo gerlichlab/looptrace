@@ -193,9 +193,9 @@ object PartitionIndexedDriftCorrectionRois:
         val maybeParseY = buildFieldParse(ParserConfig.yCol.get, safeParseDouble.andThen(_.map(YCoordinate.apply)))(header)
         val maybeParseZ = buildFieldParse(ParserConfig.zCol.get, safeParseDouble.andThen(_.map(ZCoordinate.apply)))(header)
         // The QC flag parser maps empty String to true and nonempty String to false (nonempty indicates QC fail reasons.)
-        val maybeParseQC = buildFieldParse(ParserConfig.qcCol, (s: String) => Right(s.isEmpty))(header)
-        (maybeParseIndex, maybeParseX, maybeParseY, maybeParseZ, maybeParseQC).tupled.toEither.map{
-            case (parseIndex, parseX, parseY, parseZ, parseQC) => { 
+        val maybeParseFailCode = buildFieldParse(ParserConfig.qcCol, RoiFailCode(_).asRight)(header)
+        (maybeParseIndex, maybeParseX, maybeParseY, maybeParseZ, maybeParseFailCode).tupled.toEither.map{
+            case (parseIndex, parseX, parseY, parseZ, parseFailCode) => { 
                 (record: RawRecord) => (record.length === header.length)
                     .either(NonEmptyList.one(s"Header has ${header.length} fields but record has ${record.length}"), ())
                     .flatMap{ _ => 
@@ -203,9 +203,9 @@ object PartitionIndexedDriftCorrectionRois:
                         val maybeX = parseX(record)
                         val maybeY = parseY(record)
                         val maybeZ = parseZ(record)
-                        val maybeQC = parseQC(record)
-                        (maybeIndex, maybeX, maybeY, maybeZ, maybeQC).mapN(
-                            (i, x, y, z, qcPass) => DetectedRoi(i, Point3D(x, y, z), qcPass)
+                        val maybeFailCode = parseFailCode(record)
+                        (maybeIndex, maybeX, maybeY, maybeZ, maybeFailCode).mapN(
+                            (i, x, y, z, failCode) => DetectedRoi(i, Point3D(x, y, z), failCode)
                         ).toEither
                     }
             }

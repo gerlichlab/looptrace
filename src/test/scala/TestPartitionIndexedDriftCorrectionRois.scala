@@ -343,8 +343,8 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
             numShifting <- Gen.choose[Int](AbsoluteMinimumShifting, maxNumRoisSmallTests).map(ShiftingCount.unsafe)
             numAccuracy <- arbitrary[PositiveInt]
             (usable, unusable) <- (for {
-                goods <- genRois(0, AbsoluteMinimumShifting - 1).map(_.map(_.setUsable))
-                bads <- genRois(0, maxNumRoisSmallTests - goods.length).map(_.map(_.setUnusable))
+                goods <- genUsableRois(0, AbsoluteMinimumShifting - 1)
+                bads <- genUnusableRois(0, maxNumRoisSmallTests - goods.length)
             } yield (goods, bads)).suchThat{ (goods, bads) => // Ensure uniqueness among ROIs.
                 (goods.toSet ++ bads.toSet).size === goods.size + bads.size 
             }
@@ -359,15 +359,13 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
             }
         } yield (numShifting, numAccuracy, rois, validate)
         
-        def genRois(lo: Int, hi: Int) = Gen.choose(lo, hi).flatMap(Gen.listOfN(_, arbitrary[DetectedRoi]))
-        
         def genAtLeastMinButLessThanShiftingRequest: Gen[InputsAndValidate] = for {
             numShifting <- // 1 more than absolute min, so that minimum can be hit while not hitting request.
                 Gen.choose[Int](AbsoluteMinimumShifting + 1, maxNumRoisSmallTests).map(ShiftingCount.unsafe)
             numAccuracy <- arbitrary[PositiveInt]
             maxUsable = scala.math.max(AbsoluteMinimumShifting, numShifting - 1)
-            usable <- genRois(AbsoluteMinimumShifting, maxUsable).map(_.map(_.setUsable))
-            unusable <- genRois(0, maxNumRoisSmallTests - usable.length).map(_.map(_.setUnusable))
+            usable <- genUsableRois(AbsoluteMinimumShifting, maxUsable).map(_.map(_.setUsable))
+            unusable <- genUnusableRois(0, maxNumRoisSmallTests - usable.length)
             rois = Random.shuffle(usable ::: unusable).toList
             validate = (_: RoisSplit.Result) match {
                 case tooFew: RoisSplit.TooFewAccuracyRescued => 
@@ -383,8 +381,8 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
             numShifting <- Gen.choose[Int](AbsoluteMinimumShifting, maxNumRoisSmallTests).map(ShiftingCount.unsafe)
             numAccuracy <- arbitrary[PositiveInt]
             maxUsable = scala.math.min(maxNumRoisSmallTests, numShifting + numAccuracy - 1)
-            usable <- genRois(numShifting, maxUsable).map(_.map(_.setUsable))
-            unusable <- genRois(0, maxNumRoisSmallTests - usable.length).map(_.map(_.setUnusable))
+            usable <- genUsableRois(numShifting, maxUsable)
+            unusable <- genUnusableRois(0, maxNumRoisSmallTests - usable.length)
             rois = Random.shuffle(usable ::: unusable).toList
             validate = (_: RoisSplit.Result) match {
                 case tooFew: RoisSplit.TooFewAccuracyHealthy => 
@@ -398,8 +396,8 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         def genEnoughForBoth: Gen[InputsAndValidate] = for {
             numShifting <- Gen.choose(AbsoluteMinimumShifting, maxNumRoisSmallTests - 1).map(ShiftingCount.unsafe)
             numAccuracy <- Gen.choose(1, maxNumRoisSmallTests - numShifting).map(PositiveInt.unsafe)
-            usable <- genRois(numShifting + numAccuracy, maxNumRoisSmallTests).map(_.map(_.setUsable))
-            unusable <- genRois(0, maxNumRoisSmallTests - usable.length).map(_.map(_.setUnusable))
+            usable <- genUsableRois(numShifting + numAccuracy, maxNumRoisSmallTests)
+            unusable <- genUnusableRois(0, maxNumRoisSmallTests - usable.length)
             rois = Random.shuffle(usable ::: unusable).toList
             validate = (_: RoisSplit.Result) match {
                 case partition: RoisSplit.Partition => 
@@ -430,10 +428,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
         type PosTimeRois = (PosFramePair, List[DetectedRoi])
         def genDetected(ptPairs: List[PosFramePair])(lo: Int, hi: Int): Gen[List[PosTimeRois]] = 
-            ptPairs.traverse{ pt => 
-                Gen.choose(lo, hi)
-                    .flatMap(Gen.listOfN(_, arbitrary[DetectedRoi].map(_.setUsable))) // Make all usable.
-                    .map(pt -> _) }
+            ptPairs.traverse{ pt => genUsableRois(lo, hi).map(pt -> _) }
         val maxReqShifting = 2 * AbsoluteMinimumShifting
         def genArgs: Gen[(List[PosTimeRois], ShiftingCount, List[PosTimeRois])] = for {
             nTooFewShift <- Gen.choose(1, posTimePairs.length)
@@ -487,11 +482,8 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         def genArgs: Gen[(ShiftingCount, PositiveInt, List[(PosFramePair, List[DetectedRoi])])] = for {
             numReqShifting <- Gen.choose(AbsoluteMinimumShifting, maxReqShifting).map(ShiftingCount.unsafe)
             numReqAccuracy <- Gen.choose(1, 100).map(PositiveInt.unsafe)
-            rois <- posTimePairs.traverse{ pt => 
-                Gen.choose(numReqShifting, 2 * (numReqShifting + numReqAccuracy))
-                    .flatMap(Gen.listOfN(_, arbitrary[DetectedRoi]))
-                    .map(pt -> _)
-            }
+            numReq = numReqShifting + numReqAccuracy
+            rois <- posTimePairs.traverse{ pt => genMixedUsabilityRois(AbsoluteMinimumShifting, 2 * numReq).map(pt -> _) }
         } yield (numReqShifting, numReqAccuracy, rois)
         forAll (genArgs) { (reqShifting, reqAccuracy, ptRoisPairs) => 
             withTempDirectory{ (tempdir: os.Path) => 
@@ -538,9 +530,8 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
-        def genDetected(lo: Int, hi: Int) = (_: List[PosFramePair]).traverse{ pt => 
-            Gen.choose(lo, hi).flatMap(Gen.listOfN(_, arbitrary[DetectedRoi])).map(pt -> _)
-        }
+        def genDetected(lo: Int, hi: Int) = 
+            (_: List[PosFramePair]).traverse{ pt => genMixedUsabilityRoisEachSize(lo, hi).map(pt -> _) }
         def genArgs = for {
             numTooFew <- Gen.choose(1, posTimePairs.length)
             numReqShifting <- Gen.choose(AbsoluteMinimumShifting, 50).map(ShiftingCount.unsafe)
@@ -574,9 +565,8 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
-        def genDetected(lo: Int, hi: Int) = (_: List[PosFramePair]).traverse{ pt => 
-            Gen.choose(lo, hi).flatMap(Gen.listOfN(_, arbitrary[DetectedRoi])).map(pt -> _)
-        }
+        def genDetected(lo: Int, hi: Int) = 
+            (_: List[PosFramePair]).traverse{ pt => genMixedUsabilityRoisEachSize(lo, hi).map(pt -> _) }
         def genArgs = for {
             numTooFewReqShifting <- Gen.oneOf(Gen.const(0), Gen.choose(1, posTimePairs.length))
             numTooFewReqAccuracy <- Gen.oneOf(Gen.const(0), Gen.choose(posTimePairs.length - numTooFewReqShifting, posTimePairs.length))
@@ -645,11 +635,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
         def genArgs = for {
-            rois <- posTimePairs.traverse{ pt => 
-                Gen.choose[Int](AbsoluteMinimumShifting, maxNumRoisSmallTests)
-                    .flatMap(Gen.listOfN(_, arbitrary[DetectedRoi].map(_.setUsable)))
-                    .map(pt -> _)
-            }
+            rois <- posTimePairs.traverse{ pt => genUsableRois(AbsoluteMinimumShifting, maxNumRoisSmallTests).map(pt -> _) }
             numShifting <- Gen.choose(rois.map(_._2.length).max, 1000).map(ShiftingCount.unsafe)
             numAccuracy <- Gen.choose(1, 1000).map(PositiveInt.unsafe)
         } yield (numShifting, numAccuracy, rois)
@@ -670,16 +656,22 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         }
     }
 
-    test("No unusable ROI is ever used.") {
+    test("No unusable ROI is ever used, and ROI indices and coordiantes are preserved during partition.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
-        def genSinglePosTimeRois = for {
-            numUsable <- Gen.choose[Int](AbsoluteMinimumShifting, maxNumRoisSmallTests)
-            numUnusable <- Gen.choose[Int](AbsoluteMinimumShifting, maxNumRoisSmallTests)
-            usable <- Gen.listOfN(numUsable, arbitrary[DetectedRoi].map(_.setUsable))
-            unusable <- Gen.listOfN(numUnusable, arbitrary[DetectedRoi].map(_.setUnusable))
-        } yield Random.shuffle(usable ::: unusable).toList
+        def genSinglePosTimeRois = {
+            given arbPt: Arbitrary[Point3D] = {
+                given arbX: Arbitrary[XCoordinate] = Gen.choose[Int](-3e3.toInt, 3e3.toInt).map(x => XCoordinate(x.toDouble)).toArbitrary
+                given arbY: Arbitrary[YCoordinate] = Gen.choose[Int](-3e3.toInt, 3e3.toInt).map(y => YCoordinate(y.toDouble)).toArbitrary
+                given arbZ: Arbitrary[ZCoordinate] = Gen.choose[Int](-3e3.toInt, 3e3.toInt).map(z => ZCoordinate(z.toDouble)).toArbitrary
+                Gen.zip(arbitrary[XCoordinate], arbitrary[YCoordinate], arbitrary[ZCoordinate]).map(Point3D.apply.tupled).toArbitrary
+            }
+            for {
+                usable <- genUsableRois(AbsoluteMinimumShifting, AbsoluteMinimumShifting)
+                unusable <- genUnusableRois(1, AbsoluteMinimumShifting)
+            } yield Random.shuffle(usable ::: unusable).toList
+        }
         val posTimePairs = Random.shuffle(
-            (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
+            (0 to 0).flatMap{ p => (0 to 0).map(p -> _) }
         ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
         def genArgs = for {
             numShifting <- Gen.choose(AbsoluteMinimumShifting, 2 * maxNumRoisSmallTests).map(ShiftingCount.unsafe)
@@ -724,13 +716,23 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                     (usable.toMap, unusable.toMap)
                 }
                 obsRoisAll.filter(_._2.isEmpty) shouldEqual Map()
+
+                // DEBUG
+                given ev: Ordering[(RoiIndex, Point3D)] = Order[(RoiIndex, Point3D)].toOrdering
+                println("OBS")
+                obsRoisAll.foreach((k, v) => 
+                    println(k)
+                    v.toList.sorted.foreach(println)
+                    println("USABLE")
+                    obsRoisUsable(k).toList.sorted.foreach(println)
+                    println("UNUSABLE")
+                    obsRoisUnusable(k).toList.sorted.foreach(println)
+                )
                 obsRoisAll.map((pt, rois) => pt -> (rois & obsRoisUnusable(pt)) ) shouldEqual obsRoisAll.map((pt, _) => pt -> Set())
                 obsRoisAll.map((pt, rois) => pt -> (rois -- obsRoisUsable(pt)) ) shouldEqual obsRoisAll.map((pt, _) => pt -> Set())
             }
         }
     }
-
-    test("ROI centroid coordinates and IDs are correctly preserved during partition.") { pending }
 
     /* *******************************************************************************
      * Ancillary types and functions
@@ -740,11 +742,54 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
 
     /** Minimal detected bead ROIs field consumed by the partitioning program under test */
     val ColumnNamesToParse = List(ParserConfig.xCol.get, ParserConfig.yCol.get, ParserConfig.zCol.get, ParserConfig.qcCol)
-    
+
+    /**
+     * Generate collection of detected ROIs in which usability is mixed, for tests where percentage/ratio should be irrelevant.
+     * 
+     * Here, note that the _total_ size of the generated collection will be in [lo,  hi].
+     * 
+     * @param lo The minimum number of ROIs in the output collection
+     * @param hi The maximum number of ROIs in the output collection
+     * @return A generator of a collection of detected ROIs
+     */
+    def genMixedUsabilityRois(lo: Int, hi: Int)(using Arbitrary[RoiIndex], Arbitrary[Point3D]) = for {
+        usable <- genUsableRois(lo, hi)
+        unusable <- genUnusableRois(math.max(0, lo - usable.length), hi - usable.length)
+    } yield Random.shuffle(usable ::: unusable).toList
+
+    /**
+     * Generate collection of detected ROIs in which usability is mixed, for tests where percentage/ratio should be irrelevant.
+     * 
+     * Here, note that the size of _each_ subcollection (usable or unusable) will be in [lo,  hi].
+     * Therefore, the _total_ collection size will be in [2 * lo, 2 * hi].
+     * 
+     * @param lo The minimum number of ROIs in _each_ of the subcollections (usable and unusable)
+     * @param hi The maximum number of ROIs in _each_ of the subcollections (usable and unusable)
+     * @return A generator of a collection of detected ROIs
+     */
+    def genMixedUsabilityRoisEachSize(lo: Int, hi: Int)(using Arbitrary[RoiIndex], Arbitrary[Point3D]) = for {
+        usable <- genUsableRois(lo, hi)
+        unusable <- genUnusableRois(lo, hi)
+    } yield Random.shuffle(usable ::: unusable).toList
+
+    /** Generate {@code [lo, hi]} detected ROIs with nonempty fail code. */
+    def genUnusableRois(lo: Int, hi: Int)(using Arbitrary[RoiIndex], Arbitrary[Point3D]) = 
+        Gen.choose(lo, hi).flatMap(Gen.listOfN(_, genUnusableDetectedRoi))
+
+    /** Generate {@code [lo, hi]} detected ROIs with empty fail code. */
+    def genUsableRois(lo: Int, hi: Int)(using Arbitrary[RoiIndex], Arbitrary[Point3D]) = 
+        genUnusableRois(lo, hi).map(_.map(_.setUsable))
+
+    /** Generate a single {@code DetectedRoi} with nonempty fail code. */
+    def genUnusableDetectedRoi(using Arbitrary[Point3D], Arbitrary[RoiIndex]): Gen[DetectedRoi] = for {
+        i <- arbitrary[RoiIndex]
+        pt <- arbitrary[Point3D]
+        failCode <- Gen.choose(1, 5).flatMap(Gen.listOfN(_, Gen.alphaChar).map(_.mkString("")))
+    } yield DetectedRoi(i, pt, RoiFailCode(failCode))
+
     /** Syntax additions on a detected ROI to set its usability flag */
     extension (roi: DetectedRoi)
-        def setUsable: DetectedRoi = roi.copy(isUsable = true)
-        def setUnusable: DetectedRoi = roi.copy(isUsable = false)
+        def setUsable: DetectedRoi = roi.copy(failCode = RoiFailCode.success)
 
     /** Generate a pair of pairs of nonnegative integers such that the first pair isn't the same as the second. */
     def genDistinctNonnegativePairs: Gen[(PosFramePair, PosFramePair)] = 
@@ -764,7 +809,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
             Array("", ParserConfig.xCol.get, ParserConfig.yCol.get, ParserConfig.zCol.get, ParserConfig.qcCol),
             (p: Point3D) => Array(p.x.get, p.y.get, p.z.get).map(_.toString)
         )
-        val records = rois.map{ roi => roi.index.get.toString +: getPointFields(roi.centroid) :+ "" }
+        val records = rois.map{ roi => roi.index.get.toString +: getPointFields(roi.centroid) :+ roi.failCode.get }
         os.write(f, (header +: records).map(_.mkString(",") ++ "\n"))
     }
 

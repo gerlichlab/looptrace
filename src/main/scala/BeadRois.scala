@@ -4,12 +4,24 @@ import scala.util.NotGiven
 import upickle.default.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ Coordinate, CoordinateSequence, Point3D }
 
+/** A type wrapper around a string with which to represent the reason(s) why a bead ROI is unusable */
+final case class RoiFailCode(get: String):
+    def indicatesFailure: Boolean = get.nonEmpty
+    def indicatesSuccess: Boolean = !indicatesFailure
+end RoiFailCode
+
+/** Helpers for working with {@code RoiFailCode} values */
+object RoiFailCode:
+    def success = RoiFailCode("")
+
+/** An entity which has a {@code RoiIndex} and a centroid */
 sealed trait RoiLike:
     def index: RoiIndex
     def centroid: Point3D
 
 /** Type representing a detected fiducial bead region of interest (ROI) */
-final case class DetectedRoi(index: RoiIndex, centroid: Point3D, isUsable: Boolean) extends RoiLike
+final case class DetectedRoi(index: RoiIndex, centroid: Point3D, failCode: RoiFailCode) extends RoiLike:
+    def isUsable: Boolean = failCode.indicatesSuccess
 
 /** A region of interest (ROI) selected for use in some process */
 sealed trait SelectedRoi extends RoiLike {
