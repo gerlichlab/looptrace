@@ -566,7 +566,9 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
         def genDetected(lo: Int, hi: Int) = 
-            (_: List[PosFramePair]).traverse{ pt => genMixedUsabilityRoisEachSize(lo, hi).map(pt -> _) }
+            // Make all ROIs usable so that the math about how many will be realized (used) is easier; 
+            // in particular, we don't want that math dependent on counting the number of usable vs. unusable ROIs.
+            (_: List[PosFramePair]).traverse{ pt => genUsableRois(lo, hi).map(pt -> _) }
         def genArgs = for {
             numTooFewReqShifting <- Gen.oneOf(Gen.const(0), Gen.choose(1, posTimePairs.length))
             numTooFewReqAccuracy <- Gen.oneOf(Gen.const(0), Gen.choose(posTimePairs.length - numTooFewReqShifting, posTimePairs.length))
