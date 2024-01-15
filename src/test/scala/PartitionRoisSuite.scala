@@ -11,19 +11,16 @@ import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.{ X
 
 /** Types and helpers for testing partitioning of regions of interest (ROIs) */
 trait PartitionRoisSuite extends LooptraceSuite:
-    
+
     /** Arbitrary point, index, and usability flag lifted into detected ROI data type value */
-    given detectedRoiArbitrary(using arbComponents: Arbitrary[(RoiIndex, Point3D, Boolean)]): Arbitrary[DetectedRoi] = 
+    given detectedRoiArbitrary(using arbComponents: Arbitrary[(RoiIndex, Point3D, RoiFailCode)]): Arbitrary[DetectedRoi] = 
         arbComponents.fmap(DetectedRoi.apply.tupled)
     
-    /** Generator for detected ROI, fixing the usability flag as given */
-    def genDetectedRoiFixedUse = (p: Boolean) => arbitrary[DetectedRoi].map(_.copy(isUsable = p))
-
     /** Arbitrary point, index, and lifted into shifting ROI data type value */
-    given shiftingRoiArbitrary: Arbitrary[RoiForShifting] = Arbitrary{ genSelectedRoi(RoiForShifting.apply) }
+    given arbitraryForRoiForShifting: Arbitrary[RoiForShifting] = Arbitrary{ genSelectedRoi(RoiForShifting.apply) }
     
     /** Arbitrary point, index, and lifted into accuracy ROI data type value */
-    given accuracyRoiArbitrary: Arbitrary[RoiForAccuracy] = Arbitrary{ genSelectedRoi(RoiForAccuracy.apply) }
+    given arbitraryForRoiForAccuracy: Arbitrary[RoiForAccuracy] = Arbitrary{ genSelectedRoi(RoiForAccuracy.apply) }
     
     /* Arbitrary instances for (z, y, x) columns to parse */
     given xColArb: Arbitrary[XColumn] = Arbitrary{ Gen.alphaNumStr.suchThat(_.nonEmpty).map(XColumn.apply) }
