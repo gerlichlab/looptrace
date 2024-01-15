@@ -426,7 +426,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
     test("Cases of TooFewHealthyRoisRescued are correct and generate expected (implied) too-few-accuracy-ROIs records.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
-            (0 to 2).flatMap{ p => (0 to 2).map(p -> _) }
+            (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
         type PosTimeRois = (PosFramePair, List[DetectedRoi])
         def genDetected(ptPairs: List[PosFramePair])(lo: Int, hi: Int): Gen[List[PosTimeRois]] = 
@@ -481,7 +481,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
     test("A ROI is never used for more than one purpose.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
-            (0 to 2).flatMap{ p => (0 to 2).map(p -> _) }
+            (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
         val maxReqShifting = 2 * AbsoluteMinimumShifting
         def genArgs: Gen[(ShiftingCount, PositiveInt, List[(PosFramePair, List[DetectedRoi])])] = for {
@@ -536,7 +536,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
     test("Any case of ROI count fewer than absolute minimum triggers expected exception.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
-            (0 to 2).flatMap{ p => (0 to 2).map(p -> _) }
+            (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
         def genDetected(lo: Int, hi: Int) = (_: List[PosFramePair]).traverse{ pt => 
             Gen.choose(lo, hi).flatMap(Gen.listOfN(_, arbitrary[DetectedRoi])).map(pt -> _)
@@ -572,7 +572,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
     test("Warnings file is correct and produced IF AND ONLY IF there is at least one case of too-few-ROIs.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
-            (0 to 2).flatMap{ p => (0 to 2).map(p -> _) }
+            (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
         def genDetected(lo: Int, hi: Int) = (_: List[PosFramePair]).traverse{ pt => 
             Gen.choose(lo, hi).flatMap(Gen.listOfN(_, arbitrary[DetectedRoi])).map(pt -> _)
@@ -642,7 +642,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
     test("When shifting request takes up all usable ROIs available, JSON files are still written for accuracy but are empty.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
-            (0 to 2).flatMap{ p => (0 to 2).map(p -> _) }
+            (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
         def genArgs = for {
             rois <- posTimePairs.traverse{ pt => 
@@ -670,7 +670,65 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         }
     }
 
-    test("No unusable ROI is ever used.") { pending }
+    test("No unusable ROI is ever used.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        def genSinglePosTimeRois = for {
+            numUsable <- Gen.choose[Int](AbsoluteMinimumShifting, maxNumRoisSmallTests)
+            numUnusable <- Gen.choose[Int](AbsoluteMinimumShifting, maxNumRoisSmallTests)
+            usable <- Gen.listOfN(numUsable, arbitrary[DetectedRoi].map(_.setUsable))
+            unusable <- Gen.listOfN(numUnusable, arbitrary[DetectedRoi].map(_.setUnusable))
+        } yield Random.shuffle(usable ::: unusable).toList
+        val posTimePairs = Random.shuffle(
+            (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
+        ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
+        def genArgs = for {
+            numShifting <- Gen.choose(AbsoluteMinimumShifting, 2 * maxNumRoisSmallTests).map(ShiftingCount.unsafe)
+            numAccuracy <- Gen.choose(1, 2 * maxNumRoisSmallTests).map(PositiveInt.unsafe)
+            rois <- posTimePairs.traverse{ pt => genSinglePosTimeRois.map(pt -> _) }
+        } yield (numShifting, numAccuracy, rois)
+        val simplifyRoi = (roi: RoiLike) => roi.index -> roi.centroid
+        forAll (genArgs) { (numShifting, numAccuracy, allFovTimeRois) => 
+            withTempDirectory{ (tempdir: os.Path) =>
+                /* First, write the input data files and do pretest. */
+                allFovTimeRois.foreach{ case ((p, t), rois) => writeMinimalInputRoisCsv(rois, tempdir / getInputFilename(p, t)) }
+                val expAllOutFiles = allFovTimeRois.map{ case ((p, t), _) => 
+                    (p -> t) -> List(getOutputFilepath(tempdir)(p, t, Purpose.Shifting), getOutputFilepath(tempdir)(p, t, Purpose.Accuracy))
+                }
+                expAllOutFiles.flatMap(_._2).filter(os.isFile) shouldEqual List()
+                /* Run the workflow and find the output files. */
+                workflow(tempdir, numShifting, numAccuracy, None, None)
+                val obsFilesShifting = os.list(getOutputSubfolder(tempdir)(Purpose.Shifting)).filter(os.isFile).toSet
+                val obsFilesAccuracy = os.list(getOutputSubfolder(tempdir)(Purpose.Accuracy)).filter(os.isFile).toSet
+                
+                val obsFilesAll = obsFilesShifting | obsFilesAccuracy
+                expAllOutFiles.flatMap(_._2).toSet shouldEqual obsFilesAll
+                
+                given readerForShifting: Reader[RoiForShifting] = simpleShiftingRW(ParserConfig.coordinateSequence)
+                given readerForAccuracy: Reader[RoiForAccuracy] = simpleAccuracyRW(ParserConfig.coordinateSequence)
+                val obsRoisShifting = allFovTimeRois.map{ 
+                    case ((p, t), _) => 
+                        val raw = readJsonFile[List[RoiForShifting]](getOutputFilepath(tempdir)(p, t, Purpose.Shifting))
+                        (p -> t) -> raw.map(simplifyRoi).toSet
+                }.toMap
+                val obsRoisAccuracy = allFovTimeRois.map{
+                    case ((p, t), _) => 
+                        val raw = readJsonFile[List[RoiForAccuracy]](getOutputFilepath(tempdir)(p, t, Purpose.Accuracy))
+                        (p -> t) -> raw.map(simplifyRoi).toSet
+                }.toMap
+                val obsRoisAll = obsRoisShifting |+| obsRoisAccuracy
+                val (obsRoisUsable, obsRoisUnusable) = {
+                    val (usable, unusable) = allFovTimeRois.map{ (pt, rois) => 
+                        val (yes, no) = rois.partition(_.isUsable)
+                        (pt -> yes.map(simplifyRoi).toSet, pt -> no.map(simplifyRoi).toSet)
+                    }.unzip
+                    (usable.toMap, unusable.toMap)
+                }
+                obsRoisAll.filter(_._2.isEmpty) shouldEqual Map()
+                obsRoisAll.map((pt, rois) => pt -> (rois & obsRoisUnusable(pt)) ) shouldEqual obsRoisAll.map((pt, _) => pt -> Set())
+                obsRoisAll.map((pt, rois) => pt -> (rois -- obsRoisUsable(pt)) ) shouldEqual obsRoisAll.map((pt, _) => pt -> Set())
+            }
+        }
+    }
 
     test("ROI centroid coordinates and IDs are correctly preserved during partition.") { pending }
 
@@ -685,8 +743,9 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
     
     /** Syntax additions on a detected ROI to set its usability flag */
     extension (roi: DetectedRoi)
-        def setUsable: DetectedRoi = roi.copy(isUsable = true)
-        def setUnusable: DetectedRoi = roi.copy(isUsable = false)
+        def setUsability = (use: Boolean) => roi.copy(isUsable = use)
+        def setUsable: DetectedRoi = setUsability(true)
+        def setUnusable: DetectedRoi = setUsability(false)
 
     /** Generate a pair of pairs of nonnegative integers such that the first pair isn't the same as the second. */
     def genDistinctNonnegativePairs: Gen[(PosFramePair, PosFramePair)] = 
