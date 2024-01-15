@@ -1,13 +1,11 @@
 package at.ac.oeaw.imba.gerlich
 
-import java.io.File
 import scala.util.Try
 import upickle.default.*
-import cats.{ Bifunctor, Order, Show }
-import cats.data.{ NonEmptyList as NEL, NonEmptySet, ValidatedNel }
+import cats.*
+import cats.data.*
 import cats.syntax.all.*
 import mouse.boolean.*
-
 import scopt.Read
 import com.github.tototoshi.csv.*
 
@@ -16,11 +14,11 @@ package object looptrace {
     val VersionName = "0.2.0-SNAPSHOT"
 
     type CsvRow = Map[String, String]
-    type ErrorMessages = NEL[String]
+    type ErrorMessages = NonEmptyList[String]
     type ErrMsgsOr[A] = Either[ErrorMessages, A]
     
     /** Nonempty set wrapped in {@code Right} if no duplicates, or {@code Left}-wrapped pairs of element and repeat count */
-    def safeNelToNes[A : Order](xs: NEL[A]): Either[NEL[(A, Int)], NonEmptySet[A]] = {
+    def safeNelToNes[A : Order](xs: NonEmptyList[A]): Either[NonEmptyList[(A, Int)], NonEmptySet[A]] = {
         val histogram = xs.groupByNem(identity).toNel.map(_.map(_.size))
         histogram.filter(_._2 > 1).toNel.toLeft(histogram.map(_._1).toNes)
     }
@@ -108,7 +106,7 @@ package object looptrace {
 
     /** Allow custom types as CLI parameters. */
     object ScoptCliReaders:
-        given pathRead(using fileRead: Read[File]): Read[os.Path] = fileRead.map(os.Path.apply)
+        given pathRead(using fileRead: Read[java.io.File]): Read[os.Path] = fileRead.map(os.Path.apply)
         given nonNegIntRead(using intRead: Read[Int]): Read[NonnegativeInt] = intRead.map(NonnegativeInt.unsafe)
         given nonNegRealRead(using numRead: Read[Double]): Read[NonnegativeReal] = numRead.map(NonnegativeReal.unsafe)
         given posIntRead(using intRead: Read[Int]): Read[PositiveInt] = intRead.map(PositiveInt.unsafe)
@@ -133,6 +131,7 @@ package object looptrace {
         def seqTo(n: NonnegativeInt): IndexedSeq[NonnegativeInt] = (0 to n).map(unsafe)
         def unsafe(z: Int): NonnegativeInt = either(z).fold(msg => throw new NumberFormatException(msg), identity)
         given nonnegativeIntOrder(using intOrd: Order[Int]): Order[NonnegativeInt] = intOrd.contramap(identity)
+        given showForNonnegativeInt: Show[NonnegativeInt] = Show.fromToString[NonnegativeInt]
     end NonnegativeInt
 
     /** Refinement type for nonnegative integers */
@@ -179,23 +178,6 @@ package object looptrace {
         def unsafe(x: Double): NonnegativeReal = either(x).fold(msg => throw new NumberFormatException(msg), identity)
         given nnRealOrd(using numOrd: Order[Double]): Order[NonnegativeReal] = numOrd.contramap(identity)
     end NonnegativeReal
-
-    enum Delimiter(val sep: String, val ext: String):
-        case CommaSeparator extends Delimiter(",", "csv")
-        case TabSeparator extends Delimiter("\t", "tsv")
-
-        def canonicalExtension: String = ext
-        def join(fields: Array[String]): String = fields mkString sep
-        def split(s: String): Array[String] = split(s, -1)
-        def split(s: String, limit: Int): Array[String] = s.split(sep, limit)
-    end Delimiter
-
-    object Delimiter:
-        def fromPath(p: os.Path): Option[Delimiter] = fromExtension(p.ext)
-        def fromPathUnsafe = (p: os.Path) => 
-            fromPath(p).getOrElse{ throw new IllegalArgumentException(s"Cannot infer delimiter from file: $p") }
-        def fromExtension(ext: String): Option[Delimiter] = Delimiter.values.filter(_.ext === ext).headOption
-    end Delimiter
     
     /** Type wrapper around the index of an imaging channel */
     final case class Channel(get: NonnegativeInt) extends AnyVal
