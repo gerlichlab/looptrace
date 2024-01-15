@@ -17,10 +17,10 @@ enum ExtantOutputHandler:
     }
 
     /** Print a message about why processing can proceed, or provide a {@code Left}-wrapped message or exception */
-    def prepareToWrite(f: os.Path): Either[Unit | FileAlreadyExistsException, os.Path] = {
+    def prepareToWrite(f: os.Path): Either[String | FileAlreadyExistsException, os.Path] = {
         if !os.isFile(f) then Right(f)
         else this match {
-            case ExtantOutputHandler.Skip => Left(())
+            case ExtantOutputHandler.Skip => Left(s"File to write already exists: $f")
             case ExtantOutputHandler.Fail => Left(new FileAlreadyExistsException(f.toString))
             case ExtantOutputHandler.Overwrite => Right(f)
         }
