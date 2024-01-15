@@ -764,7 +764,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
             Array("", ParserConfig.xCol.get, ParserConfig.yCol.get, ParserConfig.zCol.get, ParserConfig.qcCol),
             (p: Point3D) => Array(p.x.get, p.y.get, p.z.get).map(_.toString)
         )
-        val records = NonnegativeInt.indexed(rois).map{ (r, i) => i.toString +: getPointFields(r.centroid) :+ "" }
+        val records = rois.map{ roi => roi.index.get.toString +: getPointFields(roi.centroid) :+ "" }
         os.write(f, (header +: records).map(_.mkString(",") ++ "\n"))
     }
 
