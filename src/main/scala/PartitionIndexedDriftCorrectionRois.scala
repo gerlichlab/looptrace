@@ -305,10 +305,6 @@ object PartitionIndexedDriftCorrectionRois:
     /***********************/
     /* Helper types        */
     /***********************/
-    
-    /** Combine all given maps iff there's no overlap of sets of keys. */
-    def combineUnsafely(ms: List[JsonMappable.JMap]): JsonMappable.JMap = 
-        JsonMappable.combineSafely(ms).fold(reps => throw RepeatedKeysException(reps), identity)
 
     /** Write, to JSON, a pair of (FOV, image time) and a case of too-few-ROIs for shifting for drift correction. */
     private[looptrace] def readWriterForKeyedTooFewProblem: ReadWriter[(PosFramePair, RoisSplit.Problem)] = {
@@ -316,7 +312,9 @@ object PartitionIndexedDriftCorrectionRois:
         import PosFramePair.given
         import UJsonHelpers.UPickleCatsInstances.given
         readwriter[ujson.Value].bimap(
-            (pair, problem) => combineUnsafely(List(pair.toJsonMap, problem.toJsonMap)), 
+            (pair, problem) => JsonMappable
+                .combineSafely(List(pair.toJsonMap, problem.toJsonMap))
+                .fold(reps => throw RepeatedKeysException(reps), identity), 
             json => 
                 val pNel = Try{ PositionIndex.unsafe(json("position").int) }.toValidatedNel
                 val fNel = Try{ FrameIndex.unsafe(json("frame").int) }.toValidatedNel
