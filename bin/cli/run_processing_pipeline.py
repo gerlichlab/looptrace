@@ -207,9 +207,6 @@ def run_simple_distance_computation(config_file: ExtantFile) -> None:
         str(H.traces_file_qc_filtered),
         "-O", 
         H.analysis_path,
-        "--handleExtantOutput",
-        "OVERWRITE", # TODO: parameterise this, see: https://github.com/gerlichlab/looptrace/issues/142
-        "--sort",
     ]
     print(f"Running distance computation command: {' '.join(cmd_parts)}")
     return subprocess.check_call(cmd_parts)

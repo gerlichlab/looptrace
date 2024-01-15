@@ -22,8 +22,6 @@ object ComputeSimpleDistances {
     case class CliConfig(
         tracesFile: os.Path = null,
         outputFolder: os.Path = null, 
-        handleExtantOutput: ExtantOutputHandler = null,
-        sort: Boolean = false
     )
     
     final case class GoodInputRecord(position: PositionIndex, trace: TraceId, region: GroupName, frame: FrameIndex, point: Point3D)
@@ -109,25 +107,12 @@ object ComputeSimpleDistances {
             opt[os.Path]('O', "outputFolder")
                 .required()
                 .action((f, c) =>  c.copy(outputFolder = f))
-                .text("Path to output folder in which to write."), 
-            opt[ExtantOutputHandler]("handleExtantOutput")
-                .required()
-                .action((handle, c) => c.copy(handleExtantOutput = handle))
-                .text("How to handle existing output"),
-            opt[Unit]('S', "sort")
-                .action((_, c) => c.copy(sort = true))
-                .text("Say that output should be sorted (ascending by (FOV, region, trace, time))")
+                .text("Path to output folder in which to write."),
         )
 
         OParser.parse(parser, args, CliConfig()) match {
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
-            case Some(opts) => {
-                workflow(opts.tracesFile, opts.outputFolder, opts.handleExtantOutput, sort = opts.sort) match {
-                    case Right(_) => println("Done!")
-                    case Left(msg: String) => println(msg)
-                    case Left(err: Throwable) => throw err
-                }
-            }
+            case Some(opts) => workflow(opts.tracesFile, opts.outputFolder).fold(throw _, _ => println("Done!"))
         }
     }
 
@@ -151,51 +136,35 @@ object ComputeSimpleDistances {
         }
     }
 
-    def workflow(inputFile: os.Path, outputFolder: os.Path, handleExtantOutput: ExtantOutputHandler): Either[Throwable | String, HeadedFileWriter.DelimitedTextTarget] = 
-        workflow(inputFile, outputFolder, handleExtantOutput, false)
-
-    def workflow(inputFile: os.Path, outputFolder: os.Path, handleExtantOutput: ExtantOutputHandler, sort: Boolean): Either[Throwable | String, HeadedFileWriter.DelimitedTextTarget] = {
+    def workflow(inputFile: os.Path, outputFolder: os.Path): Either[Throwable, HeadedFileWriter.DelimitedTextTarget] = {
         import HeadedFileWriter.*
         import HeadedFileWriter.DelimitedTextTarget.*
 
-        /* Facilitate derivation of Eq[HeadedFileWriter[DelimitedTextTarget]]. */
-        import DelimitedTextTarget.given
-        given eqForPath: Eq[os.Path] = Eq.by(_.toString)
-
-        val strict = false
         val expectedOutputFile = HeadedFileWriter.DelimitedTextTarget(outputFolder, "pairwise_distances", OutputWriter.delimiter)
         
-        handleExtantOutput.prepareToWrite(expectedOutputFile.filepath) match {
-            case Right(_) => ()
-            case Left(msg: String) => { println(msg); sys.exit(0) }
-            case Left(err: Throwable) => throw err
-        }
         val inputDelimiter = Delimiter.fromPathUnsafe(inputFile)
         println(s"Reading input file: ${inputFile}")
         val (badInputRecords, goodInputRecords) = parseRecords(inputFile)
         if (badInputRecords.nonEmpty) {
             val limit = 3
-            val msg1 = s"${badInputRecords.length} bad record(s) from input file ${inputFile}"
-            val msg2 = s"First $limit: ${badInputRecords.take(limit).map(_.show) `mkString` "\n"}"
-            if (strict) { throw new Exception(s"$msg1. $msg2") }
-            else {
-                println(s"WARNING! $msg1")
-                println(msg2)
-            }
+            println(s"WARNING! ${badInputRecords.length} bad record(s) from input file ${inputFile}")
+            println(s"First $limit (below):")
+            badInputRecords.take(limit).map(_.show).foreach(println)
         }
         val outputRecords = inputRecordsToOutputRecords(goodInputRecords)
         println(s"Writing output file: ${expectedOutputFile.filepath}")
         val observedOutputFile = {
-            val recs = {
-                type Key = (PositionIndex, GroupName, TraceId, FrameIndex, FrameIndex)
-                if sort 
-                then outputRecords.toList.sortBy(r => (r.position, r.region, r.trace, r.frame1, r.frame2))(summon[Order[Key]].toOrdering)
-                else outputRecords
-            }
+            val recs = outputRecords.toList.sortBy{ r => 
+                (r.position, r.region, r.trace, r.frame1, r.frame2)
+            }(summon[Order[(PositionIndex, GroupName, TraceId, FrameIndex, FrameIndex)]].toOrdering)
             OutputWriter.writeRecordsToFile(recs)(expectedOutputFile)
         }
+
+        /* Facilitate derivation of Eq[HeadedFileWriter[DelimitedTextTarget]]. */
+        import DelimitedTextTarget.given
+        given eqForPath: Eq[os.Path] = Eq.by(_.toString)
         (observedOutputFile === expectedOutputFile).either(
-            new Exception(s"Observed output file (${observedOutputFile}) differs from expectation (${expectedOutputFile})"), 
+            new Exception(s"Observed output filepath (${observedOutputFile}) differs from expectation (${expectedOutputFile})"), 
             observedOutputFile
             )
     }
