@@ -9,7 +9,7 @@ import yaml
 from gertils import ExtantFile
 
 from looptrace.Deconvolver import REQ_GPU_KEY
-from looptrace import Drifter, LOOPTRACE_JAR_PATH, MINIMUM_SPOT_SEPARATION_KEY, ZARR_CONVERSIONS_KEY
+from looptrace import Drifter, LOOPTRACE_JAR_PATH, MINIMUM_SPOT_SEPARATION_KEY, TRACING_SUPPORT_EXCLUSIONS_KEY, ZARR_CONVERSIONS_KEY
 from looptrace.SpotPicker import DetectionMethod, CROSSTALK_SUBTRACTION_KEY, DETECTION_METHOD_KEY as SPOT_DETECTION_METHOD_KEY
 from looptrace.Tracer import MASK_FITS_ERROR_MESSAGE
 
@@ -89,6 +89,17 @@ def find_config_file_errors(config_file: ExtantFile) -> List[ConfigFileError]:
     if conf_data.get("mask_fits", False):
         errors.append(ConfigFileError(MASK_FITS_ERROR_MESSAGE))
     
+    try:
+        probe_trace_exclusions = conf_data[TRACING_SUPPORT_EXCLUSIONS_KEY]
+    except KeyError:
+        errors.append(f"Config lacks probes to exclude from tracing support ('{TRACING_SUPPORT_EXCLUSIONS_KEY}')!")
+    else:
+        if not isinstance(probe_trace_exclusions, list):
+            typename = type(probe_trace_exclusions).__name__
+            errors.append(f"Probes to exclude from tracing support ('{TRACING_SUPPORT_EXCLUSIONS_KEY}') isn't a list, but rather {typename}!")
+        elif not len(probe_trace_exclusions) == 0:
+            errors.append(f"List of probes to from tracing support ('{TRACING_SUPPORT_EXCLUSIONS_KEY}') is empty!")
+
     return errors
 
 

@@ -10,6 +10,7 @@ __all__ = [
     "SIGMA_XY_MAX_NAME",
     "SIGMA_Z_MAX_NAME",
     "SIGNAL_NOISE_RATIO_NAME",
+    "TRACING_SUPPORT_EXCLUSIONS_KEY",
     "ZARR_CONVERSIONS_KEY",
     ]
 
@@ -23,4 +24,5 @@ MINIMUM_SPOT_SEPARATION_KEY = "min_spot_dist"
 SIGMA_XY_MAX_NAME = "sigma_xy_max"
 SIGMA_Z_MAX_NAME = "sigma_z_max"
 SIGNAL_NOISE_RATIO_NAME = "A_to_BG"
+TRACING_SUPPORT_EXCLUSIONS_KEY = "illegal_frames_for_trace_support"
 ZARR_CONVERSIONS_KEY = "zarr_conversions"
