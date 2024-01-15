@@ -11,7 +11,11 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 
-/** Simple pairwise distances within trace IDs. */
+/**
+ * Simple pairwise distances within trace IDs
+ * 
+ * @author Vince Reuter
+ */
 object ComputeSimpleDistances {
     val ProgramName = "ComputeSimpleDistances"
     
@@ -29,6 +33,7 @@ object ComputeSimpleDistances {
         given showForBadInputRecord: Show[BadInputRecord] = Show.show{ r => s"${r.lineNumber}: ${r.data} -- ${r.errors}" }
     end BadInputRecord
 
+    /** Likely will correspond to regional barcode imaging timepoint */
     final case class GroupName(get: String) extends AnyVal
     object GroupName:
         given orderForGroupName: Order[GroupName] = Order.by(_.get)
@@ -39,8 +44,7 @@ object ComputeSimpleDistances {
     object TraceId:
         given orderForTraceId: Order[TraceId] = Order.by(_.get)
         given showForTraceId: Show[TraceId] = Show.show(_.get.toString)
-        def either = NonnegativeInt.either >> TraceId.apply
-        def parse = safeParseInt >>> either
+        def fromInt = NonnegativeInt.either >> TraceId.apply
     end TraceId
 
     final case class OutputRecord(
@@ -69,8 +73,6 @@ object ComputeSimpleDistances {
         override val delimiter: Delimiter = Delimiter.CommaSeparator
     }
 
-    // TODO: generalise beginning with DistanceRecord.scala.
-    //def parseRecords(header: Array[String])(rawRecords: Iterable[Array[String]]): (List[BadInputRecord], List[(GoodInputRecord, NonnegativeInt)]) = {
     def parseRecords(inputFile: os.Path): (List[BadInputRecord], List[(GoodInputRecord, NonnegativeInt)]) = {
         val (header, rawRecords) = safeReadAllWithOrderedHeaders(inputFile).fold(throw _, identity)
         val validateRecordLength = (r: CsvRow) => 
@@ -78,7 +80,7 @@ object ComputeSimpleDistances {
         Alternative[List].separate(NonnegativeInt.indexed(rawRecords.toList).map{ (r, i) => 
             validateRecordLength(r).flatMap(_ => 
                 val positionNel = safeGetFromRow("pos_index", safeParseInt >>> PositionIndex.fromInt)(r)
-                val traceNel = safeGetFromRow("trace_id", TraceId.parse)(r)
+                val traceNel = safeGetFromRow("trace_id", safeParseInt >>> TraceId.fromInt)(r)
                 val regionNel = safeGetFromRow("ref_frame", GroupName(_).asRight)(r)
                 val locusNel = safeGetFromRow("frame", safeParseInt >>> FrameIndex.fromInt)(r)
                 val pointNel = {
