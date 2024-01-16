@@ -8,9 +8,10 @@ import org.scalacheck.Arbitrary.arbitrary
 trait ScalacheckGenericExtras:
 
     /** Define mapping operation by building new arbitrary after mapping over the instance's generator. */
-    given applicativeForArbitrary: Applicative[Arbitrary] with
-        override def pure[A](a: A): Arbitrary[A] = Applicative[Gen].pure(a).toArbitrary
-        override def ap[A, B](ff: Arbitrary[A => B])(fa: Arbitrary[A]): Arbitrary[B] = Applicative[Gen].ap(ff.gen)(fa.gen).toArbitrary
+    given applicativeForArbitrary(using ev: Applicative[Gen]): Applicative[Arbitrary] with
+        override def pure[A](a: A): Arbitrary[A] = ev.pure(a).toArbitrary
+        override def ap[A, B](ff: Arbitrary[A => B])(fa: Arbitrary[A]): Arbitrary[B] = 
+            ev.ap(ff.arbitrary)(fa.arbitrary).toArbitrary
 
     /** Use Gen.flatMap to define {@code Applicative.ap}, and {@code Gen.const} to define {@code Applicative.pure}. */
     given applicativeForGen: Applicative[Gen] with
@@ -22,8 +23,7 @@ trait ScalacheckGenericExtras:
 
     /** Add nicer syntax to arbitrary instances. */
     extension [A](arb: Arbitrary[A])
-        def gen: Gen[A] = arb.arbitrary
-        infix def suchThat(p: A => Boolean): Arbitrary[A] = Arbitrary{ gen `suchThat` p }
+        infix def suchThat(p: A => Boolean): Arbitrary[A] = (arb.arbitrary `suchThat` p).toArbitrary
 
     /** Add nicer syntax to generators. */
     extension [A](g: Gen[A])
