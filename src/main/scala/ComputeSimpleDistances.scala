@@ -89,12 +89,12 @@ object ComputeSimpleDistances {
 
     /** Exception for when parsed header does not match expected header. */
     final case class UnexpectedHeaderException(observed: List[String], expected: List[String])
-        extends Exception(f"Expected ${observed.mkString(", ")} as header but got ${expected.mkString(", ")}"):
+        extends Exception(f"Expected ${expected.mkString(", ")} as header but got ${observed.mkString(", ")}"):
         require(observed =!= expected, "Alleged inequality between observed and expected header, but they're equivalent!")
 
     def parseRecords(inputFile: os.Path): (List[BadInputRecord], List[(GoodInputRecord, NonnegativeInt)]) = {
         val (header, rawRecords) = safeReadAllWithOrderedHeaders(inputFile).fold(throw _, identity)
-        if (header =!= InputColumns) throw new UnexpectedHeaderException(header, InputColumns)
+        if (header =!= InputColumns) throw new UnexpectedHeaderException(expected = InputColumns, observed = header)
         val validateRecordLength = (r: CsvRow) => 
             (r.size === header.length).either(NonEmptyList.one(s"Header has ${header.length} fields, but line has ${r.size}"), r)
         Alternative[List].separate(NonnegativeInt.indexed(rawRecords.toList).map{ (r, i) => 
