@@ -16,15 +16,15 @@ import mouse.boolean.*
  * @author Vince Reuter
  */
 trait HeadedFileWriter[R]:
-    def header: Array[String]
+    def header: List[String]
     
-    def toTextFields(r: R): Array[String]
+    def toTextFields(r: R): List[String]
         
-    def toTextFieldsChecked(r: R): Either[String, Array[String]] = {
+    def toTextFieldsChecked(r: R): Either[String, List[String]] = {
         val fields = toTextFields(r)
         (fields.length === header.length).either(s"${fields.length} field(s) in record and ${header.length} in header!", fields)
     }
-    def toTextFieldsCheckedUnsafe(r: R): Array[String] = toTextFieldsChecked(r).fold(msg => throw new Exception(msg), identity)
+    def toTextFieldsCheckedUnsafe(r: R): List[String] = toTextFieldsChecked(r).fold(msg => throw new Exception(msg), identity)
 
     /**
       * Write the given collection of records to the given target.
@@ -56,19 +56,19 @@ object HeadedFileWriter:
     /** A target / output file for some file writing process, bundling a filepath, and line formation */
     trait Target[A] {
         /** How to convert a record (sequence of text fields) into a line of text to write */
-        def getLineMaker: A => (Array[String] => String)
+        def getLineMaker: A => (List[String] => String)
         /** File to which to write */
         def getFile: A => os.Path
     }
 
     /** Syntax enrichment for any value of a type for which there's a {@code Target} instance available */
     extension [A](a: A)(using ev: Target[A])
-        def fieldsToLine: Array[String] => String = ev.getLineMaker(a)
+        def fieldsToLine: List[String] => String = ev.getLineMaker(a)
         def value: os.Path = ev.getFile(a)
         final def isFile: Boolean = os.isFile(value)
 
     final case class DelimitedTextTarget(folder: os.Path, nameBase: String, delimiter: Delimiter):
-        def fieldsToLine: Array[String] => String = delimiter.join
+        def fieldsToLine: List[String] => String = delimiter.join
         def filepath: os.Path = delimiter.filepath(folder, nameBase)
     end DelimitedTextTarget
 
@@ -76,7 +76,7 @@ object HeadedFileWriter:
     object DelimitedTextTarget:
         /** Provide an instance of the target-like typeclass for this more specific type. */
         given TargetForDelimitedTextTarget: Target[DelimitedTextTarget] with
-            override def getLineMaker: DelimitedTextTarget => (Array[String] => String) = _.fieldsToLine
+            override def getLineMaker: DelimitedTextTarget => (List[String] => String) = _.fieldsToLine
             override def getFile: DelimitedTextTarget => os.Path = _.filepath
         given eqForDelimitedTextTarget(using Eq[os.Path]): Eq[DelimitedTextTarget] = Eq.by{
             target => (target.folder, target.nameBase, target.delimiter)
