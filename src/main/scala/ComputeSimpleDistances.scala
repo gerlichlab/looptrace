@@ -25,8 +25,7 @@ object ComputeSimpleDistances {
     )
     
     final case class GoodInputRecord(position: PositionIndex, trace: TraceId, region: GroupName, frame: FrameIndex, point: Point3D)
-    
-    case class BadInputRecord(lineNumber: Int, data: CsvRow, errors: NonEmptyList[String])
+    final case class BadInputRecord(lineNumber: Int, data: CsvRow, errors: NonEmptyList[String])
     object BadInputRecord:
         given showForBadInputRecord: Show[BadInputRecord] = Show.show{ r => s"${r.lineNumber}: ${r.data} -- ${r.errors}" }
     end BadInputRecord
@@ -112,7 +111,7 @@ object ComputeSimpleDistances {
 
         OParser.parse(parser, args, CliConfig()) match {
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
-            case Some(opts) => workflow(opts.tracesFile, opts.outputFolder).fold(throw _, _ => println("Done!"))
+            case Some(opts) => workflow(opts.tracesFile, opts.outputFolder).fold(msg => throw new Exception(msg), _ => println("Done!"))
         }
     }
 
@@ -136,11 +135,9 @@ object ComputeSimpleDistances {
         }
     }
 
-    def workflow(inputFile: os.Path, outputFolder: os.Path): Either[Throwable, HeadedFileWriter.DelimitedTextTarget] = {
-        import HeadedFileWriter.*
-        import HeadedFileWriter.DelimitedTextTarget.*
-
-        val expectedOutputFile = HeadedFileWriter.DelimitedTextTarget(outputFolder, "pairwise_distances", OutputWriter.delimiter)
+    def workflow(inputFile: os.Path, outputFolder: os.Path): Either[String, HeadedFileWriter.DelimitedTextTarget] = {
+        val expOutBaseName = s"${inputFile.last.split("\\.").head}.pairwise_distances"
+        val expectedOutputFile = HeadedFileWriter.DelimitedTextTarget(outputFolder, expOutBaseName, OutputWriter.delimiter)
         
         val inputDelimiter = Delimiter.fromPathUnsafe(inputFile)
         println(s"Reading input file: ${inputFile}")
@@ -160,11 +157,12 @@ object ComputeSimpleDistances {
             OutputWriter.writeRecordsToFile(recs)(expectedOutputFile)
         }
 
-        /* Facilitate derivation of Eq[HeadedFileWriter[DelimitedTextTarget]]. */
-        import DelimitedTextTarget.given
+        // Facilitate derivation of Eq[HeadedFileWriter[DelimitedTextTarget]].
+        import HeadedFileWriter.DelimitedTextTarget.given
         given eqForPath: Eq[os.Path] = Eq.by(_.toString)
+        // Check that the observed output path matches the expectation and provide new exception if not.
         (observedOutputFile === expectedOutputFile).either(
-            new Exception(s"Observed output filepath (${observedOutputFile}) differs from expectation (${expectedOutputFile})"), 
+            s"Observed output filepath (${observedOutputFile}) differs from expectation (${expectedOutputFile})", 
             observedOutputFile
             )
     }
