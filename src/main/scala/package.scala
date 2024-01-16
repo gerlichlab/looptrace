@@ -44,7 +44,7 @@ package object looptrace {
 
     /** Wrapper around {@code os.write} to handle writing an iterable of lines. */
     def writeTextFile(target: os.Path, data: Iterable[Array[String]], delimiter: Delimiter) = 
-        os.write(target, data.map(delimiter.join.andThen(_ ++ "\n")))
+        os.write(target, data.map(delimiter.join(_: Array[String]) ++ "\n"))
 
     extension [A, F[_, _] : Bifunctor](faa: F[A, A])
         def mapBoth[B](f: A => B): F[B, B] = faa.bimap(f, f)
