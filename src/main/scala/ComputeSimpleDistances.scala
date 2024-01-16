@@ -157,7 +157,7 @@ object ComputeSimpleDistances {
             val recs = outputRecords.toList.sortBy{ r => 
                 (r.position, r.region, r.trace, r.frame1, r.frame2)
             }(summon[Order[(PositionIndex, GroupName, TraceId, FrameIndex, FrameIndex)]].toOrdering)
-            OutputWriter.writeRecordsToFile(recs)(expectedOutputFile)
+            OutputWriter.writeRecordsToFile(recs, expectedOutputFile)
         }
 
         // Facilitate derivation of Eq[HeadedFileWriter[DelimitedTextTarget]].
