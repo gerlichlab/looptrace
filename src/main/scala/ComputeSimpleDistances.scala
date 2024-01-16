@@ -61,31 +61,52 @@ object ComputeSimpleDistances {
     val parserBuilder = OParser.builder[CliConfig]
 
     // These come from the *traces.csv file produced at the end of looptrace.
-    val InputColumns = List("pos_index", "trace_id", "ref_frame", "frame", "x", "y", "z")
+    val FieldOfViewColumn = "pos_index"
+    val TraceIdColumn = "trace_id"
+    val RegionalBarcodeTimepointColumn = "ref_frame"
+    val LocusSpecificBarcodeTimepointColun = "frame"
+    val XCoordinateColumn = "x"
+    val YCoordinateColumn = "y"
+    val ZCoordinateColumn = "z"
+    val InputColumns = List(
+        FieldOfViewColumn, 
+        TraceIdColumn, 
+        RegionalBarcodeTimepointColumn, 
+        LocusSpecificBarcodeTimepointColun, 
+        XCoordinateColumn, 
+        YCoordinateColumn, 
+        ZCoordinateColumn,
+        )
 
     val OutputWriter = new HeadedFileWriter[OutputRecord] {
         // These are our names.
-        override def header: Array[String] = Array("position", "traceId", "region", "frame1", "frame2", "distance", "inputIndex1", "inputIndex2")
-        override def toTextFields(r: OutputRecord): Array[String] = r match {
+        override def header: List[String] = List("position", "traceId", "region", "frame1", "frame2", "distance", "inputIndex1", "inputIndex2")
+        override def toTextFields(r: OutputRecord): List[String] = r match {
             case OutputRecord(pos, trace, region, frame1, frame2, distance, idx1, idx2) => 
-                Array(pos.show, trace.show, region.show, frame1.show, frame2.show, distance.get.toString, idx1.show, idx2.show)
+                List(pos.show, trace.show, region.show, frame1.show, frame2.show, distance.get.toString, idx1.show, idx2.show)
         }
     }
 
+    /** Exception for when parsed header does not match expected header. */
+    final case class UnexpectedHeaderException(observed: List[String], expected: List[String])
+        extends Exception(f"Expected ${observed.mkString(", ")} as header but got ${expected.mkString(", ")}"):
+        require(observed =!= expected, "Alleged inequality between observed and expected header, but they're equivalent!")
+
     def parseRecords(inputFile: os.Path): (List[BadInputRecord], List[(GoodInputRecord, NonnegativeInt)]) = {
         val (header, rawRecords) = safeReadAllWithOrderedHeaders(inputFile).fold(throw _, identity)
+        if (header =!= InputColumns) throw new UnexpectedHeaderException(header, InputColumns)
         val validateRecordLength = (r: CsvRow) => 
             (r.size === header.length).either(NonEmptyList.one(s"Header has ${header.length} fields, but line has ${r.size}"), r)
         Alternative[List].separate(NonnegativeInt.indexed(rawRecords.toList).map{ (r, i) => 
             validateRecordLength(r).flatMap(_ => 
-                val positionNel = safeGetFromRow("pos_index", safeParseInt >>> PositionIndex.fromInt)(r)
-                val traceNel = safeGetFromRow("trace_id", safeParseInt >>> TraceId.fromInt)(r)
-                val regionNel = safeGetFromRow("ref_frame", GroupName(_).asRight)(r)
-                val locusNel = safeGetFromRow("frame", safeParseInt >>> FrameIndex.fromInt)(r)
+                val positionNel = safeGetFromRow(FieldOfViewColumn, safeParseInt >>> PositionIndex.fromInt)(r)
+                val traceNel = safeGetFromRow(TraceIdColumn, safeParseInt >>> TraceId.fromInt)(r)
+                val regionNel = safeGetFromRow(RegionalBarcodeTimepointColumn, GroupName(_).asRight)(r)
+                val locusNel = safeGetFromRow(LocusSpecificBarcodeTimepointColun, safeParseInt >>> FrameIndex.fromInt)(r)
                 val pointNel = {
-                    val xNel = safeGetFromRow("x", safeParseDouble >> XCoordinate.apply)(r)
-                    val yNel = safeGetFromRow("y", safeParseDouble >> YCoordinate.apply)(r)
-                    val zNel = safeGetFromRow("z", safeParseDouble >> ZCoordinate.apply)(r)
+                    val xNel = safeGetFromRow(XCoordinateColumn, safeParseDouble >> XCoordinate.apply)(r)
+                    val yNel = safeGetFromRow(YCoordinateColumn, safeParseDouble >> YCoordinate.apply)(r)
+                    val zNel = safeGetFromRow(ZCoordinateColumn, safeParseDouble >> ZCoordinate.apply)(r)
                     (xNel, yNel, zNel).mapN(Point3D.apply)
                 }
                 (positionNel, traceNel, regionNel, locusNel, pointNel).mapN(GoodInputRecord.apply).toEither
