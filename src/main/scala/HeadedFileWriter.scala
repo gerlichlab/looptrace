@@ -34,14 +34,15 @@ trait HeadedFileWriter[R]:
       * @tparam T The type of target value
       * @param records The records to write to the given target
       * @param target The "sink", or where to write the given records
+      * @param createFolders Whether intermediate folders needed to write the file may be created
       * @param ev Evidence of a {@code HeadedFileWriter.Target} instance for type {@code T} available in scope
       * @return The given target
       */
-    def writeRecordsToFile[T](records: Iterable[R])(target: T)(implicit ev: HeadedFileWriter.Target[T]): T = {
+    def writeRecordsToFile[T](records: Iterable[R], target: T, createFolders: Boolean = true)(using ev: HeadedFileWriter.Target[T]): T = {
         val outfile = ev.getFile(target)
         println(s"Writing records to file: $outfile")
         val fieldsToLine = ev.getLineMaker(target)
-        os.write(outfile, records.map{ r => fieldsToLine(toTextFieldsCheckedUnsafe(r)) ++ "\n" })
+        os.write(outfile, records.map{ r => fieldsToLine(toTextFieldsCheckedUnsafe(r)) ++ "\n" }, createFolders = createFolders)
         println("Done!")
         target
     }
