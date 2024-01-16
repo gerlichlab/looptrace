@@ -9,6 +9,7 @@ enum Delimiter(val sep: String, val ext: String):
 
     def canonicalExtension: String = ext
     def join(fields: Array[String]): String = fields mkString sep
+    def join(fields: Iterable[String]): String = fields mkString sep
     def filepath(folder: os.Path, baseName: String): os.Path = folder / s"${baseName}.${canonicalExtension}"
     def split(s: String): Array[String] = split(s, -1)
     def split(s: String, limit: Int): Array[String] = s.split(sep, limit)
