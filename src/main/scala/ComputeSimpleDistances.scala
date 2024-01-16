@@ -33,6 +33,8 @@ object ComputeSimpleDistances {
     /** Likely will correspond to regional barcode imaging timepoint */
     final case class GroupName(get: String) extends AnyVal
     object GroupName:
+        /** Often, the regional barcode imaging timepoint will be used as the group name, so provide this convenience constructor. */
+        def fromFrameIndex(t: FrameIndex): GroupName = GroupName(t.get.show)
         given orderForGroupName: Order[GroupName] = Order.by(_.get)
         given showForGroupName: Show[GroupName] = Show.show(_.get)
     end GroupName
@@ -42,6 +44,7 @@ object ComputeSimpleDistances {
         given orderForTraceId: Order[TraceId] = Order.by(_.get)
         given showForTraceId: Show[TraceId] = Show.show(_.get.toString)
         def fromInt = NonnegativeInt.either >> TraceId.apply
+        def fromRoiIndex(i: RoiIndex): TraceId = new TraceId(i.get)
     end TraceId
 
     final case class OutputRecord(
