@@ -19,9 +19,7 @@ trait HeadedFileWriter[R]:
     def header: Array[String]
     
     def toTextFields(r: R): Array[String]
-    
-    def delimiter: Delimiter
-    
+        
     def toTextFieldsChecked(r: R): Either[String, Array[String]] = {
         val fields = toTextFields(r)
         (fields.length === header.length).either(s"${fields.length} field(s) in record and ${header.length} in header!", fields)
@@ -38,11 +36,12 @@ trait HeadedFileWriter[R]:
       * @param ev Evidence of a {@code HeadedFileWriter.Target} instance for type {@code T} available in scope
       * @return The given target
       */
-    def writeRecordsToFile[T](records: Iterable[R], target: T, createFolders: Boolean = true)(using ev: HeadedFileWriter.Target[T]): T = {
+    def writeRecordsToFile[T](records: Seq[R], target: T, createFolders: Boolean = true)(using ev: HeadedFileWriter.Target[T]): T = {
         val outfile = ev.getFile(target)
-        println(s"Writing records to file: $outfile")
         val fieldsToLine = ev.getLineMaker(target)
-        os.write(outfile, records.map{ r => fieldsToLine(toTextFieldsCheckedUnsafe(r)) ++ "\n" }, createFolders = createFolders)
+        val rows = header +: records.map(toTextFieldsCheckedUnsafe)
+        println(s"Writing records to file: $outfile")
+        os.write(outfile, rows.map(fieldsToLine(_) ++ "\n"), createFolders = createFolders)
         println("Done!")
         target
     }
