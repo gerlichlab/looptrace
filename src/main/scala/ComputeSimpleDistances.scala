@@ -70,7 +70,6 @@ object ComputeSimpleDistances {
             case OutputRecord(pos, trace, region, frame1, frame2, distance, idx1, idx2) => 
                 Array(pos.show, trace.show, region.show, frame1.show, frame2.show, distance.get.toString, idx1.show, idx2.show)
         }
-        override val delimiter: Delimiter = Delimiter.CommaSeparator
     }
 
     def parseRecords(inputFile: os.Path): (List[BadInputRecord], List[(GoodInputRecord, NonnegativeInt)]) = {
@@ -140,7 +139,7 @@ object ComputeSimpleDistances {
 
     def workflow(inputFile: os.Path, outputFolder: os.Path): Either[String, HeadedFileWriter.DelimitedTextTarget] = {
         val expOutBaseName = s"${inputFile.last.split("\\.").head}.pairwise_distances"
-        val expectedOutputFile = HeadedFileWriter.DelimitedTextTarget(outputFolder, expOutBaseName, OutputWriter.delimiter)
+        val expectedOutputFile = HeadedFileWriter.DelimitedTextTarget(outputFolder, expOutBaseName, Delimiter.CommaSeparator)
         
         val inputDelimiter = Delimiter.fromPathUnsafe(inputFile)
         println(s"Reading input file: ${inputFile}")
