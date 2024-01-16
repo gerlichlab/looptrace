@@ -662,9 +662,9 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         def genSinglePosTimeRois = {
             given arbPt: Arbitrary[Point3D] = {
-                given arbX: Arbitrary[XCoordinate] = Gen.choose[Int](-3e3.toInt, 3e3.toInt).map(x => XCoordinate(x.toDouble)).toArbitrary
-                given arbY: Arbitrary[YCoordinate] = Gen.choose[Int](-3e3.toInt, 3e3.toInt).map(y => YCoordinate(y.toDouble)).toArbitrary
-                given arbZ: Arbitrary[ZCoordinate] = Gen.choose[Int](-3e3.toInt, 3e3.toInt).map(z => ZCoordinate(z.toDouble)).toArbitrary
+                given arbX: Arbitrary[XCoordinate] = Gen.choose(-3e3, 3e3).map(XCoordinate.apply).toArbitrary
+                given arbY: Arbitrary[YCoordinate] = Gen.choose(-3e3, 3e3).map(YCoordinate.apply).toArbitrary
+                given arbZ: Arbitrary[ZCoordinate] = Gen.choose(-3e3, 3e3).map(ZCoordinate.apply).toArbitrary
                 Gen.zip(arbitrary[XCoordinate], arbitrary[YCoordinate], arbitrary[ZCoordinate]).map(Point3D.apply.tupled).toArbitrary
             }
             for {
@@ -681,7 +681,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
             rois <- posTimePairs.traverse{ pt => genSinglePosTimeRois.map(pt -> _) }
         } yield (numShifting, numAccuracy, rois)
         val simplifyRoi = (roi: RoiLike) => roi.index -> roi.centroid
-        forAll (genArgs) { (numShifting, numAccuracy, allFovTimeRois) => 
+        forAll (genArgs, minSuccessful(200)) { (numShifting, numAccuracy, allFovTimeRois) => 
             withTempDirectory{ (tempdir: os.Path) =>
                 /* First, write the input data files and do pretest. */
                 allFovTimeRois.foreach{ case ((p, t), rois) => writeMinimalInputRoisCsv(rois, tempdir / getInputFilename(p, t)) }
