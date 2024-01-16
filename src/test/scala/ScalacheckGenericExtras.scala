@@ -1,6 +1,6 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
-import cats.{ Applicative, Functor }
+import cats.Applicative
 import org.scalacheck.{ Arbitrary, Gen }
 import org.scalacheck.Arbitrary.arbitrary
 
@@ -8,9 +8,9 @@ import org.scalacheck.Arbitrary.arbitrary
 trait ScalacheckGenericExtras:
 
     /** Define mapping operation by building new arbitrary after mapping over the instance's generator. */
-    given functorForArbitrary: Functor[Arbitrary] with
-        override def map[A, B](arb: Arbitrary[A])(f: A => B): Arbitrary[B] = 
-            Arbitrary{ arbitrary[A](arb).map(f) }
+    given applicativeForArbitrary: Applicative[Arbitrary] with
+        override def pure[A](a: A): Arbitrary[A] = Applicative[Gen].pure(a).toArbitrary
+        override def ap[A, B](ff: Arbitrary[A => B])(fa: Arbitrary[A]): Arbitrary[B] = Applicative[Gen].ap(ff.gen)(fa.gen).toArbitrary
 
     /** Use Gen.flatMap to define {@code Applicative.ap}, and {@code Gen.const} to define {@code Applicative.pure}. */
     given applicativeForGen: Applicative[Gen] with
