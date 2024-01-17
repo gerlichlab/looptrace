@@ -1,6 +1,5 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
-import scala.util.Try
 import cats.*
 import cats.data.*
 import cats.syntax.all.*
@@ -97,24 +96,37 @@ object ComputeSimpleDistances:
     }
 
     def parseRecords(inputFile: os.Path): (List[BadInputRecord], List[(GoodInputRecord, NonnegativeInt)]) = {
-        val (header, rawRecords) = safeReadAllWithOrderedHeaders(inputFile).fold(throw _, identity)
-        if (header =!= InputColumns) throw new UnexpectedHeaderException(expected = InputColumns, observed = header)
-        val validateRecordLength = (r: CsvRow) => 
+        val (header, records) = os.read.lines(inputFile)
+            .map(Delimiter.CommaSeparator.split)
+            .toList
+            .toNel
+            .fold(throw EmptyFileException(inputFile))(recs => recs.head -> recs.tail)
+        if (header.toList =!= InputColumns) throw UnexpectedHeaderException(expected = InputColumns, observed = header.toList)
+        val validateRecordLength = (r: Array[String]) => 
             (r.size === header.length).either(NonEmptyList.one(s"Header has ${header.length} fields, but line has ${r.size}"), r)
-        Alternative[List].separate(NonnegativeInt.indexed(rawRecords.toList).map{ (r, i) => 
-            validateRecordLength(r).flatMap(_ => 
-                val positionNel = safeGetFromRow(FieldOfViewColumn, safeParseInt >>> PositionIndex.fromInt)(r)
-                val traceNel = safeGetFromRow(TraceIdColumn, safeParseInt >>> TraceId.fromInt)(r)
-                val regionNel = safeGetFromRow(RegionalBarcodeTimepointColumn, GroupName(_).asRight)(r)
-                val locusNel = safeGetFromRow(LocusSpecificBarcodeTimepointColun, safeParseInt >>> FrameIndex.fromInt)(r)
-                val pointNel = {
-                    val xNel = safeGetFromRow(XCoordinateColumn, safeParseDouble >> XCoordinate.apply)(r)
-                    val yNel = safeGetFromRow(YCoordinateColumn, safeParseDouble >> YCoordinate.apply)(r)
-                    val zNel = safeGetFromRow(ZCoordinateColumn, safeParseDouble >> ZCoordinate.apply)(r)
-                    (xNel, yNel, zNel).mapN(Point3D.apply)
+        val parseRecord = {
+            val lookup = header.zipWithIndex.toMap
+            def miniparse[A] = (col: String, lift: String => Either[String, A]) => 
+                lookup.get(col).toRight(col).map{ i => safeGetFromRow(i, lift)(_: Array[String]) }.toValidatedNel
+            val parseFov = miniparse(FieldOfViewColumn, safeParseInt >>> PositionIndex.fromInt)
+            val parseTrace = miniparse(TraceIdColumn, safeParseInt >>> TraceId.fromInt)
+            val parseRegion = miniparse(RegionalBarcodeTimepointColumn, GroupName(_).asRight)
+            val parseLocus = miniparse(LocusSpecificBarcodeTimepointColun, safeParseInt >>> FrameIndex.fromInt)
+            val parseX = miniparse(XCoordinateColumn, safeParseDouble >> XCoordinate.apply)
+            val parseY = miniparse(YCoordinateColumn, safeParseDouble >> YCoordinate.apply)
+            val parseZ = miniparse(ZCoordinateColumn, safeParseDouble >> ZCoordinate.apply)    
+            (parseFov, parseTrace, parseRegion, parseLocus, parseX, parseY, parseZ).mapN(
+                (fov, trace, region, locus, x, y, z) => { (row: Array[String]) => 
+                    (fov(row), trace(row), region(row), locus(row), x(row), y(row), z(row))
+                        .mapN((pos, t, reg, loc, x, y, z) => GoodInputRecord(pos, t, reg, loc, Point3D(x, y, z)))
+                        .toEither
                 }
-                (positionNel, traceNel, regionNel, locusNel, pointNel).mapN(GoodInputRecord.apply).toEither
-            ).bimap(BadInputRecord(i, r, _), _ -> i)
+            ).fold(errors => throw new Exception(s"Could not build row parser: $errors"), identity)
+        }
+        Alternative[List].separate(NonnegativeInt.indexed(records).map{ 
+            (r, i) => validateRecordLength(r)
+                .flatMap(_ => parseRecord(r))
+                .bimap(msgs => BadInputRecord(i, r.toList, msgs), _ -> i)
         })
     }
 
@@ -156,7 +168,7 @@ object ComputeSimpleDistances:
      * @param data The raw CSV parse record (key-value mapping)
      * @param errors What went wrong with parsing the record's data
      */
-    final case class BadInputRecord(lineNumber: Int, data: CsvRow, errors: NonEmptyList[String])
+    final case class BadInputRecord(lineNumber: Int, data: List[String], errors: NonEmptyList[String])
     
     /** Helpers for working with bad input records */
     object BadInputRecord:
@@ -207,13 +219,16 @@ object ComputeSimpleDistances:
         }
     end OutputWriter
 
+    /** Error for when at least one record fails to parse correctly. */
+    final case class BadRecordsException(records: NonEmptyList[BadInputRecord]) 
+        extends Exception(s"${records.length} bad input records; first $MaxBadRecordsToShow (max): ${records.take(MaxBadRecordsToShow)}")
+
+    /** Error type for when a file to use is unexpectedly empty. */
+    final case class EmptyFileException(getFile: os.Path) extends Exception(s"File is empty: $getFile")
+
     /** Exception for when parsed header does not match expected header. */
     final case class UnexpectedHeaderException(observed: List[String], expected: List[String])
         extends Exception(f"Expected ${expected.mkString(", ")} as header but got ${observed.mkString(", ")}"):
         require(observed =!= expected, "Alleged inequality between observed and expected header, but they're equivalent!")
-
-    /** Error for when at least one record fails to parse correctly. */
-    final case class BadRecordsException(records: NonEmptyList[BadInputRecord]) 
-        extends Exception(s"${records.length} bad input records; first $MaxBadRecordsToShow (max): ${records.take(MaxBadRecordsToShow)}")
 
 end ComputeSimpleDistances
