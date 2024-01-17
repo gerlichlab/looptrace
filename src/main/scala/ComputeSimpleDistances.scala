@@ -164,7 +164,7 @@ object ComputeSimpleDistances:
                 .toList
                 .toNel
                 .fold(throw EmptyFileException(inputFile))(recs => recs.head -> recs.tail)
-            if (header.toList =!= allColumns) throw UnexpectedHeaderException(expected = allColumns, observed = header.toList)
+            if (header.toList =!= allColumns) throw UnexpectedHeaderException(header.toList)
             val validateRecordLength = (r: Array[String]) => 
                 (r.size === header.length).either(NonEmptyList.one(s"Header has ${header.length} fields, but line has ${r.size}"), r)
             Alternative[List].separate(NonnegativeInt.indexed(records).map{ 
@@ -210,9 +210,9 @@ object ComputeSimpleDistances:
         final case class EmptyFileException(getFile: os.Path) extends Exception(s"File is empty: $getFile")
 
         /** Exception for when parsed header does not match expected header. */
-        final case class UnexpectedHeaderException(observed: List[String], expected: List[String])
-            extends Exception(f"Expected ${expected.mkString(", ")} as header but got ${observed.mkString(", ")}"):
-            require(observed =!= expected, "Alleged inequality between observed and expected header, but they're equivalent!")
+        final case class UnexpectedHeaderException(observed: List[String])
+            extends Exception(f"Expected ${allColumns.mkString(", ")} as header but got ${observed.mkString(", ")}"):
+            require(observed =!= allColumns, "Alleged inequality between observed and expected header, but they're equivalent!")
 
         private def getColParser[A](col: String, lift: String => Either[String, A]): Array[String] => ValidatedNel[String, A] =
             allColumns.zipWithIndex
