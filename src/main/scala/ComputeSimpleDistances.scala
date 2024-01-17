@@ -130,7 +130,7 @@ object ComputeSimpleDistances:
         val YCoordinateColumn = "y"
         val ZCoordinateColumn = "z"
 
-        private val allColumns = List(
+        val allColumns = List(
             FieldOfViewColumn, 
             TraceIdColumn, 
             RegionalBarcodeTimepointColumn, 
@@ -140,6 +140,7 @@ object ComputeSimpleDistances:
             ZCoordinateColumn,
             )
 
+        /* Component parsers, one for each field of interest from a record. */
         private val parseFOV = getColParser(FieldOfViewColumn, safeParseInt >>> PositionIndex.fromInt)
         private val parseTrace = getColParser(TraceIdColumn, safeParseInt >>> TraceId.fromInt)
         private val parseRegion = getColParser(RegionalBarcodeTimepointColumn, GroupName(_).asRight)
@@ -148,6 +149,14 @@ object ComputeSimpleDistances:
         private val parseY = getColParser(YCoordinateColumn, safeParseDouble >> YCoordinate.apply)
         private val parseZ = getColParser(ZCoordinateColumn, safeParseDouble >> ZCoordinate.apply)
         
+        /**
+         * Parse input records from the given file.
+         * 
+         * @param inputFile The file from which to read records
+         * @return A pair in which the first element is a collection of records which failed to parse, 
+         *     augmented with line number and with messages about what went wrong during the parse attempt; 
+         *     the second element is a collection of pairs of successfully parsed record along with line number
+         */
         def parseRecords(inputFile: os.Path): (List[BadInputRecord], List[(GoodRecord, NonnegativeInt)]) = {
             val (header, records) = os.read.lines(inputFile)
                 .map(Delimiter.CommaSeparator.split)
