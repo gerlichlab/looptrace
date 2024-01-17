@@ -79,22 +79,23 @@ object ComputeSimpleDistances:
     }
 
     def inputRecordsToOutputRecords(inrecs: Iterable[(Input.GoodRecord, NonnegativeInt)]): Iterable[OutputRecord] = {
-        inrecs.groupBy((r, _) => r.position -> r.trace).toList.flatMap{ case ((pos, tid), groupedRecords) => 
-            groupedRecords.toList.combinations(2).flatMap{
-                case (r1, i1) :: (r2, i2) :: Nil => (r1.region === r2.region && r1.frame =!= r2.frame).option(
-                    OutputRecord(
-                        position = pos,
-                        trace = tid,
-                        region = r1.region,
-                        frame1 = r1.frame, 
-                        frame2 = r2.frame,
-                        distance = EuclideanDistance.between(r1.point, r2.point), 
-                        inputIndex1 = i1, 
-                        inputIndex2 = i2
-                        )
-                )
-                case rs => throw new Exception(s"${rs.length} records (not 2) when taking pairs!")
-            }
+        inrecs.groupBy((r, _) => (r.position, r.trace, r.region)).toList.flatMap{ 
+            case ((pos, tid, reg), groupedRecords) => 
+                groupedRecords.toList.combinations(2).flatMap{
+                    case (r1, i1) :: (r2, i2) :: Nil => (r1.frame =!= r2.frame).option(
+                        OutputRecord(
+                            position = pos,
+                            trace = tid,
+                            region = reg,
+                            frame1 = r1.frame, 
+                            frame2 = r2.frame,
+                            distance = EuclideanDistance.between(r1.point, r2.point), 
+                            inputIndex1 = i1, 
+                            inputIndex2 = i2
+                            )
+                    )
+                    case rs => throw new Exception(s"${rs.length} records (not 2) when taking pairs!")
+                }
         }
     }
 
