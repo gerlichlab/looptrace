@@ -35,6 +35,15 @@ object CsvHelpers:
         result <- errors.toNel.toLeft(records).leftMap(FieldNameColumnNameMismatchException.apply)
     } yield result
 
+    extension (maybe: Try[String])
+        private def continueParse[A](lift: String => Either[String, A]) = (maybe.toEither.leftMap(_.getMessage) >>= lift).toValidatedNel
+
+    /** Try to extract a value from a particular index in a sequence, and then read it into a value of the target type. */
+    def safeGetFromRow[A](idx: Int, lift: String => Either[String, A])(row: List[String]) = Try(row(idx)).continueParse(lift)
+
+    /** Try to extract a value from a particular index in a sequence, and then read it into a value of the target type. */
+    def safeGetFromRow[A](idx: Int, lift: String => Either[String, A])(row: Array[String]) = Try(row(idx)).continueParse(lift)
+
     /**
       * Try reading an {@code A} value from the given key in the key-value representation of a CSV row.
       *
@@ -44,8 +53,7 @@ object CsvHelpers:
       * @param row The row from which to parse the value
       * @return Either a {@code Left}-wrapped error message, or a {@code Right}-wrapped parsed value
       */
-    def safeGetFromRow[A](key: String, lift: String => Either[String, A])(row: CsvRow) =
-        (Try{ row(key) }.toEither.leftMap(_.getMessage) >>= lift).toValidatedNel
+    def safeGetFromRow[A](key: String, lift: String => Either[String, A])(row: CsvRow) = Try(row(key)).continueParse(lift)
 
     /**
       * Read given file as CSV with header, and handle resource safety.
