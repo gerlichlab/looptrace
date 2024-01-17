@@ -13,6 +13,7 @@ import org.scalatest.matchers.*
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.safeReadAllWithOrderedHeaders
 import at.ac.oeaw.imba.gerlich.looptrace.ComputeSimpleDistances.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
+import at.ac.oeaw.imba.gerlich.looptrace.ComputeSimpleDistances.Input.getGroupingKey
 
 /** Tests for the simple pairwise distances computation program. */
 class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, ScalacheckSuite, should.Matchers:
@@ -261,7 +262,7 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
             arbitrary[NonEmptyList[Input.GoodRecord]].suchThat{ rs => 
                 rs.length > 1 && 
                 rs.toList.combinations(2).forall{
-                    case r1 :: r2 :: Nil => (r1.position, r1.region, r1.trace) =!= (r2.position, r2.region, r2.trace)
+                    case r1 :: r2 :: Nil => Input.getGroupingKey(r1) =!= Input.getGroupingKey(r2)
                     case recs => throw new Exception(s"Got list of ${recs.length} (not 2) when taking pairs!")
                 }
             }
@@ -269,17 +270,33 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
     }
 
     test("Any output record's original record indices map them back to input records with identical grouping elements.") {
-        pending
+        /* To encourage collisions, narrow the choices for grouping components. */
+        given arbPos: Arbitrary[PositionIndex] = Gen.oneOf(0, 1).map(PositionIndex.unsafe).toArbitrary
+        given arbTrace: Arbitrary[TraceId] = Gen.oneOf(2, 3).map(NonnegativeInt.unsafe `andThen` TraceId.apply).toArbitrary
+        given arbRegion: Arbitrary[GroupName] = Gen.oneOf(40, 41).map(r => GroupName(r.toString)).toArbitrary
+        forAll (Gen.choose(10, 100).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord]))) { (records: List[Input.GoodRecord]) => 
+            val indexedRecords = NonnegativeInt.indexed(records)
+            val getKey = indexedRecords.map(_.swap).toMap.apply.andThen(Input.getGroupingKey)
+            val observed = inputRecordsToOutputRecords(indexedRecords)
+            observed.filter{ r => getKey(r.inputIndex1) === getKey(r.inputIndex2) } shouldEqual observed
+        }
     }
 
     test("Distance is never computed between records with identically-valued frames (locus-specific timepoints), even if the grouping elements place them together.") {
-        pending
+        /* To encourage collisions, narrow the choices for grouping components. */
+        given arbPos: Arbitrary[PositionIndex] = Gen.oneOf(0, 1).map(PositionIndex.unsafe).toArbitrary
+        given arbTrace: Arbitrary[TraceId] = Gen.oneOf(2, 3).map(NonnegativeInt.unsafe `andThen` TraceId.apply).toArbitrary
+        given arbRegion: Arbitrary[GroupName] = Gen.oneOf(40, 41).map(r => GroupName(r.toString)).toArbitrary
+        given arbFrame: Arbitrary[FrameIndex] = Gen.const(FrameIndex(NonnegativeInt(10))).toArbitrary
+        forAll (Gen.choose(10, 100).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord]))) {
+            (records: List[Input.GoodRecord]) => inputRecordsToOutputRecords(NonnegativeInt.indexed(records)).toList shouldEqual List()
+        }
     }
 
     /* Instance for random case / example generation */
     given arbitraryForTraceId(using arbRoiIdx: Arbitrary[RoiIndex]): Arbitrary[TraceId] = arbRoiIdx.map(TraceId.fromRoiIndex)
     given arbitraryForGroupName(using arbTime: Arbitrary[FrameIndex]): Arbitrary[GroupName] = arbTime.map(GroupName.fromFrameIndex)
-    given arbitraryForGoodInputReceord(using 
+    given arbitraryForGoodInputRecord(using 
         arbPos: Arbitrary[PositionIndex], 
         arbTrace: Arbitrary[TraceId], 
         arbRegion: Arbitrary[GroupName], 
