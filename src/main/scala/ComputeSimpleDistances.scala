@@ -111,7 +111,7 @@ object ComputeSimpleDistances:
     end GroupName
     
     /** Type wrapper around the index / identifier for trace ID */
-    final case class TraceId private(get: NonnegativeInt) extends AnyVal
+    final case class TraceId(get: NonnegativeInt) extends AnyVal
     
     /** Helpers for working with trace IDs */
     object TraceId:
