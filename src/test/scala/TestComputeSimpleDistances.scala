@@ -61,8 +61,14 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
         }
     }
 
+    test("Unexpected header error can't be created with the expected input header.") {
+        val error = intercept[IllegalArgumentException]{ Input.UnexpectedHeaderException(Input.allColumns) }
+        error.getMessage shouldEqual s"requirement failed: Alleged inequality between observed and expected header, but they're equivalent!"
+    }
+
     test("Simply permuting the header fields fails the parse with the expected error.") {
-        forAll (arbitrary[NonEmptyList[Input.GoodRecord]], Gen.oneOf(Input.allColumns.permutations.toSeq)) { (records, mutantHeader) =>
+        def genBadHeader = Gen.oneOf(Input.allColumns.permutations.toSeq).suchThat(_ =!= Input.allColumns)
+        forAll (arbitrary[NonEmptyList[Input.GoodRecord]], genBadHeader) { (records, mutantHeader) =>
             withTempDirectory{ (tempdir: os.Path) => 
                 val infile = tempdir / "input.csv"
                 val expError = Input.UnexpectedHeaderException(mutantHeader)
