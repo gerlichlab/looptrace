@@ -79,7 +79,7 @@ object ComputeSimpleDistances:
     }
 
     def inputRecordsToOutputRecords(inrecs: Iterable[(Input.GoodRecord, NonnegativeInt)]): Iterable[OutputRecord] = {
-        inrecs.groupBy((r, _) => (r.position, r.trace, r.region)).toList.flatMap{ 
+        inrecs.groupBy((r, _) => Input.getGroupingKey(r)).toList.flatMap{ 
             case ((pos, tid, reg), groupedRecords) => 
                 groupedRecords.toList.combinations(2).flatMap{
                     case (r1, i1) :: (r2, i2) :: Nil => (r1.frame =!= r2.frame).option(
@@ -175,6 +175,9 @@ object ComputeSimpleDistances:
                 }).bimap(msgs => BadInputRecord(i, r.toList, msgs), _ -> i)
             })
         }
+
+        /** How records must be grouped for consideration of between which pairs to compute distance */
+        def getGroupingKey(r: GoodRecord) = (r.position, r.trace, r.region)
         
         /**
          * Wrapper around data representing a successfully parsed record from the input file
