@@ -121,11 +121,17 @@ object CombineImagingFolders:
         if (errors.nonEmpty) throw new Exception(s"${errors.length} error(s) validating move pairs: $errors")
     }
 
-    def makeSrcDstPair(targetFolder: os.Path, sep: String)(newTime: Timepoint, oldPath: os.Path): Either[UnusableTimepointUpdateException, (os.Path, os.Path)] = 
-        updateFileTimepoint(oldPath.last, newTime, sep).bimap(
-            UnusableTimepointUpdateException(oldPath, newTime, _), 
-            fn => oldPath -> (targetFolder / fn)
-        )
+    def makeSrcDstPair(targetFolder: os.Path, sep: String)(newTime: Timepoint, oldPath: os.Path): Either[UnusableTimepointUpdateException, (os.Path, os.Path)] = {
+        val oldFields = oldPath.last.split(sep)
+        Timepoint.parseValueIndexPairFromPath(oldPath, filenameFieldSep = sep).bimap(
+            UnusableTimepointUpdateException(oldPath, newTime, _),  
+            (oldTime, i) => 
+                val (preFields, postFields) = oldFields.splitAt(i)
+                val newFields = preFields :+ Timepoint.printForFilename(newTime) ++ postFields.tail
+                val fn = newFields `mkString` sep
+                oldPath -> (targetFolder / fn)
+            )
+    }
     
     def prepareUpdatedTimepoints(inputFolders: NEL[os.Path], extToUse: Extension, filenameFieldSep: String, targetFolder: os.Path): 
         Either[NEL[UnparseablePathException] | NEL[UnusableSubfolderException], List[(Timepoint, os.Path)]] = {
@@ -174,7 +180,7 @@ object CombineImagingFolders:
         val (bads, goods) = 
             Alternative[List].separate(os.list(folder).toList
                 .filter(f => os.isFile(f) && keepFile(f))
-                .map(p => Timepoint.parse(p.last, filenameFieldSep).bimap(UnparseablePathException(p, _), _._1 -> p))
+                .map{ p => Timepoint.parseValueIndexPairFromPath(p, filenameFieldSep).bimap(UnparseablePathException(p, _), _._1 -> p) }
             )
         bads.toNel.toLeft(goods)
     }
@@ -188,17 +194,8 @@ object CombineImagingFolders:
         }
     }
 
-    /** Change the timepoint of the given filename to the given target. */
-    def updateFileTimepoint(fn: Filename, newTime: Timepoint, filenameFieldSep: String): Either[String, Filename] = {
-        val fields = fn.split(filenameFieldSep)
-        Timepoint.parse(fn = fn, filenameFieldSep = filenameFieldSep).map{ (oldTime, i) => 
-            (fields.take(i) ++ Array(Timepoint.print(newTime)) ++ fields.takeRight(fields.length - i - 1)) `mkString` filenameFieldSep
-        }
-    }
-
     /** More context-meaningful aliases */
     type Extension = String
-    type Filename = String
 
     final case class UnparseablePathException(path: os.Path, message: String) 
         extends Exception(s"$path: $message")
