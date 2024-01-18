@@ -63,7 +63,7 @@ object ComputeSimpleDistances:
             case (None, outputRecords) => 
                 val recs = outputRecords.toList.sortBy{ r => 
                     (r.position, r.region, r.trace, r.time1, r.time2)
-                }(summon[Order[(PositionIndex, GroupName, TraceId, Timepoint, Timepoint)]].toOrdering)
+                }(summon[Order[(PositionIndex, RegionId, TraceId, Timepoint, Timepoint)]].toOrdering)
                 println(s"Writing output file: ${expectedOutputFile.filepath}")
                 OutputWriter.writeRecordsToFile(recs, expectedOutputFile)
         }
@@ -99,17 +99,6 @@ object ComputeSimpleDistances:
         }
     }
 
-    /** Likely will correspond to regional barcode imaging timepoint */
-    final case class GroupName(get: String) extends AnyVal
-    
-    /** Helpers for working for grouping keys */
-    object GroupName:
-        /** Often, the regional barcode imaging timepoint will be used as the group name, so provide this convenience constructor. */
-        def fromTimepoint(t: Timepoint): GroupName = GroupName(t.get.show)
-        given orderForGroupName: Order[GroupName] = Order.by(_.get)
-        given showForGroupName: Show[GroupName] = Show.show(_.get)
-    end GroupName
-    
     /** Type wrapper around the index / identifier for trace ID */
     final case class TraceId(get: NonnegativeInt) extends AnyVal
     
@@ -144,7 +133,7 @@ object ComputeSimpleDistances:
         /* Component parsers, one for each field of interest from a record. */
         private val parseFOV = getColParser(FieldOfViewColumn, safeParseInt >>> PositionIndex.fromInt)
         private val parseTrace = getColParser(TraceIdColumn, safeParseInt >>> TraceId.fromInt)
-        private val parseRegion = getColParser(RegionalBarcodeTimepointColumn, GroupName(_).asRight)
+        private val parseRegion = getColParser(RegionalBarcodeTimepointColumn, safeParseInt >>> RegionId.fromInt)
         private val parseLocus = getColParser(LocusSpecificBarcodeTimepointColumn, safeParseInt >>> Timepoint.fromInt)
         private val parseX = getColParser(XCoordinateColumn, safeParseDouble >> XCoordinate.apply)
         private val parseY = getColParser(YCoordinateColumn, safeParseDouble >> YCoordinate.apply)
@@ -188,7 +177,7 @@ object ComputeSimpleDistances:
          * @param time The timepoint in which the (locus-specific) spot was imaged
          * @param point The 3D spatial coordinates of the center of a FISH spot
          */
-        final case class GoodRecord(position: PositionIndex, trace: TraceId, region: GroupName, time: Timepoint, point: Point3D)
+        final case class GoodRecord(position: PositionIndex, trace: TraceId, region: RegionId, time: Timepoint, point: Point3D)
         
         /**
          * Bundle of data representing a bad record (line) from input file
@@ -228,7 +217,7 @@ object ComputeSimpleDistances:
     final case class OutputRecord(
         position: PositionIndex, 
         trace: TraceId, 
-        region: GroupName, 
+        region: RegionId, 
         time1: Timepoint, 
         time2: Timepoint, 
         distance: EuclideanDistance, 

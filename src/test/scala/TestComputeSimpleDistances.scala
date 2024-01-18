@@ -204,7 +204,7 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
         def buildPoint(x: Double, y: Double, z: Double) = Point3D(XCoordinate(x), YCoordinate(y), ZCoordinate(z))
         val pos = PositionIndex(NonnegativeInt(0))
         val tid = TraceId(NonnegativeInt(1))
-        val reg = GroupName("40")
+        val reg = RegionId(Timepoint(NonnegativeInt(40)))
         val inputRecords = NonnegativeInt.indexed(List((2.0, 1.0, -1.0), (1.0, 5.0, 0.0), (3.0, 0.0, 2.0))).map{
             (pt, i) => Input.GoodRecord(pos, tid, reg, Timepoint(i), buildPoint.tupled(pt))
         }
@@ -228,10 +228,10 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
         val pairPosition = 2 -> (PositionIndex(NonnegativeInt(5)), TraceId(NonnegativeInt(4)))
         val trioPosition = 3 -> (PositionIndex(NonnegativeInt(7)), TraceId(NonnegativeInt(2)))
         val inputTable = Table(("groupingKeys", "simplifiedExpectation"), List(
-            ((1, 1, 1), (2, 1, 1), (2, 1, 2), (1, 1, 1)) -> List((1, 1, "1", 0, 3) -> math.sqrt(27)), 
-            ((2, 1, 1), (2, 1, 1), (2, 1, 2), (2, 1, 2)) -> List((2, 1, "1", 0, 1) -> math.sqrt(29), (2, 1, "2", 2, 3) -> math.sqrt(99)), 
-            ((2, 1, 1), (2, 1, 2), (2, 1, 1), (2, 1, 2)) -> List((2, 1, "1", 0, 2) -> math.sqrt(56), (2, 1, "2", 1, 3) -> math.sqrt(82)), 
-            ((3, 1, 2), (0, 4, 5), (3, 1, 2), (3, 1, 2)) -> List((3, 1, "2", 0, 2) -> math.sqrt(56), (3, 1, "2", 0, 3) -> math.sqrt(27), (3, 1, "2", 2, 3) -> math.sqrt(99)), 
+            ((1, 1, 1), (2, 1, 1), (2, 1, 2), (1, 1, 1)) -> List((1, 1, 1, 0, 3) -> math.sqrt(27)), 
+            ((2, 1, 1), (2, 1, 1), (2, 1, 2), (2, 1, 2)) -> List((2, 1, 1, 0, 1) -> math.sqrt(29), (2, 1, 2, 2, 3) -> math.sqrt(99)), 
+            ((2, 1, 1), (2, 1, 2), (2, 1, 1), (2, 1, 2)) -> List((2, 1, 1, 0, 2) -> math.sqrt(56), (2, 1, 2, 1, 3) -> math.sqrt(82)), 
+            ((3, 1, 2), (0, 4, 5), (3, 1, 2), (3, 1, 2)) -> List((3, 1, 2, 0, 2) -> math.sqrt(56), (3, 1, 2, 0, 3) -> math.sqrt(27), (3, 1, 2, 2, 3) -> math.sqrt(99)), 
             ((3, 1, 2), (3, 1, 0), (3, 1, 3), (3, 1, 1)) -> List(), // All equal on 1st 2 elements, but not 3rd
             ((0, 1, 2), (3, 1, 2), (1, 1, 2), (2, 1, 2)) -> List(), // All equal on 2nd 2 elements, but not 1st
             ((0, 1, 2), (0, 0, 2), (0, 2, 2), (0, 3, 2)) -> List(), // All equal on 1st and 3rd elements, but not 2nd
@@ -242,14 +242,14 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
                 case (((pos, tid, reg), pt), i) => Input.GoodRecord(
                     PositionIndex.unsafe(pos), 
                     TraceId(NonnegativeInt.unsafe(tid)), 
-                    GroupName(reg.toString), 
+                    RegionId.unsafe(reg), 
                     Timepoint(i), 
                     pt,
                     )
             }
             val observation = inputRecordsToOutputRecords(NonnegativeInt.indexed(records))
             val simplifiedObservation = observation.map{ r => 
-                (r.position.get, r.trace.get, r.region.get, r.time1.get, r.time2.get) -> 
+                (r.position.get, r.trace.get, r.region.get.get, r.time1.get, r.time2.get) -> 
                 r.distance.get
             }.toList
             val simplifiedExpectation = expectation.map{ case ((pos, tid, reg, t1, t2), d) => 
@@ -279,7 +279,7 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
         /* To encourage collisions, narrow the choices for grouping components. */
         given arbPos: Arbitrary[PositionIndex] = Gen.oneOf(0, 1).map(PositionIndex.unsafe).toArbitrary
         given arbTrace: Arbitrary[TraceId] = Gen.oneOf(2, 3).map(NonnegativeInt.unsafe `andThen` TraceId.apply).toArbitrary
-        given arbRegion: Arbitrary[GroupName] = Gen.oneOf(40, 41).map(r => GroupName(r.toString)).toArbitrary
+        given arbRegion: Arbitrary[RegionId] = Gen.oneOf(40, 41).map(RegionId.unsafe).toArbitrary
         forAll (Gen.choose(10, 100).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord]))) { (records: List[Input.GoodRecord]) => 
             val indexedRecords = NonnegativeInt.indexed(records)
             val getKey = indexedRecords.map(_.swap).toMap.apply.andThen(Input.getGroupingKey)
@@ -292,7 +292,7 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
         /* To encourage collisions, narrow the choices for grouping components. */
         given arbPos: Arbitrary[PositionIndex] = Gen.oneOf(0, 1).map(PositionIndex.unsafe).toArbitrary
         given arbTrace: Arbitrary[TraceId] = Gen.oneOf(2, 3).map(NonnegativeInt.unsafe `andThen` TraceId.apply).toArbitrary
-        given arbRegion: Arbitrary[GroupName] = Gen.oneOf(40, 41).map(r => GroupName(r.toString)).toArbitrary
+        given arbRegion: Arbitrary[RegionId] = Gen.oneOf(40, 41).map(RegionId.unsafe).toArbitrary
         given arbTime: Arbitrary[Timepoint] = Gen.const(Timepoint(NonnegativeInt(10))).toArbitrary
         forAll (Gen.choose(10, 100).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord]))) {
             (records: List[Input.GoodRecord]) => inputRecordsToOutputRecords(NonnegativeInt.indexed(records)).toList shouldEqual List()
@@ -301,11 +301,11 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
 
     /* Instance for random case / example generation */
     given arbitraryForTraceId(using arbRoiIdx: Arbitrary[RoiIndex]): Arbitrary[TraceId] = arbRoiIdx.map(TraceId.fromRoiIndex)
-    given arbitraryForGroupName(using arbTime: Arbitrary[Timepoint]): Arbitrary[GroupName] = arbTime.map(GroupName.fromTimepoint)
+    given arbitraryForRegionId(using arbTime: Arbitrary[Timepoint]): Arbitrary[RegionId] = arbTime.map(RegionId.apply)
     given arbitraryForGoodInputRecord(using 
         arbPos: Arbitrary[PositionIndex], 
         arbTrace: Arbitrary[TraceId], 
-        arbRegion: Arbitrary[GroupName], 
+        arbRegion: Arbitrary[RegionId], 
         arbLocus: Arbitrary[Timepoint], 
         arbPoint: Arbitrary[Point3D], 
     ): Arbitrary[Input.GoodRecord] = (arbPos, arbTrace, arbRegion, arbLocus, arbPoint).mapN(Input.GoodRecord.apply)
