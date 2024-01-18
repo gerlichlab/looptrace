@@ -14,7 +14,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
  * Tools for analysing chromatin fiber tracing (typically *_traces*.csv)
  * 
  * Originally developed for Neos, to count the number of locus-specific spots 
- * kept on a per-(ref_frame, frame) basis. That is, how many locus-specific 
+ * kept on a per-(region-time, locus-time) basis. That is, how many locus-specific 
  * spots are available (after QC filtering) per specific target (using a 
  * two-stage multiplex).
  * 

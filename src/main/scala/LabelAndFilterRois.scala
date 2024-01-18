@@ -82,7 +82,7 @@ object LabelAndFilterRois:
                             // finds negative values and groups the probes (key) by group (value), inverting the mapping and collecting
                             case ((probe, groupIndex), (neg, acc)) => Timepoint.fromInt(probe).fold(
                                 _ => (probe :: neg, acc),
-                                frame => (neg, acc + (groupIndex -> acc.get(groupIndex).fold(NEL.one(frame))(frame :: _)))
+                                time => (neg, acc + (groupIndex -> acc.get(groupIndex).fold(NEL.one(time))(time :: _)))
                                 )
                         } match {
                             case (Nil, rawGroups) => 
@@ -92,8 +92,8 @@ object LabelAndFilterRois:
                                         (hist |+| subHist, ProbeGroup(g.toNes) :: gs)
                                     }
                                 }
-                                histogram.filter(_._2 > 1).toList.toNel.toLeft(groups).leftMap{ reps => s"Repeated frames in grouping: $reps" }
-                            case (negatives, _) => s"Negative frame(s) in grouping: $negatives".asLeft
+                                histogram.filter(_._2 > 1).toList.toNel.toLeft(groups).leftMap{ reps => s"Repeated timepoints in grouping: $reps" }
+                            case (negatives, _) => s"Negative timepoint(s) in grouping: $negatives".asLeft
                         }
                     )
             }
@@ -285,13 +285,13 @@ object LabelAndFilterRois:
     final case class DriftRecordNotFoundError(key: DriftKey) extends NoSuchElementException(s"key not found: ($key)")
 
     /**
-      * Designation of regional barcode frame/probe/timepoint indices which are prohibited from being in (configurably) close proximity.
+      * Designation of regional barcode timepoints which are prohibited from being in (configurably) close proximity.
       *
       * @param get The actual collection of indices
       */
     final case class ProbeGroup(get: NonEmptySet[Timepoint])
     
-    /** Helpers for working with frame/probe/timepoint index groupings */
+    /** Helpers for working with timepoint groupings */
     object ProbeGroup:
         given rwForProbeGroup: ReadWriter[ProbeGroup] = readwriter[ujson.Value].bimap(
             group => ujson.Arr(group.get.toList.map(name => ujson.Num(name.get))*), 
@@ -368,7 +368,7 @@ object LabelAndFilterRois:
       * 
       * @param rois Pair of {@code Roi} and its record number (0-based) from a CSV file
       * @param minDist The threshold on distance, beneath which two points are to be considered proximal
-      * @param grouping The grouping of regional barcode timepoint/frame/probe indices, optional
+      * @param grouping The grouping of regional barcode timepoints, optional
       * @return A mapping from item to set of proximal (closer than given distance threshold) neighbors, omitting each item with no neighbors; 
       *         otherwise, a {@code Left}-wrapped error message about what went wrong
       */
@@ -381,16 +381,16 @@ object LabelAndFilterRois:
             if grouping.isEmpty 
             then buildNeighborsLookupKeyed(getPoint)(rois.map{ case t@(r, _) => r.position -> t }, minDist).asRight
             else {
-                val (groupIds, repeatedFrames) = NonnegativeInt.indexed(grouping)
+                val (groupIds, repeatedTimes) = NonnegativeInt.indexed(grouping)
                     .flatMap((g, i) => g.get.toList.map(_ -> i))
                     .foldLeft(Map.empty[Timepoint, NonnegativeInt] -> Map.empty[Timepoint, Int]){ 
-                        case ((ids, repeats), (frame, gid)) =>
-                            if ids `contains` frame
-                            then (ids, repeats + (frame -> (repeats.getOrElse(frame, 1) + 1)))
-                            else (ids + (frame -> gid), repeats)
+                        case ((ids, repeats), (time, gid)) =>
+                            if ids `contains` time
+                            then (ids, repeats + (time -> (repeats.getOrElse(time, 1) + 1)))
+                            else (ids + (time -> gid), repeats)
                     }
-                if (repeatedFrames.nonEmpty) // Probe groupings isn't a partition, because there's overlap between the declared equivalence classes.
-                then s"${repeatedFrames.size} repeated frame(s): ${repeatedFrames.toList.map(_.leftMap(_.get)).sortBy(_._1).mkString(", ")}".asLeft
+                if (repeatedTimes.nonEmpty) // Probe groupings isn't a partition, because there's overlap between the declared equivalence classes.
+                then s"${repeatedTimes.size} repeated timepoint(s): ${repeatedTimes.toList.map(_.leftMap(_.get)).sortBy(_._1).mkString(", ")}".asLeft
                 else {
                     val (groupless, keyedRois) = Alternative[List].separate(rois.map{ case pair@(roi, _) => 
                         groupIds.get(roi.time)

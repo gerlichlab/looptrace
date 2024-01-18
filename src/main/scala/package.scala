@@ -230,19 +230,19 @@ package object looptrace {
     
 
     /**
-      * Write a mapping, from position and frame pair to value, to JSON.
+      * Write a mapping, from position and time pair to value, to JSON.
       *
       * @param vKey The key to use for the {@code V} element in each object
-      * @param pfToV The mapping of data to write
+      * @param ptToV The mapping of data to write
       * @param writeV How to write each {@code V} element as JSON
       * @return A JSON array of object corresponding to each element of the map
       */
-    def posFrameMapToJson[V](vKey: String, pfToV: Map[(PositionIndex, Timepoint), V])(using writeV: (V) => ujson.Value): ujson.Value = {
-        val proc1 = (pf: (PositionIndex, Timepoint), v: V) => ujson.Obj(
-            "position" -> pf._1.get,
-            "frame" -> pf._2.get,
+    def posTimeMapToJson[V](vKey: String, ptToV: Map[(PositionIndex, Timepoint), V])(using writeV: (V) => ujson.Value): ujson.Value = {
+        val proc1 = (pt: (PositionIndex, Timepoint), v: V) => ujson.Obj(
+            "position" -> pt._1.get,
+            "timepoint" -> pt._2.get,
             vKey -> writeV(v)
         )
-        pfToV.toList.map(proc1.tupled)
+        ptToV.toList.map(proc1.tupled)
     }
 }

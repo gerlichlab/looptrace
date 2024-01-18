@@ -49,7 +49,7 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
     given arbitraryForRegionalBarcodeSpotRoi(using
         arbRoiIdx: Arbitrary[RoiIndex], 
         arbPosName: Arbitrary[PositionName], 
-        arbFrameIdx: Arbitrary[Timepoint], 
+        arbTime: Arbitrary[Timepoint], 
         arbCh: Arbitrary[Channel], 
         arbPt: Arbitrary[Point3D],
         arbMargin: Arbitrary[BoundingBox.Margin],

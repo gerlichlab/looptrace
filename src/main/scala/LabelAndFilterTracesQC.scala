@@ -44,7 +44,7 @@ object LabelAndFilterTracesQC:
         fovColumn: String,
         regionColumn: String,
         traceIdColumn: String,
-        frameNameColumn: String,
+        probeNameColumn: String,
         xySigmaColumn: String, 
         zSigmaColumn: String, 
         zPointColumn: PointColumnZ,
@@ -60,7 +60,7 @@ object LabelAndFilterTracesQC:
     
     /** Helpers for working with the parser configuration */
     object ParserConfig:
-        val (fovKey, regionKey, traceIdKey, frameKey, xySigKey, zSigKey, zPtKey, yPtKey, xPtKey, zBoxKey, yBoxKey, xBoxKey, aKey, bgKey, refDistKey) = 
+        val (fovKey, regionKey, traceIdKey, probeNameKey, xySigKey, zSigKey, zPtKey, yPtKey, xPtKey, zBoxKey, yBoxKey, xBoxKey, aKey, bgKey, refDistKey) = 
             labelsOf[ParserConfig]
         
         /** Enable reading from and writing to JSON representation. */
@@ -69,7 +69,7 @@ object LabelAndFilterTracesQC:
                 fovKey -> ujson.Str(pc.fovColumn),
                 regionKey -> ujson.Str(pc.regionColumn),
                 traceIdKey -> ujson.Str(pc.traceIdColumn),
-                frameKey -> ujson.Str(pc.frameNameColumn),
+                probeNameKey -> ujson.Str(pc.probeNameColumn),
                 xySigKey -> ujson.Str(pc.xySigmaColumn),
                 zSigKey -> ujson.Str(pc.zSigmaColumn), 
                 zPtKey -> ujson.Str(pc.zPointColumn.get), 
@@ -86,7 +86,7 @@ object LabelAndFilterTracesQC:
                 val fovNel = safeExtractStr(fovKey)(json)
                 val regionNel = safeExtractStr(regionKey)(json)
                 val traceIdNel = safeExtractStr(traceIdKey)(json)
-                val frameNel = safeExtractStr(frameKey)(json)
+                val probeNameNel = safeExtractStr(probeNameKey)(json)
                 val xySigNel = safeExtractStr(xySigKey)(json)
                 val zSigNel = safeExtractStr(zSigKey)(json)
                 val zPtNel = safeExtract(zPtKey, PointColumnZ.apply)(json)
@@ -98,7 +98,7 @@ object LabelAndFilterTracesQC:
                 val signalNel = safeExtractStr(aKey)(json)
                 val bgNel = safeExtractStr(bgKey)(json)
                 val refDistNel = safeExtractStr(refDistKey)(json)
-                (fovNel, regionNel, traceIdNel, frameNel, xySigNel, zSigNel, zPtNel, yPtNel, xPtNel, zBoxNel, yBoxNel, xBoxNel, signalNel, bgNel, refDistNel)
+                (fovNel, regionNel, traceIdNel, probeNameNel, xySigNel, zSigNel, zPtNel, yPtNel, xPtNel, zBoxNel, yBoxNel, xBoxNel, signalNel, bgNel, refDistNel)
                     .mapN(ParserConfig.apply)
                     .fold(errs => throw new ParseError(errs), identity)
             }
@@ -109,7 +109,7 @@ object LabelAndFilterTracesQC:
             fovColumn = "pos_index",
             regionColumn = "ref_frame",
             traceIdColumn = "trace_id",
-            frameNameColumn = "frame_name",
+            probeNameColumn = "frame_name",
             xySigmaColumn = "sigma_xy", 
             zSigmaColumn = "sigma_z", 
             zPointColumn = PointColumnZ("z"),
@@ -215,7 +215,7 @@ object LabelAndFilterTracesQC:
                     val maybeParseFov = buildFieldParse(conf.fovColumn, safeParseInt.fmap(_ >>= PositionIndex.fromInt))(header)
                     val maybeParseRegion = buildFieldParse(conf.regionColumn, safeParseInt.fmap(_ >>= RegionId.fromInt))(header)
                     val maybeParseTraceId = buildFieldParse(conf.traceIdColumn, safeParseInt.fmap(_ >>= TraceId.fromInt))(header)
-                    val maybeParseFrame = buildFieldParse(conf.frameNameColumn, _.asRight.map(ProbeName.apply))(header)
+                    val maybeParseProbeName = buildFieldParse(conf.probeNameColumn, _.asRight.map(ProbeName.apply))(header)
                     val maybeParseZ = buildFieldParse(conf.zPointColumn.get, safeParseDouble.andThen(_.map(ZCoordinate.apply)))(header)
                     val maybeParseY = buildFieldParse(conf.yPointColumn.get, safeParseDouble.andThen(_.map(YCoordinate.apply)))(header)
                     val maybeParseX = buildFieldParse(conf.xPointColumn.get, safeParseDouble.andThen(_.map(XCoordinate.apply)))(header)
@@ -231,7 +231,7 @@ object LabelAndFilterTracesQC:
                         maybeParseFov,
                         maybeParseRegion, 
                         maybeParseTraceId, 
-                        maybeParseFrame, 
+                        maybeParseProbeName, 
                         maybeParseZ, 
                         maybeParseY, 
                         maybeParseX, 
@@ -247,7 +247,7 @@ object LabelAndFilterTracesQC:
                         parseFov,
                         parseRegion, 
                         parseTraceId,
-                        parseFrame, 
+                        parseProbeName, 
                         parseZ, 
                         parseY, 
                         parseX, 
@@ -265,7 +265,7 @@ object LabelAndFilterTracesQC:
                                     parseFov(record),
                                     parseRegion(record), 
                                     parseTraceId(record),
-                                    parseFrame(record),
+                                    parseProbeName(record),
                                     parseZ(record),
                                     parseY(record),
                                     parseX(record),
@@ -277,8 +277,8 @@ object LabelAndFilterTracesQC:
                                     parseBoxZ(record), 
                                     parseBoxY(record), 
                                     parseBoxX(record)
-                                    ).mapN((fov, rid, tid, frame, z, y, x, refDist, a, bg, sigXY, sigZ, boxZ, boxY, boxX) => 
-                                        val uniqId = TraceSpotId(TraceGroupId(fov, rid, tid), frame)
+                                    ).mapN((fov, rid, tid, probeName, z, y, x, refDist, a, bg, sigXY, sigZ, boxZ, boxY, boxX) => 
+                                        val uniqId = TraceSpotId(TraceGroupId(fov, rid, tid), probeName)
                                         val qcData = QCData((boxZ, boxY, boxX), Point3D(x, y, z), refDist, a, bg, sigXY, sigZ)
                                         uniqId -> qcData
                                     ).toEither
@@ -376,7 +376,7 @@ object LabelAndFilterTracesQC:
     /** Supports for the same trace must share not only the same {@code TraceId}, but also be from the same FOV and region. */
     final case class TraceGroupId(position: PositionIndex, region: RegionId, trace: TraceId)
 
-    /** A single spot belongs to a trace group. Neither the group ID nor frame ID is unique, but together they are. */
+    /** A single spot belongs to a trace group. Neither the group ID nor probe ID is unique, but together they are. */
     final case class TraceSpotId(groupId: TraceGroupId, probe: ProbeName)
 
     /** A bundle of the QC pass/fail components for individual rows/records supporting traces */

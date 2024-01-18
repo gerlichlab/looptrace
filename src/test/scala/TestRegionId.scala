@@ -7,7 +7,7 @@ import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should
 
-/** Tests for frame index wrapper type */
+/** Tests for region ID wrapper type */
 class TestRegionId extends AnyFunSuite, LooptraceSuite, RefinementWrapperSuite, ScalacheckSuite, should.Matchers:
     test("RegionId.fromInt works; region ID must be nonnegative.") {
         forAll { (z: Int) => RegionId.fromInt(z) match {

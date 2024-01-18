@@ -836,7 +836,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("Probe grouping is a partition: A probe grouping that is not DISJOINT (probe/frame repeated between groups) is an error.") {
+    test("Probe grouping is a partition: A probe grouping that is not DISJOINT (timepoint repeated between groups) is an error.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
 
         // Generate a reasonable margin on side of each centroid coordinate for ROI bounding boxes.
@@ -864,7 +864,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 buildNeighboringRoisFinder(NonnegativeInt.indexed(rois), threshold)(grouping.toList) match {
                     case Left(obsErrMsg) => 
                         val repTimesText = repeatedTimepoints.toList.map(t => t.get -> 2).sortBy(_._1).mkString(", ")
-                        val expErrMsg = s"${repeatedTimepoints.size} repeated frame(s): $repTimesText"
+                        val expErrMsg = s"${repeatedTimepoints.size} repeated timepoint(s): $repTimesText"
                         obsErrMsg shouldEqual expErrMsg
                     case Right(_) => fail("Expected error message about invalid partition (non-disjoint), but didn't get it.")
                 }

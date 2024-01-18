@@ -21,8 +21,8 @@ object PartitionIndexedDriftCorrectionRois:
 
     /* Type aliases */
     type RawRecord = Array[String]
-    type PosFramePair = (PositionIndex, Timepoint)
-    type InitFile = (PosFramePair, os.Path)
+    type PosTimePair = (PositionIndex, Timepoint)
+    type InitFile = (PosTimePair, os.Path)
     type IndexedRoi = DetectedRoi | SelectedRoi
     type JsonWriter[*] = upickle.default.Writer[*]
 
@@ -32,7 +32,7 @@ object PartitionIndexedDriftCorrectionRois:
         numAccuracy: PositiveInt = PositiveInt(1), // bogus, unconditionally required
         outputFolder: Option[os.Path] = None, 
         optimisationTestingMode: Boolean = false, 
-        referenceFrame: Timepoint = Timepoint(NonnegativeInt(Int.MaxValue)) // bogus, conditionally required
+        referenceTimepoint: Timepoint = Timepoint(NonnegativeInt(Int.MaxValue)) // bogus, conditionally required
     )
 
     val parserBuilder = OParser.builder[CliConfig]
@@ -66,9 +66,9 @@ object PartitionIndexedDriftCorrectionRois:
                 .action((_, c) => c.copy(optimisationTestingMode = true))
                 .text("Indicate that program's being run in optimisation R&D / testing mode, so tolerate insufficient ROIs")
                 .children(
-                    opt[NonnegativeInt]("referenceFrame")
-                        .action((n, c) => c.copy(referenceFrame = Timepoint(n)))
-                        .text("0-based index of the frame/timepoint to be used as reference for drift correction")
+                    opt[NonnegativeInt]("referenceTimepoint")
+                        .action((n, c) => c.copy(referenceTimepoint = Timepoint(n)))
+                        .text("0-based index of the timepoint to be used as reference for drift correction")
                 )
         )
 
@@ -80,7 +80,7 @@ object PartitionIndexedDriftCorrectionRois:
                     numShifting = opts.numShifting, 
                     numAccuracy = opts.numAccuracy, 
                     outputFolder = opts.outputFolder, 
-                    referenceFrame = opts.optimisationTestingMode.option(opts.referenceFrame)
+                    referenceTimepoint = opts.optimisationTestingMode.option(opts.referenceTimepoint)
                     )
             }
         }
@@ -91,7 +91,7 @@ object PartitionIndexedDriftCorrectionRois:
         inputRoot: os.Path, 
         numShifting: ShiftingCount, 
         numAccuracy: PositiveInt, 
-        referenceFrame: Option[Timepoint],
+        referenceTimepoint: Option[Timepoint],
         outputFolder: Option[os.Path]
         ): Unit = {
 
@@ -110,11 +110,11 @@ object PartitionIndexedDriftCorrectionRois:
         }
         /* Function definitions based on parsed config and CLI input */
         // Shifting ROIs cannot be empty.
-        val writeRoisForShifting = (pf: PosFramePair, rois: NonEmptySet[RoiForShifting]) =>
-            writeRois(rois.toSortedSet, getOutputFilepath(outfolder)(pf._1, pf._2, Purpose.Shifting))
+        val writeRoisForShifting = (pt: PosTimePair, rois: NonEmptySet[RoiForShifting]) =>
+            writeRois(rois.toSortedSet, getOutputFilepath(outfolder)(pt._1, pt._2, Purpose.Shifting))
         // Accuracy ROIs could be empty.
-        val writeRoisForAccuracy = (pf: PosFramePair, rois: Set[RoiForAccuracy]) => 
-            writeRois(rois, getOutputFilepath(outfolder)(pf._1, pf._2, Purpose.Accuracy))
+        val writeRoisForAccuracy = (pt: PosTimePair, rois: Set[RoiForAccuracy]) => 
+            writeRois(rois, getOutputFilepath(outfolder)(pt._1, pt._2, Purpose.Accuracy))
         
         // Here, actually do the partition.
         val (bads, goods): (List[(InitFile, RoisSplit.Failure)], List[(InitFile, RoisSplit.HasPartition)]) = 
@@ -131,56 +131,56 @@ object PartitionIndexedDriftCorrectionRois:
         
         // Here, write (severe) warnings (if in development mode) or raise an exception.
         val zeroAccuracyProblems = if (bads.nonEmpty) {
-            /* Check if we can tolerate (implicitly, by provision of reference frame) cases of too few ROIs.
+            /* Check if we can tolerate (implicitly, by provision of reference timepoint) cases of too few ROIs.
              * If so, AND we have no parser errors (just too-few-ROI errors), AND none of the errors concerns 
-             * the frame/timepoint designated as the reference, simply emit a warnings file rather than 
+             * the timepoint designated as the reference, simply emit a warnings file rather than 
              * fatally crashing with an exception.
              */
-            (referenceFrame, Alternative[List].separate(bads.map{ // Partition the list of problems by type of error.
+            (referenceTimepoint, Alternative[List].separate(bads.map{ // Partition the list of problems by type of error.
                 case kv@(_, _: RoisFileParseError) => kv.asLeft
-                case ((pf, _), e: RoisSplit.TooFewShifting) => (pf, e).asRight
+                case ((pt, _), e: RoisSplit.TooFewShifting) => (pt, e).asRight
             })) match {
-                case (Some(refFrame), (Nil, tooFewErrors)) if ( ! tooFewErrors.exists(_._1._2 === refFrame) ) => 
+                case (Some(refTime), (Nil, tooFewErrors)) if ( ! tooFewErrors.exists(_._1._2 === refTime) ) => 
                     // In this case, we can just write warnings since none of the timepoints with too few ROIs 
-                    // is the reference frame (i.e., there's at least the minimal number of bead ROIs required 
+                    // is the reference (i.e., there's at least the minimal number of bead ROIs required 
                     // for drift correction (absolute minimum, though not necessarily the user-defined minimum) 
                     // in the reference timepoint in every FOV.
-                    given writer: JsonWriter[(PosFramePair, RoisSplit.Problem)] = readWriterForKeyedTooFewProblem
+                    given writer: JsonWriter[(PosTimePair, RoisSplit.Problem)] = readWriterForKeyedTooFewProblem
                     val warningsFile = outfolder / "roi_partition_warnings.severe.json"
                     println(s"Writing severe warnings file: $warningsFile")
                     val (problemsToWrite, problemsToPropagate) = tooFewErrors.map{ 
-                        (pf, tooFew) => (pf -> tooFew.shiftingProblem, pf -> tooFew.accuracyProblem) 
+                        (pt, tooFew) => (pt -> tooFew.shiftingProblem, pt -> tooFew.accuracyProblem) 
                     }.unzip
                     os.write(warningsFile, write(problemsToWrite, indent = 2))
                     problemsToPropagate
                 case (_, (Nil, tooFewErrors)) => 
                     // In this case, there's either at least one FOV in which the reference timepoint for drift correction 
-                    // lacks enough bead ROIs to meet even the absolute minimum, or there is no reference frame, in which 
-                    // case any frame lacking the minimum number of bead ROIs is a problem; either way, it's exceptional.
+                    // lacks enough bead ROIs to meet even the absolute minimum, or there is no reference timepoint, in which 
+                    // case any timepoint lacking the minimum number of bead ROIs is a problem; either way, it's exceptional.
                     throw RoisSplit.TooFewShiftingException(tooFewErrors.toNel.get)
                 case _ => 
                     // Here we have all parse errors or mixed error types and can't combine them.
-                    throw new Exception(s"${bads.size} (position, frame) pairs with problems.\n${bads}")
+                    throw new Exception(s"${bads.size} (position, timepoint) pairs with problems.\n${bads}")
             }
-        } else { List.empty[(PosFramePair, RoisSplit.Problem)] }
-        // NB: since possibly multiple problems per (pos, frame) pair (e.g., too few shifting and too few accuracy), 
+        } else { List.empty[(PosTimePair, RoisSplit.Problem)] }
+        // NB: since possibly multiple problems per (pos, timepoint) pair (e.g., too few shifting and too few accuracy), 
         //     don't convert this to Map, since key collision is potentially problematic.
-        val problems: List[(PosFramePair, RoisSplit.Problem)] = 
-            zeroAccuracyProblems ::: goods.flatMap{ case ((pf, _), splitResult) => 
+        val problems: List[(PosTimePair, RoisSplit.Problem)] = 
+            zeroAccuracyProblems ::: goods.flatMap{ case ((pt, _), splitResult) => 
                 /* Write the ROIs and emit the optional warning. */
                 val partition = splitResult.partition
-                writeRoisForShifting(pf, partition.shifting)
-                writeRoisForAccuracy(pf, partition.accuracy)
+                writeRoisForShifting(pt, partition.shifting)
+                writeRoisForAccuracy(pt, partition.accuracy)
                 splitResult match {
-                    case problematic: RoisSplit.Problematic => problematic.problems.toList.map(pf -> _)
+                    case problematic: RoisSplit.Problematic => problematic.problems.toList.map(pt -> _)
                     case _ => List()
                 }
-            }.sortBy(_._1)(Order[PosFramePair].toOrdering)
+            }.sortBy(_._1)(Order[PosTimePair].toOrdering)
         if (bads.isEmpty && problems.isEmpty) then println("No warnings from bead ROIs partitioning, nice!")
         else {
             val warningsFile = outfolder / "roi_partition_warnings.json"
             println(s"Writing bead ROIs partition warnings file: $warningsFile")
-            given writer: JsonWriter[(PosFramePair, RoisSplit.Problem)] = readWriterForKeyedTooFewProblem
+            given writer: JsonWriter[(PosTimePair, RoisSplit.Problem)] = readWriterForKeyedTooFewProblem
             os.write(warningsFile, write(problems, indent = 2))
         }
         println("Done!")
@@ -218,10 +218,8 @@ object PartitionIndexedDriftCorrectionRois:
             val filename = filepath.last
             if (filename.startsWith(BeadRoisPrefix)) {
                 filename.split("\\.").head.stripPrefix(BeadRoisPrefix).split("_").toList match {
-                    case "" :: rawPosIdx :: rawFrameIdx :: Nil => for {
-                        position <- tryReadThruNN(PositionIndex.apply)(rawPosIdx)
-                        frame <- tryReadThruNN(Timepoint.apply)(rawFrameIdx)
-                    } yield ((position, frame), filepath)
+                    case "" :: rawPosIdx :: rawTime :: Nil => 
+                        (tryReadThruNN(PositionIndex.apply)(rawPosIdx), tryReadThruNN(Timepoint.apply)(rawTime)).tupled.map(_ -> filepath)
                     case _ => None
                 }
             } else { None }
@@ -231,7 +229,7 @@ object PartitionIndexedDriftCorrectionRois:
         if (histogram.nonEmpty) {
             given writeFiles: (Iterable[os.Path] => ujson.Value) with
                 def apply(paths: Iterable[os.Path]) = paths.map(_.last)
-            val errMsg = s"Non-unique filenames for key(s): ${posFrameMapToJson("filepaths", histogram.view.mapValues(_.map(_._2)).toMap)}"
+            val errMsg = s"Non-unique filenames for key(s): ${posTimeMapToJson("filepaths", histogram.view.mapValues(_.map(_._2)).toMap)}"
             throw new IllegalStateException(errMsg)
         }
         results.toSet
@@ -246,7 +244,7 @@ object PartitionIndexedDriftCorrectionRois:
         }
 
     /**
-      * Read a single (one FOV, one frame) ROIs file.
+      * Read a single (one FOV, one time) ROIs file.
       * 
       * Potential "failures":
       * 1. Given path isn't a file
@@ -256,7 +254,7 @@ object PartitionIndexedDriftCorrectionRois:
       * 5. Any record fails to parse
       * 
       * @param roisFile The file to parse
-      * @return A collection of ROIs, representing what was detected for a particular (FOV, frame) combo
+      * @return A collection of ROIs, representing what was detected for a particular (FOV, time) combo
       */
     def readRoisFile(roisFile: os.Path): Either[RoisFileParseError, Iterable[DetectedRoi]] = {
         prepFileRead(roisFile)
@@ -281,7 +279,7 @@ object PartitionIndexedDriftCorrectionRois:
       * 
       * @param numShifting Number of ROIs to use for actual drift correction
       * @param numAccuracy Number of ROIs to use for drift correction accuracy assessment
-      * @param rois Collection of detected bead ROIs, from a single (FOV, frame) pair
+      * @param rois Collection of detected bead ROIs, from a single (FOV, time) pair
       * @return An explanation of failure if partition isn't possible, or a partition with perhaps a warning
       */
     def sampleDetectedRois(numShifting: ShiftingCount, numAccuracy: PositiveInt)(rois: Iterable[DetectedRoi]): RoisSplit.Result = {
@@ -307,9 +305,9 @@ object PartitionIndexedDriftCorrectionRois:
     /***********************/
 
     /** Write, to JSON, a pair of (FOV, image time) and a case of too-few-ROIs for shifting for drift correction. */
-    private[looptrace] def readWriterForKeyedTooFewProblem: ReadWriter[(PosFramePair, RoisSplit.Problem)] = {
+    private[looptrace] def readWriterForKeyedTooFewProblem: ReadWriter[(PosTimePair, RoisSplit.Problem)] = {
         import JsonMappable.*
-        import PosFramePair.given
+        import PosTimePair.given
         import UJsonHelpers.UPickleCatsInstances.given
         readwriter[ujson.Value].bimap(
             (pair, problem) => JsonMappable
@@ -317,7 +315,7 @@ object PartitionIndexedDriftCorrectionRois:
                 .fold(reps => throw RepeatedKeysException(reps), identity), 
             json => 
                 val pNel = Try{ PositionIndex.unsafe(json("position").int) }.toValidatedNel
-                val fNel = Try{ Timepoint.unsafe(json("frame").int) }.toValidatedNel
+                val fNel = Try{ Timepoint.unsafe(json(PosTimePair.timeKey).int) }.toValidatedNel
                 val reqdNel = Try{ PositiveInt.unsafe(json("requested").int) }.toValidatedNel
                 val realNel = Try{ NonnegativeInt.unsafe(json("realized").int) }.toValidatedNel
                 val purposeNel = Try{ read[Purpose](json("purpose")) }.toValidatedNel
@@ -330,7 +328,7 @@ object PartitionIndexedDriftCorrectionRois:
                         (p -> f) -> problem
                 ) match {
                     case Validated.Invalid(errs) => 
-                        val msg = f"${errs.size} error(s) reading pair of ((pos, frame), too-few-ROIs): ${errs.map(_.getMessage)}"
+                        val msg = f"${errs.size} error(s) reading pair of ((pos, time), too-few-ROIs): ${errs.map(_.getMessage)}"
                         throw new ujson.Value.InvalidData(json, msg)
                     case Validated.Valid(instance) => instance
                 }
@@ -357,11 +355,12 @@ object PartitionIndexedDriftCorrectionRois:
     end ShiftingCount
     
     /** Tools for working with a fundamental grouping entity -- pair of FOV and imaging timepoint */
-    object PosFramePair:
-        given jsonMappableForPosFramePair: JsonMappable[PosFramePair] with
-            override def toJsonMap = (pos, frame) => 
-                Map("position" -> ujson.Num(pos.get), "frame" -> ujson.Num(frame.get))
-    end PosFramePair
+    object PosTimePair:
+        private[PartitionIndexedDriftCorrectionRois] val timeKey = "time"
+        given jsonMappableForPosTimePair: JsonMappable[PosTimePair] with
+            override def toJsonMap = (pos, time) => 
+                Map("position" -> ujson.Num(pos.get), timeKey -> ujson.Num(time.get))
+    end PosTimePair
 
     sealed trait RoisFileParseError extends Throwable
     final case class RoisFileParseFailedSetup(get: ErrorMessages) extends RoisFileParseError
@@ -482,7 +481,7 @@ object PartitionIndexedDriftCorrectionRois:
                 require(accuracy.forall(_._2 > 1), s"Cannot allege that a 'repeat' occurs fewer than two times: ${accuracy.filter(_._2 < 2)}")
         end Partition
 
-        final case class TooFewShiftingException(errors: NonEmptyList[(PosFramePair, TooFewShifting)]) 
+        final case class TooFewShiftingException(errors: NonEmptyList[(PosTimePair, TooFewShifting)]) 
             extends Exception(s"${errors.length} (FOV, time) pairs with insufficient ROIs for drift correction: $errors")
     end RoisSplit
     
@@ -522,15 +521,15 @@ object PartitionIndexedDriftCorrectionRois:
     end ParserConfig
 
     /** Encode FOV, timepoint, and intended purpose of ROI in filename. */
-    def getOutputFilename(pos: PositionIndex, frame: Timepoint, purpose: Purpose): Filename =
-        Filename(s"${BeadRoisPrefix}_${pos.get}_${frame.get}.${purpose.lowercase}.json")
+    def getOutputFilename(pos: PositionIndex, time: Timepoint, purpose: Purpose): Filename =
+        Filename(s"${BeadRoisPrefix}_${pos.get}_${time.get}.${purpose.lowercase}.json")
 
     /** Name ROIs subfolder according to how the selected ROIs are to be used. */
     def getOutputSubfolder(root: os.Path) = root / (_: Purpose).lowercase
 
     /** Name ROIs subfolder according to how the selected ROIs are to be used, and encode the purpose in the filename also. */
-    def getOutputFilepath(root: os.Path)(pos: PositionIndex, frame: Timepoint, purpose: Purpose): os.Path = 
-        getOutputSubfolder(root)(purpose) / getOutputFilename(pos, frame, purpose).get
+    def getOutputFilepath(root: os.Path)(pos: PositionIndex, time: Timepoint, purpose: Purpose): os.Path = 
+        getOutputSubfolder(root)(purpose) / getOutputFilename(pos, time, purpose).get
 
     /** Infer delimiter and get header + data lines. */
     private def prepFileRead(roisFile: os.Path): ValidatedNel[String, (Delimiter, String, List[String])] = {
