@@ -21,8 +21,8 @@ object CombineImagingFolders:
         folders: Seq[os.Path] = null,     // required
         targetFolder: os.Path = null,     // required
         script: os.Path = null,           // required
-        ext: String = "nd2", 
-        execute: Boolean = false,
+        ext: String = "nd2",              // We most commonly store images as ND2.
+        execute: Boolean = false,         // By default, just produce a script, don't execute.
         )
 
     val parserBuilder = OParser.builder[CliConfig]
@@ -194,16 +194,14 @@ object CombineImagingFolders:
         }
     }
 
-    /** More context-meaningful aliases */
     type Extension = String
 
     final case class UnparseablePathException(path: os.Path, message: String) 
         extends Exception(s"$path: $message")
     
-    final case class UnusableTimepointUpdateException(path: os.Path, time: Timepoint, message: String) 
-        extends Exception(s"($path, $time): $message")
-
     final case class UnusableSubfolderException(path: os.Path, message: String) 
         extends Exception(s"$path: $message")
 
+    final case class UnusableTimepointUpdateException(path: os.Path, time: Timepoint, message: String) 
+        extends Exception(s"($path, $time): $message")
 end CombineImagingFolders
