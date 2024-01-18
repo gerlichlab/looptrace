@@ -26,7 +26,7 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
 
     given arbitraryForChannel(using arbInt: Arbitrary[NonnegativeInt]): Arbitrary[Channel] = arbInt.map(Channel.apply)
 
-    given arbitraryForFrameIndex(using idx: Arbitrary[NonnegativeInt]): Arbitrary[FrameIndex] = idx.map(FrameIndex.apply)
+    given arbitraryForTimepoint(using idx: Arbitrary[NonnegativeInt]): Arbitrary[Timepoint] = idx.map(Timepoint.apply)
 
     given arbitraryForPositionIndex(using idx: Arbitrary[NonnegativeInt]): Arbitrary[PositionIndex] = idx.map(PositionIndex.apply)
 
@@ -49,7 +49,7 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
     given arbitraryForRegionalBarcodeSpotRoi(using
         arbRoiIdx: Arbitrary[RoiIndex], 
         arbPosName: Arbitrary[PositionName], 
-        arbFrameIdx: Arbitrary[FrameIndex], 
+        arbTime: Arbitrary[Timepoint], 
         arbCh: Arbitrary[Channel], 
         arbPt: Arbitrary[Point3D],
         arbMargin: Arbitrary[BoundingBox.Margin],
@@ -65,7 +65,7 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
         def genRoi: Gen[RegionalBarcodeSpotRoi] = for {
             idx <- arbitrary[RoiIndex]
             pos <- arbitrary[PositionName]
-            t <- arbitrary[FrameIndex]
+            t <- arbitrary[Timepoint]
             ch <- arbitrary[Channel]
             pt <- arbitrary[Point3D]
             box <- arbitrary[(BoundingBox.Margin, BoundingBox.Margin, BoundingBox.Margin)].map(buildBox(pt).tupled)

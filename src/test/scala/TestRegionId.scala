@@ -7,14 +7,14 @@ import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should
 
-/** Tests for frame index wrapper type */
+/** Tests for region ID wrapper type */
 class TestRegionId extends AnyFunSuite, LooptraceSuite, RefinementWrapperSuite, ScalacheckSuite, should.Matchers:
     test("RegionId.fromInt works; region ID must be nonnegative.") {
         forAll { (z: Int) => RegionId.fromInt(z) match {
             case Left(msg) if z < 0 => msg shouldEqual s"Cannot refine as nonnegative: $z"
             case Right(rid) if z >= 0 => 
                 rid.toInt shouldEqual z
-                rid.get shouldEqual FrameIndex.unsafe(z)
+                rid.get shouldEqual Timepoint.unsafe(z)
             case result => fail(s"Unexpected result parsing region ID from int ($z): $result")
         } }
     }
@@ -23,7 +23,7 @@ class TestRegionId extends AnyFunSuite, LooptraceSuite, RefinementWrapperSuite, 
         forAll { (z: NonnegativeInt) => 
             val rid = RegionId.fromNonnegative(z)
             rid.toInt shouldEqual z
-            rid.get shouldEqual FrameIndex(z)
+            rid.get shouldEqual Timepoint(z)
         }
     }
 

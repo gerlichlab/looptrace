@@ -14,7 +14,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
  * Tools for analysing chromatin fiber tracing (typically *_traces*.csv)
  * 
  * Originally developed for Neos, to count the number of locus-specific spots 
- * kept on a per-(ref_frame, frame) basis. That is, how many locus-specific 
+ * kept on a per-(region-time, locus-time) basis. That is, how many locus-specific 
  * spots are available (after QC filtering) per specific target (using a 
  * two-stage multiplex).
  * 
@@ -39,12 +39,12 @@ object TracingOutputAnalysis:
 
         /** JSON codec for pair of regional spot timepoint and locus spot timepoint */
         given rwForSpotTimePair: ReadWriter[SpotTimePair] = readwriter[ujson.Value].bimap(
-            { case (RegionalSpotTimepoint(FrameIndex(r)), LocusSpotTimepoint(FrameIndex(l))) => 
+            { case (RegionalSpotTimepoint(Timepoint(r)), LocusSpotTimepoint(Timepoint(l))) => 
                 ujson.Obj(regionalKey -> ujson.Num(r), localKey -> ujson.Num(l))
             },
             json => {
-                val regional = RegionalSpotTimepoint(FrameIndex.unsafe(json(regionalKey).int))
-                val local = LocusSpotTimepoint(FrameIndex.unsafe(json(localKey).int))
+                val regional = RegionalSpotTimepoint(Timepoint.unsafe(json(regionalKey).int))
+                val local = LocusSpotTimepoint(Timepoint.unsafe(json(localKey).int))
                 regional -> local
             }
         )
@@ -69,14 +69,14 @@ object TracingOutputAnalysis:
         os.write(outfile, lines)
     }
 
-    /** Wrap a {@code FrameIndex} as signifying the timepoint of a regional spot. */
-    final case class RegionalSpotTimepoint(get: FrameIndex)
+    /** Wrap a {@code Timepoint} as signifying the timepoint of a regional spot. */
+    final case class RegionalSpotTimepoint(get: Timepoint)
     
     /** Tools for building and working with {@code RegionalSpotTimepoint} values */
     object RegionalSpotTimepoint:
         given orderForRegionalSpotTimepoint: Order[RegionalSpotTimepoint] = Order.by(_.get)
         private[TracingOutputAnalysis] def getFromRow(row: CsvRow): ValidatedNel[String, RegionalSpotTimepoint] = 
-            getFromRowThroughFrameIndex(row, "ref_frame")(RegionalSpotTimepoint.apply)
+            getFromRowThroughTimepoint(row, "ref_frame")(RegionalSpotTimepoint.apply)
         private[TracingOutputAnalysis] def getFromRowUnsafe(row: CsvRow): RegionalSpotTimepoint = 
             getFromRow(row).fold(
                 errs => throw new Exception(s"Problem(s) parsing regional spot timepoint from row ($row): $errs"), 
@@ -84,14 +84,14 @@ object TracingOutputAnalysis:
                 )
     end RegionalSpotTimepoint
 
-    /** Wrap a {@code FrameIndex} as signifying the timepoint of a locus-specific spot. */
-    final case class LocusSpotTimepoint(get: FrameIndex)
+    /** Wrap a {@code Timepoint} as signifying the timepoint of a locus-specific spot. */
+    final case class LocusSpotTimepoint(get: Timepoint)
     
     /** Tools for building and working with {@code LocusSpotTimepoint} values */
     object LocusSpotTimepoint:
         given orderForLocusSpotTimepoint: Order[LocusSpotTimepoint] = Order.by(_.get)
         private[TracingOutputAnalysis] def getFromRow(row: CsvRow): ValidatedNel[String, LocusSpotTimepoint] = 
-            getFromRowThroughFrameIndex(row, "frame")(LocusSpotTimepoint.apply)
+            getFromRowThroughTimepoint(row, "frame")(LocusSpotTimepoint.apply)
         private[TracingOutputAnalysis] def getFromRowUnsafe(row: CsvRow): LocusSpotTimepoint = 
             getFromRow(row).fold(
                 errs => throw new Exception(s"Problem(s) parsing locus spot timepoint from row ($row): $errs"), 
@@ -248,10 +248,10 @@ object TracingOutputAnalysis:
         regional -> local
     }
 
-    private def parseThroughFrameIndex[A](build: FrameIndex => A): String => Either[String, A] = 
-        safeParseInt >>> NonnegativeInt.either >> FrameIndex.apply >> build
+    private def parseThroughTimepoint[A](build: Timepoint => A): String => Either[String, A] = 
+        safeParseInt >>> NonnegativeInt.either >> Timepoint.apply >> build
 
-    private def getFromRowThroughFrameIndex[A](row: CsvRow, key: String)(build: FrameIndex => A): ValidatedNel[String, A] = 
-        safeGetFromRow(key, parseThroughFrameIndex(build))(row)
+    private def getFromRowThroughTimepoint[A](row: CsvRow, key: String)(build: Timepoint => A): ValidatedNel[String, A] = 
+        safeGetFromRow(key, parseThroughTimepoint(build))(row)
 
 end TracingOutputAnalysis

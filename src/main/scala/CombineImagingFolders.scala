@@ -9,7 +9,6 @@ import mouse.boolean.*
 import scopt.OParser
 
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
-import at.ac.oeaw.imba.gerlich.looptrace.PositiveInt.asNonnegative
 
 /** Combine imaging subfolders to create a single timecourse.
  * 
@@ -22,8 +21,8 @@ object CombineImagingFolders:
         folders: Seq[os.Path] = null,     // required
         targetFolder: os.Path = null,     // required
         script: os.Path = null,           // required
-        ext: String = "nd2", 
-        execute: Boolean = false,
+        ext: String = "nd2",              // We most commonly store images as ND2.
+        execute: Boolean = false,         // By default, just produce a script, don't execute.
         )
 
     val parserBuilder = OParser.builder[CliConfig]
@@ -122,11 +121,17 @@ object CombineImagingFolders:
         if (errors.nonEmpty) throw new Exception(s"${errors.length} error(s) validating move pairs: $errors")
     }
 
-    def makeSrcDstPair(targetFolder: os.Path, sep: String)(newTime: Timepoint, oldPath: os.Path): Either[UnusableTimepointUpdateException, (os.Path, os.Path)] = 
-        updateFileTimepoint(oldPath.last, newTime, sep).bimap(
-            UnusableTimepointUpdateException(oldPath, newTime, _), 
-            fn => oldPath -> (targetFolder / fn)
-        )
+    def makeSrcDstPair(targetFolder: os.Path, sep: String)(newTime: Timepoint, oldPath: os.Path): Either[UnusableTimepointUpdateException, (os.Path, os.Path)] = {
+        val oldFields = oldPath.last.split(sep)
+        Timepoint.parseValueIndexPairFromPath(oldPath, filenameFieldSep = sep).bimap(
+            UnusableTimepointUpdateException(oldPath, newTime, _),  
+            (oldTime, i) => 
+                val (preFields, postFields) = oldFields.splitAt(i)
+                val newFields = preFields :+ Timepoint.printForFilename(newTime) ++ postFields.tail
+                val fn = newFields `mkString` sep
+                oldPath -> (targetFolder / fn)
+            )
+    }
     
     def prepareUpdatedTimepoints(inputFolders: NEL[os.Path], extToUse: Extension, filenameFieldSep: String, targetFolder: os.Path): 
         Either[NEL[UnparseablePathException] | NEL[UnusableSubfolderException], List[(Timepoint, os.Path)]] = {
@@ -175,7 +180,7 @@ object CombineImagingFolders:
         val (bads, goods) = 
             Alternative[List].separate(os.list(folder).toList
                 .filter(f => os.isFile(f) && keepFile(f))
-                .map(p => Timepoint.parse(p.last, filenameFieldSep).bimap(UnparseablePathException(p, _), _._1 -> p))
+                .map{ p => Timepoint.parseValueIndexPairFromPath(p, filenameFieldSep).bimap(UnparseablePathException(p, _), _._1 -> p) }
             )
         bads.toNel.toLeft(goods)
     }
@@ -189,52 +194,14 @@ object CombineImagingFolders:
         }
     }
 
-    /** Change the timepoint of the given filename to the given target. */
-    def updateFileTimepoint(fn: Filename, newTime: Timepoint, filenameFieldSep: String): Either[String, Filename] = {
-        val fields = fn.split(filenameFieldSep)
-        Timepoint.parse(fn = fn, filenameFieldSep = filenameFieldSep).map{ (oldTime, i) => 
-            (fields.take(i) ++ Array(Timepoint.print(newTime)) ++ fields.takeRight(fields.length - i - 1)) `mkString` filenameFieldSep
-        }
-    }
-
-    /** More context-meaningful aliases */
     type Extension = String
-    type Filename = String
-
-    final case class Timepoint(get: NonnegativeInt) extends AnyVal
-    
-    object Timepoint:
-        given orderForTimepoint: Order[Timepoint] = Order.by(_.get)
-        private val Prefix = "Time"
-        
-        def fromInt = NonnegativeInt.either >> Timepoint.apply
-        
-        def parse(fn: Filename, filenameFieldSep: String): Either[String, (Timepoint, Int)] = {
-            val fields = fn.split(filenameFieldSep)
-            fields.zipWithIndex.toList.flatMap{ (s, idx) => parse(s).toOption.map(_ -> idx) } match {
-                case pair :: Nil => pair.asRight
-                case times => s"${times.length} timepoints detected from filename ($fn): $times".asLeft
-            }
-        }
-
-        /** Parse timepoint from text (typically, a chunk of a delimited filename). */
-        def parse(s: String): Either[String, Timepoint] = 
-            // Read first to Double and then to Int, to ensure no decimal gets through via truncation.
-            s.startsWith(Prefix).either(s"Timepoint parse input lacks correct prefix ($Prefix): $s", ())
-                >>= Function.const{ Try{ s.stripPrefix(Prefix).toDouble }.toEither.leftMap(_.getMessage) }
-                >>= tryToInt
-                >>= fromInt
-
-        def print(t: Timepoint): String = Prefix ++ "%05d".format(t.get)
-    end Timepoint
 
     final case class UnparseablePathException(path: os.Path, message: String) 
         extends Exception(s"$path: $message")
     
-    final case class UnusableTimepointUpdateException(path: os.Path, time: Timepoint, message: String) 
-        extends Exception(s"($path, $time): $message")
-
     final case class UnusableSubfolderException(path: os.Path, message: String) 
         extends Exception(s"$path: $message")
 
+    final case class UnusableTimepointUpdateException(path: os.Path, time: Timepoint, message: String) 
+        extends Exception(s"($path, $time): $message")
 end CombineImagingFolders

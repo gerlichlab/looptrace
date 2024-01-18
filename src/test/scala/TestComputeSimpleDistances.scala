@@ -135,7 +135,7 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
             def genBadPosition: Gen[Mutate] = genMutate(Input.FieldOfViewColumn, Gen.oneOf(Gen.alphaStr, arbitrary[Double]))
             def genBadTrace: Gen[Mutate] = genMutate(Input.TraceIdColumn, Gen.oneOf(Gen.alphaStr, arbitrary[Double]))
             // NB: Skipping bad region b/c so long as it's String-ly typed, there's no way to generate a bad value.
-            def genBadLocus: Gen[Mutate] = genMutate(Input.LocusSpecificBarcodeTimepointColun, Gen.oneOf(Gen.alphaStr, arbitrary[Double]))
+            def genBadLocus: Gen[Mutate] = genMutate(Input.LocusSpecificBarcodeTimepointColumn, Gen.oneOf(Gen.alphaStr, arbitrary[Double]))
             def genBadPoint: Gen[Mutate] = 
                 Gen.oneOf(Input.XCoordinateColumn, Input.YCoordinateColumn, Input.ZCoordinateColumn).flatMap(genMutate(_, Gen.alphaStr))
             Gen.oneOf(genBadPoint, genBadLocus, genBadTrace, genBadPosition)
@@ -206,12 +206,12 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
         val tid = TraceId(NonnegativeInt(1))
         val reg = GroupName("40")
         val inputRecords = NonnegativeInt.indexed(List((2.0, 1.0, -1.0), (1.0, 5.0, 0.0), (3.0, 0.0, 2.0))).map{
-            (pt, i) => Input.GoodRecord(pos, tid, reg, FrameIndex(i), buildPoint.tupled(pt))
+            (pt, i) => Input.GoodRecord(pos, tid, reg, Timepoint(i), buildPoint.tupled(pt))
         }
         val getExpEuclDist = (i: Int, j: Int) => EuclideanDistance.between(inputRecords(i).point, inputRecords(j).point)
         val expected: Iterable[OutputRecord] = List(0 -> 1, 0 -> 2, 1 -> 2).map{ (i, j) => 
-            val t1 = FrameIndex.unsafe(i)
-            val t2 = FrameIndex.unsafe(j)
+            val t1 = Timepoint.unsafe(i)
+            val t2 = Timepoint.unsafe(j)
             OutputRecord(pos, tid, reg, t1, t2, getExpEuclDist(i, j), t1.get, t2.get)
         }
         val observed = inputRecordsToOutputRecords(NonnegativeInt.indexed(inputRecords))
@@ -243,13 +243,13 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
                     PositionIndex.unsafe(pos), 
                     TraceId(NonnegativeInt.unsafe(tid)), 
                     GroupName(reg.toString), 
-                    FrameIndex(i), 
+                    Timepoint(i), 
                     pt,
                     )
             }
             val observation = inputRecordsToOutputRecords(NonnegativeInt.indexed(records))
             val simplifiedObservation = observation.map{ r => 
-                (r.position.get, r.trace.get, r.region.get, r.frame1.get, r.frame2.get) -> 
+                (r.position.get, r.trace.get, r.region.get, r.time1.get, r.time2.get) -> 
                 r.distance.get
             }.toList
             val simplifiedExpectation = expectation.map{ case ((pos, tid, reg, t1, t2), d) => 
@@ -288,12 +288,12 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
         }
     }
 
-    test("Distance is never computed between records with identically-valued frames (locus-specific timepoints), even if the grouping elements place them together.") {
+    test("Distance is never computed between records with identically-valued locus-specific timepoints, even if the grouping elements place them together.") {
         /* To encourage collisions, narrow the choices for grouping components. */
         given arbPos: Arbitrary[PositionIndex] = Gen.oneOf(0, 1).map(PositionIndex.unsafe).toArbitrary
         given arbTrace: Arbitrary[TraceId] = Gen.oneOf(2, 3).map(NonnegativeInt.unsafe `andThen` TraceId.apply).toArbitrary
         given arbRegion: Arbitrary[GroupName] = Gen.oneOf(40, 41).map(r => GroupName(r.toString)).toArbitrary
-        given arbFrame: Arbitrary[FrameIndex] = Gen.const(FrameIndex(NonnegativeInt(10))).toArbitrary
+        given arbTime: Arbitrary[Timepoint] = Gen.const(Timepoint(NonnegativeInt(10))).toArbitrary
         forAll (Gen.choose(10, 100).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord]))) {
             (records: List[Input.GoodRecord]) => inputRecordsToOutputRecords(NonnegativeInt.indexed(records)).toList shouldEqual List()
         }
@@ -301,12 +301,12 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
 
     /* Instance for random case / example generation */
     given arbitraryForTraceId(using arbRoiIdx: Arbitrary[RoiIndex]): Arbitrary[TraceId] = arbRoiIdx.map(TraceId.fromRoiIndex)
-    given arbitraryForGroupName(using arbTime: Arbitrary[FrameIndex]): Arbitrary[GroupName] = arbTime.map(GroupName.fromFrameIndex)
+    given arbitraryForGroupName(using arbTime: Arbitrary[Timepoint]): Arbitrary[GroupName] = arbTime.map(GroupName.fromTimepoint)
     given arbitraryForGoodInputRecord(using 
         arbPos: Arbitrary[PositionIndex], 
         arbTrace: Arbitrary[TraceId], 
         arbRegion: Arbitrary[GroupName], 
-        arbLocus: Arbitrary[FrameIndex], 
+        arbLocus: Arbitrary[Timepoint], 
         arbPoint: Arbitrary[Point3D], 
     ): Arbitrary[Input.GoodRecord] = (arbPos, arbTrace, arbRegion, arbLocus, arbPoint).mapN(Input.GoodRecord.apply)
 
@@ -324,6 +324,6 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
     /** Convert each ADT value to a simple sequence of text fields, for writing to format like CSV. */
     private def recordToTextFields = (r: Input.GoodRecord) => {
         val (x, y, z) = (r.point.x, r.point.y, r.point.z)
-        List(r.position.show, r.trace.show, r.region.show, r.frame.show, x.get.show, y.get.show, z.get.show)
+        List(r.position.show, r.trace.show, r.region.show, r.time.show, x.get.show, y.get.show, z.get.show)
     }
 end TestComputeSimpleDistances

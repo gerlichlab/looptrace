@@ -38,7 +38,7 @@ class TestLabelAndFilterTracesQC extends AnyFunSuite, GenericSuite, ScalacheckSu
 
     test("Missing distance-to-region column, specifically, fails the parse expectedly.") { pending }
 
-    test("Missing frame names column, specifically, fails the parse expectedly.") { pending }
+    test("Missing probe names column, specifically, fails the parse expectedly.") { pending }
 
     test("Basic golden path test") {
         withTempDirectory{ (tempdir: os.Path) => 
@@ -113,7 +113,7 @@ class TestLabelAndFilterTracesQC extends AnyFunSuite, GenericSuite, ScalacheckSu
         val probeNames = Set("pre_image", "Dp027", "Dp028", "Dp027_repeat", "Dp105", "Dp107", "blank_1", "Dp019", "Dp020", "Dp021")
         forAll (Gen.zip(Gen.someOf(probeNames), Gen.oneOf(tracesInputFile, tracesInputFileWithoutIndex))) {
             case (exclusions, infile) => 
-                withCsvData(infile){ (rows: CsvRows) => rows.map(_(ParserConfig.default.frameNameColumn)).toSet shouldEqual probeNames }
+                withCsvData(infile){ (rows: CsvRows) => rows.map(_(ParserConfig.default.probeNameColumn)).toSet shouldEqual probeNames }
                 withTempDirectory{ (tempdir: os.Path) => 
                     // Perform the pretest and get the expected result paths.
                     val (expUnfilteredPath, expFilteredPath) = pretest(tempdir = tempdir, infile = infile)
@@ -129,13 +129,14 @@ class TestLabelAndFilterTracesQC extends AnyFunSuite, GenericSuite, ScalacheckSu
                         os.read.lines(expUnfilteredPath).length shouldEqual 1
                         os.read.lines(expFilteredPath).length shouldEqual 1
                     } else {
+                        val discard = (r: CsvRow) => exclusions.contains(r("frame_name"))
                         /* Each file should exhibit row-by-row equality with expectation. */
                         withCsvPair(expUnfilteredPath, componentExpectationFile){ (obsRows: CsvRows, expRowsAll: CsvRows) =>
-                            val expRows = expRowsAll.filter{ r => !exclusions.contains(r("frame_name")) }
+                            val expRows = expRowsAll.filterNot(discard)
                             assertPairwiseEquality(observed = obsRows.toList, expected = expRows.toList)
                         }
                         withCsvPair(expFilteredPath, wholemealFilteredExpectationFile){ (obsRows: CsvRows, expRowsAll: CsvRows) =>
-                            val expRowsFilt = expRowsAll.filter{ r => !exclusions.contains(r("frame_name")) }
+                            val expRowsFilt = expRowsAll.filterNot(discard)
                             assertPairwiseEquality(observed = obsRows.toList, expected = expRowsFilt.toList)
                         }
                     }

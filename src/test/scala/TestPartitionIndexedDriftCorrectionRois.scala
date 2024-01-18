@@ -20,7 +20,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.{
     ColumnName,
     InitFile,
     ParserConfig,
-    PosFramePair,
+    PosTimePair,
     Purpose,
     RoisFileParseFailedRecords,
     RoisFileParseFailedSetup,
@@ -273,9 +273,9 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
     }
 
     test("Input discovery works as expected for folder with no other contents.") {
-        forAll (genDistinctNonnegativePairs) { case (pf1, pf2) => {
+        forAll (genDistinctNonnegativePairs) { case (pt1, pt2) => {
             withTempDirectory{ (p: os.Path) => 
-                val expected = Set(pf1, pf2).map(pf => pf -> (p / getInputFilename(pf._1, pf._2)))
+                val expected = Set(pt1, pt2).map(pt => pt -> (p / getInputFilename(pt._1, pt._2)))
 
                 /* Check that inputs don't already exist, then establish them and check existence. */
                 val expPaths = expected.map(_._2)
@@ -292,20 +292,21 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
     test("Input discovery works as expected for mixed folder contents.") {
         enum FolderChoice:
             case Root, GoodSubfolder, BadSubfolder
-        def setup(root: os.Path, pf1: PosFramePair, pf2: PosFramePair, fc: FolderChoice): (os.Path, Set[InitFile]) = {
+        def setup(root: os.Path, pt1: PosTimePair, pt2: PosTimePair, fc: FolderChoice): (os.Path, Set[InitFile]) = {
             import FolderChoice.*
             val subGood = root / "sub1"
             val subBad = root / "sub2"
-            val (pos, frame) = pf1
-            val wrongPrefixFile = subGood / getInputFilename(pos, frame).replaceAll(BeadRoisPrefix, "BadPrefix")
-            val wrongSubfolderFile = subBad / getInputFilename(pos, frame)
-            val missingPrefixFile = subGood / getInputFilename(pos, frame).replaceAll(BeadRoisPrefix, "")
+            val (pos, time) = pt1
+            val baseFilename = getInputFilename(pos, time)
+            val wrongPrefixFile = subGood / baseFilename.replaceAll(BeadRoisPrefix, "BadPrefix")
+            val wrongSubfolderFile = subBad / baseFilename
+            val missingPrefixFile = subGood / baseFilename.replaceAll(BeadRoisPrefix, "")
             val wrongFilenameStructureFile1 = 
-                subGood / getInputFilename(pos, frame).replaceAll(s"${pos.get}_${frame.get}", s"${pos.get}.${frame.get}")
+                subGood / baseFilename.replaceAll(s"${pos.get}_${time.get}", s"${pos.get}.${time.get}")
             val wrongFilenameStructureFile2 = 
-                subGood / getInputFilename(pos, frame).replaceAll(s"${pos.get}_${frame.get}", s"${pos.get}_${frame.get}_0")
-            val goodFile1 = subGood / getInputFilename(pos, frame)
-            val goodFile2 = subGood / getInputFilename(pf2._1, pf2._2)
+                subGood / baseFilename.replaceAll(s"${pos.get}_${time.get}", s"${pos.get}_${time.get}_0")
+            val goodFile1 = subGood / baseFilename
+            val goodFile2 = subGood / getInputFilename(pt2._1, pt2._2)
             List(
                 wrongPrefixFile, 
                 wrongSubfolderFile, 
@@ -317,14 +318,14 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                 ).foreach(touchFile(_, true))
             fc match {
                 case Root => root -> Set()
-                case GoodSubfolder => subGood -> Set(((pos, frame), goodFile1), ((pf2._1, pf2._2), goodFile2))
-                case BadSubfolder => subBad -> Set(((pos, frame), wrongSubfolderFile))
+                case GoodSubfolder => subGood -> Set(pt1 -> goodFile1, pt2 -> goodFile2)
+                case BadSubfolder => subBad -> Set(pt1 -> wrongSubfolderFile)
             }
         }
         forAll (Gen.zip(genDistinctNonnegativePairs, Gen.oneOf(FolderChoice.values.toList))) { 
-            case ((pf1, pf2), folderChoice) => 
+            case ((pt1, pt2), folderChoice) => 
                 withTempDirectory({ (root: os.Path) => 
-                    val (inputPath, expectedOutput) = setup(root, pf1, pf2, folderChoice)
+                    val (inputPath, expectedOutput) = setup(root, pt1, pt2, folderChoice)
                     
                     /* Pretest the folder structure */
                     os.list(root).filter(os.isDir).toSet shouldEqual Set("sub1", "sub2").map(root / _)
@@ -425,17 +426,17 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
-        ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
-        type PosTimeRois = (PosFramePair, List[DetectedRoi])
-        def genDetected(ptPairs: List[PosFramePair])(lo: Int, hi: Int): Gen[List[PosTimeRois]] = 
+        ).toList.map((p, t) => PositionIndex.unsafe(p) -> Timepoint.unsafe(t))
+        type PosTimeRois = (PosTimePair, List[DetectedRoi])
+        def genDetected(ptPairs: List[PosTimePair])(lo: Int, hi: Int): Gen[List[PosTimeRois]] = 
             ptPairs.traverse{ pt => genUsableRois(lo, hi).map(pt -> _) }
         val maxReqShifting = 2 * AbsoluteMinimumShifting
         def genArgs: Gen[(List[PosTimeRois], ShiftingCount, List[PosTimeRois])] = for {
             nTooFewShift <- Gen.choose(1, posTimePairs.length)
-            (tooFewPosFramePairs, enoughPosFramePairs) = posTimePairs.splitAt(nTooFewShift)
-            tooFew <- genDetected(tooFewPosFramePairs)(AbsoluteMinimumShifting + 1, maxReqShifting - 1)
+            (tooFewPosTimePairs, enoughPosTimePairs) = posTimePairs.splitAt(nTooFewShift)
+            tooFew <- genDetected(tooFewPosTimePairs)(AbsoluteMinimumShifting + 1, maxReqShifting - 1)
             numReqShifting <- Gen.choose(tooFew.map(_._2.length).max + 1, maxReqShifting).map(ShiftingCount.unsafe)
-            enough <- genDetected(enoughPosFramePairs)(maxReqShifting, 2 * maxReqShifting)
+            enough <- genDetected(enoughPosTimePairs)(maxReqShifting, 2 * maxReqShifting)
         } yield (tooFew, numReqShifting, enough)
         forAll (genArgs, arbitrary[PositiveInt]) { 
             case ((tooFew, reqShifting, enough), reqAccuracy) =>
@@ -452,8 +453,8 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                     /* Check the effect of having run the workflow */
                     // First, check the existence of the warnings file and parse it.
                     os.exists(warningsFile) shouldBe true
-                    given reader: Reader[(PosFramePair, RoisSplit.Problem)] = readWriterForKeyedTooFewProblem
-                    val warnings = readJsonFile[List[(PosFramePair, RoisSplit.Problem)]](warningsFile)
+                    given reader: Reader[(PosTimePair, RoisSplit.Problem)] = readWriterForKeyedTooFewProblem
+                    val warnings = readJsonFile[List[(PosTimePair, RoisSplit.Problem)]](warningsFile)
                     val obsWarnShifting = warnings.filter(_._2.purpose === Purpose.Shifting)
                     val obsWarnAccuracy = warnings.filter(_._2.purpose === Purpose.Accuracy)
                     // Then, check the too-few-shifting (but rescued) records.
@@ -477,9 +478,9 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
-        ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
+        ).toList.map((p, t) => PositionIndex.unsafe(p) -> Timepoint.unsafe(t))
         val maxReqShifting = 2 * AbsoluteMinimumShifting
-        def genArgs: Gen[(ShiftingCount, PositiveInt, List[(PosFramePair, List[DetectedRoi])])] = for {
+        def genArgs: Gen[(ShiftingCount, PositiveInt, List[(PosTimePair, List[DetectedRoi])])] = for {
             numReqShifting <- Gen.choose(AbsoluteMinimumShifting, maxReqShifting).map(ShiftingCount.unsafe)
             numReqAccuracy <- Gen.choose(1, 100).map(PositiveInt.unsafe)
             numReq = numReqShifting + numReqAccuracy
@@ -529,9 +530,9 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
-        ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
+        ).toList.map((p, t) => PositionIndex.unsafe(p) -> Timepoint.unsafe(t))
         def genDetected(lo: Int, hi: Int) = 
-            (_: List[PosFramePair]).traverse{ pt => genMixedUsabilityRoisEachSize(lo, hi).map(pt -> _) }
+            (_: List[PosTimePair]).traverse{ pt => genMixedUsabilityRoisEachSize(lo, hi).map(pt -> _) }
         def genArgs = for {
             numTooFew <- Gen.choose(1, posTimePairs.length)
             numReqShifting <- Gen.choose(AbsoluteMinimumShifting, 50).map(ShiftingCount.unsafe)
@@ -564,11 +565,11 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
-        ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
+        ).toList.map((p, t) => PositionIndex.unsafe(p) -> Timepoint.unsafe(t))
         def genDetected(lo: Int, hi: Int) = 
             // Make all ROIs usable so that the math about how many will be realized (used) is easier; 
             // in particular, we don't want that math dependent on counting the number of usable vs. unusable ROIs.
-            (_: List[PosFramePair]).traverse{ pt => genUsableRois(lo, hi).map(pt -> _) }
+            (_: List[PosTimePair]).traverse{ pt => genUsableRois(lo, hi).map(pt -> _) }
         def genArgs = for {
             numTooFewReqShifting <- Gen.oneOf(Gen.const(0), Gen.choose(1, posTimePairs.length))
             numTooFewReqAccuracy <- Gen.oneOf(Gen.const(0), Gen.choose(posTimePairs.length - numTooFewReqShifting, posTimePairs.length))
@@ -596,8 +597,8 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                     case Nil => os.exists(warningsFile) shouldBe false
                     case _ => 
                         os.exists(warningsFile) shouldBe true
-                        given readerForWarnings: Reader[(PosFramePair, RoisSplit.Problem)] = readWriterForKeyedTooFewProblem
-                        val warnings = readJsonFile[List[(PosFramePair, RoisSplit.Problem)]](warningsFile)
+                        given readerForWarnings: Reader[(PosTimePair, RoisSplit.Problem)] = readWriterForKeyedTooFewProblem
+                        val warnings = readJsonFile[List[(PosTimePair, RoisSplit.Problem)]](warningsFile)
                         val obsWarnShifting = warnings.filter(_._2.purpose === Purpose.Shifting)
                         val obsWarnAccuracy = warnings.filter(_._2.purpose === Purpose.Accuracy)
                         val expWarnShifting = tooFewShifting.map{ (pt, rois) => 
@@ -613,7 +614,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                         obsWarnAccuracy.length shouldEqual (tooFewShifting.length + tooFewAccuracy.length)
                         /* Check the actual problems. */
                         obsWarnShifting.toMap shouldEqual expWarnShifting.toMap
-                        def collapseKeyedProblems: List[(PosFramePair, RoisSplit.Problem)] => Map[PosFramePair, NonEmptySet[RoisSplit.Problem]] = {
+                        def collapseKeyedProblems: List[(PosTimePair, RoisSplit.Problem)] => Map[PosTimePair, NonEmptySet[RoisSplit.Problem]] = {
                             import at.ac.oeaw.imba.gerlich.looptrace.collections.*
                             given orderForPurpose: Order[Purpose] = Order.by{
                                 case Purpose.Shifting => 0
@@ -635,7 +636,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
-        ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
+        ).toList.map((p, t) => PositionIndex.unsafe(p) -> Timepoint.unsafe(t))
         def genArgs = for {
             rois <- posTimePairs.traverse{ pt => genUsableRois(AbsoluteMinimumShifting, maxNumRoisSmallTests).map(pt -> _) }
             numShifting <- Gen.choose(rois.map(_._2.length).max, 1000).map(ShiftingCount.unsafe)
@@ -674,7 +675,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         }
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
-        ).toList.map((p, t) => PositionIndex.unsafe(p) -> FrameIndex.unsafe(t))
+        ).toList.map((p, t) => PositionIndex.unsafe(p) -> Timepoint.unsafe(t))
         def genArgs = for {
             numShifting <- Gen.choose(AbsoluteMinimumShifting, 50).map(ShiftingCount.unsafe)
             numAccuracy <- Gen.choose(1, 50).map(PositiveInt.unsafe)
@@ -784,13 +785,13 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         def setUsable: DetectedRoi = roi.copy(failCode = RoiFailCode.success)
 
     /** Generate a pair of pairs of nonnegative integers such that the first pair isn't the same as the second. */
-    def genDistinctNonnegativePairs: Gen[(PosFramePair, PosFramePair)] = 
+    def genDistinctNonnegativePairs: Gen[(PosTimePair, PosTimePair)] = 
         Gen.zip(arbitrary[(NonnegativeInt, NonnegativeInt)], arbitrary[(NonnegativeInt, NonnegativeInt)])
             .suchThat{ case (p1, p2) => p1 =!= p2 }
-            .map { case ((p1, f1), (p2, f2)) => (PositionIndex(p1) -> FrameIndex(f1), PositionIndex(p2) -> FrameIndex(f2)) }
+            .map { case ((p1, f1), (p2, f2)) => (PositionIndex(p1) -> Timepoint(f1), PositionIndex(p2) -> Timepoint(f2)) }
     
-    /** Infer detected bead ROIs filename for particular field of view (@code pos) and timepoint ({@code frame}). */
-    def getInputFilename(pos: PositionIndex, frame: FrameIndex): String = s"bead_rois__${pos.get}_${frame.get}.csv"
+    /** Infer detected bead ROIs filename for particular field of view (@code pos) and timepoint ({@code time}). */
+    def getInputFilename(pos: PositionIndex, time: Timepoint): String = s"bead_rois__${pos.get}_${time.get}.csv"
     
     /** Limit the number of ROIs generated to keep test cases (relatively) small even without shrinking. */
     def maxNumRoisSmallTests: ShiftingCount = ShiftingCount.unsafe(2 * AbsoluteMinimumShifting)
