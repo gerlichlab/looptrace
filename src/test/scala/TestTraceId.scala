@@ -5,7 +5,7 @@ import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should
 
-/** Tests for frame index wrapper type */
+/** Tests for trace ID wrapper type */
 class TestTraceId extends AnyFunSuite, RefinementWrapperSuite, ScalacheckSuite, should.Matchers:
     test("TraceId.fromInt works; trace ID must be nonnegative.") {
         forAll { (z: Int) => TraceId.fromInt(z) match {
