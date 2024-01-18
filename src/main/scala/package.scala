@@ -190,14 +190,6 @@ package object looptrace {
         def unsafe = NonnegativeInt.unsafe `andThen` Channel.apply
     end Channel
 
-    final case class FrameIndex(get: NonnegativeInt) extends AnyVal
-    object FrameIndex:
-        given orderForFrameIndex: Order[FrameIndex] = Order.by(_.get)
-        given showForFrameIndex: Show[FrameIndex] = Show.show(_.get.show)
-        def fromInt = NonnegativeInt.either.fmap(_.map(FrameIndex.apply))
-        def unsafe = NonnegativeInt.unsafe `andThen` FrameIndex.apply
-    end FrameIndex
-
     final case class PositionIndex(get: NonnegativeInt) extends AnyVal
     object PositionIndex:
         given orderForPositionIndex: Order[PositionIndex] = Order.by(_.get)
@@ -215,12 +207,12 @@ package object looptrace {
     object ProbeName:
         given showForProbeName: Show[ProbeName] = Show.show(_.get)
 
-    final case class RegionId(get: FrameIndex):
+    final case class RegionId(get: Timepoint):
         def toInt: NonnegativeInt = get.get
     end RegionId
     object RegionId:
         def fromInt(z: Int) = NonnegativeInt.either(z).map(fromNonnegative)
-        def fromNonnegative = RegionId.apply `compose` FrameIndex.apply
+        def fromNonnegative = RegionId.apply `compose` Timepoint.apply
     end RegionId
 
     final case class RoiIndex(get: NonnegativeInt) extends AnyVal
@@ -245,8 +237,8 @@ package object looptrace {
       * @param writeV How to write each {@code V} element as JSON
       * @return A JSON array of object corresponding to each element of the map
       */
-    def posFrameMapToJson[V](vKey: String, pfToV: Map[(PositionIndex, FrameIndex), V])(using writeV: (V) => ujson.Value): ujson.Value = {
-        val proc1 = (pf: (PositionIndex, FrameIndex), v: V) => ujson.Obj(
+    def posFrameMapToJson[V](vKey: String, pfToV: Map[(PositionIndex, Timepoint), V])(using writeV: (V) => ujson.Value): ujson.Value = {
+        val proc1 = (pf: (PositionIndex, Timepoint), v: V) => ujson.Obj(
             "position" -> pf._1.get,
             "frame" -> pf._2.get,
             vKey -> writeV(v)

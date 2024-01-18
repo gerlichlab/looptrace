@@ -587,7 +587,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             |2,29,P0001.zarr,0.0,6.0,-16.0,-0.32831460930799267,0.5707716296861373,0.768359957646404
             |3,30,P0001.zarr,-2.0,2.0,-12.0,-0.6267951175716121,0.24476613641147094,0.5547602737043816
             |""".stripMargin
-        val timepoints = List(27, 28, 29, 30).map(FrameIndex.unsafe)
+        val timepoints = List(27, 28, 29, 30).map(Timepoint.unsafe)
         
         // Choose from probe groupings available given the timepoints used in drift file.
         given arbGrouping: Arbitrary[List[ProbeGroup]] = Gen.oneOf(List(
@@ -597,12 +597,12 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 List(NonEmptySet.of(27, 28, 30), NonEmptySet.one(29)), 
                 List(NonEmptySet.of(27, 28, 29, 30)),
             )
-            .map(_.map(timeSets => ProbeGroup(timeSets.map(FrameIndex.unsafe))))
+            .map(_.map(timeSets => ProbeGroup(timeSets.map(Timepoint.unsafe))))
             ).toArbitrary
 
         /* Control the generation of ROIs to match the drift file text. */
         given arbPos: Arbitrary[PositionName] = Gen.const(PositionName("P0001.zarr")).toArbitrary
-        given arbFrameIndex: Arbitrary[FrameIndex] = Gen.oneOf(timepoints).toArbitrary
+        given arbTimepoint: Arbitrary[Timepoint] = Gen.oneOf(timepoints).toArbitrary
         
         /* Generate reasonable ROIs (controlling centroid and bounding box). */
         given arbMargin: Arbitrary[BoundingBox.Margin] = getArbForMargin(NonnegativeReal(1.0), NonnegativeReal(32.0))
@@ -778,12 +778,12 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                         val intvY = buildInterval(pt.y, offY)(YCoordinate.apply)
                         val intvZ = buildInterval(pt.z, offZ)(ZCoordinate.apply)
                         val bbox = BoundingBox(intvX, intvY, intvZ)
-                        RegionalBarcodeSpotRoi(RoiIndex(i), posName, FrameIndex.unsafe(time), ch, pt, bbox)
+                        RegionalBarcodeSpotRoi(RoiIndex(i), posName, Timepoint.unsafe(time), ch, pt, bbox)
                     }
                 }
             } yield rois
             forAll (genRois) { rois => 
-                val grouping = rawGrouping.map{ sub => ProbeGroup(sub.map(FrameIndex.unsafe)) }
+                val grouping = rawGrouping.map{ sub => ProbeGroup(sub.map(Timepoint.unsafe)) }
                 buildNeighboringRoisFinder(NonnegativeInt.indexed(rois), threshold)(grouping) match {
                     case Left(err) => fail(s"Expected success but got error: $err")
                     case Right(observation) => 
@@ -801,11 +801,11 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-2048.0, 2048.0)
         given arbMargin: Arbitrary[BoundingBox.Margin] = getArbForMargin(NonnegativeReal(1.0), NonnegativeReal(32.0))
         
-        def genSmallRoisAndGrouping: Gen[(List[RegionalBarcodeSpotRoi], NonEmptyList[FrameIndex], NonEmptyList[ProbeGroup])] = for {
+        def genSmallRoisAndGrouping: Gen[(List[RegionalBarcodeSpotRoi], NonEmptyList[Timepoint], NonEmptyList[ProbeGroup])] = for {
             // First, generate ROIs timepoints, such that they're few in number (so quicker test), and
             // the number of unique timepoints is at least 2 (at least 1 to be uncovered by the grouping).
             rois <- {
-                given arbTime: Arbitrary[FrameIndex] = Gen.oneOf(List(7, 8, 9).map(FrameIndex.unsafe)).toArbitrary
+                given arbTime: Arbitrary[Timepoint] = Gen.oneOf(List(7, 8, 9).map(Timepoint.unsafe)).toArbitrary
                 Gen.choose(2, 10).flatMap(Gen.listOfN(_, arbitrary[RegionalBarcodeSpotRoi]))
             }.suchThat(_.map(_.time).toSet.size > 1)
             times = rois.map(_.time).toSet
@@ -813,7 +813,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             rawFullGrouping <- Gen.oneOf(collections.partition(numGroups, times))
             (skipped, grouping) <- rawFullGrouping
                 .traverse(_.toList.traverse(x => arbitrary[Boolean].map(_.either(x, x))))
-                .map(_.foldLeft(List.empty[FrameIndex] -> List.empty[ProbeGroup]){ 
+                .map(_.foldLeft(List.empty[Timepoint] -> List.empty[ProbeGroup]){ 
                     // Collect the timepoints to skip, and build up the probe/timepoint grouping.
                     case ((drops, acc), subMaybes) => 
                         val (newSkips, newKeeps) = Alternative[List].separate(subMaybes)
@@ -846,10 +846,10 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         extension [X : Order](xs: Set[X])
             def unsafeToNes: NonEmptySet[X] = xs.toList.toNel.get.toNes
 
-        def genSmallRoisAndGrouping: Gen[(List[RegionalBarcodeSpotRoi], NonEmptySet[FrameIndex], NonEmptyList[ProbeGroup])] = for {
+        def genSmallRoisAndGrouping: Gen[(List[RegionalBarcodeSpotRoi], NonEmptySet[Timepoint], NonEmptyList[ProbeGroup])] = for {
             // First, generate ROIs timepoints, such that they're few in number (so quicker test).
             rois <- {
-                given arbTime: Arbitrary[FrameIndex] = Gen.oneOf(List(7, 8, 9).map(FrameIndex.unsafe)).toArbitrary
+                given arbTime: Arbitrary[Timepoint] = Gen.oneOf(List(7, 8, 9).map(Timepoint.unsafe)).toArbitrary
                 Gen.choose(1, 10).flatMap(Gen.listOfN(_, arbitrary[RegionalBarcodeSpotRoi]))
             }
             times = rois.map(_.time).toSet
@@ -966,7 +966,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         def genRois: Gen[List[Roi]] = for {
             n <- Gen.choose(0, 10)
             regions <- Gen.pick(n, 0 until 100)
-        } yield regions.map(r => canonicalRoi.copy(time = FrameIndex.unsafe(r))).toList
+        } yield regions.map(r => canonicalRoi.copy(time = Timepoint.unsafe(r))).toList
         
         forAll (genThreshold(NonnegativeReal(0)), genRois) { case (threshold, rois) => 
             val indexed = NonnegativeInt.indexed(rois)
@@ -1039,7 +1039,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             RegionalBarcodeSpotRoi(
                 RoiIndex(NonnegativeInt(0)), 
                 PositionName("P0001.zarr"), 
-                FrameIndex(NonnegativeInt(0)), 
+                Timepoint(NonnegativeInt(0)), 
                 Channel(NonnegativeInt(0)), 
                 point, 
                 box,
@@ -1049,7 +1049,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
 
     private def genSpotsAndDrifts(genCoarse: Gen[CoarseDrift], genFine: Gen[FineDrift])(
         using arbMargin: Arbitrary[BoundingBox.Margin], arbPoint: Arbitrary[Point3D]
-        ): Gen[(NonEmptyList[RegionalBarcodeSpotRoi], List[(PositionName, FrameIndex, CoarseDrift, FineDrift)])] = {
+        ): Gen[(NonEmptyList[RegionalBarcodeSpotRoi], List[(PositionName, Timepoint, CoarseDrift, FineDrift)])] = {
         // Order shouldn't matter, but that invariant's tested elsewhere.
         given ordPosTime: Ordering[DriftKey] = Order[DriftKey].toOrdering
         for {
@@ -1063,7 +1063,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
 
     private def genSpotsAndDriftsWithDrop(genCoarse: Gen[CoarseDrift], genFine: Gen[FineDrift])(
         using arbMargin: Arbitrary[BoundingBox.Margin], arbPoint: Arbitrary[Point3D]
-        ): Gen[(NonEmptyList[RegionalBarcodeSpotRoi], List[(PositionName, FrameIndex, CoarseDrift, FineDrift)], Int)] = {
+        ): Gen[(NonEmptyList[RegionalBarcodeSpotRoi], List[(PositionName, Timepoint, CoarseDrift, FineDrift)], Int)] = {
         // Order shouldn't matter, but that invariant's tested elsewhere.
         given ordPosTime: Ordering[DriftKey] = Order[DriftKey].toOrdering
         genSpotsAndDrifts(genCoarse, genFine).flatMap{ (spots, driftRows) => 
@@ -1103,7 +1103,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
 
     private def getArbForPoint3D(lo: Double, hi: Double): Arbitrary[Point3D] = point3DArbitrary(using Gen.choose(lo, hi).toArbitrary)
 
-    private def getDriftFileLines(driftRows: List[(PositionName, FrameIndex, CoarseDrift, FineDrift)]): List[String] = 
+    private def getDriftFileLines(driftRows: List[(PositionName, Timepoint, CoarseDrift, FineDrift)]): List[String] = 
         headDriftFile :: driftRows.zipWithIndex.map{ case ((pos, time, coarse, fine), i) => 
             s"$i,${time.get},${pos.get},${coarse.z.get},${coarse.y.get},${coarse.x.get},${fine.z.get},${fine.y.get},${fine.x.get}"
         }

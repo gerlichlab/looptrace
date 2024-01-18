@@ -78,9 +78,9 @@ object LabelAndFilterRois:
                     .toEither
                     .leftMap(_.getMessage)
                     .flatMap(
-                        _.toList.foldRight(List.empty[Int] -> Map.empty[Int, NEL[FrameIndex]]){
+                        _.toList.foldRight(List.empty[Int] -> Map.empty[Int, NEL[Timepoint]]){
                             // finds negative values and groups the probes (key) by group (value), inverting the mapping and collecting
-                            case ((probe, groupIndex), (neg, acc)) => FrameIndex.fromInt(probe).fold(
+                            case ((probe, groupIndex), (neg, acc)) => Timepoint.fromInt(probe).fold(
                                 _ => (probe :: neg, acc),
                                 frame => (neg, acc + (groupIndex -> acc.get(groupIndex).fold(NEL.one(frame))(frame :: _)))
                                 )
@@ -227,7 +227,7 @@ object LabelAndFilterRois:
             val repeats = recordNumbersByKey.filter(_._2.size > 1)
             if (repeats.nonEmpty) { 
                 val simpleReps = repeats.toList.map{ 
-                    case ((PositionName(p), FrameIndex(t)), lineNums) => (p, t) -> lineNums.toList.sorted
+                    case ((PositionName(p), Timepoint(t)), lineNums) => (p, t) -> lineNums.toList.sorted
                 }.sortBy(_._1)
                 throw new Exception(s"${simpleReps.length} repeated (pos, time) pairs: ${simpleReps}")
             }
@@ -289,7 +289,7 @@ object LabelAndFilterRois:
       *
       * @param get The actual collection of indices
       */
-    final case class ProbeGroup(get: NonEmptySet[FrameIndex])
+    final case class ProbeGroup(get: NonEmptySet[Timepoint])
     
     /** Helpers for working with frame/probe/timepoint index groupings */
     object ProbeGroup:
@@ -299,7 +299,7 @@ object LabelAndFilterRois:
                 .toList
                 .toNel
                 .toRight("Empty collection can't parse as probe group!")
-                .flatMap(_.traverse(_.safeInt.flatMap(FrameIndex.fromInt)))
+                .flatMap(_.traverse(_.safeInt.flatMap(Timepoint.fromInt)))
                 .flatMap(safeNelToNes)
                 .leftMap(repeats => s"Repeat values for probe group: $repeats")
                 .fold(msg => throw new ujson.Value.InvalidData(json, msg), ProbeGroup.apply)
@@ -383,7 +383,7 @@ object LabelAndFilterRois:
             else {
                 val (groupIds, repeatedFrames) = NonnegativeInt.indexed(grouping)
                     .flatMap((g, i) => g.get.toList.map(_ -> i))
-                    .foldLeft(Map.empty[FrameIndex, NonnegativeInt] -> Map.empty[FrameIndex, Int]){ 
+                    .foldLeft(Map.empty[Timepoint, NonnegativeInt] -> Map.empty[Timepoint, Int]){ 
                         case ((ids, repeats), (frame, gid)) =>
                             if ids `contains` frame
                             then (ids, repeats + (frame -> (repeats.getOrElse(frame, 1) + 1)))
@@ -414,7 +414,7 @@ object LabelAndFilterRois:
     def rowToRoi(row: CsvRow): ErrMsgsOr[Roi] = {
         val indexNel = safeGetFromRow("", safeParseInt >>> RoiIndex.fromInt)(row)
         val posNel = safeGetFromRow("position", PositionName.apply(_).asRight)(row)
-        val timeNel = safeGetFromRow("frame", safeParseInt >>> FrameIndex.fromInt)(row)
+        val timeNel = safeGetFromRow("frame", safeParseInt >>> Timepoint.fromInt)(row)
         val channelNel = safeGetFromRow("ch", safeParseInt >>> Channel.fromInt)(row)
         val centroidNel = {
             val zNel = safeGetFromRow("zc", safeParseDouble >> ZCoordinate.apply)(row)
@@ -450,7 +450,7 @@ object LabelAndFilterRois:
      */
     def rowToDriftRecord(row: CsvRow): ErrMsgsOr[DriftRecord] = {
         val posNel = safeGetFromRow("position", PositionName.apply(_).asRight)(row)
-        val timeNel = safeGetFromRow("frame", safeParseInt >>> FrameIndex.fromInt)(row)
+        val timeNel = safeGetFromRow("frame", safeParseInt >>> Timepoint.fromInt)(row)
         val coarseDriftNel = {
             val zNel = safeGetFromRow("z_px_coarse", safeParseIntLike >> ZDir.apply)(row)
             val yNel = safeGetFromRow("y_px_coarse", safeParseIntLike >> YDir.apply)(row)
@@ -519,12 +519,11 @@ object LabelAndFilterRois:
     end ThresholdSemantic
     
     /* Type aliases */
-    type DriftKey = (PositionName, FrameIndex)
+    type DriftKey = (PositionName, Timepoint)
     type LineNumber = NonnegativeInt
     type PosInt = PositiveInt
     type Roi = RegionalBarcodeSpotRoi
     type RoiLinenumPair = (Roi, NonnegativeInt)
-    type Timepoint = FrameIndex
     
     /* Distinguish, at the type level, the semantic meaning of each output target. */
     opaque type FilteredOutputFile <: os.Path = os.Path

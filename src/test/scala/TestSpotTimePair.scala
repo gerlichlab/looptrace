@@ -19,13 +19,13 @@ class TestSpotTimePair extends AnyFunSuite, LooptraceSuite, ScalacheckSuite, Sca
     
     /* Typeclass instances to share among tests */
     given arbitraryForRegionalSpotTimepoint(
-        using arbFrameIndex: Arbitrary[FrameIndex]
+        using arbTimepoint: Arbitrary[Timepoint]
         ): Arbitrary[RegionalSpotTimepoint] = 
-        arbFrameIndex.fmap(RegionalSpotTimepoint.apply)
+        arbTimepoint.fmap(RegionalSpotTimepoint.apply)
     given arbitraryForLocalSpotTimepoint(
-        using arbFrameIndex: Arbitrary[FrameIndex]
+        using arbTimepoint: Arbitrary[Timepoint]
         ): Arbitrary[LocusSpotTimepoint] = 
-        arbFrameIndex.fmap(LocusSpotTimepoint.apply)
+        arbTimepoint.fmap(LocusSpotTimepoint.apply)
     given showForRegional: Show[RegionalSpotTimepoint] = Show.show(_.get.get.toString)
     given showForLocal: Show[LocusSpotTimepoint] = Show.show(_.get.get.toString)
     
@@ -300,9 +300,9 @@ class TestSpotTimePair extends AnyFunSuite, LooptraceSuite, ScalacheckSuite, Sca
 
     /* Helpers for constructing inputs */
     extension (n: NonnegativeInt)
-        def toRegional = RegionalSpotTimepoint(FrameIndex(n))
+        def toRegional = RegionalSpotTimepoint(Timepoint(n))
     extension (n: NonnegativeInt)
-        def toLocal = LocusSpotTimepoint(FrameIndex(n))
+        def toLocal = LocusSpotTimepoint(Timepoint(n))
     extension (nn: (NonnegativeInt, NonnegativeInt))
         def toSpotTimePair: SpotTimePair = nn.bimap(_.toRegional, _.toLocal)
 

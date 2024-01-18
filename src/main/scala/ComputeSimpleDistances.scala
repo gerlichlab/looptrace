@@ -63,7 +63,7 @@ object ComputeSimpleDistances:
             case (None, outputRecords) => 
                 val recs = outputRecords.toList.sortBy{ r => 
                     (r.position, r.region, r.trace, r.frame1, r.frame2)
-                }(summon[Order[(PositionIndex, GroupName, TraceId, FrameIndex, FrameIndex)]].toOrdering)
+                }(summon[Order[(PositionIndex, GroupName, TraceId, Timepoint, Timepoint)]].toOrdering)
                 println(s"Writing output file: ${expectedOutputFile.filepath}")
                 OutputWriter.writeRecordsToFile(recs, expectedOutputFile)
         }
@@ -105,7 +105,7 @@ object ComputeSimpleDistances:
     /** Helpers for working for grouping keys */
     object GroupName:
         /** Often, the regional barcode imaging timepoint will be used as the group name, so provide this convenience constructor. */
-        def fromFrameIndex(t: FrameIndex): GroupName = GroupName(t.get.show)
+        def fromTimepoint(t: Timepoint): GroupName = GroupName(t.get.show)
         given orderForGroupName: Order[GroupName] = Order.by(_.get)
         given showForGroupName: Show[GroupName] = Show.show(_.get)
     end GroupName
@@ -145,7 +145,7 @@ object ComputeSimpleDistances:
         private val parseFOV = getColParser(FieldOfViewColumn, safeParseInt >>> PositionIndex.fromInt)
         private val parseTrace = getColParser(TraceIdColumn, safeParseInt >>> TraceId.fromInt)
         private val parseRegion = getColParser(RegionalBarcodeTimepointColumn, GroupName(_).asRight)
-        private val parseLocus = getColParser(LocusSpecificBarcodeTimepointColun, safeParseInt >>> FrameIndex.fromInt)
+        private val parseLocus = getColParser(LocusSpecificBarcodeTimepointColun, safeParseInt >>> Timepoint.fromInt)
         private val parseX = getColParser(XCoordinateColumn, safeParseDouble >> XCoordinate.apply)
         private val parseY = getColParser(YCoordinateColumn, safeParseDouble >> YCoordinate.apply)
         private val parseZ = getColParser(ZCoordinateColumn, safeParseDouble >> ZCoordinate.apply)
@@ -188,7 +188,7 @@ object ComputeSimpleDistances:
          * @param frame The timepoint in which the (locus-specific) spot was imaged
          * @param point The 3D spatial coordinates of the center of a FISH spot
          */
-        final case class GoodRecord(position: PositionIndex, trace: TraceId, region: GroupName, frame: FrameIndex, point: Point3D)
+        final case class GoodRecord(position: PositionIndex, trace: TraceId, region: GroupName, frame: Timepoint, point: Point3D)
         
         /**
          * Bundle of data representing a bad record (line) from input file
@@ -229,8 +229,8 @@ object ComputeSimpleDistances:
         position: PositionIndex, 
         trace: TraceId, 
         region: GroupName, 
-        frame1: FrameIndex, 
-        frame2: FrameIndex, 
+        frame1: Timepoint, 
+        frame2: Timepoint, 
         distance: EuclideanDistance, 
         inputIndex1: NonnegativeInt, 
         inputIndex2: NonnegativeInt

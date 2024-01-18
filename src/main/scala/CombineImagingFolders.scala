@@ -9,7 +9,6 @@ import mouse.boolean.*
 import scopt.OParser
 
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
-import at.ac.oeaw.imba.gerlich.looptrace.PositiveInt.asNonnegative
 
 /** Combine imaging subfolders to create a single timecourse.
  * 
@@ -200,33 +199,6 @@ object CombineImagingFolders:
     /** More context-meaningful aliases */
     type Extension = String
     type Filename = String
-
-    final case class Timepoint(get: NonnegativeInt) extends AnyVal
-    
-    object Timepoint:
-        given orderForTimepoint: Order[Timepoint] = Order.by(_.get)
-        private val Prefix = "Time"
-        
-        def fromInt = NonnegativeInt.either >> Timepoint.apply
-        
-        def parse(fn: Filename, filenameFieldSep: String): Either[String, (Timepoint, Int)] = {
-            val fields = fn.split(filenameFieldSep)
-            fields.zipWithIndex.toList.flatMap{ (s, idx) => parse(s).toOption.map(_ -> idx) } match {
-                case pair :: Nil => pair.asRight
-                case times => s"${times.length} timepoints detected from filename ($fn): $times".asLeft
-            }
-        }
-
-        /** Parse timepoint from text (typically, a chunk of a delimited filename). */
-        def parse(s: String): Either[String, Timepoint] = 
-            // Read first to Double and then to Int, to ensure no decimal gets through via truncation.
-            s.startsWith(Prefix).either(s"Timepoint parse input lacks correct prefix ($Prefix): $s", ())
-                >>= Function.const{ Try{ s.stripPrefix(Prefix).toDouble }.toEither.leftMap(_.getMessage) }
-                >>= tryToInt
-                >>= fromInt
-
-        def print(t: Timepoint): String = Prefix ++ "%05d".format(t.get)
-    end Timepoint
 
     final case class UnparseablePathException(path: os.Path, message: String) 
         extends Exception(s"$path: $message")

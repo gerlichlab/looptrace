@@ -21,7 +21,7 @@ object PartitionIndexedDriftCorrectionRois:
 
     /* Type aliases */
     type RawRecord = Array[String]
-    type PosFramePair = (PositionIndex, FrameIndex)
+    type PosFramePair = (PositionIndex, Timepoint)
     type InitFile = (PosFramePair, os.Path)
     type IndexedRoi = DetectedRoi | SelectedRoi
     type JsonWriter[*] = upickle.default.Writer[*]
@@ -32,7 +32,7 @@ object PartitionIndexedDriftCorrectionRois:
         numAccuracy: PositiveInt = PositiveInt(1), // bogus, unconditionally required
         outputFolder: Option[os.Path] = None, 
         optimisationTestingMode: Boolean = false, 
-        referenceFrame: FrameIndex = FrameIndex(NonnegativeInt(Int.MaxValue)) // bogus, conditionally required
+        referenceFrame: Timepoint = Timepoint(NonnegativeInt(Int.MaxValue)) // bogus, conditionally required
     )
 
     val parserBuilder = OParser.builder[CliConfig]
@@ -67,7 +67,7 @@ object PartitionIndexedDriftCorrectionRois:
                 .text("Indicate that program's being run in optimisation R&D / testing mode, so tolerate insufficient ROIs")
                 .children(
                     opt[NonnegativeInt]("referenceFrame")
-                        .action((n, c) => c.copy(referenceFrame = FrameIndex(n)))
+                        .action((n, c) => c.copy(referenceFrame = Timepoint(n)))
                         .text("0-based index of the frame/timepoint to be used as reference for drift correction")
                 )
         )
@@ -91,7 +91,7 @@ object PartitionIndexedDriftCorrectionRois:
         inputRoot: os.Path, 
         numShifting: ShiftingCount, 
         numAccuracy: PositiveInt, 
-        referenceFrame: Option[FrameIndex],
+        referenceFrame: Option[Timepoint],
         outputFolder: Option[os.Path]
         ): Unit = {
 
@@ -220,7 +220,7 @@ object PartitionIndexedDriftCorrectionRois:
                 filename.split("\\.").head.stripPrefix(BeadRoisPrefix).split("_").toList match {
                     case "" :: rawPosIdx :: rawFrameIdx :: Nil => for {
                         position <- tryReadThruNN(PositionIndex.apply)(rawPosIdx)
-                        frame <- tryReadThruNN(FrameIndex.apply)(rawFrameIdx)
+                        frame <- tryReadThruNN(Timepoint.apply)(rawFrameIdx)
                     } yield ((position, frame), filepath)
                     case _ => None
                 }
@@ -317,7 +317,7 @@ object PartitionIndexedDriftCorrectionRois:
                 .fold(reps => throw RepeatedKeysException(reps), identity), 
             json => 
                 val pNel = Try{ PositionIndex.unsafe(json("position").int) }.toValidatedNel
-                val fNel = Try{ FrameIndex.unsafe(json("frame").int) }.toValidatedNel
+                val fNel = Try{ Timepoint.unsafe(json("frame").int) }.toValidatedNel
                 val reqdNel = Try{ PositiveInt.unsafe(json("requested").int) }.toValidatedNel
                 val realNel = Try{ NonnegativeInt.unsafe(json("realized").int) }.toValidatedNel
                 val purposeNel = Try{ read[Purpose](json("purpose")) }.toValidatedNel
@@ -522,14 +522,14 @@ object PartitionIndexedDriftCorrectionRois:
     end ParserConfig
 
     /** Encode FOV, timepoint, and intended purpose of ROI in filename. */
-    def getOutputFilename(pos: PositionIndex, frame: FrameIndex, purpose: Purpose): Filename =
+    def getOutputFilename(pos: PositionIndex, frame: Timepoint, purpose: Purpose): Filename =
         Filename(s"${BeadRoisPrefix}_${pos.get}_${frame.get}.${purpose.lowercase}.json")
 
     /** Name ROIs subfolder according to how the selected ROIs are to be used. */
     def getOutputSubfolder(root: os.Path) = root / (_: Purpose).lowercase
 
     /** Name ROIs subfolder according to how the selected ROIs are to be used, and encode the purpose in the filename also. */
-    def getOutputFilepath(root: os.Path)(pos: PositionIndex, frame: FrameIndex, purpose: Purpose): os.Path = 
+    def getOutputFilepath(root: os.Path)(pos: PositionIndex, frame: Timepoint, purpose: Purpose): os.Path = 
         getOutputSubfolder(root)(purpose) / getOutputFilename(pos, frame, purpose).get
 
     /** Infer delimiter and get header + data lines. */
