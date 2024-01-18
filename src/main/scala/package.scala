@@ -211,8 +211,11 @@ package object looptrace {
         def toInt: NonnegativeInt = get.get
     end RegionId
     object RegionId:
-        def fromInt(z: Int) = NonnegativeInt.either(z).map(fromNonnegative)
+        given orderForRegionId: Order[RegionId] = Order.by(_.get)
+        given showForRegionId: Show[RegionId] = Show.show(_.get.get.show)
+        def fromInt = NonnegativeInt.either.fmap(_.map(fromNonnegative))
         def fromNonnegative = RegionId.apply `compose` Timepoint.apply
+        def unsafe = fromNonnegative `compose` NonnegativeInt.unsafe
     end RegionId
 
     final case class RoiIndex(get: NonnegativeInt) extends AnyVal
@@ -226,6 +229,7 @@ package object looptrace {
     final case class TraceId(get: NonnegativeInt) extends AnyVal
     object TraceId:
         def fromInt = NonnegativeInt.either.fmap(_.map(TraceId.apply))
+        def unsafe = NonnegativeInt.unsafe.andThen(TraceId.apply)
     end TraceId
     
 
