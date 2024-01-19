@@ -596,11 +596,12 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
 
         // Generate a reasonable distance threshold.
         given arbThreshold: Arbitrary[DistanceThreshold] = genThreshold(Gen.choose(1.0, 10000.0).map(NonnegativeReal.unsafe)).toArbitrary
-        
+
         forAll { (rois: List[RegionalBarcodeSpotRoi], threshold: DistanceThreshold, grouping: RegionalGrouping, handleOutput: ExtantOutputHandler) =>
+            val inputLines = getSpotsFileLines(rois)
             withTempDirectory{ (tmpdir: os.Path) => 
                 val spotsFile = tmpdir / "spots.csv"
-                os.write(spotsFile, getSpotsFileLines(rois).map(_ ++ "\n"))
+                os.write(spotsFile, inputLines.map(_ ++ "\n"))
                 val driftFile = tmpdir / "drift.csv"
                 os.write(driftFile, driftFileText)
                 val filtFile: FilteredOutputFile = FilteredOutputFile.fromPath(tmpdir / "filtered.csv")
@@ -614,8 +615,12 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                     filteredOutputFile = filtFile, 
                     extantOutputHandler = handleOutput,
                     )
+                val (unfiltRecords, expectRecords) = {
+                    val delim = Delimiter.CommaSeparator
+                    os.read.lines(unfiltFile).map(delim.split(_).toList).toList -> inputLines.map(delim.split(_).toList)
+                }
+                unfiltRecords.map(_.dropRight(1)) shouldEqual expectRecords
             }
-            pending
         }
     }
 
