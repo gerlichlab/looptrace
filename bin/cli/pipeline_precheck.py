@@ -97,8 +97,8 @@ def find_config_file_errors(config_file: ExtantFile) -> List[ConfigFileError]:
         if not isinstance(probe_trace_exclusions, list):
             typename = type(probe_trace_exclusions).__name__
             errors.append(f"Probes to exclude from tracing support ('{TRACING_SUPPORT_EXCLUSIONS_KEY}') isn't a list, but rather {typename}!")
-        elif not len(probe_trace_exclusions) == 0:
-            errors.append(f"List of probes to from tracing support ('{TRACING_SUPPORT_EXCLUSIONS_KEY}') is empty!")
+        elif len(probe_trace_exclusions) == 0:
+            errors.append(f"List of probes to exclude from tracing support ('{TRACING_SUPPORT_EXCLUSIONS_KEY}') is empty!")
 
     return errors
 
