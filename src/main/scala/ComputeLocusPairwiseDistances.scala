@@ -15,9 +15,9 @@ import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
  * 
  * @author Vince Reuter
  */
-object ComputeSimpleDistances:
+object ComputeLocusPairwiseDistances:
     /* Constants */
-    private val ProgramName = "ComputeSimpleDistances"
+    private val ProgramName = "ComputeLocusPairwiseDistances"
     private val MaxBadRecordsToShow = 3
     
     /** CLI definition */
@@ -52,7 +52,7 @@ object ComputeSimpleDistances:
     }
 
     def workflow(inputFile: os.Path, outputFolder: os.Path): Either[String, HeadedFileWriter.DelimitedTextTarget] = {
-        val expOutBaseName = s"${inputFile.last.split("\\.").head}.pairwise_distances"
+        val expOutBaseName = s"${inputFile.last.split("\\.").head}.pairwise_distances__locus_specific"
         val expectedOutputFile = HeadedFileWriter.DelimitedTextTarget(outputFolder, expOutBaseName, Delimiter.CommaSeparator)
         val inputDelimiter = Delimiter.fromPathUnsafe(inputFile)
         
@@ -98,17 +98,6 @@ object ComputeSimpleDistances:
                 }
         }
     }
-
-    /** Type wrapper around the index / identifier for trace ID */
-    final case class TraceId(get: NonnegativeInt) extends AnyVal
-    
-    /** Helpers for working with trace IDs */
-    object TraceId:
-        given orderForTraceId: Order[TraceId] = Order.by(_.get)
-        given showForTraceId: Show[TraceId] = Show.show(_.get.toString)
-        def fromInt = NonnegativeInt.either >> TraceId.apply
-        def fromRoiIndex(i: RoiIndex): TraceId = new TraceId(i.get)
-    end TraceId
 
     object Input:
         /* These come from the *traces.csv file produced at the end of looptrace. */
@@ -234,4 +223,4 @@ object ComputeSimpleDistances:
                 List(pos.show, trace.show, region.show, locus1.show, locus2.show, distance.get.toString, idx1.show, idx2.show)
         }
     end OutputWriter
-end ComputeSimpleDistances
+end ComputeLocusPairwiseDistances

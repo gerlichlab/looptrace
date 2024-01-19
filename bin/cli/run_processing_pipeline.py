@@ -190,8 +190,8 @@ def qc_label_and_filter_traces(config_file: ExtantFile, images_folder: ExtantFol
     subprocess.check_call(cmd_parts)
 
 
-def run_simple_distance_computation(config_file: ExtantFile) -> None:
-    """Run the simple pairwise distances computation program.
+def compute_locus_pairwise_distances(config_file: ExtantFile) -> None:
+    """Run the locus pairwise distances computation program.
 
     Arguments
     ---------
@@ -202,9 +202,31 @@ def run_simple_distance_computation(config_file: ExtantFile) -> None:
         "java", 
         "-cp",
         str(LOOPTRACE_JAR_PATH),
-        f"{LOOPTRACE_JAVA_PACKAGE}.PartitionIndexedDriftCorrectionRois",
+        f"{LOOPTRACE_JAVA_PACKAGE}.ComputeLocusPairwiseDistances",
         "--tracesFile",
         str(H.traces_file_qc_filtered),
+        "-O", 
+        H.analysis_path,
+    ]
+    print(f"Running distance computation command: {' '.join(cmd_parts)}")
+    return subprocess.check_call(cmd_parts)
+
+
+def compute_region_pairwise_distances(config_file: ExtantFile) -> None:
+    """Run the regional pairwise distances computation program.
+
+    Arguments
+    ---------
+    config_file : ExtantFile
+    """
+    H = ImageHandler(config_path=config_file)
+    cmd_parts = [
+        "java", 
+        "-cp",
+        str(LOOPTRACE_JAR_PATH),
+        f"{LOOPTRACE_JAVA_PACKAGE}.ComputeRegionPairwiseDistances",
+        "--roisFile",
+        str(H.proximity_filtered_spots_file_path),
         "-O", 
         H.analysis_path,
     ]
@@ -241,7 +263,7 @@ class LooptracePipeline(pypiper.Pipeline):
             ("drift_correction_accuracy_visualisation", run_drift_correction_accuracy_visualisation, take1), 
             (SPOT_DETECTION_STAGE_NAME, run_spot_detection, take2), # generates *_rois.csv (regional spots)
             ("spot_proximity_filtration", run_spot_proximity_filtration, take2),
-            ("regional_spot_counts_visualisation", plot_spot_counts, take1_with_spot_type(SpotType.REGIONAL)), 
+            ("spot_counts_visualisation__regional", plot_spot_counts, take1_with_spot_type(SpotType.REGIONAL)), 
             ("spot_nucleus_filtration", run_spot_nucleus_filtration, take2), 
             ("spot_bounding", run_spot_bounding, take2), # computes pad_x_min, etc.; writes *_dc_rois.csv (much bigger, since regional spots x frames)
             ("spot_extraction", run_spot_extraction, take2),
@@ -249,8 +271,9 @@ class LooptracePipeline(pypiper.Pipeline):
             ("tracing", run_chromatin_tracing, take2),
             ("spot_region_distances", run_frame_name_and_distance_application, take2), 
             (TRACING_QC_STAGE_NAME, qc_label_and_filter_traces, take2),
-            ("locus_specific_spot_counts_visualisation", plot_spot_counts, take1_with_spot_type(SpotType.LOCUS_SPECIFIC)), 
-            ("pairwise_distances", run_simple_distance_computation, take1),
+            ("spot_counts_visualisation__locus_specific", plot_spot_counts, take1_with_spot_type(SpotType.LOCUS_SPECIFIC)), 
+            ("pairwise_distances__locus_specific", compute_locus_pairwise_distances, take1),
+            ("pairwise_distances__regional", compute_region_pairwise_distances, take1),
         ]
 
     def stages(self) -> List[Callable]:
