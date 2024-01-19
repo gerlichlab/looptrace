@@ -778,7 +778,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                         val intvY = buildInterval(pt.y, offY)(YCoordinate.apply)
                         val intvZ = buildInterval(pt.z, offZ)(ZCoordinate.apply)
                         val bbox = BoundingBox(intvX, intvY, intvZ)
-                        RegionalBarcodeSpotRoi(RoiIndex(i), posName, Timepoint.unsafe(time), ch, pt, bbox)
+                        RegionalBarcodeSpotRoi(RoiIndex(i), posName, RegionId.unsafe(time), ch, pt, bbox)
                     }
                 }
             } yield rois
@@ -966,7 +966,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         def genRois: Gen[List[Roi]] = for {
             n <- Gen.choose(0, 10)
             regions <- Gen.pick(n, 0 until 100)
-        } yield regions.map(r => canonicalRoi.copy(time = Timepoint.unsafe(r))).toList
+        } yield regions.map(r => canonicalRoi.copy(region = RegionId.unsafe(r))).toList
         
         forAll (genThreshold(NonnegativeReal(0)), genRois) { case (threshold, rois) => 
             val indexed = NonnegativeInt.indexed(rois)
@@ -1039,7 +1039,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             RegionalBarcodeSpotRoi(
                 RoiIndex(NonnegativeInt(0)), 
                 PositionName("P0001.zarr"), 
-                Timepoint(NonnegativeInt(0)), 
+                RegionId(Timepoint(NonnegativeInt(0))), 
                 Channel(NonnegativeInt(0)), 
                 point, 
                 box,

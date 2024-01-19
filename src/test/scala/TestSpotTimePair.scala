@@ -15,19 +15,10 @@ import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.readJsonFile
 /** Tests for pair of regional and locus-specific spot image timepoints. */
 class TestSpotTimePair extends AnyFunSuite, LooptraceSuite, ScalacheckSuite, ScalacheckGenericExtras, should.Matchers:
     import SpotTimePair.given
-    import SpotTimePair.given
     
     /* Typeclass instances to share among tests */
-    given arbitraryForRegionalSpotTimepoint(
-        using arbTimepoint: Arbitrary[Timepoint]
-        ): Arbitrary[RegionalSpotTimepoint] = 
-        arbTimepoint.fmap(RegionalSpotTimepoint.apply)
-    given arbitraryForLocalSpotTimepoint(
-        using arbTimepoint: Arbitrary[Timepoint]
-        ): Arbitrary[LocusSpotTimepoint] = 
-        arbTimepoint.fmap(LocusSpotTimepoint.apply)
-    given showForRegional: Show[RegionalSpotTimepoint] = Show.show(_.get.get.toString)
-    given showForLocal: Show[LocusSpotTimepoint] = Show.show(_.get.get.toString)
+    given showForRegional: Show[RegionId] = Show.show(_.index.toString)
+    given showForLocal: Show[LocusId] = Show.show(_.index.toString)
     
     test("SpotTimePair equivalence is component-wise.") {
         /* Confine the bounds to generate more collisions */
@@ -40,8 +31,8 @@ class TestSpotTimePair extends AnyFunSuite, LooptraceSuite, ScalacheckSuite, Sca
             val byInstance = Eq[SpotTimePair].eqv(pair1, pair2)
             val byComponent = (pair1, pair2) match {
                 case (
-                    ((RegionalSpotTimepoint(rt1)), LocusSpotTimepoint(lt1)), 
-                    ((RegionalSpotTimepoint(rt2)), LocusSpotTimepoint(lt2))
+                    (RegionId(rt1), LocusId(lt1)), 
+                    (RegionId(rt2), LocusId(lt2))
                 ) => rt1.get == rt2.get && lt1.get == lt2.get
             }
             byInstance shouldBe byComponent
@@ -300,9 +291,9 @@ class TestSpotTimePair extends AnyFunSuite, LooptraceSuite, ScalacheckSuite, Sca
 
     /* Helpers for constructing inputs */
     extension (n: NonnegativeInt)
-        def toRegional = RegionalSpotTimepoint(Timepoint(n))
+        def toRegional = RegionId(Timepoint(n))
     extension (n: NonnegativeInt)
-        def toLocal = LocusSpotTimepoint(Timepoint(n))
+        def toLocal = LocusId(Timepoint(n))
     extension (nn: (NonnegativeInt, NonnegativeInt))
         def toSpotTimePair: SpotTimePair = nn.bimap(_.toRegional, _.toLocal)
 

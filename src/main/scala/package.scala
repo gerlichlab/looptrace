@@ -190,6 +190,16 @@ package object looptrace {
         def unsafe = NonnegativeInt.unsafe `andThen` Channel.apply
     end Channel
 
+    final case class LocusId(get: Timepoint):
+        def index = get.get
+    object LocusId:
+        given orderForLocusId: Order[LocusId] = Order.by(_.get)
+        given showForLocusId: Show[LocusId] = Show.show(_.index.show)
+        def fromInt = NonnegativeInt.either.fmap(_.map(fromNonnegative))
+        def fromNonnegative = LocusId.apply `compose` Timepoint.apply
+        def unsafe = fromNonnegative `compose` NonnegativeInt.unsafe
+    end LocusId
+
     final case class PositionIndex(get: NonnegativeInt) extends AnyVal
     object PositionIndex:
         given orderForPositionIndex: Order[PositionIndex] = Order.by(_.get)
@@ -208,11 +218,10 @@ package object looptrace {
         given showForProbeName: Show[ProbeName] = Show.show(_.get)
 
     final case class RegionId(get: Timepoint):
-        def toInt: NonnegativeInt = get.get
-    end RegionId
+        def index = get.get
     object RegionId:
         given orderForRegionId: Order[RegionId] = Order.by(_.get)
-        given showForRegionId: Show[RegionId] = Show.show(_.get.get.show)
+        given showForRegionId: Show[RegionId] = Show.show(_.index.show)
         def fromInt = NonnegativeInt.either.fmap(_.map(fromNonnegative))
         def fromNonnegative = RegionId.apply `compose` Timepoint.apply
         def unsafe = fromNonnegative `compose` NonnegativeInt.unsafe

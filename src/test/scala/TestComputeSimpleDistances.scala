@@ -10,12 +10,15 @@ import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
 
-import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.safeReadAllWithOrderedHeaders
 import at.ac.oeaw.imba.gerlich.looptrace.ComputeSimpleDistances.*
+import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.safeReadAllWithOrderedHeaders
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
-import at.ac.oeaw.imba.gerlich.looptrace.ComputeSimpleDistances.Input.getGroupingKey
 
-/** Tests for the simple pairwise distances computation program. */
+/**
+ * Tests for the simple pairwise distances computation program.
+ *
+ * @author Vince Reuter
+ */
 class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, ScalacheckSuite, should.Matchers:
     
     test("Totally empty input file causes expected error.") {
@@ -206,13 +209,13 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
         val tid = TraceId(NonnegativeInt(1))
         val reg = RegionId(Timepoint(NonnegativeInt(40)))
         val inputRecords = NonnegativeInt.indexed(List((2.0, 1.0, -1.0), (1.0, 5.0, 0.0), (3.0, 0.0, 2.0))).map{
-            (pt, i) => Input.GoodRecord(pos, tid, reg, Timepoint(i), buildPoint.tupled(pt))
+            (pt, i) => Input.GoodRecord(pos, tid, reg, LocusId(Timepoint(i)), buildPoint.tupled(pt))
         }
         val getExpEuclDist = (i: Int, j: Int) => EuclideanDistance.between(inputRecords(i).point, inputRecords(j).point)
         val expected: Iterable[OutputRecord] = List(0 -> 1, 0 -> 2, 1 -> 2).map{ (i, j) => 
-            val t1 = Timepoint.unsafe(i)
-            val t2 = Timepoint.unsafe(j)
-            OutputRecord(pos, tid, reg, t1, t2, getExpEuclDist(i, j), t1.get, t2.get)
+            val loc1 = LocusId.unsafe(i)
+            val loc2 = LocusId.unsafe(j)
+            OutputRecord(pos, tid, reg, loc1, loc2, getExpEuclDist(i, j), loc1.index, loc2.index)
         }
         val observed = inputRecordsToOutputRecords(NonnegativeInt.indexed(inputRecords))
         observed shouldEqual expected
@@ -243,13 +246,13 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
                     PositionIndex.unsafe(pos), 
                     TraceId(NonnegativeInt.unsafe(tid)), 
                     RegionId.unsafe(reg), 
-                    Timepoint(i), 
+                    LocusId.unsafe(i), 
                     pt,
                     )
             }
             val observation = inputRecordsToOutputRecords(NonnegativeInt.indexed(records))
             val simplifiedObservation = observation.map{ r => 
-                (r.position.get, r.trace.get, r.region.get.get, r.time1.get, r.time2.get) -> 
+                (r.position.get, r.trace.get, r.region.index, r.locus1.index, r.locus2.index) -> 
                 r.distance.get
             }.toList
             val simplifiedExpectation = expectation.map{ case ((pos, tid, reg, t1, t2), d) => 
@@ -301,12 +304,11 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
 
     /* Instance for random case / example generation */
     given arbitraryForTraceId(using arbRoiIdx: Arbitrary[RoiIndex]): Arbitrary[TraceId] = arbRoiIdx.map(TraceId.fromRoiIndex)
-    given arbitraryForRegionId(using arbTime: Arbitrary[Timepoint]): Arbitrary[RegionId] = arbTime.map(RegionId.apply)
     given arbitraryForGoodInputRecord(using 
         arbPos: Arbitrary[PositionIndex], 
         arbTrace: Arbitrary[TraceId], 
         arbRegion: Arbitrary[RegionId], 
-        arbLocus: Arbitrary[Timepoint], 
+        arbLocus: Arbitrary[LocusId], 
         arbPoint: Arbitrary[Point3D], 
     ): Arbitrary[Input.GoodRecord] = (arbPos, arbTrace, arbRegion, arbLocus, arbPoint).mapN(Input.GoodRecord.apply)
 
@@ -324,6 +326,6 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
     /** Convert each ADT value to a simple sequence of text fields, for writing to format like CSV. */
     private def recordToTextFields = (r: Input.GoodRecord) => {
         val (x, y, z) = (r.point.x, r.point.y, r.point.z)
-        List(r.position.show, r.trace.show, r.region.show, r.time.show, x.get.show, y.get.show, z.get.show)
+        List(r.position.show, r.trace.show, r.region.show, r.locus.show, x.get.show, y.get.show, z.get.show)
     }
 end TestComputeSimpleDistances
