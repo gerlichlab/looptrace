@@ -26,11 +26,9 @@ WORKDIR /looptrace
 COPY . /looptrace
 RUN mv /looptrace/target/scala-3.3.1/looptrace-assembly-0.2.0-SNAPSHOT.jar /looptrace/looptrace
 
-# Install minimal Java 21 runtime, in proposed repo for Ubuntu 20 (focal) as of 2023-12-14.
-RUN /bin/bash /looptrace/setup_image/allow-proposed-repos.sh && \
-    /bin/bash /looptrace/setup_image/make-proposed-repos-selective.sh && \
-    apt-get update -y && \
-    apt-get install openjdk-21-jre-headless/focal-proposed -y
+# Install minimal Java 21 runtime, in updates repo for Ubuntu 20 (focal) as of 2024-01-19.
+RUN apt-get update -y && \
+    apt-get install openjdk-21-jre-headless -y
 
 # Install miniconda.
 ## The installation home should be /opt/conda; if not, we need -p /path/to/install/home
