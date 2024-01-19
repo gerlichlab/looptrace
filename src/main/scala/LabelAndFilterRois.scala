@@ -394,23 +394,20 @@ object LabelAndFilterRois:
                             then (ids, repeats + (time -> (repeats.getOrElse(time, 1) + 1)))
                             else (ids + (time -> gid), repeats)
                     }
-                if (repeatedTimes.nonEmpty) // Probe groupings isn't a partition, because there's overlap between the declared equivalence classes.
-                then s"${repeatedTimes.size} repeated timepoint(s): ${repeatedTimes.toList.map(_.leftMap(_.get)).sortBy(_._1).mkString(", ")}".asLeft
-                else {
-                    val (groupless, keyedRois) = Alternative[List].separate(rois.map{ case pair@(roi, _) => 
-                        groupIds.get(roi.time)
-                            .toRight(pair)
-                            .map(groupIndex => ((roi.position, groupIndex), pair))
-                    })
-                    groupless.isEmpty.either(
-                        {
+                repeatedTimes.toList.toNel
+                    .toLeft(rois.map{ case pair@(roi, _) => groupIds.get(roi.time).toRight(pair).map(groupIndex => ((roi.position, groupIndex), pair)) })
+                    .bimap(
+                        // Probe groupings isn't a partition, because there's overlap between the declared equivalence classes.
+                        reps => s"${reps.size} repeated timepoint(s): ${reps.toList.map(_.leftMap(_.get)).sortBy(_._1).mkString(", ")}", 
+                        Alternative[List].separate
+                    )
+                    .flatMap{ 
+                        case (Nil, keyedRois) => buildNeighborsLookupKeyed(getPoint)(keyedRois, minDist).asRight
+                        case (groupless, _) => 
                             val times = groupless.map(_._1.time).toSet
                             val timesText = times.toList.map(_.get).sorted.mkString(", ")
-                            s"${groupless.length} ROIs without timepoint declared in grouping. ${times.size} undeclared timepoints: $timesText"
-                        }, 
-                        buildNeighborsLookupKeyed(getPoint)(keyedRois, minDist)
-                        )
-                }
+                            s"${groupless.length} ROIs without timepoint declared in grouping. ${times.size} undeclared timepoints: $timesText".asLeft
+                    }
             }
         groupedRoiLinenumPairs.map(_.map{ case ((_, idx), indexedNeighbors) => idx -> indexedNeighbors.map(_._2) })
     }
