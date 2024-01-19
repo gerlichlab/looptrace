@@ -1,28 +1,18 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
-import scala.util.{ Failure, Success, Try }
+import scala.util.Try
 import upickle.default.*
-import cats.{ Alternative, Eq, Functor, Monoid, Order }
-import cats.data.{ NonEmptyList as NEL, NonEmptyMap, NonEmptySet, ValidatedNel }
-import cats.instances.tuple.*
+import cats.*
+import cats.data.*
 import cats.syntax.all.*
 import mouse.boolean.*
 
-import scopt.{ OParser }
+import scopt.OParser
 import com.github.tototoshi.csv.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
-import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.{ fromJsonThruInt, safeExtract, readJsonFile }
-import at.ac.oeaw.imba.gerlich.looptrace.space.{
-    Coordinate, 
-    DistanceThreshold, 
-    EuclideanDistance, 
-    PiecewiseDistance, 
-    Point3D, ProximityComparable, 
-    XCoordinate, 
-    YCoordinate, 
-    ZCoordinate
-}
+import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
+import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
 
 /**
@@ -31,6 +21,21 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
  * Optionally, also filter out spots that are too close together (e.g., because disambiguation 
  * of spots from indiviudal FISH probes in each region would be impossible in a multiplexed 
  * experiment).
+ * 
+ * If doing proximity-based filtration of spots, the probe groupings may be specified either 
+ * as ''permissions'' or as ''prohibitions''; these representations are dual to one another. 
+ * 
+ * For prohibitions, the groupings are interpreted by the program to mean that spots from the 
+ * grouped regional barcodes may ''not'' violate the proximity threshold; spots from other pairs 
+ * of regional barcodes ''are'' permitted to violate that threshold. 
+ * For permissions, spots from pairs of regional barcodes in the same group ''may'' violate 
+ * the threshold while all others may ''not''.
+ * 
+ * For more, see related discussions on Github:
+ * [[https://github.com/gerlichlab/looptrace/issues/71 Original, prohibitive semantics]]
+ * [[https://github.com/gerlichlab/looptrace/issues/198 Newer, permissive semantics]]
+ * 
+ * @author Vince Reuter
  */
 object LabelAndFilterRois:
     val ProgramName = "LabelAndFilterRois"
@@ -78,11 +83,11 @@ object LabelAndFilterRois:
                     .toEither
                     .leftMap(_.getMessage)
                     .flatMap(
-                        _.toList.foldRight(List.empty[Int] -> Map.empty[Int, NEL[Timepoint]]){
+                        _.toList.foldRight(List.empty[Int] -> Map.empty[Int, NonEmptyList[Timepoint]]){
                             // finds negative values and groups the probes (key) by group (value), inverting the mapping and collecting
                             case ((probe, groupIndex), (neg, acc)) => Timepoint.fromInt(probe).fold(
                                 _ => (probe :: neg, acc),
-                                time => (neg, acc + (groupIndex -> acc.get(groupIndex).fold(NEL.one(time))(time :: _)))
+                                time => (neg, acc + (groupIndex -> acc.get(groupIndex).fold(NonEmptyList.one(time))(time :: _)))
                                 )
                         } match {
                             case (Nil, rawGroups) => 
@@ -534,7 +539,7 @@ object LabelAndFilterRois:
         def fromPath(p: os.Path): UnfilteredOutputFile = p : UnfilteredOutputFile
 
     extension [A](rw: ReadWriter[List[A]])
-        def toNel(context: String): ReadWriter[NEL[A]] = 
+        def toNel(context: String): ReadWriter[NonEmptyList[A]] = 
             rw.bimap(_.toList, _.toNel.getOrElse{ throw new Exception(s"$context: No elements to read as nonempty list!") })
 
     /** Push a value through to the right side of an {@code Either}, pairing with the wrapped value */
