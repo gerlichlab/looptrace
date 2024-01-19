@@ -55,7 +55,9 @@ object LabelAndFilterRois:
     final case class CliConfig(
         spotsFile: os.Path = null, // unconditionally required
         driftFile: os.Path = null, // unconditionally required
-        probeGroups: List[ProbeGroup] = null, // unconditionally required
+        noRegionGrouping: Boolean = false,
+        proximityPermissions: Option[List[ProbeGroup]] = None, 
+        proximityProhibitions: Option[List[ProbeGroup]] = None, 
         spotSeparationThresholdValue: NonnegativeReal = NonnegativeReal(0), // unconditionally required
         buildDistanceThreshold: NonnegativeReal => DistanceThreshold = null, // unconditionally required
         unfilteredOutputFile: UnfilteredOutputFile = null, // unconditionally required
@@ -71,11 +73,7 @@ object LabelAndFilterRois:
         import parserBuilder.*
 
         /** Parse a direct spec of an empty list, content of JSON file path, or CLI-arg-like mapping spec of probe groups. */
-        given readProbeGroups: scopt.Read[List[ProbeGroup]] = {
-            def readAsEmpty[A]: String => Either[String, List[A]] = arg => arg match {
-                case "NONE" => List.empty[A].asRight
-                case _ => s"Cannot parse argument as specification of empty list: $arg".asLeft
-            }
+        given readRegionGrouping: scopt.Read[List[ProbeGroup]] = {
             val readAsFile = (s: String) => 
                 Try{ readJsonFile[List[ProbeGroup]](summon[scopt.Read[os.Path]].reads(s)) }.toEither.leftMap(_.getMessage)
             val readAsMap = (s: String) => {
@@ -102,13 +100,12 @@ object LabelAndFilterRois:
                         }
                     )
             }
-            scopt.Read.reads{ arg => 
+            scopt.Read.reads{ arg => readAsMap(arg)
                 // Preserve the first successful result and return it, otherwise accumulate the error messages.
                 // So start with an empty list as a Left, then add error messages while staying in Left, or preserving the value in Right.
                 // TODO: try to replace this with a defined structure, something like Validated + Alternative in Haskell.
-                List(readAsMap, readAsFile, readAsEmpty).foldRight(Either.left[List[String], List[ProbeGroup]](List.empty[String])){ 
-                    case (safeRead, maybeResult) => maybeResult.leftFlatMap(errors => safeRead(arg).leftMap(_ :: errors))
-                }.fold(msgs => throw new IllegalArgumentException(s"Cannot parse arg ($arg) as probe grouping. Errors: $msgs"), identity)
+                .leftFlatMap{ e1 => readAsFile(arg).leftMap(e2 => List(e1, e2)) }
+                .fold(msgs => throw new IllegalArgumentException(s"Cannot parse arg ($arg) as probe grouping. Errors: $msgs"), identity)
             }
         }
 
@@ -125,10 +122,6 @@ object LabelAndFilterRois:
                 .action((f, c) => c.copy(driftFile = f))
                 .validate(f => os.isFile(f).either(f"Alleged drift file isn't a file: $f", ()))
                 .text("Path to drift correction file"),
-            opt[List[ProbeGroup]]("probeGroups")
-                .required()
-                .action((gs, c) => c.copy(probeGroups = gs))
-                .text("Either mapping from probe ID to grouping ID, or path to JSON file (list of lists), or 'NONE' to indicate no grouping"),
             opt[NonnegativeReal]("spotSeparationThresholdValue")
                 .required()
                 .action((d, c) => c.copy(spotSeparationThresholdValue = d))
@@ -149,16 +142,33 @@ object LabelAndFilterRois:
                 .required()
                 .action((h, c) => c.copy(extantOutputHandler = h))
                 .text("How to handle writing output when target already exists"),
+            opt[Unit]("--noRegionGrouping")
+                .action((_, c) => c.copy(noRegionGrouping = true))
+                .text("Specify that proximity consideration / neighbor finding is to be done among ALL regional spots."),
+            opt[List[ProbeGroup]]("--proximityPermissions")
+                .action((groups, c) => c.copy(proximityPermissions = groups.some))
+                .text("List-of-lists--or path to file specifying one--grouping regional barcode timepoints for which to permit proximity"),
+            opt[List[ProbeGroup]]("--proximityProhibitions")
+                .action((groups, c) => c.copy(proximityProhibitions = groups.some))
+                .text("List-of-lists--or path to file specifying one--grouping regional barcode timepoints for which to prohibit proximity"),
         )
 
         OParser.parse(parser, args, CliConfig()) match {
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
             case Some(opts) => 
                 val threshold = opts.buildDistanceThreshold(opts.spotSeparationThresholdValue)
+                val regionalGrouping = (opts.noRegionGrouping, opts.proximityPermissions, opts.proximityProhibitions) match {
+                    case (true, None, None) => RegionalGrouping.Trivial
+                    case (false, Some(permissions), None) => RegionalGrouping.Permissive(permissions)
+                    case (false, None, Some(prohibitions)) => RegionalGrouping.Prohibitive(prohibitions)
+                    case _ => throw new IllegalArgumentException(
+                        "Choose exactly 1: no grouping, permissive grouping, or prohibitive grouping. Check --help"
+                        )
+                }
                 workflow(
                     spotsFile = opts.spotsFile, 
                     driftFile = opts.driftFile, 
-                    probeGroups = opts.probeGroups, 
+                    regionalGrouping = regionalGrouping, 
                     minSpotSeparation = threshold, 
                     unfilteredOutputFile = opts.unfilteredOutputFile,
                     filteredOutputFile = opts.filteredOutputFile, 
@@ -170,7 +180,7 @@ object LabelAndFilterRois:
     def workflow(
         spotsFile: os.Path, 
         driftFile: os.Path, 
-        probeGroups: List[ProbeGroup],
+        regionalGrouping: RegionalGrouping,
         minSpotSeparation: DistanceThreshold, 
         unfilteredOutputFile: UnfilteredOutputFile, 
         filteredOutputFile: FilteredOutputFile, 
@@ -248,7 +258,7 @@ object LabelAndFilterRois:
                 val newRoi = applyDrift(oldRoi, drift)
                 newRoi -> idx
             }
-            buildNeighboringRoisFinder(shiftedRoisNumbered, minSpotSeparation)(probeGroups) match {
+            buildNeighboringRoisFinder(shiftedRoisNumbered, minSpotSeparation)(regionalGrouping) match {
                 case Left(errMsg) => throw new Exception(errMsg)
                 case Right(neighborsByRecordNumber) => neighborsByRecordNumber.get
             }
@@ -289,6 +299,16 @@ object LabelAndFilterRois:
 
     final case class DriftRecordNotFoundError(key: DriftKey) extends NoSuchElementException(s"key not found: ($key)")
 
+    /** How to permit or prohibit regional barcode imaging probes/timepoints from being too physically close */
+    sealed trait RegionalGrouping
+    object RegionalGrouping:
+        case object Trivial extends RegionalGrouping
+        sealed trait Nontrivial extends RegionalGrouping:
+            def groups: List[ProbeGroup]
+        final case class Permissive(groups: List[ProbeGroup]) extends Nontrivial
+        final case class Prohibitive(groups: List[ProbeGroup]) extends Nontrivial
+    end RegionalGrouping
+
     /**
       * Designation of regional barcode timepoints which are prohibited from being in (configurably) close proximity.
       *
@@ -321,50 +341,47 @@ object LabelAndFilterRois:
     }
 
     /**
-      * Construct a mapping from single record to collection of proximal neighbors, for filtration
-      *
-      * @tparam A The type of key for an individual row/record
-      * @param getPoint How to extract a 3D point from the key
-      * @param things The collection in which to determine groups of pairwise proximity.
-      * @param minDist The definition of proximity
-      * @return A mapping from single item to nonempty set of all items neighbors; items with no proximal neigbors are absent
-      */
-    def buildNeighborsLookupFlat[A : Order, D](getPoint: A => Point3D)(things: Iterable[A], minDist: DistanceThreshold): Map[A, NonEmptySet[A]] = {
-        import ProximityComparable.proximal
-        given proxComp: ProximityComparable[A] = DistanceThreshold.defineProximityPointwise(minDist)(getPoint)
-        // Find all pairs of values more within the threshold of proximity w.r.t. one another.
-        val closePairs: List[(A, A)] = things.toList.combinations(2).flatMap{
-            case a1 :: a2 :: Nil => (a1 `proximal` a2).option(a1 -> a2)
-            case xs => throw new Exception(s"${xs.length} (not 2!) element(s) when taking pairwise combinations")
-        }.toList
-        // BIDIRECTIONALLY add the pair to the mapping, as we need the redundancy in order to remove BOTH spots.
-        // https://github.com/gerlichlab/looptrace/issues/148
-        closePairs.foldLeft(Map.empty[A, NonEmptySet[A]]){ case (acc, (a1, a2)) => 
-            val v1 = acc.get(a1).fold(NonEmptySet.one[A])(_.add)(a2)
-            val v2 = acc.get(a2).fold(NonEmptySet.one[A])(_.add)(a1)
-            acc ++ Map(a1 -> v1, a2 -> v2)
-        }
-    }
-
-    /**
       * Create a mapping from item to other items within given distance threshold of that item.
       * 
       * An item is not considered its own neigbor, and this is omitting from the result any item with no proximal neighbors.
       *
+      * @tparam B 
       * @tparam A The type items of interest, for which to compute sets of proximal neighbors
       * @tparam K The type of value on which to group the items
-      * @param getPoint How to get a point in 3D space from each arbitrary item
       * @param kvPairs The pairs of keying value and actual item
+      * @param usePair Whether to consider a given pair of items for proximity, otherwise skip
+      * @param getPoint How to get a point in 3D space from each arbitrary item
       * @param minDist The threshold distance by which to define two points as proximal
+      * @param simplify How to get from a more complex value `B` to a simpler `A`
       * @return A mapping from item to set of proximal (closer than given distance threshold) neighbors, omitting each item with no neighbors
       */
-    def buildNeighborsLookupKeyed[A : Order, K : Order](
-        getPoint: A => Point3D)(kvPairs: Iterable[(K, A)], minDist: DistanceThreshold
-        ): Map[A, NonEmptySet[A]] = {
+    def buildNeighborsLookupKeyed[B, A : Order, K : Order](
+        kvPairs: Iterable[(K, B)], usePair: (B, B) => Boolean, getPoint: A => Point3D, minDist: DistanceThreshold, simplify: B => A
+        ): Map[A, NonEmptySet[A]] = 
+        import ProximityComparable.proximal
+        given proxComp: ProximityComparable[A] = DistanceThreshold.defineProximityPointwise(minDist)(getPoint)
         // In the reduction, we don't care if on collision the Semigroup instance for Map will combine values or will overwrite them, 
         // since the partition on keys here guarantees no collisions between resulting submaps that are being combined.
-        Monoid.combineAll(kvPairs.groupBy(_._1).values.map{ subKVs => buildNeighborsLookupFlat(getPoint)(subKVs.map(_._2), minDist) })
-    }
+        kvPairs.groupBy(_._1)
+            .values // Keys are only used to create the partitions within which to compute distances, so discard after grouping.
+            .map(_.map(_._2))
+            .map{ part => 
+                // Find all pairs of values more within the threshold of proximity w.r.t. one another.
+                val closePairs: List[(A, A)] = part.toList.combinations(2).flatMap{
+                    case b1 :: b2 :: Nil => usePair(b1, b2)
+                        .option(simplify(b1) -> simplify(b2))
+                        .flatMap{ (a1, a2) => (a1 `proximal` a2).option(a1 -> a2) }
+                    case xs => throw new Exception(s"${xs.length} (not 2) element(s) when taking pairwise combinations!")
+                }.toList
+                // BIDIRECTIONALLY add the pair to the mapping, as we need the redundancy in order to remove BOTH spots.
+                // https://github.com/gerlichlab/looptrace/issues/148
+                closePairs.foldLeft(Map.empty[A, NonEmptySet[A]]){ case (acc, (a1, a2)) => 
+                    val v1 = acc.get(a1).fold(NonEmptySet.one[A])(_.add)(a2)
+                    val v2 = acc.get(a2).fold(NonEmptySet.one[A])(_.add)(a1)
+                    acc ++ Map(a1 -> v1, a2 -> v2)
+                }
+            } // Compute the neighbors mapping within each part.
+            .toSeq.combineAll // Combine all the partitioned neighbors mappings.
 
     /**
       * Create a mapping from record number (ROI) to set of record numbers encoding neighboring ROIs.
@@ -378,15 +395,14 @@ object LabelAndFilterRois:
       *         otherwise, a {@code Left}-wrapped error message about what went wrong
       */
     def buildNeighboringRoisFinder(
-        rois: List[RoiLinenumPair], minDist: DistanceThreshold)(grouping: List[ProbeGroup]
-        ): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
+        rois: List[RoiLinenumPair], minDist: DistanceThreshold)(grouping: RegionalGrouping): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
         given orderForRoiLinenumPair: Order[RoiLinenumPair] = Order.by(_._2)
         val getPoint = (_: RoiLinenumPair)._1.centroid
-        val groupedRoiLinenumPairs: Either[String, Map[RoiLinenumPair, NonEmptySet[RoiLinenumPair]]] = 
-            if grouping.isEmpty 
-            then buildNeighborsLookupKeyed(getPoint)(rois.map{ case t@(r, _) => r.position -> t }, minDist).asRight
-            else {
-                val (groupIds, repeatedTimes) = NonnegativeInt.indexed(grouping)
+        val groupedRoiLinenumPairs: Either[String, Map[RoiLinenumPair, NonEmptySet[RoiLinenumPair]]] = grouping match {
+            case RegionalGrouping.Trivial => 
+                buildNeighborsLookupKeyed(rois.map{ case pair@(r, _) => r.position -> pair }, (_, _) => true, getPoint, minDist, identity).asRight
+            case g: RegionalGrouping.Nontrivial => 
+                val (groupIds, repeatedTimes) = NonnegativeInt.indexed(g.groups)
                     .flatMap((g, i) => g.get.toList.map(_ -> i))
                     .foldLeft(Map.empty[Timepoint, NonnegativeInt] -> Map.empty[Timepoint, Int]){ 
                         case ((ids, repeats), (time, gid)) =>
@@ -394,21 +410,22 @@ object LabelAndFilterRois:
                             then (ids, repeats + (time -> (repeats.getOrElse(time, 1) + 1)))
                             else (ids + (time -> gid), repeats)
                     }
-                repeatedTimes.toList.toNel
-                    .toLeft(rois.map{ case pair@(roi, _) => groupIds.get(roi.time).toRight(pair).map(groupIndex => ((roi.position, groupIndex), pair)) })
-                    .bimap(
-                        // Probe groupings isn't a partition, because there's overlap between the declared equivalence classes.
-                        reps => s"${reps.size} repeated timepoint(s): ${reps.toList.map(_.leftMap(_.get)).sortBy(_._1).mkString(", ")}", 
-                        Alternative[List].separate
-                    )
-                    .flatMap{ 
-                        case (Nil, keyedRois) => buildNeighborsLookupKeyed(getPoint)(keyedRois, minDist).asRight
-                        case (groupless, _) => 
-                            val times = groupless.map(_._1.time).toSet
-                            val timesText = times.toList.map(_.get).sorted.mkString(", ")
-                            s"${groupless.length} ROIs without timepoint declared in grouping. ${times.size} undeclared timepoints: $timesText".asLeft
-                    }
-            }
+                if repeatedTimes.nonEmpty 
+                // Probe groupings isn't a partition, because there's overlap between the declared equivalence classes.
+                then s"${repeatedTimes.size} repeated timepoint(s): ${repeatedTimes.toList.map(_.leftMap(_.get)).sortBy(_._1).mkString(", ")}".asLeft
+                else Alternative[List].separate(rois.map{ case pair@(roi, _) => groupIds.get(roi.time).toRight(pair).map(_ -> pair)}) match {
+                    case (Nil, withGroupsAssigned) => (g match {
+                        case _: RegionalGrouping.Prohibitive => 
+                            buildNeighborsLookupKeyed(withGroupsAssigned.map{ case (gi, pair@(roi, _)) => roi.position -> (gi -> pair) }, (_._1 === _._1), getPoint, minDist, _._2)
+                        case _: RegionalGrouping.Permissive => 
+                            buildNeighborsLookupKeyed(withGroupsAssigned.map{ case (gi, pair@(roi, _)) => roi.position -> (gi -> pair) }, (_._1 =!= _._1), getPoint, minDist, _._2)
+                    }).asRight
+                    case (groupless, _) => 
+                        val times = groupless.map(_._1.time).toSet
+                        val timesText = times.toList.map(_.get).sorted.mkString(", ")
+                        s"${groupless.length} ROIs without timepoint declared in grouping. ${times.size} undeclared timepoints: $timesText".asLeft
+                }
+        }
         groupedRoiLinenumPairs.map(_.map{ case ((_, idx), indexedNeighbors) => idx -> indexedNeighbors.map(_._2) })
     }
 
