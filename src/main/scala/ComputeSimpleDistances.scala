@@ -62,8 +62,8 @@ object ComputeSimpleDistances:
             case (Some(bads), _) => throw Input.BadRecordsException(bads)
             case (None, outputRecords) => 
                 val recs = outputRecords.toList.sortBy{ r => 
-                    (r.position, r.region, r.trace, r.time1, r.time2)
-                }(summon[Order[(PositionIndex, RegionId, TraceId, Timepoint, Timepoint)]].toOrdering)
+                    (r.position, r.region, r.trace, r.locus1, r.locus2)
+                }(summon[Order[(PositionIndex, RegionId, TraceId, LocusId, LocusId)]].toOrdering)
                 println(s"Writing output file: ${expectedOutputFile.filepath}")
                 OutputWriter.writeRecordsToFile(recs, expectedOutputFile)
         }
@@ -82,13 +82,13 @@ object ComputeSimpleDistances:
         inrecs.groupBy((r, _) => Input.getGroupingKey(r)).toList.flatMap{ 
             case ((pos, tid, reg), groupedRecords) => 
                 groupedRecords.toList.combinations(2).flatMap{
-                    case (r1, i1) :: (r2, i2) :: Nil => (r1.time =!= r2.time).option(
+                    case (r1, i1) :: (r2, i2) :: Nil => (r1.locus =!= r2.locus).option(
                         OutputRecord(
                             position = pos,
                             trace = tid,
                             region = reg,
-                            time1 = r1.time, 
-                            time2 = r2.time,
+                            locus1 = r1.locus, 
+                            locus2 = r2.locus,
                             distance = EuclideanDistance.between(r1.point, r2.point), 
                             inputIndex1 = i1, 
                             inputIndex2 = i2
@@ -134,7 +134,7 @@ object ComputeSimpleDistances:
         private val parseFOV = getColParser(FieldOfViewColumn, safeParseInt >>> PositionIndex.fromInt)
         private val parseTrace = getColParser(TraceIdColumn, safeParseInt >>> TraceId.fromInt)
         private val parseRegion = getColParser(RegionalBarcodeTimepointColumn, safeParseInt >>> RegionId.fromInt)
-        private val parseLocus = getColParser(LocusSpecificBarcodeTimepointColumn, safeParseInt >>> Timepoint.fromInt)
+        private val parseLocus = getColParser(LocusSpecificBarcodeTimepointColumn, safeParseInt >>> LocusId.fromInt)
         private val parseX = getColParser(XCoordinateColumn, safeParseDouble >> XCoordinate.apply)
         private val parseY = getColParser(YCoordinateColumn, safeParseDouble >> YCoordinate.apply)
         private val parseZ = getColParser(ZCoordinateColumn, safeParseDouble >> ZCoordinate.apply)
@@ -177,7 +177,7 @@ object ComputeSimpleDistances:
          * @param time The timepoint in which the (locus-specific) spot was imaged
          * @param point The 3D spatial coordinates of the center of a FISH spot
          */
-        final case class GoodRecord(position: PositionIndex, trace: TraceId, region: RegionId, time: Timepoint, point: Point3D)
+        final case class GoodRecord(position: PositionIndex, trace: TraceId, region: RegionId, locus: LocusId, point: Point3D)
         
         /**
          * Bundle of data representing a bad record (line) from input file
@@ -218,8 +218,8 @@ object ComputeSimpleDistances:
         position: PositionIndex, 
         trace: TraceId, 
         region: RegionId, 
-        time1: Timepoint, 
-        time2: Timepoint, 
+        locus1: LocusId, 
+        locus2: LocusId, 
         distance: EuclideanDistance, 
         inputIndex1: NonnegativeInt, 
         inputIndex2: NonnegativeInt
@@ -228,10 +228,10 @@ object ComputeSimpleDistances:
     /** How to write the output records from this program */
     object OutputWriter extends HeadedFileWriter[OutputRecord]:
         // These are our names.
-        override def header: List[String] = List("position", "traceId", "region", "time1", "time2", "distance", "inputIndex1", "inputIndex2")
+        override def header: List[String] = List("position", "traceId", "region", "locus1", "locus2", "distance", "inputIndex1", "inputIndex2")
         override def toTextFields(r: OutputRecord): List[String] = r match {
-            case OutputRecord(pos, trace, region, time1, time2, distance, idx1, idx2) => 
-                List(pos.show, trace.show, region.show, time1.show, time2.show, distance.get.toString, idx1.show, idx2.show)
+            case OutputRecord(pos, trace, region, locus1, locus2, distance, idx1, idx2) => 
+                List(pos.show, trace.show, region.show, locus1.show, locus2.show, distance.get.toString, idx1.show, idx2.show)
         }
     end OutputWriter
 end ComputeSimpleDistances

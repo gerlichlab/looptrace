@@ -28,6 +28,10 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
 
     given arbitraryForTimepoint(using idx: Arbitrary[NonnegativeInt]): Arbitrary[Timepoint] = idx.map(Timepoint.apply)
 
+    given arbitraryForLocusId(using arbTime: Arbitrary[Timepoint]): Arbitrary[LocusId] = arbTime.map(LocusId.apply)
+
+    given arbitraryForRegionId(using arbTime: Arbitrary[Timepoint]): Arbitrary[RegionId] = arbTime.map(RegionId.apply)
+
     given arbitraryForPositionIndex(using idx: Arbitrary[NonnegativeInt]): Arbitrary[PositionIndex] = idx.map(PositionIndex.apply)
 
     given arbitraryForPositionName: Arbitrary[PositionName] = 
@@ -49,7 +53,7 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
     given arbitraryForRegionalBarcodeSpotRoi(using
         arbRoiIdx: Arbitrary[RoiIndex], 
         arbPosName: Arbitrary[PositionName], 
-        arbTime: Arbitrary[Timepoint], 
+        arbRegion: Arbitrary[RegionId], 
         arbCh: Arbitrary[Channel], 
         arbPt: Arbitrary[Point3D],
         arbMargin: Arbitrary[BoundingBox.Margin],
@@ -65,11 +69,11 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
         def genRoi: Gen[RegionalBarcodeSpotRoi] = for {
             idx <- arbitrary[RoiIndex]
             pos <- arbitrary[PositionName]
-            t <- arbitrary[Timepoint]
+            reg <- arbitrary[RegionId]
             ch <- arbitrary[Channel]
             pt <- arbitrary[Point3D]
             box <- arbitrary[(BoundingBox.Margin, BoundingBox.Margin, BoundingBox.Margin)].map(buildBox(pt).tupled)
-        } yield RegionalBarcodeSpotRoi(index = idx, position = pos, time = t, channel = ch, centroid = pt, boundingBox = box)
+        } yield RegionalBarcodeSpotRoi(index = idx, position = pos, region = reg, channel = ch, centroid = pt, boundingBox = box)
         Arbitrary(genRoi)
     }
 

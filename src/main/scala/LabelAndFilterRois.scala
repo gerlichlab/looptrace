@@ -414,7 +414,7 @@ object LabelAndFilterRois:
     def rowToRoi(row: CsvRow): ErrMsgsOr[Roi] = {
         val indexNel = safeGetFromRow("", safeParseInt >>> RoiIndex.fromInt)(row)
         val posNel = safeGetFromRow("position", PositionName.apply(_).asRight)(row)
-        val timeNel = safeGetFromRow("frame", safeParseInt >>> Timepoint.fromInt)(row)
+        val regionNel = safeGetFromRow("frame", safeParseInt >>> RegionId.fromInt)(row)
         val channelNel = safeGetFromRow("ch", safeParseInt >>> Channel.fromInt)(row)
         val centroidNel = {
             val zNel = safeGetFromRow("zc", safeParseDouble >> ZCoordinate.apply)(row)
@@ -437,7 +437,7 @@ object LabelAndFilterRois:
                 )
             )
         }
-        (indexNel, posNel, timeNel, channelNel, centroidNel, bboxNel)
+        (indexNel, posNel, regionNel, channelNel, centroidNel, bboxNel)
             .mapN(RegionalBarcodeSpotRoi.apply)
             .toEither
     }

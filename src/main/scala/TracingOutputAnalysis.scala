@@ -23,7 +23,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
 object TracingOutputAnalysis:
     
     /** Pairing or regional and locus-specific FISH spot, a common key by which to group and/or filter records */
-    type SpotTimePair = (RegionalSpotTimepoint, LocusSpotTimepoint)
+    type SpotTimePair = (RegionId, LocusId)
 
     /** Helpers for working with pairs of regional and locus-specific timepoint */
     object SpotTimePair:
@@ -32,19 +32,14 @@ object TracingOutputAnalysis:
         /** Key in JSON for a value representing locus-specific spot imaging timepoint */
         private[TracingOutputAnalysis] val localKey = "local"
 
-        /** Order by the numeric values, component-wise. */
-        given orderForSpotTimePair: Order[SpotTimePair] = Order.by{ 
-            case (RegionalSpotTimepoint(r), LocusSpotTimepoint(l)) => r -> l
-        }
-
         /** JSON codec for pair of regional spot timepoint and locus spot timepoint */
         given rwForSpotTimePair: ReadWriter[SpotTimePair] = readwriter[ujson.Value].bimap(
-            { case (RegionalSpotTimepoint(Timepoint(r)), LocusSpotTimepoint(Timepoint(l))) => 
+            { case (RegionId(Timepoint(r)), LocusId(Timepoint(l))) => 
                 ujson.Obj(regionalKey -> ujson.Num(r), localKey -> ujson.Num(l))
             },
             json => {
-                val regional = RegionalSpotTimepoint(Timepoint.unsafe(json(regionalKey).int))
-                val local = LocusSpotTimepoint(Timepoint.unsafe(json(localKey).int))
+                val regional = RegionId.unsafe(json(regionalKey).int)
+                val local = LocusId.unsafe(json(localKey).int)
                 regional -> local
             }
         )
@@ -64,40 +59,18 @@ object TracingOutputAnalysis:
         val header = Array(SpotTimePair.regionalKey, SpotTimePair.localKey, "N")
         val fieldRecs = counts.toList
             .sortBy(_._1)(ev.toOrdering)
-            .map{ case ((r, l), n) => Array(r.get.get, l.get.get, n).map(_.show) }
+            .map{ case ((r, l), n) => Array(r.index, l.index, n).map(_.show) }
         val lines = (header :: fieldRecs).map(sep.join(_) ++ "\n")
         os.write(outfile, lines)
     }
 
-    /** Wrap a {@code Timepoint} as signifying the timepoint of a regional spot. */
-    final case class RegionalSpotTimepoint(get: Timepoint)
+    private def unsafeGetThroughTimepoint[A](key: String, build: Timepoint => A) = (row: CsvRow) => 
+        safeGetFromRow(key, safeParseInt >>> Timepoint.fromInt)(row)
+            .fold(errs => throw new Exception(s"Problem(s) parsing $key from row ($row): $errs"), build)
     
-    /** Tools for building and working with {@code RegionalSpotTimepoint} values */
-    object RegionalSpotTimepoint:
-        given orderForRegionalSpotTimepoint: Order[RegionalSpotTimepoint] = Order.by(_.get)
-        private[TracingOutputAnalysis] def getFromRow(row: CsvRow): ValidatedNel[String, RegionalSpotTimepoint] = 
-            getFromRowThroughTimepoint(row, "ref_frame")(RegionalSpotTimepoint.apply)
-        private[TracingOutputAnalysis] def getFromRowUnsafe(row: CsvRow): RegionalSpotTimepoint = 
-            getFromRow(row).fold(
-                errs => throw new Exception(s"Problem(s) parsing regional spot timepoint from row ($row): $errs"), 
-                identity
-                )
-    end RegionalSpotTimepoint
-
-    /** Wrap a {@code Timepoint} as signifying the timepoint of a locus-specific spot. */
-    final case class LocusSpotTimepoint(get: Timepoint)
+    private def unsafeGetRegion = unsafeGetThroughTimepoint("ref_frame", RegionId.apply)
     
-    /** Tools for building and working with {@code LocusSpotTimepoint} values */
-    object LocusSpotTimepoint:
-        given orderForLocusSpotTimepoint: Order[LocusSpotTimepoint] = Order.by(_.get)
-        private[TracingOutputAnalysis] def getFromRow(row: CsvRow): ValidatedNel[String, LocusSpotTimepoint] = 
-            getFromRowThroughTimepoint(row, "frame")(LocusSpotTimepoint.apply)
-        private[TracingOutputAnalysis] def getFromRowUnsafe(row: CsvRow): LocusSpotTimepoint = 
-            getFromRow(row).fold(
-                errs => throw new Exception(s"Problem(s) parsing locus spot timepoint from row ($row): $errs"), 
-                identity
-                )
-    end LocusSpotTimepoint
+    private def unsafeGetLocus = unsafeGetThroughTimepoint("frame", LocusId.apply)
 
     /**
       * A typeclass representing how to build a (positive) selector for elements from an arbitary pool
@@ -153,7 +126,7 @@ object TracingOutputAnalysis:
             val (head, rows) = safeReadAllWithOrderedHeaders(f).fold(throw _, identity)
             if (head =!= expectedHeader)
                 throw new Exception(s"Unexpected header ($head) from regional/local pairs filter file ($f)! Expected: $expectedHeader")
-            fromList(rows.map(r => RegionalSpotTimepoint.getFromRowUnsafe(r) -> LocusSpotTimepoint.getFromRowUnsafe(r))) match {
+            fromList(rows.map{ r => unsafeGetRegion(r) -> unsafeGetLocus(r) }) match {
                 case Left(msg) => throw new NonUniquenessException(msg)
                 case Right(filt) => filt
             }
@@ -242,16 +215,6 @@ object TracingOutputAnalysis:
     private def countByKey[R, K : Order](records: Iterable[R])(key: R => K): Map[K, Int] = 
         records.groupBy(key).view.mapValues(_.size).toMap
     
-    private def countByRegionLocusPairUnsafe(rows: Iterable[CsvRow]): Map[SpotTimePair, Int] = countByKey(rows){ row => 
-        val regional = RegionalSpotTimepoint.getFromRowUnsafe(row)
-        val local = LocusSpotTimepoint.getFromRowUnsafe(row)
-        regional -> local
-    }
-
-    private def parseThroughTimepoint[A](build: Timepoint => A): String => Either[String, A] = 
-        safeParseInt >>> NonnegativeInt.either >> Timepoint.apply >> build
-
-    private def getFromRowThroughTimepoint[A](row: CsvRow, key: String)(build: Timepoint => A): ValidatedNel[String, A] = 
-        safeGetFromRow(key, parseThroughTimepoint(build))(row)
-
+    private def countByRegionLocusPairUnsafe = 
+        countByKey(_: Iterable[CsvRow]){ r => unsafeGetRegion(r) -> unsafeGetLocus(r) }
 end TracingOutputAnalysis
