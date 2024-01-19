@@ -10,7 +10,7 @@ import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
 
-import at.ac.oeaw.imba.gerlich.looptrace.ComputeSimpleDistances.*
+import at.ac.oeaw.imba.gerlich.looptrace.ComputeLocusPairwiseDistances.*
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.safeReadAllWithOrderedHeaders
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 
@@ -19,7 +19,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.*
  *
  * @author Vince Reuter
  */
-class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, ScalacheckSuite, should.Matchers:
+class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, ScalacheckSuite, should.Matchers:
     
     test("Totally empty input file causes expected error.") {
         withTempDirectory{ (tempdir: os.Path) => 
@@ -41,7 +41,7 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
             val outfolder = tempdir / "output"
             os.makeDir(outfolder)
             os.write(infile, Delimiter.CommaSeparator.join(Input.allColumns) ++ "\n")
-            val expOutfile = outfolder / "input.pairwise_distances.csv"
+            val expOutfile = outfolder / "input.pairwise_distances__locus_specific.csv"
             os.exists(expOutfile) shouldBe false
             workflow(inputFile = infile, outputFolder = outfolder)
             os.isFile(expOutfile) shouldBe true
@@ -191,7 +191,7 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
                 val infile = tempdir / "input_with_suffix.some.random.extensions.csv"
                 writeMinimalInputCsv(infile, records)
                 val outfolder = tempdir / "output"
-                val expOutfile = outfolder / "input_with_suffix.pairwise_distances.csv"
+                val expOutfile = outfolder / "input_with_suffix.pairwise_distances__locus_specific.csv"
                 os.exists(expOutfile) shouldBe false
                 workflow(inputFile = infile, outputFolder = outfolder)
                 os.isFile(expOutfile) shouldBe true
@@ -297,13 +297,16 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
         given arbTrace: Arbitrary[TraceId] = Gen.oneOf(2, 3).map(NonnegativeInt.unsafe `andThen` TraceId.apply).toArbitrary
         given arbRegion: Arbitrary[RegionId] = Gen.oneOf(40, 41).map(RegionId.unsafe).toArbitrary
         given arbTime: Arbitrary[Timepoint] = Gen.const(Timepoint(NonnegativeInt(10))).toArbitrary
+        
         forAll (Gen.choose(10, 100).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord]))) {
             (records: List[Input.GoodRecord]) => inputRecordsToOutputRecords(NonnegativeInt.indexed(records)).toList shouldEqual List()
         }
     }
 
-    /* Instance for random case / example generation */
+    /** Treat trace ID generation equivalently to ROI index generation. */
     given arbitraryForTraceId(using arbRoiIdx: Arbitrary[RoiIndex]): Arbitrary[TraceId] = arbRoiIdx.map(TraceId.fromRoiIndex)
+    
+    /** Use arbitrary instances for components to derive an an instance for the sum type. */
     given arbitraryForGoodInputRecord(using 
         arbPos: Arbitrary[PositionIndex], 
         arbTrace: Arbitrary[TraceId], 
@@ -328,4 +331,4 @@ class TestComputeSimpleDistances extends AnyFunSuite, LooptraceSuite, Scalacheck
         val (x, y, z) = (r.point.x, r.point.y, r.point.z)
         List(r.position.show, r.trace.show, r.region.show, r.locus.show, x.get.show, y.get.show, z.get.show)
     }
-end TestComputeSimpleDistances
+end TestComputeLocusPairwiseDistances

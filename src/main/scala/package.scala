@@ -237,10 +237,12 @@ package object looptrace {
 
     final case class TraceId(get: NonnegativeInt) extends AnyVal
     object TraceId:
+        given orderForTraceId: Order[TraceId] = Order.by(_.get)
+        given showForTraceId: Show[TraceId] = Show.show(_.get.toString)
         def fromInt = NonnegativeInt.either.fmap(_.map(TraceId.apply))
+        def fromRoiIndex(i: RoiIndex): TraceId = new TraceId(i.get)
         def unsafe = NonnegativeInt.unsafe.andThen(TraceId.apply)
     end TraceId
-    
 
     /**
       * Write a mapping, from position and time pair to value, to JSON.

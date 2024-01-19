@@ -291,9 +291,8 @@ class TestSpotTimePair extends AnyFunSuite, LooptraceSuite, ScalacheckSuite, Sca
 
     /* Helpers for constructing inputs */
     extension (n: NonnegativeInt)
-        def toRegional = RegionId(Timepoint(n))
-    extension (n: NonnegativeInt)
         def toLocal = LocusId(Timepoint(n))
+        def toRegional = RegionId(Timepoint(n))
     extension (nn: (NonnegativeInt, NonnegativeInt))
         def toSpotTimePair: SpotTimePair = nn.bimap(_.toRegional, _.toLocal)
 
