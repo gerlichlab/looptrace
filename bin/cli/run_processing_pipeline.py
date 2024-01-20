@@ -77,12 +77,31 @@ def partition_bead_rois(config_file: ExtantFile, images_folder: ExtantFolder):
 def run_spot_proximity_filtration(config_file: ExtantFile, images_folder: ExtantFolder) -> None:
     H = ImageHandler(config_path=config_file, image_path=images_folder)
     min_spot_sep = H.minimum_spot_separation
-    region_groups = H.config.get("regional_spots_grouping", "NONE")
-    if not isinstance(region_groups, str):
-        region_groups = ",".join(",".join([f"{r}={i}" for r in rs]) for i, rs in enumerate(region_groups))
     if min_spot_sep <= 0:
         print(f"No spot filtration on proximity to be done, as minimum separation = {min_spot_sep}")
         return
+    
+    # Detemination of the CLI flag or option/argument pair to add to specify regional grouping
+    region_group_data = H.config.get("regional_spots_grouping", "NONE")
+    if region_group_data == "NONE":
+        groups_extras = ["--noRegionGrouping"]
+    else:
+        try:
+            semantic = region_group_data["semantic"]
+            region_groups = region_group_data["groups"]
+        except (KeyError, TypeError):
+            print("Could not parse regional grouping; check semantic (string) and groups (list-of-lists) are defined.")
+            raise
+        if semantic.lower() == "permissive":
+            optname = "--proximityPermissions"
+        elif semantic.lower() == "prohibitive":
+            optname = "--proximityProhibitions"
+        else:
+            raise ValueError(f"Unrecogised semantic for regional timepoint grouping: '{semantic}'")
+        argval = ",".join(",".join([f"{r}={i}" for r in rs]) for i, rs in enumerate(region_groups))
+        groups_extras = [optname, argval]
+    
+    # Command construction, printing, and execution
     prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.LabelAndFilterRois"
     cmd_parts = [
         "java", 
@@ -93,8 +112,6 @@ def run_spot_proximity_filtration(config_file: ExtantFile, images_folder: Extant
         str(H.raw_spots_file),
         "--driftFile", 
         str(H.drift_correction_file__fine),
-        "--probeGroups",
-        region_groups,
         "--spotSeparationThresholdValue", 
         str(H.minimum_spot_separation),
         "--spotSeparationThresholdType",
@@ -105,7 +122,7 @@ def run_spot_proximity_filtration(config_file: ExtantFile, images_folder: Extant
         str(H.proximity_filtered_spots_file_path),
         "--handleExtantOutput",
         "OVERWRITE" # TODO: parameterise this, see: https://github.com/gerlichlab/looptrace/issues/142
-    ]
+    ] + groups_extras
     print(f"Running spot filtering on proximity: {' '.join(cmd_parts)}")
     subprocess.check_call(cmd_parts)
 
