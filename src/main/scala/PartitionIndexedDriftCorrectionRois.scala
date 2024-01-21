@@ -31,7 +31,6 @@ object PartitionIndexedDriftCorrectionRois:
         numShifting: ShiftingCount = ShiftingCount(10), // bogus, unconditionally required
         numAccuracy: PositiveInt = PositiveInt(1), // bogus, unconditionally required
         outputFolder: Option[os.Path] = None, 
-        optimisationTestingMode: Boolean = false, 
         referenceTimepoint: Timepoint = Timepoint(NonnegativeInt(Int.MaxValue)) // bogus, conditionally required
     )
 
@@ -62,14 +61,6 @@ object PartitionIndexedDriftCorrectionRois:
             opt[os.Path]('O', "outputFolder")
                 .action((p, c) => c.copy(outputFolder = p.some))
                 .text("Path to output root; if unspecified, use the input root."),
-            opt[Unit]("optimisationTestingMode")
-                .action((_, c) => c.copy(optimisationTestingMode = true))
-                .text("Indicate that program's being run in optimisation R&D / testing mode, so tolerate insufficient ROIs")
-                .children(
-                    opt[NonnegativeInt]("referenceTimepoint")
-                        .action((n, c) => c.copy(referenceTimepoint = Timepoint(n)))
-                        .text("0-based index of the timepoint to be used as reference for drift correction")
-                )
         )
 
         OParser.parse(parser, args, CliConfig()) match {
@@ -80,7 +71,6 @@ object PartitionIndexedDriftCorrectionRois:
                     numShifting = opts.numShifting, 
                     numAccuracy = opts.numAccuracy, 
                     outputFolder = opts.outputFolder, 
-                    referenceTimepoint = opts.optimisationTestingMode.option(opts.referenceTimepoint)
                     )
             }
         }
@@ -91,7 +81,6 @@ object PartitionIndexedDriftCorrectionRois:
         inputRoot: os.Path, 
         numShifting: ShiftingCount, 
         numAccuracy: PositiveInt, 
-        referenceTimepoint: Option[Timepoint],
         outputFolder: Option[os.Path]
         ): Unit = {
 
@@ -136,15 +125,12 @@ object PartitionIndexedDriftCorrectionRois:
              * the timepoint designated as the reference, simply emit a warnings file rather than 
              * fatally crashing with an exception.
              */
-            (referenceTimepoint, Alternative[List].separate(bads.map{ // Partition the list of problems by type of error.
+            Alternative[List].separate(bads.map{ // Partition the list of problems by type of error.
                 case kv@(_, _: RoisFileParseError) => kv.asLeft
                 case ((pt, _), e: RoisSplit.TooFewShifting) => (pt, e).asRight
-            })) match {
-                case (Some(refTime), (Nil, tooFewErrors)) if ( ! tooFewErrors.exists(_._1._2 === refTime) ) => 
-                    // In this case, we can just write warnings since none of the timepoints with too few ROIs 
-                    // is the reference (i.e., there's at least the minimal number of bead ROIs required 
-                    // for drift correction (absolute minimum, though not necessarily the user-defined minimum) 
-                    // in the reference timepoint in every FOV.
+            }) match {
+                case (Nil, tooFewErrors) => 
+                    // In this case, there's at least one FOV in which there are too few ROIs to meet even the absolute minimum.
                     given writer: JsonWriter[(PosTimePair, RoisSplit.Problem)] = readWriterForKeyedTooFewProblem
                     val warningsFile = outfolder / "roi_partition_warnings.severe.json"
                     println(s"Writing severe warnings file: $warningsFile")
@@ -153,11 +139,6 @@ object PartitionIndexedDriftCorrectionRois:
                     }.unzip
                     os.write(warningsFile, write(problemsToWrite, indent = 2))
                     problemsToPropagate
-                case (_, (Nil, tooFewErrors)) => 
-                    // In this case, there's either at least one FOV in which the reference timepoint for drift correction 
-                    // lacks enough bead ROIs to meet even the absolute minimum, or there is no reference timepoint, in which 
-                    // case any timepoint lacking the minimum number of bead ROIs is a problem; either way, it's exceptional.
-                    throw RoisSplit.TooFewShiftingException(tooFewErrors.toNel.get)
                 case _ => 
                     // Here we have all parse errors or mixed error types and can't combine them.
                     throw new Exception(s"${bads.size} (position, timepoint) pairs with problems.\n${bads}")
