@@ -320,7 +320,11 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
         bead_rois = drifter.image_handler.read_bead_rois_file_shifting(pos_idx=pos_idx, frame=drifter.reference_frame)
         
         if bead_rois.shape != beads_exp_shape:
-            raise Exception(f"Unexpected bead ROIs shape for reference (pos={pos_idx}, frame={frame})! ({bead_rois.shape}), expecting {beads_exp_shape}")
+            msg_base = f"Unexpected bead ROIs shape for reference (pos={pos_idx}, frame={drifter.reference_frame})! ({bead_rois.shape}), expecting {beads_exp_shape}"
+            if len(bead_rois.shape) == 2 and bead_rois.shape[1] == beads_exp_shape[1]:
+                print(f"WARNING: {msg_base}")
+            else:
+                raise Exception(msg_base)
         
         curr_position_rows = []
         if drifter.method_name == Methods.FIT_NAME.value:
