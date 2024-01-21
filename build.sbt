@@ -12,8 +12,6 @@ val JDK11 = JavaSpec.temurin("11")
 val JDK17 = JavaSpec.temurin("17")
 ThisBuild / githubWorkflowJavaVersions := Seq(JDK11, JDK17)
 
-Test / testOptions += Tests.Argument("-oF")
-
 lazy val root = (project in file("."))
   .settings(
     name := "looptrace",
