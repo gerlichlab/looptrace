@@ -15,7 +15,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.collections.*
  * 
  * @author Vince Reuter
  */
-class TestPartition extends AnyFunSuite, ScalaCheckPropertyChecks, should.Matchers:
+class TestPartition extends AnyFunSuite, MathSuite, ScalaCheckPropertyChecks, should.Matchers:
     implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 1000)
     
     val simpleTypeArbitraries = Table("arb", Arbitrary[String], Arbitrary[Int], Arbitrary[Double])
@@ -87,17 +87,4 @@ class TestPartition extends AnyFunSuite, ScalaCheckPropertyChecks, should.Matche
             err.getMessage shouldEqual expMsg
         }
     }
-
-    // nCk, i.e. number of ways to choose k indistinguishable objects from n
-    extension (n: Int)
-        infix def choose(k: Int): Int = {
-            require(k <= n, s"Cannot choose more items than available: $k > $n")
-            factorial(n) / (factorial(k) * factorial(n - k))
-        }
-
-    private def factorial(n: Int): Int = {
-        require(n >= 0, s"Cannot take factorial of a negative number: $n")
-        (1 to n).product
-    }
-
 end TestPartition

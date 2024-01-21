@@ -19,7 +19,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.*
  *
  * @author Vince Reuter
  */
-class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, ScalacheckSuite, should.Matchers:
+class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, MathSuite, ScalacheckSuite, should.Matchers:
     
     test("Totally empty input file causes expected error.") {
         withTempDirectory{ (tempdir: os.Path) => 
@@ -249,7 +249,22 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sc
         }
     }
 
-    test("(FOV, region ID) is NOT a key!") { pending }
+    test("(FOV, region ID) is NOT a key!") {
+        /* To encourage collisions, narrow the choices for grouping components. */
+        given arbPosition: Arbitrary[PositionIndex] = Gen.const(PositionIndex(NonnegativeInt(1))).toArbitrary
+        given arbRegion: Arbitrary[RegionId] = Gen.oneOf(40, 41, 42).map(RegionId.unsafe).toArbitrary
+        forAll (Gen.choose(5, 10).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord]))) { (records: List[Input.GoodRecord]) => 
+            // Pretest: must be multiple records of same region even within same FOV.
+            records.groupBy(r => r.position -> r.region).view.mapValues(_.length).toMap.filter(_._2 > 1).nonEmpty shouldBe true
+            val getKey = (_: Input.GoodRecord | OutputRecord) match {
+                case i: Input.GoodRecord => i.position
+                case o: OutputRecord => o.position
+            }
+            val expGroupSizes = records.groupBy(getKey).view.mapValues(g => g.size `choose` 2).toMap
+            val obsGroupSizes = inputRecordsToOutputRecords(NonnegativeInt.indexed(records)).groupBy(getKey).view.mapValues(_.size).toMap
+            obsGroupSizes shouldEqual expGroupSizes
+        }
+    }
 
     /** Use arbitrary instances for components to derive an an instance for the sum type. */
     given arbitraryForGoodInputRecord(using 
