@@ -126,15 +126,20 @@ object ComputeRegionPairwiseDistances:
                 .toList
                 .toNel
                 .fold(throw EmptyFileException(inputFile))(recs => recs.head -> recs.tail)
-            if (header.toList =!= allColumns) throw UnexpectedHeaderException(header.toList)
+            val (practicalHeader, preprocRecord): (List[String], Array[String] => Array[String]) = header.toList match {
+                case "" :: rest => (rest, (_: Array[String]).tail)
+                case head => (head, identity[Array[String]])
+            }
+            if (practicalHeader =!= allColumns) throw UnexpectedHeaderException(preprocRecord(header).toList)
             val validateRecordLength = (r: Array[String]) => 
                 (r.size === header.length).either(NonEmptyList.one(s"Header has ${header.length} fields, but line has ${r.size}"), r)
             Alternative[List].separate(NonnegativeInt.indexed(records).map{ 
-                (r, i) => validateRecordLength(r).flatMap(Function.const{
+                (rec, i) => validateRecordLength(rec).flatMap(Function.const{
+                    val r = preprocRecord(rec)
                     (parseFOV(r), parseRegion(r), parseX(r), parseY(r), parseZ(r)).mapN(
                         (fov, region, x, y, z) => GoodRecord(fov, region, Point3D(x, y, z))
                     ).toEither
-                }).bimap(msgs => BadInputRecord(i, r.toList, msgs), _ -> i)
+                }).bimap(msgs => BadInputRecord(i, rec.toList, msgs), _ -> i)
             })
         }
 

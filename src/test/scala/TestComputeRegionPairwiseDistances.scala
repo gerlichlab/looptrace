@@ -64,7 +64,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sc
                     then { (r, i) => i.show :: recordToTextFields(r) }
                     else { (r, _) => recordToTextFields(r) }
                 os.write(infile, records.toList.zipWithIndex.map(toTextFields.tupled `andThen` textFieldsToLine))
-                val expError = Input.UnexpectedHeaderException(recordToTextFields(records.head))
+                val expError = Input.UnexpectedHeaderException(toTextFields(records.head, 0))
                 val obsError = intercept[Input.UnexpectedHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
                 obsError shouldEqual expError
             }
@@ -77,13 +77,18 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sc
     }
 
     test("Simply permuting the header fields fails the parse with the expected error.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         def genBadHeader = Gen.oneOf(Input.allColumns.permutations.toSeq).suchThat(_ =!= Input.allColumns)
         forAll (arbitrary[NonEmptyList[Input.GoodRecord]], genBadHeader, arbitrary[Boolean]) { 
             (records, shuffledHeader, includeIndexCol) =>
                 withTempDirectory{ (tempdir: os.Path) => 
                     val infile = tempdir / "input.csv"
                     val expError = Input.UnexpectedHeaderException(shuffledHeader)
-                    writeMinimalInputCsv(infile, shuffledHeader :: records.toList.map(recordToTextFields), includeIndexCol)
+                    val (head, rows) = 
+                        if includeIndexCol 
+                        then ( ("" :: shuffledHeader), records.zipWithIndex.map((r, i) => i.show :: recordToTextFields(r)) )
+                        else (shuffledHeader, records.map(recordToTextFields))
+                    os.write(infile, (head :: rows.toList).map(textFieldsToLine))
                     val obsError = intercept[Input.UnexpectedHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
                     obsError shouldEqual expError
                 }
@@ -100,10 +105,10 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sc
                 .map{ indices => Input.allColumns.zipWithIndex.filterNot{ (_, i) => indices.toSet contains i }.map(_._1) }
             def genSubstitutions: Gen[ExpectedHeader] = for {
                 indicesToChange <- Gen.atLeastOne((0 until Input.allColumns.length)).map(_.toSet) // Choose header fields to change.
-                expectedHeader <- Input.allColumns.zipWithIndex.traverse{ (col, idx) => 
+                expectedHeader <- Input.allColumns.zipWithIndex.traverse{ (oldCol, idx) => 
                     if indicesToChange contains idx 
-                    then Gen.alphaNumStr.suchThat(_ =!= col) // Ensure the replacement differs from original.
-                    else Gen.const(col) // Use the original value since this index isn't one at which to update.
+                    then Gen.alphaNumStr.suchThat(newCol => newCol.nonEmpty && newCol =!= oldCol) // Ensure the replacement differs from original.
+                    else Gen.const(oldCol) // Use the original value since this index isn't one at which to update.
                 }
             } yield expectedHeader
             
@@ -168,7 +173,11 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sc
             withTempDirectory{ (tempdir: os.Path) => 
                 val infile = tempdir / "input.csv"
                 os.isFile(infile) shouldBe false
-                writeMinimalInputCsv(infile, Input.allColumns :: textRecords.toList, includeIndexCol)
+                val (head, textRows) = 
+                    if includeIndexCol 
+                    then ("" :: Input.allColumns, textRecords.zipWithIndex.map((r, i) => i.show :: r))
+                    else (Input.allColumns, textRecords)
+                os.write(infile, (head :: textRows.toList) map textFieldsToLine)
                 os.isFile(infile) shouldBe true
                 val error = intercept[Input.BadRecordsException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
                 error.records.map(_.lineNumber) shouldEqual expBadRows
@@ -180,9 +189,13 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sc
         forAll { (records: NonEmptyList[Input.GoodRecord], includeIndexCol: Boolean) => 
             withTempDirectory{ (tempdir: os.Path) => 
                 val infile = tempdir / "input_with_suffix.some.random.extensions.csv"
-                writeMinimalInputCsv(infile, records, includeIndexCol)
+                val (head, textRows) = 
+                    if includeIndexCol
+                    then ("" :: Input.allColumns, records.zipWithIndex.map((r, i) => i.show :: recordToTextFields(r)))
+                    else (Input.allColumns, records.map(recordToTextFields))
+                os.write(infile, (head :: textRows.toList).map(textFieldsToLine))
                 val outfolder = tempdir / "output"
-                val expOutfile = outfolder / "input_with_suffix.pairwise_distances_regional.csv"
+                val expOutfile = outfolder / "input_with_suffix.pairwise_distances__regional.csv"
                 os.exists(expOutfile) shouldBe false
                 workflow(inputFile = infile, outputFolder = outfolder)
                 os.isFile(expOutfile) shouldBe true
@@ -244,21 +257,6 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sc
         arbRegion: Arbitrary[RegionId], 
         arbPoint: Arbitrary[Point3D], 
     ): Arbitrary[Input.GoodRecord] = (arbPos, arbRegion, arbPoint).mapN(Input.GoodRecord.apply)
-
-    /** Write the given rows as CSV to the given file. */
-    private def writeMinimalInputCsv(f: os.Path, rows: List[List[String]], includeIndexCol: Boolean): Unit = {
-        val makeLine: (List[String], Int) => String = 
-            if includeIndexCol 
-            then { (r, i) => textFieldsToLine(i.show :: r) }
-            else { (r, _) => textFieldsToLine(r) }
-        os.write(f, rows.zipWithIndex map makeLine.tupled)
-    }
-
-    /** Write the given records as CSV to the given file. */
-    private def writeMinimalInputCsv(f: os.Path, records: NonEmptyList[Input.GoodRecord], includeIndexCol: Boolean): Unit = {
-        val header = if includeIndexCol then "" :: Input.allColumns else Input.allColumns
-        writeMinimalInputCsv(f, header :: records.toList.map(recordToTextFields), includeIndexCol)
-    }
 
     /** Convert a sequence of text fields into a single line (CSV), including newline. */
     private def textFieldsToLine = Delimiter.CommaSeparator.join(_: List[String]) ++ "\n"
