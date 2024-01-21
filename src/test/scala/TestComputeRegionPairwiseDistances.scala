@@ -10,16 +10,16 @@ import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
 
-import at.ac.oeaw.imba.gerlich.looptrace.ComputeLocusPairwiseDistances.*
+import at.ac.oeaw.imba.gerlich.looptrace.ComputeRegionPairwiseDistances.*
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.safeReadAllWithOrderedHeaders
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 
 /**
- * Tests for the simple pairwise distances computation program, for locus-specific spots
+ * Tests for the simple pairwise distances computation program, for regional barcode spots
  *
  * @author Vince Reuter
  */
-class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, ScalacheckSuite, should.Matchers:
+class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, ScalacheckSuite, should.Matchers:
     
     test("Totally empty input file causes expected error.") {
         withTempDirectory{ (tempdir: os.Path) => 
@@ -35,28 +35,35 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
     }
 
     test("Input file that's just a header produces an output file that's just a header.") {
-        withTempDirectory{ (tempdir: os.Path) => 
-            /* Setup and pretests */
-            val infile = tempdir / "input.csv"
-            val outfolder = tempdir / "output"
-            os.makeDir(outfolder)
-            os.write(infile, Delimiter.CommaSeparator.join(Input.allColumns) ++ "\n")
-            val expOutfile = outfolder / "input.pairwise_distances__locus_specific.csv"
-            os.exists(expOutfile) shouldBe false
-            workflow(inputFile = infile, outputFolder = outfolder)
-            os.isFile(expOutfile) shouldBe true
-            safeReadAllWithOrderedHeaders(expOutfile) match {
-                case Left(err) => fail(s"Expected successful output file parse but got error: $err")
-                case Right((header, _)) => header shouldEqual OutputWriter.header
+        forAll(Table("includeIndexCol", List(false, true)*)) { includeIndexCol => 
+            withTempDirectory{ (tempdir: os.Path) => 
+                /* Setup and pretests */
+                val infile = tempdir / "input.csv"
+                val outfolder = tempdir / "output"
+                os.makeDir(outfolder)
+                val cols = if includeIndexCol then "" :: Input.allColumns else Input.allColumns
+                os.write(infile, Delimiter.CommaSeparator.join(cols) ++ "\n")
+                val expOutfile = outfolder / "input.pairwise_distances__regional.csv"
+                os.exists(expOutfile) shouldBe false
+                workflow(inputFile = infile, outputFolder = outfolder)
+                os.isFile(expOutfile) shouldBe true
+                safeReadAllWithOrderedHeaders(expOutfile) match {
+                    case Left(err) => fail(s"Expected successful output file parse but got error: $err")
+                    case Right((header, _)) => header shouldEqual OutputWriter.header
+                }
             }
         }
     }
 
     test("Trying to use a file with just records and no header fails the parse as expected.") {
-        forAll { (records: NonEmptyList[Input.GoodRecord]) => 
+        forAll { (records: NonEmptyList[Input.GoodRecord], includeIndexCol: Boolean) => 
             withTempDirectory{ (tempdir: os.Path) => 
                 val infile = tempdir / "input.csv"
-                os.write(infile, records.toList.map(recordToTextFields `andThen` rowToLine))
+                val toTextFields: (Input.GoodRecord, Int) => List[String] = 
+                    if includeIndexCol 
+                    then { (r, i) => i.show :: recordToTextFields(r) }
+                    else { (r, _) => recordToTextFields(r) }
+                os.write(infile, records.toList.zipWithIndex.map(toTextFields.tupled `andThen` textFieldsToLine))
                 val expError = Input.UnexpectedHeaderException(recordToTextFields(records.head))
                 val obsError = intercept[Input.UnexpectedHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
                 obsError shouldEqual expError
@@ -71,15 +78,16 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
 
     test("Simply permuting the header fields fails the parse with the expected error.") {
         def genBadHeader = Gen.oneOf(Input.allColumns.permutations.toSeq).suchThat(_ =!= Input.allColumns)
-        forAll (arbitrary[NonEmptyList[Input.GoodRecord]], genBadHeader) { (records, mutantHeader) =>
-            withTempDirectory{ (tempdir: os.Path) => 
-                val infile = tempdir / "input.csv"
-                val expError = Input.UnexpectedHeaderException(mutantHeader)
-                writeMinimalInputCsv(infile, mutantHeader :: records.toList.map(recordToTextFields))
-                val obsError = intercept[Input.UnexpectedHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
-                obsError shouldEqual expError
+        forAll (arbitrary[NonEmptyList[Input.GoodRecord]], genBadHeader, arbitrary[Boolean]) { 
+            (records, shuffledHeader, includeIndexCol) =>
+                withTempDirectory{ (tempdir: os.Path) => 
+                    val infile = tempdir / "input.csv"
+                    val expError = Input.UnexpectedHeaderException(shuffledHeader)
+                    writeMinimalInputCsv(infile, shuffledHeader :: records.toList.map(recordToTextFields), includeIndexCol)
+                    val obsError = intercept[Input.UnexpectedHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
+                    obsError shouldEqual expError
+                }
             }
-        }
     }
 
     test("Any nonempty subset of missing/incorrect columns from input file causes expected error.") {
@@ -102,11 +110,15 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
             Gen.oneOf(genSubstitutions, genDeletions).toArbitrary
         }
         
-        forAll { (expectedHeader: ExpectedHeader, records: NonEmptyList[Input.GoodRecord]) =>
+        forAll { (expectedHeader: ExpectedHeader, records: NonEmptyList[Input.GoodRecord], includeIndexCol: Boolean) =>
+            val (expHead, textRows) = 
+                if includeIndexCol 
+                then ("" :: expectedHeader, records.toList.zipWithIndex.map{ (r, i) => i.show :: recordToTextFields(r) })
+                else (expectedHeader, records.toList.map(recordToTextFields))
             withTempDirectory{ (tempdir: os.Path) => 
                 val infile = {
                     val f = tempdir / "input.csv"
-                    os.write(f, (expectedHeader :: records.toList.map(recordToTextFields)).map(rowToLine))
+                    os.write(f, (textFieldsToLine(expHead) :: textRows.map(textFieldsToLine)))
                     f
                 }
                 val obsError = intercept[Input.UnexpectedHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
@@ -136,12 +148,10 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
                 alt.map(a => { (_: List[String]).updated(idx, a.show) })
             }
             def genBadPosition: Gen[Mutate] = genMutate(Input.FieldOfViewColumn, Gen.oneOf(Gen.alphaStr, arbitrary[Double]))
-            def genBadTrace: Gen[Mutate] = genMutate(Input.TraceIdColumn, Gen.oneOf(Gen.alphaStr, arbitrary[Double]))
             // NB: Skipping bad region b/c so long as it's String-ly typed, there's no way to generate a bad value.
-            def genBadLocus: Gen[Mutate] = genMutate(Input.LocusSpecificBarcodeTimepointColumn, Gen.oneOf(Gen.alphaStr, arbitrary[Double]))
             def genBadPoint: Gen[Mutate] = 
                 Gen.oneOf(Input.XCoordinateColumn, Input.YCoordinateColumn, Input.ZCoordinateColumn).flatMap(genMutate(_, Gen.alphaStr))
-            Gen.oneOf(genBadPoint, genBadLocus, genBadTrace, genBadPosition)
+            Gen.oneOf(genBadPoint, genBadPosition)
         }
         
         def genBadRecords: Gen[(NonEmptyList[Int], NonEmptyList[List[String]])] = for {
@@ -154,11 +164,11 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
                 .map(_.toMap)
         } yield (indices, goods.zipWithIndex.map{ (r, i) => mutations.get(i).fold(r)(_(r)) })
         
-        forAll (genBadRecords) { (expBadRows, textRecords) =>
+        forAll (genBadRecords, arbitrary[Boolean]) { case ((expBadRows, textRecords), includeIndexCol) =>
             withTempDirectory{ (tempdir: os.Path) => 
                 val infile = tempdir / "input.csv"
                 os.isFile(infile) shouldBe false
-                writeMinimalInputCsv(infile, Input.allColumns :: textRecords.toList)
+                writeMinimalInputCsv(infile, Input.allColumns :: textRecords.toList, includeIndexCol)
                 os.isFile(infile) shouldBe true
                 val error = intercept[Input.BadRecordsException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
                 error.records.map(_.lineNumber) shouldEqual expBadRows
@@ -166,32 +176,13 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
         }
     }
 
-    test("Pandas format is NOT accepted and causes Input.UnexpectedHeaderException.") {
-        val augmentedHeader = "" :: Input.allColumns
-        forAll { (records: NonEmptyList[Input.GoodRecord]) => 
-            withTempDirectory{ (tempdir: os.Path) => 
-                /* Setup and pretests */
-                val infile = {
-                    val f = tempdir / "input.csv"
-                    val indexedTextRows = NonnegativeInt.indexed(records.toList).map((r, i) => i.show :: recordToTextFields(r))
-                    os.write(f, (augmentedHeader :: indexedTextRows).map(rowToLine))
-                    f
-                }
-                os.isFile(infile) shouldBe true
-                val obsError = intercept[Input.UnexpectedHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
-                val expError = Input.UnexpectedHeaderException(augmentedHeader)
-                obsError shouldEqual expError
-            }
-        }
-    }
-
     test("Output file always has the correct header.") {
-        forAll { (records: NonEmptyList[Input.GoodRecord]) => 
+        forAll { (records: NonEmptyList[Input.GoodRecord], includeIndexCol: Boolean) => 
             withTempDirectory{ (tempdir: os.Path) => 
                 val infile = tempdir / "input_with_suffix.some.random.extensions.csv"
-                writeMinimalInputCsv(infile, records)
+                writeMinimalInputCsv(infile, records, includeIndexCol)
                 val outfolder = tempdir / "output"
-                val expOutfile = outfolder / "input_with_suffix.pairwise_distances__locus_specific.csv"
+                val expOutfile = outfolder / "input_with_suffix.pairwise_distances_regional.csv"
                 os.exists(expOutfile) shouldBe false
                 workflow(inputFile = infile, outputFolder = outfolder)
                 os.isFile(expOutfile) shouldBe true
@@ -206,64 +197,20 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
     test("Distances computed are accurately Euclidean.") {
         def buildPoint(x: Double, y: Double, z: Double) = Point3D(XCoordinate(x), YCoordinate(y), ZCoordinate(z))
         val pos = PositionIndex(NonnegativeInt(0))
-        val tid = TraceId(NonnegativeInt(1))
-        val reg = RegionId(Timepoint(NonnegativeInt(40)))
         val inputRecords = NonnegativeInt.indexed(List((2.0, 1.0, -1.0), (1.0, 5.0, 0.0), (3.0, 0.0, 2.0))).map{
-            (pt, i) => Input.GoodRecord(pos, tid, reg, LocusId(Timepoint(i)), buildPoint.tupled(pt))
+            (pt, i) => Input.GoodRecord(pos, RegionId.unsafe(i), buildPoint.tupled(pt))
         }
-        val getExpEuclDist = (i: Int, j: Int) => EuclideanDistance.between(inputRecords(i).point, inputRecords(j).point)
         val expected: Iterable[OutputRecord] = List(0 -> 1, 0 -> 2, 1 -> 2).map{ (i, j) => 
-            val loc1 = LocusId.unsafe(i)
-            val loc2 = LocusId.unsafe(j)
-            OutputRecord(pos, tid, reg, loc1, loc2, getExpEuclDist(i, j), loc1.index, loc2.index)
+            val nn1 = NonnegativeInt.unsafe(i)
+            val nn2 = NonnegativeInt.unsafe(j)
+            val rec1 = inputRecords(i)
+            val rec2 = inputRecords(j)
+            val reg1 = RegionId.unsafe(i)
+            val reg2 = RegionId.unsafe(j)
+            OutputRecord(pos, reg1, reg2, EuclideanDistance.between(rec1.point, rec2.point), nn1, nn2)
         }
         val observed = inputRecordsToOutputRecords(NonnegativeInt.indexed(inputRecords))
         observed shouldEqual expected
-    }
-    
-    test("Partitioning and completeness: (FOV, trace, region) defines an equivalence relation on the set of output records.") {
-        def buildPoint(x: Double, y: Double, z: Double) = Point3D(XCoordinate(x), YCoordinate(y), ZCoordinate(z))
-        val pt1 = buildPoint(-1.0, 2.0, 0.0)
-        val pt2 = buildPoint(1.0, 5.0, 4.0)
-        val pt3 = buildPoint(3.0, 4.0, 6.0)
-        val pt4 = buildPoint(-2.0, -3.0, 1.0)
-        val lonePosition = 1 -> (PositionIndex(NonnegativeInt(2)), TraceId(NonnegativeInt(1)))
-        val pairPosition = 2 -> (PositionIndex(NonnegativeInt(5)), TraceId(NonnegativeInt(4)))
-        val trioPosition = 3 -> (PositionIndex(NonnegativeInt(7)), TraceId(NonnegativeInt(2)))
-        val inputTable = Table(("groupingKeys", "simplifiedExpectation"), List(
-            ((1, 1, 1), (2, 1, 1), (2, 1, 2), (1, 1, 1)) -> List((1, 1, 1, 0, 3) -> math.sqrt(27)), 
-            ((2, 1, 1), (2, 1, 1), (2, 1, 2), (2, 1, 2)) -> List((2, 1, 1, 0, 1) -> math.sqrt(29), (2, 1, 2, 2, 3) -> math.sqrt(99)), 
-            ((2, 1, 1), (2, 1, 2), (2, 1, 1), (2, 1, 2)) -> List((2, 1, 1, 0, 2) -> math.sqrt(56), (2, 1, 2, 1, 3) -> math.sqrt(82)), 
-            ((3, 1, 2), (0, 4, 5), (3, 1, 2), (3, 1, 2)) -> List((3, 1, 2, 0, 2) -> math.sqrt(56), (3, 1, 2, 0, 3) -> math.sqrt(27), (3, 1, 2, 2, 3) -> math.sqrt(99)), 
-            ((3, 1, 2), (3, 1, 0), (3, 1, 3), (3, 1, 1)) -> List(), // All equal on 1st 2 elements, but not 3rd
-            ((0, 1, 2), (3, 1, 2), (1, 1, 2), (2, 1, 2)) -> List(), // All equal on 2nd 2 elements, but not 1st
-            ((0, 1, 2), (0, 0, 2), (0, 2, 2), (0, 3, 2)) -> List(), // All equal on 1st and 3rd elements, but not 2nd
-            ((0, 1, 2), (1, 1, 2), (0, 2, 2), (2, 2, 2)) -> List(), // Mixed similarities
-        )*)
-        forAll (inputTable) { case ((k1, k2, k3, k4), expectation) => 
-            val records = NonnegativeInt.indexed(List(k1 -> pt1, k2 -> pt2, k3 -> pt3, k4 -> pt4)).map{ 
-                case (((pos, tid, reg), pt), i) => Input.GoodRecord(
-                    PositionIndex.unsafe(pos), 
-                    TraceId(NonnegativeInt.unsafe(tid)), 
-                    RegionId.unsafe(reg), 
-                    LocusId.unsafe(i), 
-                    pt,
-                    )
-            }
-            val observation = inputRecordsToOutputRecords(NonnegativeInt.indexed(records))
-            val simplifiedObservation = observation.map{ r => 
-                (r.position.get, r.trace.get, r.region.index, r.locus1.index, r.locus2.index) -> 
-                r.distance.get
-            }.toList
-            val simplifiedExpectation = expectation.map{ case ((pos, tid, reg, t1, t2), d) => 
-                (NonnegativeInt.unsafe(pos), NonnegativeInt.unsafe(tid), reg, NonnegativeInt.unsafe(t1), NonnegativeInt.unsafe(t2)) -> 
-                NonnegativeReal.unsafe(d)
-            }.toList
-            // We're indifferent to the order of output records for this test, so check size then convert to maps.
-            simplifiedObservation.length shouldEqual simplifiedExpectation.length
-            simplifiedObservation.groupBy(_._1).view.mapValues(_.length).toMap shouldEqual simplifiedExpectation.groupBy(_._1).view.mapValues(_.length).toMap
-            simplifiedObservation.groupBy(_._1).view.mapValues(_.toSet).toMap shouldEqual simplifiedExpectation.groupBy(_._1).view.mapValues(_.toSet).toMap
-        }
     }
 
     test("When no input records share identical grouping elements, there's never any output.") {
@@ -278,11 +225,9 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
         forAll (genRecords) { records => inputRecordsToOutputRecords(NonnegativeInt.indexed(records.toList)).isEmpty shouldBe true }
     }
 
-    test("Any output record's original record indices map them back to input records with identical grouping elements.") {
+    test("Any output record's original record indices map them back to input records with identical FOV.") {
         /* To encourage collisions, narrow the choices for grouping components. */
         given arbPos: Arbitrary[PositionIndex] = Gen.oneOf(0, 1).map(PositionIndex.unsafe).toArbitrary
-        given arbTrace: Arbitrary[TraceId] = Gen.oneOf(2, 3).map(NonnegativeInt.unsafe `andThen` TraceId.apply).toArbitrary
-        given arbRegion: Arbitrary[RegionId] = Gen.oneOf(40, 41).map(RegionId.unsafe).toArbitrary
         forAll (Gen.choose(10, 100).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord]))) { (records: List[Input.GoodRecord]) => 
             val indexedRecords = NonnegativeInt.indexed(records)
             val getKey = indexedRecords.map(_.swap).toMap.apply.andThen(Input.getGroupingKey)
@@ -291,44 +236,37 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
         }
     }
 
-    test("Distance is never computed between records with identically-valued locus-specific timepoints, even if the grouping elements place them together.") {
-        /* To encourage collisions, narrow the choices for grouping components. */
-        given arbPos: Arbitrary[PositionIndex] = Gen.oneOf(0, 1).map(PositionIndex.unsafe).toArbitrary
-        given arbTrace: Arbitrary[TraceId] = Gen.oneOf(2, 3).map(NonnegativeInt.unsafe `andThen` TraceId.apply).toArbitrary
-        given arbRegion: Arbitrary[RegionId] = Gen.oneOf(40, 41).map(RegionId.unsafe).toArbitrary
-        given arbTime: Arbitrary[Timepoint] = Gen.const(Timepoint(NonnegativeInt(10))).toArbitrary
-        
-        forAll (Gen.choose(10, 100).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord]))) {
-            (records: List[Input.GoodRecord]) => inputRecordsToOutputRecords(NonnegativeInt.indexed(records)).toList shouldEqual List()
-        }
-    }
+    test("(FOV, region ID) is NOT a key!") { pending }
 
-    /** Treat trace ID generation equivalently to ROI index generation. */
-    given arbitraryForTraceId(using arbRoiIdx: Arbitrary[RoiIndex]): Arbitrary[TraceId] = arbRoiIdx.map(TraceId.fromRoiIndex)
-    
     /** Use arbitrary instances for components to derive an an instance for the sum type. */
     given arbitraryForGoodInputRecord(using 
         arbPos: Arbitrary[PositionIndex], 
-        arbTrace: Arbitrary[TraceId], 
         arbRegion: Arbitrary[RegionId], 
-        arbLocus: Arbitrary[LocusId], 
         arbPoint: Arbitrary[Point3D], 
-    ): Arbitrary[Input.GoodRecord] = (arbPos, arbTrace, arbRegion, arbLocus, arbPoint).mapN(Input.GoodRecord.apply)
+    ): Arbitrary[Input.GoodRecord] = (arbPos, arbRegion, arbPoint).mapN(Input.GoodRecord.apply)
 
     /** Write the given rows as CSV to the given file. */
-    private def writeMinimalInputCsv(f: os.Path, rows: List[List[String]]): Unit = 
-        os.write(f, rows map rowToLine)
+    private def writeMinimalInputCsv(f: os.Path, rows: List[List[String]], includeIndexCol: Boolean): Unit = {
+        val makeLine: (List[String], Int) => String = 
+            if includeIndexCol 
+            then { (r, i) => textFieldsToLine(i.show :: r) }
+            else { (r, _) => textFieldsToLine(r) }
+        os.write(f, rows.zipWithIndex map makeLine.tupled)
+    }
 
     /** Write the given records as CSV to the given file. */
-    private def writeMinimalInputCsv(f: os.Path, records: NonEmptyList[Input.GoodRecord]): Unit = 
-        writeMinimalInputCsv(f, Input.allColumns :: records.toList.map(recordToTextFields))
+    private def writeMinimalInputCsv(f: os.Path, records: NonEmptyList[Input.GoodRecord], includeIndexCol: Boolean): Unit = {
+        val header = if includeIndexCol then "" :: Input.allColumns else Input.allColumns
+        writeMinimalInputCsv(f, header :: records.toList.map(recordToTextFields), includeIndexCol)
+    }
 
     /** Convert a sequence of text fields into a single line (CSV), including newline. */
-    private def rowToLine = Delimiter.CommaSeparator.join(_: List[String]) ++ "\n"
+    private def textFieldsToLine = Delimiter.CommaSeparator.join(_: List[String]) ++ "\n"
 
     /** Convert each ADT value to a simple sequence of text fields, for writing to format like CSV. */
     private def recordToTextFields = (r: Input.GoodRecord) => {
         val (x, y, z) = (r.point.x, r.point.y, r.point.z)
-        List(r.position.show, r.trace.show, r.region.show, r.locus.show, x.get.show, y.get.show, z.get.show)
+        List(r.position.show, r.region.show, x.get.show, y.get.show, z.get.show)
     }
-end TestComputeLocusPairwiseDistances
+end TestComputeRegionPairwiseDistances
+
