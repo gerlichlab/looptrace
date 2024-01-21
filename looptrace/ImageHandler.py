@@ -96,9 +96,7 @@ class ImageHandler:
     @property
     def _severe_bead_roi_partition_problems_file(self) -> Optional[ExtantFile]:
         fp = self.bead_rois_path / "roi_partition_warnings.severe.json"
-        if self.tolerate_too_few_rois:
-            return ExtantFile(fp) if fp.exists() else None
-        assert not fp.exists(), f"Severe warnings file exists but tolerance for problems is turned off: {fp}"
+        return ExtantFile(fp) if fp.exists() else None
 
     @property
     def position_frame_pairs_with_severe_problems(self) -> Set[Tuple[int, int]]:
@@ -107,7 +105,7 @@ class ImageHandler:
             return set()
         with open(fp.path, 'r') as fh:
             data = json.load(fh)
-        return {(obj["position"], obj["frame"]) for obj in data}
+        return {(obj["position"], obj["time"]) for obj in data}
 
     @property
     def decon_input_name(self) -> str:
@@ -214,10 +212,6 @@ class ImageHandler:
     @property
     def spot_input_name(self) -> str:
         return self.config['spot_input_name']
-    
-    @property
-    def tolerate_too_few_rois(self) -> bool:
-        return self.config.get("tolerate_too_few_rois", False)
 
     @property
     def traces_path(self) -> Path:

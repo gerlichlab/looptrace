@@ -64,12 +64,6 @@ def partition_bead_rois(config_file: ExtantFile, images_folder: ExtantFolder):
         "--outputFolder",
         str(H.bead_rois_path),
     ]
-    if H.tolerate_too_few_rois:
-        cmd_parts.extend([
-            "--optimisationTestingMode",
-            "--referenceFrame", 
-            str(Drifter(H).reference_frame),
-        ])
     print(f"Running bead ROI partitioning: {' '.join(cmd_parts)}")
     subprocess.check_call(cmd_parts)
 

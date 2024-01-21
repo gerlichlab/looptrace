@@ -526,7 +526,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         }
     }
 
-    test("Any case of ROI count fewer than absolute minimum triggers expected exception.") {
+    test("ROI counts fewer than absolute minimum result in expected warnings.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
