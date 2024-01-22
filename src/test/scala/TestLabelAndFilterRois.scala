@@ -11,16 +11,8 @@ import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
 
-import at.ac.oeaw.imba.gerlich.looptrace.space.{ 
-    Coordinate, 
-    DistanceThreshold,
-    EuclideanDistance, 
-    PiecewiseDistance, 
-    Point3D, 
-    XCoordinate, 
-    YCoordinate, 
-    ZCoordinate
-}
+import at.ac.oeaw.imba.gerlich.looptrace.collections.*
+import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.LabelAndFilterRois.*
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.safeReadAllWithOrderedHeaders
 
@@ -487,19 +479,41 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-2048.0, 2048.0)
         // Generate a reasonable distance threshold.
         given arbThreshold: Arbitrary[DistanceThreshold] = genThreshold(Gen.choose(1.0, 10.0).map(NonnegativeReal.unsafe)).toArbitrary
-        
-        /* Generate drifts. */
-        def genCoarseDrift: Gen[CoarseDrift] = {
-            val genInt = Gen.choose(-100, 100)
-            Gen.zip(genInt, genInt, genInt).map((z, y, x) => CoarseDrift(ZDir(z), YDir(y), XDir(x)))
-        }
-        def genFineDrift: Gen[FineDrift] = {
-            val genX = Gen.choose[Double](-1, 1)
-            Gen.zip(genX, genX, genX).map((z, y, x) => FineDrift(ZDir(z), YDir(y), XDir(x)))
+
+        def genSpotsDriftsAndProbeGrouping = {
+            /* Generate drifts. */
+            def genCoarseDrift: Gen[CoarseDrift] = {
+                val genInt = Gen.choose(-100, 100)
+                Gen.zip(genInt, genInt, genInt).map((z, y, x) => CoarseDrift(ZDir(z), YDir(y), XDir(x)))
+            }
+            def genFineDrift: Gen[FineDrift] = {
+                val genX = Gen.choose[Double](-1, 1)
+                Gen.zip(genX, genX, genX).map((z, y, x) => FineDrift(ZDir(z), YDir(y), XDir(x)))
+            }
+            def genNontrivialGrouping(spots: Iterable[RegionalBarcodeSpotRoi]): Gen[RegionalGrouping.Nontrivial] = {
+                given ordTime: Ordering[Timepoint] = Order[Timepoint].toOrdering
+                for {
+                    semantic <- Gen.oneOf(RegionalGrouping.Permissive.apply, RegionalGrouping.Prohibitive.apply)
+                    timepoints = spots.map(_.region.get).toSet
+                    maybeSplit <- Gen.option(Gen.choose(1, timepoints.size - 1))
+                    groups = maybeSplit match {
+                        case None => List(ProbeGroup(timepoints.toNonEmptySetUnsafe))
+                        case Some(k) => 
+                            val (g1, g2) = timepoints.toList.splitAt(k)
+                            List(g1, g2).map(g => ProbeGroup(g.toSet.toNonEmptySetUnsafe))
+                    }
+                } yield semantic(groups)
+            }
+            
+            for {
+                // Generate at least 2 spots rows so that there's at least the chance to have the region timepoints in different groups.
+                (spots, drifts) <- genSpotsAndDrifts(genCoarseDrift, genFineDrift).suchThat(_._1.length > 1)
+                grouping <- Gen.oneOf(Gen.const(RegionalGrouping.Trivial), genNontrivialGrouping(spots.toList))
+            } yield (spots, drifts, grouping)
         }
 
-        forAll (genSpotsAndDrifts(genCoarseDrift, genFineDrift), genThreshold(arbitrary[NonnegativeReal]), arbitrary[ExtantOutputHandler]) {
-            case ((spots, driftRows), threshold, handleOutput) => 
+        forAll (genSpotsDriftsAndProbeGrouping, genThreshold(arbitrary[NonnegativeReal]), arbitrary[ExtantOutputHandler]) {
+            case ((spots, driftRows, grouping), threshold, handleOutput) => 
                 withTempDirectory{ (tmpdir: os.Path) => 
                     val spotsFile = tmpdir / "spots.csv"
                     os.write(spotsFile, getSpotsFileLines(spots.toList).map(_ ++ "\n"))
@@ -510,7 +524,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                     workflow(
                         spotsFile = spotsFile, 
                         driftFile = driftFile, 
-                        regionalGrouping = RegionalGrouping.Trivial, 
+                        regionalGrouping = grouping, 
                         minSpotSeparation = threshold, 
                         unfilteredOutputFile = unfilteredFile,
                         filteredOutputFile = filteredFile,
@@ -1058,6 +1072,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
+    /** Use the given drift component generators to create a full drift record for each generated spot record. */
     private def genSpotsAndDrifts(genCoarse: Gen[CoarseDrift], genFine: Gen[FineDrift])(
         using arbMargin: Arbitrary[BoundingBox.Margin], arbPoint: Arbitrary[Point3D]
         ): Gen[(NonEmptyList[RegionalBarcodeSpotRoi], List[(PositionName, Timepoint, CoarseDrift, FineDrift)])] = {
