@@ -7,7 +7,6 @@ EMBL Heidelberg
 """
 
 import argparse
-import os
 
 from gertils import ExtantFile, ExtantFolder
 
