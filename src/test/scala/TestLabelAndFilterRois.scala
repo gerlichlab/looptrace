@@ -52,7 +52,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("With trivial grouping, spot distance comparison is accurate, uses drift correction--coarse, fine, or both--can switch distance measure (#146), and is invariant under order of drifts.") {
+    test("With TRIVIAL grouping, spot distance comparison is accurate, uses drift correction--coarse, fine, or both--can switch distance measure (#146), and is invariant under order of drifts.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         
         // Generate permutations of lines to test invariance under input order.
@@ -406,7 +406,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             }
     }
     
-    test("Any (position, time) repeat in drift file is an error, and drift must be fine not just coarse.") {
+    test("Regardless of grouping semantic, any (position, time) repeat in drift file is an error, and drift must be fine not just coarse.") {
         val spotsLines = """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
             |0,P0001.zarr,27,0,18.594063700840934,104.97590586866923,1052.9315138200425,10.594063700840934,26.594063700840934,88.97590586866923,120.97590586866923,1036.9315138200425,1068.9315138200425
             |1,P0001.zarr,27,0,18.45511019130035,1739.9764501391553,264.9779910476261,10.45511019130035,26.45511019130035,1723.9764501391553,1755.9764501391553,248.97799104762612,280.9779910476261
@@ -471,7 +471,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("The filtered output file is the unfiltered file minus the records with neighbors, and the neighbors column.") {
+    test("Regardless of grouping semantic, the filtered output file is the unfiltered file minus the records with neighbors, and the neighbors column.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
 
         /* Generate reasonable ROIs (controlling centroid and bounding box). */
@@ -490,25 +490,10 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 val genX = Gen.choose[Double](-1, 1)
                 Gen.zip(genX, genX, genX).map((z, y, x) => FineDrift(ZDir(z), YDir(y), XDir(x)))
             }
-            def genNontrivialGrouping(spots: Iterable[RegionalBarcodeSpotRoi]): Gen[RegionalGrouping.Nontrivial] = {
-                given ordTime: Ordering[Timepoint] = Order[Timepoint].toOrdering
-                for {
-                    semantic <- Gen.oneOf(RegionalGrouping.Permissive.apply, RegionalGrouping.Prohibitive.apply)
-                    timepoints = spots.map(_.region.get).toSet
-                    maybeSplit <- Gen.option(Gen.choose(1, timepoints.size - 1))
-                    groups = maybeSplit match {
-                        case None => List(ProbeGroup(timepoints.toNonEmptySetUnsafe))
-                        case Some(k) => 
-                            val (g1, g2) = timepoints.toList.splitAt(k)
-                            List(g1, g2).map(g => ProbeGroup(g.toSet.toNonEmptySetUnsafe))
-                    }
-                } yield semantic(groups)
-            }
-            
             for {
                 // Generate at least 2 spots rows so that there's at least the chance to have the region timepoints in different groups.
                 (spots, drifts) <- genSpotsAndDrifts(genCoarseDrift, genFineDrift).suchThat(_._1.length > 1)
-                grouping <- Gen.oneOf(Gen.const(RegionalGrouping.Trivial), genNontrivialGrouping(spots.toList))
+                grouping <- genSpotCoveringGrouping(spots.toList)
             } yield (spots, drifts, grouping)
         }
 
@@ -544,7 +529,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("Any ROI without drift is an error. #196") {
+    test("Regardless of grouping semantic, any ROI without drift is an error. #196") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
 
         /* Generate reasonable ROIs (controlling centroid and bounding box). */
@@ -552,18 +537,25 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-2048.0, 2048.0)
         given arbThreshold: Arbitrary[DistanceThreshold] = genThreshold(arbitrary[NonnegativeReal]).toArbitrary
         
-        /* Generate drifts. */
-        def genCoarseDrift: Gen[CoarseDrift] = {
-            val genInt = Gen.choose(-10000, 10000)
-            Gen.zip(genInt, genInt, genInt).map((z, y, x) => CoarseDrift(ZDir(z), YDir(y), XDir(x)))
-        }
-        def genFineDrift: Gen[FineDrift] = {
-            val genX = Gen.choose[Double](-100, 100)
-            Gen.zip(genX, genX, genX).map((z, y, x) => FineDrift(ZDir(z), YDir(y), XDir(x)))
+        def genSpotsDriftsDropsAndGrouping = {
+            /* Generate drifts. */
+            def genCoarseDrift: Gen[CoarseDrift] = {
+                val genInt = Gen.choose(-10000, 10000)
+                Gen.zip(genInt, genInt, genInt).map((z, y, x) => CoarseDrift(ZDir(z), YDir(y), XDir(x)))
+            }
+            def genFineDrift: Gen[FineDrift] = {
+                val genX = Gen.choose[Double](-100, 100)
+                Gen.zip(genX, genX, genX).map((z, y, x) => FineDrift(ZDir(z), YDir(y), XDir(x)))
+            }
+            for {
+                // Generate at least 2 spots rows so that there's at least the chance to have the region timepoints in different groups.
+                (spots, driftRows, numDropped) <- genSpotsAndDriftsWithDrop(genCoarseDrift, genFineDrift).suchThat(_._1.length > 1)
+                grouping <- genSpotCoveringGrouping(spots.toList)
+            } yield (spots, driftRows, numDropped, grouping)
         }
 
-        forAll (genSpotsAndDriftsWithDrop(genCoarseDrift, genFineDrift), genThreshold(arbitrary[NonnegativeReal]), arbitrary[ExtantOutputHandler]) { 
-            case ((spots, driftRows, numDropped), threshold, handleOutput) => 
+        forAll (genSpotsDriftsDropsAndGrouping, genThreshold(arbitrary[NonnegativeReal]), arbitrary[ExtantOutputHandler]) { 
+            case ((spots, driftRows, numDropped, grouping), threshold, handleOutput) => 
                 withTempDirectory{ (tmpdir: os.Path) => 
                     val spotsFile = tmpdir / "spots.csv"
                     os.write(spotsFile, getSpotsFileLines(spots.toList).map(_ ++ "\n"))
@@ -572,7 +564,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                     def call() = workflow(
                         spotsFile = spotsFile, 
                         driftFile = driftFile, 
-                        regionalGrouping = RegionalGrouping.Trivial, 
+                        regionalGrouping = grouping, 
                         minSpotSeparation = threshold, 
                         unfilteredOutputFile = UnfilteredOutputFile.fromPath(tmpdir / "unfiltered.csv"),
                         filteredOutputFile = FilteredOutputFile.fromPath(tmpdir / "filtered.csv"),
@@ -585,7 +577,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("Processing doesn't alter ROIs: the collection of ROIs parsed from input is identical to the collection of ROIs parsed from unfiltered, labeled output.") {
+    test("Regardless of grouping semantic, processing doesn't alter ROIs: the collection of ROIs parsed from input is identical to the collection of ROIs parsed from unfiltered, labeled output.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
 
         val driftFileText = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
@@ -650,7 +642,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
     }
 
     // This tests for both the ability to specify nothing for the grouping, and for the correctness of the definition of the partitioning (trivial) when no grouping is specified.
-    test("Spot distance comparison is generally correct and considers all ROIs as one big group if no grouping is provided. #147") {
+    test("For TRIVIAL or PROHIBITIVE spot grouping, neighbor discovery is correct and considers all ROIs as one big group if no grouping is provided. #147") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
 
         // Generate a reasonable margin on side of each centroid coordinate for ROI bounding boxes.
@@ -813,7 +805,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("Probe grouping is a partition: A probe grouping that is NONEMPTY but does NOT COVER regional barcodes set is an error.") {
+    test("Regardless of grouping semantic, it's a partition: A probe grouping that is NONEMPTY but does NOT COVER regional barcodes set is an error.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
 
         // Generate a reasonable margin on side of each centroid coordinate for ROI bounding boxes.
@@ -856,7 +848,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("Probe grouping is a partition: A probe grouping that is not DISJOINT (timepoint repeated between groups) is an error.") {
+    test("Regardless of grouping semantic, it's a partition: A probe grouping that is not DISJOINT (timepoint repeated between groups) is an error.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
 
         // Generate a reasonable margin on side of each centroid coordinate for ROI bounding boxes.
@@ -892,7 +884,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("More proximal neighbors from different FOVs don't pair, while less proximal ones from the same FOV do pair. #150") {
+    test("For TRIVIAL grouping, more proximal neighbors from different FOVs don't pair, while less proximal ones from the same FOV do pair. #150") {
         // The ROIs data for each test iteration
         val spotsText = """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
             |0,P0001.zarr,27,0,12,104,1000,4,20,100,108,996,1004
@@ -940,7 +932,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("ROI grouping by frame/probe/timepoint is specific to field-of-view, so that ROIs from different FOVs don't affect each other for filtering. #150") {
+    test("For TRIVIAL grouping, ROI proximity labeling / neighbor finding is specific to field-of-view, so that ROIs from different FOVs don't affect each other for filtering. #150") {
         /* Create all partitions of 5 as 2 and 3, mapping each partition to a position value for ROIs to be made. */
         val roiIndices = 0 until 5
         val partitions = roiIndices.combinations(3).map{
@@ -969,21 +961,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("Zero threshold guarantees no neighbors.") {
-        given arbitraryDoubleTemp: Arbitrary[Double] = genReasonableCoordinate.toArbitrary
-        forAll (genThreshold(NonnegativeReal(0)), arbitrary[List[Point3D]], Gen.resize(5, Gen.alphaNumStr)) { (threshold, pts, key) => 
-            val keyedPoints = pts.map(key -> _)
-            buildNeighborsLookupKeyed(keyedPoints, (_, _) => true, identity[Point3D], threshold, identity) shouldEqual Map()
-        }
-    }
-
-    test("Total uniqueness of keys guarantees no neighbors.") {
-        forAll (genThreshold(NonnegativeReal(Double.PositiveInfinity)), arbitrary[List[Point3D]]) { (minDist, points) => 
-            buildNeighborsLookupKeyed(points.zipWithIndex.map(_.swap), (_, _) => true, identity[Point3D], minDist, identity) shouldEqual Map()
-        }
-    }
-
-    test("All-singleton prohibitive probe groupings guarantees no neighbors.") {
+    test("All-singleton PROHIBITIVE probe groupings guarantees no neighbors.") {
         def genRois: Gen[List[Roi]] = for {
             n <- Gen.choose(0, 10)
             regions <- Gen.pick(n, 0 until 100)
@@ -999,7 +977,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("Fewer than 2 ROIs means the neighbors mapping is always empty.") {
+    test("Regardless of grouping semantic, fewer than 2 ROIs means the neighbors mapping is always empty.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         def genRoiDistanceAndProbeGroup: Gen[(RegionalBarcodeSpotRoi, DistanceThreshold, RegionalGrouping)] = {
             given arbMargin: Arbitrary[BoundingBox.Margin] = getArbForMargin(NonnegativeReal(1.0), NonnegativeReal(32.0))
@@ -1044,6 +1022,22 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
+    test("Zero threshold guarantees no neighbors.") {
+        given arbitraryDoubleTemp: Arbitrary[Double] = genReasonableCoordinate.toArbitrary
+        forAll (genThreshold(NonnegativeReal(0)), arbitrary[List[Point3D]], Gen.resize(5, Gen.alphaNumStr)) { (threshold, pts, key) => 
+            val keyedPoints = pts.map(key -> _)
+            buildNeighborsLookupKeyed(keyedPoints, (_, _) => true, identity[Point3D], threshold, identity) shouldEqual Map()
+        }
+    }
+
+    test("Total uniqueness of keys guarantees no neighbors.") {
+        forAll (genThreshold(NonnegativeReal(Double.PositiveInfinity)), arbitrary[List[Point3D]]) { (minDist, points) => 
+            buildNeighborsLookupKeyed(points.zipWithIndex.map(_.swap), (_, _) => true, identity[Point3D], minDist, identity) shouldEqual Map()
+        }
+    }
+
+    test("PERMISSIVE semantic behaves as expected.") { pending }
+
     test("ROIs from different channels can never exclude one another. #138") {
         // TODO: implement with multi-channel adaptations for IF.
         // See: https://github.com/gerlichlab/looptrace/issues/138
@@ -1070,6 +1064,24 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 box,
                 )
         }
+    }
+
+    def genSpotCoveringGrouping(spots: Iterable[RegionalBarcodeSpotRoi]): Gen[RegionalGrouping] = {
+        def genNontrivialGrouping(spots: Iterable[RegionalBarcodeSpotRoi]): Gen[RegionalGrouping.Nontrivial] = {
+            given ordTime: Ordering[Timepoint] = Order[Timepoint].toOrdering
+            for {
+                semantic <- Gen.oneOf(RegionalGrouping.Permissive.apply, RegionalGrouping.Prohibitive.apply)
+                timepoints = spots.map(_.region.get).toSet
+                maybeSplit <- Gen.option(Gen.choose(1, timepoints.size - 1))
+                groups = maybeSplit match {
+                    case None => List(ProbeGroup(timepoints.toNonEmptySetUnsafe))
+                    case Some(k) => 
+                        val (g1, g2) = timepoints.toList.splitAt(k)
+                        List(g1, g2).map(g => ProbeGroup(g.toSet.toNonEmptySetUnsafe))
+                }
+            } yield semantic(groups)
+        }
+        Gen.oneOf(Gen.const(RegionalGrouping.Trivial), genNontrivialGrouping(spots.toList))
     }
 
     /** Use the given drift component generators to create a full drift record for each generated spot record. */
