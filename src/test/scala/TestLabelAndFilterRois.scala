@@ -28,7 +28,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.safeReadAllWithOrderedHeader
 /** Tests for the filtration of the individual supports (single FISH probes) of chromatin fiber traces */
 class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite, ScalacheckSuite, should.Matchers:
 
-    test("Drift file is required.") {
+    test("Drift file is required (so that distance/proximity comparisons can use drift-corrected coordinates.)") {
         def genThresholdAndHandler = for {
             threshold <- genThreshold(arbitrary[NonnegativeReal])
             extantHandler <- arbitrary[ExtantOutputHandler]
@@ -60,7 +60,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("Spot distance comparison is accurate, uses drift correction--coarse, fine, or both--can switch distance measure (#146), and is invariant under order of drifts.") {
+    test("With trivial grouping, spot distance comparison is accurate, uses drift correction--coarse, fine, or both--can switch distance measure (#146), and is invariant under order of drifts.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         
         // Generate permutations of lines to test invariance under input order.
@@ -440,30 +440,41 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             |9,1,P0002.zarr,0.0,0.0,-4.0,0.25331586851532506,0.014229358683931789,0.0077311034198835745
             |""".stripMargin
         
+        // NB: the frame value for the groping comes from the spotsLines variable.
+        def genGrouping = {
+            val singleGroup: ProbeGroup = ProbeGroup(NonEmptySet.one(Timepoint(NonnegativeInt(27))))
+            Gen.oneOf(
+                RegionalGrouping.Trivial, 
+                RegionalGrouping.Permissive(List(singleGroup)), 
+                RegionalGrouping.Prohibitive(List(singleGroup)),
+                )
+        }
+
         forAll (Table(
             ("driftLines", "expected", "mapMessage"), 
             (coarseDriftLines, 1, "[0-9]+ error\\(s\\) converting drift file .+ rows to records!".r.findAllMatchIn(_: String).toList.length), 
             (fineDriftLines, s"2 repeated (pos, time) pairs: ${List(("P0001.zarr", 2) -> List(2, 4), ("P0002.zarr", 0) -> List(6, 7, 8))}", identity[String])
             )) { (driftLines, expected, mapMessage) => 
-            forAll (Gen.zip(genThreshold(arbitrary[NonnegativeReal]), arbitrary[ExtantOutputHandler])) { (threshold, outputHandler) =>
-                withTempDirectory{ (tmpdir: os.Path) => 
-                    val spotsFile = tmpdir / "spots.csv"
-                    os.write(spotsFile, spotsLines)
-                    val driftFile = tmpdir / "drift.csv"
-                    os.write(driftFile, driftLines)
-                    val caught = intercept[Exception]{ workflow(
-                        spotsFile = spotsFile, 
-                        driftFile = driftFile, 
-                        regionalGrouping = RegionalGrouping.Trivial, 
-                        minSpotSeparation = threshold, 
-                        filteredOutputFile = FilteredOutputFile.fromPath(tmpdir / "filtered.csv"),
-                        unfilteredOutputFile = UnfilteredOutputFile.fromPath(tmpdir / "unfiltered.csv"),
-                        extantOutputHandler = outputHandler,
-                        )
+            forAll (genThreshold(arbitrary[NonnegativeReal]), arbitrary[ExtantOutputHandler], genGrouping) {
+                (threshold, outputHandler, grouping) =>
+                    withTempDirectory{ (tmpdir: os.Path) => 
+                        val spotsFile = tmpdir / "spots.csv"
+                        os.write(spotsFile, spotsLines)
+                        val driftFile = tmpdir / "drift.csv"
+                        os.write(driftFile, driftLines)
+                        val caught = intercept[Exception]{ workflow(
+                            spotsFile = spotsFile, 
+                            driftFile = driftFile, 
+                            regionalGrouping = grouping, 
+                            minSpotSeparation = threshold, 
+                            filteredOutputFile = FilteredOutputFile.fromPath(tmpdir / "filtered.csv"),
+                            unfilteredOutputFile = UnfilteredOutputFile.fromPath(tmpdir / "unfiltered.csv"),
+                            extantOutputHandler = outputHandler,
+                            )
+                        }
+                        val errMsg = caught.getMessage
+                        mapMessage(errMsg) shouldEqual expected
                     }
-                    val errMsg = caught.getMessage
-                    mapMessage(errMsg) shouldEqual expected
-                }
             }
         }
     }
