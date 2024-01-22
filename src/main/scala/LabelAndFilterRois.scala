@@ -142,13 +142,13 @@ object LabelAndFilterRois:
                 .required()
                 .action((h, c) => c.copy(extantOutputHandler = h))
                 .text("How to handle writing output when target already exists"),
-            opt[Unit]("--noRegionGrouping")
+            opt[Unit]("noRegionGrouping")
                 .action((_, c) => c.copy(noRegionGrouping = true))
                 .text("Specify that proximity consideration / neighbor finding is to be done among ALL regional spots."),
-            opt[List[ProbeGroup]]("--proximityPermissions")
+            opt[List[ProbeGroup]]("proximityPermissions")
                 .action((groups, c) => c.copy(proximityPermissions = groups.some))
                 .text("List-of-lists--or path to file specifying one--grouping regional barcode timepoints for which to permit proximity"),
-            opt[List[ProbeGroup]]("--proximityProhibitions")
+            opt[List[ProbeGroup]]("proximityProhibitions")
                 .action((groups, c) => c.copy(proximityProhibitions = groups.some))
                 .text("List-of-lists--or path to file specifying one--grouping regional barcode timepoints for which to prohibit proximity"),
         )
