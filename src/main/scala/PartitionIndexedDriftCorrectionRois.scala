@@ -22,6 +22,7 @@ object PartitionIndexedDriftCorrectionRois:
     /* Type aliases */
     type RawRecord = Array[String]
     type PosTimePair = (PositionIndex, Timepoint)
+    type KeyedProblem = (PosTimePair, RoisSplit.Problem)
     type InitFile = (PosTimePair, os.Path)
     type IndexedRoi = DetectedRoi | SelectedRoi
     type JsonWriter[*] = upickle.default.Writer[*]
@@ -131,7 +132,7 @@ object PartitionIndexedDriftCorrectionRois:
             }) match {
                 case (Nil, tooFewErrors) => 
                     // In this case, there's at least one FOV in which there are too few ROIs to meet even the absolute minimum.
-                    given writer: JsonWriter[(PosTimePair, RoisSplit.Problem)] = readWriterForKeyedTooFewProblem
+                    given writer: JsonWriter[KeyedProblem] = readWriterForKeyedTooFewProblem
                     val warningsFile = outfolder / "roi_partition_warnings.severe.json"
                     println(s"Writing severe warnings file: $warningsFile")
                     val (problemsToWrite, problemsToPropagate) = tooFewErrors.map{ 
@@ -143,10 +144,10 @@ object PartitionIndexedDriftCorrectionRois:
                     // Here we have all parse errors or mixed error types and can't combine them.
                     throw new Exception(s"${bads.size} (position, timepoint) pairs with problems.\n${bads}")
             }
-        } else { List.empty[(PosTimePair, RoisSplit.Problem)] }
+        } else { List.empty[KeyedProblem] }
         // NB: since possibly multiple problems per (pos, timepoint) pair (e.g., too few shifting and too few accuracy), 
         //     don't convert this to Map, since key collision is potentially problematic.
-        val problems: List[(PosTimePair, RoisSplit.Problem)] = 
+        val problems: List[KeyedProblem] = 
             zeroAccuracyProblems ::: goods.flatMap{ case ((pt, _), splitResult) => 
                 /* Write the ROIs and emit the optional warning. */
                 val partition = splitResult.partition
@@ -161,7 +162,7 @@ object PartitionIndexedDriftCorrectionRois:
         else {
             val warningsFile = outfolder / "roi_partition_warnings.json"
             println(s"Writing bead ROIs partition warnings file: $warningsFile")
-            given writer: JsonWriter[(PosTimePair, RoisSplit.Problem)] = readWriterForKeyedTooFewProblem
+            given writer: JsonWriter[KeyedProblem] = readWriterForKeyedTooFewProblem
             os.write(warningsFile, write(problems, indent = 2))
         }
         println("Done!")
@@ -286,7 +287,7 @@ object PartitionIndexedDriftCorrectionRois:
     /***********************/
 
     /** Write, to JSON, a pair of (FOV, image time) and a case of too-few-ROIs for shifting for drift correction. */
-    private[looptrace] def readWriterForKeyedTooFewProblem: ReadWriter[(PosTimePair, RoisSplit.Problem)] = {
+    private[looptrace] def readWriterForKeyedTooFewProblem: ReadWriter[KeyedProblem] = {
         import JsonMappable.*
         import PosTimePair.given
         import UJsonHelpers.UPickleCatsInstances.given
