@@ -3,7 +3,7 @@ package at.ac.oeaw.imba.gerlich.looptrace
 import scala.util.{ Random, Try }
 
 import cats.Order
-import cats.data.{ NonEmptyList as NEL, NonEmptySet }
+import cats.data.{ NonEmptyList, NonEmptySet }
 import cats.syntax.all.*
 import mouse.boolean.*
 import upickle.default.*
@@ -13,30 +13,7 @@ import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
 
-import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.{
-    AbsoluteMinimumShifting,
-    BadRecord,
-    BeadRoisPrefix, 
-    ColumnName,
-    InitFile,
-    ParserConfig,
-    PosTimePair,
-    Purpose,
-    RoisFileParseFailedRecords,
-    RoisFileParseFailedSetup,
-    RoisSplit,
-    ShiftingCount,
-    XColumn, 
-    YColumn, 
-    ZColumn, 
-    discoverInputs, 
-    getOutputFilepath,
-    getOutputSubfolder,
-    readRoisFile,
-    readWriterForKeyedTooFewProblem,
-    sampleDetectedRois, 
-    workflow, 
-}
+import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.*
 import at.ac.oeaw.imba.gerlich.looptrace.PathHelpers.listPath
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.readJsonFile
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ CoordinateSequence, Point3D, XCoordinate, YCoordinate, ZCoordinate }
@@ -167,7 +144,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         forAll { (delimiter: Delimiter) => 
             withTempFile("", delimiter){ (roisFile: os.Path) => 
                 os.isFile(roisFile) shouldBe true
-                readRoisFile(roisFile) shouldEqual Left(NEL.one(s"No lines in file! $roisFile"))
+                readRoisFile(roisFile) shouldEqual Left(NonEmptyList.one(s"No lines in file! $roisFile"))
             }
         }
     }
@@ -188,7 +165,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
             case (ext, (header, maybeGetExpError)) => 
                 withTempFile(initData = header, suffix = ext){ (roisFile: os.Path) => 
                     val extras: List[String] = maybeGetExpError.fold(List())(getMsg => List(getMsg(roisFile)))
-                    val expErrorMessages = NEL(s"Cannot infer delimiter for file! $roisFile", extras)
+                    val expErrorMessages = NonEmptyList(s"Cannot infer delimiter for file! $roisFile", extras)
                     readRoisFile(roisFile) shouldEqual Left(RoisFileParseFailedSetup(expErrorMessages))
                 }
         }
@@ -238,14 +215,14 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                     "101,102,11.96875,1857.9375,1076.25,26799.0,32.0,", 
                     "104,105,10.6,1919.8,1137.4,12858.0,5.0,,"
                     ), 
-                NEL.one(BadRecord(NonnegativeInt(1), delimiter.split("104,105,10.6,1919.8,1137.4,12858.0,5.0,,"), NEL.one("Header has 8 fields but record has 9")))
+                NonEmptyList.one(BadRecord(NonnegativeInt(1), delimiter.split("104,105,10.6,1919.8,1137.4,12858.0,5.0,,"), NonEmptyList.one("Header has 8 fields but record has 9")))
             ),
             (
                 headLine :: List(
                     "101,102,11.96875,1857.9375,1076.25,26799.0,32.0,", 
                     "104,105,10.6,1919.8,1137.4,12858.0,5.0"
                     ), 
-                NEL.one(BadRecord(NonnegativeInt(1), delimiter.split("104,105,10.6,1919.8,1137.4,12858.0,5.0"), NEL.one("Header has 8 fields but record has 7")))
+                NonEmptyList.one(BadRecord(NonnegativeInt(1), delimiter.split("104,105,10.6,1919.8,1137.4,12858.0,5.0"), NonEmptyList.one("Header has 8 fields but record has 7")))
             ), 
             (
                 headLine :: List(
@@ -253,9 +230,9 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                     "104,105,10.6,1919.8,1137.4,12858.0,5.0,i", 
                     "109,107,11.96875,1857.9375,1076.25,26799.0"
                     ), 
-                NEL(
-                    BadRecord(NonnegativeInt(0), delimiter.split("101,102,11.96875,1857.9375,1076.25,26799.0,32.0"), NEL.one("Header has 8 fields but record has 7")), 
-                    List(BadRecord(NonnegativeInt(2), delimiter.split("109,107,11.96875,1857.9375,1076.25,26799.0"), NEL.one("Header has 8 fields but record has 6")))
+                NonEmptyList(
+                    BadRecord(NonnegativeInt(0), delimiter.split("101,102,11.96875,1857.9375,1076.25,26799.0,32.0"), NonEmptyList.one("Header has 8 fields but record has 7")), 
+                    List(BadRecord(NonnegativeInt(2), delimiter.split("109,107,11.96875,1857.9375,1076.25,26799.0"), NonEmptyList.one("Header has 8 fields but record has 6")))
                 )
             )
         )
@@ -453,8 +430,8 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                     /* Check the effect of having run the workflow */
                     // First, check the existence of the warnings file and parse it.
                     os.exists(warningsFile) shouldBe true
-                    given reader: Reader[(PosTimePair, RoisSplit.Problem)] = readWriterForKeyedTooFewProblem
-                    val warnings = readJsonFile[List[(PosTimePair, RoisSplit.Problem)]](warningsFile)
+                    given reader: Reader[KeyedProblem] = readWriterForKeyedTooFewProblem
+                    val warnings = readJsonFile[List[KeyedProblem]](warningsFile)
                     val obsWarnShifting = warnings.filter(_._2.purpose === Purpose.Shifting)
                     val obsWarnAccuracy = warnings.filter(_._2.purpose === Purpose.Accuracy)
                     // Then, check the too-few-shifting (but rescued) records.
@@ -526,7 +503,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         }
     }
 
-    test("ROI counts fewer than absolute minimum result in expected warnings.") {
+    test("ROI counts fewer than absolute minimum results in expected warnings.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
@@ -547,16 +524,17 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                 (tooFew ::: enough).foreach{ case ((p, t), rois) => 
                     writeMinimalInputRoisCsv(rois, tempdir / getInputFilename(p, t))
                 }
+                val badWarningsFile = tempdir / "roi_partition_warnings.severe.json"
+                os.exists(badWarningsFile) shouldBe false
                 /* Make actual output assertions. */
-                // First, the expected exception should occur.
-                val exception = intercept[RoisSplit.TooFewShiftingException]{
-                    workflow(tempdir, numReqShifting, numReqAccuracy, None)
-                }
-                // Second, the expected exception should have the correct (FOV, time) fail points.
-                val obsBadPosTimePairs = exception.errors.map(_._1).toList
-                val expBadPosTimePairs = tooFew.map(_._1)
-                obsBadPosTimePairs.length shouldEqual expBadPosTimePairs.length
-                obsBadPosTimePairs.toSet shouldEqual expBadPosTimePairs.toSet
+                workflow(tempdir, numReqShifting, numReqAccuracy, None)
+                // The expected file should be produced, and it should have the expected data.
+                os.isFile(badWarningsFile) shouldBe true
+                given readerForKeyedProblem: Reader[KeyedProblem] = readWriterForKeyedTooFewProblem
+                val obsWarnSevere = readJsonFile[List[KeyedProblem]](badWarningsFile)
+                obsWarnSevere.length shouldEqual tooFew.length
+                given ord: Ordering[PosTimePair] = summon[Order[PosTimePair]].toOrdering
+                obsWarnSevere.map(_._1).sorted shouldEqual tooFew.map(_._1).sorted // Ignore original ordering.
             }
         }
     }
@@ -597,8 +575,8 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                     case Nil => os.exists(warningsFile) shouldBe false
                     case _ => 
                         os.exists(warningsFile) shouldBe true
-                        given readerForWarnings: Reader[(PosTimePair, RoisSplit.Problem)] = readWriterForKeyedTooFewProblem
-                        val warnings = readJsonFile[List[(PosTimePair, RoisSplit.Problem)]](warningsFile)
+                        given readerForWarnings: Reader[KeyedProblem] = readWriterForKeyedTooFewProblem
+                        val warnings = readJsonFile[List[KeyedProblem]](warningsFile)
                         val obsWarnShifting = warnings.filter(_._2.purpose === Purpose.Shifting)
                         val obsWarnAccuracy = warnings.filter(_._2.purpose === Purpose.Accuracy)
                         val expWarnShifting = tooFewShifting.map{ (pt, rois) => 
@@ -614,7 +592,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                         obsWarnAccuracy.length shouldEqual (tooFewShifting.length + tooFewAccuracy.length)
                         /* Check the actual problems. */
                         obsWarnShifting.toMap shouldEqual expWarnShifting.toMap
-                        def collapseKeyedProblems: List[(PosTimePair, RoisSplit.Problem)] => Map[PosTimePair, NonEmptySet[RoisSplit.Problem]] = {
+                        def collapseKeyedProblems: List[KeyedProblem] => Map[PosTimePair, NonEmptySet[RoisSplit.Problem]] = {
                             import at.ac.oeaw.imba.gerlich.looptrace.collections.*
                             given orderForPurpose: Order[Purpose] = Order.by{
                                 case Purpose.Shifting => 0
