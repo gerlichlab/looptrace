@@ -449,7 +449,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                     /* Pretest and workflow execution */
                     val warningsFile = tempdir / "roi_partition_warnings.json"
                     os.exists(warningsFile) shouldBe false
-                    workflow(tempdir, reqShifting, reqAccuracy, None, None)
+                    workflow(tempdir, reqShifting, reqAccuracy, None)
                     /* Check the effect of having run the workflow */
                     // First, check the existence of the warnings file and parse it.
                     os.exists(warningsFile) shouldBe true
@@ -497,7 +497,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                 val accuracyFolder = getOutputSubfolder(tempdir)(Purpose.Accuracy)
                 os.exists(shiftingFolder) shouldBe false
                 os.exists(accuracyFolder) shouldBe false
-                workflow(tempdir, reqShifting, reqAccuracy, None, None)
+                workflow(tempdir, reqShifting, reqAccuracy, None)
                 /* Make actual output assertions. */
                 val expFilesShifting = ptRoisPairs.map{
                     case ((p, t), _) => (p -> t) -> getOutputFilepath(tempdir)(p, t, Purpose.Shifting)
@@ -550,7 +550,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                 /* Make actual output assertions. */
                 // First, the expected exception should occur.
                 val exception = intercept[RoisSplit.TooFewShiftingException]{
-                    workflow(tempdir, numReqShifting, numReqAccuracy, None, None)
+                    workflow(tempdir, numReqShifting, numReqAccuracy, None)
                 }
                 // Second, the expected exception should have the correct (FOV, time) fail points.
                 val obsBadPosTimePairs = exception.errors.map(_._1).toList
@@ -591,7 +591,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                 val warningsFile = tempdir / "roi_partition_warnings.json"
                 os.exists(warningsFile) shouldBe false
                 /* Run the workflow */
-                workflow(tempdir, numReqShifting, numReqAccuracy, None, None)
+                workflow(tempdir, numReqShifting, numReqAccuracy, None)
                 /* Make actual output assertions. */
                 tooFew match {
                     case Nil => os.exists(warningsFile) shouldBe false
@@ -649,7 +649,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                 val expAccuracyFiles = allFovTimeRois.map{ case ((p, t), _) => (p -> t) -> getOutputFilepath(tempdir)(p, t, Purpose.Accuracy) }
                 expAccuracyFiles.exists((_, f) => os.exists(f)) shouldBe false
                 /* Then, execute workflow. */
-                workflow(tempdir, numReqShifting, numReqAccuracy, None, None)
+                workflow(tempdir, numReqShifting, numReqAccuracy, None)
                 /* Finally, make assertions. */
                 expAccuracyFiles.filterNot((_, f) => os.isFile(f)) shouldEqual List()
                 given roiReader: Reader[RoiForAccuracy] = simpleAccuracyRW(ParserConfig.coordinateSequence)
@@ -691,7 +691,7 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
                 }
                 expAllOutFiles.flatMap(_._2).filter(os.isFile) shouldEqual List()
                 /* Run the workflow and find the output files. */
-                workflow(tempdir, numShifting, numAccuracy, None, None)
+                workflow(tempdir, numShifting, numAccuracy, None)
                 val obsFilesShifting = os.list(getOutputSubfolder(tempdir)(Purpose.Shifting)).filter(os.isFile).toSet
                 val obsFilesAccuracy = os.list(getOutputSubfolder(tempdir)(Purpose.Accuracy)).filter(os.isFile).toSet
                 
