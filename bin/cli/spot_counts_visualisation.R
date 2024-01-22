@@ -128,7 +128,10 @@ if (opts$spot_file_type == kRegionalName) {
     # Create a side-by-side grouped barchart, with unfiltered count next to filtered count for each timepoint.
     unfilteredSpots$filter_status <- FALSE
     filteredSpots$filter_status <- TRUE
-    spotCountsCombined <- rbindlist(list(unfilteredSpots, filteredSpots))[, .(count = .N), by = list(filter_status, frame_name)]
+    spotCountsCombined <- rbindlist(list(
+        unfilteredSpots[, .(filter_status, frame_name)], 
+        filteredSpots[, .(filter_status, frame_name)]
+    ))[, .(count = .N), by = list(filter_status, frame_name)]
     combinedBarchart <- ggplot(spotCountsCombined, aes(x = as.factor(frame_name), y = count, fill = filter_status)) + 
         geom_bar(stat = "identity", position = "dodge") + 
         xlab("probe") + 
