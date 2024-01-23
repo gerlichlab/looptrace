@@ -642,7 +642,7 @@ class SpotPicker:
         
         print(f"Writing spot image extraction skip reasons file: {self.extraction_skip_reasons_json_file}")
         with open(self.extraction_skip_reasons_json_file, 'w') as fh:
-            json.dump(skip_spot_image_reasons, fh)
+            json.dump(skip_spot_image_reasons, fh, indent=2)
 
         return self.spot_images_path
 
