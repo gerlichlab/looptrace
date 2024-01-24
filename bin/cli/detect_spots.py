@@ -8,9 +8,7 @@ EMBL Heidelberg
 
 import argparse
 from dataclasses import dataclass
-from enum import Enum
 import json
-import os
 from pathlib import Path
 from typing import *
 
