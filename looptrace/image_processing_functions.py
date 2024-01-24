@@ -23,6 +23,7 @@ from skimage.filters import gaussian, threshold_otsu
 from skimage.morphology import white_tophat, ball, remove_small_objects
 from skimage.measure import regionprops_table
 
+from looptrace.numeric_types import NumberLike
 from looptrace.wrappers import phase_xcor
 
 logger = logging.getLogger()
@@ -259,15 +260,15 @@ def center_crop_embryo(embryo_stack, size, center=None):
     return out
 
 
-def detect_spots(input_img, spot_threshold=20, expand_px=10):
+def detect_spots(input_img, spot_threshold: NumberLike, expand_px: int = 10):
     """Spot detection by difference of Gaussians filter
 
     Arguments
     ---------
     img : ndarray
         Input 3D image
-    spot_threshold : int or float
-        Threshold to use for spots. Defaults to 20.
+    spot_threshold : NumberLike
+        Threshold to use for spots
     expand_px : int
         Number of pixels by which to expand contiguous subregion, 
         up to point of overlap with neighboring subregion of image
@@ -301,15 +302,15 @@ def detect_spots(input_img, spot_threshold=20, expand_px=10):
     return spot_props, img, labels
 
 
-def detect_spots_int(input_img, spot_threshold=500, expand_px=1):
+def detect_spots_int(input_img, spot_threshold: NumberLike, expand_px: int = 1):
     """Spot detection by intensity filter
 
     Arguments
     ---------
     img : ndarray
         Input 3D image
-    spot_threshold : int or float
-        Threshold to use for spots. Defaults to 500.
+    spot_threshold : NumberLike
+        Threshold to use for spots
     expand_px : int
         Number of pixels by which to expand contiguous subregion, 
         up to point of overlap with neighboring subregion of image

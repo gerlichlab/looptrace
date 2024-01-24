@@ -120,6 +120,7 @@ class SpotDetectionParameters:
     detection_function: callable
     downsampling: int
     minimum_distance_between: NumberLike
+    # TODO: non-nullity requirement for crosstalk_channel is coupled to this condition, and this should be reflected in the types.
     subtract_beads: bool
     crosstalk_channel: Optional[int]
     crosstalk_frame: Optional[int]
@@ -473,7 +474,7 @@ class SpotPicker:
                     bead_img = self.images[pos_index][frame, crosstalk_ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
                     img, orig = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
 
-                spot_props, filt_img, _ = detect_func(img, spot_threshold[i], min_dist = min_dist)
+                spot_props, filt_img, _ = detect_func(img, spot_threshold[i])
                 spot_props['position'] = preview_pos
                 spot_props = spot_props.reset_index().rename(columns={'index':'roi_id_pos'})
 
