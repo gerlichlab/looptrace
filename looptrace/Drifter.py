@@ -345,7 +345,6 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
                     print(f"WARNING: {get_no_partition_message(frame)}")
                     assert (pos_idx, frame) in pos_time_problems, \
                         f"No bead ROIs for fine DC for (FOV={pos_idx}, time={frame}), but no evidence of a problem there"
-                    # TODO: need to store 0 fine drift.
                     fine = (0.0, 0.0, 0.0)
                 else:
                     mov_img = drifter.get_moving_image(pos_idx=pos_idx, frame_idx=frame)
@@ -371,7 +370,6 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
                     print(f"WARNING: {get_no_partition_message(frame)}")
                     assert (pos_idx, frame) in pos_time_problems, \
                         f"No bead ROIs for fine DC for (FOV={pos_idx}, time={frame}), but no evidence of a problem there"
-                    # TODO: need to store 0 fine drift.
                     fine = (0.0, 0.0, 0.0)
                 else:
                     mov_img = drifter.get_moving_image(pos_idx=pos_idx, frame_idx=frame)
