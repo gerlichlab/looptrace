@@ -21,6 +21,16 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.*
  */
 class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, ScalacheckSuite, should.Matchers:
     
+    val AllReqdColumns = List(
+        Input.FieldOfViewColumn, 
+        Input.TraceIdColumn, 
+        Input.LocusSpecificBarcodeTimepointColumn, 
+        Input.RegionalBarcodeTimepointColumn, 
+        Input.ZCoordinateColumn,
+        Input.YCoordinateColumn, 
+        Input.XCoordinateColumn,
+        )
+
     test("Totally empty input file causes expected error.") {
         withTempDirectory{ (tempdir: os.Path) => 
             /* Setup and pretests */
@@ -40,7 +50,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
             val infile = tempdir / "input.csv"
             val outfolder = tempdir / "output"
             os.makeDir(outfolder)
-            os.write(infile, Delimiter.CommaSeparator.join(Input.allColumns) ++ "\n")
+            os.write(infile, Delimiter.CommaSeparator.join(AllReqdColumns) ++ "\n")
             val expOutfile = outfolder / "input.pairwise_distances__locus_specific.csv"
             os.exists(expOutfile) shouldBe false
             workflow(inputFile = infile, outputFolder = outfolder)
@@ -57,8 +67,8 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
             withTempDirectory{ (tempdir: os.Path) => 
                 val infile = tempdir / "input.csv"
                 os.write(infile, records.toList.map(recordToTextFields `andThen` rowToLine))
-                val expError = Input.IllegalHeaderException(recordToTextFields(records.head), Input.allColumns.toNel.get.toNes)
-                val obsError = intercept[Input.IllegalHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
+                val expError = IllegalHeaderException(recordToTextFields(records.head), AllReqdColumns.toNel.get.toNes)
+                val obsError = intercept[IllegalHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
                 obsError shouldEqual expError
             }
         }
@@ -69,20 +79,20 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         
         def genExpHeadAndMiss: Gen[(ExpectedHeader, NonEmptySet[String])] = {
-            def genDeletions: Gen[(ExpectedHeader, NonEmptySet[String])] = Gen.choose(1, Input.allColumns.length - 1)
-                .flatMap(Gen.pick(_, (0 until Input.allColumns.length)))
+            def genDeletions: Gen[(ExpectedHeader, NonEmptySet[String])] = Gen.choose(1, AllReqdColumns.length - 1)
+                .flatMap(Gen.pick(_, (0 until AllReqdColumns.length)))
                 .map{ indices => 
-                    val (expHead, expMiss) = Input.allColumns.zipWithIndex.partition((_, i) => !indices.contains(i))
+                    val (expHead, expMiss) = AllReqdColumns.zipWithIndex.partition((_, i) => !indices.contains(i))
                     expHead.map(_._1) -> expMiss.map(_._1).toNel.get.toNes
                 }
             def genSubstitutions: Gen[(ExpectedHeader, NonEmptySet[String])] = for {
-                indicesToChange <- Gen.atLeastOne((0 until Input.allColumns.length)).map(_.toSet) // Choose header fields to change.
-                expHead <- Input.allColumns.zipWithIndex.traverse{ (col, idx) => 
+                indicesToChange <- Gen.atLeastOne((0 until AllReqdColumns.length)).map(_.toSet) // Choose header fields to change.
+                expHead <- AllReqdColumns.zipWithIndex.traverse{ (col, idx) => 
                     if indicesToChange contains idx 
                     then Gen.alphaNumStr.suchThat(_ =!= col) // Ensure the replacement differs from original.
                     else Gen.const(col) // Use the original value since this index isn't one at which to update.
                 }
-            } yield (expHead, indicesToChange.toList.toNel.get.toNes.map(Input.allColumns.zipWithIndex.map(_.swap).toMap.apply))            
+            } yield (expHead, indicesToChange.toList.toNel.get.toNes.map(AllReqdColumns.zipWithIndex.map(_.swap).toMap.apply))            
             Gen.oneOf(genSubstitutions, genDeletions)
         }
         
@@ -93,9 +103,12 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
                     os.write(f, (expectedHead :: records.toList.map(recordToTextFields)).map(rowToLine))
                     f
                 }
-                val obsError = intercept[Input.IllegalHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
-                val expError = Input.IllegalHeaderException(expectedHead, expectedMiss)
-                obsError shouldEqual expError
+                intercept[IllegalHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") } match {
+                    case IllegalHeaderException(observedHead, observedMiss) => 
+                        observedHead shouldEqual expectedHead
+                        observedMiss shouldEqual expectedMiss
+
+                }
             }
         }
     }
@@ -107,14 +120,14 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
             case s: String => s
         }) // used for .show'ing a generated value of more than one type possibility
         
-        def genDrops: Gen[Mutate] = Gen.atLeastOne((0 until Input.allColumns.length)).map {
+        def genDrops: Gen[Mutate] = Gen.atLeastOne((0 until AllReqdColumns.length)).map {
             indices => { (_: List[String]).zipWithIndex.filterNot((_, i) => indices.toSet.contains(i)).map(_._1) }
         }
         def genAdditions: Gen[Mutate] = 
             Gen.resize(5, Gen.nonEmptyListOf(Gen.choose(-3e-3, 3e3).map(_.toString))).map(additions => (_: List[String]) ++ additions)
         def genImproperlyTyped: Gen[Mutate] = {
             def genMutate[A : Show](col: String, alt: Gen[A]): Gen[Mutate] = {
-                val idx = Input.allColumns.zipWithIndex.find(_._1 === col).map(_._2).getOrElse{
+                val idx = AllReqdColumns.zipWithIndex.find(_._1 === col).map(_._2).getOrElse{
                     throw new Exception(s"Cannot find index for alleged input column: $col")
                 }
                 alt.map(a => { (_: List[String]).updated(idx, a.show) })
@@ -142,7 +155,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
             withTempDirectory{ (tempdir: os.Path) => 
                 val infile = tempdir / "input.csv"
                 os.isFile(infile) shouldBe false
-                writeMinimalInputCsv(infile, Input.allColumns :: textRecords.toList)
+                writeMinimalInputCsv(infile, AllReqdColumns :: textRecords.toList)
                 os.isFile(infile) shouldBe true
                 val error = intercept[Input.BadRecordsException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
                 error.records.map(_.lineNumber) shouldEqual expBadRows
@@ -151,7 +164,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
     }
 
     test("Pandas format IS accepted.") {
-        val augmentedHeader = "" :: Input.allColumns
+        val augmentedHeader = "" :: AllReqdColumns
         forAll { (records: NonEmptyList[Input.GoodRecord]) => 
             withTempDirectory{ (tempdir: os.Path) => 
                 /* Setup and pretests */
@@ -251,11 +264,8 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
     }
 
     test("Unexpected header error can't be created with the empty missing columns or with an unnecessary column.") {
-        assertTypeError{ "Input.IllegalHeaderException(List(), List())" }
-        assertCompiles{ "Input.IllegalHeaderException(List(), NonEmptySet.one(\"x\"))" }
-        val nonReqCol = "unrequiredColumn"
-        val error = intercept[IllegalArgumentException]{ Input.IllegalHeaderException(List(), NonEmptySet.one(nonReqCol)) }
-        error.getMessage shouldEqual s"requirement failed: Alleged missing columns aren't required: $nonReqCol"
+        assertTypeError{ "IllegalHeaderException(List(), List())" }
+        assertCompiles{ "IllegalHeaderException(List(), NonEmptySet.one(\"x\"))" }
     }
 
     test("When no input records share identical grouping elements, there's never any output.") {
@@ -313,7 +323,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
 
     /** Write the given records as CSV to the given file. */
     private def writeMinimalInputCsv(f: os.Path, records: NonEmptyList[Input.GoodRecord]): Unit = 
-        writeMinimalInputCsv(f, Input.allColumns :: records.toList.map(recordToTextFields))
+        writeMinimalInputCsv(f, AllReqdColumns :: records.toList.map(recordToTextFields))
 
     /** Convert a sequence of text fields into a single line (CSV), including newline. */
     private def rowToLine = Delimiter.CommaSeparator.join(_: List[String]) ++ "\n"

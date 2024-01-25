@@ -12,6 +12,7 @@ import org.scalatest.matchers.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.ComputeRegionPairwiseDistances.*
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.safeReadAllWithOrderedHeaders
+import at.ac.oeaw.imba.gerlich.looptrace.collections.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 
 /**
@@ -21,6 +22,14 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.*
  */
 class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, MathSuite, ScalacheckSuite, should.Matchers:
     
+    val AllReqdColumns = List(
+        Input.FieldOfViewColumn, 
+        Input.RegionalBarcodeTimepointColumn, 
+        Input.XCoordinateColumn, 
+        Input.YCoordinateColumn, 
+        Input.ZCoordinateColumn,
+        )
+
     test("Totally empty input file causes expected error.") {
         withTempDirectory{ (tempdir: os.Path) => 
             /* Setup and pretests */
@@ -30,7 +39,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, Ma
             touchFile(infile)
             os.isDir(outfolder) shouldBe true
             os.isFile(infile) shouldBe true
-            assertThrows[Input.EmptyFileException]{ workflow(inputFile = infile, outputFolder = outfolder) }
+            assertThrows[EmptyFileException]{ workflow(inputFile = infile, outputFolder = outfolder) }
         }
     }
 
@@ -41,7 +50,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, Ma
                 val infile = tempdir / "input.csv"
                 val outfolder = tempdir / "output"
                 os.makeDir(outfolder)
-                val cols = if includeIndexCol then "" :: Input.allColumns else Input.allColumns
+                val cols = if includeIndexCol then "" :: AllReqdColumns else AllReqdColumns
                 os.write(infile, Delimiter.CommaSeparator.join(cols) ++ "\n")
                 val expOutfile = outfolder / "input.pairwise_distances__regional.csv"
                 os.exists(expOutfile) shouldBe false
@@ -64,35 +73,13 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, Ma
                     then { (r, i) => i.show :: recordToTextFields(r) }
                     else { (r, _) => recordToTextFields(r) }
                 os.write(infile, records.toList.zipWithIndex.map(toTextFields.tupled `andThen` textFieldsToLine))
-                val expError = Input.UnexpectedHeaderException(toTextFields(records.head, 0))
-                val obsError = intercept[Input.UnexpectedHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
-                obsError shouldEqual expError
-            }
-        }
-    }
-
-    test("Unexpected header error can't be created with the expected input header.") {
-        val error = intercept[IllegalArgumentException]{ Input.UnexpectedHeaderException(Input.allColumns) }
-        error.getMessage shouldEqual s"requirement failed: Alleged inequality between observed and expected header, but they're equivalent!"
-    }
-
-    test("Simply permuting the header fields fails the parse with the expected error.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
-        def genBadHeader = Gen.oneOf(Input.allColumns.permutations.toSeq).suchThat(_ =!= Input.allColumns)
-        forAll (arbitrary[NonEmptyList[Input.GoodRecord]], genBadHeader, arbitrary[Boolean]) { 
-            (records, shuffledHeader, includeIndexCol) =>
-                withTempDirectory{ (tempdir: os.Path) => 
-                    val infile = tempdir / "input.csv"
-                    val expError = Input.UnexpectedHeaderException(shuffledHeader)
-                    val (head, rows) = 
-                        if includeIndexCol 
-                        then ( ("" :: shuffledHeader), records.zipWithIndex.map((r, i) => i.show :: recordToTextFields(r)) )
-                        else (shuffledHeader, records.map(recordToTextFields))
-                    os.write(infile, (head :: rows.toList).map(textFieldsToLine))
-                    val obsError = intercept[Input.UnexpectedHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
-                    obsError shouldEqual expError
+                intercept[IllegalHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") } match {
+                    case IllegalHeaderException(obsHead, missing) => 
+                        obsHead shouldEqual toTextFields(records.head, 0)
+                        missing shouldEqual AllReqdColumns.toNel.get.toNes
                 }
             }
+        }
     }
 
     test("Any nonempty subset of missing/incorrect columns from input file causes expected error.") {
@@ -100,12 +87,12 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, Ma
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         
         given arbExpHeader: Arbitrary[ExpectedHeader] = {
-            def genDeletions: Gen[ExpectedHeader] = Gen.choose(1, Input.allColumns.length - 1)
-                .flatMap(Gen.pick(_, (0 until Input.allColumns.length)))
-                .map{ indices => Input.allColumns.zipWithIndex.filterNot{ (_, i) => indices.toSet contains i }.map(_._1) }
+            def genDeletions: Gen[ExpectedHeader] = Gen.choose(1, AllReqdColumns.length - 1)
+                .flatMap(Gen.pick(_, (0 until AllReqdColumns.length)))
+                .map{ indices => AllReqdColumns.zipWithIndex.filterNot{ (_, i) => indices.toSet contains i }.map(_._1) }
             def genSubstitutions: Gen[ExpectedHeader] = for {
-                indicesToChange <- Gen.atLeastOne((0 until Input.allColumns.length)).map(_.toSet) // Choose header fields to change.
-                expectedHeader <- Input.allColumns.zipWithIndex.traverse{ (oldCol, idx) => 
+                indicesToChange <- Gen.atLeastOne((0 until AllReqdColumns.length)).map(_.toSet) // Choose header fields to change.
+                expectedHeader <- AllReqdColumns.zipWithIndex.traverse{ (oldCol, idx) => 
                     if indicesToChange contains idx 
                     then Gen.alphaNumStr.suchThat(newCol => newCol.nonEmpty && newCol =!= oldCol) // Ensure the replacement differs from original.
                     else Gen.const(oldCol) // Use the original value since this index isn't one at which to update.
@@ -126,9 +113,16 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, Ma
                     os.write(f, (textFieldsToLine(expHead) :: textRows.map(textFieldsToLine)))
                     f
                 }
-                val obsError = intercept[Input.UnexpectedHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
-                val expError = Input.UnexpectedHeaderException(expectedHeader)
-                obsError shouldEqual expError
+                intercept[IllegalHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") } match {
+                    case IllegalHeaderException(header, missing) => 
+                        header shouldEqual expHead
+                        (AllReqdColumns.toSet -- expHead.toSet).toNonEmptySet match {
+                            case None => throw new Exception(
+                                s"All required columns are in expected header, leaving nothing for expected missing! $expHead"
+                                )
+                            case Some(expMiss) => missing shouldEqual expMiss
+                        }
+                }
             }
         }
     }
@@ -140,14 +134,14 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, Ma
             case s: String => s
         }) // used for .show'ing a generated value of more than one type possibility
         
-        def genDrops: Gen[Mutate] = Gen.atLeastOne((0 until Input.allColumns.length)).map {
+        def genDrops: Gen[Mutate] = Gen.atLeastOne((0 until AllReqdColumns.length)).map {
             indices => { (_: List[String]).zipWithIndex.filterNot((_, i) => indices.toSet.contains(i)).map(_._1) }
         }
         def genAdditions: Gen[Mutate] = 
             Gen.resize(5, Gen.nonEmptyListOf(Gen.choose(-3e-3, 3e3).map(_.toString))).map(additions => (_: List[String]) ++ additions)
         def genImproperlyTyped: Gen[Mutate] = {
             def genMutate[A : Show](col: String, alt: Gen[A]): Gen[Mutate] = {
-                val idx = Input.allColumns.zipWithIndex.find(_._1 === col).map(_._2).getOrElse{
+                val idx = AllReqdColumns.zipWithIndex.find(_._1 === col).map(_._2).getOrElse{
                     throw new Exception(s"Cannot find index for alleged input column: $col")
                 }
                 alt.map(a => { (_: List[String]).updated(idx, a.show) })
@@ -175,8 +169,8 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, Ma
                 os.isFile(infile) shouldBe false
                 val (head, textRows) = 
                     if includeIndexCol 
-                    then ("" :: Input.allColumns, textRecords.zipWithIndex.map((r, i) => i.show :: r))
-                    else (Input.allColumns, textRecords)
+                    then ("" :: AllReqdColumns, textRecords.zipWithIndex.map((r, i) => i.show :: r))
+                    else (AllReqdColumns, textRecords)
                 os.write(infile, (head :: textRows.toList) map textFieldsToLine)
                 os.isFile(infile) shouldBe true
                 val error = intercept[Input.BadRecordsException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
@@ -191,8 +185,8 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, Ma
                 val infile = tempdir / "input_with_suffix.some.random.extensions.csv"
                 val (head, textRows) = 
                     if includeIndexCol
-                    then ("" :: Input.allColumns, records.zipWithIndex.map((r, i) => i.show :: recordToTextFields(r)))
-                    else (Input.allColumns, records.map(recordToTextFields))
+                    then ("" :: AllReqdColumns, records.zipWithIndex.map((r, i) => i.show :: recordToTextFields(r)))
+                    else (AllReqdColumns, records.map(recordToTextFields))
                 os.write(infile, (head :: textRows.toList).map(textFieldsToLine))
                 val outfolder = tempdir / "output"
                 val expOutfile = outfolder / "input_with_suffix.pairwise_distances__regional.csv"

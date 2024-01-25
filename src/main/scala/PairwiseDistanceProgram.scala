@@ -26,4 +26,12 @@ private[looptrace] trait PairwiseDistanceProgram:
 
     /** Error type for when a file to use is unexpectedly empty. */
     final case class EmptyFileException(getFile: os.Path) extends Exception(s"File is empty: $getFile")
+
+    /** Exception for when necessary columns are missing from header. */
+    final case class IllegalHeaderException(header: List[String], missing: NonEmptySet[String]) extends Throwable:
+        require(
+            (header.toSet & missing.toSortedSet).isEmpty, 
+            s"Alleged missing columns/fields actually present: ${(header.toSet & missing.toSortedSet).toList.sorted.mkString(", ")}"
+            )
+        override def toString = s"header = $header, missing = $missing"
 end PairwiseDistanceProgram
