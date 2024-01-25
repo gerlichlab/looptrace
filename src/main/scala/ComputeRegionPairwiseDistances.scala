@@ -63,7 +63,7 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram:
             case (None, outputRecords) => 
                 val recs = outputRecords.toList.sortBy{ r => 
                     (r.position, r.region1, r.region2, r.distance)
-                }(summon[Order[(PositionIndex, RegionId, RegionId, EuclideanDistance)]].toOrdering)
+                }(summon[Order[(PositionName, RegionId, RegionId, EuclideanDistance)]].toOrdering)
                 println(s"Writing output file: ${expectedOutputFile.filepath}")
                 OutputWriter.writeRecordsToFile(recs, expectedOutputFile)
         }
@@ -91,11 +91,11 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram:
 
     object Input:
         /* These come from the *traces.csv file produced at the end of looptrace. */
-        val FieldOfViewColumn = "pos_index"
+        val FieldOfViewColumn = "position"
         val RegionalBarcodeTimepointColumn = "frame"
-        val XCoordinateColumn = "x"
-        val YCoordinateColumn = "y"
-        val ZCoordinateColumn = "z"
+        val XCoordinateColumn = "xc"
+        val YCoordinateColumn = "yc"
+        val ZCoordinateColumn = "zc"
 
         /**
          * Parse input records from the given file.
@@ -112,7 +112,7 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram:
                 getColParser(header)(col, lift)
 
             /* Component parsers, one for each field of interest from a record. */
-            val maybeParseFOV = getParser(FieldOfViewColumn, safeParseInt >>> PositionIndex.fromInt)
+            val maybeParseFOV = getParser(FieldOfViewColumn, PositionName(_).asRight)
             val maybeParseRegion = getParser(RegionalBarcodeTimepointColumn, safeParseInt >>> RegionId.fromInt)
             val maybeParseX = getParser(XCoordinateColumn, safeParseDouble >> XCoordinate.apply)
             val maybeParseY = getParser(YCoordinateColumn, safeParseDouble >> YCoordinate.apply)
@@ -144,7 +144,7 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram:
          * @param time The timepoint in which the (locus-specific) spot was imaged
          * @param point The 3D spatial coordinates of the center of a FISH spot
          */
-        final case class GoodRecord(position: PositionIndex, region: RegionId, point: Point3D)
+        final case class GoodRecord(position: PositionName, region: RegionId, point: Point3D)
         
         /**
          * Bundle of data representing a bad record (line) from input file
@@ -168,7 +168,7 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram:
 
     /** Bundler of data which represents a single output record (pairwise distance) */
     final case class OutputRecord(
-        position: PositionIndex, 
+        position: PositionName, 
         region1: RegionId, 
         region2: RegionId, 
         distance: EuclideanDistance, 

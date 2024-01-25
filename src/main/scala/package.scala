@@ -211,6 +211,7 @@ package object looptrace {
     final case class PositionName(get: String) extends AnyVal
     object PositionName:
         given orderForPositionName: Order[PositionName] = Order.by(_.get)
+        given showForPositionName: Show[PositionName] = Show.show(_.get)
     end PositionName
 
     final case class ProbeName(get: String)

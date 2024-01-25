@@ -146,11 +146,8 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, Ma
                 }
                 alt.map(a => { (_: List[String]).updated(idx, a.show) })
             }
-            def genBadPosition: Gen[Mutate] = genMutate(Input.FieldOfViewColumn, Gen.oneOf(Gen.alphaStr, arbitrary[Double]))
-            // NB: Skipping bad region b/c so long as it's String-ly typed, there's no way to generate a bad value.
-            def genBadPoint: Gen[Mutate] = 
-                Gen.oneOf(Input.XCoordinateColumn, Input.YCoordinateColumn, Input.ZCoordinateColumn).flatMap(genMutate(_, Gen.alphaStr))
-            Gen.oneOf(genBadPoint, genBadPosition)
+            // NB: Skipping bad position and region b/c so long as they're String-ly typed, there's no way to generate a bad value.
+            Gen.oneOf(Input.XCoordinateColumn, Input.YCoordinateColumn, Input.ZCoordinateColumn).flatMap(genMutate(_, Gen.alphaStr))
         }
         
         def genBadRecords: Gen[(NonEmptyList[Int], NonEmptyList[List[String]])] = for {
@@ -203,7 +200,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, Ma
 
     test("Distances computed are accurately Euclidean.") {
         def buildPoint(x: Double, y: Double, z: Double) = Point3D(XCoordinate(x), YCoordinate(y), ZCoordinate(z))
-        val pos = PositionIndex(NonnegativeInt(0))
+        val pos = PositionName("P0001.zarr")
         val inputRecords = NonnegativeInt.indexed(List((2.0, 1.0, -1.0), (1.0, 5.0, 0.0), (3.0, 0.0, 2.0))).map{
             (pt, i) => Input.GoodRecord(pos, RegionId.unsafe(i), buildPoint.tupled(pt))
         }
@@ -245,7 +242,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, Ma
 
     test("(FOV, region ID) is NOT a key!") {
         /* To encourage collisions, narrow the choices for grouping components. */
-        given arbPosition: Arbitrary[PositionIndex] = Gen.const(PositionIndex(NonnegativeInt(1))).toArbitrary
+        given arbPosition: Arbitrary[PositionName] = Gen.const(PositionName("P0002.zarr")).toArbitrary
         given arbRegion: Arbitrary[RegionId] = Gen.oneOf(40, 41, 42).map(RegionId.unsafe).toArbitrary
         forAll (Gen.choose(5, 10).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord]))) { (records: List[Input.GoodRecord]) => 
             // Pretest: must be multiple records of same region even within same FOV.
@@ -262,7 +259,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, Ma
 
     /** Use arbitrary instances for components to derive an an instance for the sum type. */
     given arbitraryForGoodInputRecord(using 
-        arbPos: Arbitrary[PositionIndex], 
+        arbPos: Arbitrary[PositionName], 
         arbRegion: Arbitrary[RegionId], 
         arbPoint: Arbitrary[Point3D], 
     ): Arbitrary[Input.GoodRecord] = (arbPos, arbRegion, arbPoint).mapN(Input.GoodRecord.apply)

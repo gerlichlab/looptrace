@@ -93,7 +93,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
                     else Gen.const(col) // Use the original value since this index isn't one at which to update.
                 }
             } yield (expHead, indicesToChange.toList.toNel.get.toNes.map(AllReqdColumns.zipWithIndex.map(_.swap).toMap.apply))            
-            Gen.oneOf(genSubstitutions, genDeletions)
+            Gen.oneOf(genSubstitutions, genDeletions).suchThat{ (head, miss) => (head.toSet & miss.toSortedSet).isEmpty }
         }
         
         forAll (genExpHeadAndMiss, arbitrary[NonEmptyList[Input.GoodRecord]]) { case ((expectedHead, expectedMiss), records) =>
