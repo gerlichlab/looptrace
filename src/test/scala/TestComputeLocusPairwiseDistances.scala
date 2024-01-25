@@ -250,6 +250,14 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
         }
     }
 
+    test("Unexpected header error can't be created with the empty missing columns or with an unnecessary column.") {
+        assertTypeError{ "Input.IllegalHeaderException(List(), List())" }
+        assertCompiles{ "Input.IllegalHeaderException(List(), NonEmptySet.one(\"x\"))" }
+        val nonReqCol = "unrequiredColumn"
+        val error = intercept[IllegalArgumentException]{ Input.IllegalHeaderException(List(), NonEmptySet.one(nonReqCol)) }
+        error.getMessage shouldEqual s"requirement failed: Alleged missing columns aren't required: $nonReqCol"
+    }
+
     test("When no input records share identical grouping elements, there's never any output.") {
         def genRecords: Gen[NonEmptyList[Input.GoodRecord]] = 
             arbitrary[NonEmptyList[Input.GoodRecord]].suchThat{ rs => 
