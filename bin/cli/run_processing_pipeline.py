@@ -43,7 +43,7 @@ TRACING_QC_STAGE_NAME = "tracing_QC"
 
 class SpotType(Enum):
     REGIONAL = "regional"
-    LOCUS_SPECIFIC = "locus_specific"
+    LOCUS_SPECIFIC = "locus-specific"
 
 
 def partition_bead_rois(config_file: ExtantFile, images_folder: ExtantFolder):
