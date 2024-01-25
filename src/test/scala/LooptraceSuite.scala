@@ -46,7 +46,7 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
     
     given arbitraryForZCoordinate(using num: Arbitrary[Double]): Arbitrary[ZCoordinate] = num.fmap(ZCoordinate.apply)
     
-    given point3DArbitrary(using arbX: Arbitrary[Double]): Arbitrary[Point3D] = Arbitrary{
+    given arbitraryForPoint3D(using arbX: Arbitrary[Double]): Arbitrary[Point3D] = Arbitrary{
         Gen.zip(arbitrary[XCoordinate], arbitrary[YCoordinate], arbitrary[ZCoordinate]).map(Point3D.apply.tupled)
     }
 
@@ -58,21 +58,13 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
         arbPt: Arbitrary[Point3D],
         arbMargin: Arbitrary[BoundingBox.Margin],
         ): Arbitrary[RegionalBarcodeSpotRoi] = {
-        def buildBox(pt: Point3D)(xMargin: BoundingBox.Margin, yMargin: BoundingBox.Margin, zMargin: BoundingBox.Margin): BoundingBox = {
-            def buildInterval[C <: Coordinate : [C] =>> NotGiven[C =:= Coordinate]](lift: Double => C)(center: Double, margin: BoundingBox.Margin): BoundingBox.Interval[C] = 
-                BoundingBox.Interval.apply[C].tupled((center - margin.get, center + margin.get).mapBoth(lift))
-            val ix = buildInterval(XCoordinate.apply)(pt.x.get, xMargin)
-            val iy = buildInterval(YCoordinate.apply)(pt.y.get, yMargin)
-            val iz = buildInterval(ZCoordinate.apply)(pt.z.get, zMargin)
-            BoundingBox(ix, iy, iz)
-        }
         def genRoi: Gen[RegionalBarcodeSpotRoi] = for {
             idx <- arbitrary[RoiIndex]
             pos <- arbitrary[PositionName]
             reg <- arbitrary[RegionId]
             ch <- arbitrary[Channel]
             pt <- arbitrary[Point3D]
-            box <- arbitrary[(BoundingBox.Margin, BoundingBox.Margin, BoundingBox.Margin)].map(buildBox(pt).tupled)
+            box <- arbitrary[(BoundingBox.Margin, BoundingBox.Margin, BoundingBox.Margin)].map(buildRectangularBox(pt).tupled)
         } yield RegionalBarcodeSpotRoi(index = idx, position = pos, region = reg, channel = ch, centroid = pt, boundingBox = box)
         Arbitrary(genRoi)
     }
@@ -80,7 +72,15 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
     /************************
      * Other definitions
      ***********************/
-    def genNonNegInt(limit: NonnegativeInt): Gen[NonnegativeInt] = Gen.choose(0, limit).map(NonnegativeInt.unsafe)
-    def genNonNegReal(limit: NonnegativeReal): Gen[NonnegativeReal] = Gen.choose(0.0, limit).map(NonnegativeReal.unsafe)
+    protected def genNonNegInt(limit: NonnegativeInt): Gen[NonnegativeInt] = Gen.choose(0, limit).map(NonnegativeInt.unsafe)
+    protected def genNonNegReal(limit: NonnegativeReal): Gen[NonnegativeReal] = Gen.choose(0.0, limit).map(NonnegativeReal.unsafe)
+    protected def buildRectangularBox(pt: Point3D)(xMargin: BoundingBox.Margin, yMargin: BoundingBox.Margin, zMargin: BoundingBox.Margin): BoundingBox = {
+        def buildInterval[C <: Coordinate : [C] =>> NotGiven[C =:= Coordinate]](lift: Double => C)(center: Double, margin: BoundingBox.Margin): BoundingBox.Interval[C] = 
+            BoundingBox.Interval.apply[C].tupled((center - margin.get, center + margin.get).mapBoth(lift))
+        val ix = buildInterval(XCoordinate.apply)(pt.x.get, xMargin)
+        val iy = buildInterval(YCoordinate.apply)(pt.y.get, yMargin)
+        val iz = buildInterval(ZCoordinate.apply)(pt.z.get, zMargin)
+        BoundingBox(ix, iy, iz)
+    }
 
 end LooptraceSuite

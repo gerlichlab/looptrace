@@ -355,7 +355,7 @@ object LabelAndFilterRois:
       * @param simplify How to get from a more complex value `B` to a simpler `A`
       * @return A mapping from item to set of proximal (closer than given distance threshold) neighbors, omitting each item with no neighbors
       */
-    def buildNeighborsLookupKeyed[B, A : Order, K : Order](
+    private[looptrace] def buildNeighborsLookupKeyed[B, A : Order, K : Order](
         kvPairs: Iterable[(K, B)], usePair: (B, B) => Boolean, getPoint: A => Point3D, minDist: DistanceThreshold, simplify: B => A
         ): Map[A, NonEmptySet[A]] = 
         import ProximityComparable.proximal

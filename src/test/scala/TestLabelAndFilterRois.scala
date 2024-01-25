@@ -641,8 +641,70 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
+    test("PERMISSIVE semantic behaves as expected. #222") {
+        given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-1, 1) // Limit to [-1, 1] in all dimensions.
+        given ordReg: Ordering[Timepoint] = Order[Timepoint].toOrdering
+
+        val regions = (0 to 3).map(RegionId.unsafe)
+        val channel = Channel(NonnegativeInt(0))
+        val margin = BoundingBox.Margin(NonnegativeReal(0.5))
+
+        def genRois(lo: Int, hi: Int) = {
+            def genOne = {
+                def genPos = Gen.oneOf("P0001.zarr", "P0001.zarr").map(PositionName.apply)
+                (arbitrary[RoiIndex], genPos, Gen.oneOf(regions), arbitrary[Point3D]).mapN((idx, pos, reg, pt) => 
+                    val box = buildRectangularBox(pt)(margin, margin, margin)
+                    RegionalBarcodeSpotRoi(idx, pos, reg, channel, pt, box)
+                )
+            }
+            Gen.choose(lo, hi).flatMap(Gen.listOfN(_, genOne))
+        }
+
+        def genRoisAndGrouping(lo: Int, hi: Int) = for {
+            rois <- genRois(lo, hi)
+            obsReg = rois.map(_.region.get).toSet
+            groups <- 
+                if obsReg.size === 1 
+                then Gen.const(List(obsReg.toNonEmptySetUnsafe))
+                else Gen.choose(1, obsReg.size - 1).map{ k => 
+                    val (g1, g2) = obsReg.toList.splitAt(k)
+                    List(g1, g2).map(_.toSet.toNonEmptySetUnsafe)
+                }
+        } yield (rois, RegionalGrouping.Permissive(groups.map(ProbeGroup.apply)))
+
+        forAll (genRoisAndGrouping(10, 50), genThreshold{ Gen.choose[Double](0, 1).map(NonnegativeReal.unsafe) }, minSuccessful(1000)) { 
+            case ((rois, grouping), threshold) =>
+                val roisWithLine = NonnegativeInt.indexed(rois)
+                val roiByLine = roisWithLine.map(_.swap).toMap
+                buildNeighboringRoisFinder(roisWithLine, threshold)(grouping) match {
+                    case Left(msg) => fail(s"Expected successful neighbors assignment, but got error: $msg")
+                    case Right(obsNeighbors) => 
+                        val timeByLine = roisWithLine.map((r, i) => i -> r.region.get).toMap
+                        def getGroup(line: LineNumber): Int = {
+                            val time = timeByLine(line)
+                            grouping.groups.zipWithIndex.filter((g, _) => g.get.contains(time)) match {
+                                case (_, i) :: Nil => i
+                                case Nil => throw new Exception(s"No group found for time $time! Grouping: $grouping")
+                                case _ => throw new Exception(s"Multiple groups found for time $time! Grouping: $grouping")
+                            }
+                        }
+                        val unexpectedNeighbors = obsNeighbors.foldRight(List.empty[(RegionalBarcodeSpotRoi, NonEmptyList[RegionalBarcodeSpotRoi])]){ 
+                            case ((line, neighborLines), acc) =>
+                                val keyGroupIdx = getGroup(line)
+                                neighborLines.toList
+                                    .filter(getGroup(_) === keyGroupIdx)
+                                    .toNel match{
+                                        case None => acc
+                                        case Some(ls) => (roiByLine(line), ls.map(roiByLine)) :: acc
+                                    }
+                            }
+                        unexpectedNeighbors shouldEqual List()
+                }
+        }
+    }
+
     // This tests for both the ability to specify nothing for the grouping, and for the correctness of the definition of the partitioning (trivial) when no grouping is specified.
-    test("For TRIVIAL or PROHIBITIVE spot grouping, neighbor discovery is correct and considers all ROIs as one big group if no grouping is provided. #147") {
+    test("For TRIVIAL or PROHIBITIVE spot grouping, neighbor discovery is correct. #147") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
 
         // Generate a reasonable margin on side of each centroid coordinate for ROI bounding boxes.
@@ -1036,8 +1098,6 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("PERMISSIVE semantic behaves as expected.") { pending }
-
     test("ROIs from different channels can never exclude one another. #138") {
         // TODO: implement with multi-channel adaptations for IF.
         // See: https://github.com/gerlichlab/looptrace/issues/138
@@ -1139,7 +1199,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
     private def getArbForMargin(lo: NonnegativeReal, hi: NonnegativeReal): Arbitrary[BoundingBox.Margin] = 
         Gen.choose[Double](lo, hi).map(NonnegativeReal.unsafe `andThen` BoundingBox.Margin.apply).toArbitrary
 
-    private def getArbForPoint3D(lo: Double, hi: Double): Arbitrary[Point3D] = point3DArbitrary(using Gen.choose(lo, hi).toArbitrary)
+    private def getArbForPoint3D(lo: Double, hi: Double): Arbitrary[Point3D] = arbitraryForPoint3D(using Gen.choose(lo, hi).toArbitrary)
 
     private def getDriftFileLines(driftRows: List[(PositionName, Timepoint, CoarseDrift, FineDrift)]): List[String] = 
         headDriftFile :: driftRows.zipWithIndex.map{ case ((pos, time, coarse, fine), i) => 
