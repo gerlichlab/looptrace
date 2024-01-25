@@ -8,7 +8,6 @@ import scopt.OParser
 
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
-import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 
 /**
  * Simple pairwise distances within trace IDs
@@ -108,16 +107,6 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram:
         val XCoordinateColumn = "x"
         val YCoordinateColumn = "y"
         val ZCoordinateColumn = "z"
-
-        val allColumns = List(
-            FieldOfViewColumn, 
-            TraceIdColumn, 
-            LocusSpecificBarcodeTimepointColumn, 
-            RegionalBarcodeTimepointColumn, 
-            ZCoordinateColumn,
-            YCoordinateColumn, 
-            XCoordinateColumn,
-            )
         
         /**
          * Parse input records from the given file.
@@ -169,11 +158,6 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram:
          * @param point The 3D spatial coordinates of the center of a FISH spot
          */
         final case class GoodRecord(position: PositionIndex, trace: TraceId, region: RegionId, locus: LocusId, point: Point3D)
-        
-        /** Exception for when necessary columns are missing from header. */
-        final case class IllegalHeaderException(header: List[String], missing: NonEmptySet[String]) extends Throwable:
-            require(missing.forall(Input.allColumns.contains), s"Alleged missing columns aren't required: ${missing.toList.sorted.mkString(", ")}")
-            override def toString = s"header = $header, missing = $missing"
 
         /**
          * Bundle of data representing a bad record (line) from input file
