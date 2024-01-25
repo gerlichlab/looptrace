@@ -176,6 +176,7 @@ object ComputeLocusPairwiseDistances:
         
         /** Exception for when necessary columns are missing from header. */
         final case class IllegalHeaderException(header: List[String], missing: NonEmptySet[String]) extends Throwable:
+            require(missing.forall(Input.allColumns.contains), s"Alleged missing columns aren't required: ${missing.toList.sorted.mkString(", ")}")
             override def toString = s"header = $header, missing = $missing"
 
         /**
