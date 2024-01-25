@@ -112,21 +112,12 @@ object ComputeLocusPairwiseDistances:
         val allColumns = List(
             FieldOfViewColumn, 
             TraceIdColumn, 
-            RegionalBarcodeTimepointColumn, 
             LocusSpecificBarcodeTimepointColumn, 
-            XCoordinateColumn, 
-            YCoordinateColumn, 
+            RegionalBarcodeTimepointColumn, 
             ZCoordinateColumn,
+            YCoordinateColumn, 
+            XCoordinateColumn,
             )
-
-        /* Component parsers, one for each field of interest from a record. */
-        private val parseFOV = getColParser(FieldOfViewColumn, safeParseInt >>> PositionIndex.fromInt)
-        private val parseTrace = getColParser(TraceIdColumn, safeParseInt >>> TraceId.fromInt)
-        private val parseRegion = getColParser(RegionalBarcodeTimepointColumn, safeParseInt >>> RegionId.fromInt)
-        private val parseLocus = getColParser(LocusSpecificBarcodeTimepointColumn, safeParseInt >>> LocusId.fromInt)
-        private val parseX = getColParser(XCoordinateColumn, safeParseDouble >> XCoordinate.apply)
-        private val parseY = getColParser(YCoordinateColumn, safeParseDouble >> YCoordinate.apply)
-        private val parseZ = getColParser(ZCoordinateColumn, safeParseDouble >> ZCoordinate.apply)
         
         /**
          * Parse input records from the given file.
@@ -142,16 +133,31 @@ object ComputeLocusPairwiseDistances:
                 .toList
                 .toNel
                 .fold(throw EmptyFileException(inputFile))(recs => recs.head -> recs.tail)
-            if (header.toList =!= allColumns) throw UnexpectedHeaderException(header.toList)
-            val validateRecordLength = (r: Array[String]) => 
-                (r.size === header.length).either(NonEmptyList.one(s"Header has ${header.length} fields, but line has ${r.size}"), r)
-            Alternative[List].separate(NonnegativeInt.indexed(records).map{ 
-                (r, i) => validateRecordLength(r).flatMap(Function.const{
-                    (parseFOV(r), parseTrace(r), parseRegion(r), parseLocus(r), parseX(r), parseY(r), parseZ(r)).mapN(
-                        (fov, trace, region, locus, x, y, z) => GoodRecord(fov, trace, region, locus, Point3D(x, y, z))
-                    ).toEither
-                }).bimap(msgs => BadInputRecord(i, r.toList, msgs), _ -> i)
-            })
+            
+            def getParser[A](col: String, lift: String => Either[String, A]): ValidatedNel[String, Array[String] => ValidatedNel[String, A]] = 
+                getColParser(header)(col, lift)
+
+            /* Component parsers, one for each field of interest from a record. */
+            val maybeParseFOV = getParser(FieldOfViewColumn, safeParseInt >>> PositionIndex.fromInt)
+            val maybeParseTrace = getParser(TraceIdColumn, safeParseInt >>> TraceId.fromInt)
+            val maybeParseRegion = getParser(RegionalBarcodeTimepointColumn, safeParseInt >>> RegionId.fromInt)
+            val maybeParseLocus = getParser(LocusSpecificBarcodeTimepointColumn, safeParseInt >>> LocusId.fromInt)
+            val maybeParseX = getParser(XCoordinateColumn, safeParseDouble >> XCoordinate.apply)
+            val maybeParseY = getParser(YCoordinateColumn, safeParseDouble >> YCoordinate.apply)
+            val maybeParseZ = getParser(ZCoordinateColumn, safeParseDouble >> ZCoordinate.apply)
+
+            (maybeParseFOV, maybeParseTrace, maybeParseRegion, maybeParseLocus, maybeParseX, maybeParseY, maybeParseZ).mapN(
+                (parseFOV, parseTrace, parseRegion, parseLocus, parseX, parseY, parseZ) => 
+                    val validateRecordLength = (r: Array[String]) => 
+                        (r.size === header.length).either(NonEmptyList.one(s"Header has ${header.length} fields, but line has ${r.size}"), r)
+                    Alternative[List].separate(NonnegativeInt.indexed(records).map{ 
+                        (r, i) => validateRecordLength(r).flatMap(Function.const{
+                            (parseFOV(r), parseTrace(r), parseRegion(r), parseLocus(r), parseX(r), parseY(r), parseZ(r)).mapN(
+                                (fov, trace, region, locus, x, y, z) => GoodRecord(fov, trace, region, locus, Point3D(x, y, z))
+                            ).toEither
+                        }).bimap(msgs => BadInputRecord(i, r.toList, msgs), _ -> i)
+                    })
+            ).fold(missing => throw IllegalHeaderException(header.toList, missing.toNes), identity)
         }
 
         /** How records must be grouped for consideration of between which pairs to compute distance */
@@ -168,6 +174,10 @@ object ComputeLocusPairwiseDistances:
          */
         final case class GoodRecord(position: PositionIndex, trace: TraceId, region: RegionId, locus: LocusId, point: Point3D)
         
+        /** Exception for when necessary columns are missing from header. */
+        final case class IllegalHeaderException(header: List[String], missing: NonEmptySet[String]) extends Throwable:
+            override def toString = s"header = $header, missing = $missing"
+
         /**
          * Bundle of data representing a bad record (line) from input file
          * 
@@ -190,16 +200,12 @@ object ComputeLocusPairwiseDistances:
         /** Error type for when a file to use is unexpectedly empty. */
         final case class EmptyFileException(getFile: os.Path) extends Exception(s"File is empty: $getFile")
 
-        /** Exception for when parsed header does not match expected header. */
-        final case class UnexpectedHeaderException(observed: List[String])
-            extends Exception(f"Expected ${allColumns.mkString(", ")} as header but got ${observed.mkString(", ")}"):
-            require(observed =!= allColumns, "Alleged inequality between observed and expected header, but they're equivalent!")
-
-        private def getColParser[A](col: String, lift: String => Either[String, A]): Array[String] => ValidatedNel[String, A] =
-            allColumns.zipWithIndex
+        private def getColParser[A](header: Array[String])(col: String, lift: String => Either[String, A]): ValidatedNel[String, Array[String] => ValidatedNel[String, A]] =
+            header.zipWithIndex
                 .find(_._1 === col)
                 .map((_, i) => safeGetFromRow(i, lift)(_: Array[String]))
-                .getOrElse{ throw new Exception(s"Column not defined as part of header! $col") }
+                .toRight(col)
+                .toValidatedNel
     end Input
 
     /** Bundler of data which represents a single output record (pairwise distance) */

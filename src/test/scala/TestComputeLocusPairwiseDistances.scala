@@ -57,26 +57,8 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
             withTempDirectory{ (tempdir: os.Path) => 
                 val infile = tempdir / "input.csv"
                 os.write(infile, records.toList.map(recordToTextFields `andThen` rowToLine))
-                val expError = Input.UnexpectedHeaderException(recordToTextFields(records.head))
-                val obsError = intercept[Input.UnexpectedHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
-                obsError shouldEqual expError
-            }
-        }
-    }
-
-    test("Unexpected header error can't be created with the expected input header.") {
-        val error = intercept[IllegalArgumentException]{ Input.UnexpectedHeaderException(Input.allColumns) }
-        error.getMessage shouldEqual s"requirement failed: Alleged inequality between observed and expected header, but they're equivalent!"
-    }
-
-    test("Simply permuting the header fields fails the parse with the expected error.") {
-        def genBadHeader = Gen.oneOf(Input.allColumns.permutations.toSeq).suchThat(_ =!= Input.allColumns)
-        forAll (arbitrary[NonEmptyList[Input.GoodRecord]], genBadHeader) { (records, mutantHeader) =>
-            withTempDirectory{ (tempdir: os.Path) => 
-                val infile = tempdir / "input.csv"
-                val expError = Input.UnexpectedHeaderException(mutantHeader)
-                writeMinimalInputCsv(infile, mutantHeader :: records.toList.map(recordToTextFields))
-                val obsError = intercept[Input.UnexpectedHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
+                val expError = Input.IllegalHeaderException(recordToTextFields(records.head), Input.allColumns.toNel.get.toNes)
+                val obsError = intercept[Input.IllegalHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
                 obsError shouldEqual expError
             }
         }
@@ -86,31 +68,33 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
         type ExpectedHeader = List[String]
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         
-        given arbExpHeader: Arbitrary[ExpectedHeader] = {
-            def genDeletions: Gen[ExpectedHeader] = Gen.choose(1, Input.allColumns.length - 1)
+        def genExpHeadAndMiss: Gen[(ExpectedHeader, NonEmptySet[String])] = {
+            def genDeletions: Gen[(ExpectedHeader, NonEmptySet[String])] = Gen.choose(1, Input.allColumns.length - 1)
                 .flatMap(Gen.pick(_, (0 until Input.allColumns.length)))
-                .map{ indices => Input.allColumns.zipWithIndex.filterNot{ (_, i) => indices.toSet contains i }.map(_._1) }
-            def genSubstitutions: Gen[ExpectedHeader] = for {
+                .map{ indices => 
+                    val (expHead, expMiss) = Input.allColumns.zipWithIndex.partition((_, i) => !indices.contains(i))
+                    expHead.map(_._1) -> expMiss.map(_._1).toNel.get.toNes
+                }
+            def genSubstitutions: Gen[(ExpectedHeader, NonEmptySet[String])] = for {
                 indicesToChange <- Gen.atLeastOne((0 until Input.allColumns.length)).map(_.toSet) // Choose header fields to change.
-                expectedHeader <- Input.allColumns.zipWithIndex.traverse{ (col, idx) => 
+                expHead <- Input.allColumns.zipWithIndex.traverse{ (col, idx) => 
                     if indicesToChange contains idx 
                     then Gen.alphaNumStr.suchThat(_ =!= col) // Ensure the replacement differs from original.
                     else Gen.const(col) // Use the original value since this index isn't one at which to update.
                 }
-            } yield expectedHeader
-            
-            Gen.oneOf(genSubstitutions, genDeletions).toArbitrary
+            } yield (expHead, indicesToChange.toList.toNel.get.toNes.map(Input.allColumns.zipWithIndex.map(_.swap).toMap.apply))            
+            Gen.oneOf(genSubstitutions, genDeletions)
         }
         
-        forAll { (expectedHeader: ExpectedHeader, records: NonEmptyList[Input.GoodRecord]) =>
+        forAll (genExpHeadAndMiss, arbitrary[NonEmptyList[Input.GoodRecord]]) { case ((expectedHead, expectedMiss), records) =>
             withTempDirectory{ (tempdir: os.Path) => 
                 val infile = {
                     val f = tempdir / "input.csv"
-                    os.write(f, (expectedHeader :: records.toList.map(recordToTextFields)).map(rowToLine))
+                    os.write(f, (expectedHead :: records.toList.map(recordToTextFields)).map(rowToLine))
                     f
                 }
-                val obsError = intercept[Input.UnexpectedHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
-                val expError = Input.UnexpectedHeaderException(expectedHeader)
+                val obsError = intercept[Input.IllegalHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
+                val expError = Input.IllegalHeaderException(expectedHead, expectedMiss)
                 obsError shouldEqual expError
             }
         }
@@ -166,7 +150,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
         }
     }
 
-    test("Pandas format is NOT accepted and causes Input.UnexpectedHeaderException.") {
+    test("Pandas format IS accepted.") {
         val augmentedHeader = "" :: Input.allColumns
         forAll { (records: NonEmptyList[Input.GoodRecord]) => 
             withTempDirectory{ (tempdir: os.Path) => 
@@ -178,9 +162,9 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
                     f
                 }
                 os.isFile(infile) shouldBe true
-                val obsError = intercept[Input.UnexpectedHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
-                val expError = Input.UnexpectedHeaderException(augmentedHeader)
-                obsError shouldEqual expError
+                workflow(inputFile = infile, outputFolder = tempdir / "output") match
+                    case Left(errMsg) => fail(errMsg)
+                    case Right(_) => succeed
             }
         }
     }
