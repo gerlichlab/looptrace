@@ -15,7 +15,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
  * 
  * @author Vince Reuter
  */
-object ComputeLocusPairwiseDistances:
+object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram:
     /* Constants */
     private val ProgramName = "ComputeLocusPairwiseDistances"
     private val MaxBadRecordsToShow = 3
@@ -128,11 +128,7 @@ object ComputeLocusPairwiseDistances:
          *     the second element is a collection of pairs of successfully parsed record along with line number
          */
         def parseRecords(inputFile: os.Path): (List[BadInputRecord], List[(GoodRecord, NonnegativeInt)]) = {
-            val (header, records) = os.read.lines(inputFile)
-                .map(Delimiter.CommaSeparator.split)
-                .toList
-                .toNel
-                .fold(throw EmptyFileException(inputFile))(recs => recs.head -> recs.tail)
+            val (header, records) = preparse(inputFile)
             
             def getParser[A](col: String, lift: String => Either[String, A]): ValidatedNel[String, Array[String] => ValidatedNel[String, A]] = 
                 getColParser(header)(col, lift)
@@ -197,16 +193,6 @@ object ComputeLocusPairwiseDistances:
         /** Error for when at least one record fails to parse correctly. */
         final case class BadRecordsException(records: NonEmptyList[BadInputRecord]) 
             extends Exception(s"${records.length} bad input records; first $MaxBadRecordsToShow (max): ${records.take(MaxBadRecordsToShow)}")
-
-        /** Error type for when a file to use is unexpectedly empty. */
-        final case class EmptyFileException(getFile: os.Path) extends Exception(s"File is empty: $getFile")
-
-        private def getColParser[A](header: Array[String])(col: String, lift: String => Either[String, A]): ValidatedNel[String, Array[String] => ValidatedNel[String, A]] =
-            header.zipWithIndex
-                .find(_._1 === col)
-                .map((_, i) => safeGetFromRow(i, lift)(_: Array[String]))
-                .toRight(col)
-                .toValidatedNel
     end Input
 
     /** Bundler of data which represents a single output record (pairwise distance) */

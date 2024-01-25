@@ -30,7 +30,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
             touchFile(infile)
             os.isDir(outfolder) shouldBe true
             os.isFile(infile) shouldBe true
-            assertThrows[Input.EmptyFileException]{ workflow(inputFile = infile, outputFolder = outfolder) }
+            assertThrows[EmptyFileException]{ workflow(inputFile = infile, outputFolder = outfolder) }
         }
     }
 
