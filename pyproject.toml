@@ -38,7 +38,7 @@ numba = { version = "^0.57.0", optional = true }
 numcodecs = "^0.11.0"
 numpy = ">= 1.24.2, < 1.25"
 pandas = "^1.5.3"
-piper = { version = "0.12.3", optional = true }
+piper = { version = "0.14.0", optional = true }
 pyqt5 = { version = "5.15.7", optional = true }
 pyqt6 = { version = "^6.5.0", optional = true }
 pyside6 = { version = "^6.5.0", optional = true }

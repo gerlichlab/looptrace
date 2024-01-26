@@ -677,6 +677,24 @@ files = [
 ]
 
 [[package]]
+name = "eido"
+version = "0.2.2"
+description = "A project metadata validator"
+optional = true
+python-versions = "*"
+files = [
+    {file = "eido-0.2.2-py3-none-any.whl", hash = "sha256:01af095ec4c3ea081a917dbcd3be1308f0043e167a4b6dc15a75c99b85159293"},
+    {file = "eido-0.2.2.tar.gz", hash = "sha256:3966c8e91296189d5827d6415843eb300d204c9da9b8a780807ebc5403be2800"},
+]
+
+[package.dependencies]
+jsonschema = ">=3.0.1"
+logmuse = ">=0.2.5"
+pandas = "*"
+peppy = ">=0.35.7"
+ubiquerg = ">=0.5.2"
+
+[[package]]
 name = "entrypoints"
 version = "0.4"
 description = "Discover and load entry points from installed packages."
@@ -2504,6 +2522,24 @@ toolz = "*"
 complete = ["blosc", "numpy (>=1.9.0)", "pandas (>=0.19.0)", "pyzmq"]
 
 [[package]]
+name = "peppy"
+version = "0.40.1"
+description = "A python-based project metadata manager for portable encapsulated projects"
+optional = true
+python-versions = "*"
+files = [
+    {file = "peppy-0.40.1-py3-none-any.whl", hash = "sha256:33cfa369e26cb785d3a7e6d6a6036fe7d1d29b53073f2d497cd269c6fa7945fb"},
+    {file = "peppy-0.40.1.tar.gz", hash = "sha256:22ed51ae042ec2e1fbfa213205967133319fa498a7f09aa438eccfebfae5e78f"},
+]
+
+[package.dependencies]
+numpy = "*"
+pandas = ">=0.24.2"
+pyyaml = "*"
+rich = ">=10.3.0"
+ubiquerg = ">=0.6.2"
+
+[[package]]
 name = "pexpect"
 version = "4.8.0"
 description = "Pexpect allows easy control of interactive console applications."
@@ -2623,28 +2659,53 @@ xarray = ["xarray"]
 
 [[package]]
 name = "piper"
-version = "0.12.3"
+version = "0.14.0"
 description = "A lightweight python toolkit for gluing together restartable, robust command line pipelines"
 optional = true
 python-versions = "*"
 files = [
-    {file = "piper-0.12.3-py3-none-any.whl", hash = "sha256:b7da6286fc883d129bd3456179946bbe8f2f9455b81032ffcc97410b8f4dd572"},
-    {file = "piper-0.12.3.tar.gz", hash = "sha256:0ec7d4c4fd9cd1142e87193483c4f92022adbe2cd0f4678f2a1ea8227cdcd9fd"},
+    {file = "piper-0.14.0-py3-none-any.whl", hash = "sha256:874706b253f159b5546016c8b6a180118d4e64df53b7698a8f39c271d20f93cd"},
+    {file = "piper-0.14.0.tar.gz", hash = "sha256:2d2b226689f2e992da0735f25ea432f16f230bfaef51e732ef50b1b495ce153c"},
 ]
 
 [package.dependencies]
-attmap = ">=0.12.5"
 logmuse = ">=0.2.4"
 pandas = "*"
+pipestat = ">=0.6.0"
 psutil = "*"
 ubiquerg = ">=0.4.5"
 yacman = "*"
 
 [package.extras]
-all = ["matplotlib", "numpy", "pandas", "pysam", "scipy", "seaborn", "yacman"]
-dev = ["coveralls (>=1.1)", "hypothesis", "matplotlib", "mock (==2.0.0)", "numpy", "pandas", "pysam", "pytest (>=4.2.1)", "pytest-cov (==2.6.1)", "pytest-remotedata", "scipy", "seaborn", "veracitools", "yacman"]
-ngstk = ["numpy", "pandas", "pysam", "yacman"]
+all = ["matplotlib", "numpy", "pandas", "pipestat (>=0.1.0)", "pysam", "scipy", "seaborn", "yacman"]
+dev = ["coveralls", "hypothesis (==4.38.0)", "matplotlib", "mock (==2.0.0)", "numpy", "pandas", "pipestat (>=0.1.0)", "pysam", "pytest (>=4.6.9)", "pytest-cov (>=2.8.1)", "pytest-remotedata", "scipy", "seaborn", "veracitools", "yacman"]
+ngstk = ["numpy", "pandas", "pipestat (>=0.1.0)", "pysam", "yacman"]
 plot = ["matplotlib", "scipy", "seaborn"]
+
+[[package]]
+name = "pipestat"
+version = "0.8.0"
+description = "A pipeline results reporter"
+optional = true
+python-versions = "*"
+files = [
+    {file = "pipestat-0.8.0-py3-none-any.whl", hash = "sha256:7eefabdda82bbbfa1f5582848b0072683f1b0d165fbacce3dfff0ed1d61d3f59"},
+    {file = "pipestat-0.8.0.tar.gz", hash = "sha256:6a69b7f4de8d5f1987a1d1a9ebc4dda3e1006240a20b968bb24b8fa872603563"},
+]
+
+[package.dependencies]
+eido = "*"
+jinja2 = "*"
+jsonschema = "*"
+logmuse = ">=0.2.5"
+oyaml = "*"
+pandas = "*"
+ubiquerg = ">=0.6.1"
+yacman = ">=0.9.2"
+
+[package.extras]
+dbbackend = ["psycopg (>=3.1.13)", "pydantic (>=2.5.3,<3.0.0)", "sqlmodel (>=0.0.14)"]
+pipestatreader = ["fastapi", "uvicorn"]
 
 [[package]]
 name = "platformdirs"
@@ -4605,13 +4666,13 @@ files = [
 
 [[package]]
 name = "yacman"
-version = "0.9.1"
+version = "0.9.2"
 description = "A standardized configuration object for reference genome assemblies"
 optional = true
 python-versions = "*"
 files = [
-    {file = "yacman-0.9.1-py3-none-any.whl", hash = "sha256:f97872ff6c74705611893133af0a74e47d7e6780b1baa9d4638406d835276dcb"},
-    {file = "yacman-0.9.1.tar.gz", hash = "sha256:dabcd31fa293579973bed6e9e525427a0fba284e43920dfe567e90728f6635a2"},
+    {file = "yacman-0.9.2-py3-none-any.whl", hash = "sha256:5ba2b84cef318febb9a85711c37382c01b85848bc8f53643ac8a61de3a5dd942"},
+    {file = "yacman-0.9.2.tar.gz", hash = "sha256:a98fee7ebf936330a9c249190f1f36eff9444cc744822800fe15f077e46ca867"},
 ]
 
 [package.dependencies]
@@ -4670,4 +4731,4 @@ test = ["hypothesis", "joblib", "nd2", "piper", "pytest", "pytest-skip-slow"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "ae0fcb1b11a9a254e50167da6b1dbd67d6cfe66c6d8b4cd5736174056d442164"
+content-hash = "008c2e8a65ee57d3745584074cd1643fa97033e92733b67bbe836d4ea5b70e17"
