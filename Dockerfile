@@ -16,8 +16,6 @@ RUN apt-get update -y && \
     update-alternatives --config gcc && \
     apt-get install git wget libz-dev libbz2-dev liblzma-dev -y && \
     apt-get install cuda-compat-11-4 -y && \
-    apt-get install r-base -y && \
-    R -e "install.packages(c('argparse', 'data.table', 'ggplot2', 'stringi'), dependencies=TRUE, repos='http://cran.rstudio.com/')" && \
     apt-get install vim -y
 
 # Copy repo code, to be built later.
@@ -25,6 +23,13 @@ RUN mkdir /looptrace
 WORKDIR /looptrace
 COPY . /looptrace
 RUN mv /looptrace/target/scala-3.3.1/looptrace-assembly-0.2.0-SNAPSHOT.jar /looptrace/looptrace
+
+# Install new-ish R and necessary packages.
+RUN echo "Installing R..." && \
+    /bin/bash /looptrace/setup_image/allow_new_R.sh && \
+    apt-get install r-base -y && \
+    R -e "install.packages(c('argparse', 'data.table', 'ggplot2', 'stringi'), dependencies=TRUE, repos='http://cran.rstudio.com/')" && \
+    echo "Installed R!"
 
 # Install minimal Java 21 runtime, in updates repo for Ubuntu 20 (focal) as of 2024-01-19.
 RUN apt-get update -y && \
