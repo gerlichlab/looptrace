@@ -16,8 +16,16 @@ kSpotCountPrefix <- "spot_counts"
 #   spots_table: data table with regional spots data
 #   probe_names: ordered list of names to give the imaging timepoints
 addProbeNames <- function(spots_table, probe_names) {
-    if ("frame_name" %in% colnames(spots_table)) { stop("Table alread contains column for probe names!") }
-    spots_table$frame_name <- sapply(spots_table$frame, function(i) probe_names[i + 1])
+    if ("frame_name" %in% colnames(spots_table)) { stop("Table already contains column for probe names!") }
+    probe_index <- (spots_table$frame + 1)
+    if ( ! all(probe_index %in% (1:length(probe_names))) ) {
+        stop(sprintf(
+            "Can't index (1-based, inclusive) into vector of %s probe names with these values: %s", 
+            length(probe_names), 
+            paste0(Filter(function(i) !(i %in% (1:length(probe_names))) , unique(probe_index)), collapse = ", ")
+            ))
+    }
+    spots_table$frame_name <- sapply(probe_index, function(i) probe_names[i])
     spots_table
 }
 
