@@ -21,7 +21,7 @@ from run_bead_roi_generation import workflow as gen_all_bead_rois
 from analyse_detected_bead_rois import workflow as run_all_bead_roi_detection_analysis
 from decon import workflow as run_deconvolution
 #from nuc_label import workflow as run_nuclei_detection
-from looptrace.Drifter import Drifter, coarse_correction_workflow as run_coarse_drift_correction, fine_correction_workflow as run_fine_drift_correction
+from looptrace.Drifter import coarse_correction_workflow as run_coarse_drift_correction, fine_correction_workflow as run_fine_drift_correction
 from looptrace.ImageHandler import ImageHandler
 from drift_correct_accuracy_analysis import workflow as run_drift_correction_analysis, run_visualisation as run_drift_correction_accuracy_visualisation
 from detect_spots import workflow as run_spot_detection

@@ -181,6 +181,105 @@ class NucDetector:
             image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name='nuc_classes', axes=axes_for_zarr, dtype = np.uint16, chunk_split=(1,1))
 
         return self.nuc_masks_path
+    
+    def segment_nuclei_threshold(self):
+        for i, pos in tqdm.tqdm(enumerate(self.pos_list)):
+            img = np.array(self.image_handler.images['nuc_images'][i][0,0,::2,::2,::2])
+            img = ndi.gaussian_filter(img, 2)
+            mask = img > int(self.config['nuc_threshold'])
+            mask = ndi.binary_fill_holes(mask)
+            mask = remove_small_objects(mask, min_size=self.config['nuc_min_size']).astype(np.uint16)
+            mask = ndi.label(mask)[0]
+            mask = rescale(expand_labels(mask.astype(np.uint16),self.config['nuc_dilation']), scale = (2, 2, 2), order = 0)
+            image_io.single_position_to_zarr(mask, path = self.nuc_masks_path, name = 'nuc_mask', pos_name=pos, axes=('z','y','x'), dtype = np.uint16, chunk_split=(1,1))
+
+    def segment_nuclei_cellpose(self):
+        '''
+        Runs nucleus segmentation using nucleus segmentation algorithm defined in ip functions.
+        Dilates a bit and saves images.
+        '''
+
+        imgs_key = "nuc_images"
+        if imgs_key not in self.image_handler.images:
+            print(f"{imgs_key} doesn't yet exist; generating...")
+            self.gen_nuc_images()
+            print("Re-reading images...")
+            self.image_handler.read_images()
+        print("Segmenting nuclei...")
+
+        method = self.config.get("nuc_method", "nuclei")
+        try:
+            nuc_3d = self.config["nuc_3d"]
+            ds_xy = self.config["nuc_downscaling_xy"]
+            if nuc_3d:
+                anisotropy = self.config["nuc_anisotropy"]
+                ds_z = self.config["nuc_downscaling_z"]
+                nuc_min_size = self.config["nuc_min_size"] / (ds_z * ds_xy * ds_xy)
+            else:
+                nuc_min_size = self.config["nuc_min_size"] / (ds_xy *ds_xy)
+            mitosis_class = self.config['nuc_mitosis_class']
+        except KeyError:
+            nuc_3d = False
+            ds_xy = 4
+            nuc_min_size = 10
+            mitosis_class = False
+
+        diameter = self.config['nuc_diameter'] / ds_xy
+
+        print('Segmenting nuclei.')
+        nuc_imgs = []
+
+        #Remove unused dimensions and downscale input images.
+        for i, pos in tqdm.tqdm(enumerate(self.pos_list)):
+            img = self.image_handler.images["nuc_images"][i]
+            nuc_imgs.append(np.array(img[0, 0, ::ds_z, ::ds_xy, ::ds_xy] if nuc_3d else img[0, 0, 0, ::ds_xy, ::ds_xy]))
+
+        print(f'Running nuclear segmentation using CellPose {method} model and diameter {diameter}.')
+
+        if nuc_3d:
+            masks = ip.nuc_segmentation_cellpose_3d(nuc_imgs, diameter = diameter, model_type = method, anisotropy=anisotropy)
+        else:
+            masks = ip.nuc_segmentation_cellpose_2d(nuc_imgs, diameter = diameter, model_type = method)
+
+        #Remove under-segmented nuclei and clean up:
+        masks = [remove_small_objects(arr, min_size=nuc_min_size) for arr in masks]
+        masks = [relabel_sequential(arr)[0] for arr in masks]
+
+        if mitosis_class:
+            print(f'Detecting mitotic cells on top of CellPose nuclei.')
+            masks, mitotic_idx = zip(*[ip.mitotic_cell_extra_seg(np.array(nuc_imgs[i]), masks[i]) for i in range(len(nuc_imgs))])
+
+        if nuc_3d:
+            masks = [rescale(expand_labels(mask.astype(np.uint16),3), scale = (ds_z, ds_xy, ds_xy), order = 0) for mask in masks]
+        else:
+            masks = [rescale(expand_labels(mask.astype(np.uint16),3), scale = (ds_xy, ds_xy), order = 0) for mask in masks]
+        #masks = np.stack(masks)
+
+        print('Saving segmentations.')
+
+        self.image_handler.images['nuc_masks']= masks
+
+        if nuc_3d:
+            image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name='nuc_masks', axes=('p','z','y','x'), dtype = np.uint16, chunk_split=(1,1))
+        else:
+            image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name='nuc_masks', axes=('p','y','x'), dtype = np.uint16, chunk_split=(1,1))
+
+        if mitosis_class:
+            nuc_class = []
+            for i, mask in enumerate(masks):
+                class_1 = ((mask > 0) & (mask < mitotic_idx[i])).astype(int)
+                class_2 = (mask >= mitotic_idx[i]).astype(int)
+                nuc_class.append(class_1 + class_2*2)
+            #nuc_class = np.stack(nuc_class).astype(np.uint16)
+            print('Saving classifications.')
+
+            self.image_handler.images['nuc_classes'] = nuc_class
+            if nuc_3d:
+                image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name='nuc_classes', axes=('p','z', 'y','x'), dtype = np.uint16, chunk_split=(1,1))
+            else:
+                image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name='nuc_classes', axes=('p','y','x'), dtype = np.uint16, chunk_split=(1,1))
+
+
             
     def update_masks_after_qc(self, new_mask, original_mask, mask_name, position):
 
