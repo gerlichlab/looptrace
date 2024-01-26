@@ -20,7 +20,7 @@ from extract_exp_psf import workflow as run_psf_extraction
 from run_bead_roi_generation import workflow as gen_all_bead_rois
 from analyse_detected_bead_rois import workflow as run_all_bead_roi_detection_analysis
 from decon import workflow as run_deconvolution
-#from nuc_label import workflow as run_nuclei_detection
+from nuc_label import workflow as run_nuclei_detection
 from looptrace.Drifter import coarse_correction_workflow as run_coarse_drift_correction, fine_correction_workflow as run_fine_drift_correction
 from looptrace.ImageHandler import ImageHandler
 from drift_correct_accuracy_analysis import workflow as run_drift_correction_analysis, run_visualisation as run_drift_correction_accuracy_visualisation
@@ -261,6 +261,7 @@ class LooptracePipeline(pypiper.Pipeline):
         return [
             ("pipeline_precheck", pretest, take1),
             ("zarr_production", run_zarr_production, take2),
+            ("nuclei_detection", run_nuclei_detection, take2),
             ("psf_extraction", run_psf_extraction, take2),
             (DECON_STAGE_NAME, run_deconvolution, take2), # Really just for denoising, no need for structural disambiguation
             ("drift_correction__coarse", run_coarse_drift_correction, take2), 

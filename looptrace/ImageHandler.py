@@ -150,6 +150,10 @@ class ImageHandler:
         return self.config[MINIMUM_SPOT_SEPARATION_KEY]
 
     @property
+    def nuclei_channel(self) -> int:
+        return self.config["nuc_channel"]
+
+    @property
     def nuclei_labeled_spots_file_path(self) -> Path:
         return self.proximity_filtered_spots_file_path.with_suffix(".nuclei_labeled.csv")
 
