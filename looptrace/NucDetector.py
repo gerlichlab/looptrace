@@ -99,6 +99,14 @@ class NucDetector:
     def nuc_masks_path(self) -> Path:
         return self._get_img_save_path(self.MASKS_KEY)
     
+    @property
+    def reference_frame(self) -> int:
+        return self.config["nuc_ref_frame"]
+
+    @property
+    def get_relevant_subimage(self, img: Union[np.ndarray, da.array]) -> np.ndarray:
+        return img[self.reference_frame, self.channel]
+
     def _get_img_save_path(self, name: str) -> Path:
         return Path(self.image_handler.image_save_path) / name
 
@@ -107,23 +115,21 @@ class NucDetector:
         Saves 2D/3D (defined in config) images of the nuclear channel into image folder for later analysis.
         '''
         nuc_slice = self.config.get("nuc_slice", -1)
-        
-        print('Generating nuclei images.')
-        imgs = []
-        for pos in tqdm.tqdm(self.pos_list):
-            pos_index = self.pos_list.index(pos)
-
+        print("Generating nuclei images...")
+        for i, pos in tqdm.tqdm(enumerate(self.pos_list)):
             if self.do_in_3d:
-                img = self.images[pos_index][self.config["nuc_ref_frame"], self.config['nuc_channel']].compute()
-            elif nuc_slice == -1:
-                img = da.max(self.images[pos_index][self.config["nuc_ref_frame"], self.config['nuc_channel']], axis=0).compute()
+                prep = lambda img: img
+                axes = ("z", "y", "x")
             else:
-                img = self.images[pos_index][self.config["nuc_ref_frame"], self.config['nuc_channel'], self.config["nuc_slice"]].compute()
-            imgs.append(img.astype(np.uint16))
-
-        image_io.images_to_ome_zarr(images=imgs, path=self.nuc_images_path, name=self.IMAGES_KEY, axes=self.ome_zarr_axes, chunk_split=(1, 1), dtype=np.uint16)
-        del imgs #Cleanup RAM
-
+                axes = ("y", "x")
+                if nuc_slice == -1:
+                    # TODO: encode the meaning of this sentinel better, and document it (i.e., -1 appears to be max-projection).
+                    prep = lambda img: da.max(img, axis=0)
+                else:
+                    prep = lambda img: img[nuc_slice]
+            subimg = prep(self.get_relevant_subimage(self.images[i])).compute()
+            image_io.single_position_to_zarr(subimg, path=self.nuc_images_path, name=self.IMAGES_KEY, pos_name=pos, axes=axes, dtype=np.uint16, chunk_split=(1,1))
+    
     def segment_nuclei(self) -> Path:
         '''
         Runs nucleus segmentation using nucleus segmentation algorithm defined in ip functions.
@@ -194,7 +200,7 @@ class NucDetector:
 
         print("Saving segmentations...")
         self.image_handler.images[self.MASKS_KEY] = masks
-        image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name=self.MASKS_KEY, axes=self.ome_zarr_axes, dtype = np.uint16, chunk_split=(1, 1))
+        image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name=self.MASKS_KEY, axes=self.ome_zarr_axes, dtype=np.uint16, chunk_split=(1, 1))
         
         if self.classify_mitotic:
             nuc_class = []
@@ -205,7 +211,7 @@ class NucDetector:
             #nuc_class = np.stack(nuc_class).astype(np.uint16)
             print("Saving classifications...")
             self.image_handler.images[self.CLASSES_KEY] = nuc_class
-            image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name=self.CLASSES_KEY, axes=self.ome_zarr_axes, dtype = np.uint16, chunk_split=(1, 1))
+            image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name=self.CLASSES_KEY, axes=self.ome_zarr_axes, dtype=np.uint16, chunk_split=(1, 1))
 
         return self.nuc_masks_path
             
@@ -216,7 +222,7 @@ class NucDetector:
             nuc_mask = ip.relabel_nucs(new_mask)
             pos_index = self.image_handler.image_lists[mask_name].index(position)
             self.image_handler.images[mask_name] = nuc_mask.astype(np.uint16)
-            image_io.single_position_to_zarr(images=self.image_handler.images[mask_name][pos_index], path=self.nuc_masks_path+position, name=mask_name, axes=('z','y','x') if self.do_in_3d else ('y','x'), dtype=np.uint16, chunk_split=(1,1))
+            image_io.single_position_to_zarr(images=self.image_handler.images[mask_name][pos_index], path = self.nuc_masks_path / position, name=mask_name, axes=('z','y','x') if self.do_in_3d else ('y','x'), dtype=np.uint16, chunk_split=(1,1))
         else:
             print("Nothing to update, as all values are approximately equal")
 
@@ -225,8 +231,6 @@ class NucDetector:
         # Use if images are not drift corrected, but a drift correction needs to have been calculated using Drifter.
         nuc_rois = []
         nuc_masks = self.image_handler.images[self.MASKS_KEY]
-        #ch = self.config['trace_ch']
-        #ref_frame = self.config["nuc_ref_frame"]
 
         if self.CLASSES_KEY in self.image_handler.images:
             print('Adding classes.')
@@ -306,8 +310,6 @@ class NucDetector:
     def gen_nuc_rois_prereg(self):
         nuc_rois = []
         nuc_masks = self.image_handler.images[self.MASKS_KEY]
-        #ch = self.config['trace_ch']
-        #ref_frame = self.config["nuc_ref_frame"]
         
         for i in tqdm.tqdm(range(len(nuc_masks))):
 
@@ -383,12 +385,14 @@ class NucDetector:
                 except KeyError:
                     break
 
-                image_io.single_position_to_zarr(images=nuc_pos_images, 
-                            path=self.image_handler.image_save_path+os.sep+self.config['nuc_extract_target']+'_single_nucs', 
-                            name='single_nucs',
-                            pos_name = nuc_position, 
-                            axes=('t','c','z','y','x'), 
-                            chunk_axes = ('t','z','y','x'),
-                            dtype = np.uint16, 
-                            chunk_split=(1,1,1,1))
-        print('ROI images generated, please reinitialize to load them.')
+                image_io.single_position_to_zarr(
+                    images=nuc_pos_images, 
+                    path=os.path.join(self.image_handler.image_save_path, self.config["nuc_extract_target"] + "_single_nucs"), 
+                    name='single_nucs',
+                    pos_name = nuc_position, 
+                    axes=('t','c','z','y','x'), 
+                    chunk_axes = ('t','z','y','x'),
+                    dtype = np.uint16, 
+                    chunk_split=(1,1,1,1),
+                    )
+        print("ROI images generated; please reinitialize to load them.")
