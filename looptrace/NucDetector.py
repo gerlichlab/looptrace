@@ -34,6 +34,10 @@ class NucDetector:
         self.images = self.image_handler.images[self.input_name]
         self.pos_list = self.image_handler.image_lists[self.input_name]
 
+    CLASSES_KEY = "nuc_classes"
+    IMAGES_KEY = "nuc_images"
+    MASKS_KEY = "nuc_masks"
+
     @property
     def channel(self) -> int:
         return self.image_handler.nuclei_channel
@@ -60,6 +64,16 @@ class NucDetector:
             return self.config["nuc_downscaling_z"]
         raise NotImplementedError("3D nuclei detection is off, so downscaling in z (ds_z) is undefined!")
 
+    def iter_pos_img_pairs(self) -> Iterable[Tuple[str, np.ndarray]]:
+        for i, pos in enumerate(self.pos_list):
+            yield pos, self.image_handler.images[self.IMAGES_KEY][i]
+
+    def iter_images(self) -> Iterable[np.ndarray]:
+        return (img for _, img in self.iter_images())
+
+    def segmentation_method(self) -> str:
+        return self.config["nuc_method"]
+
     @property
     def min_size(self) -> int:
         return self.config["nuc_min_size"]
@@ -75,15 +89,15 @@ class NucDetector:
 
     @property
     def nuc_classes_path(self) -> Path:
-        return self._get_img_save_path("nuc_classes")
+        return self._get_img_save_path(self.CLASSES_KEY)
     
     @property
     def nuc_images_path(self) -> Path:
-        return self._get_img_save_path("nuc_images")
+        return self._get_img_save_path(self.IMAGES_KEY)
     
     @property
     def nuc_masks_path(self) -> Path:
-        return self._get_img_save_path("nuc_masks")
+        return self._get_img_save_path(self.MASKS_KEY)
     
     def _get_img_save_path(self, name: str) -> Path:
         return Path(self.image_handler.image_save_path) / name
@@ -107,7 +121,7 @@ class NucDetector:
                 img = self.images[pos_index][self.config["nuc_ref_frame"], self.config['nuc_channel'], self.config["nuc_slice"]].compute()
             imgs.append(img.astype(np.uint16))
 
-        image_io.images_to_ome_zarr(images=imgs, path=self.nuc_images_path, name="nuc_images", axes=self.ome_zarr_axes, chunk_split=(1, 1), dtype=np.uint16)
+        image_io.images_to_ome_zarr(images=imgs, path=self.nuc_images_path, name=self.IMAGES_KEY, axes=self.ome_zarr_axes, chunk_split=(1, 1), dtype=np.uint16)
         del imgs #Cleanup RAM
 
     def segment_nuclei(self) -> Path:
@@ -115,100 +129,23 @@ class NucDetector:
         Runs nucleus segmentation using nucleus segmentation algorithm defined in ip functions.
         Dilates a bit and saves images.
         '''
-        
-        imgs_key = "nuc_images"
-        if imgs_key not in self.image_handler.images:
-            print(f"{imgs_key} doesn't yet exist; generating...")
-            self.gen_nuc_images()
-            print(f"Re-reading images...")
-            self.image_handler.read_images()
-        
-        method = self.config.get('nuc_method', 'nuclei')
-        
-        try:
-            ds_xy = self.ds_xy
-            if self.do_in_3d:
-                anisotropy = self.config['nuc_anisotropy']
-                ds_z = self.config['nuc_downscaling_z']
-                nuc_min_size = self.min_size / (ds_z * ds_xy * ds_xy)
-            else:
-                nuc_min_size = self.min_size / (ds_xy * ds_xy)
-            mitosis_class = self.config['nuc_mitosis_class']
-        except KeyError:
-            nuc_3d = False
-            ds_xy = 4
-            nuc_min_size = 10
-            mitosis_class = False
-        
-        print(f"Nuclei segmentation parameters: {[("nuc_3d", nuc_3d), ("ds_xy", ds_xy), ("min_size (effective)", nuc_min_size), ("mitosis_class", mitosis_class)]}")
-
-        diameter = self.config["nuc_diameter"] / ds_xy
-        
-        nuc_imgs_in = self.image_handler.images[imgs_key]
-
-        nuc_imgs = []
-
-        #Remove unused dimensions and downscale input images.
-        for img in nuc_imgs_in:        
-            new_slice = tuple([0 if i == 1 else slice(None) for i in img.shape])
-            img = img[new_slice]
-            img = np.array(img[::ds_z, ::ds_xy, ::ds_xy]) if nuc_3d else np.array(img[::ds_xy,::ds_xy]) 
-            nuc_imgs.append(img)
-        
-        print(f'Running nuclear segmentation using CellPose {method} model and diameter {diameter}.')
-
-        if nuc_3d:
-            print("Using all 3 dimensions for nuclei detection")
-            masks = ip.nuc_segmentation_cellpose_3d(nuc_imgs, diameter = diameter, model_type = method, anisotropy=anisotropy)
-            scaling = (ds_z, ds_xy, ds_xy)
-            axes_for_zarr = ('p', 'z', 'y', 'x')
+        if self.segmentation_method == "threshold":
+            return self.segment_nuclei_threshold()
         else:
-            print("Using just 2 dimensions for nuclei detection")
-            masks = ip.nuc_segmentation_cellpose_2d(nuc_imgs, diameter = diameter, model_type = method)
-            scaling = (ds_xy, ds_xy)
-            axes_for_zarr = ('p', 'y', 'x')
-
-        #Remove under-segmented nuclei and clean up:
-        masks = [remove_small_objects(arr, min_size=nuc_min_size) for arr in masks]
-        masks = [relabel_sequential(arr)[0] for arr in masks]
-
-        if mitosis_class:
-            print(f'Detecting mitotic cells on top of CellPose nuclei.')
-            masks, mitotic_idx = zip(*[ip.mitotic_cell_extra_seg(np.array(nuc_imgs[i]), masks[i]) for i in range(len(nuc_imgs))])
-
-        masks = [rescale(expand_labels(mask.astype(np.uint16), 3), scale=scaling, order=0) for mask in masks]
-        #masks = np.stack(masks)
-
-        print('Saving segmentations.')
-
-        self.image_handler.images["nuc_masks"] = masks
-
-        image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name="nuc_masks", axes=axes_for_zarr, dtype = np.uint16, chunk_split=(1,1))
-        
-        if mitosis_class:
-            nuc_class = []
-            for i, mask in enumerate(masks):
-                class_1 = ((mask > 0) & (mask < mitotic_idx[i])).astype(int)
-                class_2 = (mask >= mitotic_idx[i]).astype(int)
-                nuc_class.append(class_1 + class_2*2)
-            #nuc_class = np.stack(nuc_class).astype(np.uint16)
-            print('Saving classifications.')
-
-            self.image_handler.images["nuc_classes"] = nuc_class
-            image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name="nuc_classes", axes=axes_for_zarr, dtype = np.uint16, chunk_split=(1,1))
-
-        return self.nuc_masks_path
+            return self.segment_nuclei_cellpose()
     
     def segment_nuclei_threshold(self) -> Path:
-        for i, pos in tqdm.tqdm(enumerate(self.pos_list)):
-            img = np.array(self.image_handler.images['nuc_images'][i][0, 0, ::2, ::2, ::2])
+        for pos, img in self.iter_pos_img_pairs():
+            # TODO: need to handle whether nuclei images can have more than 1 timepoint (nontrivial time dimension).
+            # See: https://github.com/gerlichlab/looptrace/issues/243
+            img = img[0, self.channel, ::self.ds_z, ::self.ds_xy, ::self.ds_xy]
             img = ndi.gaussian_filter(img, 2)
-            mask = img > int(self.config['nuc_threshold'])
+            mask = img > int(self.config["nuc_threshold"])
             mask = ndi.binary_fill_holes(mask)
             mask = remove_small_objects(mask, min_size=self.min_size).astype(np.uint16)
             mask = ndi.label(mask)[0]
-            mask = rescale(expand_labels(mask.astype(np.uint16),self.config['nuc_dilation']), scale = (2, 2, 2), order = 0)
-            image_io.single_position_to_zarr(mask, path = self.nuc_masks_path, name = 'nuc_mask', pos_name=pos, axes=('z','y','x'), dtype = np.uint16, chunk_split=(1,1))
+            mask = rescale(expand_labels(mask.astype(np.uint16),self.config["nuc_dilation"]), scale = (self.ds_z, self.ds_xy, self.ds_xy), order=0)
+            image_io.single_position_to_zarr(mask, path=self.nuc_masks_path, name=self.MASKS_KEY, pos_name=pos, axes=('z','y','x'), dtype = np.uint16, chunk_split=(1,1))
 
     def segment_nuclei_cellpose(self) -> Path:
         '''
@@ -216,51 +153,48 @@ class NucDetector:
         Dilates a bit and saves images.
         '''
 
-        imgs_key = "nuc_images"
-        if imgs_key not in self.image_handler.images:
-            print(f"{imgs_key} doesn't yet exist; generating...")
+        if self.IMAGES_KEY not in self.image_handler.images:
+            print(f"{self.IMAGES_KEY} doesn't yet exist as key for subset of images; generating...")
             self.gen_nuc_images()
             print("Re-reading images...")
             self.image_handler.read_images()
         print("Segmenting nuclei...")
-
-        method = self.config.get("nuc_method", "nuclei")
         
         diameter = self.config["nuc_diameter"] / self.ds_xy
         if self.do_in_3d:
-            total_downscaling = (self.ds_z * self.ds_xy * self.ds_xy)
-            downsample = lambda img_zyx: img_zyx[::self.ds_z, ::self.ds_xy, ::self.ds_xy]
+            scale_for_rescaling = (self.ds_z, self.ds_xy, self.ds_xy)
+            scale_down_img = lambda img_zyx: img_zyx[::self.ds_z, ::self.ds_xy, ::self.ds_xy]
             extra_kwargs = {"anisotropy": self.config["nuc_anisotropy"]}
         else:
-            total_downscaling = (self.ds_xy * self.ds_xy)
-            downsample = lambda img_zyx: img_zyx[0, ::self.ds_xy, ::self.ds_xy]
+            scale_for_rescaling = (self.ds_xy, self.ds_xy)
+            scale_down_img = lambda img_zyx: img_zyx[0, ::self.ds_xy, ::self.ds_xy]
             extra_kwargs = {}
         
-        nuc_min_size = self.min_size / total_downscaling
-        get_zyx_stack = lambda img: img[0, self.channel]
+        nuc_min_size = self.min_size / np.prod(scale_for_rescaling)
+        method = self.config.get("nuc_method", "nuclei")
         get_masks = lambda imgs: ip.nuc_segmentation_cellpose_3d(imgs, diameter=diameter, model_type=method, **extra_kwargs)
-
-        nuc_imgs = []
-        for i, pos in tqdm.tqdm(enumerate(self.pos_list)):
-            img = self.image_handler.images["nuc_images"][i]
-            nuc_imgs.append(np.array(downsample(get_zyx_stack(img))))
+        # TODO: need to handle whether nuclei images can have more than 1 timepoint (nontrivial time dimension).
+        # See: https://github.com/gerlichlab/looptrace/issues/243
+        get_zyx_stack_downscaled = lambda img: scale_down_img(img[0, self.channel])
+        
+        print("Extracting nuclei images...")
+        nuc_imgs = [np.array(get_zyx_stack_downscaled(img)) for img in tqdm.tqdm(self.iter_images())]
 
         print(f"Running nuclear segmentation using CellPose {method} model and diameter {diameter}.")
-        masks = get_masks(nuc_imgs)
-        # Remove under-segmented nuclei and clean up.
-        masks = [remove_small_objects(arr, min_size=nuc_min_size) for arr in masks]
+        # Remove under-segmented nuclei and clean up after getting initial masks.
+        masks = [remove_small_objects(arr, min_size=nuc_min_size) for arr in get_masks(nuc_imgs)]
         masks = [relabel_sequential(arr)[0] for arr in masks]
 
         if self.classify_mitotic:
             print(f"Detecting mitotic cells on top of CellPose nuclei...")
-            masks, mitotic_idx = zip(*[ip.mitotic_cell_extra_seg(np.array(nuc_imgs[i]), masks[i]) for i in range(len(nuc_imgs))])
+            masks, mitotic_idx = zip(*[ip.mitotic_cell_extra_seg(np.array(img), mask) for img, mask in zip(nuc_imgs, masks)])
 
-        masks = [rescale(expand_labels(mask.astype(np.uint16), 3), scale=(self.ds_z, self.ds_xy, self.ds_xy) if self.do_in_3d else (self.ds_xy, self.ds_xy), order=0) for mask in masks]
+        masks = [rescale(expand_labels(mask.astype(np.uint16), 3), scale=scale_for_rescaling, order=0) for mask in masks]
         #masks = np.stack(masks)
 
         print("Saving segmentations...")
-        self.image_handler.images["nuc_masks"]= masks
-        image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name="nuc_masks", axes=self.ome_zarr_axes, dtype = np.uint16, chunk_split=(1, 1))
+        self.image_handler.images[self.MASKS_KEY] = masks
+        image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name=self.MASKS_KEY, axes=self.ome_zarr_axes, dtype = np.uint16, chunk_split=(1, 1))
         
         if self.classify_mitotic:
             nuc_class = []
@@ -270,37 +204,33 @@ class NucDetector:
                 nuc_class.append(class_1 + 2*class_2)
             #nuc_class = np.stack(nuc_class).astype(np.uint16)
             print("Saving classifications...")
-            self.image_handler.images["nuc_classes"] = nuc_class
-            image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name="nuc_classes", axes=self.ome_zarr_axes, dtype = np.uint16, chunk_split=(1, 1))
+            self.image_handler.images[self.CLASSES_KEY] = nuc_class
+            image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name=self.CLASSES_KEY, axes=self.ome_zarr_axes, dtype = np.uint16, chunk_split=(1, 1))
 
         return self.nuc_masks_path
             
     def update_masks_after_qc(self, new_mask, original_mask, mask_name, position):
-        try:
-            nuc_3d = self.config["nuc_3d"]
-        except KeyError:
-            nuc_3d = False
-        s = tuple([slice(None, None, 4) for i in range(new_mask.ndim)])
+        s = tuple([slice(None, None, 4)] * len(new_mask.ndim))
         if not np.allclose(new_mask[s], original_mask[s]):
-            print('Segmentation labels changed, resaving.')
+            print("Segmentation labels have changed; resaving...")
             nuc_mask = ip.relabel_nucs(new_mask)
             pos_index = self.image_handler.image_lists[mask_name].index(position)
             self.image_handler.images[mask_name] = nuc_mask.astype(np.uint16)
-            if nuc_3d:
-                image_io.single_position_to_zarr(images = self.image_handler.images[mask_name][pos_index], path=self.nuc_masks_path+position, name = mask_name, axes=('z','y','x'), dtype=np.uint16, chunk_split=(1,1))
-            else:
-                image_io.single_position_to_zarr(images = self.image_handler.images[mask_name][pos_index], path=self.nuc_masks_path+position, name = mask_name, axes=('y','x'), dtype=np.uint16, chunk_split=(1,1))
+            image_io.single_position_to_zarr(images=self.image_handler.images[mask_name][pos_index], path=self.nuc_masks_path+position, name=mask_name, axes=('z','y','x') if self.do_in_3d else ('y','x'), dtype=np.uint16, chunk_split=(1,1))
+        else:
+            print("Nothing to update, as all values are approximately equal")
 
 
     def gen_nuc_rois(self):
+        # Use if images are not drift corrected, but a drift correction needs to have been calculated using Drifter.
         nuc_rois = []
-        nuc_masks = self.image_handler.images["nuc_masks"]
+        nuc_masks = self.image_handler.images[self.MASKS_KEY]
         #ch = self.config['trace_ch']
         #ref_frame = self.config["nuc_ref_frame"]
 
-        if "nuc_classes" in self.image_handler.images:
+        if self.CLASSES_KEY in self.image_handler.images:
             print('Adding classes.')
-            nuc_classes = self.image_handler.images["nuc_classes"]
+            nuc_classes = self.image_handler.images[self.CLASSES_KEY]
         else:
             nuc_classes = [None]*len(nuc_masks)
         
@@ -375,7 +305,7 @@ class NucDetector:
 
     def gen_nuc_rois_prereg(self):
         nuc_rois = []
-        nuc_masks = self.image_handler.images["nuc_masks"]
+        nuc_masks = self.image_handler.images[self.MASKS_KEY]
         #ch = self.config['trace_ch']
         #ref_frame = self.config["nuc_ref_frame"]
         
@@ -395,8 +325,8 @@ class NucDetector:
                                                                 'bbox-4':'y_max', 
                                                                 'bbox-5':'x_max'})
 
-            nuc_props['orig_position'] = self.image_handler.image_lists["nuc_masks"][i]
-            nuc_props['position'] = self.image_handler.image_lists["nuc_masks"][i]+'_'+'P'+nuc_props['label'].apply(str).str.zfill(3)
+            nuc_props['orig_position'] = self.image_handler.image_lists[self.MASKS_KEY][i]
+            nuc_props['position'] = self.image_handler.image_lists[self.MASKS_KEY][i]+'_'+'P'+nuc_props['label'].apply(str).str.zfill(3)
             nuc_rois.append(nuc_props)
 
         self.nuc_rois = pd.concat(nuc_rois).reset_index(drop=True)
