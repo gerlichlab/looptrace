@@ -273,6 +273,7 @@ def images_to_ome_zarr(images: np.ndarray or list,
     '''
     Saves an array to ome-zarr format (metadata still needs work to match spec)
     '''
+    # TODO: type/shape/structure of images should correspond to conditional here, about axes.
 
     if not os.path.isdir(path):
         os.makedirs(path)
@@ -282,6 +283,7 @@ def images_to_ome_zarr(images: np.ndarray or list,
             pos_name = get_position_name_1(i)
             single_position_to_zarr(pos_img, path, name, pos_name, dtype, axes[1:], chunk_axes, chunk_split, metadata)
     else:
+        # TODO: fix the fact that here pos_name is undefined.
         single_position_to_zarr(images, path, name, pos_name, dtype, axes, chunk_axes, chunk_split, metadata)
 
 
