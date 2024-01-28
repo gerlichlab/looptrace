@@ -69,7 +69,7 @@ class NucDetector:
             yield pos, self.image_handler.images[self.IMAGES_KEY][i]
 
     def iter_images(self) -> Iterable[np.ndarray]:
-        return (img for _, img in self.iter_images())
+        return (img for _, img in self.iter_pos_img_pairs())
 
     def segmentation_method(self) -> str:
         return self.config["nuc_method"]
@@ -77,11 +77,6 @@ class NucDetector:
     @property
     def min_size(self) -> int:
         return self.config["nuc_min_size"]
-
-    @property
-    def ome_zarr_axes(self) -> Union[Tuple[str, str, str], Tuple[str, str, str, str]]:
-        base = ("z", "y", "x")
-        return ("p", ) + base if self.do_in_3d else base
 
     @property
     def input_name(self) -> str:
@@ -103,7 +98,6 @@ class NucDetector:
     def reference_frame(self) -> int:
         return self.config["nuc_ref_frame"]
 
-    @property
     def get_relevant_subimage(self, img: Union[np.ndarray, da.array]) -> np.ndarray:
         return img[self.reference_frame, self.channel]
 
@@ -142,6 +136,7 @@ class NucDetector:
     
     def segment_nuclei_threshold(self) -> Path:
         for pos, img in self.iter_pos_img_pairs():
+            # TODO: need to make this accord with the structure of saved images in segment_nuclei_cellpose.
             # TODO: need to handle whether nuclei images can have more than 1 timepoint (nontrivial time dimension).
             # See: https://github.com/gerlichlab/looptrace/issues/243
             img = img[0, self.channel, ::self.ds_z, ::self.ds_xy, ::self.ds_xy]
@@ -164,27 +159,28 @@ class NucDetector:
             self.gen_nuc_images()
             print("Re-reading images...")
             self.image_handler.read_images()
-        print("Segmenting nuclei...")
-        
+                
+        method = self.config.get("nuc_method", "nuclei")
         diameter = self.config["nuc_diameter"] / self.ds_xy
         if self.do_in_3d:
             scale_for_rescaling = (self.ds_z, self.ds_xy, self.ds_xy)
-            scale_down_img = lambda img_zyx: img_zyx[::self.ds_z, ::self.ds_xy, ::self.ds_xy]
-            extra_kwargs = {"anisotropy": self.config["nuc_anisotropy"]}
+            def scale_down_img(img_zyx: np.ndarray) -> np.ndarray:
+                assert len(img_zyx.shape) == 3, f"Bad shape for alleged 3D image: {img_zyx.shape}"
+                return img_zyx[::self.ds_z, ::self.ds_xy, ::self.ds_xy]
+            get_masks = lambda imgs: ip.nuc_segmentation_cellpose_3d(imgs, diameter=diameter, model_type=method, anisotropy=self.config["nuc_anisotropy"])
+            ome_zarr_axes = ("p", "z", "y", "x")
         else:
             scale_for_rescaling = (self.ds_xy, self.ds_xy)
-            scale_down_img = lambda img_zyx: img_zyx[0, ::self.ds_xy, ::self.ds_xy]
-            extra_kwargs = {}
+            def scale_down_img(img_zyx: np.ndarray) -> np.ndarray:
+                assert len(img_zyx.shape) == 2, f"Bad shape for alleged 3D image: {img_zyx.shape}"
+                return img_zyx[::self.ds_xy, ::self.ds_xy]
+            get_masks = lambda imgs: ip.nuc_segmentation_cellpose_2d(imgs, diameter=diameter, model_type=method)
+            ome_zarr_axes = ("p", "y", "x")
         
         nuc_min_size = self.min_size / np.prod(scale_for_rescaling)
-        method = self.config.get("nuc_method", "nuclei")
-        get_masks = lambda imgs: ip.nuc_segmentation_cellpose_3d(imgs, diameter=diameter, model_type=method, **extra_kwargs)
-        # TODO: need to handle whether nuclei images can have more than 1 timepoint (nontrivial time dimension).
-        # See: https://github.com/gerlichlab/looptrace/issues/243
-        get_zyx_stack_downscaled = lambda img: scale_down_img(img[0, self.channel])
         
         print("Extracting nuclei images...")
-        nuc_imgs = [np.array(get_zyx_stack_downscaled(img)) for img in tqdm.tqdm(self.iter_images())]
+        nuc_imgs = [np.array(scale_down_img(img)) for img in tqdm.tqdm(self.iter_images())]
 
         print(f"Running nuclear segmentation using CellPose {method} model and diameter {diameter}.")
         # Remove under-segmented nuclei and clean up after getting initial masks.
@@ -200,7 +196,7 @@ class NucDetector:
 
         print("Saving segmentations...")
         self.image_handler.images[self.MASKS_KEY] = masks
-        image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name=self.MASKS_KEY, axes=self.ome_zarr_axes, dtype=np.uint16, chunk_split=(1, 1))
+        image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name=self.MASKS_KEY, axes=ome_zarr_axes, dtype=np.uint16, chunk_split=(1, 1))
         
         if self.classify_mitotic:
             nuc_class = []
@@ -211,7 +207,7 @@ class NucDetector:
             #nuc_class = np.stack(nuc_class).astype(np.uint16)
             print("Saving classifications...")
             self.image_handler.images[self.CLASSES_KEY] = nuc_class
-            image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name=self.CLASSES_KEY, axes=self.ome_zarr_axes, dtype=np.uint16, chunk_split=(1, 1))
+            image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name=self.CLASSES_KEY, axes=ome_zarr_axes, dtype=np.uint16, chunk_split=(1, 1))
 
         return self.nuc_masks_path
             
