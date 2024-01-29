@@ -230,10 +230,16 @@ def single_position_to_zarr(images: np.ndarray or list,
     # This is relevance, e.g., for NucDetector.gen_nuc_images.
     # Namely, different readers may not like the fact that the shape and chunks don't match underlying data.
     # This can happen when one or more dimensions collapses down flat, to a trivial single dimension.
-    # See: 
+    # See: https://github.com/gerlichlab/looptrace/issues/245
     default_axes = ('t','c','z','y','x')
+    try:
+        print(f"Building metdata for image with shape {images.shape}")
+    except AttributeError:
+        pass
     for ax in default_axes:
         if ax in axes:
+            # TODO: fix the signature or implementation of this, as well as call sites, since 
+            #       if images argument is a list, it won't have a .shape attribute to access.
             size[ax] = images.shape[axes.index(ax)]
             if ax in chunk_axes:
                 chunk_dict[ax] = size[ax]//chunk_split[chunk_axes.index(ax)]
@@ -242,7 +248,9 @@ def single_position_to_zarr(images: np.ndarray or list,
         else:
             size[ax] = 1
             chunk_dict[ax] = 1
-            
+    
+    print(f"Shape metadata: {size}")
+    print(f"Shape metadata: {chunk_dict}")
 
     shape = tuple([size[ax] for ax in default_axes])
     chunks = tuple([chunk_dict[ax] for ax in default_axes])
