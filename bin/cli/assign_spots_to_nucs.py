@@ -2,7 +2,6 @@
 
 import argparse
 import logging
-import os
 from typing import *
 
 from gertils import ExtantFile, ExtantFolder
@@ -23,7 +22,6 @@ def workflow(
     
     # Set up the spot picker, to manage paths and settings.
     H = handler_from_cli(config_file=config_file, images_folder=images_folder, image_save_path=image_save_path)
-    pos_list = H.image_lists[H.spot_input_name]
     
     def query_table_for_pos(input_name_key: str, table_suffix: str):
         table_name = H.config[input_name_key] + table_suffix
@@ -56,12 +54,10 @@ def workflow(
         filter_kwargs = {"nuc_drifts": nuc_drifts, "nuc_target_frame": H.config['nuc_ref_frame'], "spot_drifts": spot_drifts}
         if 'nuc_masks' in H.images:
             logger.info(f"Assigning nuclei labels for sports from position: {pos}")
-            rois = ip.filter_rois_in_nucs(rois, nuc_label_img=H.images['nuc_masks'][i][0,0], new_col='nuc_label', **filter_kwargs)
-            #rois = ip.filter_rois_in_nucs(rois, H.images['nuc_masks'][i][0,0], pos_list, new_col='nuc_label', **filter_kwargs)
+            rois = ip.filter_rois_in_nucs(rois, nuc_label_img=H.images['nuc_masks'][i][0, 0], new_col='nuc_label', **filter_kwargs)
         if 'nuc_classes' in H.images:
             logger.info(f"Assigning nuclei classes for spots from position: {pos}")
-            rois = ip.filter_rois_in_nucs(rois, nuc_label_img=H.images['nuc_classes'][i][0,0], new_col='nuc_class', **filter_kwargs)
-            #rois = ip.filter_rois_in_nucs(rois, H.images['nuc_classes'][i][0,0], pos_list, new_col='nuc_class', **filter_kwargs)
+            rois = ip.filter_rois_in_nucs(rois, nuc_label_img=H.images['nuc_classes'][i][0, 0], new_col='nuc_class', **filter_kwargs)
         all_rois.append(rois.copy())
     
     outfile = H.nuclei_labeled_spots_file_path
