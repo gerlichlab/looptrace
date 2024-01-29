@@ -110,9 +110,7 @@ class NucDetector:
         for i, pos in tqdm.tqdm(enumerate(self.pos_list)):
             if self.do_in_3d:
                 prep = lambda img: img
-                axes = ("z", "y", "x")
             else:
-                axes = ("y", "x")
                 if nuc_slice == -1:
                     # TODO: encode the meaning of this sentinel better, and document it (i.e., -1 appears to be max-projection).
                     # See: https://github.com/gerlichlab/looptrace/issues/244
@@ -122,7 +120,7 @@ class NucDetector:
             # TODO: replace this dimensionality hack with a cleaner solution to zarr writing.
             # See: https://github.com/gerlichlab/looptrace/issues/245
             subimg = prep(self.images[i][self.reference_frame:(self.reference_frame + 1), self.channel:(self.channel + 1), :, :, :]).compute()
-            image_io.single_position_to_zarr(subimg, path=self.nuc_images_path, name=self.IMAGES_KEY, pos_name=pos, axes=axes, dtype=np.uint16, chunk_split=(1,1))
+            image_io.single_position_to_zarr(subimg, path=self.nuc_images_path, name=self.IMAGES_KEY, pos_name=pos, axes=("t", "c", "z", "y", "x"), dtype=np.uint16, chunk_split=(1,1))
     
     def segment_nuclei(self) -> Path:
         '''
@@ -146,7 +144,9 @@ class NucDetector:
             mask = remove_small_objects(mask, min_size=self.min_size).astype(np.uint16)
             mask = ndi.label(mask)[0]
             mask = rescale(expand_labels(mask.astype(np.uint16),self.config["nuc_dilation"]), scale = (self.ds_z, self.ds_xy, self.ds_xy), order=0)
-            image_io.single_position_to_zarr(mask, path=self.nuc_masks_path, name=self.MASKS_KEY, pos_name=pos, axes=('z','y','x'), dtype = np.uint16, chunk_split=(1,1))
+            # TODO: need to adjust axes argument probably.
+            # See: https://github.com/gerlichlab/looptrace/issues/245
+            image_io.single_position_to_zarr(mask, path=self.nuc_masks_path, name=self.MASKS_KEY, pos_name=pos, axes=('z','y','x'), dtype=np.uint16, chunk_split=(1,1))
 
     def segment_nuclei_cellpose(self) -> Path:
         '''
@@ -196,6 +196,8 @@ class NucDetector:
 
         print("Saving segmentations...")
         self.image_handler.images[self.MASKS_KEY] = masks
+        # TODO: need to adjust axes argument probably.
+        # See: https://github.com/gerlichlab/looptrace/issues/245
         image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name=self.MASKS_KEY, axes=ome_zarr_axes, dtype=np.uint16, chunk_split=(1, 1))
         
         if self.classify_mitotic:
@@ -207,6 +209,8 @@ class NucDetector:
             #nuc_class = np.stack(nuc_class).astype(np.uint16)
             print("Saving classifications...")
             self.image_handler.images[self.CLASSES_KEY] = nuc_class
+            # TODO: need to adjust axes argument probably.
+            # See: https://github.com/gerlichlab/looptrace/issues/245
             image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name=self.CLASSES_KEY, axes=ome_zarr_axes, dtype=np.uint16, chunk_split=(1, 1))
 
         return self.nuc_masks_path
@@ -218,6 +222,8 @@ class NucDetector:
             nuc_mask = ip.relabel_nucs(new_mask)
             pos_index = self.image_handler.image_lists[mask_name].index(position)
             self.image_handler.images[mask_name] = nuc_mask.astype(np.uint16)
+            # TODO: need to adjust axes argument probably.
+            # See: https://github.com/gerlichlab/looptrace/issues/245
             image_io.single_position_to_zarr(images=self.image_handler.images[mask_name][pos_index], path = self.nuc_masks_path / position, name=mask_name, axes=('z','y','x') if self.do_in_3d else ('y','x'), dtype=np.uint16, chunk_split=(1,1))
         else:
             print("Nothing to update, as all values are approximately equal")
