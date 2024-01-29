@@ -121,7 +121,7 @@ class NucDetector:
                     prep = lambda img: img[nuc_slice]
             # TODO: replace this dimensionality hack with a cleaner solution to zarr writing.
             # See: https://github.com/gerlichlab/looptrace/issues/245
-            subimg = prep(self.images[i][self.reference_frame:(self.reference_frame + 1), self.channel:(self.channel + 1)]).compute()
+            subimg = prep(self.images[i][self.reference_frame:(self.reference_frame + 1), self.channel:(self.channel + 1), :, :, :]).compute()
             image_io.single_position_to_zarr(subimg, path=self.nuc_images_path, name=self.IMAGES_KEY, pos_name=pos, axes=axes, dtype=np.uint16, chunk_split=(1,1))
     
     def segment_nuclei(self) -> Path:
