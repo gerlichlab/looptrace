@@ -98,9 +98,6 @@ class NucDetector:
     def reference_frame(self) -> int:
         return self.config["nuc_ref_frame"]
 
-    def get_relevant_subimage(self, img: Union[np.ndarray, da.array]) -> np.ndarray:
-        return img[self.reference_frame, self.channel]
-
     def _get_img_save_path(self, name: str) -> Path:
         return Path(self.image_handler.image_save_path) / name
 
@@ -118,10 +115,13 @@ class NucDetector:
                 axes = ("y", "x")
                 if nuc_slice == -1:
                     # TODO: encode the meaning of this sentinel better, and document it (i.e., -1 appears to be max-projection).
+                    # See: https://github.com/gerlichlab/looptrace/issues/244
                     prep = lambda img: da.max(img, axis=0)
                 else:
                     prep = lambda img: img[nuc_slice]
-            subimg = prep(self.get_relevant_subimage(self.images[i])).compute()
+            # TODO: replace this dimensionality hack with a cleaner solution to zarr writing.
+            # See: https://github.com/gerlichlab/looptrace/issues/245
+            subimg = prep(self.images[i][self.reference_frame:(self.reference_frame + 1), self.channel:(self.channel + 1)]).compute()
             image_io.single_position_to_zarr(subimg, path=self.nuc_images_path, name=self.IMAGES_KEY, pos_name=pos, axes=axes, dtype=np.uint16, chunk_split=(1,1))
     
     def segment_nuclei(self) -> Path:
