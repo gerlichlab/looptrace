@@ -226,6 +226,11 @@ def single_position_to_zarr(images: np.ndarray or list,
 
     size = {}
     chunk_dict = {}
+    # TODO: handle better the absence of dimensions w.r.t. shape and chunks.
+    # This is relevance, e.g., for NucDetector.gen_nuc_images.
+    # Namely, different readers may not like the fact that the shape and chunks don't match underlying data.
+    # This can happen when one or more dimensions collapses down flat, to a trivial single dimension.
+    # See: 
     default_axes = ('t','c','z','y','x')
     for ax in default_axes:
         if ax in axes:
