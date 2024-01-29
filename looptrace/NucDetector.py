@@ -47,7 +47,7 @@ class NucDetector:
         return self.config.get("nuc_mitosis_class", False)
 
     @property
-    def config(self) -> Dict[str, Any]:
+    def config(self) -> Mapping[str, Any]:
         return self.image_handler.config
 
     @property
