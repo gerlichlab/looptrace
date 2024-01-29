@@ -7,7 +7,6 @@ Ellenberg group
 EMBL Heidelberg
 """
 
-import logging
 from typing import *
 import numpy as np
 import pandas as pd
@@ -21,8 +20,6 @@ from skimage.measure import regionprops_table
 
 from looptrace.numeric_types import NumberLike
 from looptrace.wrappers import phase_xcor
-
-logger = logging.getLogger()
 
 
 CENTROID_COLUMNS_REMAPPING = {'centroid_weighted-0': 'zc', 'centroid_weighted-1': 'yc', 'centroid_weighted-2': 'xc'}
