@@ -8,15 +8,11 @@ EMBL Heidelberg
 """
 
 import logging
-import glob
-import os
-import re
 from typing import *
 import numpy as np
 import pandas as pd
 
 import scipy.ndimage as ndi
-from scipy.spatial.distance import squareform, pdist
 from scipy.stats import trim_mean
 from skimage.segmentation import clear_border, find_boundaries, expand_labels
 from skimage.filters import gaussian, threshold_otsu
@@ -31,42 +27,6 @@ logger = logging.getLogger()
 
 CENTROID_COLUMNS_REMAPPING = {'centroid_weighted-0': 'zc', 'centroid_weighted-1': 'yc', 'centroid_weighted-2': 'xc'}
 
-
-def rois_from_csv(path):
-    rois = pd.read_csv(path, index_col=0)
-    print('Loaded existing ROIs from ', path)
-    return rois
-
-def rois_from_imagej(roi_folder_path, template = '.zip', crop_size_z = 16, roi_scale = 0.5):
-    from .image_io import all_matching_files_in_subfolders
-
-    roi_files = all_matching_files_in_subfolders(roi_folder_path, template)
-    all_roi_coords = []
-    for file_id, roi_path in enumerate(roi_files):
-        position = re.search('W[0-9]*', roi_path).group(0)
-        rois=read_roi_zip(roi_path)
-        rois=[rois[k] for k in list(rois)]
-        for roi_id, roi in enumerate(rois):
-            z_min = int(roi['position']['slice']-1-crop_size_z//2)
-            z_max = int(roi['position']['slice']-1+crop_size_z//2)
-            y_min = int((roi['top']-1)/roi_scale)
-            y_max = int(y_min + roi['height']/roi_scale)
-            x_min = int((roi['left']-1)/roi_scale)
-            x_max = int(x_min + roi['width']/roi_scale)
-            all_roi_coords.append([file_id, roi_path, position, roi_id, z_min, z_max, y_min, y_max, x_min, x_max])
-    roi_table = pd.DataFrame(all_roi_coords, columns=[   'file_id',
-                                                            'roi_path',
-                                                            'position', 
-                                                            'roi_id',
-                                                            'z_min',
-                                                            'z_max',
-                                                            'y_min',
-                                                            'y_max',
-                                                            'x_min',
-                                                            'x_max',
-                                                            ])
-    print('Loaded ImageJ ROIs from ', roi_folder_path)
-    return roi_table
 
 def roi_to_napari_points(roi_table, position):
     '''Convert roi from looptrace roi table to points to see in napari.
@@ -91,6 +51,7 @@ def roi_to_napari_points(roi_table, position):
     roi_shapes = np.array(roi_shapes)
     roi_props = {'roi_id': rois_at_pos['roi_id_pos'].values}
     return roi_shapes, roi_props
+
 
 def update_roi_points(point_layer, roi_table, position, downscale):
     '''Takes (possibly) updated points from napari and converts them into ROI table format for looptrace
@@ -237,27 +198,6 @@ def crop_to_center(arr, center, size):
     #Crop array to size centered at center position.
     s=tuple([slice(min(0,int(c-s//2)),max(int(c+s//2), arr_s)) for c, s, arr_s in zip(center,size,arr.shape)])
     return arr[s]
-    
-def find_center_of_embryo(embryo_stack):
-    #Find center of embryo:
-    blur = ndi.gaussian_filter(embryo_stack[::4,::4,::4], 5)
-    thresh = np.min(blur)+30
-    binary = blur > thresh
-    labels, n_labels = ndi.label(remove_small_objects(binary, min_size=5000))
-    props = regionprops_table(labels, properties=['bbox', 'centroid'])
-    zc = ((props['bbox-3']-props['bbox-0'])//2+props['bbox-0'])*4
-    yc = ((props['bbox-4']-props['bbox-1'])//2+props['bbox-1'])*4
-    xc = ((props['bbox-5']-props['bbox-2'])//2+props['bbox-2'])*4
-    return (zc, yc, xc)
-
-def center_crop_embryo(embryo_stack, size, center=None):
-    #Find center of embryo and crop image to specific size, padding if needed.
-    if center is None:
-        center = find_center_of_embryo(embryo_stack)
-    out = crop_to_center(embryo_stack, center, size)
-    if out.shape != tuple(size):
-        out = pad_to_shape(out, size)
-    return out
 
 
 def detect_spots(input_img, spot_threshold: NumberLike, expand_px: int = 10):
@@ -354,12 +294,6 @@ def detect_spots_int(input_img, spot_threshold: NumberLike, expand_px: int = 1):
             )
 
     return spot_props, input_img, labels
-
-
-def discard_too_close(spot_props: pd.DataFrame, min_dist: Union[int, float]) -> pd.DataFrame:
-    dists = squareform(pdist(spot_props[['zc', 'yc', 'xc']].to_numpy(), metric='euclidean'))
-    idx = np.nonzero(np.triu(dists < min_dist, k=1))[1]
-    return spot_props.drop(idx)
 
 
 def roi_center_to_bbox(rois: pd.DataFrame, roi_size: Union[np.ndarray, Tuple[int, int, int]]):
@@ -654,45 +588,6 @@ def nuc_segmentation_watershed(nuc_img, bg_thresh = 800, fg_thresh = 5000):
     seg = label(ws == foreground)
     return seg
 
-def combine_overviews_ND2(input_folder, tidx = 0, align_channels=[1,1], ds = 2):
-    from nd2reader import ND2Reader  
-    '''[summary]
-
-    Args:
-        input_folder ([type]): Folder with ND2 overview images. Script assumes format is CYX (no Z-stacks)
-        tidx (int, optional): Index of template image to use. Defaults to 0.
-        align_channels (list, optional): Which channels to align the images. Length must match number of images. Defaults to [1,1].
-        ds (int, optional): Downsampling. Defaults to 2.
-
-    Returns:
-        [type]: [description]
-    '''
-    paths = sorted(glob.glob(input_folder+os.sep+'*.nd2'))
-    print(paths)
-    imgs = []
-    for path in paths:
-        ND = ND2Reader(path)
-        img = np.stack([ND.get_frame_2D(c=i) for i in range(ND.sizes['c'])]).astype(np.uint16)
-        imgs.append(img)
-        
-    Y, X = imgs[tidx][align_channels[tidx]].shape
-    ref_img = imgs[tidx][align_channels[tidx], Y*3//5:Y*4//5:ds, X*3//5:X*4//5:ds]
-
-    imgs_reg = [imgs[tidx]]
-    for i, off_img in enumerate(imgs):
-        if i == tidx:
-            continue
-        off_img = pad_to_shape(off_img, imgs[tidx].shape)
-        o_img = off_img[align_channels[i],Y*3//5:Y*4//5:ds, X*3//5:X*4//5:ds]
-        shift = phase_xcor(ref_img, o_img) * ds
-        print(shift)
-        off_img_reg = ndi.shift(off_img, (0, shift[0], shift[1]), mode='constant', order=1).astype(np.uint16)
-        imgs_reg.append(off_img_reg)
-
-    imgs = np.concatenate(imgs_reg, axis=0)
-    print(imgs.shape)
-
-    return imgs, np.stack([ref_img, o_img])
 
 def extract_cell_features(nuc_img, int_imgs: list, nuc_bg_int=800, nuc_fg_int=5000, scale=True):
     from sklearn import preprocessing
@@ -710,11 +605,13 @@ def extract_cell_features(nuc_img, int_imgs: list, nuc_bg_int=800, nuc_fg_int=50
         scaler_model = None
     return features, scaler_model
 
+
 def relabel_nucs(nuc_image):
     from skimage.morphology import label
     out = mask_to_binary(nuc_image)
     out = label(out)
     return out.astype(nuc_image.dtype)
+
 
 def full_frame_dc_to_single_nuc_dc(old_dc_path, new_dc_position_list, new_dc_path):
     new_drifts = []
