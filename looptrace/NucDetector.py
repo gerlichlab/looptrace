@@ -266,7 +266,7 @@ class NucDetector:
             moving_images=self.images,
             moving_channel=self.channel,
             downsampling=downsampling,
-            stop_after=sys.maxsize,
+            nuclei_mode=True,
         )
         print("Computing coarse drifts...")
         records = Parallel(n_jobs=-1, prefer='threads')(
