@@ -76,7 +76,7 @@ class NucDetector:
         raise NotImplementedError("3D nuclei detection is off, so downscaling in z (ds_z) is undefined!")
 
     @property
-    def images(self) -> List[da.core.array]:
+    def images(self) -> List[da.core.Array]:
         imgs = self.image_handler.images[self.input_name]
         if len(imgs) != len(self.pos_list):
             raise Exception(f"{len(imgs)} images and {len(self.pos_list)} positions; these should be equal!")
