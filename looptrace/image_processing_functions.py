@@ -444,7 +444,8 @@ def decon_RL(img, kernel, algo, fd_data, niter=10):
     res = algo.run(fd_data.Acquisition(data=img, kernel=kernel), niter=niter).data
     return res
 
-def nuc_segmentation_cellpose_2d(nuc_imgs, diameter = 150, model_type = 'nuclei'):
+
+def nuc_segmentation_cellpose_2d(nuc_imgs: Union[List[np.ndarray], np.ndarray], diameter: NumberLike = 150, model_type = 'nuclei'):
     '''
     Runs nuclear segmentation using cellpose trained model (https://github.com/MouseLand/cellpose)
 
@@ -457,25 +458,26 @@ def nuc_segmentation_cellpose_2d(nuc_imgs, diameter = 150, model_type = 'nuclei'
 
     from cellpose import models
     model = models.CellposeModel(gpu=False, model_type=model_type)
-    masks = model.eval(nuc_imgs, diameter=diameter, channels=[0,0], net_avg=False, do_3D = False)[0]
+    masks = model.eval(nuc_imgs, diameter=diameter, channels=[0,0], net_avg=False, do_3D=False)[0]
     return masks
 
-def nuc_segmentation_cellpose_3d(nuc_imgs, diameter = 150, model_type = 'nuclei', anisotropy = 2):
+
+def nuc_segmentation_cellpose_3d(nuc_imgs: Union[List[np.ndarray], np.ndarray], diameter: NumberLike = 150, model_type: str = 'nuclei', anisotropy: NumberLike = 2):
     '''
     Runs nuclear segmentation using cellpose trained model (https://github.com/MouseLand/cellpose)
 
     Args:
         nuc_imgs (ndarray or list of ndarrays): 2D or 3D images of nuclei, expects single channel
     '''
-    from cellpose import models
-
     if not isinstance(nuc_imgs, list):
         if nuc_imgs.ndim > 3:
             nuc_imgs = [np.array(nuc_imgs[i]) for i in range(nuc_imgs.shape[0])] #Force array conversion in case of zarr.
 
+    from cellpose import models
     model = models.CellposeModel(gpu=True, model_type=model_type, net_avg=False)
-    masks = model.eval(nuc_imgs, diameter=diameter, channels=[0,0], z_axis = 0, anisotropy = anisotropy, do_3D=True)[0]
+    masks = model.eval(nuc_imgs, diameter=diameter, channels=[0,0], z_axis=0, anisotropy=anisotropy, do_3D=True)[0]
     return masks
+
 
 def mask_to_binary(mask):
     '''Converts masks from nuclear segmentation to masks with 
