@@ -74,29 +74,7 @@ class NPZ_wrapper():
         return [self.npz[self.files[j]] for j in list(range(len(self.files))[s])]
 
 
-# class RaggedArray():
-#     '''
-#     Class for allowing slicing of a list of ragged arrays as if it was one large array.
-#     NB! Does not work yet, slicing is incorrect!
-#     '''
-#     def __init__(self, arr):
-#         self.arr = arr
-
-#     def __getitem__(self, i):
-#         if isinstance(i, int):
-#             return self.arr[i]
-#         elif isinstance(i, tuple):
-#             return [a[i[1:]] for a in self.return_list_slice(i[0])]
-#         elif isinstance(i, slice):
-#             return self.return_list_slice(i)
-    
-#     def return_list_slice(self, s):
-#         if not isinstance(s, slice):
-#             s = slice(s)
-#         return [self.arr[j] for j in list(range(len(self.arr)+1)[s])]
-
-
-def multi_ome_zarr_to_dask(folder: str, remove_unused_dims = True):
+def multi_ome_zarr_to_dask(folder: str, remove_unused_dims: bool = True):
     '''The multi_ome_zarr_to_dask function takes a folder path and returns a list of dask arrays and a list of image folders by reading multiple dask images in a single folder.
         If the remove_unused_dims flag is set to True, the function will also remove unnecessary dimensions from the dask array.
 
@@ -113,17 +91,19 @@ def multi_ome_zarr_to_dask(folder: str, remove_unused_dims = True):
     out = []
     for image in image_folders:
         print("Parsing subfolder: ", image)
-        z = zarr.open(os.path.join(folder, image, '0'))
-        arr = da.from_zarr(z)
-
-        # Remove unecessary dimensions: #TODO consider if this is wise!
-        if remove_unused_dims:
-            new_slice = tuple([0 if i == 1 else slice(None) for i in arr.shape])
-            arr = arr[new_slice]
-        #chunks = (1,1,s[-3], s[-2], s[-1])
-        out.append(arr)#, chunks=chunks))
-    #out = da.stack(out) #Removed as not compatible with different shaped
-    print('Loaded list of ', len(out), ' arrays.')
+        curr_path = os.path.join(folder, image)
+        if (Path(curr_path) / ".zarray").is_file():
+            z = zarr.open(curr_path)
+            arr = da.from_zarr(z)
+        else:
+            z = zarr.open(os.path.join(curr_path, '0'))
+            arr = da.from_zarr(z)
+            # Remove unecessary dimensions: #TODO consider if this is wise!
+            if remove_unused_dims:
+                new_slice = tuple([0 if i == 1 else slice(None) for i in arr.shape])
+                arr = arr[new_slice]
+        out.append(arr)
+    print(f"Loaded list of {len(out)} arrays.")
     return out, image_folders
 
 def multipos_nd2_to_dask(folder: str):
