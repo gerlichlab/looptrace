@@ -8,8 +8,9 @@ import yaml
 
 from gertils import ExtantFile
 
-from looptrace.Deconvolver import REQ_GPU_KEY
 from looptrace import Drifter, LOOPTRACE_JAR_PATH, MINIMUM_SPOT_SEPARATION_KEY, TRACING_SUPPORT_EXCLUSIONS_KEY, ZARR_CONVERSIONS_KEY
+from looptrace.Deconvolver import REQ_GPU_KEY
+from looptrace.NucDetector import NucDetector
 from looptrace.SpotPicker import DetectionMethod, CROSSTALK_SUBTRACTION_KEY, DETECTION_METHOD_KEY as SPOT_DETECTION_METHOD_KEY
 from looptrace.Tracer import MASK_FITS_ERROR_MESSAGE
 
@@ -52,32 +53,44 @@ def find_config_file_errors(config_file: ExtantFile) -> List[ConfigFileError]:
     
     errors = []
     
+    # Zarr conversions
     if not conf_data.get(ZARR_CONVERSIONS_KEY):
         errors.append(ConfigFileError(
             f"Conversion of image folders should be specified as mapping from src to dst folder, with key {ZARR_CONVERSIONS_KEY}."
             ))
     
+    # Deconvolution
     errors.extend([
         ConfigFileError(f"Missing or null value for key: {k}") 
         for k in ("decon_input_name", "decon_output_name") if not conf_data.get(k)
         ])
-    
     if not conf_data.get(REQ_GPU_KEY, False):
         errors.append(ConfigFileError(f"Requiring GPUs for deconvolution with key {REQ_GPU_KEY} is currently required."))
     
+    # Nuclei detection
+    if conf_data.get(NucDetector.KEY_3D, False):
+        errors.append(ConfigFileError(f"Nuclei detection in 3D isn't supported! Set key '{NucDetector.KEY_3D}' to False."))
+    try:
+        nuclei_detection_method = conf_data[NucDetector.NUCLEI_DETECTION_METHOD_KEY]
+    except KeyError:
+        errors.append(ConfigFileError(f"Missing nuclei detection method key: {NucDetector.NUCLEI_DETECTION_METHOD_KEY}!"))
+    else:
+        if nuclei_detection_method != "nuclei":
+            errors.append(f"Unsupported nuclei detection method (key '{NucDetector.NUCLEI_DETECTION_METHOD_KEY}')! {nuclei_detection_method}")
+    
+    # Drift correction
     dc_method = Drifter.get_method_name(conf_data)
     if dc_method and not Drifter.Methods.is_valid_name(dc_method):
         errors.append(ConfigFileError(f"Invalid drift correction method ({dc_method}); choose from: {', '.join(Drifter.Methods.values())}"))
     
+    # Spot detection
     if conf_data.get(CROSSTALK_SUBTRACTION_KEY, False):
         errors.append(ConfigFileError(f"Crosstalk subtraction ('{CROSSTALK_SUBTRACTION_KEY}') isn't currently supported."))
-    
     spot_detection_method = conf_data.get(SPOT_DETECTION_METHOD_KEY)
     if spot_detection_method is None:
         errors.append(ConfigFileError(f"No spot detection method ('{SPOT_DETECTION_METHOD_KEY}') specified!"))
     elif spot_detection_method == DetectionMethod.INTENSITY.value:
         errors.append(ConfigFileError(f"Prohibited (or unsupported) spot detection method: '{spot_detection_method}'"))
-    
     try:
         min_sep = conf_data[MINIMUM_SPOT_SEPARATION_KEY]
     except KeyError:
@@ -86,9 +99,9 @@ def find_config_file_errors(config_file: ExtantFile) -> List[ConfigFileError]:
         if not isinstance(min_sep, (int, float)) or min_sep < 0:
             errors.append(ConfigFileError(f"Illegal minimum spot separation ('{MINIMUM_SPOT_SEPARATION_KEY}') value: {min_sep}"))
 
+    # Tracing
     if conf_data.get("mask_fits", False):
         errors.append(ConfigFileError(MASK_FITS_ERROR_MESSAGE))
-    
     try:
         probe_trace_exclusions = conf_data[TRACING_SUPPORT_EXCLUSIONS_KEY]
     except KeyError:

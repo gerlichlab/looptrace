@@ -24,9 +24,12 @@ The path to the configuration file is a required parameter to [run the pipeline]
 ### Requirements and suggestions
 * Check that each channel setting (often with a `_ch` or `_channel` suffix) matches what's been used in the imaging experiment which generated the data to be processed.
 * `xy_nm` and `z_nm` should be adjusted to match your microscope settings (number of nanomerters per step in xy or in z).
+* `nuc_method` should be set to "nuclei".
+* `nuc_3d` should be absent or set to `False`.
 * `analysis_path` should be an _absolute_ path but may use environment and/or user variables.
 * `analysis_path` should specify the path to a folder that exists before the pipeline is run.
-* `zarr_conversions` should be a singleton mapping from subfolder in the images folder (`-I` / `--images-folder` when [running from the command-line](#general-workflow)) to new subfolder (1-to-1): the keys are names of subfolders with raw image files (e.g., `.nd2`), and each value will be the new folder with that image data, just reformatted as `.zarr`.
+* `zarr_conversions` should be a mapping from subfolder in the images folder (`-I` / `--images-folder` when [running from the command-line](#general-workflow)) to new subfolder (1-to-1): the keys are names of subfolders with raw image files (e.g., `.nd2`), and each value will be the new folder with that image data, just reformatted as `.zarr`. 
+Typically there will be one entry for the sequential FISH images' folder and another for the nuclei images' folder.
 * Check that `spot_wavelength` and `objective_na` have been adjusted to match the microscope and fluorophores used.
 * `decon_psf` should be set to `gen`.
 * `require_gpu` should be set to `True`.
