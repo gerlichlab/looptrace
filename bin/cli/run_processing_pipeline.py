@@ -23,6 +23,7 @@ from decon import workflow as run_deconvolution
 from nuc_label import workflow as run_nuclei_detection
 from looptrace.Drifter import coarse_correction_workflow as run_coarse_drift_correction, fine_correction_workflow as run_fine_drift_correction
 from looptrace.ImageHandler import ImageHandler
+from looptrace.NucDetector import NucDetector
 from drift_correct_accuracy_analysis import workflow as run_drift_correction_analysis, run_visualisation as run_drift_correction_accuracy_visualisation
 from detect_spots import workflow as run_spot_detection
 from assign_spots_to_nucs import workflow as run_spot_nucleus_filtration
@@ -245,6 +246,12 @@ def compute_region_pairwise_distances(config_file: ExtantFile) -> None:
     return subprocess.check_call(cmd_parts)
 
 
+def drift_correct_nuclei(config_file: ExtantFile, images_folder: ExtantFolder) -> Path:
+    H = ImageHandler(config_path=config_file, image_path=images_folder)
+    N = NucDetector(H)
+    return N.coarse_drift_correction_workflow()
+
+
 class LooptracePipeline(pypiper.Pipeline):
     """Main looptrace processing pipeline"""
 
@@ -262,6 +269,7 @@ class LooptracePipeline(pypiper.Pipeline):
             ("pipeline_precheck", pretest, take1),
             ("zarr_production", run_zarr_production, take2),
             ("nuclei_detection", run_nuclei_detection, take2),
+            ("nuclei_drift_correction", drift_correct_nuclei, take2),
             ("psf_extraction", run_psf_extraction, take2),
             (DECON_STAGE_NAME, run_deconvolution, take2), # Really just for denoising, no need for structural disambiguation
             ("drift_correction__coarse", run_coarse_drift_correction, take2), 
