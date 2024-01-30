@@ -13,6 +13,10 @@ from gertils import ExtantFile, ExtantFolder
 import pypiper
 
 from looptrace import *
+from looptrace.Drifter import coarse_correction_workflow as run_coarse_drift_correction, fine_correction_workflow as run_fine_drift_correction
+from looptrace.ImageHandler import ImageHandler
+from looptrace.NucDetector import NucDetector
+from looptrace.Tracer import run_frame_name_and_distance_application
 
 from pipeline_precheck import workflow as pretest
 from convert_datasets_to_zarr import one_to_one as run_zarr_production
@@ -21,9 +25,6 @@ from run_bead_roi_generation import workflow as gen_all_bead_rois
 from analyse_detected_bead_rois import workflow as run_all_bead_roi_detection_analysis
 from decon import workflow as run_deconvolution
 from nuc_label import workflow as run_nuclei_detection
-from looptrace.Drifter import coarse_correction_workflow as run_coarse_drift_correction, fine_correction_workflow as run_fine_drift_correction
-from looptrace.ImageHandler import ImageHandler
-from looptrace.NucDetector import NucDetector
 from drift_correct_accuracy_analysis import workflow as run_drift_correction_analysis, run_visualisation as run_drift_correction_accuracy_visualisation
 from detect_spots import workflow as run_spot_detection
 from assign_spots_to_nucs import workflow as run_spot_nucleus_filtration
@@ -31,7 +32,6 @@ from extract_spots_table import workflow as run_spot_bounding
 from extract_spots import workflow as run_spot_extraction
 from extract_spots_cluster_cleanup import workflow as run_spot_zipping
 from tracing import workflow as run_chromatin_tracing
-from looptrace.Tracer import run_frame_name_and_distance_application
 
 logger = logging.getLogger(__name__)
 
@@ -273,7 +273,6 @@ class LooptracePipeline(pypiper.Pipeline):
             ("psf_extraction", run_psf_extraction, take2),
             (DECON_STAGE_NAME, run_deconvolution, take2), # Really just for denoising, no need for structural disambiguation
             ("drift_correction__coarse", run_coarse_drift_correction, take2), 
-            #("nuclei_detection", run_nuclei_detection, take2), 
             ("bead_roi_generation", gen_all_bead_rois, take2), # Find/define all the bead ROIs in each (FOV, frame) pair.
             # Count detected bead ROIs for each timepoint, mainly to see if anything went awry during some phase of the imaging, e.g. air bubble.
             ("bead_roi_detection_analysis", run_all_bead_roi_detection_analysis, take2),
