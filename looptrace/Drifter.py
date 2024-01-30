@@ -228,7 +228,7 @@ class JoblibParallelSpecification:
 @dataclasses.dataclass
 class MultiprocessingPoolSpecification:
     """Bundle of parameters to pass to multiprocessing.Pool"""
-    n_workers: int
+    n_workers: int    
 
 
 def coarse_correction_workflow(config_file: ExtantFile, images_folder: ExtantFolder):
@@ -249,10 +249,10 @@ def coarse_correction_workflow(config_file: ExtantFile, images_folder: ExtantFol
         reference_channel=D.reference_channel,
         moving_images=D.images_moving, 
         moving_channel=D.moving_channel, 
-        downsampling = D.downsampling,
+        downsampling=D.downsampling,
         stop_after=pos_halt_point,
     )
-    print("Computing coarse drifts")
+    print("Computing coarse drifts...")
     records = Parallel(n_jobs=-1, prefer='threads')(
         delayed(lambda p, t, ref_ds, mov_ds: (t, p) + tuple(phase_xcor(ref_ds, mov_ds) * D.downsampling))(*args) 
         for args in all_args
@@ -458,7 +458,7 @@ class Drifter():
 
     @property
     def downsampling(self) -> int:
-        return self.config['coarse_drift_downsample']
+        return self.config["coarse_drift_downsample"]
 
     @property
     def fine_correction_subfolder(self) -> Path:
@@ -503,11 +503,11 @@ class Drifter():
 
     @property
     def reference_channel(self) -> int:
-        return self.config['reg_ch_template']
+        return self.config["reg_ch_template"]
 
     @property
     def reference_frame(self) -> int:
-        return self.config['reg_ref_frame']
+        return self.config["reg_ref_frame"]
 
     def get_moving_image(self, pos_idx: int, frame_idx: int) -> np.ndarray:
         return np.array(self.images_moving[pos_idx][frame_idx, self.moving_channel])

@@ -9,6 +9,7 @@ EMBL Heidelberg
 
 import os
 from pathlib import Path
+import sys
 from typing import *
 
 import dask.array as da
@@ -23,6 +24,8 @@ import tqdm
 
 from looptrace import image_io
 from looptrace import image_processing_functions as ip
+from looptrace.wrappers import phase_xcor
+from looptrace.Drifter import COARSE_DRIFT_TABLE_COLUMNS, generate_drift_function_arguments__coarse_drift_only
 
 
 class NucDetector:
@@ -31,8 +34,6 @@ class NucDetector:
     '''
     def __init__(self, image_handler):
         self.image_handler = image_handler
-        self.images = self.image_handler.images[self.input_name]
-        self.pos_list = self.image_handler.image_lists[self.input_name]
 
     CLASSES_KEY = "nuc_classes"
     DETECTION_METHOD_KEY = "nuc_method"
@@ -57,6 +58,14 @@ class NucDetector:
         return self.config.get(self.KEY_3D, False)
 
     @property
+    def drift_correction_file__coarse(self) -> Path:
+        return self.image_handler.get_dc_filepath(prefix="nuclei", suffix="_coarse.csv")
+
+    @property
+    def drift_correction_file__fine(self) -> Path:
+        return self.image_handler.get_dc_filepath(prefix="nuclei", suffix="_fine.csv")
+
+    @property
     def ds_xy(self) -> int:
         return self.config["nuc_downscaling_xy"]
 
@@ -65,6 +74,17 @@ class NucDetector:
         if self.do_in_3d:
             return self.config["nuc_downscaling_z"]
         raise NotImplementedError("3D nuclei detection is off, so downscaling in z (ds_z) is undefined!")
+
+    @property
+    def images(self) -> List[da.core.array]:
+        imgs = self.image_handler.images[self.input_name]
+        if len(imgs) != len(self.pos_list):
+            raise Exception(f"{len(imgs)} images and {len(self.pos_list)} positions; these should be equal!")
+        exp_shape_len = 4 # (ch, z, y, x) -- no time dimension since only 1 timepoint's imaged for nuclei.
+        bad_images = {p: i.shape for p, i in zip(self.pos_list, imgs) if len(i.shape) != exp_shape_len}
+        if bad_images:
+            raise Exception(f"{len(bad_images)} images with shape length not equal to {exp_shape_len}: {bad_images}")
+        return imgs
 
     def iter_pos_img_pairs(self) -> Iterable[Tuple[str, np.ndarray]]:
         for i, pos in enumerate(self.pos_list):
@@ -98,6 +118,10 @@ class NucDetector:
         return self._get_img_save_path(self.MASKS_KEY)
     
     @property
+    def pos_list(self) -> List[str]:
+        return self.image_handler.image_lists[self.input_name]
+
+    @property
     def reference_frame(self) -> int:
         return self.config["nuc_ref_frame"]
 
@@ -114,15 +138,12 @@ class NucDetector:
             prep = lambda img: img
         else:
             axes = ("y", "x")
-            if nuc_slice == -1:
-                # TODO: encode the meaning of this sentinel better, and document it (i.e., -1 appears to be max-projection).
-                # See: https://github.com/gerlichlab/looptrace/issues/244
-                prep = lambda img: da.max(img, axis=0)
-            else:
-                prep = lambda img: img[nuc_slice]
+            # TODO: encode better the meaning of this sentinel for nuc_slice, and document it (i.e., -1 appears to be max-projection).
+            # See: https://github.com/gerlichlab/looptrace/issues/244
+            prep = (lambda img: da.max(img, axis=0)) if nuc_slice == -1 else (lambda img: img[nuc_slice])
         
         print("Generating nuclei images...")
-        name_img_pairs = [(pos_name, prep(self.images[i][self.reference_frame, self.channel]).compute()) for i, pos_name in tqdm.tqdm(enumerate(self.pos_list))]
+        name_img_pairs = [(pos_name, prep(self.images[i][self.channel]).compute()) for i, pos_name in tqdm.tqdm(enumerate(self.pos_list))]
         print("Saving nuclei images...")
         if nuc_slice == -1:
             image_io.nuc_multipos_single_time_max_z_proj_zarr(name_img_pairs, root_path=self.nuc_images_path, dtype=np.uint16)
@@ -232,7 +253,37 @@ class NucDetector:
             image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name=self.CLASSES_KEY, axes=ome_zarr_axes, dtype=np.uint16, chunk_split=(1, 1))
 
         return self.nuc_masks_path
-            
+
+    def coarse_drift_correction_workflow(self):
+        from joblib import Parallel, delayed
+        downsampling = self.config["coarse_drift_downsample"]
+        all_args = generate_drift_function_arguments__coarse_drift_only(
+            full_pos_list=self.pos_list, 
+            pos_list=self.pos_list, 
+            reference_images=self.image_handler.images[self.image_handler.reg_input_template], 
+            reference_frame=self.config["reg_ref_frame"],
+            reference_channel=self.config["reg_ch_template"],
+            moving_images=self.images,
+            moving_channel=self.channel,
+            downsampling=downsampling,
+            stop_after=sys.maxsize,
+        )
+        print("Computing coarse drifts...")
+        records = Parallel(n_jobs=-1, prefer='threads')(
+            delayed(lambda p, t, ref_ds, mov_ds: (t, p) + tuple(phase_xcor(ref_ds, mov_ds) * downsampling))(*args) 
+            for args in all_args
+            )
+        try:
+            coarse_drifts = pd.DataFrame(records, columns=COARSE_DRIFT_TABLE_COLUMNS)
+        except ValueError: # most likely if element count of one or more rows doesn't match column count
+            print(f"Example record (below):\n{records[0]}")
+            raise
+        outfile = self.drift_correction_file__coarse
+        print(f"Writing coarse drifts: {outfile}")
+        coarse_drifts.to_csv(outfile)
+        return outfile
+
+
     def update_masks_after_qc(self, new_mask, original_mask, mask_name, position):
         s = tuple([slice(None, None, 4)] * len(new_mask.ndim))
         if not np.allclose(new_mask[s], original_mask[s]):
@@ -282,7 +333,7 @@ class NucDetector:
                 sel_dc = self.image_handler.tables['drift_correction_full_frame'].query('position == @old_pos')
                 ref_offset = sel_dc.query('frame == @ref_frame')
                 try:
-                    Z, Y, X = self.images[i][0,ch].shape[-3:]
+                    Z, Y, X = self.images[i][self.channel].shape[-3:]
                 except AttributeError: #Images not loaded for some reason
                     Z = 200
                     Y = nuc_masks[0].shape[-2]

@@ -125,14 +125,14 @@ class ImageHandler:
 
     @property
     def drift_correction_file__coarse(self) -> Path:
-        return self._get_dc_filepath("_coarse.csv")
+        return self.get_dc_filepath(prefix=self.reg_input_moving, suffix="_coarse.csv")
 
     @property
     def drift_correction_file__fine(self) -> Path:
-        return self._get_dc_filepath("_fine.csv")
+        return self.get_dc_filepath(prefix=self.reg_input_moving, suffix="_fine.csv")
 
-    def _get_dc_filepath(self, suffix: str) -> Path:
-        return Path(self.out_path(self.reg_input_moving + '_drift_correction' + suffix))
+    def get_dc_filepath(self, prefix: str, suffix: str) -> Path:
+        return Path(self.out_path(prefix + '_drift_correction' + suffix))
 
     @property
     def frame_names(self) -> List[str]:
@@ -203,11 +203,11 @@ class ImageHandler:
 
     @property
     def reg_input_template(self) -> str:
-        return self.config['reg_input_template']
+        return self.config["reg_input_template"]
 
     @property
     def reg_input_moving(self) -> str:
-        return self.config['reg_input_moving']
+        return self.config["reg_input_moving"]
 
     @property
     def spot_image_extraction_skip_reasons_json_file(self) -> Path:
@@ -215,12 +215,12 @@ class ImageHandler:
 
     @property
     def spot_input_name(self) -> str:
-        return self.config['spot_input_name']
+        return self.config["spot_input_name"]
 
     @property
     def traces_path(self) -> Path:
         # Written by Tracer.py
-        return Path(self.out_path('traces.csv'))
+        return Path(self.out_path("traces.csv"))
 
     @property
     def traces_path_enriched(self) -> Path:
