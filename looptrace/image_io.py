@@ -209,7 +209,6 @@ def single_position_to_zarr(
     metadata: dict = None,
     compressor: Optional[numcodecs.abc.Codec] = None,
     ):
-
     '''
     Function to write a single position image with optional amount of additional dimensions to zarr.
     '''
@@ -283,28 +282,18 @@ def single_position_to_zarr(
                                                             (multiscale_level, i, images[i]) for i in range(size['t']))
 
 
-def nuc_single_pos_max_proj_zarr(
-    image: np.ndarray, 
-    path: str,
-    pos_name: str, 
-    dtype: Type, 
-    metadata: dict = None,
-    ):
+def nuc_multipos_single_time_max_z_proj_zarr(name_img_pairs: List[Tuple[str, np.ndarray]], root_path: str, dtype: Type, metadata: dict = None):
     axes = ('y', 'x')
-    if not isinstance(image, np.ndarray):
-        raise TypeError(f"Expected ndarray for image type, but got {type(image).__name__}")
-    if len(image.shape) != len(axes):
-        raise ValueError(f"{len(axes)} axes ({axes}), but image array has shape {image.shape}!")
-    store = zarr.DirectoryStore(os.path.join(path, pos_name + ".zarr"))
+    bad_name_shape_pairs = [(name, img.shape) for name, img in name_img_pairs if len(img.shape) != len(axes)]
+    if bad_name_shape_pairs:
+        raise ValueError(f"{len(bad_name_shape_pairs)}/{len(name_img_pairs)} images with bad shape given {len(axes)} axes: {bad_name_shape_pairs}")
+    store = zarr.DirectoryStore(root_path)
     root = zarr.group(store=store, overwrite=True)
     if metadata:
         root.attrs["metadata"] = metadata
-    try:
-        print(f"Saving image with shape {image.shape}")
-    except AttributeError:
-        pass
-    dataset = root.create_dataset(name=str(0), compressor=numcodecs.Zlib(), shape=image.shape, dtype=dtype)
-    dataset[:] = image
+    for pos_name, img in name_img_pairs:
+        dataset = root.create_dataset(name=pos_name + ".zarr", compressor=numcodecs.Zlib(), shape=img.shape, dtype=dtype)
+        dataset[:] = img
 
 
 def images_to_ome_zarr(
