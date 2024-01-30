@@ -23,8 +23,8 @@ def workflow(
     # Set up the spot picker, to manage paths and settings.
     H = handler_from_cli(config_file=config_file, images_folder=images_folder, image_save_path=image_save_path)
     
-    def query_table_for_pos(input_name_key: str, table_suffix: str):
-        table_name = H.config[input_name_key] + table_suffix
+    def query_table_for_pos(input_name_key: str):
+        table_name = H.config[input_name_key] + '_drift_correction'
         try:
             table = H.tables[table_name]
         except KeyError:
@@ -37,8 +37,8 @@ def workflow(
 
     logger.info('Assigning spots to nuclei labels.')
     all_rois = []
-    get_nuc_drifts = query_table_for_pos('nuc_input_name', '_drift_correction')
-    get_spot_drifts = query_table_for_pos('spot_input_name', '_drift_correction')
+    get_nuc_drifts = query_table_for_pos('nuc_input_name')
+    get_spot_drifts = query_table_for_pos('spot_input_name')
     
     rois_table = pd.read_csv(H.proximity_filtered_spots_file_path, index_col=0)
     get_rois = lambda pos: rois_table[rois_table.position == pos]
