@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import *
 
 import dask.array as da
+import numcodecs
 import numpy as np
 import pandas as pd
 from scipy import ndimage as ndi
@@ -35,8 +36,10 @@ class NucDetector:
         self.pos_list = self.image_handler.image_lists[self.input_name]
 
     CLASSES_KEY = "nuc_classes"
+    DETECTION_METHOD_KEY = "nuc_method"
     IMAGES_KEY = "nuc_images"
     MASKS_KEY = "nuc_masks"
+    KEY_3D = "nuc_3d"
 
     @property
     def channel(self) -> int:
@@ -52,7 +55,7 @@ class NucDetector:
 
     @property
     def do_in_3d(self) -> bool:
-        return self.config.get("nuc_3d", False)
+        return self.config.get(self.KEY_3D, False)
 
     @property
     def ds_xy(self) -> int:
@@ -72,7 +75,7 @@ class NucDetector:
         return (img for _, img in self.iter_pos_img_pairs())
 
     def segmentation_method(self) -> str:
-        return self.config["nuc_method"]
+        return self.config[self.DETECTION_METHOD_KEY]
 
     @property
     def min_size(self) -> int:
@@ -120,7 +123,16 @@ class NucDetector:
             # TODO: replace this dimensionality hack with a cleaner solution to zarr writing.
             # See: https://github.com/gerlichlab/looptrace/issues/245
             subimg = prep(self.images[i][self.reference_frame:(self.reference_frame + 1), self.channel:(self.channel + 1), :, :, :]).compute()
-            image_io.single_position_to_zarr(subimg, path=self.nuc_images_path, name=self.IMAGES_KEY, pos_name=pos, axes=("t", "c", "z", "y", "x"), dtype=np.uint16, chunk_split=(1,1))
+            image_io.single_position_to_zarr(
+                subimg, 
+                path=self.nuc_images_path, 
+                name=self.IMAGES_KEY, 
+                pos_name=pos, 
+                axes=("t", "c", "z", "y", "x"), 
+                dtype=np.uint16, 
+                chunk_split=(1,1),
+                compressor=numcodecs.Zlib(),
+                )
     
     def segment_nuclei(self) -> Path:
         '''
@@ -160,7 +172,7 @@ class NucDetector:
             print("Re-reading images...")
             self.image_handler.read_images()
                 
-        method = self.config.get("nuc_method", "nuclei")
+        method = self.segmentation_method
         diameter = self.config["nuc_diameter"] / self.ds_xy
         if self.do_in_3d:
             scale_for_rescaling = (self.ds_z, self.ds_xy, self.ds_xy)
