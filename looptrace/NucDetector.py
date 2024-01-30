@@ -147,6 +147,11 @@ class NucDetector:
         Runs nucleus segmentation using nucleus segmentation algorithm defined in ip functions.
         Dilates a bit and saves images.
         '''
+        if self.IMAGES_KEY not in self.image_handler.images:
+            print(f"{self.IMAGES_KEY} doesn't yet exist as key for subset of images; generating...")
+            self.gen_nuc_images()
+            print("Re-reading images...")
+            self.image_handler.read_images()
         if self.segmentation_method == "threshold":
             return self.segment_nuclei_threshold()
         else:
@@ -172,14 +177,7 @@ class NucDetector:
         '''
         Runs nucleus segmentation using nucleus segmentation algorithm defined in ip functions.
         Dilates a bit and saves images.
-        '''
-
-        if self.IMAGES_KEY not in self.image_handler.images:
-            print(f"{self.IMAGES_KEY} doesn't yet exist as key for subset of images; generating...")
-            self.gen_nuc_images()
-            print("Re-reading images...")
-            self.image_handler.read_images()
-                
+        '''     
         method = self.segmentation_method
         diameter = self.config["nuc_diameter"] / self.ds_xy
         if self.do_in_3d:
