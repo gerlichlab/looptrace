@@ -19,6 +19,7 @@ import zipfile
 
 import dask
 import dask.array as da
+import numcodecs
 import numpy as np
 import tqdm
 import zarr
@@ -196,20 +197,22 @@ def stack_tif_to_dask(folder: str):
     return out, image_points
 
 
-def single_position_to_zarr(images: np.ndarray or list, 
-                            path: str,
-                            name: str, 
-                            pos_name: str, 
-                            dtype:str = None, 
-                            axes=('t','c','z','y','x'), 
-                            chunk_axes = ('y', 'x'), 
-                            chunk_split = (2,2),  
-                            metadata:dict = None):
+def single_position_to_zarr(
+    images: np.ndarray or list, 
+    path: str,
+    name: str, 
+    pos_name: str, 
+    dtype: Type, 
+    axes = ('t','c','z','y','x'), 
+    chunk_axes = ('y', 'x'), 
+    chunk_split = (2,2),  
+    metadata: dict = None,
+    compressor: Optional[numcodecs.abc.Codec] = None,
+    ):
 
     '''
     Function to write a single position image with optional amount of additional dimensions to zarr.
     '''
-    from numcodecs import Blosc
 
     def single_image_to_zarr(z: zarr.DirectoryStore, idx: str, img: np.ndarray):
         '''Small helper function.
@@ -256,16 +259,20 @@ def single_position_to_zarr(images: np.ndarray or list,
     chunks = tuple([chunk_dict[ax] for ax in default_axes])
     images = np.reshape(images, shape)
 
-    root.attrs['multiscale'] = {'multiscales': [{'version': '0.3', 
-                                                    'name': name+'_'+pos_name, 
-                                                    'datasets': [{'path': '0'}],
-                                                    'axes': ['t','c','z','y','x']}]}
+    root.attrs['multiscale'] = {
+        'multiscales': [{
+            'version': '0.3', 
+            'name': name+'_'+pos_name, 
+            'datasets': [{'path': '0'}],
+            'axes': ['t','c','z','y','x'],
+        }]
+    }
     if metadata:
         root.attrs['metadata'] = metadata
 
-    compressor = Blosc(cname='zstd', clevel=5, shuffle=Blosc.BITSHUFFLE)
+    compressor = compressor or numcodecs.Blosc(cname='zstd', clevel=5, shuffle=numcodecs.Blosc.BITSHUFFLE)
 
-    multiscale_level = root.create_dataset(name = str(0), compressor=compressor, shape=shape, chunks=chunks, dtype=dtype)
+    multiscale_level = root.create_dataset(name=str(0), compressor=compressor, shape=shape, chunks=chunks, dtype=dtype)
     if 't' in chunk_axes:
         multiscale_level[:] = images
     elif size['t'] < 10 or images.size < 1e9:
@@ -275,14 +282,16 @@ def single_position_to_zarr(images: np.ndarray or list,
         joblib.Parallel(n_jobs=-1, prefer='threads', verbose=10)(joblib.delayed(single_image_to_zarr)
                                                             (multiscale_level, i, images[i]) for i in range(size['t']))
 
-def images_to_ome_zarr(images: np.ndarray or list, 
-                    path: str, 
-                    name: str, 
-                    dtype:str = None, 
-                    axes=('p','t','c','z','y','x'), 
-                    chunk_axes = ('y', 'x'), 
-                    chunk_split = (2,2),  
-                    metadata:dict = None):
+def images_to_ome_zarr(
+    images: np.ndarray or list, 
+    path: str, 
+    name: str, 
+    dtype: Type, 
+    axes = ('p','t','c','z','y','x'), 
+    chunk_axes = ('y', 'x'), 
+    chunk_split = (2,2),  
+    metadata: dict = None,
+    ):
     '''
     Saves an array to ome-zarr format (metadata still needs work to match spec)
     '''
@@ -310,8 +319,6 @@ def create_zarr_store(  path: Union[str, Path],
                         chunks: tuple,   
                         metadata: Optional[dict] = None,
                         voxel_size: list = [1, 1, 1]):
-    from numcodecs import Blosc
-
     store = zarr.NestedDirectoryStore(os.path.join(path, pos_name))
     root = zarr.group(store=store, overwrite=True)
 
@@ -329,7 +336,7 @@ def create_zarr_store(  path: Union[str, Path],
     if metadata is not None:
         root.attrs['metadata'] = metadata
 
-    compressor = Blosc(cname='zstd', clevel=5, shuffle=Blosc.BITSHUFFLE)
+    compressor = numcodecs.Blosc(cname='zstd', clevel=5, shuffle=numcodecs.Blosc.BITSHUFFLE)
 
     level_store = root.create_dataset(name=str(0), compressor=compressor, shape=shape, chunks=chunks, dtype=dtype)
     return level_store
