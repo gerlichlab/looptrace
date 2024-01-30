@@ -262,7 +262,7 @@ def single_position_to_zarr(
     root.attrs['multiscale'] = {
         'multiscales': [{
             'version': '0.3', 
-            'name': name+'_'+pos_name, 
+            'name': name + '_' + pos_name, 
             'datasets': [{'path': '0'}],
             'axes': ['t','c','z','y','x'],
         }]
@@ -276,7 +276,8 @@ def single_position_to_zarr(
     if 't' in chunk_axes:
         multiscale_level[:] = images
     elif size['t'] < 10 or images.size < 1e9:
-        [single_image_to_zarr(multiscale_level, i, images[i]) for i in range(size['t'])]
+        for i in range(size['t']):
+            single_image_to_zarr(multiscale_level, i, images[i])
     else:
         import joblib
         joblib.Parallel(n_jobs=-1, prefer='threads', verbose=10)(joblib.delayed(single_image_to_zarr)
