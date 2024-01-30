@@ -12,6 +12,9 @@ val JDK11 = JavaSpec.temurin("11")
 val JDK17 = JavaSpec.temurin("17")
 ThisBuild / githubWorkflowJavaVersions := Seq(JDK11, JDK17)
 
+// TODO: reactivate if using netcdf-java or similar. #127
+// resolvers += "Unidata All" at "https://artifacts.unidata.ucar.edu/repository/unidata-all/"
+
 lazy val root = (project in file("."))
   .settings(
     name := "looptrace",
@@ -33,11 +36,14 @@ lazy val root = (project in file("."))
       scalaCsv,
       scopt,
       uPickle,
-    ) ++ Seq( // only for tests
-      scalacheck, 
-      scalactic, 
-      scalatest, 
-      scalatestScalacheck
-    ).map(_ % Test), 
+      ) ++ 
+      // TODO: reactivate if using netcdf-java or similar. #127
+      // netcdf ++
+      logging ++
+      Seq( // only for tests
+        scalacheck, 
+        scalactic, 
+        scalatest, 
+        scalatestScalacheck
+      ).map(_ % Test), 
   )
-
