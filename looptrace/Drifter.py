@@ -488,7 +488,7 @@ class Drifter():
 
     @property
     def moving_channel(self) -> int:
-        return self.config['reg_ch_moving']
+        return self.config["reg_ch_moving"]
 
     @property
     def num_bead_rois_for_drift_correction(self) -> int:
