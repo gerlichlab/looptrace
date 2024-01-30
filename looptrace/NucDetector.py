@@ -254,7 +254,7 @@ class NucDetector:
 
         return self.nuc_masks_path
 
-    def coarse_drift_correction_workflow(self):
+    def coarse_drift_correction_workflow(self) -> Path:
         from joblib import Parallel, delayed
         downsampling = self.config["coarse_drift_downsample"]
         all_args = generate_drift_function_arguments__coarse_drift_only(
