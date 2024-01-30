@@ -74,6 +74,7 @@ class NucDetector:
     def iter_images(self) -> Iterable[np.ndarray]:
         return (img for _, img in self.iter_pos_img_pairs())
 
+    @property
     def segmentation_method(self) -> str:
         return self.config[self.DETECTION_METHOD_KEY]
 
