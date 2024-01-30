@@ -264,7 +264,7 @@ class NucDetector:
             reference_frame=self.config["reg_ref_frame"],
             reference_channel=self.config["reg_ch_template"],
             moving_images=self.images,
-            moving_channel=self.channel,
+            moving_channel=self.config["reg_ch_moving"],
             downsampling=downsampling,
             nuclei_mode=True,
         )
