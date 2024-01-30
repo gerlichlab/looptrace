@@ -172,7 +172,8 @@ def generate_drift_function_arguments__coarse_drift_only(
     moving_images: List[np.ndarray], 
     moving_channel: int, 
     downsampling: int, 
-    stop_after: int,
+    nuclei_mode: bool,
+    stop_after: int = sys.maxsize,
     ) -> Iterable[Tuple[str, int, np.ndarray, np.ndarray]]:
     """
     Generate the coarse and fine drift correction shifts, when just doing coarse correction (dummy values for fine DC).
@@ -195,6 +196,10 @@ def generate_drift_function_arguments__coarse_drift_only(
         The channel in signal to shift was imaged
     downsampling : int
         A factor by which to downsample the reference and moving signal, by taking every nth entry of an array
+    nuclei_mode : bool
+        Whether the arguments are being generated for nuclei, changing expected dimensionality of moving images
+    stop_after : int, default infinite
+        Point (position) after which to stop the generation
     
     Returns
     -------
@@ -212,10 +217,15 @@ def generate_drift_function_arguments__coarse_drift_only(
     for i, pos in takewhile(lambda i_and_p: i_and_p[0] <= stop_after, map(lambda p: (full_pos_list.index(p), p), pos_list)):
         print(f'Running coarse drift correction for position: {pos}.')
         t_img = np.array(reference_images[i][reference_frame, reference_channel, ::downsampling, ::downsampling, ::downsampling])
-        for t in tqdm.tqdm(range(moving_images[i].shape[0])):
-            o_img = np.array(moving_images[i][t, moving_channel, ::downsampling, ::downsampling, ::downsampling])
-            yield pos, t, t_img, o_img
-        print(f'Finished drift correction for position: {pos}')
+        mov_img = moving_images[i]
+        if nuclei_mode:
+            o_img = np.array(mov_img[moving_channel, ::downsampling, ::downsampling, ::downsampling])
+            yield pos, 0, t_img, o_img
+        else:
+            for t in tqdm.tqdm(range(mov_img.shape[0])):
+                o_img = np.array(mov_img[t, moving_channel, ::downsampling, ::downsampling, ::downsampling])
+                yield pos, t, t_img, o_img
+        print(f"Finished drift correction for position: {pos}")
 
 
 @dataclasses.dataclass
@@ -250,6 +260,7 @@ def coarse_correction_workflow(config_file: ExtantFile, images_folder: ExtantFol
         moving_images=D.images_moving, 
         moving_channel=D.moving_channel, 
         downsampling=D.downsampling,
+        nuclei_mode=False,
         stop_after=pos_halt_point,
     )
     print("Computing coarse drifts...")
