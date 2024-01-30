@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import *
 
 import dask.array as da
-import numcodecs
 import numpy as np
 import pandas as pd
 from scipy import ndimage as ndi
@@ -110,30 +109,32 @@ class NucDetector:
         Saves 2D/3D (defined in config) images of the nuclear channel into image folder for later analysis.
         '''
         nuc_slice = self.config.get("nuc_slice", -1)
-        print("Generating nuclei images...")
-        for i, pos in tqdm.tqdm(enumerate(self.pos_list)):
-            if self.do_in_3d:
-                axes = ("z", "y", "x")
-                prep = lambda img: img
-            else:
-                axes = ("y", "x")
-                if nuc_slice == -1:
-                    # TODO: encode the meaning of this sentinel better, and document it (i.e., -1 appears to be max-projection).
-                    # See: https://github.com/gerlichlab/looptrace/issues/244
-                    prep = lambda img: da.max(img, axis=0)
-                else:
-                    prep = lambda img: img[nuc_slice]
-            # TODO: replace this dimensionality hack with a cleaner solution to zarr writing.
-            # See: https://github.com/gerlichlab/looptrace/issues/245
-            subimg = prep(self.images[i][self.reference_frame, self.channel]).compute()
+        if self.do_in_3d:
+            axes = ("z", "y", "x")
+            prep = lambda img: img
+        else:
+            axes = ("y", "x")
             if nuc_slice == -1:
-                image_io.nuc_single_pos_max_proj_zarr(image=subimg, path=self.nuc_images_path, pos_name=pos, dtype=np.uint16)
+                # TODO: encode the meaning of this sentinel better, and document it (i.e., -1 appears to be max-projection).
+                # See: https://github.com/gerlichlab/looptrace/issues/244
+                prep = lambda img: da.max(img, axis=0)
             else:
+                prep = lambda img: img[nuc_slice]
+        
+        print("Generating nuclei images...")
+        name_img_pairs = [(pos_name, prep(self.images[i][self.reference_frame, self.channel]).compute()) for i, pos_name in tqdm.tqdm(enumerate(self.pos_list))]
+        print("Saving nuclei images...")
+        if nuc_slice == -1:
+            image_io.nuc_multipos_single_time_max_z_proj_zarr(name_img_pairs, root_path=self.nuc_images_path, dtype=np.uint16)
+        else:
+            for pos_name, subimg in tqdm.tqdm(name_img_pairs):
+                # TODO: replace this dimensionality hack with a cleaner solution to zarr writing.
+                # See: https://github.com/gerlichlab/looptrace/issues/245
                 image_io.single_position_to_zarr(
                     subimg, 
                     path=self.nuc_images_path, 
                     name=self.IMAGES_KEY, 
-                    pos_name=pos, 
+                    pos_name=pos_name, 
                     axes=axes, 
                     dtype=np.uint16, 
                     chunk_split=(1,1),
