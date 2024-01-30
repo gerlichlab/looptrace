@@ -133,7 +133,8 @@ class NucDetector:
                 axes=axes, 
                 dtype=np.uint16, 
                 chunk_split=(1,1),
-                compressor=numcodecs.Zlib(),
+                # TODO: reactivate if using netcdf-java or similar. #127
+                # compressor=numcodecs.Zlib(),
                 )
     
     def segment_nuclei(self) -> Path:
