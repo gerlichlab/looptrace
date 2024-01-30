@@ -126,17 +126,20 @@ class NucDetector:
             # TODO: replace this dimensionality hack with a cleaner solution to zarr writing.
             # See: https://github.com/gerlichlab/looptrace/issues/245
             subimg = prep(self.images[i][self.reference_frame, self.channel]).compute()
-            image_io.single_position_to_zarr(
-                subimg, 
-                path=self.nuc_images_path, 
-                name=self.IMAGES_KEY, 
-                pos_name=pos, 
-                axes=axes, 
-                dtype=np.uint16, 
-                chunk_split=(1,1),
-                # TODO: reactivate if using netcdf-java or similar. #127
-                # compressor=numcodecs.Zlib(),
-                )
+            if nuc_slice == -1:
+                image_io.nuc_single_pos_max_proj_zarr(image=subimg, path=self.nuc_images_path, pos_name=pos, dtype=np.uint16)
+            else:
+                image_io.single_position_to_zarr(
+                    subimg, 
+                    path=self.nuc_images_path, 
+                    name=self.IMAGES_KEY, 
+                    pos_name=pos, 
+                    axes=axes, 
+                    dtype=np.uint16, 
+                    chunk_split=(1,1),
+                    # TODO: reactivate if using netcdf-java or similar. #127
+                    # compressor=numcodecs.Zlib(),
+                    )
     
     def segment_nuclei(self) -> Path:
         '''
