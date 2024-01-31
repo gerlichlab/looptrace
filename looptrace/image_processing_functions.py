@@ -13,9 +13,9 @@ import pandas as pd
 
 import scipy.ndimage as ndi
 from scipy.stats import trim_mean
-from skimage.segmentation import clear_border, find_boundaries, expand_labels
+from skimage.segmentation import clear_border, expand_labels
 from skimage.filters import gaussian, threshold_otsu
-from skimage.morphology import white_tophat, ball, remove_small_objects
+from skimage.morphology import ball, remove_small_objects, white_tophat
 from skimage.measure import regionprops_table
 
 from looptrace.numeric_types import NumberLike
@@ -434,6 +434,7 @@ def decon_RL_setup(size_x=8, size_y=8, size_z=8, pz=0., wavelength=.660,
         ).generate()
     return algo, kernel, fd_data
 
+
 def decon_RL(img, kernel, algo, fd_data, niter=10):
     '''[summary]
 
@@ -450,76 +451,6 @@ def decon_RL(img, kernel, algo, fd_data, niter=10):
     res = algo.run(fd_data.Acquisition(data=img, kernel=kernel), niter=niter).data
     return res
 
-
-def nuc_segmentation_cellpose_2d(nuc_imgs: Union[List[np.ndarray], np.ndarray], diameter: NumberLike = 150, model_type = 'nuclei'):
-    '''
-    Runs nuclear segmentation using cellpose trained model (https://github.com/MouseLand/cellpose)
-
-    Args:
-        nuc_imgs (ndarray or list of ndarrays): 2D or 3D images of nuclei, expects single channel
-    '''
-    if not isinstance(nuc_imgs, list):
-        if nuc_imgs.ndim > 2:
-            nuc_imgs = [np.array(nuc_imgs[i]) for i in range(nuc_imgs.shape[0])] #Force array conversion in case of zarr.
-
-    from cellpose import models
-    model = models.CellposeModel(gpu=False, model_type=model_type)
-    masks = model.eval(nuc_imgs, diameter=diameter, channels=[0,0], net_avg=False, do_3D=False)[0]
-    return masks
-
-
-def nuc_segmentation_cellpose_3d(nuc_imgs: Union[List[np.ndarray], np.ndarray], diameter: NumberLike = 150, model_type: str = 'nuclei', anisotropy: NumberLike = 2):
-    '''
-    Runs nuclear segmentation using cellpose trained model (https://github.com/MouseLand/cellpose)
-
-    Args:
-        nuc_imgs (ndarray or list of ndarrays): 2D or 3D images of nuclei, expects single channel
-    '''
-    if not isinstance(nuc_imgs, list):
-        if nuc_imgs.ndim > 3:
-            nuc_imgs = [np.array(nuc_imgs[i]) for i in range(nuc_imgs.shape[0])] #Force array conversion in case of zarr.
-
-    from cellpose import models
-    model = models.CellposeModel(gpu=True, model_type=model_type, net_avg=False)
-    masks = model.eval(nuc_imgs, diameter=diameter, channels=[0,0], z_axis=0, anisotropy=anisotropy, do_3D=True)[0]
-    return masks
-
-
-def mask_to_binary(mask):
-    '''Converts masks from nuclear segmentation to masks with 
-    single pixel background between separate, neighbouring features.
-
-    Args:
-        masks ([np array]): Detected nuclear masks (label image)
-
-    Returns:
-        [np array]: Masks with single pixel seperation beteween neighboring features.
-    '''
-    masks_no_bound = np.where(find_boundaries(mask)>0, 0, mask)
-    return masks_no_bound
-
-def mitotic_cell_extra_seg(nuc_image, nuc_mask):
-    '''Performs additional mitotic cell segmentation on top of an interphase segmentation (e.g. from CellPose).
-    Assumes mitotic cells are brighter, unsegmented objects in the image.
-
-    Args:
-        nuc_image ([nD numpy array]): nuclei image
-        nuc_mask ([nD numpy array]): labeled nuclei from nuclei image
-
-    Returns:
-        nuc_mask ([nD numpy array]): labeled nuclei with mitotic cells added
-        mito_index+1 (int): the first index of the mitotic cells in the returned nuc_mask
-
-    '''
-    from skimage.morphology import label, remove_small_objects
-    nuc_int = np.mean(nuc_image[nuc_mask>0])
-    mito_nuc = (nuc_image * (nuc_mask == 0)) > 1.5*nuc_int
-    mito_nuc = remove_small_objects(mito_nuc, min_size=100)
-    mito_nuc = label(mito_nuc)
-    mito_index = np.max(nuc_mask)
-    mito_nuc[mito_nuc>0] += mito_index
-    nuc_mask = nuc_mask + mito_nuc
-    return nuc_mask, mito_index+1
 
 def nuc_segmentation_otsu(nuc_image, min_size, exp_bb=-1, clear_edges=True):
     '''
@@ -609,13 +540,6 @@ def extract_cell_features(nuc_img, int_imgs: list, nuc_bg_int=800, nuc_fg_int=50
         features = res
         scaler_model = None
     return features, scaler_model
-
-
-def relabel_nucs(nuc_image):
-    from skimage.morphology import label
-    out = mask_to_binary(nuc_image)
-    out = label(out)
-    return out.astype(nuc_image.dtype)
 
 
 def full_frame_dc_to_single_nuc_dc(old_dc_path, new_dc_position_list, new_dc_path):
