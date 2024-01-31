@@ -231,7 +231,6 @@ class NucDetector:
             masks, mitotic_idx = zip(*[ip.mitotic_cell_extra_seg(np.array(img), mask) for img, mask in zip(nuc_imgs, masks)])
 
         masks = [rescale(expand_labels(mask.astype(np.uint16), 3), scale=scale_for_rescaling, order=0) for mask in masks]
-        #masks = np.stack(masks)
 
         print("Saving segmentations...")
         self.image_handler.images[self.MASKS_KEY] = masks
@@ -245,7 +244,6 @@ class NucDetector:
                 class_1 = ((mask > 0) & (mask < mitotic_idx[i])).astype(int)
                 class_2 = (mask >= mitotic_idx[i]).astype(int)
                 nuc_class.append(class_1 + 2*class_2)
-            #nuc_class = np.stack(nuc_class).astype(np.uint16)
             print("Saving classifications...")
             self.image_handler.images[self.CLASSES_KEY] = nuc_class
             # TODO: need to adjust axes argument probably.

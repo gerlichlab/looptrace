@@ -88,24 +88,26 @@ def filter_rois_in_nucs(rois, nuc_label_img, new_col='nuc_label', nuc_drifts=Non
     '''
 
     new_rois = rois.copy()
-    print(nuc_label_img.shape)
-    def spot_in_nuc(row, nuc_label_img):
-        try:
-            if nuc_label_img.shape[-3] == 1:
-                spot_label = int(nuc_label_img[0, int(row['yc']), int(row['xc'])])
-            else:
-                spot_label = int(nuc_label_img[int(row['zc']),int(row['yc']), int(row['xc'])])
-        except IndexError as e: #If due to drift spot is outside frame.
-            spot_label = 0
-            print(e)
-        #print(spot_label)
-        return spot_label
+    
+    def spot_in_nuc(row: Union[pd.Series, dict], nuc_label_img: np.ndarray):
+        idx_px_y = int(row["yc"])
+        idx_px_x = int(row["xc"])
+        if len(nuc_label_img.shape) == 2:
+            spot_label = nuc_label_img[idx_px_y, idx_px_x]
+        else:
+            idx_px_z = 1 if nuc_label_img.shape[-3] == 1 else int(row["zc"]) # Flat in z dimension?
+            try:
+                spot_label = nuc_label_img[idx_px_z, idx_px_y, idx_px_x]
+            except IndexError as e: # If, due to drift spot, is outside frame?
+                print(f"IndexError ({e}) extracting {(idx_px_z, idx_px_y, idx_px_x)} from image of shape {nuc_label_img.shape}. Spot label set to 0.")
+                spot_label = 0
+            return int(spot_label)
 
     try:
         new_rois.drop(columns=[new_col], inplace=True)
     except KeyError:
         pass
-    #print(rois, nuc_drifts)
+
     if nuc_drifts is not None:
         rois_shifted = new_rois.copy()
         shifts = []
