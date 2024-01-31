@@ -71,12 +71,12 @@ def find_config_file_errors(config_file: ExtantFile) -> List[ConfigFileError]:
     if conf_data.get(NucDetector.KEY_3D, False):
         errors.append(ConfigFileError(f"Nuclei detection in 3D isn't supported! Set key '{NucDetector.KEY_3D}' to False."))
     try:
-        nuclei_detection_method = conf_data[NucDetector.NUCLEI_DETECTION_METHOD_KEY]
+        nuclei_detection_method = conf_data[NucDetector.DETECTION_METHOD_KEY]
     except KeyError:
-        errors.append(ConfigFileError(f"Missing nuclei detection method key: {NucDetector.NUCLEI_DETECTION_METHOD_KEY}!"))
+        errors.append(ConfigFileError(f"Missing nuclei detection method key: {NucDetector.DETECTION_METHOD_KEY}!"))
     else:
         if nuclei_detection_method != "nuclei":
-            errors.append(f"Unsupported nuclei detection method (key '{NucDetector.NUCLEI_DETECTION_METHOD_KEY}')! {nuclei_detection_method}")
+            errors.append(f"Unsupported nuclei detection method (key '{NucDetector.DETECTION_METHOD_KEY}')! {nuclei_detection_method}")
     
     # Drift correction
     dc_method = Drifter.get_method_name(conf_data)

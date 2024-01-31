@@ -48,14 +48,6 @@ def workflow(
         )
 
 
-def get_images_key(handler: ImageHandler) -> str:
-    key_ref = handler.reg_input_template
-    key_mov = handler.reg_input_moving
-    if key_mov != key_ref:
-        raise Exception(f"Key for shifted images differs from key for template images! ({key_mov}, {key_ref})")
-    return key_ref
-
-
 def get_beads_channel(drifter: Drifter) -> int:
     ch_ref = drifter.reference_channel
     ch_mov = drifter.moving_channel

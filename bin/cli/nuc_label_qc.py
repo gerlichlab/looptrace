@@ -7,57 +7,61 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+import argparse
+import sys
+import numpy as np
+
+import napari
+
 from looptrace.ImageHandler import ImageHandler
 from looptrace.NucDetector import NucDetector
-import napari
-import numpy as np
-import sys
-import argparse
+
+__author__ = "Kai Sandvold Beckwith"
+__credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
+
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Extract experimental PSF from bead images.')
+    parser = argparse.ArgumentParser(
+        description="Extract experimental PSF from bead images.", 
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        )
     parser.add_argument("config_path", help="Config file path")
     parser.add_argument("image_path", help="Path to folder with images to read.")
-    parser.add_argument("--image_save_path", help="(Optional): Path to folder to save images to.", default=None)
-    parser.add_argument("--qc", help="(Optional): Additionally run QC (allows edits).", action='store_true')
+    parser.add_argument("--image_save_path", help="Path to folder to save images to.")
+    parser.add_argument("--qc", action="store_true", help="Additionally run QC (allows edits).")
     args = parser.parse_args()
     
+    prep_image_to_add = np.array if args.qc else (lambda img: img)
+
     H = ImageHandler(config_path=args.config_path, image_path=args.image_path, image_save_path=args.image_save_path)
     N = NucDetector(H)
     
-    if 'nuc_images' not in H.images or 'nuc_masks' not in H.images:
-        print('Nuclei need to be segmented first.')
+    # Gather the images to use and determine what to do for each FOV.
+    seg_imgs = N.images_for_segmentation
+    mask_imgs = N.mask_images
+    if mask_imgs is None:
+        print("Nuclei need to be segmented first.")
         sys.exit()
+    
+    class_imgs = N.class_images
+    if class_imgs is None:
+        get_class_layer = lambda _1, _2: None
+    else:
+        get_class_layer = lambda view, pos_idx: view.add_labels(prep_image_to_add(class_imgs[pos_idx]))
 
-    nuc_imgs = H.images['nuc_images']
-    for i, nuc_img in enumerate(nuc_imgs):
+    for i, nuc_img in enumerate(seg_imgs):
         viewer = napari.view_image(nuc_img)
-        if NucDetector.MASKS_KEY in H.images:
-            nuc_mask = H.images['nuc_masks'][i]
-            if args.qc:
-                nuc_mask = np.array(nuc_mask)
-            masks_layer = viewer.add_labels(nuc_mask)
-        if NucDetector.CLASSES_KEY in H.images:
-            nuc_class = H.images['nuc_classes'][i]
-            if args.qc:
-                nuc_class = np.array(nuc_class)
-            classes_layer = viewer.add_labels(nuc_class)
+        masks_layer = viewer.add_labels(prep_image_to_add(mask_imgs[i]))
+        class_layer = get_class_layer(viewer, i)
         napari.run()
 
-        user_input = input('Press enter to continue to next position, or q to quit.')
-        if user_input == 'q':
+        sentinel = "q"
+        user_input = input(f"Press enter to continue to next position, or {sentinel} to quit.")
+        if user_input == sentinel:
             break
 
         if args.qc:
-            if 'nuc_masks' in H.images:
-                N.update_masks_after_qc(masks_layer.data.astype(np.uint16), np.array(H.images['nuc_masks'][i]), 'nuc_masks', H.image_lists['nuc_masks'][i])
-            if 'nuc_classes' in H.images:    
-                N.update_masks_after_qc(classes_layer.data.astype(np.uint16), np.array(H.images['nuc_classes'][i]), 'nuc_classes', H.image_lists['nuc_classes'][i])
-        
-            del nuc_img
-            if 'nuc_masks' in H.images:
-                del nuc_mask
-                del masks_layer
-            if 'nuc_classes' in H.images:
-                del nuc_class
-                del classes_layer
+            N.update_masks_after_qc(masks_layer.data.astype(np.uint16), np.array(mask_imgs[i]), NucDetector.MASKS_KEY, H.image_lists[NucDetector.MASKS_KEY][i])
+            if class_layer is not None:
+                N.update_masks_after_qc(class_layer.data.astype(np.uint16), np.array(class_imgs[i]), NucDetector.CLASSES_KEY, H.image_lists[NucDetector.CLASSES_KEY][i])
+                del class_layer
