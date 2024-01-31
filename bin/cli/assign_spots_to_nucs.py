@@ -24,27 +24,25 @@ def workflow(
     # Set up the spot picker and the nuclei detector instances, to manage paths and settings.
     H = handler_from_cli(config_file=config_file, images_folder=images_folder, image_save_path=image_save_path)
     N = NucDetector(H)
-    
-    def query_table_for_pos(input_name_key: str):
-        table_name = H.config[input_name_key] + '_drift_correction'
-        try:
-            table = H.tables[table_name]
-        except KeyError:
-            logger.warning(f"Drift-corrected table unavailable for filtration: {table_name}")
-            fun = lambda _: None
-        else:
-            logger.info(f"Using drift-corrected table for filtration: {table_name}")
-            fun = lambda pos: table.query('position == @pos')
-        return fun
 
-    logger.info('Assigning spots to nuclei labels.')
+    read_table = lambda f: pd.read_csv(f, index_col=0)
+    
+    def query_table_for_pos(table: pd.DataFrame) -> Callable[[str], pd.DataFrame]:
+        return (lambda pos: table.query('position == @pos'))
+
+    logger.info(f"Reading coarse-drift file for nuclei: {N.drift_correction_file__coarse}")
+    drift_table_nuclei = read_table(N.drift_correction_file__coarse)
+    get_nuc_drifts = query_table_for_pos(drift_table_nuclei)
+    
+    logger.info(f"Reading coarse-drift file for spots: {H.drift_correction_file__coarse}")
+    drift_table_spots = read_table(H.drift_correction_file__coarse)
+    get_spot_drifts = query_table_for_pos(drift_table_spots)
+    
+    rois_table = read_table(H.proximity_filtered_spots_file_path)
+    get_rois = query_table_for_pos(rois_table)
+
+    logger.info("Assigning spots to nuclei labels...")
     all_rois = []
-    get_nuc_drifts = query_table_for_pos('nuc_input_name')
-    get_spot_drifts = query_table_for_pos('spot_input_name')
-    
-    rois_table = pd.read_csv(H.proximity_filtered_spots_file_path, index_col=0)
-    get_rois = lambda pos: rois_table[rois_table.position == pos]            
-
     for i, pos in tqdm.tqdm(enumerate(H.image_lists[H.spot_input_name])):
         rois = get_rois(pos)
         if len(rois) == 0:
@@ -65,18 +63,19 @@ def workflow(
     
     outfile = H.nuclei_labeled_spots_file_path
     if len(all_rois) == 0:
-        print(f"No ROIs! Cannot write output file: {outfile}")
+        logger.warn(f"No ROIs! Cannot write output file: {outfile}")
     else:
         all_rois = pd.concat(all_rois).sort_values(['position', 'frame'])
+        logger.info(f"Writing output file: {outfile}")
         all_rois.to_csv(outfile)
-        if H.spot_input_name + '_traces' in H.tables:
-            logger.info('Assigning ids to traces.')
-            traces = H.tables[H.spot_input_name + '_traces'].copy()
-            if 'nuc_masks' in H.images:
-                traces.loc[:, 'nuc_label'] = traces['trace_id'].map(all_rois['nuc_label'].to_dict())
-            if 'nuc_classes' in H.images:
-                traces.loc[:, 'nuc_class'] = traces['trace_id'].map(all_rois['nuc_class'].to_dict())
-            traces.sort_values(['trace_id', 'frame']).to_csv(H.out_path(H.spot_input_name + '_traces.csv'))
+        # if H.spot_input_name + '_traces' in H.tables:
+        #     logger.info('Assigning ids to traces.')
+        #     traces = H.tables[H.spot_input_name + '_traces'].copy()
+        #     if 'nuc_masks' in H.images:
+        #         traces.loc[:, 'nuc_label'] = traces['trace_id'].map(all_rois['nuc_label'].to_dict())
+        #     if 'nuc_classes' in H.images:
+        #         traces.loc[:, 'nuc_class'] = traces['trace_id'].map(all_rois['nuc_class'].to_dict())
+        #     traces.sort_values(['trace_id', 'frame']).to_csv(H.out_path(H.spot_input_name + '_traces.csv'))
 
     logger.info("Done!")
 
