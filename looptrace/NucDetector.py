@@ -9,21 +9,20 @@ EMBL Heidelberg
 
 import os
 from pathlib import Path
-import sys
 from typing import *
 
 import dask.array as da
 import numpy as np
 import pandas as pd
 from scipy import ndimage as ndi
-from skimage.segmentation import expand_labels, relabel_sequential
+from skimage.segmentation import expand_labels, find_boundaries, relabel_sequential
 from skimage.measure import regionprops_table
 from skimage.transform import rescale
 from skimage.morphology import remove_small_objects
 import tqdm
 
 from looptrace import image_io
-from looptrace import image_processing_functions as ip
+from looptrace.numeric_types import NumberLike
 from looptrace.wrappers import phase_xcor
 from looptrace.Drifter import COARSE_DRIFT_TABLE_COLUMNS, generate_drift_function_arguments__coarse_drift_only
 
@@ -206,14 +205,14 @@ class NucDetector:
             def scale_down_img(img_zyx: np.ndarray) -> np.ndarray:
                 assert len(img_zyx.shape) == 3, f"Bad shape for alleged 3D image: {img_zyx.shape}"
                 return img_zyx[::self.ds_z, ::self.ds_xy, ::self.ds_xy]
-            get_masks = lambda imgs: ip.nuc_segmentation_cellpose_3d(imgs, diameter=diameter, model_type=method, anisotropy=self.config["nuc_anisotropy"])
+            get_masks = lambda imgs: _nuc_segmentation_cellpose_3d(imgs, diameter=diameter, model_type=method, anisotropy=self.config["nuc_anisotropy"])
             ome_zarr_axes = ("p", "z", "y", "x")
         else:
             scale_for_rescaling = (self.ds_xy, self.ds_xy)
             def scale_down_img(img_zyx: np.ndarray) -> np.ndarray:
                 assert len(img_zyx.shape) == 2, f"Bad shape for alleged 3D image: {img_zyx.shape}"
                 return img_zyx[::self.ds_xy, ::self.ds_xy]
-            get_masks = lambda imgs: ip.nuc_segmentation_cellpose_2d(imgs, diameter=diameter, model_type=method)
+            get_masks = lambda imgs: _nuc_segmentation_cellpose_2d(imgs, diameter=diameter, model_type=method)
             ome_zarr_axes = ("p", "y", "x")
         
         nuc_min_size = self.min_size / np.prod(scale_for_rescaling)
@@ -228,7 +227,7 @@ class NucDetector:
 
         if self.classify_mitotic:
             print(f"Detecting mitotic cells on top of CellPose nuclei...")
-            masks, mitotic_idx = zip(*[ip.mitotic_cell_extra_seg(np.array(img), mask) for img, mask in zip(nuc_imgs, masks)])
+            masks, mitotic_idx = zip(*[_mitotic_cell_extra_seg(np.array(img), mask) for img, mask in zip(nuc_imgs, masks)])
 
         masks = [rescale(expand_labels(mask.astype(np.uint16), 3), scale=scale_for_rescaling, order=0) for mask in masks]
 
@@ -286,12 +285,19 @@ class NucDetector:
         s = tuple([slice(None, None, 4)] * len(new_mask.ndim))
         if not np.allclose(new_mask[s], original_mask[s]):
             print("Segmentation labels have changed; resaving...")
-            nuc_mask = ip.relabel_nucs(new_mask)
+            nuc_mask = _relabel_nucs(new_mask)
             pos_index = self.image_handler.image_lists[mask_name].index(position)
             self.image_handler.images[mask_name] = nuc_mask.astype(np.uint16)
             # TODO: need to adjust axes argument probably.
             # See: https://github.com/gerlichlab/looptrace/issues/245
-            image_io.single_position_to_zarr(images=self.image_handler.images[mask_name][pos_index], path = self.nuc_masks_path / position, name=mask_name, axes=('z','y','x') if self.do_in_3d else ('y','x'), dtype=np.uint16, chunk_split=(1,1))
+            image_io.single_position_to_zarr(
+                images=self.image_handler.images[mask_name][pos_index], 
+                path = self.nuc_masks_path / position, 
+                name=mask_name, 
+                axes=('z','y','x') if self.do_in_3d else ('y','x'), 
+                dtype=np.uint16, 
+                chunk_split=(1,1),
+                )
         else:
             print("Nothing to update, as all values are approximately equal")
 
@@ -313,17 +319,29 @@ class NucDetector:
             nuc_class = np.array(nuc_classes[i])
 
             if mask.ndim == 2:
-                nuc_props = pd.DataFrame(regionprops_table(mask, intensity_image=nuc_class, properties=['label', 'bbox', 'intensity_mean'])).rename(columns={'bbox-0':'y_min', 
-                                                                                'bbox-1':'x_min', 
-                                                                                'bbox-2':'y_max', 
-                                                                                'bbox-3':'x_max'})
+                nuc_props = pd.DataFrame(regionprops_table(
+                    mask, 
+                    intensity_image=nuc_class, 
+                    properties=['label', 'bbox', 'intensity_mean']
+                    )).rename(columns={
+                        'bbox-0':'y_min', 
+                        'bbox-1':'x_min', 
+                        'bbox-2':'y_max', 
+                        'bbox-3':'x_max',
+                    })
             else:
-                nuc_props = pd.DataFrame(regionprops_table(mask, intensity_image=nuc_class, properties=['label', 'bbox', 'intensity_mean'])).rename(columns={'bbox-0':'z_min', 
-                                                                'bbox-1':'y_min', 
-                                                                'bbox-2':'x_min', 
-                                                                'bbox-3':'z_max', 
-                                                                'bbox-4':'y_max', 
-                                                                'bbox-5':'x_max'})
+                nuc_props = pd.DataFrame(regionprops_table(
+                    mask, 
+                    intensity_image=nuc_class, 
+                    properties=['label', 'bbox', 'intensity_mean']
+                    )).rename(columns={
+                        'bbox-0':'z_min', 
+                        'bbox-1':'y_min', 
+                        'bbox-2':'x_min', 
+                        'bbox-3':'z_max', 
+                        'bbox-4':'y_max', 
+                        'bbox-5':'x_max',
+                    })
 
             for j, roi in nuc_props.iterrows():
                 old_pos = 'P'+str(i+1).zfill(4)
@@ -367,7 +385,7 @@ class NucDetector:
                         slice(sy[0],sy[1]), 
                         slice(sx[0],sx[1]))
 
-                    nuc_rois.append([old_pos, new_pos, i, roi.name, dc_frame['frame'], ref_frame, ch, s, pad, z_drift_coarse, y_drift_coarse, x_drift_coarse, 
+                    nuc_rois.append([old_pos, new_pos, i, roi.name, dc_frame['frame'], self.reference_frame, self.channel, s, pad, z_drift_coarse, y_drift_coarse, x_drift_coarse, 
                                                                                             dc_frame['z_px_fine'], dc_frame['y_px_fine'], dc_frame['x_px_fine'], roi['intensity_mean']])
 
         nuc_rois = pd.DataFrame(nuc_rois, columns=['orig_position','position', 'orig_pos_index', 'roi_id', 'frame', 'ref_frame', 'ch', 'roi_slice', 'pad', 'z_px_coarse', 'y_px_coarse', 'x_px_coarse', 
@@ -384,20 +402,24 @@ class NucDetector:
 
             mask = np.array(nuc_masks[i][0,0])
             if mask.shape[0] == 1:
-                nuc_props = pd.DataFrame(regionprops_table(mask, properties=['label', 'bbox', 'area'])).rename(columns={'bbox-0':'y_min', 
-                                                                                'bbox-1':'x_min', 
-                                                                                'bbox-2':'y_max', 
-                                                                                'bbox-3':'x_max'})
+                nuc_props = pd.DataFrame(regionprops_table(mask, properties=['label', 'bbox', 'area'])).rename(columns={
+                    'bbox-0':'y_min', 
+                    'bbox-1':'x_min', 
+                    'bbox-2':'y_max', 
+                    'bbox-3':'x_max',
+                })
             else:
-                nuc_props = pd.DataFrame(regionprops_table(mask, properties=['label', 'bbox', 'area'])).rename(columns={'bbox-0':'z_min', 
-                                                                'bbox-1':'y_min', 
-                                                                'bbox-2':'x_min', 
-                                                                'bbox-3':'z_max', 
-                                                                'bbox-4':'y_max', 
-                                                                'bbox-5':'x_max'})
+                nuc_props = pd.DataFrame(regionprops_table(mask, properties=['label', 'bbox', 'area'])).rename(columns={
+                    'bbox-0':'z_min', 
+                    'bbox-1':'y_min', 
+                    'bbox-2':'x_min', 
+                    'bbox-3':'z_max', 
+                    'bbox-4':'y_max', 
+                    'bbox-5':'x_max',
+                })
 
             nuc_props['orig_position'] = self.image_handler.image_lists[self.MASKS_KEY][i]
-            nuc_props['position'] = self.image_handler.image_lists[self.MASKS_KEY][i]+'_'+'P'+nuc_props['label'].apply(str).str.zfill(3)
+            nuc_props['position'] = self.image_handler.image_lists[self.MASKS_KEY][i] + '_' + 'P' + nuc_props['label'].apply(str).str.zfill(3)
             nuc_rois.append(nuc_props)
 
         self.nuc_rois = pd.concat(nuc_rois).reset_index(drop=True)
@@ -465,3 +487,82 @@ class NucDetector:
                     chunk_split=(1,1,1,1),
                     )
         print("ROI images generated; please reinitialize to load them.")
+
+
+def _mask_to_binary(mask):
+    '''Converts masks from nuclear segmentation to masks with 
+    single pixel background between separate, neighbouring features.
+
+    Args:
+        masks ([np array]): Detected nuclear masks (label image)
+
+    Returns:
+        [np array]: Masks with single pixel seperation beteween neighboring features.
+    '''
+    masks_no_bound = np.where(find_boundaries(mask)>0, 0, mask)
+    return masks_no_bound
+
+
+def _mitotic_cell_extra_seg(nuc_image, nuc_mask):
+    '''Performs additional mitotic cell segmentation on top of an interphase segmentation (e.g. from CellPose).
+    Assumes mitotic cells are brighter, unsegmented objects in the image.
+
+    Args:
+        nuc_image ([nD numpy array]): nuclei image
+        nuc_mask ([nD numpy array]): labeled nuclei from nuclei image
+
+    Returns:
+        nuc_mask ([nD numpy array]): labeled nuclei with mitotic cells added
+        mito_index+1 (int): the first index of the mitotic cells in the returned nuc_mask
+
+    '''
+    from skimage.morphology import label, remove_small_objects
+    nuc_int = np.mean(nuc_image[nuc_mask > 0])
+    mito_nuc = (nuc_image * (nuc_mask == 0)) > 1.5 * nuc_int
+    mito_nuc = remove_small_objects(mito_nuc, min_size=100)
+    mito_nuc = label(mito_nuc)
+    mito_index = np.max(nuc_mask)
+    mito_nuc[mito_nuc > 0] += mito_index
+    nuc_mask = nuc_mask + mito_nuc
+    return nuc_mask, mito_index + 1
+
+
+def _nuc_segmentation_cellpose_2d(nuc_imgs: Union[List[np.ndarray], np.ndarray], diameter: NumberLike = 150, model_type = 'nuclei'):
+    '''
+    Runs nuclear segmentation using cellpose trained model (https://github.com/MouseLand/cellpose)
+
+    Args:
+        nuc_imgs (ndarray or list of ndarrays): 2D or 3D images of nuclei, expects single channel
+    '''
+    if not isinstance(nuc_imgs, list):
+        if nuc_imgs.ndim > 2:
+            nuc_imgs = [np.array(nuc_imgs[i]) for i in range(nuc_imgs.shape[0])] #Force array conversion in case of zarr.
+
+    from cellpose import models
+    model = models.CellposeModel(gpu=False, model_type=model_type)
+    masks = model.eval(nuc_imgs, diameter=diameter, channels=[0,0], net_avg=False, do_3D=False)[0]
+    return masks
+
+
+def _nuc_segmentation_cellpose_3d(nuc_imgs: Union[List[np.ndarray], np.ndarray], diameter: NumberLike = 150, model_type: str = 'nuclei', anisotropy: NumberLike = 2):
+    '''
+    Runs nuclear segmentation using cellpose trained model (https://github.com/MouseLand/cellpose)
+
+    Args:
+        nuc_imgs (ndarray or list of ndarrays): 2D or 3D images of nuclei, expects single channel
+    '''
+    if not isinstance(nuc_imgs, list):
+        if nuc_imgs.ndim > 3:
+            nuc_imgs = [np.array(nuc_imgs[i]) for i in range(nuc_imgs.shape[0])] #Force array conversion in case of zarr.
+
+    from cellpose import models
+    model = models.CellposeModel(gpu=True, model_type=model_type, net_avg=False)
+    masks = model.eval(nuc_imgs, diameter=diameter, channels=[0, 0], z_axis=0, anisotropy=anisotropy, do_3D=True)[0]
+    return masks
+
+
+def _relabel_nucs(nuc_image):
+    from skimage.morphology import label
+    out = _mask_to_binary(nuc_image)
+    out = label(out)
+    return out.astype(nuc_image.dtype)
