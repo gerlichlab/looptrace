@@ -179,7 +179,7 @@ def stack_tif_to_dask(folder: str):
 
 def single_position_to_zarr(
     images: np.ndarray or list, 
-    path: str,
+    path: Union[str, Path],
     name: str, 
     pos_name: str, 
     dtype: Type, 
@@ -208,7 +208,7 @@ def single_position_to_zarr(
     size = {}
     chunk_dict = {}
     # TODO: handle better the absence of dimensions w.r.t. shape and chunks.
-    # This is relevance, e.g., for NucDetector.gen_nuc_images.
+    # This is relevance, e.g., for NucDetector.generate_images_for_segmentation.
     # Namely, different readers may not like the fact that the shape and chunks don't match underlying data.
     # This can happen when one or more dimensions collapses down flat, to a trivial single dimension.
     # See: https://github.com/gerlichlab/looptrace/issues/245
@@ -278,7 +278,7 @@ def nuc_multipos_single_time_max_z_proj_zarr(name_img_pairs: List[Tuple[str, np.
 
 def images_to_ome_zarr(
     images: np.ndarray or list, 
-    path: str, 
+    path: Union[str, Path], 
     name: str, 
     dtype: Type, 
     axes = ('p','t','c','z','y','x'), 

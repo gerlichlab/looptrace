@@ -416,15 +416,6 @@ class Drifter():
         '''
         self.image_handler = image_handler
         self.config = self.image_handler.config
-        try:
-            images = image_handler.images
-        except AttributeError:
-            print("ERROR! Image handler has no images attribute; was it created with an images folder?")
-            raise
-        self.images_template = images[self.image_handler.reg_input_template]
-        self.images_moving = images[self.image_handler.reg_input_moving]
-        self.full_pos_list = self.image_handler.image_lists[self.image_handler.reg_input_moving]
-        self.pos_list = self.full_pos_list
     
     @property
     def bead_detection_max_intensity(self) -> Optional[int]:
@@ -479,6 +470,18 @@ class Drifter():
         return self.fine_correction_subfolder / f"{pos_idx}.dc_fine.tmp.csv"
 
     @property
+    def full_pos_list(self) -> List[str]:
+        return self.image_handler.drift_correction_position_names
+
+    @property
+    def images_moving(self) -> Sequence[np.ndarray]:
+        return self.image_handler.drift_correction_moving_images
+
+    @property
+    def images_template(self) -> Sequence[np.ndarray]:
+        return self.image_handler.drift_correction_reference_images
+
+    @property
     def method_name(self) -> str:
         return get_method_name(self.config) or Methods.CROSS_CORRELATION_NAME.value
 
@@ -488,7 +491,7 @@ class Drifter():
 
     @property
     def moving_channel(self) -> int:
-        return self.config["reg_ch_moving"]
+        return self.image_handler.drift_correction_moving_channel
 
     @property
     def num_bead_rois_for_drift_correction(self) -> int:
@@ -502,6 +505,10 @@ class Drifter():
     def overwrite(self) -> bool:
         return self.config.get("overwrite_fine_dc", False)
 
+    @property
+    def pos_list(self) -> List[str]:
+        return self.full_pos_list
+
     def read_all_fine_drifts(self) -> pd.DataFrame:
         files = [
             self.fine_correction_subfolder / fn 
@@ -514,11 +521,11 @@ class Drifter():
 
     @property
     def reference_channel(self) -> int:
-        return self.config["reg_ch_template"]
+        return self.image_handler.drift_correction_reference_channel
 
     @property
     def reference_frame(self) -> int:
-        return self.config["reg_ref_frame"]
+        return self.image_handler.drift_correction_reference_frame
 
     def get_moving_image(self, pos_idx: int, frame_idx: int) -> np.ndarray:
         return np.array(self.images_moving[pos_idx][frame_idx, self.moving_channel])

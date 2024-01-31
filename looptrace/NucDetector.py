@@ -36,15 +36,22 @@ class NucDetector:
     def __init__(self, image_handler):
         self.image_handler = image_handler
 
-    CLASSES_KEY = "nuc_classes"
+    # segmentation settings
     DETECTION_METHOD_KEY = "nuc_method"
-    IMAGES_KEY = "nuc_images"
-    MASKS_KEY = "nuc_masks"
     KEY_3D = "nuc_3d"
+
+    # image/label subfolder names
+    CLASSES_KEY = "nuc_classes"
+    MASKS_KEY = "nuc_masks"
+    SEGMENTATION_IMAGES_KEY = "nuc_images"
 
     @property
     def channel(self) -> int:
         return self.image_handler.nuclei_channel
+
+    @property
+    def class_images(self) -> Optional[Sequence]:
+        return self.image_handler.images.get(self.CLASSES_KEY)
 
     @property
     def classify_mitotic(self) -> bool:
@@ -76,9 +83,24 @@ class NucDetector:
             return self.config["nuc_downscaling_z"]
         raise NotImplementedError("3D nuclei detection is off, so downscaling in z (ds_z) is undefined!")
 
+    def _get_img_save_path(self, name: str) -> Path:
+        return Path(self.image_handler.image_save_path) / name
+
     @property
-    def images(self) -> List[da.core.Array]:
-        imgs = self.image_handler.images[self.input_name]
+    def mask_images(self) -> Optional[Sequence[np.ndarray]]:
+        return self.image_handler.images.get(self.MASKS_KEY)
+
+    @property
+    def has_images_for_segmentation(self) -> bool:
+        try:
+            self.images_for_segmentation
+        except KeyError:
+            return False
+        return True
+
+    @property
+    def input_images(self) -> List[da.core.Array]:
+        imgs = self.image_handler.images[self._input_name]
         if len(imgs) != len(self.pos_list):
             raise Exception(f"{len(imgs)} images and {len(self.pos_list)} positions; these should be equal!")
         exp_shape_len = 4 # (ch, z, y, x) -- no time dimension since only 1 timepoint's imaged for nuclei.
@@ -87,49 +109,51 @@ class NucDetector:
             raise Exception(f"{len(bad_images)} images with shape length not equal to {exp_shape_len}: {bad_images}")
         return imgs
 
-    def iter_pos_img_pairs(self) -> Iterable[Tuple[str, np.ndarray]]:
-        for i, pos in enumerate(self.pos_list):
-            yield pos, self.image_handler.images[self.IMAGES_KEY][i]
-
-    def iter_images(self) -> Iterable[np.ndarray]:
-        return (img for _, img in self.iter_pos_img_pairs())
+    @property
+    def _input_name(self) -> str:
+        return self.config["nuc_input_name"]
 
     @property
-    def segmentation_method(self) -> str:
-        return self.config[self.DETECTION_METHOD_KEY]
+    def images_for_segmentation(self) -> Sequence[np.ndarray]:
+        return self.image_handler.images[self.SEGMENTATION_IMAGES_KEY]
+
+    def _iterate_over_pairs_of_position_and_segmentation_image(self) -> Iterable[Tuple[str, np.ndarray]]:
+        try:
+            imgs = self.images_for_segmentation
+        except KeyError as e:
+            raise Exception("Tried to iterate over images for segmentation, but they're not yet generated!") from e
+        for i, pos in enumerate(self.pos_list):
+            yield pos, imgs[i]
 
     @property
     def min_size(self) -> int:
         return self.config["nuc_min_size"]
 
     @property
-    def input_name(self) -> str:
-        return self.config["nuc_input_name"]
-
-    @property
     def nuc_classes_path(self) -> Path:
         return self._get_img_save_path(self.CLASSES_KEY)
     
     @property
-    def nuc_images_path(self) -> Path:
-        return self._get_img_save_path(self.IMAGES_KEY)
+    def _nuclear_segmentation_images_path(self) -> Path:
+        return self._get_img_save_path(self.SEGMENTATION_IMAGES_KEY)
     
     @property
-    def nuc_masks_path(self) -> Path:
+    def nuclear_masks_path(self) -> Path:
         return self._get_img_save_path(self.MASKS_KEY)
     
     @property
     def pos_list(self) -> List[str]:
-        return self.image_handler.image_lists[self.input_name]
+        return self.image_handler.image_lists[self._input_name]
 
     @property
     def reference_frame(self) -> int:
         return self.config["nuc_ref_frame"]
 
-    def _get_img_save_path(self, name: str) -> Path:
-        return Path(self.image_handler.image_save_path) / name
+    @property
+    def segmentation_method(self) -> str:
+        return self.config[self.DETECTION_METHOD_KEY]
 
-    def gen_nuc_images(self):
+    def generate_images_for_segmentation(self):
         '''
         Saves 2D/3D (defined in config) images of the nuclear channel into image folder for later analysis.
         '''
@@ -144,18 +168,18 @@ class NucDetector:
             prep = (lambda img: da.max(img, axis=0)) if nuc_slice == -1 else (lambda img: img[nuc_slice])
         
         print("Generating nuclei images...")
-        name_img_pairs = [(pos_name, prep(self.images[i][self.channel]).compute()) for i, pos_name in tqdm.tqdm(enumerate(self.pos_list))]
+        name_img_pairs = [(pos_name, prep(self.input_images[i][self.channel]).compute()) for i, pos_name in tqdm.tqdm(enumerate(self.pos_list))]
         print("Saving nuclei images...")
         if nuc_slice == -1:
-            image_io.nuc_multipos_single_time_max_z_proj_zarr(name_img_pairs, root_path=self.nuc_images_path, dtype=np.uint16)
+            image_io.nuc_multipos_single_time_max_z_proj_zarr(name_img_pairs, root_path=self._nuclear_segmentation_images_path, dtype=np.uint16)
         else:
             for pos_name, subimg in tqdm.tqdm(name_img_pairs):
                 # TODO: replace this dimensionality hack with a cleaner solution to zarr writing.
                 # See: https://github.com/gerlichlab/looptrace/issues/245
                 image_io.single_position_to_zarr(
                     subimg, 
-                    path=self.nuc_images_path, 
-                    name=self.IMAGES_KEY, 
+                    path=self._nuclear_segmentation_images_path, 
+                    name=self.SEGMENTATION_IMAGES_KEY, 
                     pos_name=pos_name, 
                     axes=axes, 
                     dtype=np.uint16, 
@@ -169,9 +193,9 @@ class NucDetector:
         Runs nucleus segmentation using nucleus segmentation algorithm defined in ip functions.
         Dilates a bit and saves images.
         '''
-        if self.IMAGES_KEY not in self.image_handler.images:
-            print(f"{self.IMAGES_KEY} doesn't yet exist as key for subset of images; generating...")
-            self.gen_nuc_images()
+        if not self.has_images_for_segmentation:
+            print(f"Images for segmentation don't yet exist; generating...")
+            self.generate_images_for_segmentation()
             print("Re-reading images...")
             self.image_handler.read_images()
         if self.segmentation_method == "threshold":
@@ -180,7 +204,7 @@ class NucDetector:
             return self.segment_nuclei_cellpose()
     
     def segment_nuclei_threshold(self) -> Path:
-        for pos, img in self.iter_pos_img_pairs():
+        for pos, img in self._iterate_over_pairs_of_position_and_segmentation_image():
             # TODO: need to make this accord with the structure of saved images in segment_nuclei_cellpose.
             # TODO: need to handle whether nuclei images can have more than 1 timepoint (nontrivial time dimension).
             # See: https://github.com/gerlichlab/looptrace/issues/243
@@ -193,7 +217,7 @@ class NucDetector:
             mask = rescale(expand_labels(mask.astype(np.uint16),self.config["nuc_dilation"]), scale = (self.ds_z, self.ds_xy, self.ds_xy), order=0)
             # TODO: need to adjust axes argument probably.
             # See: https://github.com/gerlichlab/looptrace/issues/245
-            image_io.single_position_to_zarr(mask, path=self.nuc_masks_path, name=self.MASKS_KEY, pos_name=pos, axes=('z','y','x'), dtype=np.uint16, chunk_split=(1,1))
+            image_io.single_position_to_zarr(mask, path=self.nuclear_masks_path, name=self.MASKS_KEY, pos_name=pos, axes=('z','y','x'), dtype=np.uint16, chunk_split=(1,1))
 
     def segment_nuclei_cellpose(self) -> Path:
         '''
@@ -220,7 +244,7 @@ class NucDetector:
         nuc_min_size = self.min_size / np.prod(scale_for_rescaling)
         
         print("Extracting nuclei images...")
-        nuc_imgs = [np.array(scale_down_img(img)) for img in tqdm.tqdm(self.iter_images())]
+        nuc_imgs = [np.array(scale_down_img(img)) for img in tqdm.tqdm(self.images_for_segmentation)]
 
         print(f"Running nuclear segmentation using CellPose {method} model and diameter {diameter}.")
         # Remove under-segmented nuclei and clean up after getting initial masks.
@@ -233,11 +257,12 @@ class NucDetector:
 
         masks = [rescale(expand_labels(mask.astype(np.uint16), 3), scale=scale_for_rescaling, order=0) for mask in masks]
 
-        print("Saving segmentations...")
         self.image_handler.images[self.MASKS_KEY] = masks
+        saving_prefix = "Overwriting existing nuclear segmentations" if self.nuclear_masks_path.exists() else "Saving nuclear segmentations"
+        print(f"{saving_prefix}: {self.nuclear_masks_path}")
         # TODO: need to adjust axes argument probably.
         # See: https://github.com/gerlichlab/looptrace/issues/245
-        image_io.images_to_ome_zarr(images=masks, path=self.nuc_masks_path, name=self.MASKS_KEY, axes=ome_zarr_axes, dtype=np.uint16, chunk_split=(1, 1))
+        image_io.images_to_ome_zarr(images=masks, path=self.nuclear_masks_path, name=self.MASKS_KEY, axes=ome_zarr_axes, dtype=np.uint16, chunk_split=(1, 1))
         
         if self.classify_mitotic:
             nuc_class = []
@@ -251,7 +276,7 @@ class NucDetector:
             # See: https://github.com/gerlichlab/looptrace/issues/245
             image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name=self.CLASSES_KEY, axes=ome_zarr_axes, dtype=np.uint16, chunk_split=(1, 1))
 
-        return self.nuc_masks_path
+        return self.nuclear_masks_path
 
     def coarse_drift_correction_workflow(self) -> Path:
         from joblib import Parallel, delayed
@@ -259,11 +284,11 @@ class NucDetector:
         all_args = generate_drift_function_arguments__coarse_drift_only(
             full_pos_list=self.pos_list, 
             pos_list=self.pos_list, 
-            reference_images=self.image_handler.images[self.image_handler.reg_input_template], 
-            reference_frame=self.config["reg_ref_frame"],
-            reference_channel=self.config["reg_ch_template"],
-            moving_images=self.images,
-            moving_channel=self.config["reg_ch_moving"],
+            reference_images=self.image_handler.drift_correction_reference_images, 
+            reference_frame=self.image_handler.drift_correction_reference_frame,
+            reference_channel=self.image_handler.drift_correction_reference_channel,
+            moving_images=self.input_images,
+            moving_channel=self.image_handler.drift_correction_moving_channel,
             downsampling=downsampling,
             nuclei_mode=True,
         )
@@ -294,7 +319,7 @@ class NucDetector:
             # See: https://github.com/gerlichlab/looptrace/issues/245
             image_io.single_position_to_zarr(
                 images=self.image_handler.images[mask_name][pos_index], 
-                path = self.nuc_masks_path / position, 
+                path = self.nuclear_masks_path / position, 
                 name=mask_name, 
                 axes=('z','y','x') if self.do_in_3d else ('y','x'), 
                 dtype=np.uint16, 
@@ -351,7 +376,7 @@ class NucDetector:
                 sel_dc = self.image_handler.tables['drift_correction_full_frame'].query('position == @old_pos')
                 ref_offset = sel_dc.query('frame == @ref_frame')
                 try:
-                    Z, Y, X = self.images[i][self.channel].shape[-3:]
+                    Z, Y, X = self.input_images[i][self.channel].shape[-3:]
                 except AttributeError: #Images not loaded for some reason
                     Z = 200
                     Y = nuc_masks[0].shape[-2]

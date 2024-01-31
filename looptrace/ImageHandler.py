@@ -22,6 +22,8 @@ from looptrace.image_io import ignore_path, NPZ_wrapper, TIFF_EXTENSIONS
 from gertils import ExtantFile, ExtantFolder
 
 __all__ = ["ImageHandler", "handler_from_cli", "read_images"]
+__author__ = "Kai Sandvold Beckwith"
+__credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 
 logger = logging.getLogger()
 
@@ -130,6 +132,30 @@ class ImageHandler:
     @property
     def drift_correction_file__fine(self) -> Path:
         return self.get_dc_filepath(prefix=self.reg_input_moving, suffix="_fine.csv")
+
+    @property
+    def drift_correction_moving_channel(self) -> int:
+        return self.config["reg_ch_moving"]
+
+    @property
+    def drift_correction_moving_images(self) -> Sequence[np.ndarray]:
+        return self.images[self.reg_input_moving]
+
+    @property
+    def drift_correction_position_names(self) -> List[str]:
+        return self.image_lists[self.reg_input_moving]
+
+    @property
+    def drift_correction_reference_channel(self) -> int:
+        return self.config["reg_ch_template"]
+
+    @property
+    def drift_correction_reference_frame(self) -> int:
+        return self.config["reg_ref_frame"]
+
+    @property
+    def drift_correction_reference_images(self) -> Sequence[np.ndarray]:
+        return self.images[self.reg_input_template]
 
     def get_dc_filepath(self, prefix: str, suffix: str) -> Path:
         return Path(self.out_path(prefix + '_drift_correction' + suffix))

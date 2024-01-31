@@ -348,8 +348,8 @@ def workflow(
     
     # Detection parameters
     bead_detection_params = BeadDetectionParameters(
-        reference_frame = config["reg_ref_frame"],
-        reference_channel = get_beads_channel(config), 
+        reference_frame=H.drift_correction_reference_frame,
+        reference_channel=get_beads_channel(config), 
         threshold=config["bead_threshold"], 
         min_intensity=config["min_bead_intensity"],
         roi_pixels=config["bead_roi_size"],
