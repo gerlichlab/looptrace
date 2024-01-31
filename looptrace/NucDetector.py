@@ -424,69 +424,6 @@ class NucDetector:
 
         self.nuc_rois = pd.concat(nuc_rois).reset_index(drop=True)
         self.nuc_rois.to_csv(self.image_handler.out_path('nuc_rois.csv'))
-                
-                
-    def extract_single_roi_img(self, single_roi, images):
-        # Function for extracting a single cropped region defined by ROI from a larger 3D image.
-
-        z = slice(single_roi['z_min'], single_roi['z_max'])
-        y = slice(single_roi['y_min'], single_roi['y_max'])
-        x = slice(single_roi['x_min'], single_roi['x_max'])
-        #pad = single_roi['pad']
-
-        try:
-            roi_img = np.array(images[z, y, x])
-
-            #If microscope drifted, ROI could be outside image. Correct for this:
-            #if pad != ((0,0),(0,0),(0,0)):
-            #    roi_img = np.pad(roi_img, pad, mode='edge')
-
-        except ValueError: # ROI collection failed for some reason
-            roi_img = np.zeros((z,y,x), dtype=np.float32)
-
-        return roi_img  #{'p':p, 't':t, 'c':c, 'z':z, 'y':y, 'x':x, 'img':roi_img}
-
-    def gen_single_nuc_images(self):
-        #Function to extract single nuclei images from full FOVs
-        # A bit convoluted currently to ensure efficient loading of appropriate arrays into RAM for processing.
-        print('Extracting nucs from ', self.config['nuc_extract_target'])
-        rois = self.image_handler.tables['nuc_rois']#.iloc[0:500]
-        rois_orig_all_pos = sorted(list(rois.orig_position.unique()))
-        input_images = self.image_handler.images[self.config['nuc_extract_target']]
-
-        T = input_images[0].shape[0]
-        C = input_images[0].shape[1]
-
-        
-        for pos in self.pos_list:
-            roi_array = {}
-            print("extracting nucs in position ", pos)
-            pos_index = self.image_handler.image_lists[self.config['nuc_extract_target']].index(pos)
-            rois_orig_pos = rois[rois.orig_position == rois_orig_all_pos[pos_index]]
-
-            for frame in tqdm.tqdm(range(T)):
-                image_stack = np.array(input_images[pos_index][frame])
-                for i, pos_roi in rois_orig_pos.iterrows():
-                    roi_array[pos_roi['position'], frame] = np.stack([self.extract_single_roi_img(pos_roi, image_stack[c]).astype(np.uint16) for c in range(C)])
-        
-            for nuc_position in tqdm.tqdm(rois_orig_pos.position.to_list()):
-                try:
-                    nuc_pos_images = np.stack([roi_array[(nuc_position, frame)] for frame in range(T)])
-                    #print('Made pos roi ', roi_id, pos_rois.shape)
-                except KeyError:
-                    break
-
-                image_io.single_position_to_zarr(
-                    images=nuc_pos_images, 
-                    path=os.path.join(self.image_handler.image_save_path, self.config["nuc_extract_target"] + "_single_nucs"), 
-                    name='single_nucs',
-                    pos_name = nuc_position, 
-                    axes=('t','c','z','y','x'), 
-                    chunk_axes = ('t','z','y','x'),
-                    dtype = np.uint16, 
-                    chunk_split=(1,1,1,1),
-                    )
-        print("ROI images generated; please reinitialize to load them.")
 
 
 def _mask_to_binary(mask):
