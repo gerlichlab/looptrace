@@ -90,22 +90,22 @@ def filter_rois_in_nucs(rois, nuc_label_img, new_col='nuc_label', nuc_drifts=Non
     new_rois = rois.copy()
     
     def spot_in_nuc(row: Union[pd.Series, dict], nuc_label_img: np.ndarray):
-        idx_px_y = int(row["yc"])
-        idx_px_x = int(row["xc"])
+        base_idx = (int(row["yc"]), int(row["xc"]))
         if len(nuc_label_img.shape) == 2:
-            spot_label = nuc_label_img[idx_px_y, idx_px_x]
+            idx = base_idx
         else:
             try:
                 idx_px_z = 1 if nuc_label_img.shape[-3] == 1 else int(row["zc"]) # Flat in z dimension?
             except IndexError as e:
                 print(f"IndexError ({e}) trying to get z-axis length from images with shape {nuc_label_img}")
                 raise
-            try:
-                spot_label = nuc_label_img[idx_px_z, idx_px_y, idx_px_x]
-            except IndexError as e: # If, due to drift spot, is outside frame?
-                print(f"IndexError ({e}) extracting {(idx_px_z, idx_px_y, idx_px_x)} from image of shape {nuc_label_img.shape}. Spot label set to 0.")
-                spot_label = 0
-            return int(spot_label)
+            idx = (idx_px_z, ) + base_idx
+        try:
+            spot_label = nuc_label_img[idx]
+        except IndexError as e: # If, due to drift spot, is outside frame?
+            print(f"IndexError ({e}) extracting {idx} from image of shape {nuc_label_img.shape}. Spot label set to 0.")
+            spot_label = 0
+        return int(spot_label)
 
     try:
         new_rois.drop(columns=[new_col], inplace=True)
