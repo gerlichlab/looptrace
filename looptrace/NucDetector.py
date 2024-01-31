@@ -7,7 +7,6 @@ Ellenberg group
 EMBL Heidelberg
 """
 
-import os
 from pathlib import Path
 from typing import *
 
@@ -25,6 +24,9 @@ from looptrace import image_io
 from looptrace.numeric_types import NumberLike
 from looptrace.wrappers import phase_xcor
 from looptrace.Drifter import COARSE_DRIFT_TABLE_COLUMNS, generate_drift_function_arguments__coarse_drift_only
+
+__author__ = "Kai Sandvold Beckwith"
+__credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 
 
 class NucDetector:
