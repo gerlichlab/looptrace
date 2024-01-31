@@ -95,7 +95,11 @@ def filter_rois_in_nucs(rois, nuc_label_img, new_col='nuc_label', nuc_drifts=Non
         if len(nuc_label_img.shape) == 2:
             spot_label = nuc_label_img[idx_px_y, idx_px_x]
         else:
-            idx_px_z = 1 if nuc_label_img.shape[-3] == 1 else int(row["zc"]) # Flat in z dimension?
+            try:
+                idx_px_z = 1 if nuc_label_img.shape[-3] == 1 else int(row["zc"]) # Flat in z dimension?
+            except IndexError as e:
+                print(f"IndexError ({e}) trying to get z-axis length from images with shape {nuc_label_img}")
+                raise
             try:
                 spot_label = nuc_label_img[idx_px_z, idx_px_y, idx_px_x]
             except IndexError as e: # If, due to drift spot, is outside frame?
