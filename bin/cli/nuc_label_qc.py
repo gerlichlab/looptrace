@@ -21,21 +21,23 @@ if __name__ == '__main__':
     parser.add_argument("--image_save_path", help="(Optional): Path to folder to save images to.", default=None)
     parser.add_argument("--qc", help="(Optional): Additionally run QC (allows edits).", action='store_true')
     args = parser.parse_args()
+    
     H = ImageHandler(config_path=args.config_path, image_path=args.image_path, image_save_path=args.image_save_path)
     N = NucDetector(H)
+    
     if 'nuc_images' not in H.images or 'nuc_masks' not in H.images:
         print('Nuclei need to be segmented first.')
         sys.exit()
-    
+
     nuc_imgs = H.images['nuc_images']
     for i, nuc_img in enumerate(nuc_imgs):
         viewer = napari.view_image(nuc_img)
-        if 'nuc_masks' in H.images:
+        if NucDetector.MASKS_KEY in H.images:
             nuc_mask = H.images['nuc_masks'][i]
             if args.qc:
                 nuc_mask = np.array(nuc_mask)
             masks_layer = viewer.add_labels(nuc_mask)
-        if 'nuc_classes' in H.images:
+        if NucDetector.CLASSES_KEY in H.images:
             nuc_class = H.images['nuc_classes'][i]
             if args.qc:
                 nuc_class = np.array(nuc_class)
