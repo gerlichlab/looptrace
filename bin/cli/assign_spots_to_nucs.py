@@ -53,12 +53,14 @@ def workflow(
         spot_drifts = get_spot_drifts(pos)
         
         filter_kwargs = {"nuc_drifts": nuc_drifts, "nuc_target_frame": H.config['nuc_ref_frame'], "spot_drifts": spot_drifts}
+        # TODO: this array indexing is sensitive to whether the mask and class images have the dummy time and channel dimensions or not.
+        # See: https://github.com/gerlichlab/looptrace/issues/247
         if NucDetector.MASKS_KEY in H.images:
             logger.info(f"Assigning nuclei labels for sports from position: {pos}")
-            rois = ip.filter_rois_in_nucs(rois, nuc_label_img=H.images[NucDetector.MASKS_KEY][i][0, 0].compute(), new_col='nuc_label', **filter_kwargs)
+            rois = ip.filter_rois_in_nucs(rois, nuc_label_img=H.images[NucDetector.MASKS_KEY][i].compute(), new_col="nuc_label", **filter_kwargs)
         if NucDetector.CLASSES_KEY in H.images:
             logger.info(f"Assigning nuclei classes for spots from position: {pos}")
-            rois = ip.filter_rois_in_nucs(rois, nuc_label_img=H.images[NucDetector.CLASSES_KEY][i][0, 0].compute(), new_col='nuc_class', **filter_kwargs)
+            rois = ip.filter_rois_in_nucs(rois, nuc_label_img=H.images[NucDetector.CLASSES_KEY][i].compute(), new_col="nuc_class", **filter_kwargs)
         all_rois.append(rois.copy())
     
     outfile = H.nuclei_labeled_spots_file_path
