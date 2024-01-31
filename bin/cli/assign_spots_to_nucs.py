@@ -9,6 +9,7 @@ import pandas as pd
 import tqdm
 
 from looptrace.ImageHandler import handler_from_cli
+from looptrace.NucDetector import NucDetector
 import looptrace.image_processing_functions as ip
 
 logger = logging.getLogger()
@@ -20,8 +21,9 @@ def workflow(
         image_save_path: Optional[ExtantFolder] = None,
         ) -> None:
     
-    # Set up the spot picker, to manage paths and settings.
+    # Set up the spot picker and the nuclei detector instances, to manage paths and settings.
     H = handler_from_cli(config_file=config_file, images_folder=images_folder, image_save_path=image_save_path)
+    N = NucDetector(H)
     
     def query_table_for_pos(input_name_key: str):
         table_name = H.config[input_name_key] + '_drift_correction'
@@ -41,18 +43,19 @@ def workflow(
     get_spot_drifts = query_table_for_pos('spot_input_name')
     
     rois_table = pd.read_csv(H.proximity_filtered_spots_file_path, index_col=0)
-    get_rois = lambda pos: rois_table[rois_table.position == pos]
-    
+    get_rois = lambda pos: rois_table[rois_table.position == pos]            
+
     for i, pos in tqdm.tqdm(enumerate(H.image_lists[H.spot_input_name])):
         rois = get_rois(pos)
         if len(rois) == 0:
+            logger.warn(f"No ROIs for position: {pos}")
             continue
 
         nuc_drifts = get_nuc_drifts(pos)
         spot_drifts = get_spot_drifts(pos)
         
         filter_kwargs = {"nuc_drifts": nuc_drifts, "nuc_target_frame": H.config['nuc_ref_frame'], "spot_drifts": spot_drifts}
-        if 'nuc_masks' in H.images:
+        if NucDetector.MASKS_KEY in H.images:
             logger.info(f"Assigning nuclei labels for sports from position: {pos}")
             rois = ip.filter_rois_in_nucs(rois, nuc_label_img=H.images['nuc_masks'][i][0, 0], new_col='nuc_label', **filter_kwargs)
         if 'nuc_classes' in H.images:
