@@ -20,4 +20,3 @@ def test_background_subtraction_uses_drift_correction():
 @pytest.mark.skip("not yet implemented")
 def test_mask_fits():
     pass
-

@@ -4,5 +4,8 @@ on: [push, pull_request]
 
 jobs:
   pytest:
-    uses: ./.github/workflows/python-tests.yml
-
+    steps:
+      - name: Run Python non-pipeline tests
+        uses: ./.github/workflows/python-tests-non-pipeline.yml
+      - name: Run Python pipeline tests
+        uses: ./.github/workflows/python-tests-pipeline.yml
