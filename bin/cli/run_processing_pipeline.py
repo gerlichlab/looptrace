@@ -149,27 +149,28 @@ def plot_spot_counts(config_file: ExtantFile, spot_type: "SpotType") -> None:
     if not analysis_script_file.is_file():
         raise FileNotFoundError(f"Missing regional spot counts plot script: {analysis_script_file}")
     if spot_type == SpotType.REGIONAL:
-        unfiltered = H.raw_spots_file
         filtered = H.proximity_filtered_spots_file_path
+        extra_files = [
+            "--unfiltered-spots-file", str(H.raw_spots_file), 
+            "--nuclei-filtered-spots-file", str(H.nuclei_filtered_spots_file_path),
+            ]
         probe_name_extra = ["--probe-names"] + H.frame_names
     elif spot_type == SpotType.LOCUS_SPECIFIC:
-        unfiltered = H.traces_file_qc_unfiltered
         filtered = H.traces_file_qc_filtered
+        extra_files = []
         probe_name_extra = []
     else:
         raise ValueError(f"Illegal spot_type for plotting spot counts: {spot_type}")
     cmd_parts = [
         "Rscript", 
         str(analysis_script_file), 
-        "--unfiltered-spots-file", 
-        str(unfiltered),
         "--filtered-spots-file",
         str(filtered),
         "--spot-file-type", 
         spot_type.value,
         "-o", 
         output_folder, 
-        ] + probe_name_extra
+        ] + extra_files + probe_name_extra
     print(f"Running spot count plotting command: {' '.join(cmd_parts)}")
     return subprocess.check_call(cmd_parts)
 

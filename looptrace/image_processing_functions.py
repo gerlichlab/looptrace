@@ -108,8 +108,10 @@ def filter_rois_in_nucs(rois, nuc_label_img, new_col='nuc_label', nuc_drifts=Non
         return int(spot_label)
 
     try:
+        # Remove the labels column if it already exists.
         new_rois.drop(columns=[new_col], inplace=True)
     except KeyError:
+        # Ignore case in which we're replacing an extant label column.
         pass
 
     if nuc_drifts is not None:
