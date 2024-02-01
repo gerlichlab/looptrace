@@ -8,6 +8,7 @@ EMBL Heidelberg
 """
 
 import argparse
+from itertools import dropwhile, takewhile
 import os
 import sys
 import numpy as np
@@ -32,6 +33,8 @@ if __name__ == '__main__':
     exec_flow = parser.add_mutually_exclusive_group(required=True)
     exec_flow.add_argument("--save-images", action="store_true", help="Save comuted mask images.")
     exec_flow.add_argument("--qc", action="store_true", help="Additionally run QC (allows edits).")
+    parser.add_argument("--start-from", type=int, default=0, help="Minimum (inclusive) position index (0-based) to use")
+    parser.add_argument("--stop-after", type=int, default=sys.maxsize, help="Maximum (inclusive) position index (0-based) to use")
     args = parser.parse_args()
     
     prep_image_to_add = np.array if args.qc else (lambda img: img)
@@ -52,7 +55,7 @@ if __name__ == '__main__':
     else:
         get_class_layer = lambda view, pos_idx: view.add_labels(prep_image_to_add(class_imgs[pos_idx]))
 
-    for i, nuc_img in enumerate(seg_imgs):
+    for i, nuc_img in takewhile(lambda i, _: i <= args.stop_after, dropwhile(lambda i, _: i < args.start_from, enumerate(seg_imgs))):
         viewer = napari.view_image(nuc_img)
         masks_layer = viewer.add_labels(prep_image_to_add(mask_imgs[i]))
         class_layer = get_class_layer(viewer, i)
