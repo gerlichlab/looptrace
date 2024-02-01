@@ -11,11 +11,13 @@ import argparse
 from itertools import dropwhile, takewhile
 import os
 import sys
-import numpy as np
+from typing import *
 
+import numpy as np
 from skimage.io import imsave
 import napari
 
+from gertils import ExtantFile, ExtantFolder
 from looptrace.ImageHandler import ImageHandler
 from looptrace.NucDetector import NucDetector
 
@@ -23,23 +25,13 @@ __author__ = "Kai Sandvold Beckwith"
 __credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(
-        description="Extract experimental PSF from bead images.", 
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        )
-    parser.add_argument("config_path", help="Config file path")
-    parser.add_argument("image_path", help="Path to folder with images to read.")
-    exec_flow = parser.add_mutually_exclusive_group(required=True)
-    exec_flow.add_argument("--save-images", action="store_true", help="Save comuted mask images.")
-    exec_flow.add_argument("--qc", action="store_true", help="Additionally run QC (allows edits).")
-    parser.add_argument("--start-from", type=int, default=0, help="Minimum (inclusive) position index (0-based) to use")
-    parser.add_argument("--stop-after", type=int, default=sys.maxsize, help="Maximum (inclusive) position index (0-based) to use")
-    args = parser.parse_args()
+def workflow(config_file: ExtantFile, images_folder: ExtantFolder, save_images: bool = True, do_qc: bool = False, start_from: Optional[int] = None, stop_after: Optional[int] = None):
+    if save_images and do_qc:
+        raise ValueError("Cannot do interactive QC and image saving at the same time!")
     
-    prep_image_to_add = np.array if args.qc else (lambda img: img)
+    prep_image_to_add = np.array if do_qc else (lambda img: img)
 
-    H = ImageHandler(config_path=args.config_path, image_path=args.image_path)
+    H = ImageHandler(config_file, images_folder)
     N = NucDetector(H)
     
     # Gather the images to use and determine what to do for each FOV.
@@ -51,16 +43,15 @@ if __name__ == '__main__':
     
     class_imgs = N.class_images
     if class_imgs is None:
-        get_class_layer = lambda _1, _2: None
+        get_class_layer = lambda *_: None
     else:
         get_class_layer = lambda view, pos_idx: view.add_labels(prep_image_to_add(class_imgs[pos_idx]))
 
-    for i, nuc_img in takewhile(lambda i, _: i <= args.stop_after, dropwhile(lambda i, _: i < args.start_from, enumerate(seg_imgs))):
+    for i, nuc_img in takewhile(lambda i_: i_[0] <= stop_after, dropwhile(lambda i_: i_[0] < start_from, enumerate(seg_imgs))):
         viewer = napari.view_image(nuc_img)
         masks_layer = viewer.add_labels(prep_image_to_add(mask_imgs[i]))
         class_layer = get_class_layer(viewer, i)
-        
-        if args.save_images:
+        if save_images:
             screenshot = viewer.screenshot()
             viewer.add_image(screenshot)
             outfile = H.nuclear_mask_images_folder / f"nuc_maks.{i}.png"
@@ -69,14 +60,38 @@ if __name__ == '__main__':
             imsave(outfile, screenshot)
         else:
             napari.run()
-
             sentinel = "q"
             user_input = input(f"Press enter to continue to next position, or {sentinel} to quit.")
             if user_input == sentinel:
                 break
-
-            if args.qc:
+            if do_qc:
                 N.update_masks_after_qc(masks_layer.data.astype(np.uint16), np.array(mask_imgs[i]), NucDetector.MASKS_KEY, H.image_lists[NucDetector.MASKS_KEY][i])
                 if class_layer is not None:
                     N.update_masks_after_qc(class_layer.data.astype(np.uint16), np.array(class_imgs[i]), NucDetector.CLASSES_KEY, H.image_lists[NucDetector.CLASSES_KEY][i])
                     del class_layer
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description="Extract experimental PSF from bead images.", 
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        )
+    parser.add_argument("config_file", type=ExtantFile.from_string, help="Config file path")
+    parser.add_argument("images_folder", type=ExtantFolder.from_string, help="Path to folder with images to read.")
+    exec_flow = parser.add_mutually_exclusive_group(required=True)
+    exec_flow.add_argument("--save-images", action="store_true", help="Save comuted mask images.")
+    exec_flow.add_argument("--qc", action="store_true", help="Additionally run QC (allows edits).")
+    parser.add_argument("--start-from", type=int, default=0, help="Minimum (inclusive) position index (0-based) to use")
+    parser.add_argument("--stop-after", type=int, default=sys.maxsize, help="Maximum (inclusive) position index (0-based) to use")
+    
+    args = parser.parse_args()
+    
+    workflow(
+        config_file=args.config_file, 
+        images_folder=args.images_folder, 
+        save_images=args.save_images, 
+        do_qc=args.qc, 
+        start_from=args.start_from, 
+        stop_after=args.stop_after,
+        )
+    
