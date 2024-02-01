@@ -1,22 +1,102 @@
-"""Filter detected spots for overlap with detected nuclei"""
+"""Filter detected spots for overlap with detected nuclei."""
 
 import argparse
 import logging
 from typing import *
 
-from gertils import ExtantFile, ExtantFolder
+import numpy as np
 import pandas as pd
 import tqdm
 
+from gertils import ExtantFile, ExtantFolder
 from looptrace import IllegalSequenceOfOperationsError
 from looptrace.ImageHandler import handler_from_cli
 from looptrace.NucDetector import NucDetector
-import looptrace.image_processing_functions as ip
+
+__author__ = "Kai Sandvold Beckwith"
+__credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 
 logger = logging.getLogger()
 
 
 NUC_LABEL_COL = "nuc_label"
+
+
+def filter_rois_in_nucs(
+    rois: pd.DataFrame, 
+    nuc_label_img: np.ndarray, 
+    new_col: str, 
+    *,
+    nuc_drifts: pd.DataFrame, 
+    nuc_target_frame: int, 
+    spot_drifts: pd.DataFrame,
+    ) -> pd.DataFrame:
+    """
+    Check if a spot is in inside a segmented nucleus.
+
+    Arguments
+    ---------
+    rois : pd.DataFrame
+        ROI table to check, usually FISH spots (from regional barcodes)
+    nuc_label_img : np.ndarray
+        2D/3D label images, where 0 is outside any nuclear region and >0 inside a nuclear region
+    new_col : str
+        The name of the new column in the ROI table
+    nuc_drifts : pd.DataFrame
+        Data table with information on drift correction for nuclei
+    nuc_target_frame : int
+        Reference timepoint for nuclei imaging, usually 0
+    spot_drifts : pd.DataFrame
+        Data table with information on drift correction for FISH spots
+
+    Returns
+    -------
+    pd.DataFrame: Updated ROI table, with column indicating if ROI is inside nucleus (or other labeled region)
+    """
+    new_rois = rois.copy()
+    
+    def spot_in_nuc(row: Union[pd.Series, dict], nuc_label_img: np.ndarray):
+        base_idx = (int(row["yc"]), int(row["xc"]))
+        if len(nuc_label_img.shape) == 2:
+            idx = base_idx
+        else:
+            try:
+                idx_px_z = 1 if nuc_label_img.shape[-3] == 1 else int(row["zc"]) # Flat in z dimension?
+            except IndexError as e:
+                print(f"IndexError ({e}) trying to get z-axis length from images with shape {nuc_label_img}")
+                raise
+            idx = (idx_px_z, ) + base_idx
+        try:
+            spot_label = nuc_label_img[idx]
+        except IndexError as e: # If, due to drift spot, is outside frame?
+            print(f"IndexError ({e}) extracting {idx} from image of shape {nuc_label_img.shape}. Spot label set to 0.")
+            spot_label = 0
+        return int(spot_label)
+
+    try:
+        # Remove the labels column if it already exists.
+        new_rois.drop(columns=[new_col], inplace=True)
+    except KeyError:
+        # Ignore case in which we're replacing an extant label column.
+        pass
+
+    if nuc_drifts is not None:
+        rois_shifted = new_rois.copy()
+        shifts = []
+        for _, row in rois_shifted.iterrows():
+            drift_target = nuc_drifts[(nuc_drifts['position'] == row['position']) & (nuc_drifts['frame'] == nuc_target_frame)][['z_px_coarse', 'y_px_coarse', 'x_px_coarse']].to_numpy()
+            drift_roi = spot_drifts[(spot_drifts['position'] == row['position']) & (spot_drifts['frame'] == row['frame'])][['z_px_coarse', 'y_px_coarse', 'x_px_coarse']].to_numpy()
+            shift = drift_target - drift_roi
+            shifts.append(shift[0])
+        shifts = pd.DataFrame(shifts, columns=['z', 'y', 'x'])
+        rois_shifted[['zc', 'yc', 'xc']] = rois_shifted[['zc', 'yc', 'xc']].to_numpy() - shifts[['z','y','x']].to_numpy()
+
+        new_rois.loc[:, new_col] = rois_shifted.apply(spot_in_nuc, nuc_label_img=nuc_label_img, axis=1)
+    
+    else:
+        new_rois.loc[:, new_col] = new_rois.apply(spot_in_nuc, nuc_label_img=nuc_label_img, axis=1)
+
+    return new_rois
 
 
 def workflow(
@@ -62,10 +142,10 @@ def workflow(
         # TODO: this array indexing is sensitive to whether the mask and class images have the dummy time and channel dimensions or not.
         # See: https://github.com/gerlichlab/looptrace/issues/247
         logger.info(f"Assigning nuclei labels for sports from position: {pos}")
-        rois = ip.filter_rois_in_nucs(rois, nuc_label_img=N.mask_images[i].compute(), new_col=NUC_LABEL_COL, **filter_kwargs)
+        rois = filter_rois_in_nucs(rois, nuc_label_img=N.mask_images[i].compute(), new_col=NUC_LABEL_COL, **filter_kwargs)
         if N.class_images is not None:
             logger.info(f"Assigning nuclei classes for spots from position: {pos}")
-            rois = ip.filter_rois_in_nucs(rois, nuc_label_img=N.class_images[i].compute(), new_col="nuc_class", **filter_kwargs)
+            rois = filter_rois_in_nucs(rois, nuc_label_img=N.class_images[i].compute(), new_col="nuc_class", **filter_kwargs)
         all_rois.append(rois.copy())
     
     outfile = H.nuclei_labeled_spots_file_path

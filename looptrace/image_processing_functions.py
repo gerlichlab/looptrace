@@ -74,65 +74,6 @@ def update_roi_points(point_layer, roi_table, position, downscale):
     return pd.concat([rois, new_rois]).sort_values('position').reset_index(drop=True)
 
 
-def filter_rois_in_nucs(rois, nuc_label_img, new_col='nuc_label', nuc_drifts=None, nuc_target_frame=None, spot_drifts=None):
-    '''Check if a spot is in inside a segmented nucleus.
-
-    Args:
-        rois (DataFrame): ROI table to check
-        nuc_label_img (list): 2D/3D label images, where 0 is outside nuclei and >0 inside
-        pos_list (list): List of all the positions (str) to check
-        new_col (str, optional): The name of the new column in the ROI table. Defaults to 'nuc_label'.
-
-    Returns:
-        rois (DataFrame): Updated ROI table indicating if ROI is inside nucleus or not.
-    '''
-
-    new_rois = rois.copy()
-    
-    def spot_in_nuc(row: Union[pd.Series, dict], nuc_label_img: np.ndarray):
-        base_idx = (int(row["yc"]), int(row["xc"]))
-        if len(nuc_label_img.shape) == 2:
-            idx = base_idx
-        else:
-            try:
-                idx_px_z = 1 if nuc_label_img.shape[-3] == 1 else int(row["zc"]) # Flat in z dimension?
-            except IndexError as e:
-                print(f"IndexError ({e}) trying to get z-axis length from images with shape {nuc_label_img}")
-                raise
-            idx = (idx_px_z, ) + base_idx
-        try:
-            spot_label = nuc_label_img[idx]
-        except IndexError as e: # If, due to drift spot, is outside frame?
-            print(f"IndexError ({e}) extracting {idx} from image of shape {nuc_label_img.shape}. Spot label set to 0.")
-            spot_label = 0
-        return int(spot_label)
-
-    try:
-        # Remove the labels column if it already exists.
-        new_rois.drop(columns=[new_col], inplace=True)
-    except KeyError:
-        # Ignore case in which we're replacing an extant label column.
-        pass
-
-    if nuc_drifts is not None:
-        rois_shifted = new_rois.copy()
-        shifts = []
-        for i, row in rois_shifted.iterrows():
-            drift_target = nuc_drifts[(nuc_drifts['position'] == row['position']) & (nuc_drifts['frame'] == nuc_target_frame)][['z_px_coarse', 'y_px_coarse', 'x_px_coarse']].to_numpy()
-            drift_roi = spot_drifts[(spot_drifts['position'] == row['position']) & (spot_drifts['frame'] == row['frame'])][['z_px_coarse', 'y_px_coarse', 'x_px_coarse']].to_numpy()
-            shift = drift_target - drift_roi
-            shifts.append(shift[0])
-        shifts = pd.DataFrame(shifts, columns=['z','y','x'])
-        rois_shifted[['zc', 'yc', 'xc']] = rois_shifted[['zc', 'yc', 'xc']].to_numpy() - shifts[['z','y','x']].to_numpy()
-
-        new_rois.loc[:,new_col] = rois_shifted.apply(spot_in_nuc, nuc_label_img=nuc_label_img, axis=1)
-    
-    else:
-        new_rois.loc[:,new_col] = new_rois.apply(spot_in_nuc, nuc_label_img=nuc_label_img, axis=1)
-
-    return new_rois
-
-
 def subtract_crosstalk(source, bleed, threshold=500):
     shift = drift_corr_coarse(source, bleed, downsample=1)
     bleed = ndi.shift(bleed, shift=shift, order=1)

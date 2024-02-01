@@ -510,12 +510,8 @@ class SpotPicker:
 
         all_rois = []
         
-        if self.config.get('spot_in_nuc', False):
-            spotfile = self.image_handler.nuclei_labeled_spots_file_path
-            use_roi = lambda r: r['nuc_label'] != 0
-        else:
-            spotfile = self.image_handler.proximity_filtered_spots_file_path
-            use_roi = lambda _: True
+        spotfile = self.image_handler.nuclei_filtered_spots_file_path if self.config.get('spot_in_nuc', False) \
+            else self.image_handler.proximity_filtered_spots_file_path
         key_rois_table, _ = os.path.splitext(spotfile.name)
         key_rois_table = key_rois_table\
             .lstrip(self.image_handler.analysis_filename_prefix)\
@@ -527,8 +523,6 @@ class SpotPicker:
             raise MissingRoisTableException(key_rois_table) from e
         
         for idx, (_, roi) in tqdm.tqdm(enumerate(rois_table.iterrows()), total=len(rois_table)):
-            if not use_roi(roi):
-                continue
             pos = roi['position']
             pos_index = self.image_handler.image_lists[self.input_name].index(pos)
             dc_pos_name = self.image_handler.image_lists[self.config['reg_input_moving']][pos_index] # not unused; used for table query
