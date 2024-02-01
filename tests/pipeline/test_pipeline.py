@@ -1,16 +1,35 @@
 """Tests for the main processing pipeline"""
 
 from dataclasses import dataclass
+import importlib
 import itertools
 import logging
+import os
 from pathlib import Path
+import sys
 from typing import *
 
 import pytest
 import yaml
 from gertils import PathWrapperException
 
-from conftest import import_pipeline_script, prep_images_folder, prep_output_folder
+from conftest import PIPE_NAME, prep_images_folder, prep_subfolder
+
+
+def scripts_folder():
+    project_folder = Path(__file__).parent.parent.parent
+    return project_folder / "bin" / "cli"
+
+
+def import_pipeline_script():
+    pipe_path = scripts_folder() / "run_processing_pipeline.py"
+    sys.path.append(os.path.dirname(pipe_path))
+    spec = importlib.util.spec_from_file_location(PIPE_NAME, pipe_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[PIPE_NAME] = module
+    spec.loader.exec_module(module)
+    return module
+
 
 looptrace_pipeline = import_pipeline_script()
 
@@ -67,18 +86,19 @@ class CliSpecMinimal:
     def __str__(self) -> str:
         return str((self.config_file, self.images_folder, self.output_folder))
 
-
+_BOOL_GRID = (False, True)
 CONFIG_FILE_SPECS = [
     CliOptProvision(opt, lambda p: p / "config.yaml", (lambda p: p.write_text("", encoding='utf-8')) if create else None) 
-    for opt, create in itertools.product((None, "-C", "--config-file"), (False, True))
+    for opt, create in itertools.product((None, "-C", "--config-file"), _BOOL_GRID)
     ]
 IMAGE_FOLDER_SPECS = [
     CliOptProvision(opt, lambda p: p / "images", (lambda p: p.mkdir()) if create else None) 
-    for opt, create in itertools.product((None, "-I", "--images-folder"), (False, True))
+    for opt, create in itertools.product((None, "-I", "--images-folder"), _BOOL_GRID)
     ]
 OUTPUT_FOLDER_SPECS = [
     CliOptProvision(opt, lambda p: p / "output", (lambda p: p.mkdir()) if create else None) 
-    for opt, create in itertools.product((None, "-O", "--output-folder"), (False, True))]
+    for opt, create in itertools.product((None, "-O", "--output-folder"), _BOOL_GRID)
+    ]
 
 
 COMMAND_LINES = [CliSpecMinimal(config_file=conf, images_folder=imgs, output_folder=out) for conf, imgs, out in itertools.product(CONFIG_FILE_SPECS, IMAGE_FOLDER_SPECS, OUTPUT_FOLDER_SPECS)]
@@ -112,7 +132,7 @@ def test_logging(tmp_path, prepped_minimal_config_data, caplog, config_file_opti
     with open(conf_path, 'w') as fh:
         yaml.dump(prepped_minimal_config_data, fh)
     imgs_path = prep_images_folder(tmp_path, create=True)
-    output_folder = prep_output_folder(tmp_path, create=True)
+    output_folder = prep_subfolder(folder=tmp_path, name="output", create=True)
     opts = looptrace_pipeline.parse_cli([
         config_file_option, str(conf_path), 
         images_folder_option, str(imgs_path), 

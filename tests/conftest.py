@@ -1,9 +1,7 @@
 """Test fixtures and utilities"""
 
-import importlib
 import os
 from pathlib import Path
-import sys
 import pytest
 
 PIPE_NAME = "looptrace_pipeline"
@@ -36,39 +34,11 @@ def seq_images_path(images_all_path):
 #################################################################
 # Other helpers
 #################################################################
-def get_pipeline_path():
-    return get_script_path("run_processing_pipeline.py")
-
-
-def get_script_path(name: str) -> Path:
-    return scripts_folder() / name
-
-
-def import_pipeline_script():
-    pipe_path = get_pipeline_path()
-    sys.path.append(os.path.dirname(pipe_path))
-    spec = importlib.util.spec_from_file_location(PIPE_NAME, pipe_path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[PIPE_NAME] = module
-    spec.loader.exec_module(module)
-    return module
-
-
 def prep_images_folder(folder: Path, create: bool) -> Path:
-    return _prep_subfolder(folder=folder, name="images", create=create)
+    return prep_subfolder(folder=folder, name="images", create=create)
 
 
-def prep_output_folder(folder: Path, create: bool) -> Path:
-    return _prep_subfolder(folder=folder, name="output", create=create)
-
-
-def scripts_folder():
-    tests_folder = os.path.dirname(__file__)
-    project_folder = os.path.dirname(tests_folder)
-    return Path(project_folder) / "bin" / "cli"
-
-
-def _prep_subfolder(folder: Path, name: str, create: bool) -> Path:
+def prep_subfolder(folder: Path, name: str, create: bool) -> Path:
     fp = folder / name
     if create:
         fp.mkdir()
