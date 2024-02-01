@@ -11,6 +11,7 @@ import argparse
 import sys
 import numpy as np
 
+from skimage.io import imsave
 import napari
 
 from looptrace.ImageHandler import ImageHandler
@@ -27,13 +28,14 @@ if __name__ == '__main__':
         )
     parser.add_argument("config_path", help="Config file path")
     parser.add_argument("image_path", help="Path to folder with images to read.")
-    parser.add_argument("--image_save_path", help="Path to folder to save images to.")
-    parser.add_argument("--qc", action="store_true", help="Additionally run QC (allows edits).")
+    exec_flow = parser.add_mutually_exclusive_group(required=True)
+    exec_flow.add_argument("--save-images", action="store_true", help="Save comuted mask images.")
+    exec_flow.add_argument("--qc", action="store_true", help="Additionally run QC (allows edits).")
     args = parser.parse_args()
     
     prep_image_to_add = np.array if args.qc else (lambda img: img)
 
-    H = ImageHandler(config_path=args.config_path, image_path=args.image_path, image_save_path=args.image_save_path)
+    H = ImageHandler(config_path=args.config_path, image_path=args.image_path)
     N = NucDetector(H)
     
     # Gather the images to use and determine what to do for each FOV.
@@ -53,15 +55,23 @@ if __name__ == '__main__':
         viewer = napari.view_image(nuc_img)
         masks_layer = viewer.add_labels(prep_image_to_add(mask_imgs[i]))
         class_layer = get_class_layer(viewer, i)
-        napari.run()
+        
+        if args.save_images:
+            screenshot = viewer.screenshot()
+            viewer.add_image(screenshot)
+            outfile = H.nuclear_mask_images_folder / f"nuc_maks.{i}.png"
+            print(f"Saving image for position {i}: {outfile}")
+            imsave(outfile, screenshot)
+        else:
+            napari.run()
 
-        sentinel = "q"
-        user_input = input(f"Press enter to continue to next position, or {sentinel} to quit.")
-        if user_input == sentinel:
-            break
+            sentinel = "q"
+            user_input = input(f"Press enter to continue to next position, or {sentinel} to quit.")
+            if user_input == sentinel:
+                break
 
-        if args.qc:
-            N.update_masks_after_qc(masks_layer.data.astype(np.uint16), np.array(mask_imgs[i]), NucDetector.MASKS_KEY, H.image_lists[NucDetector.MASKS_KEY][i])
-            if class_layer is not None:
-                N.update_masks_after_qc(class_layer.data.astype(np.uint16), np.array(class_imgs[i]), NucDetector.CLASSES_KEY, H.image_lists[NucDetector.CLASSES_KEY][i])
-                del class_layer
+            if args.qc:
+                N.update_masks_after_qc(masks_layer.data.astype(np.uint16), np.array(mask_imgs[i]), NucDetector.MASKS_KEY, H.image_lists[NucDetector.MASKS_KEY][i])
+                if class_layer is not None:
+                    N.update_masks_after_qc(class_layer.data.astype(np.uint16), np.array(class_imgs[i]), NucDetector.CLASSES_KEY, H.image_lists[NucDetector.CLASSES_KEY][i])
+                    del class_layer
