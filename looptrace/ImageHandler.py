@@ -71,7 +71,7 @@ class ImageHandler:
         return self.config['analysis_prefix']
 
     @property
-    def analysis_path(self):
+    def analysis_path(self) -> str:
         return get_analysis_path(self.config)
 
     @property
@@ -174,6 +174,10 @@ class ImageHandler:
     @property
     def minimum_spot_separation(self) -> Union[int, float]:
         return self.config[MINIMUM_SPOT_SEPARATION_KEY]
+
+    @property
+    def nuclear_mask_images_folder(self) -> Path:
+        return Path(self.analysis_path) / "nuclear_mask_images"
 
     @property
     def nuclei_channel(self) -> int:
