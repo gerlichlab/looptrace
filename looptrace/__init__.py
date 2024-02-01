@@ -12,6 +12,7 @@ __all__ = [
     "SIGNAL_NOISE_RATIO_NAME",
     "TRACING_SUPPORT_EXCLUSIONS_KEY",
     "ZARR_CONVERSIONS_KEY",
+    "IllegalSequenceOfOperationsError",
     ]
 
 
@@ -26,3 +27,13 @@ SIGMA_Z_MAX_NAME = "sigma_z_max"
 SIGNAL_NOISE_RATIO_NAME = "A_to_BG"
 TRACING_SUPPORT_EXCLUSIONS_KEY = "illegal_frames_for_trace_support"
 ZARR_CONVERSIONS_KEY = "zarr_conversions"
+
+
+class LooptraceException(BaseException):
+    "General base for exceptional situations related to the specifics of this project"
+    pass
+
+
+class IllegalSequenceOfOperationsError(LooptraceException):
+    """Exception for when an operation's attempted before at least one of its dependencies is finished."""
+    pass

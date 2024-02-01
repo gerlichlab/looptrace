@@ -18,6 +18,7 @@ from skimage.io import imsave
 import napari
 
 from gertils import ExtantFile, ExtantFolder
+from looptrace import IllegalSequenceOfOperationsError
 from looptrace.ImageHandler import ImageHandler
 from looptrace.NucDetector import NucDetector
 
@@ -38,14 +39,9 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder, save_images: 
     seg_imgs = N.images_for_segmentation
     mask_imgs = N.mask_images
     if mask_imgs is None:
-        print("Nuclei need to be segmented first.")
-        sys.exit()
-    
+        raise IllegalSequenceOfOperationsError("Nuclei need to be detected/segmented before visualising or QC'ing labels.")
     class_imgs = N.class_images
-    if class_imgs is None:
-        get_class_layer = lambda *_: None
-    else:
-        get_class_layer = lambda view, pos_idx: view.add_labels(prep_image_to_add(class_imgs[pos_idx]))
+    get_class_layer = (lambda *_: None) if class_imgs is None else (lambda view, pos_idx: view.add_labels(prep_image_to_add(class_imgs[pos_idx])))
 
     for i, nuc_img in takewhile(lambda i_: i_[0] <= stop_after, dropwhile(lambda i_: i_[0] < start_from, enumerate(seg_imgs))):
         viewer = napari.view_image(nuc_img)

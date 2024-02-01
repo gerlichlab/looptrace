@@ -8,11 +8,15 @@ from gertils import ExtantFile, ExtantFolder
 import pandas as pd
 import tqdm
 
+from looptrace import IllegalSequenceOfOperationsError
 from looptrace.ImageHandler import handler_from_cli
 from looptrace.NucDetector import NucDetector
 import looptrace.image_processing_functions as ip
 
 logger = logging.getLogger()
+
+
+NUC_LABEL_COL = "nuc_label"
 
 
 def workflow(
@@ -24,6 +28,8 @@ def workflow(
     # Set up the spot picker and the nuclei detector instances, to manage paths and settings.
     H = handler_from_cli(config_file=config_file, images_folder=images_folder, image_save_path=image_save_path)
     N = NucDetector(H)
+    if N.mask_images is None:
+        raise IllegalSequenceOfOperationsError("Nuclei need to be detected/segmented before assigning spots to nuclei.")
 
     read_table = lambda f: pd.read_csv(f, index_col=0)
     
@@ -55,9 +61,8 @@ def workflow(
         filter_kwargs = {"nuc_drifts": nuc_drifts, "nuc_target_frame": H.config['nuc_ref_frame'], "spot_drifts": spot_drifts}
         # TODO: this array indexing is sensitive to whether the mask and class images have the dummy time and channel dimensions or not.
         # See: https://github.com/gerlichlab/looptrace/issues/247
-        if N.mask_images is not None:
-            logger.info(f"Assigning nuclei labels for sports from position: {pos}")
-            rois = ip.filter_rois_in_nucs(rois, nuc_label_img=N.mask_images[i].compute(), new_col="nuc_label", **filter_kwargs)
+        logger.info(f"Assigning nuclei labels for sports from position: {pos}")
+        rois = ip.filter_rois_in_nucs(rois, nuc_label_img=N.mask_images[i].compute(), new_col=NUC_LABEL_COL, **filter_kwargs)
         if N.class_images is not None:
             logger.info(f"Assigning nuclei classes for spots from position: {pos}")
             rois = ip.filter_rois_in_nucs(rois, nuc_label_img=N.class_images[i].compute(), new_col="nuc_class", **filter_kwargs)
@@ -65,19 +70,13 @@ def workflow(
     
     outfile = H.nuclei_labeled_spots_file_path
     if len(all_rois) == 0:
-        logger.warn(f"No ROIs! Cannot write output file: {outfile}")
+        logger.warn(f"No ROIs! Cannot write nuclei-labeled spots file: {outfile}")
     else:
-        all_rois = pd.concat(all_rois).sort_values(['position', 'frame'])
-        logger.info(f"Writing output file: {outfile}")
+        all_rois = pd.concat(all_rois).sort_values(["position", "frame"])
+        logger.info(f"Writing nuclei-labeled spots file: {outfile}")
         all_rois.to_csv(outfile)
-        # if H.spot_input_name + '_traces' in H.tables:
-        #     logger.info('Assigning ids to traces.')
-        #     traces = H.tables[H.spot_input_name + '_traces'].copy()
-        #     if 'nuc_masks' in H.images:
-        #         traces.loc[:, 'nuc_label'] = traces['trace_id'].map(all_rois['nuc_label'].to_dict())
-        #     if 'nuc_classes' in H.images:
-        #         traces.loc[:, 'nuc_class'] = traces['trace_id'].map(all_rois['nuc_class'].to_dict())
-        #     traces.sort_values(['trace_id', 'frame']).to_csv(H.out_path(H.spot_input_name + '_traces.csv'))
+        logger.info(f"Writing nuclei-filtered spots file: {H.nuclei_labeled_spots_file_path}")
+        all_rois.to_csv(all_rois[all_rois[NUC_LABEL_COL] != 0].drop(NUC_LABEL_COL, axis=1))
 
     logger.info("Done!")
 
