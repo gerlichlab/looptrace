@@ -61,7 +61,7 @@ dev = ["czifile", "matplotlib", "joblib", "nd2", "numba", "seaborn", "tifffile"]
 interactive = ["napari", "napari-plot-profile", "pyqt6"]
 legacy-support = ["imagecodecs"]
 nuclei = ["cellpose"]
-pipeline = ["cellpose", "czifile", "flowdec", "joblib", "nd2", "piper", "tensorflow", "tensorrt", "tifffile"]
+pipeline = ["cellpose", "czifile", "flowdec", "joblib", "napari", "nd2", "piper", "tensorflow", "tensorrt", "tifffile"]
 polymer = ["numba"]
 test = ["hypothesis", "joblib", "nd2", "piper", "pytest", "pytest-skip-slow"]
 

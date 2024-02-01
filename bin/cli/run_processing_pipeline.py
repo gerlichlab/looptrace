@@ -20,11 +20,12 @@ from looptrace.Tracer import run_frame_name_and_distance_application
 
 from pipeline_precheck import workflow as pretest
 from convert_datasets_to_zarr import one_to_one as run_zarr_production
+from nuc_label import workflow as run_nuclei_detection
+from nuc_label_qc import workflow as run_nuclei_visualisation
 from extract_exp_psf import workflow as run_psf_extraction
 from run_bead_roi_generation import workflow as gen_all_bead_rois
 from analyse_detected_bead_rois import workflow as run_all_bead_roi_detection_analysis
 from decon import workflow as run_deconvolution
-from nuc_label import workflow as run_nuclei_detection
 from drift_correct_accuracy_analysis import workflow as run_drift_correction_analysis, run_visualisation as run_drift_correction_accuracy_visualisation
 from detect_spots import workflow as run_spot_detection
 from assign_spots_to_nucs import workflow as run_spot_nucleus_filtration
@@ -269,6 +270,7 @@ class LooptracePipeline(pypiper.Pipeline):
             ("pipeline_precheck", pretest, take1),
             ("zarr_production", run_zarr_production, take2),
             ("nuclei_detection", run_nuclei_detection, take2),
+            ("nuclei_visualisation", run_nuclei_visualisation, take2), 
             ("nuclei_drift_correction", drift_correct_nuclei, take2),
             ("psf_extraction", run_psf_extraction, take2),
             (DECON_STAGE_NAME, run_deconvolution, take2), # Really just for denoising, no need for structural disambiguation
