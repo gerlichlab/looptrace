@@ -8,6 +8,7 @@ EMBL Heidelberg
 """
 
 import argparse
+import os
 import sys
 import numpy as np
 
@@ -61,6 +62,7 @@ if __name__ == '__main__':
             viewer.add_image(screenshot)
             outfile = H.nuclear_mask_images_folder / f"nuc_maks.{i}.png"
             print(f"Saving image for position {i}: {outfile}")
+            os.makedirs(outfile.parent, exist_ok=True)
             imsave(outfile, screenshot)
         else:
             napari.run()
