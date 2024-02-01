@@ -68,7 +68,8 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder, save_images: 
                 N.update_masks_after_qc(masks_layer.data.astype(np.uint16), np.array(mask_imgs[i]), NucDetector.MASKS_KEY, H.image_lists[NucDetector.MASKS_KEY][i])
                 if class_layer is not None:
                     N.update_masks_after_qc(class_layer.data.astype(np.uint16), np.array(class_imgs[i]), NucDetector.CLASSES_KEY, H.image_lists[NucDetector.CLASSES_KEY][i])
-                    del class_layer
+        del masks_layer
+        del class_layer
 
 
 if __name__ == '__main__':
