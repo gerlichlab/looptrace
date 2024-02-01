@@ -47,7 +47,7 @@ Judge in accordance with how many beads you anticipate having per image.
 * `spot_downsample` should be a small integer, often just 2 or even 1 (no downsampling).
 * `regional_spots_grouping` (if specified) should be a mapping, with a `groups` key and a `semantic` key. 
 The `semantic` value should be either `permissive` or `prohibitive`, depending on how you want the groupings to be handled for regional spot exclusion based on proximity. The `groups` value should be a list-of-lists specifying the grouped regional barcode imaging timepoints.
-* `spot_in_nuc` should be set to `False`.
+* `spot_in_nuc` should be set to `True`, generally.
 * `padding_method` should be set to `edge`.
 * `tracing_cores` should be a value no more than the number of CPUs on the machine on which the processing will run.
 * `mask_fits` should be set to `False`.
