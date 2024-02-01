@@ -28,6 +28,6 @@ jobs:
             ~/.cache/pytest
           key: ${{ runner.os }}-poetry-tests-${{ hashFiles('poetry.lock') }}
       - name: Install project
-        run: poetry install --no-interaction --sync -E test -E pipeline
+        run: poetry install --no-interaction --sync -E test -E pipeline-test
       - name: Run PIPELINE unit tests on Python ${{ matrix.python-version }}
         run: poetry run pytest -vv tests/pipeline
