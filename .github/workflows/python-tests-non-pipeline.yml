@@ -1,6 +1,6 @@
 name: Python tests, non-pipeline
 
-on: [workflow_call]
+on: [push, pull_request]
 
 jobs:
   tests:
