@@ -18,12 +18,12 @@ import yaml
 
 from gertils import ExtantFile, ExtantFolder
 
+from looptrace import image_io, read_table_pandas, SIGNAL_NOISE_RATIO_NAME
 from looptrace.Drifter import Drifter
 from looptrace.ImageHandler import ImageHandler, handler_from_cli
 from looptrace.bead_roi_generation import extract_single_bead
 from looptrace.filepaths import get_analysis_path
 from looptrace.gaussfit import fitSymmetricGaussian3D
-from looptrace import image_io, SIGNAL_NOISE_RATIO_NAME
 from looptrace.numeric_types import NumberLike
 
 
@@ -388,7 +388,7 @@ def workflow(
     
     # Read the table of precomputed drift correction values.
     print(f"Reading drift correction table: {drift_correction_table_file}")
-    drift_table = pd.read_csv(drift_correction_table_file, index_col=0)
+    drift_table = read_table_pandas(drift_correction_table_file)
 
     # Subsample beads and compute remaining distance from reference point, even after drift correction.
     # Whether this is done in just a single FOV or across all FOVs is determined by the command-line specification.

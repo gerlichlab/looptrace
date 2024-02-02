@@ -79,7 +79,7 @@ def read_traces_and_apply_frame_names(traces_file: Path, config_file: Path) -> T
     frame_names = config["frame_name"]
     print(f"{len(frame_names)} frame names: {', '.join(frame_names)}")
     print(f"Reading traces: {traces_file}")
-    traces = pd.read_csv(traces_file, index_col=0)
+    traces = read_table_pandas(traces_file)
     print(f"Applying frame names to traces")
     traces["frame_name"] = traces.apply(lambda row: frame_names[row["frame"]], axis=1)
     return traces, config
