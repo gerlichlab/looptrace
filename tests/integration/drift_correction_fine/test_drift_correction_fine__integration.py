@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 from gertils import ExtantFile, ExtantFolder
 
+from looptrace import read_table_pandas
 from looptrace.Drifter import compute_fine_drifts, Drifter, FullDriftTableRow, Z_PX_COARSE, Y_PX_COARSE, X_PX_COARSE
 from looptrace.ImageHandler import ImageHandler
 from looptrace.numeric_types import NumberLike
@@ -132,8 +133,7 @@ def coarse_drift_file(data_path) -> Path:
 
 @pytest.fixture
 def coarse_drift_table(coarse_drift_file) -> pd.DataFrame:
-    # TODO: update with #104
-    return pd.read_csv(coarse_drift_file, index_col=0)
+    return read_table_pandas(coarse_drift_file)
 
 
 @pytest.fixture

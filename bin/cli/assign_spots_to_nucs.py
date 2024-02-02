@@ -9,7 +9,7 @@ import pandas as pd
 import tqdm
 
 from gertils import ExtantFile, ExtantFolder
-from looptrace import IllegalSequenceOfOperationsError
+from looptrace import IllegalSequenceOfOperationsError, read_table_pandas
 from looptrace.ImageHandler import handler_from_cli
 from looptrace.NucDetector import NucDetector
 
@@ -111,20 +111,18 @@ def workflow(
     if N.mask_images is None:
         raise IllegalSequenceOfOperationsError("Nuclei need to be detected/segmented before assigning spots to nuclei.")
 
-    read_table = lambda f: pd.read_csv(f, index_col=0)
-    
     def query_table_for_pos(table: pd.DataFrame) -> Callable[[str], pd.DataFrame]:
         return (lambda pos: table.query('position == @pos'))
 
     logger.info(f"Reading coarse-drift file for nuclei: {N.drift_correction_file__coarse}")
-    drift_table_nuclei = read_table(N.drift_correction_file__coarse)
+    drift_table_nuclei = read_table_pandas(N.drift_correction_file__coarse)
     get_nuc_drifts = query_table_for_pos(drift_table_nuclei)
     
     logger.info(f"Reading coarse-drift file for spots: {H.drift_correction_file__coarse}")
-    drift_table_spots = read_table(H.drift_correction_file__coarse)
+    drift_table_spots = read_table_pandas(H.drift_correction_file__coarse)
     get_spot_drifts = query_table_for_pos(drift_table_spots)
     
-    rois_table = read_table(H.proximity_filtered_spots_file_path)
+    rois_table = read_table_pandas(H.proximity_filtered_spots_file_path)
     get_rois = query_table_for_pos(rois_table)
 
     logger.info("Assigning spots to nuclei labels...")

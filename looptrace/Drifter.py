@@ -26,7 +26,7 @@ import tqdm
 
 from gertils import ExtantFile, ExtantFolder
 
-from looptrace import image_io
+from looptrace import image_io, read_table_pandas
 from looptrace.ImageHandler import ImageHandler
 from looptrace.bead_roi_generation import BeadRoiParameters, extract_single_bead
 from looptrace.gaussfit import fitSymmetricGaussian3D
@@ -294,7 +294,7 @@ def fine_correction_workflow(config_file: ExtantFile, images_folder: ExtantFolde
 
 def iter_coarse_drifts_by_position(filepath: Union[str, Path, ExtantFile]) -> Iterable[Tuple[str, pd.DataFrame]]:
     print(f"Reading coarse drift table: {filepath}")
-    coarse_table = pd.read_csv(filepath, index_col=0)
+    coarse_table = read_table_pandas(filepath)
     coarse_table = coarse_table.sort_values([POSITION_COLUMN, FRAME_COLUMN]) # Sort so that grouping by position then frame doesn't alter order.
     return coarse_table.groupby(POSITION_COLUMN)
 
@@ -517,7 +517,7 @@ class Drifter():
         ]
         files = sorted(files, key=lambda fp: int(fp.name.split(".")[0]))
         print(f"Reading {len(files)} fine drift correction file(s):\n" + "\n".join(p.name for p in files))
-        return pd.concat((pd.read_csv(fp, index_col=0) for fp in files), axis=0, ignore_index=True)
+        return pd.concat((read_table_pandas(fp) for fp in files), axis=0, ignore_index=True)
 
     @property
     def reference_channel(self) -> int:
