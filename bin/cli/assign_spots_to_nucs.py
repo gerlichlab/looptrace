@@ -28,7 +28,6 @@ def filter_rois_in_nucs(
     new_col: str, 
     *,
     nuc_drifts: pd.DataFrame, 
-    nuc_target_frame: int, 
     spot_drifts: pd.DataFrame,
     ) -> pd.DataFrame:
     """
@@ -44,8 +43,6 @@ def filter_rois_in_nucs(
         The name of the new column in the ROI table
     nuc_drifts : pd.DataFrame
         Data table with information on drift correction for nuclei
-    nuc_target_frame : int
-        Reference timepoint for nuclei imaging, usually 0
     spot_drifts : pd.DataFrame
         Data table with information on drift correction for FISH spots
 
@@ -84,7 +81,7 @@ def filter_rois_in_nucs(
         rois_shifted = new_rois.copy()
         shifts = []
         for _, row in rois_shifted.iterrows():
-            drift_target = nuc_drifts[(nuc_drifts['position'] == row['position']) & (nuc_drifts['frame'] == nuc_target_frame)][['z_px_coarse', 'y_px_coarse', 'x_px_coarse']].to_numpy()
+            drift_target = nuc_drifts[nuc_drifts['position'] == row['position']][['z_px_coarse', 'y_px_coarse', 'x_px_coarse']].to_numpy()
             drift_roi = spot_drifts[(spot_drifts['position'] == row['position']) & (spot_drifts['frame'] == row['frame'])][['z_px_coarse', 'y_px_coarse', 'x_px_coarse']].to_numpy()
             shift = drift_target - drift_roi
             shifts.append(shift[0])
@@ -136,7 +133,7 @@ def workflow(
         nuc_drifts = get_nuc_drifts(pos)
         spot_drifts = get_spot_drifts(pos)
         
-        filter_kwargs = {"nuc_drifts": nuc_drifts, "nuc_target_frame": H.config['nuc_ref_frame'], "spot_drifts": spot_drifts}
+        filter_kwargs = {"nuc_drifts": nuc_drifts, "spot_drifts": spot_drifts}
         # TODO: this array indexing is sensitive to whether the mask and class images have the dummy time and channel dimensions or not.
         # See: https://github.com/gerlichlab/looptrace/issues/247
         logger.info(f"Assigning nuclei labels for sports from position: {pos}")

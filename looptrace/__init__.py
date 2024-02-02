@@ -15,8 +15,10 @@ __all__ = [
     "SIGNAL_NOISE_RATIO_NAME",
     "TRACING_SUPPORT_EXCLUSIONS_KEY",
     "ZARR_CONVERSIONS_KEY",
+    "ArrayDimensionalityError",
     "ConfigurationValueError",
     "IllegalSequenceOfOperationsError",
+    "MissingImagesError",
     "read_table_pandas",
     ]
 
@@ -55,6 +57,10 @@ class LooptraceException(BaseException):
     pass
 
 
+class ArrayDimensionalityError(Exception):
+    """Error subtype to represent an error in array dimensionality"""
+
+
 class ConfigurationValueError(BaseException):
     "Exception subtype for when something's wrong with a config file value"
     pass
@@ -62,4 +68,9 @@ class ConfigurationValueError(BaseException):
 
 class IllegalSequenceOfOperationsError(LooptraceException):
     """Exception for when an operation's attempted before at least one of its dependencies is finished."""
+    pass
+
+
+class MissingImagesError(LooptraceException):
+    """Exception subtype for when a collection of images (usually subfolder of main images) is missing"""
     pass
