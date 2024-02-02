@@ -15,9 +15,8 @@ import numpy as np
 import pandas as pd
 from scipy import ndimage as ndi
 from skimage.segmentation import expand_labels, find_boundaries, relabel_sequential
-from skimage.measure import regionprops_table
 from skimage.transform import rescale
-from skimage.morphology import remove_small_objects
+from skimage.morphology import remove_small_objects, label as morph_label
 import tqdm
 
 from looptrace import image_io
@@ -356,11 +355,10 @@ def _mitotic_cell_extra_seg(nuc_image, nuc_mask):
         mito_index+1 (int): the first index of the mitotic cells in the returned nuc_mask
 
     '''
-    from skimage.morphology import label, remove_small_objects
     nuc_int = np.mean(nuc_image[nuc_mask > 0])
     mito_nuc = (nuc_image * (nuc_mask == 0)) > 1.5 * nuc_int
     mito_nuc = remove_small_objects(mito_nuc, min_size=100)
-    mito_nuc = label(mito_nuc)
+    mito_nuc = morph_label(mito_nuc)
     mito_index = np.max(nuc_mask)
     mito_nuc[mito_nuc > 0] += mito_index
     nuc_mask = nuc_mask + mito_nuc
@@ -402,7 +400,6 @@ def _nuc_segmentation_cellpose_3d(nuc_imgs: Union[List[np.ndarray], np.ndarray],
 
 
 def _relabel_nucs(nuc_image):
-    from skimage.morphology import label
     out = _mask_to_binary(nuc_image)
-    out = label(out)
+    out = morph_label(out)
     return out.astype(nuc_image.dtype)
