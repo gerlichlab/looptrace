@@ -7,6 +7,7 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+from enum import Enum
 from pathlib import Path
 from typing import *
 
@@ -19,13 +20,35 @@ from skimage.transform import rescale
 from skimage.morphology import remove_small_objects, label as morph_label
 import tqdm
 
-from looptrace import image_io
+from looptrace import ConfigurationValueError, image_io
 from looptrace.numeric_types import NumberLike
 from looptrace.wrappers import phase_xcor
 from looptrace.Drifter import COARSE_DRIFT_TABLE_COLUMNS, generate_drift_function_arguments__coarse_drift_only
 
 __author__ = "Kai Sandvold Beckwith"
 __credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
+
+
+CELLPOSE_NUCLEI_MODEL_NAME = "nuclei"
+
+
+class SegmentationMethod(Enum):
+    """Encoding of the methods available for nuclei segmentation"""
+    CELLPOSE = "cellpose"
+    THRESHOLD = "threshold"
+
+    @classmethod
+    def from_string(cls, s: str) -> Optional["SegmentationMethod"]:
+        extra = {CELLPOSE_NUCLEI_MODEL_NAME: SegmentationMethod.CELLPOSE}
+        lookup = {**extra, **{k: m for m in cls for k in [m.name, m.value]}}
+        return lookup.get(s)
+
+    @classmethod
+    def unsafe_from_string(cls, s: str) -> "SegmentationMethod":
+        member = cls.from_string(s)
+        if member is None:
+            choices = ", ".join(m.value for m in cls)
+            raise ConfigurationValueError(f"Cannot parse '{s}' as nuceli segmentation method; choose from: {choices}")
 
 
 class NucDetector:
@@ -44,6 +67,9 @@ class NucDetector:
     MASKS_KEY = "nuc_masks"
     SEGMENTATION_IMAGES_KEY = "nuc_images"
 
+    # other settings
+    _Z_SLICE_KEY = "nuc_slice"
+
     @property
     def channel(self) -> int:
         return self.image_handler.nuclei_channel
@@ -61,8 +87,12 @@ class NucDetector:
         return self.image_handler.config
 
     @property
+    def _defines_z_slice(self) -> bool:
+        return self._Z_SLICE_KEY in self.config
+
+    @property
     def do_in_3d(self) -> bool:
-        return self.config.get(self.KEY_3D, False)
+        return self.config.get(self.KEY_3D, False) or self.segmentation_method == SegmentationMethod.THRESHOLD
 
     @property
     def drift_correction_file__coarse(self) -> Path:
@@ -84,10 +114,6 @@ class NucDetector:
 
     def _get_img_save_path(self, name: str) -> Path:
         return Path(self.image_handler.image_save_path) / name
-
-    @property
-    def mask_images(self) -> Optional[Sequence[np.ndarray]]:
-        return self.image_handler.images.get(self.MASKS_KEY)
 
     @property
     def has_images_for_segmentation(self) -> bool:
@@ -125,6 +151,10 @@ class NucDetector:
             yield pos, imgs[i]
 
     @property
+    def mask_images(self) -> Optional[Sequence[np.ndarray]]:
+        return self.image_handler.images.get(self.MASKS_KEY)
+
+    @property
     def min_size(self) -> int:
         return self.config["nuc_min_size"]
 
@@ -149,32 +179,37 @@ class NucDetector:
         return self.config["nuc_ref_frame"]
 
     @property
-    def segmentation_method(self) -> str:
-        return self.config[self.DETECTION_METHOD_KEY]
+    def segmentation_method(self) -> SegmentationMethod:
+        rawval = self.config[self.DETECTION_METHOD_KEY]
+        return SegmentationMethod.unsafe_from_string(rawval)
+
+    @property
+    def z_slice_for_segmentation(self) -> int:
+        if self.do_in_3d:
+            raise NotImplementedError("z-slicing isn't allowed when doing nuclear segmentation in 3D!")
+        z = self.config.get(self._Z_SLICE_KEY, -1)
+        if not isinstance(z, int):
+            raise TypeError(f"z-slice for nuclear segmentation isn't an integer, but {type(z).__name__}: {z}")
+        return z
 
     def generate_images_for_segmentation(self):
-        '''
-        Saves 2D/3D (defined in config) images of the nuclear channel into image folder for later analysis.
-        '''
-        nuc_slice = self.config.get("nuc_slice", -1)
+        """Save 2D/3D (defined in config) images of the nuclear channel into image folder for later analysis."""
         if self.do_in_3d:
+            if self._defines_z_slice:
+                print(f"INFO: z-slice for nuclear segmentation is defined but won't be used for method '{self.segmentation_method}'.")
             axes = ("z", "y", "x")
             prep = lambda img: img
         else:
             axes = ("y", "x")
             # TODO: encode better the meaning of this sentinel for nuc_slice, and document it (i.e., -1 appears to be max-projection).
             # See: https://github.com/gerlichlab/looptrace/issues/244
+            nuc_slice = self.z_slice_for_segmentation
             prep = (lambda img: da.max(img, axis=0)) if nuc_slice == -1 else (lambda img: img[nuc_slice])
         
-        print("Generating nuclei images...")
-        name_img_pairs = [(pos_name, prep(self.input_images[i][self.channel]).compute()) for i, pos_name in tqdm.tqdm(enumerate(self.pos_list))]
-        print("Saving nuclei images...")
-        if nuc_slice == -1:
-            image_io.nuc_multipos_single_time_max_z_proj_zarr(name_img_pairs, root_path=self._nuclear_segmentation_images_path, dtype=np.uint16)
-        else:
+        name_img_pairs = ((pos_name, prep(self.input_images[i][self.channel]).compute()) for i, pos_name in tqdm.tqdm(enumerate(self.pos_list)))
+        print("Generating and saving nuclei images...")
+        if self.do_in_3d:
             for pos_name, subimg in tqdm.tqdm(name_img_pairs):
-                # TODO: replace this dimensionality hack with a cleaner solution to zarr writing.
-                # See: https://github.com/gerlichlab/looptrace/issues/245
                 image_io.single_position_to_zarr(
                     subimg, 
                     path=self._nuclear_segmentation_images_path, 
@@ -186,6 +221,8 @@ class NucDetector:
                     # TODO: reactivate if using netcdf-java or similar. #127
                     # compressor=numcodecs.Zlib(),
                     )
+        else:
+            image_io.nuc_multipos_single_time_max_z_proj_zarr(name_img_pairs, root_path=self._nuclear_segmentation_images_path, dtype=np.uint16)
     
     def segment_nuclei(self) -> Path:
         '''
@@ -197,10 +234,12 @@ class NucDetector:
             self.generate_images_for_segmentation()
             print("Re-reading images...")
             self.image_handler.read_images()
-        if self.segmentation_method == "threshold":
+        if self.segmentation_method == SegmentationMethod.CELLPOSE:
+            return self.segment_nuclei_cellpose()
+        elif self.segmentation_method == SegmentationMethod.THRESHOLD:
             return self.segment_nuclei_threshold()
         else:
-            return self.segment_nuclei_cellpose()
+            raise Exception(f"Unknown segmentation method: {self.segmentation_method}")
     
     def segment_nuclei_threshold(self) -> Path:
         for pos, img in self._iterate_over_pairs_of_position_and_segmentation_image():
@@ -223,7 +262,7 @@ class NucDetector:
         Runs nucleus segmentation using nucleus segmentation algorithm defined in ip functions.
         Dilates a bit and saves images.
         '''     
-        method = self.segmentation_method
+        method = CELLPOSE_NUCLEI_MODEL_NAME
         diameter = self.config["nuc_diameter"] / self.ds_xy
         if self.do_in_3d:
             scale_for_rescaling = (self.ds_z, self.ds_xy, self.ds_xy)
@@ -280,6 +319,7 @@ class NucDetector:
     def coarse_drift_correction_workflow(self) -> Path:
         from joblib import Parallel, delayed
         downsampling = self.config["coarse_drift_downsample"]
+        # TODO: check that the structure of the images (moving and template) matches the indexing in this function w.r.t. (t, c, z, y, x). See #241.
         all_args = generate_drift_function_arguments__coarse_drift_only(
             full_pos_list=self.pos_list, 
             pos_list=self.pos_list, 
@@ -305,7 +345,6 @@ class NucDetector:
         print(f"Writing coarse drifts: {outfile}")
         coarse_drifts.to_csv(outfile)
         return outfile
-
 
     def update_masks_after_qc(self, new_mask, original_mask, mask_name, position):
         s = tuple([slice(None, None, 4)] * len(new_mask.ndim))
