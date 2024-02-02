@@ -15,6 +15,7 @@ __all__ = [
     "SIGNAL_NOISE_RATIO_NAME",
     "TRACING_SUPPORT_EXCLUSIONS_KEY",
     "ZARR_CONVERSIONS_KEY",
+    "ConfigurationValueError",
     "IllegalSequenceOfOperationsError",
     "read_table_pandas",
     ]
@@ -51,6 +52,11 @@ def read_table_pandas(f: Union[str, Path]) -> pd.DataFrame:
 
 class LooptraceException(BaseException):
     "General base for exceptional situations related to the specifics of this project"
+    pass
+
+
+class ConfigurationValueError(BaseException):
+    "Exception subtype for when something's wrong with a config file value"
     pass
 
 
