@@ -17,21 +17,18 @@ from joblib import Parallel, delayed
 from pathlib import Path
 from typing import *
 
-from gertils import ExtantFile, ExtantFolder
 import numpy as np
 import pandas as pd
 import scipy.ndimage as ndi
 from skimage.measure import regionprops_table
 import tqdm
 
-from looptrace.ImageHandler import ImageHandler, bead_rois_filename
+from gertils import ExtantFolder
+from looptrace import ArrayDimensionalityError
+from looptrace.ImageHandler import bead_rois_filename
 from looptrace.numeric_types import NumberLike
 
 PathLike = Union[str, Path]
-
-
-class ArrayDimensionalityError(Exception):
-    """Error subtype to represent an error in array dimensionality"""
 
 
 def extract_single_bead(

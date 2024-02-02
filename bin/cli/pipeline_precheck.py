@@ -3,6 +3,7 @@
 import argparse
 from pathlib import Path
 from typing import *
+import warnings
 
 import yaml
 
@@ -72,6 +73,16 @@ def find_config_file_errors(config_file: ExtantFile) -> List[ConfigurationValueE
     else:
         if nuclei_detection_method != "nuclei":
             errors.append(f"Unsupported nuclei detection method (key '{NucDetector.DETECTION_METHOD_KEY}')! {nuclei_detection_method}")
+    try:
+        nuc_ref_frame = conf_data["nuc_ref_frame"]
+    except KeyError:
+        pass
+    else:
+        msg_base = f"Nuclei frame ('nuc_ref_frame') is deprecated"
+        if nuc_ref_frame == 0:
+            warnings.warn(msg_base, DeprecationWarning)
+        else:
+            errors.append(ConfigurationValueError(f"{msg_base}, but if present must be 0, not {nuc_ref_frame}"))
     
     # Drift correction
     dc_method = Drifter.get_method_name(conf_data)

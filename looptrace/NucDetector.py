@@ -20,7 +20,7 @@ from skimage.transform import rescale
 from skimage.morphology import remove_small_objects, label as morph_label
 import tqdm
 
-from looptrace import ConfigurationValueError, image_io
+from looptrace import ArrayDimensionalityError, ConfigurationValueError, MissingImagesError, image_io
 from looptrace.numeric_types import NumberLike
 from looptrace.wrappers import phase_xcor
 from looptrace.Drifter import COARSE_DRIFT_TABLE_COLUMNS, generate_drift_function_arguments__coarse_drift_only
@@ -72,6 +72,7 @@ class NucDetector:
 
     @property
     def channel(self) -> int:
+        """The imaging channel with nuclei stain (generally DAPI) signal"""
         return self.image_handler.nuclei_channel
 
     @property
@@ -80,6 +81,7 @@ class NucDetector:
 
     @property
     def classify_mitotic(self) -> bool:
+        """Whether mitotic status of nuclei should also be evaluated and labeled"""
         return self.config.get("nuc_mitosis_class", False)
 
     @property
@@ -92,22 +94,27 @@ class NucDetector:
 
     @property
     def do_in_3d(self) -> bool:
+        """Whether the deftection and segmentation are to be done using z as well as x and y"""
         return self.config.get(self.KEY_3D, False) or self.segmentation_method == SegmentationMethod.THRESHOLD
 
     @property
     def drift_correction_file__coarse(self) -> Path:
+        """Path to the file with coarse drift correction information for nuclei"""
         return self.image_handler.get_dc_filepath(prefix="nuclei", suffix="_coarse.csv")
 
     @property
-    def drift_correction_file__fine(self) -> Path:
-        return self.image_handler.get_dc_filepath(prefix="nuclei", suffix="_fine.csv")
+    def drift_correction_file__full(self) -> Path:
+        """Path to the file with full drift correction information for nuclei"""
+        return self.image_handler.get_dc_filepath(prefix="nuclei", suffix="_full.csv")
 
     @property
     def ds_xy(self) -> int:
+        """Downscaling factor for the x and y dimensions; sample every nth pixel."""
         return self.config["nuc_downscaling_xy"]
 
     @property
     def ds_z(self) -> int:
+        """Downscaling factor for the z dimension; sample every nth pixel."""
         if self.do_in_3d:
             return self.config["nuc_downscaling_z"]
         raise NotImplementedError("3D nuclei detection is off, so downscaling in z (ds_z) is undefined!")
@@ -117,6 +124,7 @@ class NucDetector:
 
     @property
     def has_images_for_segmentation(self) -> bool:
+        """Whether this nuclei detection manager is prepared for segmentation"""
         try:
             self.images_for_segmentation
         except KeyError:
@@ -124,14 +132,34 @@ class NucDetector:
         return True
 
     @property
-    def input_images(self) -> List[da.core.Array]:
-        imgs = self.image_handler.images[self._input_name]
+    def input_images(self) -> list[da.core.Array]:
+        """The unprocessed (other than perhaps format conversion) nuclei images
+
+        Returns
+        -------
+        list of da.core.Array
+            A list of dask arrays, each corresponding to an image stack for a particular FOV / position
+
+        Raises
+        ------
+        looptrace.MissingImagesError
+            If the underlying image handler lacks the key for the nuclei images
+        looptrace.ArrayDimensionalityError
+            If the number of position names doesn't match the number of image stacks, or
+            if any of the image stacks isn't 4-dimensional (1 for channel, and 1 each for (z, y, x))
+        """
+        try:
+            imgs = self.image_handler.images[self._input_name]
+        except KeyError as e:
+            raise MissingImagesError(f"No images {self._input_name} for nuclei segmentation!") from e
         if len(imgs) != len(self.pos_list):
-            raise Exception(f"{len(imgs)} images and {len(self.pos_list)} positions; these should be equal!")
+            raise ArrayDimensionalityError(f"{len(imgs)} images and {len(self.pos_list)} positions; these should be equal!")
         exp_shape_len = 4 # (ch, z, y, x) -- no time dimension since only 1 timepoint's imaged for nuclei.
         bad_images = {p: i.shape for p, i in zip(self.pos_list, imgs) if len(i.shape) != exp_shape_len}
         if bad_images:
-            raise Exception(f"{len(bad_images)} images with shape length not equal to {exp_shape_len}: {bad_images}")
+            raise ArrayDimensionalityError(
+                f"{len(bad_images)} images with shape length not equal to {exp_shape_len}: {bad_images}"
+                )
         return imgs
 
     @property
@@ -172,11 +200,8 @@ class NucDetector:
     
     @property
     def pos_list(self) -> List[str]:
+        """List of names for the fields of view (FOVs) in which nuclei images were taken"""
         return self.image_handler.image_lists[self._input_name]
-
-    @property
-    def reference_frame(self) -> int:
-        return self.config["nuc_ref_frame"]
 
     @property
     def segmentation_method(self) -> SegmentationMethod:
@@ -246,13 +271,13 @@ class NucDetector:
             # TODO: need to make this accord with the structure of saved images in segment_nuclei_cellpose.
             # TODO: need to handle whether nuclei images can have more than 1 timepoint (nontrivial time dimension).
             # See: https://github.com/gerlichlab/looptrace/issues/243
-            img = img[0, self.channel, ::self.ds_z, ::self.ds_xy, ::self.ds_xy]
+            img = img[::self.ds_z, ::self.ds_xy, ::self.ds_xy]
             img = ndi.gaussian_filter(img, 2)
             mask = img > int(self.config["nuc_threshold"])
             mask = ndi.binary_fill_holes(mask)
             mask = remove_small_objects(mask, min_size=self.min_size).astype(np.uint16)
             mask = ndi.label(mask)[0]
-            mask = rescale(expand_labels(mask.astype(np.uint16),self.config["nuc_dilation"]), scale = (self.ds_z, self.ds_xy, self.ds_xy), order=0)
+            mask = rescale(expand_labels(mask.astype(np.uint16),self.config["nuc_dilation"]), scale=(self.ds_z, self.ds_xy, self.ds_xy), order=0)
             # TODO: need to adjust axes argument probably.
             # See: https://github.com/gerlichlab/looptrace/issues/245
             image_io.single_position_to_zarr(mask, path=self.nuclear_masks_path, name=self.MASKS_KEY, pos_name=pos, axes=('z','y','x'), dtype=np.uint16, chunk_split=(1,1))
@@ -377,7 +402,7 @@ def _mask_to_binary(mask):
     Returns:
         [np array]: Masks with single pixel seperation beteween neighboring features.
     '''
-    masks_no_bound = np.where(find_boundaries(mask)>0, 0, mask)
+    masks_no_bound = np.where(find_boundaries(mask) > 0, 0, mask)
     return masks_no_bound
 
 
@@ -417,7 +442,7 @@ def _nuc_segmentation_cellpose_2d(nuc_imgs: Union[List[np.ndarray], np.ndarray],
 
     from cellpose import models
     model = models.CellposeModel(gpu=False, model_type=model_type)
-    masks = model.eval(nuc_imgs, diameter=diameter, channels=[0,0], net_avg=False, do_3D=False)[0]
+    masks = model.eval(nuc_imgs, diameter=diameter, channels=[0, 0], net_avg=False, do_3D=False)[0]
     return masks
 
 
