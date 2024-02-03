@@ -1,0 +1,87 @@
+analysis_prefix: testing_testing_
+
+xy_nm: 100
+z_nm: 300
+
+zarr_conversions:
+    nuc_images_raw: nuc_images_zarr
+    seq_images_raw: seq_images_zarr
+
+nuc_input_name: nuc_images_zarr
+nuc_channel: 0
+nuc_ref_frame: 0
+nuc_slice: -1
+nuc_3d: False
+nuc_method: nuclei
+nuc_diameter: 170
+nuc_dilation: 2
+nuc_downscaling_xy: 4
+nuc_min_size: 10
+
+psf_input_name: psf_images_raw
+psf_bead_ch: 0
+psf_bead_frame: 0
+num_beads_psf: 500
+decon_input_name: seq_images_zarr
+decon_output_name: seq_images_zarr_decon
+decon_ch: 0
+non_decon_ch: 1
+require_gpu: True
+decon_iter: 30
+decon_psf: gen
+spot_wavelength: 660
+objective_na: 1.40
+
+reg_input_template: seq_images_zarr_decon
+reg_input_moving: seq_images_zarr_decon
+reg_ch_template: 1
+reg_ch_moving: 1
+reg_ref_frame : 27
+bead_threshold: 10000
+min_bead_intensity: 15000
+bead_roi_size: 16
+num_bead_rois_for_drift_correction: 100
+coarse_drift_downsample: 2
+dc_method: fit
+num_bead_rois_for_drift_correction_accuracy: 50
+
+spot_input_name: seq_images_zarr_decon
+spot_ch: 0
+spot_frame:
+    - 7
+    - 8
+    - 9
+    - 10
+detection_method: dog
+spot_threshold: 10
+spot_downsample: 2
+spot_in_nuc: False
+subtract_crosstalk: False
+crosstalk_ch: 1
+min_spot_dist: 5
+parallelise_spot_detection: False
+
+regional_spots_grouping:
+    semantic: permissive
+    groups:
+        - - 7
+          - 8
+        - - 9
+          - 10
+
+keep_spot_images_folder: False
+
+tracing_cores: 2
+trace_input_name: spot_images
+fit_func: LS
+mask_fits: False
+subtract_background: 0
+roi_image_size:
+    - 8
+    - 16
+    - 16
+    
+A_to_BG: 2
+sigma_xy_max: 150
+sigma_z_max: 400
+max_dist: 800

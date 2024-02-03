@@ -8,6 +8,7 @@ EMBL Heidelberg
 """
 
 from enum import Enum
+from operator import itemgetter
 from pathlib import Path
 from typing import *
 
@@ -149,7 +150,11 @@ class NucDetector:
             if any of the image stacks isn't 4-dimensional (1 for channel, and 1 each for (z, y, x))
         """
         try:
-            imgs = self.image_handler.images[self._input_name]
+            all_imgs = self.image_handler.images
+        except AttributeError as e:
+            raise MissingImagesError(f"No images available at all!") from e
+        try:
+            imgs = all_imgs[self._input_name]
         except KeyError as e:
             raise MissingImagesError(f"No images {self._input_name} for nuclei segmentation!") from e
         if len(imgs) != len(self.pos_list):
@@ -157,9 +162,8 @@ class NucDetector:
         exp_shape_len = 4 # (ch, z, y, x) -- no time dimension since only 1 timepoint's imaged for nuclei.
         bad_images = {p: i.shape for p, i in zip(self.pos_list, imgs) if len(i.shape) != exp_shape_len}
         if bad_images:
-            raise ArrayDimensionalityError(
-                f"{len(bad_images)} images with shape length not equal to {exp_shape_len}: {bad_images}"
-                )
+            item_list_text = ", ".join(f"{p}: {shape}" for p, shape in sorted(bad_images.items(), key=itemgetter(0)))
+            raise ArrayDimensionalityError(f"{len(bad_images)} images with bad shape (length not equal to {exp_shape_len}): {item_list_text}")
         return imgs
 
     @property
@@ -201,7 +205,14 @@ class NucDetector:
     @property
     def pos_list(self) -> List[str]:
         """List of names for the fields of view (FOVs) in which nuclei images were taken"""
-        return self.image_handler.image_lists[self._input_name]
+        try:
+            image_lists = self.image_handler.image_lists
+        except AttributeError as e:
+            raise AttributeError("Position names list for nuclei isn't defined when there are no images!") from e
+        try:
+            return image_lists[self._input_name]
+        except KeyError as e:
+            raise AttributeError("Position names list for nuclei isn't defined when there are no nuclei images!") from e
 
     @property
     def segmentation_method(self) -> SegmentationMethod:
