@@ -169,7 +169,7 @@ def image_handler(data_paths) -> ImageHandler:
 def set_analysis_path(handler: ImageHandler, p: Union[str, Path, ExtantFolder]) -> ImageHandler:
     if isinstance(p, ExtantFolder):
         p = p.path
-    handler.config.analysis_path = str(p)
+    handler.config["analysis_path"] = str(p)
     return handler
 
 
