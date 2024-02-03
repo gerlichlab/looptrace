@@ -20,7 +20,7 @@ let baseBuildInputs = with pkgs; [ poetry stdenv.cc.cc.lib zlib ] ++ [ pkgs.${jd
         (if rDev then [ pkgs.rPackages.languageserver ] else [ ]);
     };
     poetryExtras = [] ++ 
-      (if test then ["test"] else (
+      (if test then [ "test" "pipeline-test" ] else (
         (if pipeline then [ "pipeline" ] else []) ++
         (if analysis then [ "analysis" ] else []) ++ 
         (if interactive then [ "interactive" ] else []) ++
