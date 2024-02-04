@@ -9,7 +9,7 @@ import pandas as pd
 import tqdm
 
 from gertils import ExtantFile, ExtantFolder
-from looptrace import read_table_pandas
+from looptrace import DimensionalityError, read_table_pandas
 from looptrace.ImageHandler import handler_from_cli
 from looptrace.NucDetector import NucDetector
 
@@ -81,8 +81,14 @@ def filter_rois_in_nucs(
         rois_shifted = new_rois.copy()
         shifts = []
         for _, row in rois_shifted.iterrows():
-            drift_target = nuc_drifts[nuc_drifts['position'] == row['position']][['z_px_coarse', 'y_px_coarse', 'x_px_coarse']].to_numpy()
-            drift_roi = spot_drifts[(spot_drifts['position'] == row['position']) & (spot_drifts['frame'] == row['frame'])][['z_px_coarse', 'y_px_coarse', 'x_px_coarse']].to_numpy()
+            curr_pos_name = row['position']
+            raw_nuc_drift_match = nuc_drifts[nuc_drifts['position'] == curr_pos_name]
+            if not isinstance(drift_target, pd.DataFrame):
+                raise TypeError(f"Nuclear drift for position {curr_pos_name} is not a data frame, but {type(raw_nuc_drift_match).__name__}")
+            if not raw_nuc_drift_match.shape[0] == 1:
+                raise DimensionalityError(f"Nuclear drift for position {curr_pos_name} is not exactly 1 row, but {raw_nuc_drift_match.shape[0]} rows!")
+            drift_target = raw_nuc_drift_match[['z_px_coarse', 'y_px_coarse', 'x_px_coarse']].to_numpy()
+            drift_roi = spot_drifts[(spot_drifts['position'] == curr_pos_name) & (spot_drifts['frame'] == row['frame'])][['z_px_coarse', 'y_px_coarse', 'x_px_coarse']].to_numpy()
             shift = drift_target - drift_roi
             shifts.append(shift[0])
         shifts = pd.DataFrame(shifts, columns=['z', 'y', 'x'])
