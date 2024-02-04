@@ -177,8 +177,8 @@ class ImageHandler:
         return self.config[MINIMUM_SPOT_SEPARATION_KEY]
 
     @property
-    def nuclear_mask_images_folder(self) -> Path:
-        return Path(self.analysis_path) / "nuclear_mask_images"
+    def nuclear_mask_screenshots_folder(self) -> Path:
+        return Path(self.analysis_path) / "nuclear_mask_screenshots"
 
     @property
     def nuclei_channel(self) -> int:

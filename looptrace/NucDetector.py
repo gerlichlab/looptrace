@@ -181,7 +181,16 @@ class NucDetector:
 
     @property
     def mask_images(self) -> Optional[Sequence[np.ndarray]]:
-        return self.image_handler.images.get(self.MASKS_KEY)
+        try:
+            all_imgs = self.image_handler
+        except ArithmeticError as e:
+            self._raise_missing_images_error(e)
+        try:
+            return all_imgs[self.MASKS_KEY]
+        except KeyError as e:
+            raise MissingImagesError(
+                f"No images available ({self.MASKS_KEY}) as nuclear masks!"
+                ) from e
 
     @property
     def min_size(self) -> int:
@@ -397,9 +406,9 @@ class NucDetector:
         coarse_drifts.to_csv(outfile)
         return outfile
 
-    def update_masks_after_qc(self, new_mask, original_mask, mask_name, position):
+    def update_masks_after_qc(self, new_mask: np.ndarray, old_mask: np.ndarray, mask_name: str, position: str):
         s = tuple([slice(None, None, 4)] * len(new_mask.ndim))
-        if not np.allclose(new_mask[s], original_mask[s]):
+        if not np.allclose(new_mask[s], old_mask[s]):
             print("Segmentation labels have changed; resaving...")
             nuc_mask = _relabel_nucs(new_mask)
             pos_index = self.image_handler.image_lists[mask_name].index(position)

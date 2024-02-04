@@ -206,4 +206,5 @@ def test_nuc_detector__generates_image_of_proper_dimension(complete_config_data,
 
 @pytest.mark.skip("not implemented")
 def test_nuclei_labels__are_contiguous_nonnegative_integers_from_zero():
+    # This is a cellpose property that could be enforced.
     pass

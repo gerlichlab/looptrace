@@ -18,7 +18,6 @@ from skimage.io import imsave
 import napari
 
 from gertils import ExtantFile, ExtantFolder
-from looptrace import IllegalSequenceOfOperationsError
 from looptrace.ImageHandler import ImageHandler
 from looptrace.NucDetector import NucDetector
 
@@ -38,8 +37,6 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder, save_images: 
     # Gather the images to use and determine what to do for each FOV.
     seg_imgs = N.images_for_segmentation
     mask_imgs = N.mask_images
-    if mask_imgs is None:
-        raise IllegalSequenceOfOperationsError("Nuclei need to be detected/segmented before visualising or QC'ing labels.")
     class_imgs = N.class_images
     get_class_layer = (lambda *_: None) if class_imgs is None else (lambda view, pos_idx: view.add_labels(prep_image_to_add(class_imgs[pos_idx])))
 
@@ -50,7 +47,7 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder, save_images: 
         if save_images:
             screenshot = viewer.screenshot()
             viewer.add_image(screenshot)
-            outfile = H.nuclear_mask_images_folder / f"nuc_maks.{i}.png"
+            outfile = H.nuclear_mask_screenshots_folder / f"nuc_maks.{i}.png"
             print(f"Saving image for position {i}: {outfile}")
             os.makedirs(outfile.parent, exist_ok=True)
             imsave(outfile, screenshot)
@@ -61,9 +58,19 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder, save_images: 
             if user_input == sentinel:
                 break
             if do_qc:
-                N.update_masks_after_qc(masks_layer.data.astype(np.uint16), np.array(mask_imgs[i]), NucDetector.MASKS_KEY, H.image_lists[NucDetector.MASKS_KEY][i])
+                N.update_masks_after_qc(
+                    new_mask=masks_layer.data.astype(np.uint16), 
+                    old_mask=np.array(mask_imgs[i]), 
+                    mask_name=NucDetector.MASKS_KEY, 
+                    position=H.image_lists[NucDetector.MASKS_KEY][i],
+                    )
                 if class_layer is not None:
-                    N.update_masks_after_qc(class_layer.data.astype(np.uint16), np.array(class_imgs[i]), NucDetector.CLASSES_KEY, H.image_lists[NucDetector.CLASSES_KEY][i])
+                    N.update_masks_after_qc(
+                        new_mask=class_layer.data.astype(np.uint16), 
+                        old_mask=np.array(class_imgs[i]), 
+                        mask_name=NucDetector.CLASSES_KEY, 
+                        position=H.image_lists[NucDetector.CLASSES_KEY][i],
+                        )
         print("Removing layers and closing current viewer...")
         del masks_layer
         del class_layer

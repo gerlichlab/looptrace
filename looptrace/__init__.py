@@ -17,7 +17,6 @@ __all__ = [
     "ZARR_CONVERSIONS_KEY",
     "ArrayDimensionalityError",
     "ConfigurationValueError",
-    "IllegalSequenceOfOperationsError",
     "MissingImagesError",
     "read_table_pandas",
     ]
@@ -63,11 +62,6 @@ class ArrayDimensionalityError(Exception):
 
 class ConfigurationValueError(BaseException):
     "Exception subtype for when something's wrong with a config file value"
-    pass
-
-
-class IllegalSequenceOfOperationsError(LooptraceException):
-    """Exception for when an operation's attempted before at least one of its dependencies is finished."""
     pass
 
 
