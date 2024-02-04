@@ -75,36 +75,45 @@ class NPZ_wrapper():
 
 
 def multi_ome_zarr_to_dask(folder: str, remove_unused_dims: bool = True):
-    '''The multi_ome_zarr_to_dask function takes a folder path and returns a list of dask arrays and a list of image folders by reading multiple dask images in a single folder.
-        If the remove_unused_dims flag is set to True, the function will also remove unnecessary dimensions from the dask array.
+    """
+    The multi_ome_zarr_to_dask function takes a folder path and returns a list of dask arrays and a list of image folders.
+    
+    This is done by reading multiple dask images from a single folder.
+    If the remove_unused_dims flag is set to True, the function will also remove unnecessary dimensions from the dask array.
 
-    Args:
-        folder (str): Input folder path
-        remove_unused_dims (bool, optional): Defaults to True.
-
-    Returns:
-        list: list of dask arrays of the images
-        list: list of strings of image folder names
-    '''
+    Parameters
+    ----------
+    folder : str
+        Input folder path
+    remove_unused_dims : bool, default True
+        Whether to collapse each  unit-length dimensions
+    
+    Returns
+    -------
+    (list of da.core.Array, list of str)
+        list of dask arrays of the images and list of strings of image folder names
+    """
     print("Parsing zarr to dask: ", folder)
     image_folders = sorted([p.name for p in os.scandir(folder) if os.path.isdir(p) and not ignore_path(p)])
     out = []
     for image in image_folders:
         print("Parsing subfolder: ", image)
         curr_path = os.path.join(folder, image)
-        if (Path(curr_path) / ".zarray").is_file():
-            z = zarr.open(curr_path)
+        path_to_open = curr_path if (Path(curr_path) / ".zarray").is_file() else os.path.join(curr_path, "0")
+        z = zarr.open(path_to_open)
+        try:
             arr = da.from_zarr(z)
-        else:
-            z = zarr.open(os.path.join(curr_path, '0'))
-            arr = da.from_zarr(z)
-            # Remove unecessary dimensions: #TODO consider if this is wise!
-            if remove_unused_dims:
-                new_slice = tuple([0 if i == 1 else slice(None) for i in arr.shape])
-                arr = arr[new_slice]
+        except zarr.core.ArrayNotFoundError:
+            print(f"ERROR reading zarr array from {path_to_open}")
+            raise
+        # TODO: consider if this is wise!
+        if remove_unused_dims:
+            new_slice = tuple([0 if i == 1 else slice(None) for i in arr.shape])
+            arr = arr[new_slice]
         out.append(arr)
     print(f"Loaded list of {len(out)} arrays.")
     return out, image_folders
+
 
 def multipos_nd2_to_dask(folder: str):
     '''The function takes a folder path and returns a list of dask arrays and a 
@@ -262,18 +271,38 @@ def single_position_to_zarr(
                                                             (multiscale_level, i, images[i]) for i in range(size['t']))
 
 
-def nuc_multipos_single_time_max_z_proj_zarr(name_img_pairs: List[Tuple[str, np.ndarray]], root_path: str, dtype: Type, metadata: dict = None):
-    axes = ('y', 'x')
+def nuc_multipos_single_time_max_z_proj_zarr(
+    name_img_pairs: List[Tuple[str, np.ndarray]], 
+    root_path: str, 
+    dtype: Type, 
+    metadata: Optional[dict] = None,
+    ):
+    if not isinstance(name_img_pairs, (list, tuple)):
+        raise TypeError(f"Sequence of pairs of name and image data must be list or tuple, not {type(name_img_pairs).__name__}")
+    axes = ("y", "x")
     bad_name_shape_pairs = [(name, img.shape) for name, img in name_img_pairs if len(img.shape) != len(axes)]
     if bad_name_shape_pairs:
         raise ValueError(f"{len(bad_name_shape_pairs)}/{len(name_img_pairs)} images with bad shape given {len(axes)} axes: {bad_name_shape_pairs}")
+    write_jvm_compatible_zarr_store(name_data_pairs=[(p + ".zarr", img) for p, img in name_img_pairs], root_path=root_path, dtype=dtype, metadata=metadata)
+
+
+def write_jvm_compatible_zarr_store(
+    name_data_pairs: Sequence[Tuple[str, np.ndarray]], 
+    root_path: Union[str, Path], 
+    dtype: Type, 
+    metadata: Optional[dict] = None,
+    ):
+    if not name_data_pairs:
+        raise ValueError("To write data to zarr, a nonempty sequence of name/data pairs must be passed!")
+    print(f"INFO: creating zarr store rooted at {root_path}")
     store = zarr.DirectoryStore(root_path)
     root = zarr.group(store=store, overwrite=True)
     if metadata:
         root.attrs["metadata"] = metadata
-    for pos_name, img in name_img_pairs:
-        dataset = root.create_dataset(name=pos_name + ".zarr", compressor=numcodecs.Zlib(), shape=img.shape, dtype=dtype)
-        dataset[:] = img
+    for name, data in name_data_pairs:
+        # Use numcodecs.ZLib() as the compressor to ensure readability by cdm-core / netcdf-Java.
+        dataset = root.create_dataset(name=name, compressor=numcodecs.Zlib(), shape=data.shape, dtype=dtype)
+        dataset[:] = data
 
 
 def images_to_ome_zarr(

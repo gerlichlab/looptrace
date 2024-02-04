@@ -128,7 +128,7 @@ class NucDetector:
         """Whether this nuclei detection manager is prepared for segmentation"""
         try:
             self.images_for_segmentation
-        except KeyError:
+        except MissingImagesError:
             return False
         return True
 
@@ -152,11 +152,11 @@ class NucDetector:
         try:
             all_imgs = self.image_handler.images
         except AttributeError as e:
-            raise MissingImagesError(f"No images available at all!") from e
+            self._raise_missing_images_error(e)
         try:
             imgs = all_imgs[self._input_name]
         except KeyError as e:
-            raise MissingImagesError(f"No images {self._input_name} for nuclei segmentation!") from e
+            raise MissingImagesError(f"No images available ({self._input_name}) as raw input for nuclei segmentation!") from e
         if len(imgs) != len(self.pos_list):
             raise ArrayDimensionalityError(f"{len(imgs)} images and {len(self.pos_list)} positions; these should be equal!")
         exp_shape_len = 4 # (ch, z, y, x) -- no time dimension since only 1 timepoint's imaged for nuclei.
@@ -167,20 +167,17 @@ class NucDetector:
         return imgs
 
     @property
-    def _input_name(self) -> str:
-        return self.config["nuc_input_name"]
-
-    @property
     def images_for_segmentation(self) -> Sequence[np.ndarray]:
-        return self.image_handler.images[self.SEGMENTATION_IMAGES_KEY]
-
-    def _iterate_over_pairs_of_position_and_segmentation_image(self) -> Iterable[Tuple[str, np.ndarray]]:
         try:
-            imgs = self.images_for_segmentation
+            all_imgs = self.image_handler.images
+        except AttributeError as e:
+            self._raise_missing_images_error(e)
+        try:
+            return all_imgs[self.SEGMENTATION_IMAGES_KEY]
         except KeyError as e:
-            raise Exception("Tried to iterate over images for segmentation, but they're not yet generated!") from e
-        for i, pos in enumerate(self.pos_list):
-            yield pos, imgs[i]
+            raise MissingImagesError(
+                f"No images available ({self.SEGMENTATION_IMAGES_KEY}) as preprocessed input for nuclei segmentation!"
+                ) from e
 
     @property
     def mask_images(self) -> Optional[Sequence[np.ndarray]]:
@@ -193,11 +190,7 @@ class NucDetector:
     @property
     def nuc_classes_path(self) -> Path:
         return self._get_img_save_path(self.CLASSES_KEY)
-    
-    @property
-    def _nuclear_segmentation_images_path(self) -> Path:
-        return self._get_img_save_path(self.SEGMENTATION_IMAGES_KEY)
-    
+        
     @property
     def nuclear_masks_path(self) -> Path:
         return self._get_img_save_path(self.MASKS_KEY)
@@ -228,6 +221,25 @@ class NucDetector:
             raise TypeError(f"z-slice for nuclear segmentation isn't an integer, but {type(z).__name__}: {z}")
         return z
 
+    @property
+    def _input_name(self) -> str:
+        return self.config["nuc_input_name"]
+
+    def _iterate_over_pairs_of_position_and_segmentation_image(self) -> Iterable[Tuple[str, np.ndarray]]:
+        try:
+            imgs = self.images_for_segmentation
+        except KeyError as e:
+            raise Exception("Tried to iterate over images for segmentation, but they're not yet generated!") from e
+        for i, pos in enumerate(self.pos_list):
+            yield pos, imgs[i]
+
+    @property
+    def _nuclear_segmentation_images_path(self) -> Path:
+        return self._get_img_save_path(self.SEGMENTATION_IMAGES_KEY)
+
+    def _raise_missing_images_error(self, src: BaseException):
+        raise MissingImagesError(f"No images available at all; was {type(self).__name__} created without an images folder?") from src
+
     def generate_images_for_segmentation(self):
         """Save 2D/3D (defined in config) images of the nuclear channel into image folder for later analysis."""
         if self.do_in_3d:
@@ -242,7 +254,11 @@ class NucDetector:
             nuc_slice = self.z_slice_for_segmentation
             prep = (lambda img: da.max(img, axis=0)) if nuc_slice == -1 else (lambda img: img[nuc_slice])
         
-        name_img_pairs = ((pos_name, prep(self.input_images[i][self.channel]).compute()) for i, pos_name in tqdm.tqdm(enumerate(self.pos_list)))
+        arr_to_numpy = lambda a: a if isinstance(a, np.ndarray) else a.compute()
+        name_img_pairs = [
+            (pos_name, arr_to_numpy(prep(self.input_images[i][self.channel]))) 
+            for i, pos_name in tqdm.tqdm(enumerate(self.pos_list))
+        ]
         print("Generating and saving nuclei images...")
         if self.do_in_3d:
             for pos_name, subimg in tqdm.tqdm(name_img_pairs):
@@ -298,21 +314,20 @@ class NucDetector:
         Runs nucleus segmentation using nucleus segmentation algorithm defined in ip functions.
         Dilates a bit and saves images.
         '''     
-        method = CELLPOSE_NUCLEI_MODEL_NAME
         diameter = self.config["nuc_diameter"] / self.ds_xy
         if self.do_in_3d:
             scale_for_rescaling = (self.ds_z, self.ds_xy, self.ds_xy)
             def scale_down_img(img_zyx: np.ndarray) -> np.ndarray:
                 assert len(img_zyx.shape) == 3, f"Bad shape for alleged 3D image: {img_zyx.shape}"
                 return img_zyx[::self.ds_z, ::self.ds_xy, ::self.ds_xy]
-            get_masks = lambda imgs: _nuc_segmentation_cellpose_3d(imgs, diameter=diameter, model_type=method, anisotropy=self.config["nuc_anisotropy"])
+            get_masks = lambda imgs: _nuc_segmentation_cellpose_3d(imgs, diameter=diameter, anisotropy=self.config["nuc_anisotropy"])
             ome_zarr_axes = ("p", "z", "y", "x")
         else:
             scale_for_rescaling = (self.ds_xy, self.ds_xy)
             def scale_down_img(img_zyx: np.ndarray) -> np.ndarray:
                 assert len(img_zyx.shape) == 2, f"Bad shape for alleged 3D image: {img_zyx.shape}"
                 return img_zyx[::self.ds_xy, ::self.ds_xy]
-            get_masks = lambda imgs: _nuc_segmentation_cellpose_2d(imgs, diameter=diameter, model_type=method)
+            get_masks = lambda imgs: _nuc_segmentation_cellpose_2d(imgs, diameter=diameter)
             ome_zarr_axes = ("p", "y", "x")
         
         nuc_min_size = self.min_size / np.prod(scale_for_rescaling)
@@ -320,7 +335,7 @@ class NucDetector:
         print("Extracting nuclei images...")
         nuc_imgs = [np.array(scale_down_img(img)) for img in tqdm.tqdm(self.images_for_segmentation)]
 
-        print(f"Running nuclear segmentation using CellPose {method} model and diameter {diameter}.")
+        print(f"Running nuclear segmentation using CellPose and diameter {diameter}.")
         # Remove under-segmented nuclei and clean up after getting initial masks.
         masks = [remove_small_objects(arr, min_size=nuc_min_size) for arr in get_masks(nuc_imgs)]
         masks = [relabel_sequential(arr)[0] for arr in masks]
@@ -440,7 +455,7 @@ def _mitotic_cell_extra_seg(nuc_image, nuc_mask):
     return nuc_mask, mito_index + 1
 
 
-def _nuc_segmentation_cellpose_2d(nuc_imgs: Union[List[np.ndarray], np.ndarray], diameter: NumberLike = 150, model_type = 'nuclei'):
+def _nuc_segmentation_cellpose_2d(nuc_imgs: Union[List[np.ndarray], np.ndarray], diameter: NumberLike = 150):
     '''
     Runs nuclear segmentation using cellpose trained model (https://github.com/MouseLand/cellpose)
 
@@ -452,12 +467,12 @@ def _nuc_segmentation_cellpose_2d(nuc_imgs: Union[List[np.ndarray], np.ndarray],
             nuc_imgs = [np.array(nuc_imgs[i]) for i in range(nuc_imgs.shape[0])] #Force array conversion in case of zarr.
 
     from cellpose import models
-    model = models.CellposeModel(gpu=False, model_type=model_type)
+    model = models.CellposeModel(gpu=False, model_type="nuclei")
     masks = model.eval(nuc_imgs, diameter=diameter, channels=[0, 0], net_avg=False, do_3D=False)[0]
     return masks
 
 
-def _nuc_segmentation_cellpose_3d(nuc_imgs: Union[List[np.ndarray], np.ndarray], diameter: NumberLike = 150, model_type: str = 'nuclei', anisotropy: NumberLike = 2):
+def _nuc_segmentation_cellpose_3d(nuc_imgs: Union[List[np.ndarray], np.ndarray], diameter: NumberLike = 150, anisotropy: NumberLike = 2):
     '''
     Runs nuclear segmentation using cellpose trained model (https://github.com/MouseLand/cellpose)
 
@@ -469,7 +484,7 @@ def _nuc_segmentation_cellpose_3d(nuc_imgs: Union[List[np.ndarray], np.ndarray],
             nuc_imgs = [np.array(nuc_imgs[i]) for i in range(nuc_imgs.shape[0])] #Force array conversion in case of zarr.
 
     from cellpose import models
-    model = models.CellposeModel(gpu=True, model_type=model_type, net_avg=False)
+    model = models.CellposeModel(gpu=True, model_type="nuclei", net_avg=False)
     masks = model.eval(nuc_imgs, diameter=diameter, channels=[0, 0], z_axis=0, anisotropy=anisotropy, do_3D=True)[0]
     return masks
 

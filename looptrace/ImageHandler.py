@@ -12,6 +12,7 @@ import logging
 import os
 from pathlib import Path
 from typing import *
+
 import numpy as np
 import pandas as pd
 import yaml
@@ -332,6 +333,8 @@ def handler_from_cli(config_file: ExtantFile, images_folder: Optional[ExtantFold
 
 
 def read_images_folder(folder: Path, is_eligible: PathFilter = lambda _: True) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    if folder is None:
+        raise ValueError(f"To read images folder, a folder must be supplied.")
     print(f"Finding image paths in folder: {folder}")
     image_paths = ((p.name, p.path) for p in os.scandir(folder) if is_eligible(p))
     print(f"Reading images from folder: {folder}")
