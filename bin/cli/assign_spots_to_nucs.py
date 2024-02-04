@@ -9,7 +9,7 @@ import pandas as pd
 import tqdm
 
 from gertils import ExtantFile, ExtantFolder
-from looptrace import IllegalSequenceOfOperationsError, read_table_pandas
+from looptrace import read_table_pandas
 from looptrace.ImageHandler import handler_from_cli
 from looptrace.NucDetector import NucDetector
 
@@ -105,8 +105,6 @@ def workflow(
     # Set up the spot picker and the nuclei detector instances, to manage paths and settings.
     H = handler_from_cli(config_file=config_file, images_folder=images_folder, image_save_path=image_save_path)
     N = NucDetector(H)
-    if N.mask_images is None:
-        raise IllegalSequenceOfOperationsError("Nuclei need to be detected/segmented before assigning spots to nuclei.")
 
     def query_table_for_pos(table: pd.DataFrame) -> Callable[[str], pd.DataFrame]:
         return (lambda pos: table.query('position == @pos'))
