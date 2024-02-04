@@ -17,6 +17,7 @@ __all__ = [
     "ZARR_CONVERSIONS_KEY",
     "ArrayDimensionalityError",
     "ConfigurationValueError",
+    "DimensionalityError",
     "MissingImagesError",
     "read_table_pandas",
     ]
@@ -56,11 +57,16 @@ class LooptraceException(BaseException):
     pass
 
 
-class ArrayDimensionalityError(Exception):
+class DimensionalityError(LooptraceException):
+    """Error subtype for when one or more dimensions of an object are unexpected"""
+    pass
+
+
+class ArrayDimensionalityError(DimensionalityError):
     """Error subtype to represent an error in array dimensionality"""
 
 
-class ConfigurationValueError(BaseException):
+class ConfigurationValueError(LooptraceException):
     "Exception subtype for when something's wrong with a config file value"
     pass
 
