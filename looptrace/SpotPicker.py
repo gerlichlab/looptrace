@@ -450,7 +450,7 @@ class SpotPicker:
         spot_threshold = self.spot_threshold
         detect_func = self.detection_function
         logger.info(f"Using '{self.detection_method_name}' for spot detection, threshold : {spot_threshold}")
-        spot_ds = self.config['spot_downsample']
+        spot_ds = self.config["spot_downsample"]
         logger.info(f"Spot downsampling setting: {spot_ds}")
         
         params = SpotDetectionParameters(
@@ -465,27 +465,27 @@ class SpotPicker:
 
         # previewing
         if preview_pos is not None:
+            print("INFO: in spot previewing mode")
             for (i, frame), ch in self.iter_frames_and_channels():
-                logger.info(f'Preview spot detection in position {preview_pos}, frame {frame} with threshold {spot_threshold[i]}.')
+                logger.info(f"Preview spot detection in position {preview_pos}, frame {frame} with threshold {spot_threshold[i]}.")
                 pos_index = self.image_handler.image_lists[self.input_name].index(preview_pos)
                 img = self.images[pos_index][frame, ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
-
                 if subtract_beads:
                     bead_img = self.images[pos_index][frame, crosstalk_ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
                     img, orig = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
-
                 spot_props, filt_img, _ = detect_func(img, spot_threshold[i])
-                spot_props['position'] = preview_pos
-                spot_props = spot_props.reset_index().rename(columns={'index':'roi_id_pos'})
-
+                spot_props["position"] = preview_pos
+                spot_props = spot_props.reset_index().rename(columns={"index": "roi_id_pos"})
                 spot_props = params.try_centering_spot_box_coordinates(spots_table=spot_props)
-                
-                roi_points, _ = ip.roi_to_napari_points(spot_props, position=preview_pos)
-                try:
-                    ip.napari_view(np.stack([filt_img, img, orig]), axes = 'CZYX', points=roi_points, downscale=1, name = ['DoG', 'Subtracted', 'Original'])
-                except NameError:
-                    ip.napari_view(np.stack([filt_img, img]), axes = 'CZYX', points=roi_points, downscale=1, name = ['DoG', 'Original'])
-
+                images_to_view = {"DoG": filt_img, "Subtracted": img, "Original": orig} if subtract_beads else {"DoG": filt_img, "Original": img}
+                # DEBUG
+                print(f"spot_props.shape: {spot_props.shape}")
+                roi_points, _ = ip.roi_to_napari_points(spot_props, position=preview_pos, use_time=False)
+                # DEBUG
+                print(f"roi_points.shape: {roi_points.shape}")
+                print(f"INFO: viewing frame position {preview_pos}, frame {frame}...")
+                #ip.napari_view(np.stack(images_to_view), roi_points, axes="ZYX", downscale=1, name=image_names)
+                ip.napari_view(images_to_view, roi_points, axes="ZYX", downscale=1)
             return
 
         # Not previewing, but actually computing all ROIs

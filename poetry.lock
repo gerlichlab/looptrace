@@ -4576,7 +4576,6 @@ analysis = ["matplotlib", "numba", "seaborn"]
 deconvolution = ["flowdec"]
 dev = ["czifile", "joblib", "matplotlib", "nd2", "numba", "seaborn", "tifffile"]
 interactive = ["napari"]
-interactive-mac-m1 = ["napari", "pyqt6"]
 legacy-support = ["imagecodecs"]
 nuclei = ["cellpose"]
 pipeline = ["cellpose", "flowdec", "joblib", "napari", "nd2", "piper", "tensorflow", "tensorrt"]
@@ -4587,4 +4586,4 @@ test = ["hypothesis", "joblib", "nd2", "piper", "pytest", "pytest-skip-slow"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "3a1a3d76002f3c29e3d319e6e322d390dbe362d6e248275584ece712c138e800"
+content-hash = "062bdbf1e3228eb11a67e57f4677d917c35cf6372252210db72251ce5bfaf278"
