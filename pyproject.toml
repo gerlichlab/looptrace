@@ -39,9 +39,7 @@ numcodecs = "^0.11.0"
 numpy = ">= 1.24.2, < 1.25"
 pandas = "^1.5.3"
 piper = { version = "0.14.0", optional = true }
-pyqt5 = { version = "5.15.7", optional = true }
 pyqt6 = { version = "^6.5.0", optional = true }
-pyside6 = { version = "^6.5.0", optional = true }
 pytest = { version = "^7.3.1", optional = true }
 pytest-skip-slow = { version = "^0.0.5", optional = true }
 pyyaml = "^6.0"
@@ -58,8 +56,8 @@ zarr = "^2.4.12"
 analysis = ["matplotlib", "numba", "seaborn"]
 deconvolution = ["flowdec"]
 dev = ["czifile", "matplotlib", "joblib", "nd2", "numba", "seaborn", "tifffile"]
-#interactive = ["napari", "pyqt6"] # For newer Mac (M1) -- https://napari.org/stable/tutorials/fundamentals/installation#choosing-a-different-qt-backend
-interactive = ["napari"] # For older Mac -- https://napari.org/stable/tutorials/fundamentals/installation#choosing-a-different-qt-backend
+interactive-mac-M1 = ["napari", "pyqt6"] # https://napari.org/stable/tutorials/fundamentals/installation#choosing-a-different-qt-backend
+interactive = ["napari"] # https://napari.org/stable/tutorials/fundamentals/installation#choosing-a-different-qt-backend
 legacy-support = ["imagecodecs"]
 nuclei = ["cellpose"]
 pipeline = ["cellpose", "flowdec", "joblib", "napari", "nd2", "piper", "tensorflow", "tensorrt"]
