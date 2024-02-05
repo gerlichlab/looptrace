@@ -373,7 +373,7 @@ def napari_view(images: Union[list[np.ndarray], dict[str, np.ndarray]], points: 
         edge_width_is_relative=False,
         edge_color="red",
         face_color="transparent",
-        n_dimensional=True,
+        n_dimensional=False,
         )
     sel_dim = list(points[0, :] / downscale)
     for dim in range(len(sel_dim)):
