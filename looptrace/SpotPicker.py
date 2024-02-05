@@ -338,23 +338,40 @@ class SpotPicker:
         self.image_handler = image_handler
         self.config = image_handler.config
         self.images = self.image_handler.images[self.input_name]
-        self.pos_list = self.image_handler.image_lists[self.input_name]
     
     @property
     def crosstalk_frame(self) -> Optional[int]:
         return self.config.get('crosstalk_frame')
 
     @property
-    def detection_method_name(self) -> str:
-        return self.config.get(DETECTION_METHOD_KEY, DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC)
-    
-    @property
     def detection_function(self) -> Callable:
         try:
             return {DetectionMethod.INTENSITY.value: ip.detect_spots_int, DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC: ip.detect_spots}[self.detection_method_name]
         except KeyError as e:
             raise ValueError(f"Illegal value for spot detection method in config: {self.detection_method_name}") from e
-    
+
+    @property
+    def detection_method_name(self) -> str:
+        return self.config.get(DETECTION_METHOD_KEY, DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC)
+
+    @property
+    def detection_parameters(self) -> "SpotDetectionParameters":
+        try:
+            subtract_beads = self.config[CROSSTALK_SUBTRACTION_KEY]
+            crosstalk_ch = self.config["crosstalk_ch"]
+        except KeyError: #Legacy config.
+            subtract_beads = False
+            crosstalk_ch = None # dummy that should cause errors; never accessed if subtract_beads is False
+        return SpotDetectionParameters(
+            detection_function=self.detection_function, 
+            downsampling=self.config["spot_downsample"], 
+            minimum_distance_between=self.image_handler.minimum_spot_separation, 
+            subtract_beads=subtract_beads, 
+            crosstalk_channel=crosstalk_ch, 
+            crosstalk_frame=None, 
+            roi_image_size=self.roi_image_size, 
+            )
+
     @property
     def extraction_skip_reasons_json_file(self) -> Path:
         return self.image_handler.spot_image_extraction_skip_reasons_json_file
@@ -376,10 +393,8 @@ class SpotPicker:
 
     def iter_pos_img_pairs(self) -> Iterable[Tuple[str, np.ndarray]]:
         """Iterate over pairs of position (FOV) name, and corresponding 5-tensor (t, c, z, y, x ) of images."""
-        pos_names = self.image_handler.image_lists[self.input_name]
-        for pos in self.pos_list:
-            idx = pos_names.index(pos)
-            yield pos, self.images[idx]
+        for i, pos in enumerate(self.pos_list):
+            yield pos, self.images[i]
 
     @property
     def padding_method(self) -> str:
@@ -388,6 +403,10 @@ class SpotPicker:
     @property
     def parallelise(self) -> bool:
         return self.config.get("parallelise_spot_detection", False)
+
+    @property
+    def pos_list(self) -> List[str]:
+        return self.image_handler.image_lists[self.input_name]
 
     @property
     def _raw_roi_image_size(self) -> Tuple[int, int, int]:
@@ -427,81 +446,32 @@ class SpotPicker:
         spot_threshold = self.config.get('spot_threshold', 1000)
         return spot_threshold if isinstance(spot_threshold, list) else [spot_threshold] * len(self.spot_frame)
 
-    def rois_from_spots(self, preview_pos=None, outfile: Optional[Union[str, Path]] = None) -> Optional[Union[str, Path]]:
-        '''
-        Autodetect ROIs from spot images using a manual threshold defined in config.
+    def rois_from_spots(self, outfile: Optional[Union[str, Path]] = None) -> Union[str, Path]:
+        """Detect regions of interest (ROIs) from regional barcode FISH spots.
+
+        Parameters
+        ----------
+        outfile : str or Path, optional
+            Path to output file to which to write ROIs; will use default path from 
+            underlying image handler if no path is passed to this function
         
         Returns
         ---------
         Path to file containing ROI centers
-        '''
-
-        # Fetch some settings.        
-        try:
-            subtract_beads = self.config[CROSSTALK_SUBTRACTION_KEY]
-            crosstalk_ch = self.config['crosstalk_ch']
-        except KeyError: #Legacy config.
-            subtract_beads = False
-            crosstalk_ch = None # dummy that should cause errors; never accessed if subtract_beads is False
-
-        min_dist = self.image_handler.minimum_spot_separation
-
-        # Determine the detection method and parameters threshold.
-        spot_threshold = self.spot_threshold
-        detect_func = self.detection_function
-        logger.info(f"Using '{self.detection_method_name}' for spot detection, threshold : {spot_threshold}")
-        spot_ds = self.config["spot_downsample"]
-        logger.info(f"Spot downsampling setting: {spot_ds}")
-        
-        params = SpotDetectionParameters(
-            detection_function=detect_func, 
-            downsampling=spot_ds, 
-            minimum_distance_between=min_dist, 
-            subtract_beads=subtract_beads, 
-            crosstalk_channel=crosstalk_ch, 
-            crosstalk_frame=None, 
-            roi_image_size=self.roi_image_size, 
-            )
-
-        # previewing
-        if preview_pos is not None:
-            print("INFO: in spot previewing mode")
-            for (i, frame), ch in self.iter_frames_and_channels():
-                logger.info(f"Preview spot detection in position {preview_pos}, frame {frame} with threshold {spot_threshold[i]}.")
-                pos_index = self.image_handler.image_lists[self.input_name].index(preview_pos)
-                img = self.images[pos_index][frame, ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
-                if subtract_beads:
-                    bead_img = self.images[pos_index][frame, crosstalk_ch, ::spot_ds, ::spot_ds, ::spot_ds].compute()
-                    img, orig = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
-                spot_props, filt_img, _ = detect_func(img, spot_threshold[i])
-                spot_props["position"] = preview_pos
-                spot_props = spot_props.reset_index().rename(columns={"index": "roi_id_pos"})
-                spot_props = params.try_centering_spot_box_coordinates(spots_table=spot_props)
-                images_to_view = {"DoG": filt_img, "Subtracted": img, "Original": orig} if subtract_beads else {"DoG": filt_img, "Original": img}
-                # DEBUG
-                print(f"spot_props.shape: {spot_props.shape}")
-                roi_points, _ = ip.roi_to_napari_points(spot_props, position=preview_pos, use_time=False)
-                # DEBUG
-                print(f"roi_points.shape: {roi_points.shape}")
-                print(f"INFO: viewing frame position {preview_pos}, frame {frame}...")
-                #ip.napari_view(np.stack(images_to_view), roi_points, axes="ZYX", downscale=1, name=image_names)
-                ip.napari_view(images_to_view, roi_points, axes="ZYX", downscale=1)
-            return
-
-        # Not previewing, but actually computing all ROIs
+        """
+        params = self.detection_parameters
+        logger.info(f"Using '{self.detection_method_name}' for spot detection, threshold = {self.spot_threshold}, downsampling = {params.downsampling}")
         output = detect_spots_multiple(
             pos_img_pairs=self.iter_pos_img_pairs(), 
             frame_specs=list(self.iter_frame_threshold_pairs()), 
             channels=list(self.spot_channel), 
             spot_detection_parameters=params, 
             parallelise=self.parallelise,
-            )
-        
+            )        
         outfile = outfile or self.image_handler.raw_spots_file
         n_spots = output.shape[0]
         (logger.warning if n_spots == 0 else logger.info)(f"Writing initial spot ROIs with {n_spots} spot(s): {outfile}")
         output.to_csv(outfile)
-
         return outfile
     
     def make_dc_rois_all_frames(self) -> str:

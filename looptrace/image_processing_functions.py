@@ -22,33 +22,9 @@ from looptrace.numeric_types import NumberLike
 from looptrace.wrappers import phase_xcor
 
 __author__ = "Kai Sandvold Beckwith"
-__credits = ["Kai Sandvold Beckwith", "Vince Reuter"]
+__credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 
 CENTROID_COLUMNS_REMAPPING = {'centroid_weighted-0': 'zc', 'centroid_weighted-1': 'yc', 'centroid_weighted-2': 'xc'}
-
-
-def roi_to_napari_points(roi_table, position, use_time: bool):
-    """Convert roi from looptrace roi table to points to see in napari.
-
-    Parameters
-    ----------
-    roi_table : pd.DataFrame
-        ROI data found in looptrace pipeline
-    position : str
-        Positional (FOV) identifier
-    use_time : bool
-        Whether or not to try to add a value (at the beginning of each point row) representing timepoint
-
-    Returns
-    -------
-    np.ndarray, dict
-        Numpy array of shape N x 4, with the 4 volumns (frame, z, y, x), and a dict of the roi_ids
-    """
-
-    rois_at_pos = roi_table[roi_table["position"] == position]
-    finalise = (lambda row, sub: [row["frame"]] + sub) if use_time else (lambda _, sub: sub)
-    roi_shapes = [finalise(r, [r["zc"], r["yc"], r["xc"]]) for _, r in rois_at_pos.iterrows()]
-    return np.array(roi_shapes), {"roi_id": rois_at_pos["roi_id_pos"].values}
 
 
 def update_roi_points(point_layer, roi_table, position, downscale):
@@ -322,64 +298,6 @@ def drift_corr_multipoint_cc(t_img, o_img, coarse_drift, threshold, min_bead_int
     #Return the 60% central mean to avoid outliers.
     return fine_drift#, np.std(shifts, axis=0)
 
-def napari_view(images: Union[list[np.ndarray], dict[str, np.ndarray]], points: np.ndarray, *, axes: str, downscale: int):
-    """View images as layers in napari, adding points on top.
-
-    Parameters
-    ----------
-    images 
-
-    Returns
-    -------
-
-    Raises
-    ------
-    """
-    import napari
-
-    # Ensure there's actual image data to view.
-    if not images:
-        raise ValueError(f"Non-null, non-empty images collection must be passed to view with napari")
-    # Unpack images and names.
-    if isinstance(images, dict):
-        names, images = zip(*images.items())
-    elif isinstance(images, list):
-        names = None
-    else:
-        raise TypeError(f"Collection of images to view should be list or dict, not {type(images).__name__}!")
-    # Check that each image is a numpy array of same dimensionality, and that it's 2D or 3D.
-    if not all(isinstance(img, np.ndarray) for img in images):
-        raise TypeError(f"Each image to view should be a numpy array; got: {', '.join(type(img).__name__ for img in images)}")
-    num_dim = len(axes)
-    shape = images[0].shape
-    if not len(shape) == num_dim:
-        raise ValueError(f"Each image must have {num_dim} dimensions to conform with axes {axes}; got {len(shape)} for first image: {shape}")
-    if not all(img.shape == shape for img in images):
-        raise ValueError(
-            f"Each images to view must have shape {shape}; got {', '.join(img.shape for img in images)}"
-            )
-    
-    images = np.stack(images)
-    print(f"DEBUG: Stacked images' shape: {images.shape}")
-    viewer = napari.view_image(images, channel_axis=0, name=names)
-
-    # DEBUG
-    print(f"Points: {points}")
-        
-    point_layer = viewer.add_points(
-        points / downscale, 
-        size=15,
-        edge_width=1,
-        edge_width_is_relative=False,
-        edge_color="red",
-        face_color="transparent",
-        n_dimensional=False,
-        )
-    sel_dim = list(points[0, :] / downscale)
-    for dim in range(len(sel_dim)):
-        viewer.dims.set_current_step(dim, sel_dim[dim])
-    napari.run()
-    return point_layer
 
 def decon_RL_setup(size_x=8, size_y=8, size_z=8, pz=0., wavelength=.660,
             na=1.46, res_lateral=.1, res_axial=.2):
