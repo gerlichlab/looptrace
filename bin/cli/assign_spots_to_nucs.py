@@ -83,7 +83,7 @@ def filter_rois_in_nucs(
         for _, row in rois_shifted.iterrows():
             curr_pos_name = row['position']
             raw_nuc_drift_match = nuc_drifts[nuc_drifts['position'] == curr_pos_name]
-            if not isinstance(drift_target, pd.DataFrame):
+            if not isinstance(raw_nuc_drift_match, pd.DataFrame):
                 raise TypeError(f"Nuclear drift for position {curr_pos_name} is not a data frame, but {type(raw_nuc_drift_match).__name__}")
             if not raw_nuc_drift_match.shape[0] == 1:
                 raise DimensionalityError(f"Nuclear drift for position {curr_pos_name} is not exactly 1 row, but {raw_nuc_drift_match.shape[0]} rows!")
