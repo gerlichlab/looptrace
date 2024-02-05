@@ -11,7 +11,7 @@ from gertils import ExtantFile
 
 from looptrace import ConfigurationValueError, Drifter, LOOPTRACE_JAR_PATH, MINIMUM_SPOT_SEPARATION_KEY, TRACING_SUPPORT_EXCLUSIONS_KEY, ZARR_CONVERSIONS_KEY
 from looptrace.Deconvolver import REQ_GPU_KEY
-from looptrace.NucDetector import NucDetector
+from looptrace.NucDetector import NucDetector, SegmentationMethod as NucSegMethod
 from looptrace.SpotPicker import DetectionMethod, CROSSTALK_SUBTRACTION_KEY, DETECTION_METHOD_KEY as SPOT_DETECTION_METHOD_KEY
 from looptrace.Tracer import MASK_FITS_ERROR_MESSAGE
 
@@ -78,11 +78,20 @@ def find_config_file_errors(config_file: ExtantFile) -> List[ConfigurationValueE
     except KeyError:
         pass
     else:
-        msg_base = f"Nuclei frame ('nuc_ref_frame') is deprecated"
+        msg_base = f"Nuclei frame ('nuc_ref_frame') is deprecated, as it's assumed that nuclei are imaged in exactly 1 timepoint."
         if nuc_ref_frame == 0:
             warnings.warn(msg_base, DeprecationWarning)
         else:
             errors.append(ConfigurationValueError(f"{msg_base}, but if present must be 0, not {nuc_ref_frame}"))
+    try:
+        segmentation_method = conf_data[NucDetector.DETECTION_METHOD_KEY]
+    except KeyError:
+        errors.append(ConfigurationValueError(f"Missing nuclei detection method ('{NucDetector.DETECTION_METHOD_KEY}')"))
+    else:
+        if NucSegMethod.from_string(segmentation_method) != NucSegMethod.CELLPOSE:
+            errors.append(ConfigurationValueError(
+                f"Illegal or unsupported nuclei detection method (from '{NucDetector.DETECTION_METHOD_KEY}'): {segmentation_method}. Only '{NucSegMethod.CELLPOSE.value}' is supported."
+                ))
     
     # Drift correction
     dc_method = Drifter.get_method_name(conf_data)
