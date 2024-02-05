@@ -12,6 +12,7 @@
   scalaDev ? true, 
   absolutelyOnlyR ? false,
   jdk ? "jdk21_headless",
+  isMacM1 ? false,
 }:
 let baseBuildInputs = with pkgs; [ poetry stdenv.cc.cc.lib zlib ] ++ [ pkgs.${jdk} ];
     py310 = pkgs.python310.withPackages (ps: with ps; [ numpy pandas ]);
@@ -23,7 +24,7 @@ let baseBuildInputs = with pkgs; [ poetry stdenv.cc.cc.lib zlib ] ++ [ pkgs.${jd
       (if test then [ "test" "pipeline-test" ] else (
         (if pipeline then [ "pipeline" ] else []) ++
         (if analysis then [ "analysis" ] else []) ++ 
-        (if interactive then [ "interactive" ] else []) ++
+        (if interactive then (if isMacM1 then [ "interactive-mac-M1" ] else [ "interactive" ]) else []) ++
         (if pyDev then ["dev"] else [])
       ));
     poetryInstallExtras = (
