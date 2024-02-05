@@ -186,7 +186,7 @@ class ImageHandler:
 
     @property
     def nuclei_filtered_spots_file_path(self) -> Path:
-        return self.raw_spots_file.with_suffix(".nuclei_filtered.csv")
+        return self.proximity_filtered_spots_file_path.with_suffix(".nuclei_filtered.csv")
 
     @property
     def nuclei_labeled_spots_file_path(self) -> Path:

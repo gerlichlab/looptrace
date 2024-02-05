@@ -155,7 +155,7 @@ def workflow(
         logger.info(f"Writing nuclei-labeled spots file: {outfile}")
         all_rois.to_csv(outfile)
         logger.info(f"Writing nuclei-filtered spots file: {H.nuclei_filtered_spots_file_path}")
-        all_rois[all_rois[NUC_LABEL_COL] != 0].drop(NUC_LABEL_COL, axis=1).to_csv(H.nuclei_filtered_spots_file_path)
+        all_rois[all_rois[NUC_LABEL_COL] != 0].to_csv(H.nuclei_filtered_spots_file_path)
 
     logger.info("Done!")
 
