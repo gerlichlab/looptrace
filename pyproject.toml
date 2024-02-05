@@ -31,8 +31,8 @@ hypothesis = { version = "^6.92.1", optional = true }
 imagecodecs = { version = "2023.9.18", optional = true }
 joblib = { version = "^1.3.1", optional = true }
 matplotlib = { version = "^3.7.0", optional = true }
-napari = { version = "^0.4.17", optional = true }
-napari-plot-profile = { version = "^0.2.0", optional = true }
+#napari = { version = "^0.4.17", optional = true } # For newer Mac (M1) -- https://napari.org/stable/tutorials/fundamentals/installation#choosing-a-different-qt-backend
+napari = { extras = ["all", "pyqt"], version = "^0.4.17", optional = true }
 nd2 = { version = "^0.5.3", optional = true }
 numba = { version = "^0.57.0", optional = true }
 numcodecs = "^0.11.0"
@@ -58,7 +58,8 @@ zarr = "^2.4.12"
 analysis = ["matplotlib", "numba", "seaborn"]
 deconvolution = ["flowdec"]
 dev = ["czifile", "matplotlib", "joblib", "nd2", "numba", "seaborn", "tifffile"]
-interactive = ["napari", "napari-plot-profile", "pyqt6"]
+#interactive = ["napari", "pyqt6"] # For newer Mac (M1) -- https://napari.org/stable/tutorials/fundamentals/installation#choosing-a-different-qt-backend
+interactive = ["napari"] # For older Mac -- https://napari.org/stable/tutorials/fundamentals/installation#choosing-a-different-qt-backend
 legacy-support = ["imagecodecs"]
 nuclei = ["cellpose"]
 pipeline = ["cellpose", "flowdec", "joblib", "napari", "nd2", "piper", "tensorflow", "tensorrt"]
