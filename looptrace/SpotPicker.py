@@ -364,6 +364,37 @@ class SpotPicker:
         return self.config.get('crosstalk_frame')
 
     @property
+    def path_to_detected_spot_images_folder(self) -> Path:
+        return Path(self.image_handler.analysis_path) / "detected_spot_images"
+
+    def path_to_detected_spot_image_file(self, position: int, time: int, channel: int) -> Path:
+        """
+        Return the path to the detected spot images file for the given (FOV, time, channel) triplet.
+
+        Parameters
+        ----------
+        position : int
+            Imaging field of view (0-based index)
+        time : int
+            Imaging timepoint (0-based index)
+        channel : int
+            Imaging channel
+
+        Raises
+        ------
+        TypeError: if position is given as a value other than integer
+
+        Returns
+        -------
+        Path: path to the detected spot images file for the given (FOV, time, channel) triplet.
+        """
+        if not isinstance(position, int):
+            raise TypeError(f"For detected spot image file path, position should be integer, not {type(position).__name__}: {position}")
+        filetype = "png"
+        fn = f"{self.image_handler.analysis_filename_prefix}_p{position}_t{time}_c{channel}.{filetype}"
+        return self.path_to_detected_spot_images_folder / fn
+
+    @property
     def detection_function(self) -> Callable:
         try:
             return {DetectionMethod.INTENSITY.value: ip.detect_spots_int, DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC: ip.detect_spots}[self.detection_method_name]
