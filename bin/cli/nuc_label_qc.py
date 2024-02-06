@@ -20,12 +20,48 @@ import napari
 from gertils import ExtantFile, ExtantFolder
 from looptrace.ImageHandler import ImageHandler
 from looptrace.NucDetector import NucDetector
+from looptrace.napari_helpers import SIGNAL_TO_QUIT, add_screenshot, shutdown_napari
 
 __author__ = "Kai Sandvold Beckwith"
 __credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 
 
-def workflow(config_file: ExtantFile, images_folder: ExtantFolder, save_images: bool = True, do_qc: bool = False, start_from: Optional[int] = None, stop_after: Optional[int] = None):
+def workflow(
+    config_file: ExtantFile, 
+    images_folder: ExtantFolder, 
+    *, 
+    save_images: bool = True, 
+    do_qc: bool = False, 
+    start_from: Optional[int] = None, 
+    stop_after: Optional[int] = None,
+    ):
+    """
+    Either save detected nuclei / mask images, or examine them interactively with napari.
+
+    Parameters
+    ----------
+    config_file : gertils.ExtantFile
+        Path to the main looptrace processing configuration file
+    images_folder : gertils.ExtantFolder
+        Path to an experiment's main images folder
+    save_images : bool
+        Indicate that nuclei images should simply be saved, rather than examined interactivel. 
+        This is mutually exclusive with do_qc.
+    do_qc : bool
+        Indicate that you'd like to interactively do QC with the nuclei images. 
+        This is mutually exclusive with save_images.
+    start_from : int, optional
+        0-based index (inclusive) of the position (FOV) with which to start the 
+        image saving or interactive examination
+    stop_after : int, optional
+        0-based index (inclusive) of the position (FOV) at which to stop the 
+        image saving or interactive examination
+
+    Raises
+    ------
+    ValueError : if image saving and interactive QC are both selected
+    
+    """
     if save_images and do_qc:
         raise ValueError("Cannot do interactive QC and image saving at the same time!")
     
@@ -45,17 +81,15 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder, save_images: 
         masks_layer = viewer.add_labels(prep_image_to_add(mask_imgs[i]))
         class_layer = get_class_layer(viewer, i)
         if save_images:
-            screenshot = viewer.screenshot()
-            viewer.add_image(screenshot)
+            screenshot = add_screenshot(viewer)
             outfile = H.nuclear_mask_screenshots_folder / f"nuc_maks.{i}.png"
             print(f"Saving image for position {i}: {outfile}")
             os.makedirs(outfile.parent, exist_ok=True)
             imsave(outfile, screenshot)
         else:
             napari.run()
-            sentinel = "q"
-            user_input = input(f"Press enter to continue to next position, or {sentinel} to quit.")
-            if user_input == sentinel:
+            user_input = input(f"Press enter to continue to next position, or {SIGNAL_TO_QUIT} to quit.")
+            if user_input == SIGNAL_TO_QUIT:
                 break
             if do_qc:
                 N.update_masks_after_qc(
@@ -76,8 +110,7 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder, save_images: 
         del class_layer
         viewer.close()
     
-    print("Closing any remaining napari windows...")
-    napari.Viewer.close_all()
+    shutdown_napari()
 
 
 if __name__ == '__main__':

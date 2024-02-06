@@ -12,10 +12,12 @@ from typing import *
 
 import napari
 import numpy as np
+import pandas as pd
 
 from looptrace.ImageHandler import ImageHandler
 from looptrace.SpotPicker import SpotPicker, compute_downsampled_image
 from looptrace.image_processing_functions import subtract_crosstalk
+from looptrace.napari_helpers import add_points_to_viewer, extract_roi_centers
 
 __author__ = "Kai Sandvold Beckwith"
 __credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
@@ -23,7 +25,7 @@ __credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 logger = logging.getLogger(__name__)
 
 
-def roi_to_napari_points(roi_table, position, use_time: bool) -> np.ndarray:
+def _roi_to_napari_points(roi_table: pd.DataFrame, position: str) -> np.ndarray:
     """Convert roi from looptrace roi table to points to see in napari.
 
     Parameters
@@ -32,18 +34,15 @@ def roi_to_napari_points(roi_table, position, use_time: bool) -> np.ndarray:
         ROI data found in looptrace pipeline
     position : str
         Positional (FOV) identifier
-    use_time : bool
-        Whether or not to try to add a value (at the beginning of each point row) representing timepoint
 
     Returns
     -------
     np.ndarray, dict
         Numpy array of shape N x 4, with the 4 volumns (frame, z, y, x), and a dict of the roi_ids
     """
-
     rois_at_pos = roi_table[roi_table["position"] == position]
-    finalise = (lambda row, sub: [row["frame"]] + sub) if use_time else (lambda _, sub: sub)
-    roi_shapes = [finalise(r, [r["zc"], r["yc"], r["xc"]]) for _, r in rois_at_pos.iterrows()]
+    roi_shapes = extract_roi_centers(roi_table)
+    roi_shapes = [[r["zc"], r["yc"], r["xc"]] for _, r in rois_at_pos.iterrows()]
     return np.array(roi_shapes), {"roi_id": rois_at_pos["roi_id_pos"].values}
 
 
@@ -73,7 +72,7 @@ def napari_view(
 
     Returns
     -------
-    napari.Points
+    napari.layers.Points
         The layers of detected spot ROIs
     """
     import napari
@@ -100,23 +99,10 @@ def napari_view(
             f"Each images to view must have shape {shape}; got {', '.join(img.shape for img in images)}"
             )
     
+    # Do the image viewing and points layer addition.
     images = np.stack(images)
-    print(f"DEBUG: Stacked images' shape: {images.shape}")
     viewer = napari.view_image(images, channel_axis=0, name=names)
-
-    # DEBUG
-    print(f"Points: {points}")
-        
-    point_layer = viewer.add_points(
-        points / downscale, 
-        size=roi_size / downscale,
-        edge_width=1,
-        edge_width_is_relative=False,
-        symbol=roi_symbol,
-        edge_color="red",
-        face_color="transparent",
-        n_dimensional=False,
-        )
+    point_layer = add_points_to_viewer(viewer=viewer, points=points/downscale, size=roi_size/downscale, symbol=roi_symbol)
     sel_dim = list(points[0, :] / downscale)
     for dim in range(len(sel_dim)):
         viewer.dims.set_current_step(dim, sel_dim[dim])
@@ -124,8 +110,8 @@ def napari_view(
     return point_layer
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Preview spot detection in given position.')
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Visualise preview spot detection in given position.")
     parser.add_argument("config_path", help="Config file path")
     parser.add_argument("image_path", help="Path to folder with images to read.")
     parser.add_argument('--position', type=int, help='(Optional): Index of position to view.', default=0)
@@ -146,15 +132,7 @@ if __name__ == '__main__':
         spot_props = spot_props.reset_index().rename(columns={"index": "roi_id_pos"})
         spot_props = params.try_centering_spot_box_coordinates(spots_table=spot_props)
         images_to_view = {"DoG": filt_img, "Subtracted": img, "Original": orig} if params.subtract_beads else {"DoG": filt_img, "Original": img}
-
-        # DEBUG
-        print(f"spot_props.shape: {spot_props.shape}")
-
-        roi_points, _ = roi_to_napari_points(spot_props, position=S.pos_list[args.position], use_time=False)
-
-        # DEBUG
-        print(f"roi_points.shape: {roi_points.shape}")
-
+        roi_points, _ = _roi_to_napari_points(spot_props, position=S.pos_list[args.position])
         _, roi_sz_y, roi_sz_x = S.roi_image_size
         roi_size = (roi_sz_y + roi_sz_x) / 2
         if roi_sz_y != roi_sz_x:
