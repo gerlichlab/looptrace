@@ -138,6 +138,25 @@ class SpotDetectionParameters:
 
 
 def compute_downsampled_image(full_image: da.core.Array, *, frame: int, channel: int, downsampling: int) -> np.ndarray:
+    """
+    Standardise the way to pull--for a single FOV--the data for a particular (time, channel) combo, with downsampling.
+
+    Parameters
+    ----------
+    full_image : np.ndarray
+        The full dask array of image data, with all timepoints, channels, and spatial dimensions for a particular FOV
+    frame : int
+        The imaging timepoint for which to pull data
+    channel : int
+        The imaging channel for which to pull data
+    downsampling : int
+        The step size to take when pulling individual pixels from the underlying image; should be a natural number
+
+    Returns
+    -------
+    np.ndarray
+        The pixel data for the particular frame and channel requested, with the given downsampling factor
+    """
     return full_image[frame, channel, ::downsampling, ::downsampling, ::downsampling].compute()
 
 
@@ -423,16 +442,19 @@ class SpotPicker:
 
     @property
     def roi_image_size(self) -> Optional[Tuple[int, int, int]]:
+        """The dimensions (in pixels, as (z, y, x)) for the ROI bounding box around the center of each spot"""
         return self._raw_roi_image_size if self.detection_method_name == DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC else None
 
     @property
     def spot_channel(self) -> List[int]:
-        spot_ch = self.config['spot_ch']
+        """The imaging channel in which spot detection is to be done"""
+        spot_ch = self.config["spot_ch"]
         return spot_ch if isinstance(spot_ch, list) else [spot_ch]
 
     @property
     def spot_frame(self) -> List[int]:
-        spot_frame = self.config['spot_frame']
+        """The imaging timepoints in which spot detection is to be done, generally those in which regional barcodes were imaged"""
+        spot_frame = self.config["spot_frame"]
         return spot_frame if isinstance(spot_frame, list) else [spot_frame]
 
     @property
