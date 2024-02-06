@@ -14,13 +14,12 @@ import sys
 from typing import *
 
 import numpy as np
-from skimage.io import imsave
 import napari
 
 from gertils import ExtantFile, ExtantFolder
 from looptrace.ImageHandler import ImageHandler
 from looptrace.NucDetector import NucDetector
-from looptrace.napari_helpers import SIGNAL_TO_QUIT, add_screenshot, shutdown_napari
+from looptrace.napari_helpers import SIGNAL_TO_QUIT, prompt_continue_napari, save_screenshot, shutdown_napari
 
 __author__ = "Kai Sandvold Beckwith"
 __credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
@@ -81,15 +80,13 @@ def workflow(
         masks_layer = viewer.add_labels(prep_image_to_add(mask_imgs[i]))
         class_layer = get_class_layer(viewer, i)
         if save_images:
-            screenshot = add_screenshot(viewer)
+            print(f"DEBUG: saving image for position: {i}")
             outfile = H.nuclear_mask_screenshots_folder / f"nuc_maks.{i}.png"
-            print(f"Saving image for position {i}: {outfile}")
-            os.makedirs(outfile.parent, exist_ok=True)
-            imsave(outfile, screenshot)
+            save_screenshot(viewer=viewer, outfile=outfile)
+            print(f"DEBUG: saved image {outfile}")
         else:
             napari.run()
-            user_input = input(f"Press enter to continue to next position, or {SIGNAL_TO_QUIT} to quit.")
-            if user_input == SIGNAL_TO_QUIT:
+            if prompt_continue_napari() == SIGNAL_TO_QUIT:
                 break
             if do_qc:
                 N.update_masks_after_qc(
