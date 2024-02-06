@@ -14,7 +14,7 @@ import napari
 import numpy as np
 
 from looptrace.ImageHandler import ImageHandler
-from looptrace.SpotPicker import SpotPicker
+from looptrace.SpotPicker import SpotPicker, compute_downsampled_image
 from looptrace.image_processing_functions import subtract_crosstalk
 
 __author__ = "Kai Sandvold Beckwith"
@@ -55,7 +55,7 @@ def napari_view(
     downscale: int, 
     roi_size: int, 
     roi_symbol: str = "square",
-    ) -> napari.layers.points.points.Points:
+    ) -> napari.layers.Points:
     """View images as layers in napari, adding points on top.
 
     Parameters
@@ -137,9 +137,9 @@ if __name__ == '__main__':
     params = S.detection_parameters
     for (i, frame), ch in S.iter_frames_and_channels():
         logger.info(f"Previewing spot detection in position {args.position}, frame {frame} with threshold {S.spot_threshold[i]}...")
-        img = S.images[args.position][frame, ch, ::params.downsampling, ::params.downsampling, ::params.downsampling].compute()
+        img = compute_downsampled_image(S.images[args.position], frame=frame, channel=ch, downsampling=S.downsampling)
         if params.subtract_beads:
-            bead_img = S.images[args.position][frame, params.crosstalk_channel, ::params.downsampling, ::params.downsampling, ::params.downsampling].compute()
+            bead_img = compute_downsampled_image(S.images[args.position], frame=frame, channel=params.crosstalk_channel, downsampling=S.downsampling)
             img, orig = subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
         spot_props, filt_img, _ = params.detection_function(img, S.spot_threshold[i])
         spot_props["position"] = S.pos_list[args.position]
@@ -159,6 +159,6 @@ if __name__ == '__main__':
         roi_size = (roi_sz_y + roi_sz_x) / 2
         if roi_sz_y != roi_sz_x:
             logger.warn(f"ROI size differs in y ({roi_sz_y}) and x ({roi_sz_x}). Will use average: {roi_size}")
-        roi_size = roi_sz_y / params.downsampling
+        roi_size = roi_sz_y / S.downsampling
         logger.debug(f"ROI size after downsampling: {roi_size}")
         napari_view(images_to_view, roi_points, axes="ZYX", downscale=1, roi_size=roi_size)
