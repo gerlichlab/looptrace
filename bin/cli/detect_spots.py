@@ -94,4 +94,4 @@ if __name__ == '__main__':
     parser.add_argument("image_path", type=ExtantFolder.from_string, help="Path to folder with images to read.")
     parser.add_argument("--image_save_path", type=ExtantFolder.from_string, help="(Optional): Path to folder to save images to.")
     args = parser.parse_args()
-    workflow(config_file=args.config_path, images_folder=args.image_path, image_save_path=args.image_save_path, method=args.method, intensity_threshold=args.threshold)
+    workflow(config_file=args.config_path, images_folder=args.image_path, image_save_path=args.image_save_path)
