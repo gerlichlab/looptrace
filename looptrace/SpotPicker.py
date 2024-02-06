@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 from typing import *
 
+import dask.array as da
 from joblib import Parallel, delayed
 import numpy as np
 from numpy.lib.format import open_memmap
@@ -31,6 +32,9 @@ from looptrace.exceptions import MissingRoisTableException
 from looptrace.filepaths import get_spot_images_path
 from looptrace import image_processing_functions as ip
 from looptrace.numeric_types import NumberLike
+
+__author__ = "Kai Sandvold Beckwith"
+__credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 
 CROSSTALK_SUBTRACTION_KEY = "subtract_crosstalk"
 DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC = 'dog'
@@ -133,6 +137,10 @@ class SpotDetectionParameters:
         return ip.roi_center_to_bbox(spots_table, roi_size=dims)
 
 
+def compute_downsampled_image(full_image: da.core.Array, *, frame: int, channel: int, downsampling: int) -> np.ndarray:
+    return full_image[frame, channel, ::downsampling, ::downsampling, ::downsampling].compute()
+
+
 def detect_spot_single_fov_single_frame(
         single_fov_img: np.ndarray, 
         frame: int, 
@@ -141,22 +149,16 @@ def detect_spot_single_fov_single_frame(
         detection_parameters: SpotDetectionParameters
         ) -> pd.DataFrame:
     print(f"Computing image for spot detection based on downsampling ({detection_parameters.downsampling})")
-    img = single_fov_img[frame, fish_channel, ::detection_parameters.downsampling, ::detection_parameters.downsampling, ::detection_parameters.downsampling].compute()
+    img = compute_downsampled_image(single_fov_img, frame=frame, channel=fish_channel, downsampling=detection_parameters.downsampling)
     crosstalk_frame = frame if detection_parameters.crosstalk_frame is None else detection_parameters.crosstalk_frame
     if detection_parameters.subtract_beads:
         # TODO: non-nullity requirement for crosstalk_channel is coupled to this condition, and this should be reflected in the types.
-        bead_img = single_fov_img[
-            crosstalk_frame, 
-            detection_parameters.crosstalk_channel, 
-            ::detection_parameters.downsampling, 
-            ::detection_parameters.downsampling, 
-            ::detection_parameters.downsampling
-            ].compute()
+        bead_img = compute_downsampled_image(single_fov_img, frame=crosstalk_frame, channel=detection_parameters.crosstalk_channel, downsampling=detection_parameters.downsampling)
         img, _ = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
     spot_props, _, _ = detection_parameters.detection_function(img, spot_threshold)
     spot_props = detection_parameters.try_centering_spot_box_coordinates(spots_table=spot_props)
-    spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] = \
-        spot_props[['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']] * detection_parameters.downsampling
+    columns_to_scale = ['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']
+    spot_props[columns_to_scale] = spot_props[columns_to_scale] * detection_parameters.downsampling
     return spot_props
 
 
@@ -337,7 +339,6 @@ class SpotPicker:
     def __init__(self, image_handler):
         self.image_handler = image_handler
         self.config = image_handler.config
-        self.images = self.image_handler.images[self.input_name]
     
     @property
     def crosstalk_frame(self) -> Optional[int]:
@@ -364,7 +365,7 @@ class SpotPicker:
             crosstalk_ch = None # dummy that should cause errors; never accessed if subtract_beads is False
         return SpotDetectionParameters(
             detection_function=self.detection_function, 
-            downsampling=self.config["spot_downsample"], 
+            downsampling=self.downsampling, 
             minimum_distance_between=self.image_handler.minimum_spot_separation, 
             subtract_beads=subtract_beads, 
             crosstalk_channel=crosstalk_ch, 
@@ -373,9 +374,17 @@ class SpotPicker:
             )
 
     @property
+    def downsampling(self) -> int:
+        return self.config["spot_downsample"]
+
+    @property
     def extraction_skip_reasons_json_file(self) -> Path:
         return self.image_handler.spot_image_extraction_skip_reasons_json_file
     
+    @property
+    def images(self) -> List[da.core.Array]:
+        return self.image_handler.images[self.input_name]
+
     @property
     def input_name(self):
         """Name of the input to the spot detection phase of the pipeline; in particular, a subfolder of the 'all images' folder typically passed to looptrace"""
@@ -467,7 +476,7 @@ class SpotPicker:
             channels=list(self.spot_channel), 
             spot_detection_parameters=params, 
             parallelise=self.parallelise,
-            )        
+            )
         outfile = outfile or self.image_handler.raw_spots_file
         n_spots = output.shape[0]
         (logger.warning if n_spots == 0 else logger.info)(f"Writing initial spot ROIs with {n_spots} spot(s): {outfile}")
@@ -617,7 +626,7 @@ class SpotPicker:
         rois = self.image_handler.tables[self.input_name+'_dc_rois']
         for pos, group in tqdm.tqdm(rois.groupby('position')):
             pos_index = self.image_handler.image_lists[self.input_name].index(pos)
-            full_image = np.array(self.image_handler.images[self.input_name][pos_index])
+            full_image = np.array(self.images[pos_index])
             for roi in group.to_dict('records'):
                 spot_stack = full_image[:, 
                                 roi['ch'], 
