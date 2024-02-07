@@ -31,6 +31,7 @@ from gertils import ExtantFolder, NonExtantPath
 from looptrace.exceptions import MissingRoisTableException
 from looptrace.filepaths import get_spot_images_path
 from looptrace import image_processing_functions as ip
+from looptrace.integer_naming import *
 from looptrace.numeric_types import NumberLike
 
 __author__ = "Kai Sandvold Beckwith"
@@ -391,8 +392,14 @@ class SpotPicker:
         if not isinstance(position, int):
             raise TypeError(f"For detected spot image file path, position should be integer, not {type(position).__name__}: {position}")
         filetype = "png"
-        fn = f"{self.image_handler.analysis_filename_prefix}_p{position}_t{time}_c{channel}.{filetype}"
-        return self.path_to_detected_spot_images_folder / fn
+        fn_chunks = [
+            self.image_handler.analysis_filename_prefix,
+            get_position_name_1(position), 
+            get_time_name_1(time), 
+            get_channel_name_1(channel),
+            ]
+        fn_base = "_".join(fn_chunks)
+        return self.path_to_detected_spot_images_folder / f"{fn_base}.{filetype}"
 
     @property
     def detection_function(self) -> Callable:
@@ -621,7 +628,7 @@ class SpotPicker:
         pos_index = self.image_handler.image_lists[self.input_name].index(pos_group_name)
         f_id = 0
         n_frames = len(pos_group_data.frame.unique())
-        array_files = OrderedDict()
+        array_files = OrderedDict() # Maintain insertion order.
         skip_spot_image_reasons = defaultdict(lambda: defaultdict(dict))
         for frame, frame_group in tqdm.tqdm(pos_group_data.groupby('frame')):
             for ch, ch_group in frame_group.groupby('ch'):
@@ -642,7 +649,7 @@ class SpotPicker:
                         arr = open_memmap(fp, mode='r+')
                     else:
                         arr = open_memmap(fp, mode='w+', dtype = roi_img.dtype, shape=(n_frames,) + roi_img.shape)
-                        array_files[fp] = None
+                        array_files[fp] = None # Values don't matter, just for key order.
                     try:
                         arr[f_id] = roi_img
                     except ValueError:
