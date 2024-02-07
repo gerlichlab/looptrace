@@ -8,7 +8,9 @@ from math import log10
 from typing import *
 
 __author__ = "Vince Reuter"
-__all__ = ["get_position_name_1", "get_position_names_N"]
+__credits__ = ["Vince Reuter"]
+
+__all__ = ["get_channel_name_1", "get_position_name_1", "get_position_names_N", "get_time_name_1"]
 
 
 class _IntegerNaming(Enum):
@@ -17,6 +19,7 @@ class _IntegerNaming(Enum):
     
     These strategies map [0, n) into [1, N] in text reprentation, with each name the same length.
     """
+    OneHundred = 100
     TenThousand = 10000
 
     @property
@@ -47,7 +50,12 @@ class _IntegerNaming(Enum):
 _DEFAULT_NAMER = _IntegerNaming.TenThousand
 
 
-def get_position_name_1(pos_idx: int, namer: _IntegerNaming = _DEFAULT_NAMER) -> str:
+def get_channel_name_1(channel: int, *, namer: _IntegerNaming = _IntegerNaming.OneHundred) -> str:
+    """Get the channel-like name for the given channel."""
+    return "C" + namer.get_name(channel)
+
+
+def get_position_name_1(pos_idx: int, *, namer: _IntegerNaming = _DEFAULT_NAMER) -> str:
     """Get the position-like (field of view) name for the given index."""
     return "P" + namer.get_name(pos_idx)
 
@@ -58,6 +66,11 @@ def get_position_names_N(num_names: int, namer: _IntegerNaming = _DEFAULT_NAMER)
     if num_names < 0:
         raise ValueError(f"Number of names is negative: {num_names}")
     return [get_position_name_1(i, namer) for i in range(num_names)]
+
+
+def get_time_name_1(time_index: int, *, namer: _IntegerNaming = _DEFAULT_NAMER) -> str:
+    """Get the time-like name for the given time."""
+    return "T" + namer.get_name(time_index)
 
 
 def _typecheck(i: int, ctx: str) -> bool:
