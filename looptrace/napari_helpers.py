@@ -36,9 +36,6 @@ def add_points_to_viewer(
     size: Union[NumberLike, list, np.array], 
     edge_width: NumberLike = 1, 
     edge_width_is_relative: bool = False,
-    symbol: str = "square",
-    edge_color: str = "red", 
-    face_color: str = "transparent", 
     n_dimensional: bool = False,
     **kwargs,
     ) -> napari.layers.Points:
@@ -67,9 +64,6 @@ def add_points_to_viewer(
         size=size,
         edge_width=edge_width,
         edge_width_is_relative=edge_width_is_relative,
-        symbol=symbol,
-        edge_color=edge_color,
-        face_color=face_color,
         n_dimensional=n_dimensional,
         **kwargs,
         )

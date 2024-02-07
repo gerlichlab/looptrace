@@ -72,10 +72,17 @@ def workflow(
     for pos, frame, ch, img in iterate_over_select_pos_subset(S, positions=positions_to_use):
         print(f"INFO: Visualising spot detection in position {pos}, frame {frame}, channel {ch}...")
         sub_rois = get_sub_rois(p=pos, t=frame, c=ch)
-        to_points = lambda cols: sub_rois[cols]
         if save_projections:
             viewer = napari.view_image(np.amax(img, axis=0))
-            add_points_to_viewer(viewer=viewer, points=to_points(["yc", "xc"]), size=roi_size)
+            add_points_to_viewer(
+                viewer=viewer, 
+                points=sub_rois[["yc", "xc"]], 
+                point_properties={"zc": sub_rois["zc"].values},
+                size=roi_size,
+                edge_color="zc",
+                edge_colormap="turbo",
+                face_color="transparent", 
+                )
             outfile = S.path_to_detected_spot_image_file(position=pos, time=frame, channel=ch)
             print(f"DEBUG: saving image for ({outfile})")
             save_screenshot(viewer=viewer, outfile=outfile, scale=2)
@@ -83,7 +90,13 @@ def workflow(
             viewer.close()
         if interactive:
             viewer = napari.view_image(img)
-            add_points_to_viewer(viewer=viewer, points=to_points(["zc", "yc", "xc"]), size=roi_size)
+            add_points_to_viewer(
+                viewer=viewer, 
+                points=sub_rois[["zc", "yc", "xc"]], 
+                size=roi_size,
+                edge_color="red",
+                face_color="transparent", 
+                )
             napari.run()
             if prompt_continue_napari() == SIGNAL_TO_QUIT:
                 break
@@ -110,6 +123,9 @@ if __name__ == "__main__":
         positions = set(range(args.num_positions))
     else:
         positions = None
+    pos_use_msg = f"Positions to use for spot detection visualisation: {', '.join(map(str, positions))}" \
+        if positions else "All positions will be used for spot detection visualisation."
+    print(pos_use_msg)
     workflow(
         config_file=args.config_path, 
         images_folder=args.image_path, 
