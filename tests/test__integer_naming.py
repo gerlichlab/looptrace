@@ -58,7 +58,10 @@ def test_behavior_near_domain_boundaries(fun, arg, expected_structure):
 
 
 @given(st.tuples(
-    st.sampled_from((get_position_name_short, get_position_names_N)), 
+    st.sampled_from((
+        (get_position_name_short, "Index to name"), 
+        (get_position_names_N, "Number of names"),
+    )), 
     st.one_of(
         st.just(None),
         st.booleans(), 
@@ -72,9 +75,9 @@ def test_behavior_near_domain_boundaries(fun, arg, expected_structure):
         st.text()
         )
 ))
-def test_get_position_name__is_expected_error_when_input_is_not_int(func_num_pair):
-    func, alleged_number = func_num_pair
+def test_get_position_name__is_expected_error_when_input_is_not_int(func_and_prefix__num_pair):
+    (func, exp_msg_prefix), alleged_number = func_and_prefix__num_pair
     with pytest.raises(TypeError) as err_ctx:
         func(alleged_number)
-    exp_msg = f"Index to name ({alleged_number}) (type={type(alleged_number).__name__}) is not integer-like!"
+    exp_msg = f"{exp_msg_prefix} ({alleged_number}) (type={type(alleged_number).__name__}) is not integer-like!"
     assert str(err_ctx.value) == exp_msg
