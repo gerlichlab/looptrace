@@ -34,6 +34,7 @@ def add_points_to_viewer(
     points: np.ndarray, 
     *,
     size: Union[NumberLike, list, np.array], 
+    symbol: str = "square", # Usually we want a bounding box.
     edge_width: NumberLike = 1, 
     edge_width_is_relative: bool = False,
     n_dimensional: bool = False,
@@ -49,6 +50,8 @@ def add_points_to_viewer(
     size : looptrace.numeric_types.NumberLike or np.array
         Either a single value to make all points the same size, or an array of shape compatible with points, 
         e.g. a 1D array of length equal to the number of points.
+    symbol : str
+        The name of the shape of the points to draw
 
     Returns
     -------
@@ -62,6 +65,7 @@ def add_points_to_viewer(
     return viewer.add_points(
         points, 
         size=size,
+        symbol=symbol,
         edge_width=edge_width,
         edge_width_is_relative=edge_width_is_relative,
         n_dimensional=n_dimensional,
