@@ -10,7 +10,12 @@ from typing import *
 __author__ = "Vince Reuter"
 __credits__ = ["Vince Reuter"]
 
-__all__ = ["get_channel_name_1", "get_position_name_1", "get_position_names_N", "get_time_name_1"]
+__all__ = [
+    "get_channel_name_short", 
+    "get_position_name_short", 
+    "get_position_names_N", 
+    "get_time_name_short",
+    ]
 
 
 class _IntegerNaming(Enum):
@@ -50,14 +55,26 @@ class _IntegerNaming(Enum):
 _DEFAULT_NAMER = _IntegerNaming.TenThousand
 
 
-def get_channel_name_1(channel: int, *, namer: _IntegerNaming = _IntegerNaming.OneHundred) -> str:
+class NameableSemantic(Enum):
+    Point = "P"
+    Time = "T"
+    Channel = "C"
+
+    def get_long_name(self, i: int, *, namer: _IntegerNaming = _IntegerNaming.TenThousand) -> str:
+        return self.name + namer.get_name(i)
+
+    def get_short_name(self, i: int, *, namer: _IntegerNaming = _IntegerNaming.TenThousand) -> str:
+        return self.value + namer.get_name(i)
+
+
+def get_channel_name_short(i: int, *, namer: _IntegerNaming = _IntegerNaming.OneHundred) -> str:
     """Get the channel-like name for the given channel."""
-    return "C" + namer.get_name(channel)
+    return NameableSemantic.Channel.get_short_name(i, namer=namer)
 
 
-def get_position_name_1(pos_idx: int, *, namer: _IntegerNaming = _DEFAULT_NAMER) -> str:
+def get_position_name_short(i: int, *, namer: _IntegerNaming = _DEFAULT_NAMER) -> str:
     """Get the position-like (field of view) name for the given index."""
-    return "P" + namer.get_name(pos_idx)
+    return NameableSemantic.Point.get_short_name(i, namer=namer)
 
 
 def get_position_names_N(num_names: int, namer: _IntegerNaming = _DEFAULT_NAMER) -> List[str]:
@@ -65,12 +82,12 @@ def get_position_names_N(num_names: int, namer: _IntegerNaming = _DEFAULT_NAMER)
     _typecheck(num_names, ctx="Number of names")
     if num_names < 0:
         raise ValueError(f"Number of names is negative: {num_names}")
-    return [get_position_name_1(i, namer) for i in range(num_names)]
+    return [get_position_name_short(i, namer=namer) for i in range(num_names)]
 
 
-def get_time_name_1(time_index: int, *, namer: _IntegerNaming = _DEFAULT_NAMER) -> str:
+def get_time_name_short(i: int, *, namer: _IntegerNaming = _DEFAULT_NAMER) -> str:
     """Get the time-like name for the given time."""
-    return "T" + namer.get_name(time_index)
+    return NameableSemantic.Time.get_short_name(i, namer=namer)
 
 
 def _typecheck(i: int, ctx: str) -> bool:
