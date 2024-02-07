@@ -394,7 +394,7 @@ class SpotPicker:
         filetype = "png"
         fn_chunks = [
             self.image_handler.analysis_filename_prefix,
-            get_position_name_1(position), 
+            get_position_name_short(position), 
             get_time_name_1(time), 
             get_channel_name_1(channel),
             ]

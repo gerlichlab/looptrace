@@ -15,7 +15,7 @@ def test_get_position_name_N__length_is_number_given__when_legal(n):
 
 @given(st.integers(min_value=1, max_value=9998))
 def test_get_position_name_N_over_domain__is_equivalent_to_one_at_a_time__at_shared_domain(n):
-    manual = [get_position_name_1(i) for i in range(n)]
+    manual = [get_position_name_short(i) for i in range(n)]
     auto = get_position_names_N(n)
     assert manual == auto
 
@@ -28,21 +28,21 @@ def test_get_position_name_N_over_domain__is_equivalent_to_one_at_a_time__at_sha
     (100, "P0101"), (331, "P0332"), (999, "P1000"), 
     (1000, "P1001"), (4236, "P4237"),
     ])
-def test_get_position_name_1_over_domain__is_accurate(pos, exp):
-    assert get_position_name_1(pos) == exp
+def test_get_position_name_short_over_domain__is_accurate(pos, exp):
+    assert get_position_name_short(pos) == exp
 
 
 @pytest.mark.parametrize(
     ["fun", "arg", "expected_structure"], [
-        (get_position_name_1, -1, ValueError("-1 is out-of-bounds [0, 9998] for for namer 'TenThousand'")), 
+        (get_position_name_short, -1, ValueError("-1 is out-of-bounds [0, 9998] for for namer 'TenThousand'")), 
         (get_position_names_N, -1, ValueError("Number of names is negative: -1")),
-        (get_position_name_1, 0, (lambda obs: obs, "P0001")), 
+        (get_position_name_short, 0, (lambda obs: obs, "P0001")), 
         (get_position_names_N, 0, (lambda obs: obs, [])), 
-        (get_position_name_1, 9998, (lambda obs: obs, "P9999")), 
+        (get_position_name_short, 9998, (lambda obs: obs, "P9999")), 
         (get_position_names_N, 9998, (len, 9998)), 
-        (get_position_name_1, 9999, ValueError("9999 is out-of-bounds [0, 9998] for for namer 'TenThousand'")), 
+        (get_position_name_short, 9999, ValueError("9999 is out-of-bounds [0, 9998] for for namer 'TenThousand'")), 
         (get_position_names_N, 9999, (len, 9999)), 
-        (get_position_name_1, 10000, ValueError("10000 is out-of-bounds [0, 9998] for for namer 'TenThousand'")), 
+        (get_position_name_short, 10000, ValueError("10000 is out-of-bounds [0, 9998] for for namer 'TenThousand'")), 
         (get_position_names_N, 10000, ValueError("9999 is out-of-bounds [0, 9998] for for namer 'TenThousand'")), 
     ])
 def test_behavior_near_domain_boundaries(fun, arg, expected_structure):
@@ -58,7 +58,7 @@ def test_behavior_near_domain_boundaries(fun, arg, expected_structure):
 
 
 @given(st.tuples(
-    st.sampled_from((get_position_name_1, get_position_names_N)), 
+    st.sampled_from((get_position_name_short, get_position_names_N)), 
     st.one_of(
         st.just(None),
         st.booleans(), 
@@ -73,7 +73,8 @@ def test_behavior_near_domain_boundaries(fun, arg, expected_structure):
         )
 ))
 def test_get_position_name__is_expected_error_when_input_is_not_int(func_num_pair):
-    #call_func, arg, exp_err, exp_msg
     func, alleged_number = func_num_pair
     with pytest.raises(TypeError) as err_ctx:
         func(alleged_number)
+    exp_msg = f"Index to name ({alleged_number}) (type={type(alleged_number).__name__}) is not integer-like!"
+    assert str(err_ctx.value) == exp_msg

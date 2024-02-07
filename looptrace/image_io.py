@@ -24,7 +24,7 @@ import numpy as np
 import tqdm
 import zarr
 
-from looptrace.integer_naming import get_position_name_1
+from looptrace.integer_naming import get_position_name_short
 
 
 POSITION_EXTRACTION_REGEX = r"(Point\d+)"
@@ -325,7 +325,7 @@ def images_to_ome_zarr(
 
     if 'p' in axes:
         for i, pos_img in enumerate(images):
-            pos_name = get_position_name_1(i)
+            pos_name = get_position_name_short(i)
             single_position_to_zarr(pos_img, path, name, pos_name, dtype, axes[1:], chunk_axes, chunk_split, metadata)
     else:
         # TODO: fix the fact that here pos_name is undefined.
