@@ -102,7 +102,14 @@ def napari_view(
     # Do the image viewing and points layer addition.
     images = np.stack(images)
     viewer = napari.view_image(images, channel_axis=0, name=names)
-    point_layer = add_points_to_viewer(viewer=viewer, points=points/downscale, size=roi_size/downscale, symbol=roi_symbol)
+    point_layer = add_points_to_viewer(
+        viewer=viewer, 
+        points=points/downscale, 
+        size=roi_size/downscale, 
+        symbol=roi_symbol, 
+        edge_color="red", 
+        face_color="transparent", 
+        )
     sel_dim = list(points[0, :] / downscale)
     for dim in range(len(sel_dim)):
         viewer.dims.set_current_step(dim, sel_dim[dim])

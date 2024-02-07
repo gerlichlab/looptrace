@@ -20,7 +20,7 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder, already_regis
     return picker.gen_roi_imgs_inmem_coarsedc() if already_registered else picker.gen_roi_imgs_inmem()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run spot detection on all frames and channels listed in config.')
     parser.add_argument("config_path", type=ExtantFile.from_string, help="Config file path")
     parser.add_argument("image_path", type=ExtantFolder.from_string, help="Path to folder with images to read.")
