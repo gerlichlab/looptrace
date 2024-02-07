@@ -77,7 +77,7 @@ def workflow(
             add_points_to_viewer(
                 viewer=viewer, 
                 points=sub_rois[["yc", "xc"]], 
-                point_properties={"zc": sub_rois["zc"].values},
+                properties={"zc": sub_rois["zc"].values},
                 size=roi_size,
                 edge_color="zc",
                 edge_colormap="turbo",
