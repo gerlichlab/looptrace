@@ -45,9 +45,8 @@ class NPZ_wrapper():
     Class wrapping the numpy .npz loader to allow slicing npz files as standard arrays
     Note that this returns a list of arrays in case the stacks have different dimensions.
     '''
-    def __init__(self, fid):
-        #super().__init__(fid, allow_pickle=True)
-        self.npz = np.load(fid, allow_pickle=True)
+    def __init__(self, filepath: Union[str, Path]):
+        self.npz = np.load(filepath, allow_pickle=True)
         self.files = self.npz.files
 
     def __iter__(self):
