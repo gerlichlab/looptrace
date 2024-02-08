@@ -8,19 +8,24 @@ EMBL Heidelberg
 """
 
 import dataclasses
+import itertools
 from pathlib import Path
+import sys
 from typing import *
 
 from joblib import Parallel, delayed
+import numcodecs
 import numpy as np
 import pandas as pd
 import scipy.ndimage as ndi
 from tqdm import tqdm
+import zarr
 
 from looptrace import *
 from looptrace.ImageHandler import ImageHandler
-from looptrace.SpotPicker import RoiOrderingSpecification, SkipReasonsMapping
+from looptrace.SpotPicker import RoiOrderingSpecification
 from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
+from looptrace.image_io import NPZ_wrapper
 from looptrace.numeric_types import NumberLike
 from looptrace.tracing_qc_support import apply_frame_names_and_spatial_information
 
@@ -61,7 +66,7 @@ def run_frame_name_and_distance_application(config_file: ExtantFile, images_path
 
 class Tracer:
 
-    def __init__(self, image_handler, trace_beads=False):
+    def __init__(self, image_handler: ImageHandler, trace_beads: bool = False):
         '''
         Initialize Tracer class with config read in from YAML file.
         '''
@@ -69,7 +74,6 @@ class Tracer:
         self.config_path = image_handler.config_path
         self.config = image_handler.config
         self.drift_table = image_handler.tables[image_handler.spot_input_name + '_drift_correction_fine']
-        self.images = self.image_handler.images[self.config['trace_input_name']]
         self.pos_list = self.image_handler.image_lists[image_handler.spot_input_name]
         if trace_beads:
             self.roi_table = image_handler.tables[image_handler.spot_input_name + '_bead_rois']
@@ -104,6 +108,40 @@ class Tracer:
         pos_drifts = self.drift_table[self.drift_table.position.isin(self.pos_list)][['z_px_fine', 'y_px_fine', 'x_px_fine']].to_numpy()
         return BackgroundSpecification(frame_index=bg_frame_idx, drifts=pos_drifts - pos_drifts[bg_frame_idx])
 
+    def write_images_to_zarr(self, root_path: Path, overwrite: bool = False, stop_after_n: Optional[int] = None):
+        raise NotImplementedError(f"Implementation for writing tracing spot images to zarr isn't yet fully implemented.")
+        keyed = map(lambda fn: (RoiOrderingSpecification.get_file_sort_key(fn), fn), self._iterate_over_spot_filenames())
+        stop_after_n = sys.maxsize if stop_after_n is None else stop_after_n
+        print(f"Creating zarr store rooted at: {root_path}")
+        store = zarr.DirectoryStore(root_path)
+        root = zarr.group(store=store, overwrite=overwrite)
+        data = np.stack([
+            np.stack([
+                np.stack([self._images_wrapper[fn] for _, fn in time_group]) 
+                for _, time_group in itertools.groupby(pos_group, lambda pair: pair[0].ref_frame)
+                ])
+            for _, (_, pos_group) in itertools.takewhile(lambda i_: i_[0] < stop_after_n, enumerate(itertools.groupby(keyed, lambda pair: pair[0].position))) 
+        ])
+        dataset = root.create_dataset(name="spot_images", compressor=numcodecs.Zlib(), shape=data.shape, dtype=np.uint16)
+        dataset[:] = data
+    
+    def _iterate_over_spot_filenames(self) -> Iterable[str]:
+        return sorted(self._images_wrapper.files, key=lambda fn: RoiOrderingSpecification.get_file_sort_key(fn).to_tuple)
+
+    @property
+    def images(self) -> Iterable[np.ndarray]:
+        """Iterate over the small, single spot images for tracing (1 per timepoint per ROI)."""
+        for fn in self._iterate_over_spot_filenames():
+            yield self._images_wrapper[fn]
+
+    @property
+    def _input_name(self) -> str:
+        return self.config['trace_input_name']
+
+    @property
+    def _images_wrapper(self) -> NPZ_wrapper:
+        return self.image_handler.images[self._input_name]
+
     @property
     def nanometers_per_pixel_xy(self) -> NumberLike:
         return self.config["xy_nm"]
@@ -118,7 +156,7 @@ class Tracer:
             fit_func_spec=self.fit_func_spec,
             # TODO: fix this brittle / fragile / incredibly error-prone thing; #84
             # TODO: in essence, we need a better mapping between these images and the ordering of the index of the ROIs table.
-            images=(self.images[fn] for fn in sorted(self.images.files, key=lambda fn: RoiOrderingSpecification.get_file_sort_key(fn).to_tuple)), 
+            images=self.images, 
             mask_ref_frames=self.roi_table['frame'].to_list() if self.image_handler.config.get('mask_fits', False) else None, 
             background_specification=self.background_specification, 
             cores=self.config.get("tracing_cores")
