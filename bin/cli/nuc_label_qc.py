@@ -9,12 +9,13 @@ EMBL Heidelberg
 
 import argparse
 from itertools import dropwhile, takewhile
-import os
 import sys
 from typing import *
 
 import numpy as np
 import napari
+import pandas as pd
+from skimage.measure import regionprops_table
 
 from gertils import ExtantFile, ExtantFolder
 from looptrace.ImageHandler import ImageHandler
@@ -77,13 +78,28 @@ def workflow(
 
     for i, nuc_img in takewhile(lambda i_: i_[0] <= stop_after, dropwhile(lambda i_: i_[0] < start_from, enumerate(seg_imgs))):
         viewer = napari.view_image(nuc_img)
-        masks_layer = viewer.add_labels(prep_image_to_add(mask_imgs[i]))
+        mask = mask_imgs[i]
+        point_table = pd.DataFrame(regionprops_table(mask, properties=("label", "centroid")))
+        masks_layer = viewer.add_labels(prep_image_to_add(mask))
         class_layer = get_class_layer(viewer, i)
+        label_layer = viewer.add_points(
+            point_table[["centroid-0", "centroid-1"]].values, 
+            properties={"label": point_table["label"].values},
+            text={
+                "string": "{label}",
+                "size": 10,
+                "color": "black",
+                'translation': np.array([-30, 0]),
+                },
+            size=1,
+            face_color="transparent", 
+            edge_color="transparent"
+            )
         if save_images:
-            print(f"DEBUG: saving image for position: {i}")
+            print(f"DEBUG -- saving nuclei image for position: {i}")
             outfile = H.nuclear_mask_screenshots_folder / f"nuc_maks.{i}.png"
             save_screenshot(viewer=viewer, outfile=outfile)
-            print(f"DEBUG: saved image {outfile}")
+            print(f"DEBUG -- saved nuclei image: {outfile}")
         else:
             napari.run()
             if prompt_continue_napari() == SIGNAL_TO_QUIT:
@@ -91,7 +107,7 @@ def workflow(
             if do_qc:
                 N.update_masks_after_qc(
                     new_mask=masks_layer.data.astype(np.uint16), 
-                    old_mask=np.array(mask_imgs[i]), 
+                    old_mask=np.array(mask), 
                     mask_name=NucDetector.MASKS_KEY, 
                     position=H.image_lists[NucDetector.MASKS_KEY][i],
                     )
@@ -105,6 +121,7 @@ def workflow(
         print("Removing layers and closing current viewer...")
         del masks_layer
         del class_layer
+        del label_layer
         viewer.close()
     
     shutdown_napari()
