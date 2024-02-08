@@ -147,44 +147,6 @@ def parse_times_from_text(s: str) -> List[str]:
     return re.findall(TIME_EXTRACTION_REGEX, s)
 
 
-def stack_tif_to_dask(folder: str):
-    '''The function takes a folder path and returns a list of dask arrays and a 
-    list of image folders by reading multiple tif images where each represents a 3D stack (split by position and time) in a single folder.
-
-    Args:
-        folder (str): Input folder path
-
-    Returns:
-        list: list of dask arrays of the images
-    '''
-    import tifffile
-    
-    image_files = sorted([p.path for p in os.scandir(folder) if _has_tiff_extension(p)])
-    try:
-        image_times = sorted(list(set([parse_times_from_text(s)[0] for s in image_files])))
-    except IndexError:
-        time_dim = False
-    else:
-        time_dim = True
-    image_points = sorted(list(set([parse_positions_from_text(s)[0] for s in image_files])))
-    out = []
-    for p in tqdm.tqdm(image_points):
-        if time_dim:
-            t_stack = []
-            for t in image_times:
-                path = list(filter(lambda s: (p in s) and (t in s), image_files))[0]
-                arr = tifffile.memmap(path)
-                arr = da.moveaxis(arr, 0, 1)
-                t_stack.append(arr)
-        else:
-            path = list(filter(lambda s: (p in s), image_files))[0]
-            arr = tifffile.memmap(path)
-            arr = da.moveaxis(arr, 0, 1)
-            t_stack = [arr]
-        out.append(da.stack(t_stack))
-    return out, image_points
-
-
 def single_position_to_zarr(
     images: np.ndarray or list, 
     path: Union[str, Path],
@@ -467,12 +429,6 @@ def read_czi_image(image_path):
     return image
 
 
-def read_tif_image(image_path):
-    import tifffile
-    with tifffile.TiffFile(image_path) as tif:
-        image=tif.asarray()
-    return image
-
 def read_czi_meta(image_path, tags, save_meta=False):
     '''
     Function to read metadata and image data for CZI files.
@@ -506,68 +462,6 @@ def read_czi_meta(image_path, tags, save_meta=False):
             yaml.safe_dump(metadict, myfile)
     return metadict
 
-def czi_to_tif(in_folder, template, out_folder, prefix):
-    '''Convert CZI files from MyPIC experiment to single YX tif images.
-
-    Args:
-        in_folder (str): Top level folder path to find czi files
-        template (list): Template to match files to
-        out_folder (str): Output folder to save tif images
-        prefix (str): Prefix of output files, prepended to axis info
-    '''
-    import czifile
-    import joblib
-    import tifffile
-
-    all_files = all_matching_files_in_subfolders(in_folder, template)
-    sample = czifile.CziFile(all_files[0])
-    n_c = sample.shape[-6]
-    n_z = sample.shape[-4]
-
-    def save_single_tif(n_c, n_z, path, out_folder):
-        pos = re.search('W[0-9]{4}',path)[0]
-        pos = 'P'+pos[1:]
-        t = re.search('T[0-9]{4}',path)[0]
-        img = czifile.imread(path)[0,0,:,0,:,:,:,0] 
-        for c in range(n_c):
-            for z in range(n_z):
-                fn = out_folder + prefix + pos + '_' + t + '_C' + str(c).zfill(4)+ '_Z' + str(z).zfill(4)+'.tif'
-                if not os.path.isfile(fn):
-                    tifffile.imwrite(fn, img[c,z], compression='deflate', metadata={'axes': 'YX'})
-
-    joblib.Parallel(n_jobs=-2)(joblib.delayed(save_single_tif)(n_c, n_z, path, out_folder) for path in all_files)
-
-def tif_store_to_dask(folder, re_search = 'P[0-9]{4}'):
-    '''Read a series of tif files as a zarr array from a single folder using tifffile sequence reader, 
-    then assemble the sequences to a dask array.
-
-    Args:
-        folder (str): Path to folder with tif files
-        prefix (str): Prefix of tif files in folder before axes info
-
-    Returns:
-        Dask array: Dask array with all the matching tif files form the folder
-    '''
-    import tifffile
-    imgs = []
-    all_files = all_matching_files_in_subfolders(folder, ['.tif'])
-    groups, positions = group_filelist(all_files, re_search)
-    for i, group in enumerate(groups):
-        print('Loading images for position ', positions[i])
-        seq = tifffile.TiffSequence(group, pattern='axes')
-        with seq.aszarr() as store:
-            imgs.append(da.from_array(zarr.open(store, mode='r'), chunks =  (1,1,1,1,-1,-1))[0])
-    return imgs
-        
-def nikon_tiff_to_dask(folder):
-    import tifffile
-    image_sequence = tifffile.TiffSequence(folder+os.sep+'*.tiff', pattern='(Time)(\d+)_(Point)(\d+)_(ZStack)(\d+)')
-    print('Found image folder of shape', image_sequence.shape)
-    with image_sequence.aszarr() as store:
-        z = zarr.open(store, mode='r')
-        print('Zarr shape: ', z.shape)
-        images = da.transpose(da.from_zarr(z), (1,0,3,2,4,5))
-    return images
 
 def images_to_dask(folder, template):
     '''Wrapper function to generate dask arrays from image folder.
