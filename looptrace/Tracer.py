@@ -109,24 +109,13 @@ class Tracer:
         return BackgroundSpecification(frame_index=bg_frame_idx, drifts=pos_drifts - pos_drifts[bg_frame_idx])
 
     def write_images_to_zarr(self, root_path: Path, overwrite: bool = False, stop_after_n: Optional[int] = None):
-        raise NotImplementedError(f"Implementation for writing tracing spot images to zarr isn't yet fully implemented.")
-        keyed = map(lambda fn: (RoiOrderingSpecification.get_file_sort_key(fn), fn), self._iterate_over_spot_filenames())
-        stop_after_n = sys.maxsize if stop_after_n is None else stop_after_n
+        print("Computing non-ragged array of spot images to save")
+        data = compute_non_ragged_spot_images_multiarray(npz=self._images_wrapper, stop_after_n=stop_after_n)
         print(f"Creating zarr store rooted at: {root_path}")
         store = zarr.DirectoryStore(root_path)
         root = zarr.group(store=store, overwrite=overwrite)
-        data = np.stack([
-            np.stack([
-                np.stack([self._images_wrapper[fn] for _, fn in time_group]) 
-                for _, time_group in itertools.groupby(pos_group, lambda pair: pair[0].ref_frame)
-                ])
-            for _, (_, pos_group) in itertools.takewhile(lambda i_: i_[0] < stop_after_n, enumerate(itertools.groupby(keyed, lambda pair: pair[0].position))) 
-        ])
         dataset = root.create_dataset(name="spot_images", compressor=numcodecs.Zlib(), shape=data.shape, dtype=np.uint16)
         dataset[:] = data
-    
-    def _iterate_over_spot_filenames(self) -> Iterable[str]:
-        return sorted(self._images_wrapper.files, key=lambda fn: RoiOrderingSpecification.get_file_sort_key(fn).to_tuple)
 
     @property
     def images(self) -> Iterable[np.ndarray]:
@@ -381,3 +370,33 @@ def apply_pixels_to_nanometers(traces: pd.DataFrame, z_nm_per_px: float, xy_nm_p
     traces['sigma_z'] = traces['sigma_z'] * z_nm_per_px
     traces['sigma_xy'] = traces['sigma_xy'] * xy_nm_per_px
     return traces
+
+
+def compute_non_ragged_spot_images_multiarray(npz: Union[str, Path, NPZ_wrapper], stop_after_n: Optional[int] = None) -> np.ndarray:
+    if isinstance(npz, (str, Path)):
+        npz = NPZ_wrapper(npz)
+    keyed = sorted(map(lambda fn: (RoiOrderingSpecification.get_file_sort_key(fn), fn), npz.files), key=lambda k_: k_[0].to_tuple)
+    stop_after_n = sys.maxsize if stop_after_n is None else stop_after_n
+    by_pos_by_time = {}
+    for i, (pos, pos_group) in enumerate(itertools.groupby(keyed, lambda pair: pair[0].position)):
+        if i == stop_after_n:
+            break
+        for time, time_group in itertools.groupby(pos_group, lambda pair: pair[0].ref_frame):
+            by_pos_by_time.setdefault(pos, {})[time] = [fn for _, fn in time_group]
+    if not by_pos_by_time:
+        raise ValueError("No images to write!")
+    num_times_by_pos = [(p, len(g)) for p, g in by_pos_by_time.items()]
+    num_times = max(nt for _, nt in num_times_by_pos)
+    print(f"Will save data from {num_times} timepoints per position")
+    bad_time_positions = [(p, nt) for p, nt in num_times_by_pos if nt != num_times]
+    if bad_time_positions:
+        raise ValueError(f"Positions with fewer than max number of times ({num_times}): {bad_time_positions}")
+    num_per_time_to_use = min(len(tg) for _, pg in by_pos_by_time.items() for _, tg in pg.items())
+    print(f"Will save data from {num_per_time_to_use} ROIs per timepoint per position")
+    return np.stack([
+        np.stack([
+            np.stack([npz[fn] for _, fn in itertools.takewhile(lambda i_: i_[0] < num_per_time_to_use, enumerate(tg))]) 
+            for _, tg in pg.items()
+        ]) 
+        for _, pg in by_pos_by_time.items()
+    ])
