@@ -17,7 +17,6 @@ import time
 from typing import *
 import zipfile
 
-import dask
 import dask.array as da
 import numcodecs
 import numpy as np
@@ -29,7 +28,6 @@ from looptrace.integer_naming import get_position_name_short
 
 POSITION_EXTRACTION_REGEX = r"(Point\d+)"
 TIME_EXTRACTION_REGEX = r"(Time\d+)"
-TIFF_EXTENSIONS = [".tif", ".tiff"]
 
 
 def ignore_path(p: Union[str, os.DirEntry, Path]) -> bool:
@@ -444,7 +442,7 @@ def read_czi_meta(image_path, tags, save_meta=False):
         tree = ElementTree.iterparse(data, events=('start',))
         _, root = next(tree)
     
-        for event, node in tree:
+        for _, node in tree:
             if node.tag in tags:
                 yield node.tag, node.text
             root.clear()
@@ -463,67 +461,8 @@ def read_czi_meta(image_path, tags, save_meta=False):
     return metadict
 
 
-def images_to_dask(folder, template):
-    '''Wrapper function to generate dask arrays from image folder.
-
-    Args:
-        folder (string): path to folder
-        template (list of strings): templates files in folder should match.
-
-    Returns:
-        x: dask array
-        groups : list of groups identified, currectly hardcoded to re_phrase='W[0-9]{4}'
-    '''        
-    print("Loading files to dask array: ")
-    #if '.h5' in template:
-    #    x, groups = svih5_to_dask(folder, template)
-    if '.czi' in template or _template_matches_tiff(template):
-        x, groups, all_files = czi_tif_to_dask(folder, template)
-    print('\n Loaded images of shape: ', x[0])
-    print('Found positions ', groups)
-    return x, groups, all_files
-
-def czi_tif_to_dask(folder, template):
-    ''' Read a series of tif or czi files into a virtual Dask array.
-    Args:
-        folder (string): path to folder with files (also in subfolders)
-        template (list of strings): templates files in folder should match.
-
-    Returns:
-        pos_stack (list): list of dask arrays, one per position
-        groups (list): list of groups identified, currectly hardcoded to re_phrase='W[0-9]{4}'
-        all_files (list): list of all file paths read
-    '''
-
-    all_files = all_matching_files_in_subfolders(folder, template)
-    grouped_files, groups = group_filelist(all_files, re_phrase='W[0-9]{4}')
-    #print(groups, pos_list)
-    
-    if '.czi' in template:
-        sample = read_czi_image(all_files[0])
-    elif _template_matches_tiff(template):
-        sample = read_tif_image(all_files[0])
-    else:
-        raise TypeError('Input filetype not yet implemented.')
-
-    pos_stack=[]
-    for g in grouped_files:
-        dask_arrays = []
-        for fn in g:
-            if '.czi' in template:
-                d = dask.delayed(read_czi_image)(fn)
-            elif _template_matches_tiff(template):
-                d = dask.delayed(read_tif_image)(fn)
-            array = da.from_delayed(d, shape=sample.shape, dtype=sample.dtype)
-            dask_arrays.append(array)
-        pos_stack.append(da.stack(dask_arrays, axis=0))
-    #x = da.stack(pos_stack, axis=0)
-    
-    return pos_stack, groups, all_files
-
-
 class ImageParseException(Exception):
-    """Error subtype for when at least one error occurs during image """
+    """Error subtype for when at least one error occurs during image parse"""
     
     def __init__(self, errors: Dict[str, Exception]) -> None:
         if len(errors) == 0:
@@ -535,12 +474,3 @@ class ImageParseException(Exception):
     @property
     def errors(self):
         return copy.deepcopy(self._errors)
-
-
-def _has_tiff_extension(p: Union[str, Path]) -> bool:
-    _, ext = os.path.splitext(p)
-    return ext in TIFF_EXTENSIONS
-
-
-def _template_matches_tiff(template: str) -> bool:
-    return any(ext in template for ext in TIFF_EXTENSIONS)

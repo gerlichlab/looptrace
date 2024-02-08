@@ -19,7 +19,7 @@ import yaml
 
 from looptrace import MINIMUM_SPOT_SEPARATION_KEY, TRACING_SUPPORT_EXCLUSIONS_KEY, ZARR_CONVERSIONS_KEY, read_table_pandas
 from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, get_analysis_path, simplify_path
-from looptrace.image_io import ignore_path, NPZ_wrapper, TIFF_EXTENSIONS
+from looptrace.image_io import ignore_path, NPZ_wrapper
 from gertils import ExtantFile, ExtantFolder
 
 __all__ = ["ImageHandler", "handler_from_cli", "read_images"]
@@ -357,9 +357,10 @@ def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[
                 def parse(p):
                     arrays, pos_names, _ = stack_nd2_to_dask(p)
                     return arrays, pos_names
-            elif sample_ext in TIFF_EXTENSIONS:
-                from .image_io import stack_tif_to_dask
-                parse = stack_tif_to_dask
+            elif sample_ext in [".tif", ".tiff"]:
+                raise NotImplementedError(
+                    f"Parsing TIFF-like isn't supported! Found extension '{sample_ext}' in folder {image_path}"
+                    )
             else:
                 from .image_io import multi_ome_zarr_to_dask
                 parse = multi_ome_zarr_to_dask
