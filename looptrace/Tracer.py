@@ -387,12 +387,12 @@ def compute_non_ragged_spot_images_multiarray(npz: Union[str, Path, NPZ_wrapper]
         raise ValueError("No images to write!")
     num_times_by_pos = [(p, len(g)) for p, g in by_pos_by_time.items()]
     num_times = max(nt for _, nt in num_times_by_pos)
-    print(f"Will save data from {num_times} timepoints per position")
+    print(f"Will have data from {num_times} timepoints per position")
     bad_time_positions = [(p, nt) for p, nt in num_times_by_pos if nt != num_times]
     if bad_time_positions:
         raise ValueError(f"Positions with fewer than max number of times ({num_times}): {bad_time_positions}")
     num_per_time_to_use = min(len(tg) for _, pg in by_pos_by_time.items() for _, tg in pg.items())
-    print(f"Will save data from {num_per_time_to_use} ROIs per timepoint per position")
+    print(f"Will use data from {num_per_time_to_use} ROIs per timepoint per position")
     return np.stack([
         np.stack([
             np.stack([npz[fn] for _, fn in itertools.takewhile(lambda i_: i_[0] < num_per_time_to_use, enumerate(tg))]) 
