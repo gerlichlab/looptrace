@@ -32,8 +32,5 @@ See https://www-ellenberg.embl.de/.
 Extended and maintained by Vincent Reuter (vincent.reuter@imba.oeaw.ac.at), Gerlich group, IMBA in Vienna, Austria.
 See https://www.oeaw.ac.at/imba/research/daniel-gerlich/
 
-## License
-[MIT](https://choosealicense.com/licenses/mit/)
-
 ## Citation
 Please cite this paper: https://www.biorxiv.org/content/10.1101/2021.04.12.439407
