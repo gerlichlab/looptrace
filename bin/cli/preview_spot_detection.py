@@ -140,10 +140,11 @@ if __name__ == "__main__":
         spot_props = params.try_centering_spot_box_coordinates(spots_table=spot_props)
         images_to_view = {"DoG": filt_img, "Subtracted": img, "Original": orig} if params.subtract_beads else {"DoG": filt_img, "Original": img}
         roi_points, _ = _roi_to_napari_points(spot_props, position=S.pos_list[args.position])
-        _, roi_sz_y, roi_sz_x = S.roi_image_size
-        roi_size = (roi_sz_y + roi_sz_x) / 2
-        if roi_sz_y != roi_sz_x:
-            logger.warn(f"ROI size differs in y ({roi_sz_y}) and x ({roi_sz_x}). Will use average: {roi_size}")
-        roi_size = roi_sz_y / S.downsampling
+        if H.roi_image_size.y != H.roi_image_size.x:
+            roi_size = (H.roi_image_size.y + H.roi_image_size.x) / 2
+            logger.warn(f"ROI size differs in y ({H.roi_image_size.y}) and x ({H.roi_image_size.x}). Will use average: {roi_size}")
+        else:
+            roi_size = H.roi_image_size.y
+        roi_size = H.roi_image_size.y / S.downsampling
         logger.debug(f"ROI size after downsampling: {roi_size}")
         napari_view(images_to_view, roi_points, axes="ZYX", downscale=1, roi_size=roi_size)

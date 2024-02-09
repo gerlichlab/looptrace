@@ -14,7 +14,6 @@ import sys
 from typing import *
 
 from joblib import Parallel, delayed
-import numcodecs
 import numpy as np
 import pandas as pd
 import scipy.ndimage as ndi
@@ -100,6 +99,10 @@ class Tracer:
         self.traces_path_enriched = finalise_suffix(image_handler.traces_path_enriched)
 
     @property
+    def all_spot_images_zarr_root_path(self) -> Path:
+        return Path(self.image_handler.analysis_path) / "all_spot_images_zarr"
+
+    @property
     def background_specification(self) -> BackgroundSpecification:
         bg_frame_idx = self.image_handler.background_subtraction_frame
         if bg_frame_idx is None:
@@ -110,7 +113,7 @@ class Tracer:
 
     def write_all_spot_images_to_one_per_fov_zarr(self, overwrite: bool = False) -> List[Path]:
         name_data_pairs = compute_spot_images_multiarray_per_fov(npz=self._images_wrapper)
-        return write_jvm_compatible_zarr_store(name_data_pairs, root_path=Path(self.image_handler.analysis_path) / "all_spot_images_zarr", dtype=np.uint16, overwrite=overwrite)
+        return write_jvm_compatible_zarr_store(name_data_pairs, root_path=self.all_spot_images_zarr_root_path, dtype=np.uint16, overwrite=overwrite)
 
     def write_spot_images_subset_to_single_highly_nested_zarr(self, overwrite: bool = False, stop_after_n: Optional[int] = None) -> Path:
         data = compute_spot_images_subset_highly_nested_multiarray(npz=self._images_wrapper, stop_after_n=stop_after_n)
@@ -202,12 +205,13 @@ def finalise_traces(rois: pd.DataFrame, fits: pd.DataFrame, z_nm: NumberLike, xy
     pd.DataFrame
         The result of joining (horizontally) the frames, applying drift correction, sorting, and applying units
     """
+    # First, combine the original ROI data with the newly obtained Gaussian fits data.
     traces = pair_rois_with_fits(rois=rois, fits=fits)
-    #Apply fine scale drift to fits, and physcial units.
+    #Then, apply fine scale drift to fits, and map pixels to physcial units.
     traces = apply_fine_scale_drift_correction(traces)
-    #traces=traces.drop(columns=['drift_z', 'drift_y', 'drift_x'])
     traces = apply_pixels_to_nanometers(traces, z_nm_per_px=z_nm, xy_nm_per_px=xy_nm)
     traces = traces.sort_values(RoiOrderingSpecification.row_order_columns())
+    # Finally, rename columns and yield the result.
     traces.rename(columns={"roi_id": "trace_id"}, inplace=True)
     return traces
 
@@ -363,14 +367,10 @@ def apply_fine_scale_drift_correction(traces: pd.DataFrame) -> pd.DataFrame:
 
 def apply_pixels_to_nanometers(traces: pd.DataFrame, z_nm_per_px: float, xy_nm_per_px: float) -> pd.DataFrame:
     """Add columns for distance in nanometers, based on pixel-to-nanometer conversions."""
-    traces[BOX_Z_COL] = traces[BOX_Z_COL] * z_nm_per_px
-    traces[BOX_Y_COL] = traces[BOX_Y_COL] * xy_nm_per_px
-    traces[BOX_X_COL] = traces[BOX_X_COL] * xy_nm_per_px
-    traces['z'] = traces['z_px_dc'] * z_nm_per_px
-    traces['y'] = traces['y_px_dc'] * xy_nm_per_px
-    traces['x'] = traces['x_px_dc'] * xy_nm_per_px
-    traces['sigma_z'] = traces['sigma_z'] * z_nm_per_px
-    traces['sigma_xy'] = traces['sigma_xy'] * xy_nm_per_px
+    z_cols = [BOX_Z_COL, "z", "sigma_z"]
+    xy_cols = [BOX_Y_COL, BOX_X_COL, "y", "x", "sigma_xy"]
+    traces[z_cols] = traces[z_cols] * z_nm_per_px
+    traces[xy_cols] = traces[xy_cols] * xy_nm_per_px
     return traces
 
 

@@ -66,7 +66,11 @@ def workflow(
     print(f"Reading ROIs file: {H.nuclei_filtered_spots_file_path}")
     rois = read_table_pandas(H.nuclei_filtered_spots_file_path)
     get_sub_rois = lambda p, t, c: rois[(rois.position == S.pos_list[p]) & (rois.frame == t) & (rois.ch == c)]
-    _, roi_size, _ = S.roi_image_size
+    if H.roi_image_size.y != H.roi_image_size.x:
+        roi_size = (H.roi_image_size.y + H.roi_image_size.x) / 2
+        print(f"WARN -- ROI size differs in y ({H.roi_image_size.y}) and x ({H.roi_image_size.x}). Will use average: {roi_size}")
+    else:
+        roi_size = H.roi_image_size.y
 
     print("INFO: Iterating over images...")
     for pos, frame, ch, img in iterate_over_select_pos_subset(S, positions=positions_to_use):
@@ -107,7 +111,10 @@ def workflow(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Visualise the detected spot ROIs.")
+    parser = argparse.ArgumentParser(
+        description="Visualise the detected spot ROIs.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        )
     parser.add_argument("config_path", type=ExtantFile.from_string, help="Config file path")
     parser.add_argument("image_path", type=ExtantFolder.from_string, help="Path to folder with images to read.")
     parser.add_argument("--image_save_path", type=ExtantFolder.from_string, help="(Optional): Path to folder to save images to.")

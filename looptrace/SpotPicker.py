@@ -28,9 +28,9 @@ import tqdm
 
 from gertils import ExtantFolder, NonExtantPath
 
+from looptrace import RoiImageSize, image_processing_functions as ip
 from looptrace.exceptions import MissingRoisTableException
 from looptrace.filepaths import get_spot_images_path
-from looptrace import image_processing_functions as ip
 from looptrace.integer_naming import *
 from looptrace.numeric_types import NumberLike
 
@@ -129,13 +129,13 @@ class SpotDetectionParameters:
     subtract_beads: bool
     crosstalk_channel: Optional[int]
     crosstalk_frame: Optional[int]
-    roi_image_size: Optional[Tuple[int, int, int]]
+    roi_image_size: Optional[RoiImageSize]
 
     def try_centering_spot_box_coordinates(self, spots_table: pd.DataFrame) -> pd.DataFrame:
         if self.roi_image_size is None:
             return spots_table
-        dims = tuple(map(lambda x: x // self.downsampling, self.roi_image_size))
-        return ip.roi_center_to_bbox(spots_table, roi_size=dims)
+        dims = self.roi_image_size.div_by(self.downsampling)
+        return roi_center_to_bbox(spots_table, roi_size=dims)
 
 
 def compute_downsampled_image(full_image: da.core.Array, *, frame: int, channel: int, downsampling: int) -> np.ndarray:
@@ -177,7 +177,7 @@ def detect_spot_single_fov_single_frame(
         img, _ = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
     spot_props, _, _ = detection_parameters.detection_function(img, spot_threshold)
     spot_props = detection_parameters.try_centering_spot_box_coordinates(spots_table=spot_props)
-    columns_to_scale = ['z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'zc', 'yc', 'xc']
+    columns_to_scale = ["z_min", "y_min", "x_min", "z_max", "y_max", "x_max", "zc", "yc", "xc"]
     spot_props[columns_to_scale] = spot_props[columns_to_scale] * detection_parameters.downsampling
     return spot_props
 
@@ -395,8 +395,8 @@ class SpotPicker:
         fn_chunks = [
             self.image_handler.analysis_filename_prefix,
             get_position_name_short(position), 
-            get_time_name_1(time), 
-            get_channel_name_1(channel),
+            get_time_name_short(time), 
+            get_channel_name_short(channel),
             ]
         fn_base = "_".join(fn_chunks)
         return self.path_to_detected_spot_images_folder / f"{fn_base}.{filetype}"
@@ -475,13 +475,9 @@ class SpotPicker:
         return self.image_handler.image_lists[self.input_name]
 
     @property
-    def _raw_roi_image_size(self) -> Tuple[int, int, int]:
-        return tuple(self.config['roi_image_size'])
-
-    @property
-    def roi_image_size(self) -> Optional[Tuple[int, int, int]]:
+    def roi_image_size(self) -> Optional[RoiImageSize]:
         """The dimensions (in pixels, as (z, y, x)) for the ROI bounding box around the center of each spot"""
-        return self._raw_roi_image_size if self.detection_method_name == DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC else None
+        return self.image_handler.roi_image_size if self.detection_method_name == DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC else None
 
     @property
     def spot_channel(self) -> List[int]:
@@ -596,7 +592,7 @@ class SpotPicker:
                                 dc_frame['z_px_fine'], dc_frame['y_px_fine'], dc_frame['x_px_fine']])
 
         self.all_rois = pd.DataFrame(all_rois, columns=['position', 'pos_index', 'roi_number', 'roi_id', 'frame', 'ref_frame', 'ch', 
-                                'z_min', 'z_max', 'y_min', 'y_max', 'x_min', 'x_max',
+                                "z_min", "z_max", "y_min", "y_max", "x_min", "x_max",
                                 'pad_z_min', 'pad_z_max', 'pad_y_min', 'pad_y_max', 'pad_x_min', 'pad_x_max', 
                                 'z_px_coarse', 'y_px_coarse', 'x_px_coarse',
                                 'z_px_fine', 'y_px_fine', 'x_px_fine'])
@@ -690,9 +686,9 @@ class SpotPicker:
             for roi in group.to_dict('records'):
                 spot_stack = full_image[:, 
                                 roi['ch'], 
-                                roi['z_min']:roi['z_max'], 
-                                roi['y_min']:roi['y_max'],
-                                roi['x_min']:roi['x_max']].copy()
+                                roi["z_min"]:roi["z_max"], 
+                                roi["y_min"]:roi["y_max"],
+                                roi["x_min"]:roi["x_max"]].copy()
                 fn = pos+'_'+str(roi['frame'])+'_'+str(roi['roi_id_pos']).zfill(4)
                 arr_out = os.path.join(self.spot_images_path, fn + '.npy')
                 np.save(arr_out, spot_stack)
@@ -758,9 +754,9 @@ def extract_single_roi_img_inmem(
     z_pad, y_pad, x_pad = ((single_roi[f"pad_{dim}_min"], single_roi[f"pad_{dim}_max"]) for dim in ("z", "y", "x"))
     # Compute bounds for extracting the unpadded image.
     # Because of inclusiveness of lower and exclusiveness of upper bound, truncate decimals here.
-    z = slice(_down_to_int(single_roi['z_min']), _down_to_int(single_roi['z_max']))
-    y = slice(_down_to_int(single_roi['y_min']), _down_to_int(single_roi['y_max']))
-    x = slice(_down_to_int(single_roi['x_min']), _down_to_int(single_roi['x_max']))
+    z = slice(_down_to_int(single_roi["z_min"]), _down_to_int(single_roi["z_max"]))
+    y = slice(_down_to_int(single_roi["y_min"]), _down_to_int(single_roi["y_max"]))
+    x = slice(_down_to_int(single_roi["x_min"]), _down_to_int(single_roi["x_max"]))
     # Determine any error.
     error = None
     if z.stop > Z or y.stop > Y or x.stop > X:
@@ -789,6 +785,18 @@ def extract_single_roi_img_inmem(
             print(f"Cannot pad spot image!\nroi={single_roi}\nshape={roi_img.shape}\n(z, y, x)={(z, y, x)}\npad={pad}\nmode={pad_mode}\n")
             raise
     return roi_img, error
+
+
+def roi_center_to_bbox(rois: pd.DataFrame, roi_size: RoiImageSize):
+    """Make bounding box coordinates around centers of regions of interest, based on box dimensions."""
+    halved = roi_size.div_by(2)
+    rois["z_min"] = rois["zc"] - halved.z
+    rois["z_max"] = rois["zc"] + halved.z
+    rois["y_min"] = rois["yc"] - halved.y
+    rois["y_max"] = rois["yc"] + halved.y
+    rois["x_min"] = rois["xc"] - halved.x
+    rois["x_max"] = rois["xc"] + halved.x
+    return rois
 
 
 _down_to_int = lambda x: int(floor(x))

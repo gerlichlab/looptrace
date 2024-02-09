@@ -1,5 +1,6 @@
 """Chromatin tracing in Python, from microscopy images of FISH probes"""
 
+from dataclasses import dataclass
 import importlib.resources
 from pathlib import Path
 from typing import *
@@ -19,6 +20,7 @@ __all__ = [
     "ConfigurationValueError",
     "DimensionalityError",
     "MissingImagesError",
+    "RoiImageSize",
     "read_table_pandas",
     ]
 
@@ -34,6 +36,16 @@ SIGMA_Z_MAX_NAME = "sigma_z_max"
 SIGNAL_NOISE_RATIO_NAME = "A_to_BG"
 TRACING_SUPPORT_EXCLUSIONS_KEY = "illegal_frames_for_trace_support"
 ZARR_CONVERSIONS_KEY = "zarr_conversions"
+
+
+@dataclass
+class RoiImageSize:
+    z: int
+    y: int
+    x: int
+
+    def div_by(self, m: int) -> "RoiImageSize":
+        return RoiImageSize(z=self.z // m, y=self.y // m, x=self.x // m)
 
 
 def read_table_pandas(f: Union[str, Path]) -> pd.DataFrame:

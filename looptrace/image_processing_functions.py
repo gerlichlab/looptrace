@@ -219,17 +219,6 @@ def detect_spots_int(input_img, spot_threshold: NumberLike, expand_px: int = 1):
     return spot_props, input_img, labels
 
 
-def roi_center_to_bbox(rois: pd.DataFrame, roi_size: Union[np.ndarray, Tuple[int, int, int]]):
-    """Make bounding box coordinates around centers of regions of interest, based on box dimensions."""
-    rois['z_min'] = rois['zc'] - roi_size[0]//2
-    rois['z_max'] = rois['zc'] + roi_size[0]//2
-    rois['y_min'] = rois['yc'] - roi_size[1]//2
-    rois['y_max'] = rois['yc'] + roi_size[1]//2
-    rois['x_min'] = rois['xc'] - roi_size[2]//2
-    rois['x_max'] = rois['xc'] + roi_size[2]//2
-    return rois
-
-
 def drift_corr_coarse(t_img, o_img, downsample=1):
     '''
     Calculates coarse and fine 

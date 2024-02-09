@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from looptrace import MINIMUM_SPOT_SEPARATION_KEY, TRACING_SUPPORT_EXCLUSIONS_KEY, ZARR_CONVERSIONS_KEY, read_table_pandas
+from looptrace import MINIMUM_SPOT_SEPARATION_KEY, TRACING_SUPPORT_EXCLUSIONS_KEY, ZARR_CONVERSIONS_KEY, RoiImageSize, read_table_pandas
 from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, get_analysis_path, simplify_path
 from looptrace.image_io import ignore_path, NPZ_wrapper
 from gertils import ExtantFile, ExtantFolder
@@ -243,6 +243,11 @@ class ImageHandler:
     @property
     def reg_input_moving(self) -> str:
         return self.config["reg_input_moving"]
+
+    @property
+    def roi_image_size(self) -> RoiImageSize:
+        z, y, x = tuple(self.config["roi_image_size"])
+        return RoiImageSize(z=z, y=y, x=x)
 
     @property
     def spot_image_extraction_skip_reasons_json_file(self) -> Path:
