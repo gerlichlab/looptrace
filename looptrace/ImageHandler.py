@@ -112,11 +112,11 @@ class ImageHandler:
 
     @property
     def decon_input_name(self) -> str:
-        return self.config['decon_input_name']
+        return self.config["decon_input_name"]
     
     @property
     def decon_output_name(self) -> str:
-        return self.config['decon_output_name']
+        return self.config["decon_output_name"]
 
     @property
     def decon_output_path(self) -> Optional[str]:
@@ -124,7 +124,7 @@ class ImageHandler:
 
     @property
     def drift_corrected_all_timepoints_rois_file(self) -> Path:
-        return Path(self.out_path(self.spot_input_name + '_dc_rois' + ".csv"))
+        return Path(self.out_path(self.spot_input_name + "_dc_rois" + ".csv"))
 
     @property
     def drift_correction_file__coarse(self) -> Path:
@@ -159,7 +159,7 @@ class ImageHandler:
         return self.images[self.reg_input_template]
 
     def get_dc_filepath(self, prefix: str, suffix: str) -> Path:
-        return Path(self.out_path(prefix + '_drift_correction' + suffix))
+        return Path(self.out_path(prefix + "_drift_correction" + suffix))
 
     @property
     def frame_names(self) -> List[str]:

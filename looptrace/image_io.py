@@ -235,6 +235,7 @@ def nuc_multipos_single_time_max_z_proj_zarr(
     root_path: str, 
     dtype: Type, 
     metadata: Optional[dict] = None,
+    overwrite: bool = True,
     ):
     if not isinstance(name_img_pairs, (list, tuple)):
         raise TypeError(f"Sequence of pairs of name and image data must be list or tuple, not {type(name_img_pairs).__name__}")
@@ -242,7 +243,7 @@ def nuc_multipos_single_time_max_z_proj_zarr(
     bad_name_shape_pairs = [(name, img.shape) for name, img in name_img_pairs if len(img.shape) != len(axes)]
     if bad_name_shape_pairs:
         raise ValueError(f"{len(bad_name_shape_pairs)}/{len(name_img_pairs)} images with bad shape given {len(axes)} axes: {bad_name_shape_pairs}")
-    write_jvm_compatible_zarr_store(name_data_pairs=[(p + ".zarr", img) for p, img in name_img_pairs], root_path=root_path, dtype=dtype, metadata=metadata)
+    write_jvm_compatible_zarr_store(name_data_pairs=[(p + ".zarr", img) for p, img in name_img_pairs], root_path=root_path, dtype=dtype, metadata=metadata, overwrite=overwrite)
 
 
 def write_jvm_compatible_zarr_store(
@@ -250,6 +251,7 @@ def write_jvm_compatible_zarr_store(
     root_path: Union[str, Path], 
     dtype: Type, 
     metadata: Optional[dict] = None,
+    overwrite: bool = False,
     ):
     if not name_data_pairs:
         raise ValueError("To write data to zarr, a nonempty sequence of name/data pairs must be passed!")

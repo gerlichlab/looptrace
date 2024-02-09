@@ -25,7 +25,7 @@ from looptrace import *
 from looptrace.ImageHandler import ImageHandler
 from looptrace.SpotPicker import RoiOrderingSpecification
 from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
-from looptrace.image_io import NPZ_wrapper
+from looptrace.image_io import NPZ_wrapper, write_jvm_compatible_zarr_store
 from looptrace.numeric_types import NumberLike
 from looptrace.tracing_qc_support import apply_frame_names_and_spatial_information
 
@@ -105,17 +105,16 @@ class Tracer:
         if bg_frame_idx is None:
             return None
         # TODO: note -- the drifts part of this is currently (2023-12-01) irrelevant, as the 'drifts' component of the background spec is unused.
-        pos_drifts = self.drift_table[self.drift_table.position.isin(self.pos_list)][['z_px_fine', 'y_px_fine', 'x_px_fine']].to_numpy()
+        pos_drifts = self.drift_table[self.drift_table.position.isin(self.pos_list)][["z_px_fine", "y_px_fine", "x_px_fine"]].to_numpy()
         return BackgroundSpecification(frame_index=bg_frame_idx, drifts=pos_drifts - pos_drifts[bg_frame_idx])
 
-    def write_images_to_zarr(self, root_path: Path, overwrite: bool = False, stop_after_n: Optional[int] = None):
-        print("Computing non-ragged array of spot images to save")
-        data = compute_non_ragged_spot_images_multiarray(npz=self._images_wrapper, stop_after_n=stop_after_n)
-        print(f"Creating zarr store rooted at: {root_path}")
-        store = zarr.DirectoryStore(root_path)
-        root = zarr.group(store=store, overwrite=overwrite)
-        dataset = root.create_dataset(name="spot_images", compressor=numcodecs.Zlib(), shape=data.shape, dtype=np.uint16)
-        dataset[:] = data
+    def write_all_spot_images_to_one_per_fov_zarr(self, root_path: Path, overwrite: bool = False) -> List[Path]:
+        name_data_pairs = compute_spot_images_subset_highly_nested_multiarray(npz=self._images_wrapper)
+        return write_jvm_compatible_zarr_store(name_data_pairs, root_path=root_path, dtype=np.uint16, overwrite=overwrite)
+
+    def write_spot_images_subset_to_single_highly_nested_zarr(self, root_path: Path, overwrite: bool = False, stop_after_n: Optional[int] = None):
+        data = compute_spot_images_subset_highly_nested_multiarray(npz=self._images_wrapper, stop_after_n=stop_after_n)
+        return write_jvm_compatible_zarr_store([("spot_images_subset.zarr", data)], root_path=root_path, dtype=np.uint16, overwrite=overwrite)
 
     @property
     def images(self) -> Iterable[np.ndarray]:
@@ -372,10 +371,76 @@ def apply_pixels_to_nanometers(traces: pd.DataFrame, z_nm_per_px: float, xy_nm_p
     return traces
 
 
-def compute_non_ragged_spot_images_multiarray(npz: Union[str, Path, NPZ_wrapper], stop_after_n: Optional[int] = None) -> np.ndarray:
-    if isinstance(npz, (str, Path)):
-        npz = NPZ_wrapper(npz)
-    keyed = sorted(map(lambda fn: (RoiOrderingSpecification.get_file_sort_key(fn), fn), npz.files), key=lambda k_: k_[0].to_tuple)
+def compute_spot_images_multiarray_per_fov(npz: Union[str, Path, NPZ_wrapper]) -> List[Tuple[str, np.ndarray]]:
+    """
+    Compute a list of multiarrays, grouping and stacking by "position" (FOV).
+
+    The expectation is that the data underlying the NPZ input will be a list of 4D arrays, each corresponding to 
+    one of the retained (after filtering) regional barcode spots. The 4 dimensions: (time, z, y, x). 
+    The time dimension represents the extraction of the bounding box corresponding to the spot ROI, extracting 
+    pixel intensity data in each of the imaging timepoints for the entire experiment.
+
+    The expectation is that this data is flattened over the hypothetical FOV, regional barcode, and channel dimensions. 
+    That is, the underlying arrays may come from any field of view imaged during the experiment, any channel, and 
+    any of the regional barcode imaging timepoints. The names of the underlying arrays in the NPZ must encode 
+    this information (about FOV, regional barcode timepoint, and ROI ID).
+
+    Parameters
+    ----------
+    npz : str or pathlib.Path or looptrace.image_io.NPZ_wrapper
+        The collection of 4D arrays representing the extraction of data from each regional spot ROI across all 
+        timepoints in the experiment
+
+    Returns
+    -------
+    list of (str, np.ndarray)
+        A list of pairs in which first element is positional name, e.g. P0001.zarr, and second element is 
+        an array with structure (ROI, timepoint, z, y, x), such that each position/FOV must be viewed separately 
+        (or at least as a separate layer) in napari, and that in so doing, the slider bars for switching between 
+        2D images will be 3: ROI, timepoint, and z
+    """
+    npz, keyed = _prep_npz_to_zarr(npz)
+    return [
+        (pos, np.stack([npz[fn] for _, fn in pos_group])) 
+        for pos, pos_group in itertools.groupby(keyed, lambda k_: k_[0].position)
+        ]
+
+
+def compute_spot_images_subset_highly_nested_multiarray(npz: Union[str, Path, NPZ_wrapper], stop_after_n: Optional[int] = None) -> np.ndarray:
+    """
+    For the given spot images NPZ file, create a multidimensional array ready to write as ZARR.
+
+    The expectation is that the data underlying the NPZ input will be a list of 4D arrays, each corresponding to 
+    one of the retained (after filtering) regional barcode spots. The 4 dimensions: (time, z, y, x). 
+    The time dimension represents the extraction of the bounding box corresponding to the spot ROI, extracting 
+    pixel intensity data in each of the imaging timepoints for the entire experiment.
+
+    The expectation is that this data is flattened over the hypothetical FOV, regional barcode, and channel dimensions. 
+    That is, the underlying arrays may come from any field of view imaged during the experiment, any channel, and 
+    any of the regional barcode imaging timepoints. The names of the underlying arrays in the NPZ must encode 
+    this information (about FOV, regional barcode timepoint, and ROI ID).
+
+    Note that since the arrays must be rectangular (not ragged), the length of the ROI ID axis/dimension will be 
+    equal to the minimum number of ROIs in any field of view (FOV).
+
+    Parameters
+    ----------
+    npz : str or pathlib.Path or looptrace.image_io.NPZ_wrapper
+        The collection of 4D arrays representing the extraction of data from each regional spot ROI across all 
+        timepoints in the experiment
+    stop_after_n : int, optional
+        Number of fields of view (FOVs) to use before stopping; useful for testing or sampling a small data portion. 
+        If not provided, all available fields of view will be used.
+
+    Returns
+    -------
+    np.ndarray
+        An array created by stacking--according to regional barcode and field of view--the 4D arrays in the input. 
+        The output will have dimensions where the values index (FOV, ref_frame, ROI ID, time, z, y, x). 
+        Note, however, that the indices are 0-based inclusive, so the real values of e.g. regional barcode timepoint 
+        and ROI ID will be reset.
+    """
+    npz, keyed = _prep_npz_to_zarr(npz)
     stop_after_n = sys.maxsize if stop_after_n is None else stop_after_n
     by_pos_by_time = {}
     for i, (pos, pos_group) in enumerate(itertools.groupby(keyed, lambda pair: pair[0].position)):
@@ -400,3 +465,10 @@ def compute_non_ragged_spot_images_multiarray(npz: Union[str, Path, NPZ_wrapper]
         ]) 
         for _, pg in by_pos_by_time.items()
     ])
+
+
+def _prep_npz_to_zarr(npz: Union[str, Path, NPZ_wrapper]) -> Tuple[NPZ_wrapper, Iterable[Tuple[RoiOrderingSpecification.FilenameKey, str]]]:
+    if isinstance(npz, (str, Path)):
+        npz = NPZ_wrapper(npz)
+    keyed = sorted(map(lambda fn: (RoiOrderingSpecification.get_file_sort_key(fn), fn), npz.files), key=lambda k_: k_[0].to_tuple)
+    return npz, keyed
