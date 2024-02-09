@@ -112,9 +112,12 @@ class Tracer:
         name_data_pairs = compute_spot_images_subset_highly_nested_multiarray(npz=self._images_wrapper)
         return write_jvm_compatible_zarr_store(name_data_pairs, root_path=root_path, dtype=np.uint16, overwrite=overwrite)
 
-    def write_spot_images_subset_to_single_highly_nested_zarr(self, root_path: Path, overwrite: bool = False, stop_after_n: Optional[int] = None):
+    def write_spot_images_subset_to_single_highly_nested_zarr(self, overwrite: bool = False, stop_after_n: Optional[int] = None) -> Path:
         data = compute_spot_images_subset_highly_nested_multiarray(npz=self._images_wrapper, stop_after_n=stop_after_n)
-        return write_jvm_compatible_zarr_store([("spot_images_subset.zarr", data)], root_path=root_path, dtype=np.uint16, overwrite=overwrite)
+        target = Path(self.image_handler.analysis_path) / "spot_images_subset.zarr"
+        dataset = zarr.open(target, dtype=np.uint16, mode="w" if overwrite else "w-")
+        dataset[:] = data
+        return target
 
     @property
     def images(self) -> Iterable[np.ndarray]:
