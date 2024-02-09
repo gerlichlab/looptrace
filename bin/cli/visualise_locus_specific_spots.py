@@ -4,6 +4,7 @@ import argparse
 from typing import *
 
 import napari
+import pandas as pd
 
 from gertils import ExtantFile, ExtantFolder
 from looptrace import read_table_pandas
@@ -19,17 +20,25 @@ __credits__ = ["Vince Reuter"]
 # TODO: feature ideas:
 # 2. Include annotation and/or coloring based on the skipped reason(s).
 
+POSITION_COLUMN = "position"
 QC_PASS_COLUMN = "qcPass"
 
 def workflow(config_file: ExtantFile, images_folder: ExtantFolder):
     H = ImageHandler(config_path=config_file, image_path=images_folder)
     T = Tracer(H)
-    print(f"Reading ROIs file: {H.drift_corrected_all_timepoints_rois_file}")
+    coordinate_columns = ["z_px", "y_px", "x_px"]
+    extra_columns = [POSITION_COLUMN, QC_PASS_COLUMN]
+    print(f"Reading ROIs file: {H.traces_file_qc_filtered}")
     # NB: we do NOT use the drift-corrected pixel values here, since we're interested 
     #     in placing each point within its own ROI, not relative to some other ROI.
-    coordinate_columns = ["z_px", "y_px", "x_px"]
-    extra_columns = ["position", QC_PASS_COLUMN]
-    point_table = read_table_pandas(H.drift_corrected_all_timepoints_rois_file)[coordinate_columns + extra_columns]
+    # TODO: we need to add the columns for frame and ROI ID / ROI number to the 
+    #       list of what we pull, because we need these to add to the points coordinates.
+    point_table = read_table_pandas(H.traces_file_qc_filtered)
+    if POSITION_COLUMN not in point_table:
+        # TODO -- See: https://github.com/gerlichlab/looptrace/issues/261
+        print(f"DEBUG -- Column '{POSITION_COLUMN}' is not in the spots table parsed in package-standard pandas fashion")
+        print(f"DEBUG -- Retrying the spots table parse while assuming no index: {H.traces_file_qc_filtered}")
+        point_table = pd.read_csv(H.traces_file_qc_filtered, index_col=None)[coordinate_columns + extra_columns]
     data_path = T.all_spot_images_zarr_root_path
     print(f"INFO -- Reading image data: {data_path}")
     images, positions = multi_ome_zarr_to_dask(data_path)
@@ -38,7 +47,8 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder):
         viewer = napari.view_image(img)
         add_points_to_viewer(
             viewer=viewer, 
-            points=cur_pts_tab[coordinate_columns].drop(extra_columns), 
+            # TODO: use info about frame and ROI ID / ROI number to put each point in the proper 3D array (z, y, x).
+            points=cur_pts_tab[coordinate_columns].to_numpy(), 
             properties={QC_PASS_COLUMN: cur_pts_tab[QC_PASS_COLUMN].values.astype(bool)},
             size=1,
             symbol=cur_pts_tab.apply(lambda row: "star" if bool(row[QC_PASS_COLUMN]) else "hbar", axis=1).values,
