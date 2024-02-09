@@ -125,7 +125,8 @@ class Tracer:
     @property
     def images(self) -> Iterable[np.ndarray]:
         """Iterate over the small, single spot images for tracing (1 per timepoint per ROI)."""
-        for fn in self._iterate_over_spot_filenames():
+        _, keyed_filenames = _prep_npz_to_zarr(self._images_wrapper)
+        for _, fn in keyed_filenames:
             yield self._images_wrapper[fn]
 
     @property
