@@ -17,8 +17,8 @@ from looptrace.napari_helpers import \
 __author__ = "Vince Reuter"
 __credits__ = ["Vince Reuter"]
 
-# TODO: feature ideas:
-# 2. Include annotation and/or coloring based on the skipped reason(s).
+# TODO: feature ideas -- see https://github.com/gerlichlab/looptrace/issues/259
+# Include annotation and/or coloring based on the skipped reason(s).
 
 POSITION_COLUMN = "position"
 QC_PASS_COLUMN = "qcPass"
@@ -28,27 +28,33 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder):
     T = Tracer(H)
     coordinate_columns = ["z_px", "y_px", "x_px"]
     extra_columns = [POSITION_COLUMN, QC_PASS_COLUMN]
-    print(f"Reading ROIs file: {H.traces_file_qc_filtered}")
+    print(f"Reading ROIs file: {H.traces_file_qc_unfiltered}")
     # NB: we do NOT use the drift-corrected pixel values here, since we're interested 
     #     in placing each point within its own ROI, not relative to some other ROI.
     # TODO: we need to add the columns for frame and ROI ID / ROI number to the 
     #       list of what we pull, because we need these to add to the points coordinates.
-    point_table = read_table_pandas(H.traces_file_qc_filtered)
+    point_table = read_table_pandas(H.traces_file_qc_unfiltered)
     if POSITION_COLUMN not in point_table:
         # TODO -- See: https://github.com/gerlichlab/looptrace/issues/261
         print(f"DEBUG -- Column '{POSITION_COLUMN}' is not in the spots table parsed in package-standard pandas fashion")
-        print(f"DEBUG -- Retrying the spots table parse while assuming no index: {H.traces_file_qc_filtered}")
-        point_table = pd.read_csv(H.traces_file_qc_filtered, index_col=None)[coordinate_columns + extra_columns]
+        print(f"DEBUG -- Retrying the spots table parse while assuming no index: {H.traces_file_qc_unfiltered}")
+        point_table = pd.read_csv(H.traces_file_qc_unfiltered, index_col=None)[coordinate_columns + extra_columns]
     data_path = T.all_spot_images_zarr_root_path
     print(f"INFO -- Reading image data: {data_path}")
     images, positions = multi_ome_zarr_to_dask(data_path)
     for img, pos in zip(images, positions):
         cur_pts_tab = point_table[point_table.position == pos]
+        unique_traces = cur_pts_tab["trace_id"].nunique()
+        unique_frames = cur_pts_tab["frame"].nunique()
+        points_array_long = cur_pts_tab[coordinate_columns].to_numpy()
+        print(f"DEBUG -- points array long shape: {points_array_long.shape}")
+        print(f"DEBUG -- nesting {points_array_long.shape[0]} into {(unique_traces, unique_frames)}")
+        points_array_nested = points_array_long.reshape(unique_traces, unique_frames)
         viewer = napari.view_image(img)
         add_points_to_viewer(
             viewer=viewer, 
             # TODO: use info about frame and ROI ID / ROI number to put each point in the proper 3D array (z, y, x).
-            points=cur_pts_tab[coordinate_columns].to_numpy(), 
+            points=points_array_nested, 
             properties={QC_PASS_COLUMN: cur_pts_tab[QC_PASS_COLUMN].values.astype(bool)},
             size=1,
             symbol=cur_pts_tab.apply(lambda row: "star" if bool(row[QC_PASS_COLUMN]) else "hbar", axis=1).values,
