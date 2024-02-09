@@ -108,8 +108,8 @@ class Tracer:
         pos_drifts = self.drift_table[self.drift_table.position.isin(self.pos_list)][["z_px_fine", "y_px_fine", "x_px_fine"]].to_numpy()
         return BackgroundSpecification(frame_index=bg_frame_idx, drifts=pos_drifts - pos_drifts[bg_frame_idx])
 
-    def write_all_spot_images_to_one_per_fov_zarr(self, root_path: Path, overwrite: bool = False) -> List[Path]:
-        name_data_pairs = compute_spot_images_subset_highly_nested_multiarray(npz=self._images_wrapper)
+    def write_all_spot_images_to_one_per_fov_zarr(self, overwrite: bool = False) -> List[Path]:
+        name_data_pairs = compute_spot_images_multiarray_per_fov(npz=self._images_wrapper)
         return write_jvm_compatible_zarr_store(name_data_pairs, root_path=Path(self.image_handler.analysis_path) / "all_spot_images_zarr", dtype=np.uint16, overwrite=overwrite)
 
     def write_spot_images_subset_to_single_highly_nested_zarr(self, overwrite: bool = False, stop_after_n: Optional[int] = None) -> Path:
