@@ -177,28 +177,6 @@ def view_fits(traces, imgs, mode='2D', contrast=(100,1000), axis=2):
         viewer = napari.view_image(imgs, contrast_limits=contrast)
         viewer.add_points(points, size=[0,0,3,1,1], face_color='blue', symbol='cross', n_dimensional=True)
 
-def points_for_overlay(traces, rois, config):
-    '''
-    Generate the fit coordinates in a format convenient to display as a marker in napari.
-
-    roi_image_size = config['roi_image_size']
-    points_df = traces.copy()
-    for i, roi in rois.iterrows():
-        #transp_z=(roi_image_size[0]-(roi['z_max']-roi['z_min']))//2
-        #transp_y=(roi_image_size[1]-(roi['y_max']-roi['y_min']))//2
-        #transp_x=(roi_image_size[2]-(roi['x_max']-roi['x_min']))//2
-        idx = traces['trace_id'] == roi.name
-        points_df[idx] = points_df[idx].assign(z_px = traces[idx]['z_px'],
-                                               y_px = traces[idx]['y_px'],
-                                               x_px = traces[idx]['x_px'])
-
-    #points_df[['y_px','x_px']]=points_df[['y_px','x_px']].clip(lower=0, upper=64)
-    #points_df[['z_px']]=points_df[['z_px']].clip(lower=0, upper=16)
-    points=points_df[['trace_id', 'frame', 'z_px', 'y_px', 'x_px']].to_numpy()
-    '''
-    
-    return points
-
 def euclidean_dist(traces, frame_names, column = 'frame_name'):
     '''Calculate the eucledian distances between the positions indicated in all traces.
 
