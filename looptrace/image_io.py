@@ -252,18 +252,21 @@ def write_jvm_compatible_zarr_store(
     dtype: Type, 
     metadata: Optional[dict] = None,
     overwrite: bool = False,
-    ):
+    ) -> List[Path]:
     if not name_data_pairs:
         raise ValueError("To write data to zarr, a nonempty sequence of name/data pairs must be passed!")
     print(f"INFO: creating zarr store rooted at {root_path}")
     store = zarr.DirectoryStore(root_path)
-    root = zarr.group(store=store, overwrite=True)
+    root = zarr.group(store=store, overwrite=overwrite)
     if metadata:
         root.attrs["metadata"] = metadata
+    paths = []
     for name, data in name_data_pairs:
         # Use numcodecs.ZLib() as the compressor to ensure readability by cdm-core / netcdf-Java.
         dataset = root.create_dataset(name=name, compressor=numcodecs.Zlib(), shape=data.shape, dtype=dtype)
         dataset[:] = data
+        paths.append(Path(root_path) / name)
+    return paths
 
 
 def images_to_ome_zarr(
