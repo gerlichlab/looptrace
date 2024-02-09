@@ -16,7 +16,7 @@ from looptrace import *
 from looptrace.Drifter import coarse_correction_workflow as run_coarse_drift_correction, fine_correction_workflow as run_fine_drift_correction
 from looptrace.ImageHandler import ImageHandler
 from looptrace.NucDetector import NucDetector
-from looptrace.Tracer import run_frame_name_and_distance_application
+from looptrace.Tracer import Tracer, run_frame_name_and_distance_application
 
 from pipeline_precheck import workflow as pretest
 from convert_datasets_to_zarr import one_to_one as run_zarr_production
@@ -33,6 +33,7 @@ from extract_spots_table import workflow as run_spot_bounding
 from extract_spots import workflow as run_spot_extraction
 from extract_spots_cluster_cleanup import workflow as run_spot_zipping
 from tracing import workflow as run_chromatin_tracing
+from visualise_detected_spots import workflow as visualise_regional_spots
 
 logger = logging.getLogger(__name__)
 
@@ -254,12 +255,21 @@ def drift_correct_nuclei(config_file: ExtantFile, images_folder: ExtantFolder) -
     return N.coarse_drift_correction_workflow()
 
 
-def visualise_regional_spots():
-    pass
+def visualise_regional_spots(config_file: ExtantFile, images_folder: ExtantFolder):
+    return visualise_regional_spots(
+        config_file=config_file, 
+        images_folder=images_folder,
+        interactive=False,
+        save_projections=True,
+        )
 
 
-def prep_locus_specific_spots_visualisation():
-    pass
+def prep_locus_specific_spots_visualisation(config_file: ExtantFile, images_folder: ExtantFolder) -> Tuple[Path, List[Path]]:
+    H = ImageHandler(config_path=config_file, image_path=images_folder)
+    T = Tracer(H)
+    all_one_zarr = T.write_spot_images_subset_to_single_highly_nested_zarr()
+    per_fov_zarr = T.write_all_spot_images_to_one_per_fov_zarr()
+    return all_one_zarr, per_fov_zarr
 
 
 class LooptracePipeline(pypiper.Pipeline):
