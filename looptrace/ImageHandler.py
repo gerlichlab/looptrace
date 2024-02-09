@@ -285,6 +285,8 @@ class ImageHandler:
         return self.config.get(ZARR_CONVERSIONS_KEY, dict())
 
     def load_tables(self):
+        # TODO: the CSV parse needs to depend on whether the first column really is the index or not.
+        # See: https://github.com/gerlichlab/looptrace/issues/261
         parsers = {".csv": read_table_pandas, ".pkl": pd.read_pickle}
         try:
             table_files = os.scandir(self.analysis_path)
