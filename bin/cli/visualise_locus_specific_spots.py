@@ -12,8 +12,7 @@ from looptrace import RoiImageSize, read_table_pandas
 from looptrace.ImageHandler import ImageHandler
 from looptrace.Tracer import Tracer
 from looptrace.image_io import multi_ome_zarr_to_dask
-from looptrace.napari_helpers import \
-    SIGNAL_TO_QUIT, add_points_to_viewer, prompt_continue_napari, shutdown_napari
+from looptrace.napari_helpers import SIGNAL_TO_QUIT, prompt_continue_napari, shutdown_napari
 
 __author__ = "Vince Reuter"
 __credits__ = ["Vince Reuter"]
@@ -46,30 +45,36 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder):
     data_path = T.all_spot_images_zarr_root_path
     print(f"INFO -- Reading image data: {data_path}")
     images, positions = multi_ome_zarr_to_dask(data_path)
-    for img, pos in zip(images, positions):
+    step_through_positions(zip(positions, images), point_table=point_table, roi_size=H.roi_image_size)
+    shutdown_napari()
+
+
+def step_through_positions(pos_img_pairs: Iterable[Tuple[str, np.ndarray]], point_table: pd.DataFrame, roi_size: RoiImageSize):
+    for pos, img in pos_img_pairs:
         _, num_times, _, _, _ = img.shape
         cur_pts_tab = point_table[point_table.position == pos]
-        points_data = compute_points(cur_pts_tab, num_times=num_times, roi_size=H.roi_image_size)
+        points_data = compute_points(cur_pts_tab, num_times=num_times, roi_size=roi_size)
         visibilities, point_symbols, qc_passes, points = zip(*points_data)
         viewer = napari.view_image(img)
-        add_points_to_viewer(
-            viewer=viewer, 
-            # TODO: use info about frame and ROI ID / ROI number to put each point in the proper 3D array (z, y, x).
-            points=points, 
+        viewer.add_points(
+            points, 
             properties={QC_PASS_COLUMN: qc_passes},
-            size=1,
+            size=0.5,
             shown=visibilities,
             symbol=point_symbols,
-            edge_color="transparent",
+            edge_width=0.1,
+            edge_width_is_relative=True,
+            edge_color=QC_PASS_COLUMN,
+            edge_color_cycle=["blue", "red"],
             face_color=QC_PASS_COLUMN,
             face_color_cycle=["blue", "red"], 
+            n_dimensional=False,
             )
         napari.run()
         if prompt_continue_napari() == SIGNAL_TO_QUIT:
             break
         # Here we don't call viewer.close() programmatically since it's expected that the user closes the window.
         print("DEBUG: Continuing...")
-    shutdown_napari()
 
 
 def compute_points(cur_pts_tab, *, num_times: int, roi_size: RoiImageSize):
@@ -88,7 +93,7 @@ def compute_points(cur_pts_tab, *, num_times: int, roi_size: RoiImageSize):
             else:
                 visible = True
                 qc_pass = bool(qc_pass)
-                point_shape = "star" if qc_pass else "hbar"
+                point_shape = "*" if qc_pass else "o"
             if coords[0] < 0 or coords[0] > roi_size.z or coords[1] < 0 or coords[1] > roi_size.y or coords[2] < 0 or coords[2] > roi_size.x:
                 if qc_pass:
                     print(f"WARN -- spot point passed QC! {coords}")
