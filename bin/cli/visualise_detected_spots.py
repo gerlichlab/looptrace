@@ -121,7 +121,7 @@ if __name__ == "__main__":
     position_subset_spec = parser.add_mutually_exclusive_group()
     position_subset_spec.add_argument("--positions", nargs="*", type=int, help="Indices (0-based) of positions to use, otherwise use all.")
     position_subset_spec.add_argument("--num-positions", type=int, help="Number of positions to use")
-    parser.add_argument("--no-interaction", action="store_true", help="Do not do interactive image viewing.")
+    parser.add_argument("--interactive", action="store_true", help="Do interactive image viewing.")
     parser.add_argument("--save-projections", action="store_true", help="Save (max-z-projected) 2D images with bounding boxes.")
     args = parser.parse_args()
     if args.positions:
@@ -137,7 +137,7 @@ if __name__ == "__main__":
         config_file=args.config_path, 
         images_folder=args.image_path, 
         image_save_path=args.image_save_path, 
-        interactive=not args.no_interaction,
+        interactive=args.interactive,
         save_projections=args.save_projections, 
         positions_to_use=positions,
         )
