@@ -12,6 +12,7 @@ import org.scalatest.matchers.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.ComputeLocusPairwiseDistances.*
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.safeReadAllWithOrderedHeaders
+import at.ac.oeaw.imba.gerlich.looptrace.collections.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 
 /**
@@ -67,7 +68,13 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, LooptraceSuite, Sca
             withTempDirectory{ (tempdir: os.Path) => 
                 val infile = tempdir / "input.csv"
                 os.write(infile, records.toList.map(recordToTextFields `andThen` rowToLine))
-                val expError = IllegalHeaderException(recordToTextFields(records.head), AllReqdColumns.toNel.get.toNes)
+                val expError = {
+                    val textHead = recordToTextFields(records.head)
+                    // Account for the fact that randomly drawn first-row elements could collide with 
+                    // a required header field and therefore reduce the theoretically missing set.
+                    val expMiss = (AllReqdColumns.toNel.get.toNes -- textHead.toNel.get.toNes).toNonEmptySetUnsafe
+                    IllegalHeaderException(textHead, expMiss)
+                }
                 val obsError = intercept[IllegalHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
                 obsError shouldEqual expError
             }

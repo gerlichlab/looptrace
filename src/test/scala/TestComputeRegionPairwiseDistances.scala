@@ -76,7 +76,9 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, Ma
                 intercept[IllegalHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") } match {
                     case IllegalHeaderException(obsHead, missing) => 
                         obsHead shouldEqual toTextFields(records.head, 0)
-                        missing shouldEqual AllReqdColumns.toNel.get.toNes
+                        // Account for the fact that randomly drawn first-row elements could collide with 
+                        // a required header field and therefore reduce the theoretically missing set.
+                        missing.some shouldEqual (AllReqdColumns.toNel.get.toNes -- obsHead.toNel.get.toNes).toNonEmptySet
                 }
             }
         }
