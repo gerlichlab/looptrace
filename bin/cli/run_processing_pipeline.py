@@ -314,8 +314,8 @@ class LooptracePipeline(pypiper.Pipeline):
             ("spot_counts_visualisation__locus_specific", plot_spot_counts, take1_with_spot_type(SpotType.LOCUS_SPECIFIC)), 
             ("pairwise_distances__locus_specific", compute_locus_pairwise_distances, take1),
             ("pairwise_distances__regional", compute_region_pairwise_distances, take1),
-            ("regional_spots_visualisation", run_regional_spot_visualisation, take2),
             ("locus_specific_spots_visualisation_data_prep", prep_locus_specific_spots_visualisation, take2),
+            ("regional_spots_visualisation", run_regional_spot_visualisation, take2),
         ]
 
     def stages(self) -> List[Callable]:
