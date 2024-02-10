@@ -255,7 +255,7 @@ def drift_correct_nuclei(config_file: ExtantFile, images_folder: ExtantFolder) -
     return N.coarse_drift_correction_workflow()
 
 
-def visualise_regional_spots(config_file: ExtantFile, images_folder: ExtantFolder):
+def run_regional_spot_visualisation(config_file: ExtantFile, images_folder: ExtantFolder):
     return visualise_regional_spots(
         config_file=config_file, 
         images_folder=images_folder,
@@ -314,7 +314,7 @@ class LooptracePipeline(pypiper.Pipeline):
             ("spot_counts_visualisation__locus_specific", plot_spot_counts, take1_with_spot_type(SpotType.LOCUS_SPECIFIC)), 
             ("pairwise_distances__locus_specific", compute_locus_pairwise_distances, take1),
             ("pairwise_distances__regional", compute_region_pairwise_distances, take1),
-            ("regional_spots_visualisation", visualise_regional_spots, take2),
+            ("regional_spots_visualisation", run_regional_spot_visualisation, take2),
             ("locus_specific_spots_visualisation_data_prep", prep_locus_specific_spots_visualisation, take2),
         ]
 
