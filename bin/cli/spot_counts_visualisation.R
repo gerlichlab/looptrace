@@ -46,8 +46,19 @@ buildCountsHeatmap <- function(spots_table) {
 #   spot_type_name: either 'regional' or 'locus_specific', indicating the type of spots data passed
 #   output_folder: path to folder in which to place output
 plotAndWriteToFile <- function(spots_table, filt_type, spot_type_name, output_folder) {
-    if ( ! (filt_type %in% c("unfiltered", "proximity-filtered", "nuclei-filtered"))) {
-        stop("Illegal value for filtered/not argument: ", filt_type)
+    if (spot_type_name == kRegionalName) {
+        legal_names <- c("unfiltered", "proximity-filtered", "nuclei-filtered")
+    } else if (spot_type_name == kLocusSpecificName) {
+        legal_names <- c("unfiltered", "filtered")
+    } else {
+        stop("Illegal value for spot_type_name: ", spot_type_name)
+    }
+    if ( ! (filt_type %in% legal_names)) {
+        stop(sprintf(
+            "For spot_type_name %s, illegal value for filtered/not argument: %s", 
+            spot_type_name, 
+            filt_type
+            ))
     }
     p <- buildCountsHeatmap(spots_table)
     p <- p + ggtitle(sprintf("Counts of %s spots, %s", spot_type_name, filt_type))
