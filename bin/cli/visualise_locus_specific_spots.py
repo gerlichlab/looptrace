@@ -21,13 +21,16 @@ __credits__ = ["Vince Reuter"]
 # Include annotation and/or coloring based on the skipped reason(s).
 
 POSITION_COLUMN = "position"
+TRACE_ID_COLUMN = "trace_id"
+FRAME_COLUMN = "frame"
 QC_PASS_COLUMN = "qcPass"
+
 
 def workflow(config_file: ExtantFile, images_folder: ExtantFolder):
     H = ImageHandler(config_path=config_file, image_path=images_folder)
     T = Tracer(H)
     coordinate_columns = ["z_px", "y_px", "x_px"]
-    extra_columns = [POSITION_COLUMN, QC_PASS_COLUMN]
+    extra_columns = [POSITION_COLUMN, TRACE_ID_COLUMN, FRAME_COLUMN, QC_PASS_COLUMN]
     print(f"Reading ROIs file: {H.traces_file_qc_unfiltered}")
     # NB: we do NOT use the drift-corrected pixel values here, since we're interested 
     #     in placing each point within its own ROI, not relative to some other ROI.
@@ -44,8 +47,8 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder):
     images, positions = multi_ome_zarr_to_dask(data_path)
     for img, pos in zip(images, positions):
         cur_pts_tab = point_table[point_table.position == pos]
-        unique_traces = cur_pts_tab["trace_id"].nunique()
-        unique_frames = cur_pts_tab["frame"].nunique()
+        unique_traces = cur_pts_tab[TRACE_ID_COLUMN].nunique()
+        unique_frames = cur_pts_tab[FRAME_COLUMN].nunique()
         points_array_long = cur_pts_tab[coordinate_columns].to_numpy()
         print(f"DEBUG -- points array long shape: {points_array_long.shape}")
         print(f"DEBUG -- nesting {points_array_long.shape[0]} into {(unique_traces, unique_frames)}")
