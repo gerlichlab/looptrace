@@ -4,10 +4,11 @@ import argparse
 from typing import *
 
 import napari
+import numpy as np
 import pandas as pd
 
 from gertils import ExtantFile, ExtantFolder
-from looptrace import read_table_pandas
+from looptrace import RoiImageSize, read_table_pandas
 from looptrace.ImageHandler import ImageHandler
 from looptrace.Tracer import Tracer
 from looptrace.image_io import multi_ome_zarr_to_dask
@@ -21,16 +22,16 @@ __credits__ = ["Vince Reuter"]
 # Include annotation and/or coloring based on the skipped reason(s).
 
 POSITION_COLUMN = "position"
-TRACE_ID_COLUMN = "trace_id"
+ROI_NUMBER_COLUMN = "roi_number"
 FRAME_COLUMN = "frame"
 QC_PASS_COLUMN = "qcPass"
+COORDINATE_COLUMNS = ["z_px", "y_px", "x_px"]
 
 
 def workflow(config_file: ExtantFile, images_folder: ExtantFolder):
     H = ImageHandler(config_path=config_file, image_path=images_folder)
     T = Tracer(H)
-    coordinate_columns = ["z_px", "y_px", "x_px"]
-    extra_columns = [POSITION_COLUMN, TRACE_ID_COLUMN, FRAME_COLUMN, QC_PASS_COLUMN]
+    extra_columns = [POSITION_COLUMN, ROI_NUMBER_COLUMN, FRAME_COLUMN, QC_PASS_COLUMN]
     print(f"Reading ROIs file: {H.traces_file_qc_unfiltered}")
     # NB: we do NOT use the drift-corrected pixel values here, since we're interested 
     #     in placing each point within its own ROI, not relative to some other ROI.
@@ -41,26 +42,24 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder):
         # TODO -- See: https://github.com/gerlichlab/looptrace/issues/261
         print(f"DEBUG -- Column '{POSITION_COLUMN}' is not in the spots table parsed in package-standard pandas fashion")
         print(f"DEBUG -- Retrying the spots table parse while assuming no index: {H.traces_file_qc_unfiltered}")
-        point_table = pd.read_csv(H.traces_file_qc_unfiltered, index_col=None)[coordinate_columns + extra_columns]
+        point_table = pd.read_csv(H.traces_file_qc_unfiltered, index_col=None)[COORDINATE_COLUMNS + extra_columns]
     data_path = T.all_spot_images_zarr_root_path
     print(f"INFO -- Reading image data: {data_path}")
     images, positions = multi_ome_zarr_to_dask(data_path)
     for img, pos in zip(images, positions):
+        _, num_times, _, _, _ = img.shape
         cur_pts_tab = point_table[point_table.position == pos]
-        unique_traces = cur_pts_tab[TRACE_ID_COLUMN].nunique()
-        unique_frames = cur_pts_tab[FRAME_COLUMN].nunique()
-        points_array_long = cur_pts_tab[coordinate_columns].to_numpy()
-        print(f"DEBUG -- points array long shape: {points_array_long.shape}")
-        print(f"DEBUG -- nesting {points_array_long.shape[0]} into {(unique_traces, unique_frames)}")
-        points_array_nested = points_array_long.reshape(unique_traces, unique_frames, 3)
+        points_data = compute_points(cur_pts_tab, num_times=num_times, roi_size=H.roi_image_size)
+        visibilities, point_symbols, qc_passes, points = zip(*points_data)
         viewer = napari.view_image(img)
         add_points_to_viewer(
             viewer=viewer, 
             # TODO: use info about frame and ROI ID / ROI number to put each point in the proper 3D array (z, y, x).
-            points=points_array_nested, 
-            properties={QC_PASS_COLUMN: cur_pts_tab[QC_PASS_COLUMN].values.astype(bool)},
+            points=points, 
+            properties={QC_PASS_COLUMN: qc_passes},
             size=1,
-            symbol=cur_pts_tab.apply(lambda row: "star" if bool(row[QC_PASS_COLUMN]) else "hbar", axis=1).values,
+            shown=visibilities,
+            symbol=point_symbols,
             edge_color="transparent",
             face_color=QC_PASS_COLUMN,
             face_color_cycle=["blue", "red"], 
@@ -72,6 +71,33 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder):
         print("DEBUG: Continuing...")
     shutdown_napari()
 
+
+def compute_points(cur_pts_tab, *, num_times: int, roi_size: RoiImageSize):
+    bad_shape = "o"
+    points_data = []
+    for roi_idx, roi_group in cur_pts_tab.groupby(ROI_NUMBER_COLUMN):
+        lookup = {row[FRAME_COLUMN]: (row[QC_PASS_COLUMN], row[COORDINATE_COLUMNS].to_numpy()) for _, row in roi_group.iterrows()}
+        for t in range(num_times):
+            try:
+                qc_pass, coords = lookup[t]
+            except KeyError:
+                coords = np.zeros(3)
+                visible = False
+                point_shape = bad_shape
+                qc_pass = False
+            else:
+                visible = True
+                qc_pass = bool(qc_pass)
+                point_shape = "star" if qc_pass else "hbar"
+            if coords[0] < 0 or coords[0] > roi_size.z or coords[1] < 0 or coords[1] > roi_size.y or coords[2] < 0 or coords[2] > roi_size.x:
+                if qc_pass:
+                    print(f"WARN -- spot point passed QC! {coords}")
+                coords = np.array([0, 0, 0])
+                visible = False
+                point_shape = bad_shape
+            point = np.concatenate(([roi_idx, t], coords)).astype(np.float32)
+            points_data.append((visible, point_shape, qc_pass, point))
+    return points_data
 
 
 if __name__ == "__main__":
