@@ -368,10 +368,13 @@ def apply_fine_scale_drift_correction(traces: pd.DataFrame) -> pd.DataFrame:
 
 def apply_pixels_to_nanometers(traces: pd.DataFrame, z_nm_per_px: float, xy_nm_per_px: float) -> pd.DataFrame:
     """Add columns for distance in nanometers, based on pixel-to-nanometer conversions."""
-    z_cols = [BOX_Z_COL, "z", "sigma_z"]
-    xy_cols = [BOX_Y_COL, BOX_X_COL, "y", "x", "sigma_xy"]
-    traces[z_cols] = traces[z_cols] * z_nm_per_px
-    traces[xy_cols] = traces[xy_cols] * xy_nm_per_px
+    simple_z = [BOX_Z_COL, "sigma_z"]
+    simple_xy = [BOX_Y_COL, BOX_X_COL, "sigma_xy"]
+    traces[simple_z] = traces[simple_z] * z_nm_per_px
+    traces[simple_xy] = traces[simple_xy] * xy_nm_per_px
+    traces["z"] = traces["z_px_dc"] * z_nm_per_px
+    traces["y"] = traces["y_px_dc"] * xy_nm_per_px
+    traces["x"] = traces["x_px_dc"] * xy_nm_per_px
     return traces
 
 
