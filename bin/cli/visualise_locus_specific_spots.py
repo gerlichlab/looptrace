@@ -52,7 +52,7 @@ def workflow(config_file: ExtantFile, images_folder: ExtantFolder):
         points_array_long = cur_pts_tab[coordinate_columns].to_numpy()
         print(f"DEBUG -- points array long shape: {points_array_long.shape}")
         print(f"DEBUG -- nesting {points_array_long.shape[0]} into {(unique_traces, unique_frames)}")
-        points_array_nested = points_array_long.reshape(unique_traces, unique_frames)
+        points_array_nested = points_array_long.reshape(unique_traces, unique_frames, 3)
         viewer = napari.view_image(img)
         add_points_to_viewer(
             viewer=viewer, 
