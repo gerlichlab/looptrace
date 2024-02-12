@@ -167,7 +167,6 @@ if (opts$spot_file_type == kRegionalName) {
         geom_bar(stat = "identity", position = "dodge") + 
         xlab("probe") + 
         ggtitle(sprintf("Spot counts, %s", kRegionalName)) + 
-        scale_fill_manual(name = element_blank(), values = c("lightsalmon", "lightcoral", "indianred4"), labels = names(spot_tables)) + 
         labs(fill = element_blank()) + 
         theme_bw()
     saveCountsPlot(
