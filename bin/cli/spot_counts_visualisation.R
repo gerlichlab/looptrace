@@ -153,7 +153,7 @@ if (opts$spot_file_type == kRegionalName) {
     }
     # First, read the data tables.
     spot_tables <- lapply(names(spots_table_files), function(filt_type) readData(filt_type = filt_type, spot_file = spots_table_files[[filt_type]]))
-    message("Names of spot tables: ", paste0(names(spot_tables), collapse = ", "))
+    names(spot_tables) <- names(spots_table_files)
     # Then, build the charts and save them to disk.
     message(sprintf("Creating and saving %s spot counts plots...", kRegionalName))
     plotfiles <- lapply(names(spot_tables), function(filt_type) plotAndWrite(spots_table = spot_tables[[filt_type]], filt_type = filt_type))
