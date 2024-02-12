@@ -5,7 +5,6 @@ library("data.table")
 library("ggplot2")
 
 kLocusSpecificName <- "locus-specific"
-kPlotColor <- c("lightcoral", "indianred4")
 kRegionalName <- "regional"
 kSpotCountPrefix <- "spot_counts"
 
@@ -168,7 +167,7 @@ if (opts$spot_file_type == kRegionalName) {
         geom_bar(stat = "identity", position = "dodge") + 
         xlab("probe") + 
         ggtitle(sprintf("Spot counts, %s", kRegionalName)) + 
-        scale_fill_manual(name = element_blank(), values = kPlotColor, labels = names(spot_tables)) + 
+        scale_fill_manual(name = element_blank(), values = c("lightsalmon", "lightcoral", "indianred4"), labels = names(spot_tables)) + 
         labs(fill = element_blank()) + 
         theme_bw()
     saveCountsPlot(
