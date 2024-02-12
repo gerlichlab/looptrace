@@ -47,7 +47,7 @@ buildCountsHeatmap <- function(spots_table) {
 #   output_folder: path to folder in which to place output
 plotAndWriteToFile <- function(spots_table, filt_type, spot_type_name, output_folder) {
     if (spot_type_name == kRegionalName) {
-        legal_names <- c("unfiltered", "proximity-filtered", "nuclei-filtered")
+        legal_names <- c("unfiltered", "proximity_filtered", "nuclei_filtered")
     } else if (spot_type_name == kLocusSpecificName) {
         legal_names <- c("unfiltered", "filtered")
     } else {
