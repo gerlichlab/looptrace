@@ -73,7 +73,7 @@ class RoiOrderingSpecification:
             return "_".join([self.position, str(self.roi_id).zfill(5), str(self.ref_frame)]) + ".npy"
         
         @property
-        def to_tuple(self) -> (str, int, int):
+        def to_tuple(self) -> Tuple[str, int, int]:
             return self.position, self.roi_id, self.ref_frame
 
     @staticmethod
