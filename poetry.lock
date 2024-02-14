@@ -1941,7 +1941,6 @@ lazy-loader = ">=0.2"
 magicgui = ">=0.3.6"
 napari-console = ">=0.0.6"
 napari-plugin-engine = ">=0.1.9"
-napari-plugin-manager = {version = ">=0.1.0a1,<0.2.0", optional = true, markers = "extra == \"all\""}
 napari-svg = ">=0.1.7"
 npe2 = ">=0.5.2"
 numpy = ">=1.21"
@@ -1954,7 +1953,6 @@ psygnal = ">=0.3.4"
 pydantic = ">=1.9.0,<2"
 pygments = ">=2.6.0"
 PyOpenGL = ">=3.1.0"
-PyQt5 = {version = ">=5.12.3,<5.15.0 || >5.15.0", optional = true, markers = "extra == \"all\" or extra == \"pyqt\""}
 PyYAML = ">=5.1"
 qtpy = ">=1.10.0"
 scikit-image = {version = ">=0.19.1", extras = ["data"]}
@@ -2016,26 +2014,6 @@ files = [
 [package.extras]
 dev = ["pre-commit", "pytest", "pytest-cov", "tox", "tox-conda"]
 test = ["pytest", "pytest-cov"]
-
-[[package]]
-name = "napari-plugin-manager"
-version = "0.1.0a2"
-description = "Install plugins for napari, in napari."
-optional = true
-python-versions = ">=3.8"
-files = [
-    {file = "napari-plugin-manager-0.1.0a2.tar.gz", hash = "sha256:70de69b197eed9ad61087d437af7c7a282b9e8521072e5588f2775f15537ad1e"},
-    {file = "napari_plugin_manager-0.1.0a2-py3-none-any.whl", hash = "sha256:8785bb57f9b3b6e063f7e0c4bc40f9a6a422150e19451961513e28c56f4b4060"},
-]
-
-[package.dependencies]
-npe2 = "*"
-pip = "*"
-qtpy = "*"
-superqt = "*"
-
-[package.extras]
-testing = ["pytest", "pytest-cov", "pytest-qt", "virtualenv"]
 
 [[package]]
 name = "napari-svg"
@@ -2587,17 +2565,6 @@ uncertainties = ["uncertainties (>=3.1.6)"]
 xarray = ["xarray"]
 
 [[package]]
-name = "pip"
-version = "24.0"
-description = "The PyPA recommended tool for installing Python packages."
-optional = true
-python-versions = ">=3.7"
-files = [
-    {file = "pip-24.0-py3-none-any.whl", hash = "sha256:ba0d021a166865d2265246961bec0152ff124de910c5cc39f1156ce3fa7c69dc"},
-    {file = "pip-24.0.tar.gz", hash = "sha256:ea9bd1a847e8c5774a5777bb398c19e80bcd4e2aa16a4b301b718fe6f593aba2"},
-]
-
-[[package]]
 name = "piper"
 version = "0.14.0"
 description = "A lightweight python toolkit for gluing together restartable, robust command line pipelines"
@@ -2974,67 +2941,6 @@ files = [
 
 [package.dependencies]
 tomli = {version = ">=1.1.0", markers = "python_version < \"3.11\""}
-
-[[package]]
-name = "pyqt5"
-version = "5.15.7"
-description = "Python bindings for the Qt cross platform application toolkit"
-optional = true
-python-versions = ">=3.7"
-files = [
-    {file = "PyQt5-5.15.7-cp37-abi3-macosx_10_13_x86_64.whl", hash = "sha256:1a793748c60d5aff3850b7abf84d47c1d41edb11231b7d7c16bef602c36be643"},
-    {file = "PyQt5-5.15.7-cp37-abi3-manylinux1_x86_64.whl", hash = "sha256:e319c9d8639e0729235c1b09c99afdadad96fa3dbd8392ab561b5ab5946ee6ef"},
-    {file = "PyQt5-5.15.7-cp37-abi3-win32.whl", hash = "sha256:08694f0a4c7d4f3d36b2311b1920e6283240ad3b7c09b515e08262e195dcdf37"},
-    {file = "PyQt5-5.15.7-cp37-abi3-win_amd64.whl", hash = "sha256:232fe5b135a095cbd024cf341d928fc672c963f88e6a52b0c605be8177c2fdb5"},
-    {file = "PyQt5-5.15.7.tar.gz", hash = "sha256:755121a52b3a08cb07275c10ebb96576d36e320e572591db16cfdbc558101594"},
-]
-
-[package.dependencies]
-PyQt5-Qt5 = ">=5.15.0"
-PyQt5-sip = ">=12.11,<13"
-
-[[package]]
-name = "pyqt5-qt5"
-version = "5.15.2"
-description = "The subset of a Qt installation needed by PyQt5."
-optional = true
-python-versions = "*"
-files = [
-    {file = "PyQt5_Qt5-5.15.2-py3-none-macosx_10_13_intel.whl", hash = "sha256:76980cd3d7ae87e3c7a33bfebfaee84448fd650bad6840471d6cae199b56e154"},
-    {file = "PyQt5_Qt5-5.15.2-py3-none-manylinux2014_x86_64.whl", hash = "sha256:1988f364ec8caf87a6ee5d5a3a5210d57539988bf8e84714c7d60972692e2f4a"},
-    {file = "PyQt5_Qt5-5.15.2-py3-none-win32.whl", hash = "sha256:9cc7a768b1921f4b982ebc00a318ccb38578e44e45316c7a4a850e953e1dd327"},
-    {file = "PyQt5_Qt5-5.15.2-py3-none-win_amd64.whl", hash = "sha256:750b78e4dba6bdf1607febedc08738e318ea09e9b10aea9ff0d73073f11f6962"},
-]
-
-[[package]]
-name = "pyqt5-sip"
-version = "12.12.2"
-description = "The sip module support for PyQt5"
-optional = true
-python-versions = ">=3.7"
-files = [
-    {file = "PyQt5_sip-12.12.2-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:1cc49c8498c34649325d53bcd243c854391f828d9bab4f2f3afd3ee3451cab72"},
-    {file = "PyQt5_sip-12.12.2-cp310-cp310-manylinux_2_5_x86_64.manylinux1_x86_64.whl", hash = "sha256:c8f6e7a697d0ddf754798988fae7b2a0da04f6a59fb13ae863e5d1da4b280c4f"},
-    {file = "PyQt5_sip-12.12.2-cp310-cp310-win32.whl", hash = "sha256:7e572c8104e75db2c69609d195daf44c7b965dcb1c5b48e30fc376868909be56"},
-    {file = "PyQt5_sip-12.12.2-cp310-cp310-win_amd64.whl", hash = "sha256:6a65697aa0fdb66e20d7b1ef8adfacc1caf1e61655530920172bf3a2fb1148cd"},
-    {file = "PyQt5_sip-12.12.2-cp311-cp311-macosx_10_9_universal2.whl", hash = "sha256:761e018dbbc46daccdb01f8f0dcc0d055c76834d839f0343cbec4b0ecbbde512"},
-    {file = "PyQt5_sip-12.12.2-cp311-cp311-manylinux_2_5_x86_64.manylinux1_x86_64.whl", hash = "sha256:9d2b127ba5155bff452944b8a96ba06d7ec2161f48a2f9cc190425bfca94ab6b"},
-    {file = "PyQt5_sip-12.12.2-cp311-cp311-win32.whl", hash = "sha256:26e75bc4ffd8e6b19ae96fe93dc135eb5aea03e4570724d4b3c40dbf36f3a2e6"},
-    {file = "PyQt5_sip-12.12.2-cp311-cp311-win_amd64.whl", hash = "sha256:d9548f353f17407d00f67d08c737de9f5c067352c3bdac8571492c614c2893eb"},
-    {file = "PyQt5_sip-12.12.2-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:7e640b7636d86271ba8969b260e1655068b44750f20801ebc80f49a1aa737bf9"},
-    {file = "PyQt5_sip-12.12.2-cp37-cp37m-manylinux_2_5_x86_64.manylinux1_x86_64.whl", hash = "sha256:e46d957fbeecaa1437f2dd715407b1e59e0918cc29382c7ea79784c5f3cbe0d2"},
-    {file = "PyQt5_sip-12.12.2-cp37-cp37m-win32.whl", hash = "sha256:cb4523097f1ccabb95b3197a58278a40fc944b33791d3406bfa397e12303b6c6"},
-    {file = "PyQt5_sip-12.12.2-cp37-cp37m-win_amd64.whl", hash = "sha256:ed04bd0065d870912c1b0a4b34b8a78698c76d77f15474c3e841b0b6dd2f429f"},
-    {file = "PyQt5_sip-12.12.2-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:71795c177010e52109812b03ec919020461ec42a7d9d241a45fe6d708529b5a6"},
-    {file = "PyQt5_sip-12.12.2-cp38-cp38-manylinux_2_5_x86_64.manylinux1_x86_64.whl", hash = "sha256:de06b6bd8241a189f729b8c093ce5dcf5928489eb7748bda28e28324e57544b0"},
-    {file = "PyQt5_sip-12.12.2-cp38-cp38-win32.whl", hash = "sha256:7050ad8f94370eb7e4caa022b7e6d8b2de615e0714b557ca2098c82c0132074a"},
-    {file = "PyQt5_sip-12.12.2-cp38-cp38-win_amd64.whl", hash = "sha256:67eed70427d3291e5c52c349fb4619c57c9a8810ab8d78a142c00edcbfd20d3b"},
-    {file = "PyQt5_sip-12.12.2-cp39-cp39-macosx_10_9_universal2.whl", hash = "sha256:cf74db9a1542f66793ccc00e403c8c2c36c67c0cff0fb01d23fe71cc1c56c788"},
-    {file = "PyQt5_sip-12.12.2-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.whl", hash = "sha256:23e983119f760dc6c1a1e6cb21fd4c268d14c4ee497de6da9ce2b9d46f9779b2"},
-    {file = "PyQt5_sip-12.12.2-cp39-cp39-win32.whl", hash = "sha256:a88ce85176639723f04cf5ce59157ecf3a9faca5d5dd1fe82d5ef46a3bd1d102"},
-    {file = "PyQt5_sip-12.12.2-cp39-cp39-win_amd64.whl", hash = "sha256:7f13e71f5171f30d8b4176c081f0203a43e1704746b4cdaa837477945177b2a0"},
-    {file = "PyQt5_sip-12.12.2.tar.gz", hash = "sha256:10d9bfa9f59f0fd1cad81be187479316ffc95684f573efea94512cb4257d2b17"},
-]
 
 [[package]]
 name = "pyqt6"
@@ -4578,12 +4484,12 @@ dev = ["czifile", "joblib", "matplotlib", "nd2", "numba", "seaborn"]
 interactive = ["napari"]
 legacy-support = ["imagecodecs"]
 nuclei = ["cellpose"]
-pipeline = ["cellpose", "flowdec", "joblib", "napari", "nd2", "piper", "tensorflow", "tensorrt"]
-pipeline-test = ["cellpose", "flowdec", "joblib", "napari", "nd2", "piper"]
+pipeline = ["cellpose", "flowdec", "joblib", "napari", "nd2", "piper", "pyqt6", "tensorflow", "tensorrt"]
+pipeline-test = ["cellpose", "flowdec", "joblib", "napari", "nd2", "piper", "pyqt6"]
 polymer = ["numba"]
 test = ["hypothesis", "joblib", "nd2", "piper", "pytest", "pytest-skip-slow"]
 
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "21e2522667ce04fd22974966e5ef554356ce474c45657285b178f91bc6c68354"
+content-hash = "c5240d9980b175952d8128f4440460412b764d46bf15e16611cad7eb3b8c5d52"
