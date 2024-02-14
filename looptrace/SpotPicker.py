@@ -13,7 +13,7 @@ import dataclasses
 from enum import Enum
 import json
 import logging
-from math import ceil, floor
+from math import ceil, floor, pow
 import os
 from pathlib import Path
 from typing import *
@@ -31,7 +31,6 @@ from gertils import ExtantFolder, NonExtantPath
 from looptrace import RoiImageSize, image_processing_functions as ip
 from looptrace.exceptions import MissingRoisTableException
 from looptrace.filepaths import get_spot_images_path
-from looptrace.integer_naming import *
 from looptrace.numeric_types import NumberLike
 
 __author__ = "Kai Sandvold Beckwith"
@@ -361,45 +360,23 @@ class SpotPicker:
         self.config = image_handler.config
     
     @property
-    def crosstalk_frame(self) -> Optional[int]:
-        return self.config.get('crosstalk_frame')
+    def analysis_filename_prefix(self) -> str:
+        """Prefix to use for output files in experiment's analysis subfolder, set by config file value"""
+        return self.image_handler.analysis_filename_prefix
 
     @property
     def path_to_detected_spot_images_folder(self) -> Path:
         return Path(self.image_handler.analysis_path) / "detected_spot_images"
 
     def path_to_detected_spot_image_file(self, position: int, time: int, channel: int) -> Path:
-        """
-        Return the path to the detected spot images file for the given (FOV, time, channel) triplet.
-
-        Parameters
-        ----------
-        position : int
-            Imaging field of view (0-based index)
-        time : int
-            Imaging timepoint (0-based index)
-        channel : int
-            Imaging channel
-
-        Raises
-        ------
-        TypeError: if position is given as a value other than integer
-
-        Returns
-        -------
-        Path: path to the detected spot images file for the given (FOV, time, channel) triplet.
-        """
-        if not isinstance(position, int):
-            raise TypeError(f"For detected spot image file path, position should be integer, not {type(position).__name__}: {position}")
-        filetype = "png"
-        fn_chunks = [
-            self.image_handler.analysis_filename_prefix,
-            get_position_name_short(position), 
-            get_time_name_short(time), 
-            get_channel_name_short(channel),
-            ]
-        fn_base = "_".join(fn_chunks)
-        return self.path_to_detected_spot_images_folder / f"{fn_base}.{filetype}"
+        """Get the path to the detected spot image file for given FOV (position), timepoint (hybridisation round), and imaging channel."""
+        fn = get_name_for_detected_spot_image_file(
+            fn_prefix=self.analysis_filename_prefix, 
+            position=position, 
+            time=time, 
+            channel=channel,
+            )
+        return self.path_to_detected_spot_images_folder / fn
 
     @property
     def detection_function(self) -> Callable:
@@ -549,8 +526,8 @@ class SpotPicker:
             else self.image_handler.proximity_filtered_spots_file_path
         key_rois_table, _ = os.path.splitext(spotfile.name)
         key_rois_table = key_rois_table\
-            .lstrip(self.image_handler.analysis_filename_prefix)\
-            .lstrip(os.path.expanduser(os.path.expandvars(self.image_handler.analysis_filename_prefix)))
+            .lstrip(self.analysis_filename_prefix)\
+            .lstrip(os.path.expanduser(os.path.expandvars(self.analysis_filename_prefix)))
         
         try:
             rois_table = self.image_handler.tables[key_rois_table]
@@ -797,6 +774,50 @@ def roi_center_to_bbox(rois: pd.DataFrame, roi_size: RoiImageSize):
     rois["x_min"] = rois["xc"] - halved.x
     rois["x_max"] = rois["xc"] + halved.x
     return rois
+
+
+def get_name_for_detected_spot_image_file(*, fn_prefix: str, position: int, time: int, channel: int, filetype: str = "png") -> Path:
+    """
+    Return the path to the detected spot images file for the given (FOV, time, channel) triplet.
+
+    Each value must be in [0, 999] since each represents the value of an entity which should be nonnegative, 
+    and each will be represented by 3 base-10 digits.
+
+    Parameters
+    ----------
+    fn_prefix : str
+        Prefix for the filename, e.g. name of experiment; use empty string to have no prefix
+    position : int
+        Imaging field of view (0-based index)
+    time : int
+        Imaging timepoint (0-based index)
+    channel : int
+        Imaging channel
+    filetype : str
+        Name of extension (without prefix dot) to save as
+
+    Raises
+    ------
+    TypeError: if position is given as a value other than integer
+    ValueError: if any value is negative or too big to be represented by 3 base-10 digits
+
+    Returns
+    -------
+    Path: path to the detected spot images file for the given (FOV, time, channel) triplet.
+    """
+    num_digits = 3
+    keyed_values = [("P", position), ("T", time), ("C", channel)]
+    too_big = [(k, v) for k, v in keyed_values if v > int(pow(10, num_digits)) - 1] # Check that we have enough digits to represent number.
+    if too_big:
+        raise ValueError(f"{len(too_big)} values cannot be represented with {num_digits} digits: {too_big}")
+    negatives = [(k, v) for k, v in keyed_values if v < 0] # Check that each value is nonnegative.
+    if negatives:
+        raise ValueError(f"{len(negatives)} values representing nonnegative fields are negative: {negatives}")
+    if not isinstance(position, int):
+        raise TypeError(f"For detected spot image file path, position should be integer, not {type(position).__name__}: {position}")
+    fn_chunks = [pre + str(n).zfill(3) for pre, n in keyed_values]
+    fn_base = "_".join([fn_prefix] + fn_chunks if fn_prefix else fn_chunks)
+    return f"{fn_base}.regional_spots.{filetype}"
 
 
 _down_to_int = lambda x: int(floor(x))
