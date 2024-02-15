@@ -148,6 +148,7 @@ package object looptrace {
         def maybe(z: Int): Option[PositiveInt] = (z > 0).option{ (z: PositiveInt) }
         def unsafe(z: Int): PositiveInt = either(z).fold(msg => throw new NumberFormatException(msg), identity)
         given posIntOrder(using intOrd: Order[Int]): Order[PositiveInt] = intOrd.contramap(identity)
+        given posIntShow(using intShow: Show[Int]): Show[PositiveInt] = intShow.contramap(identity)
         given posIntRW(using intRW: ReadWriter[Int]): ReadWriter[PositiveInt] = intRW.bimap(identity, _.int)
     end PositiveInt
 
