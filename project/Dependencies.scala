@@ -25,8 +25,8 @@ object Dependencies {
     lazy val os = "com.lihaoyi" %% "os-lib" % "0.9.2"
     lazy val scalaCsv = "com.github.tototoshi" %% "scala-csv" % "1.3.10"
     lazy val scopt = "com.github.scopt" %% "scopt" % "4.1.0"
-    lazy val uJson = "com.lihaoyi" %% "ujson" % "3.1.3"
-    lazy val uPickle = "com.lihaoyi" %% "upickle" % "3.1.3"
+    lazy val uJson = "com.lihaoyi" %% "ujson" % "3.1.4"
+    lazy val uPickle = "com.lihaoyi" %% "upickle" % "3.1.4"
 
     /* Test dependencies */
     lazy val scalacheck = "org.scalacheck" %% "scalacheck" % s"$scalacheckMajor.$scalacheckMinor.0"
