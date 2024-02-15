@@ -11,7 +11,16 @@ import org.scalatest.matchers.*
   * @author Vince Reuter
   */
 class TestImagingRound extends AnyFunSuite, DistanceSuite, LooptraceSuite, ScalacheckSuite, should.Matchers:
-    test("ImagingRound itself cannot be instantiated.") { pending }
-    test("FishImagingRound itself cannot be instantiated.") { pending }
-    test("BlankImagingRound takes just name and timepoint.") { pending }
+    
+    test("ImagingRound itself cannot be instantiated.") {
+        assertTypeError{ "new ImagingRound{ def name = \"absolutelynot\"; def timepoint = Timepoint(NonnegativeInt(0)) }" }
+    }
+    
+    test("FishImagingRound itself cannot be instantiated.") {
+        assertTypeError{ "new FishImagingRound{ def name = \"absolutelynot\"; def timepoint = Timepoint(NonnegativeInt(0)); def probe = ProbeName(\"irrelevant\"); def repeat = Option.empty[PositiveInt] }" }
+    }
+    
+    test("BlankImagingRound takes just name and timepoint.") {
+        assertCompiles{ "BlankImagingRound(\"absolutelynot\", Timepoint(NonnegativeInt(0)))" }
+    }
 end TestImagingRound
