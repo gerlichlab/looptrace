@@ -1,7 +1,7 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
 import scala.util.NotGiven
-import cats.syntax.functor.*
+import cats.syntax.all.*
 import org.scalacheck.{ Arbitrary, Gen }
 import org.scalacheck.Arbitrary.arbitrary
 
@@ -26,20 +26,22 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
 
     given arbitraryForChannel(using arbInt: Arbitrary[NonnegativeInt]): Arbitrary[Channel] = arbInt.map(Channel.apply)
 
-    given arbitraryForTimepoint(using idx: Arbitrary[NonnegativeInt]): Arbitrary[Timepoint] = idx.map(Timepoint.apply)
-
     given arbitraryForLocusId(using arbTime: Arbitrary[Timepoint]): Arbitrary[LocusId] = arbTime.map(LocusId.apply)
-
-    given arbitraryForRegionId(using arbTime: Arbitrary[Timepoint]): Arbitrary[RegionId] = arbTime.map(RegionId.apply)
 
     given arbitraryForPositionIndex(using idx: Arbitrary[NonnegativeInt]): Arbitrary[PositionIndex] = idx.map(PositionIndex.apply)
 
     given arbitraryForPositionName: Arbitrary[PositionName] = 
         Arbitrary{ Gen.alphaNumStr.suchThat(_.nonEmpty).map(PositionName.apply) }
 
+    given arbitraryForProbeName(using arbName: Arbitrary[String]): Arbitrary[ProbeName] = arbName.map(ProbeName.apply)
+
+    given arbitraryForRegionId(using arbTime: Arbitrary[Timepoint]): Arbitrary[RegionId] = arbTime.map(RegionId.apply)
+
     given arbitraryForRoiIndex(using idx: Arbitrary[Int]): Arbitrary[RoiIndex] = 
         Arbitrary{ Gen.choose(0, Int.MaxValue).map(RoiIndex.unsafe) }
     
+    given arbitraryForTimepoint(using idx: Arbitrary[NonnegativeInt]): Arbitrary[Timepoint] = idx.map(Timepoint.apply)
+
     given arbitraryForXCoordinate(using num: Arbitrary[Double]): Arbitrary[XCoordinate] = num.fmap(XCoordinate.apply)
     
     given arbitraryForYCoordinate(using num: Arbitrary[Double]): Arbitrary[YCoordinate] = num.fmap(YCoordinate.apply)
@@ -49,6 +51,25 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
     given arbitraryForPoint3D(using arbX: Arbitrary[Double]): Arbitrary[Point3D] = Arbitrary{
         Gen.zip(arbitrary[XCoordinate], arbitrary[YCoordinate], arbitrary[ZCoordinate]).map(Point3D.apply.tupled)
     }
+
+    given arbitraryForBlankImagingRound(using arbName: Arbitrary[String], arbTime: Arbitrary[Timepoint]): Arbitrary[BlankImagingRound] = 
+        (arbName, arbTime).mapN(BlankImagingRound.apply)
+
+    given arbitraryForRegionalImagingRound(using 
+        arbName: Arbitrary[String], 
+        arbTime: Arbitrary[Timepoint], 
+        arbProbe: Arbitrary[ProbeName]
+        ): Arbitrary[RegionalImagingRound] = (arbName, arbTime, arbProbe).mapN(RegionalImagingRound.apply)
+
+    given arbitraryForLocusImagingRound(using 
+        arbName: Arbitrary[String], 
+        arbTime: Arbitrary[Timepoint], 
+        arbProbe: Arbitrary[ProbeName], 
+        arbRepeat: Arbitrary[PositiveInt]
+        ): Arbitrary[LocusImagingRound] = {
+            val arbRepOpt = Gen.option(arbitrary(arbRepeat)).toArbitrary
+            (arbName, arbTime, arbProbe, arbRepOpt).mapN(LocusImagingRound.apply)
+        }
 
     given arbitraryForRegionalBarcodeSpotRoi(using
         arbRoiIdx: Arbitrary[RoiIndex], 
