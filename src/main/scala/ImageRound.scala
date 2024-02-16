@@ -21,8 +21,6 @@ object ImagingRound:
     import LocusImagingRound.*
     import RegionalImagingRound.*
 
-    private type InvalidOr[A] = ValidatedNel[String, A]
-
     /**
      * Wrapper around [[ujson.Value.InvalidData]] for the case in which one or more errors occur during decoding.
      * 
@@ -108,16 +106,41 @@ object ImagingRound:
         Try(v.int).toEither.leftMap(e => s"Non-integral value for repeat! ${e.getMessage}") 
             >>= PositiveInt.either
 
+    /**
+     * Extract a Boolean value from the given key in a key-value mapping to JSON values.
+     * 
+     * @param key The key of the data element to extract
+     * @param data The key-value store from which to extract a datum
+     * @return Either a [[scala.util.Left]]-wrapped error message for a bad value present at the given key, 
+     *     or a [[scala.util.Right]]-wrapped Boolean value extracted from the given key
+     */
     private def extractDefaultFalse(key: String)(data: Map[String, ujson.Value]): Either[String, Boolean] = 
         data.get(key) match {
             case None => false.asRight
             case Some(v) => Try(v.bool).toEither.leftMap(e => s"Illegal value for '$key'! ${e.getMessage}")
         }
 
+    /**
+     * Extract a text value from the given key in a key-value mapping to JSON values.
+     * 
+     * @param key The key of the data element to extract
+     * @param data The key-value store from which to extract a datum
+     * @return Either a [[scala.util.Left]]-wrapped error message for a bad value present at the given key, 
+     *     or a [[scala.util.Right]]-wrapped optional, empty if the key was not present or a nonempty with 
+     *     the extracted value if the key was in fact present with a valid value
+     */
     private def extractOptionalString(key: String)(data: Map[String, ujson.Value]): Either[String, Option[String]] = 
         data.get(key).traverse{ v => Try(v.str).toEither.leftMap(e => s"Illagel value for '$key'! ${e.getMessage}") }
 
-    private def validateNoExtraKeys(validKeys: Set[String], whatToDecode: String)(data: Map[String, ujson.Value]): InvalidOr[Unit] = {
+    /**
+     * Check that the given data contains no keys other than those in the set passed as valid.
+     * 
+     * @param validKeys The set of keys that the given data are permitted to have
+     * @param whatToDecode Some sort of name or short phrase to give context to a potential error messages
+     * @param data The key-value mapping being checked for presence of any extra keys
+     * @return Either a [[cats.data.Validated.Invalid]] wrapping a singleton explanatory message, or a trivial [[cats.data.Validated.Valid]]
+     */
+    private def validateNoExtraKeys(validKeys: Set[String], whatToDecode: String)(data: Map[String, ujson.Value]): ValidatedNel[String, Unit] = {
         (data.keySet.toSet -- validKeys)
             .toList
             .toNel
