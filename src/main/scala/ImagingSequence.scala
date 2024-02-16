@@ -15,9 +15,22 @@ end ImagingSequence
 
 /** Smart constructors and tools for working with sequences of imaging rounds */
 object ImagingSequence:
-    private def preprocess1(data: ujson.Value): Either[String, Map[String, ujson.Value]] = 
-        Try(data.obj).toEither.bimap(_.getMessage, _.toMap)
     
+    /**
+      * Create a sequence of imaging rounds constituting an imaging experiment.
+      * 
+      * With the individual rounds already parsed, the additional validation / error cases here 
+      * are with respect to the non-emptiness of the collection, the sequence of timepoints, and 
+      * the uniqueness of the names of the rounds (assumed to be usable as an identifier within an experiment).
+      * 
+      * To parse a valid instance, the given collection of individual rounds should be nonempty, 
+      * the timepoints should form a sequence '(0, 1, ..., N-1)', with 'N' representing the number 
+      * of imaging rounds, and there should be no repeated name among the rounds.
+      *
+      * @param maybeRounds Sequence of individual imaging rounds
+      * @return Either a [[scala.util.Left]]-wrapped [[cats.data.NonEmptyList]] of error messages, 
+      *     or a [[scala.util.Right]]-wrapped [[ImagingSequence]] instance
+      */
     def fromRounds(maybeRounds: List[ImagingRound]): ErrMsgsOr[ImagingSequence] = maybeRounds.toNel
         .toRight(NonEmptyList.one("Can't build an imaging sequence from empty collection of rounds!"))
         .flatMap{ rounds => 
