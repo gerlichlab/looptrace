@@ -12,14 +12,7 @@ import org.scalatest.matchers.*
   *  @author Vince Reuter
   */
 class TestImagingSequence extends AnyFunSuite, DistanceSuite, LooptraceSuite, ScalacheckSuite, should.Matchers:
-    test("Sequence of timepoints other than 0, 1, ..., N-1 is an error") { pending }
     
-    test("Regional round can't be blank.") { pending }
-    
-    test("Regional round can't be a repeat.") { pending }
-
-    test("Probe implies name, but not vice-versa: name + time only--without blank flag set--is illegal.") { pending }
-
     test("Empty collection is an error.") {
         ImagingSequence.fromRounds(List()) match {
             case Left(messages) => messages.toList match {
@@ -31,6 +24,8 @@ class TestImagingSequence extends AnyFunSuite, DistanceSuite, LooptraceSuite, Sc
             case Right(_) => fail("Expected imaging sequence parse to fail, but it succeeded!")
         }
     }
+    
+    test("Sequence of timepoints other than 0, 1, ..., N-1 is an error") { pending }
     
     test("Non-unique names is an error.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
@@ -55,9 +50,6 @@ class TestImagingSequence extends AnyFunSuite, DistanceSuite, LooptraceSuite, Sc
         }
     }
     
-    /** Healthy */
-    test("Timepoints are correctly parsed.") { pending }
-    test("Repeat is used (correctly) in name, if and only if no name is explicitly given.") { pending }
-    test("Non-blank round can infer name from probe.") { pending }
+    test("List of rounds can roundtrip through JSON.") { pending }
     
 end TestImagingSequence
