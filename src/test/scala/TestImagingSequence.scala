@@ -5,29 +5,33 @@ import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
 
+import upickle.default.*
+
 /**
   * Tests for config file definition and parsing of imaging rounds and a sequence of them for an experiment.
   * 
   *  @author Vince Reuter
   */
 class TestImagingSequence extends AnyFunSuite, DistanceSuite, LooptraceSuite, ScalacheckSuite, should.Matchers:
-    test("Any repeat timepoint is an error") { pending }
-    
     test("Sequence of timepoints other than 0, 1, ..., N-1 is an error") { pending }
-    
-    test("Regional round can't be a repeat.") { pending }
     
     test("Regional round can't be blank.") { pending }
     
-    test("Blank round can't have a probe.") { pending }
-    
-    test("Non-blank round must have probe.") { pending }
-    
-    test("Non-blank round can infer name from probe.") { pending }
-    
-    test("Repeat is used (correctly) in name, if and only if no name is explicitly given.") { pending }
-    
-    test("Empty collection is an error.") { pending }
+    test("Regional round can't be a repeat.") { pending }
+
+    test("Probe implies name, but not vice-versa: name + time only--without blank flag set--is illegal.") { pending }
+
+    test("Empty collection is an error.") {
+        ImagingSequence.fromRounds(List()) match {
+            case Left(messages) => messages.toList match {
+                case msg :: Nil => 
+                    val exp = "Can't build an imaging sequence from empty collection of rounds!"
+                    msg shouldEqual exp
+                case _ => fail(s"Expected exactly 1 error message but got ${messages.length}!")
+            }
+            case Right(_) => fail("Expected imaging sequence parse to fail, but it succeeded!")
+        }
+    }
     
     test("Non-unique names is an error.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
@@ -54,4 +58,7 @@ class TestImagingSequence extends AnyFunSuite, DistanceSuite, LooptraceSuite, Sc
     
     /** Healthy */
     test("Timepoints are correctly parsed.") { pending }
+    test("Repeat is used (correctly) in name, if and only if no name is explicitly given.") { pending }
+    test("Non-blank round can infer name from probe.") { pending }
+    
 end TestImagingSequence
