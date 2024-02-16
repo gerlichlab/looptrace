@@ -15,6 +15,7 @@ sealed trait ImagingRound:
     def time: Timepoint
 end ImagingRound
 
+/** Helpers and JSON tools for working with the abstraction of imaging rounds */
 object ImagingRound:
     import BlankImagingRound.*
     import LocusImagingRound.*
@@ -22,9 +23,32 @@ object ImagingRound:
 
     private type InvalidOr[A] = ValidatedNel[String, A]
 
+    /**
+     * Wrapper around [[ujson.Value.InvalidData]] for the case in which one or more errors occur during decoding.
+     * 
+     * @param whatWasBeingDecoded Text to provide context to the error message, typically the name of the type of value 
+     *    that was being decoded when error(s) wrapped here arose
+     * @param json The data that was being decoded
+     * @param messages The error messages explaining why decoding didn't work
+     */
     final class DecodingError(val whatWasBeingDecoded: String, val json: ujson.Value, val messages: NonEmptyList[String]) 
         extends ujson.Value.InvalidData(json, s"Error(s) decoding ($whatWasBeingDecoded): ${messages.mkString_(", ")}")
     
+    /**
+     * A JSON read/write implementation for imaging rounds, allowing subtype determination to be done by keys and values present.
+     * 
+     * Specifically, here are some rules for what determines the subtype that will be decoded:
+     * 1. A [[RegionalImagingRound]] value decoding attempt will be made iff the `isRegional` key is present with a value of `true`.
+     * 2. A [[BlankImagingRound]] value decoding attempt will be made iff the `isBlank` key is present with a value of `true`.
+     * 3. A [[LocusImagingRound]] value decoding attempt will be made otherwise.
+     * 4. The presence of `probe` key, giving the name of the FISH probe used for the imaging round, is required whenever the 
+     *    `isBlank` key is absent or set to `false`
+     * 5. `name` is required exactly when `probe` is not, namely to decode a [[BlankImagingRound]]; this is because otherwise, 
+     *    the name of the imaging round will match that of the probe (possibly with the addition of a suffix to encode the `repeat` 
+     *    value).
+     * 
+     * @return A [[upickle.default.ReadWriter]] value with which to read and write values of [[ImagingRound]]
+     */
     def rwForImagingRound: ReadWriter[ImagingRound] = readwriter[ujson.Value].bimap(
         roundToJsonObject, 
         json => parseFromJsonMap(json.obj.toMap).fold(errors => throw new DecodingError("ImagingRound", json, errors), identity)
@@ -76,12 +100,12 @@ object ImagingRound:
     }
 
     private def parseTimeValue(v: ujson.Value): Either[String, Timepoint] = 
-        Try(v.int).toEither.leftMap(e => s"Illegal value for time! ${e.getMessage}") 
+        Try(v.int).toEither.leftMap(e => s"Non-integral value for time! ${e.getMessage}") 
             >>= NonnegativeInt.either 
             >> Timepoint.apply
 
     private def parseRepeatValue(v: ujson.Value): Either[String, PositiveInt] = 
-        Try(v.int).toEither.leftMap(e => s"Illegal value for repeat! ${e.getMessage}") 
+        Try(v.int).toEither.leftMap(e => s"Non-integral value for repeat! ${e.getMessage}") 
             >>= PositiveInt.either
 
     private def extractDefaultFalse(key: String)(data: Map[String, ujson.Value]): Either[String, Boolean] = 
