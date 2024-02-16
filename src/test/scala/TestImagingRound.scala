@@ -1,6 +1,5 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
-import scala.util.Random
 import cats.syntax.all.*
 import mouse.boolean.*
 import upickle.default.*
@@ -14,17 +13,10 @@ import org.scalatest.matchers.*
   * 
   * @author Vince Reuter
   */
-class TestImagingRound extends AnyFunSuite, DistanceSuite, LooptraceSuite, ScalacheckSuite, should.Matchers:
-    def genNameForJson: Gen[String] = (Gen.alphaNumStr, Gen.listOf(Gen.oneOf("_", "-", " ", "."))).mapN(
-        (alphaNum, punctuation) => Random.shuffle(alphaNum.toList ::: punctuation.toList).mkString
-    ).suchThat(n => n.nonEmpty & !n.forall(_.isWhitespace))
+class TestImagingRound extends AnyFunSuite, DistanceSuite, ImagingRoundHelpers, LooptraceSuite, ScalacheckSuite, should.Matchers:
 
     test("ImagingRound itself cannot be instantiated.") {
         assertTypeError{ "new ImagingRound{ def name = \"absolutelynot\"; def timepoint = Timepoint(NonnegativeInt(0)) }" }
-    }
-    
-    test("FishImagingRound itself cannot be instantiated.") {
-        assertTypeError{ "new FishImagingRound{ def name = \"absolutelynot\"; def timepoint = Timepoint(NonnegativeInt(0)); def probe = ProbeName(\"irrelevant\"); def repeat = Option.empty[PositiveInt] }" }
     }
     
     test("BlankImagingRound can be instantiated (DIRECTLY) with just name and timepoint, but must have appropriate key-value to come from JSON through parent parser.") {
