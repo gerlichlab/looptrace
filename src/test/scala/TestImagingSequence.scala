@@ -1,6 +1,7 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
 import upickle.default.*
+import cats.syntax.all.*
 import org.scalacheck.{ Arbitrary, Gen, Shrink }
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
@@ -11,7 +12,7 @@ import org.scalatest.matchers.*
   * 
   *  @author Vince Reuter
   */
-class TestImagingSequence extends AnyFunSuite, DistanceSuite, LooptraceSuite, ScalacheckSuite, should.Matchers:
+class TestImagingSequence extends AnyFunSuite, DistanceSuite, ImagingRoundHelpers, LooptraceSuite, ScalacheckSuite, should.Matchers:
     
     test("Empty collection is an error.") {
         ImagingSequence.fromRounds(List()) match {
@@ -29,18 +30,11 @@ class TestImagingSequence extends AnyFunSuite, DistanceSuite, LooptraceSuite, Sc
     
     test("Non-unique names is an error.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
-
         def genRoundsWithNameCollision = {
-            def genRound(using arbName: Arbitrary[String]): Gen[ImagingRound] = Gen.oneOf(
-                arbitrary[BlankImagingRound], 
-                arbitrary[RegionalImagingRound], 
-                arbitrary[LocusImagingRound]
-                )
             val namePool = List("firstName", "secondName")
             given arbName: Arbitrary[String] = Gen.oneOf(namePool).toArbitrary
             Gen.choose(namePool.size + 1, math.max(namePool.size + 1, 5)).flatMap(Gen.listOfN(_, genRound))
         }
-        
         forAll (genRoundsWithNameCollision) { 
             rounds => ImagingSequence.fromRounds(rounds) match {
                 case Left(messages) => 
@@ -53,11 +47,11 @@ class TestImagingSequence extends AnyFunSuite, DistanceSuite, LooptraceSuite, Sc
     test("List of imaging round declarations can roundtrip through JSON.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         given rw: ReadWriter[ImagingRound] = ImagingRound.rwForImagingRound
-        def genRounds = Gen.nonEmptyListOf(arbitrary[ImagingRound])
-            .suchThat(rounds => rounds.map(_.name).toSet.size === rounds.length) // Names must be unique.
+        def genRounds = Gen.choose(1, 100)
             /* Force satisfaction of the requirement that the timepoints form sequence [0, ..., N-1]. */
-            .map(rounds => NonnegativeInt.indexed(rounds))
-            .map(_.map(setRoundTimepoint.tupled))
+            .map(k => (0 until k).map(Timepoint.unsafe).toList)
+            .flatMap(_.traverse{ t => genRound(using genNameForJson.toArbitrary, Gen.const(t).toArbitrary) })
+            .suchThat(rounds => rounds.map(_.name).toSet.size === rounds.length) // Names must be unique.
         forAll (genRounds) { rounds => 
             val exp = ImagingSequence.fromRounds(rounds)
             val obs = ImagingSequence.fromRounds(read[List[ImagingRound]](write(rounds)))
@@ -65,19 +59,9 @@ class TestImagingSequence extends AnyFunSuite, DistanceSuite, LooptraceSuite, Sc
         }
     }
 
-    def setRoundTimepoint(round: ImagingRound, time: NonnegativeInt): ImagingRound = {
-        val t = Timepoint(time)
-        round match {
-            case r: BlankImagingRound => r.copy(time = t)
-            case r: RegionalImagingRound => r.copy(time = t)
-            case r: LocusImagingRound => r.copy(time = t)
-        }
-    }
-
-    given arbitraryForImagingRound(using 
-        arbBlank: Arbitrary[BlankImagingRound], 
-        arbRegional: Arbitrary[RegionalImagingRound], 
-        arbLocus: Arbitrary[LocusImagingRound],
-        ): Arbitrary[ImagingRound] = Gen.oneOf(arbitrary[BlankImagingRound], arbitrary[RegionalImagingRound], arbitrary[LocusImagingRound]).toArbitrary
-    
+    private def genRound(using arbName: Arbitrary[String], arbTime: Arbitrary[Timepoint]): Gen[ImagingRound] = Gen.oneOf(
+        arbitrary[BlankImagingRound], 
+        arbitrary[RegionalImagingRound], 
+        arbitrary[LocusImagingRound],
+        )
 end TestImagingSequence
