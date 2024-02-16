@@ -1,11 +1,10 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
+import upickle.default.*
 import org.scalacheck.{ Arbitrary, Gen, Shrink }
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
-
-import upickle.default.*
 
 /**
   * Tests for config file definition and parsing of imaging rounds and a sequence of them for an experiment.
