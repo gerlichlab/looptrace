@@ -8,12 +8,10 @@ ThisBuild / organizationName := "Gerlich Group, IMBA, OEAW"
 /* sbt-github-actions settings */
 ThisBuild / githubWorkflowOSes := Seq("ubuntu-22.04", "ubuntu-20.04")
 ThisBuild / githubWorkflowPublishTargetBranches := Seq()
-val JDK11 = JavaSpec.temurin("11")
-val JDK17 = JavaSpec.temurin("17")
-ThisBuild / githubWorkflowJavaVersions := Seq(JDK11, JDK17)
+ThisBuild / githubWorkflowJavaVersions := Seq("11", "17", "19", "21").map(JavaSpec.temurin)
 
 // TODO: reactivate if using netcdf-java or similar. #127
-resolvers += "Unidata All" at "https://artifacts.unidata.ucar.edu/repository/unidata-all/"
+//resolvers += "Unidata All" at "https://artifacts.unidata.ucar.edu/repository/unidata-all/"
 
 lazy val root = (project in file("."))
   .settings(
