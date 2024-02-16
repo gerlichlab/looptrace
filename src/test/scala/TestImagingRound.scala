@@ -1,11 +1,11 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
+import mouse.boolean.*
+import upickle.default.*
 import org.scalacheck.{ Arbitrary, Gen, Shrink }
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
-
-import upickle.default.*
 
 /**
   * Tests for the abstraction of an imaging round
@@ -25,23 +25,42 @@ class TestImagingRound extends AnyFunSuite, DistanceSuite, LooptraceSuite, Scala
         assertCompiles{ "BlankImagingRound(\"absolutelynot\", Timepoint(NonnegativeInt(0)))" }
     }
 
-    test("Just name and timepoint is under-specified (blank or probe is required.)") { pending }
-
-    test("BlankImagingRound can roundtrip through JSON.") {
-        forAll { (blank: BlankImagingRound) => 
-            given rw: (Reader[BlankImagingRound] & Writer[BlankImagingRound]) = ImagingRound.rwForImagingRound.narrow[BlankImagingRound]
-            blank shouldEqual read[BlankImagingRound](write(blank))
+    test("Non-blank round without probe contains appropriate error message.") {
+        forAll { (name: String, time: Timepoint, useBlankKey: Boolean, regOpt: Option[Boolean], repOpt: Option[PositiveInt]) => 
+            val baseData = Map("name" -> ujson.Str(name), "time" -> ujson.Num(time.get))
+            val extras = List(
+                regOpt.map{ p => "isRegional" -> ujson.Bool(p) }, 
+                repOpt.map{ n => "repeat" -> ujson.Num(n) }, 
+                useBlankKey.option{ "isBlank" -> ujson.Bool(false) }
+                ).flatten.toMap
+            ImagingRound.parseFromJsonMap(baseData ++ extras) match {
+                case Left(messages) => messages.toList.count(_ ===  "Probe is required when a round isn't blank!") shouldEqual 1
+                case Right(_) => fail("Expected decoding failure, but it succeded!")
+            }
         }
     }
 
-    test("BlankImagingRound cannot have a probe.") {
-        assertTypeError{ "BlankImagingRound(\"absolutelynot\", Timepoint(NonnegativeInt(0)), ProbeName(\"irrelevant\"))" }
-        // val error = intercept[ImagingRound.DecodingError]{ ImagingRound.parseFromJsonMap(baseData + ("probe" -> ujson.Str(probe.get))) }
-        //     error.whatWasBeingDecoded shouldEqual "ImagingRound"
-        //     error.errors.toList.count(_ ===  "Blank frame cannot have probe specified!") shouldEqual 1
+    test("Blank round is parsed from name + time + blank flag.") { pending }
+
+    test("Locus round is parsed from JUST probe + time.") { pending }
+        
+    test("Locus or region is parsed from probe + time + regional flag + (optional) name.") { pending }
+
+    test("BlankImagingRound can roundtrip through JSON.") {
+        given rw: (Reader[BlankImagingRound] & Writer[BlankImagingRound]) = ImagingRound.rwForImagingRound.narrow[BlankImagingRound]
+        forAll { (blank: BlankImagingRound) => blank shouldEqual read[BlankImagingRound](write(blank)) }
     }
 
-    test("Non-blank round must have probe.") { pending }
+    test("BlankImagingRound cannot have a probe.") {
+        given rw: (Reader[BlankImagingRound] & Writer[BlankImagingRound]) = ImagingRound.rwForImagingRound.narrow[BlankImagingRound]
+        assertTypeError{ "BlankImagingRound(\"absolutelynot\", Timepoint(NonnegativeInt(0)), ProbeName(\"irrelevant\"))" }
+        forAll { (blank: BlankImagingRound, probe: ProbeName) => 
+            val data = ImagingRound.roundToJsonObject(blank).obj.toMap + ("probe" -> ujson.Str(probe.get))
+            val error = intercept[ImagingRound.DecodingError]{ read[BlankImagingRound](write(data)) }
+            error.whatWasBeingDecoded shouldEqual "ImagingRound"
+            error.messages.toList.count(_ ===  "Blank frame cannot have probe specified!") shouldEqual 1
+        }
+    }
 
     test("Presence of probe makes distinguishes blank round from locus-specific round.") { pending }
 

@@ -22,8 +22,8 @@ object ImagingRound:
 
     private type InvalidOr[A] = ValidatedNel[String, A]
 
-    final class DecodingError(val whatWasBeingDecoded: String, val json: ujson.Value, val errors: NonEmptyList[String]) 
-        extends ujson.Value.InvalidData(json, s"Error(s) decoding ($whatWasBeingDecoded): ${errors.mkString_(", ")}")
+    final class DecodingError(val whatWasBeingDecoded: String, val json: ujson.Value, val messages: NonEmptyList[String]) 
+        extends ujson.Value.InvalidData(json, s"Error(s) decoding ($whatWasBeingDecoded): ${messages.mkString_(", ")}")
     
     def rwForImagingRound: ReadWriter[ImagingRound] = readwriter[ujson.Value].bimap(
         roundToJsonObject, 
@@ -39,7 +39,7 @@ object ImagingRound:
         val nameOptNel = extractOptionalString("name")(data).toValidatedNel
         val probeOptNel = extractOptionalString("probe")(data).toValidatedNel
         val repOptNel = data.get("repeat").traverse(parseRepeatValue).toValidatedNel
-        val noExtraKeysNel = validateNoExtraKeys(Set("time", "probe", "name", "isRegional", "isBlank"), "image round")(data)
+        val noExtraKeysNel = validateNoExtraKeys(Set("time", "probe", "name", "isRegional", "isBlank", "repeat"), "ImagingRound")(data)
         (timeNel, isRegionalNel, isBlankNel, nameOptNel, probeOptNel, repOptNel, noExtraKeysNel).tupled.toEither.flatMap{
             case (time, isRegional, isBlank, nameOpt, probeOpt, repOpt, _) => 
                 val regRepNel = (repOpt.isEmpty || !isRegional).either(s"Regional round cannot be a repeat!", ()).toValidatedNel
@@ -65,12 +65,12 @@ object ImagingRound:
         }
     }
 
-    private def roundToJsonObject(fishRound: FishImagingRound): ujson.Obj = fishRound match {
+    private[looptrace] def roundToJsonObject(fishRound: FishImagingRound): ujson.Obj = fishRound match {
         case round: LocusImagingRound => locusRoundToJson(round)
         case round: RegionalImagingRound => regionalRoundToJson(round)
     }
 
-    private def roundToJsonObject(imagingRound: ImagingRound): ujson.Obj = imagingRound match {
+    private[looptrace] def roundToJsonObject(imagingRound: ImagingRound): ujson.Obj = imagingRound match {
         case round: BlankImagingRound => blankRoundToJson(round)
         case round: FishImagingRound => roundToJsonObject(round)
     }
