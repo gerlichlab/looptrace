@@ -88,14 +88,10 @@ object ImagingRound:
         }
     }
 
-    private[looptrace] def roundToJsonObject(fishRound: FishImagingRound): ujson.Obj = fishRound match {
+    private[looptrace] def roundToJsonObject(imagingRound: ImagingRound): ujson.Obj = imagingRound match {
         case round: LocusImagingRound => locusRoundToJson(round)
         case round: RegionalImagingRound => regionalRoundToJson(round)
-    }
-
-    private[looptrace] def roundToJsonObject(imagingRound: ImagingRound): ujson.Obj = imagingRound match {
         case round: BlankImagingRound => blankRoundToJson(round)
-        case round: FishImagingRound => roundToJsonObject(round)
     }
 
     private def parseTimeValue(v: ujson.Value): Either[String, Timepoint] = 
@@ -194,11 +190,15 @@ object LocusImagingRound:
         val name = maybeName.getOrElse(probe.get ++ maybeRepeat.fold("")(rep => s"_repeat${rep.show}"))
         new LocusImagingRound(name, time, probe, maybeRepeat)
 
-    private[looptrace] def locusRoundToJson(round: LocusImagingRound) = ujson.Obj(
-        "name" -> round.name, 
-        "time" -> ujson.Num(round.time.get), 
-        "repeat" -> round.repeat.fold(ujson.Null)(n => ujson.Num(n))
-        )
+    private[looptrace] def locusRoundToJson(round: LocusImagingRound): ujson.Obj = {
+        val baseData = NonEmptyList.of(
+            "name" -> ujson.Str(round.name), 
+            "probe" -> ujson.Str(round.probe.get),
+            "time" -> ujson.Num(round.time.get),
+            )
+        val fullData = baseData ++ round.repeat.fold(List()){ n => List("repeat" -> ujson.Num(n)) }
+        ujson.Obj(fullData.head, fullData.tail*)
+    }
 end LocusImagingRound
 
 /**
@@ -220,7 +220,8 @@ object RegionalImagingRound:
 
     private[looptrace] def regionalRoundToJson(round: RegionalImagingRound) = ujson.Obj(
         "name" -> round.name, 
-        "time" -> ujson.Num(round.time.get), 
-        "isRegional" -> ujson.Bool(true)
+        "probe" -> round.probe.get,
+        "time" -> round.time.get, 
+        "isRegional" -> true
         )
 end RegionalImagingRound
