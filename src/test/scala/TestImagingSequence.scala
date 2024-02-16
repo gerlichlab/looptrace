@@ -50,6 +50,34 @@ class TestImagingSequence extends AnyFunSuite, DistanceSuite, LooptraceSuite, Sc
         }
     }
     
-    test("List of rounds can roundtrip through JSON.") { pending }
+    test("List of imaging round declarations can roundtrip through JSON.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given rw: ReadWriter[ImagingRound] = ImagingRound.rwForImagingRound
+        def genRounds = Gen.nonEmptyListOf(arbitrary[ImagingRound])
+            .suchThat(rounds => rounds.map(_.name).toSet.size === rounds.length) // Names must be unique.
+            /* Force satisfaction of the requirement that the timepoints form sequence [0, ..., N-1]. */
+            .map(rounds => NonnegativeInt.indexed(rounds))
+            .map(_.map(setRoundTimepoint.tupled))
+        forAll (genRounds) { rounds => 
+            val exp = ImagingSequence.fromRounds(rounds)
+            val obs = ImagingSequence.fromRounds(read[List[ImagingRound]](write(rounds)))
+            obs shouldEqual exp
+        }
+    }
+
+    def setRoundTimepoint(round: ImagingRound, time: NonnegativeInt): ImagingRound = {
+        val t = Timepoint(time)
+        round match {
+            case r: BlankImagingRound => r.copy(time = t)
+            case r: RegionalImagingRound => r.copy(time = t)
+            case r: LocusImagingRound => r.copy(time = t)
+        }
+    }
+
+    given arbitraryForImagingRound(using 
+        arbBlank: Arbitrary[BlankImagingRound], 
+        arbRegional: Arbitrary[RegionalImagingRound], 
+        arbLocus: Arbitrary[LocusImagingRound],
+        ): Arbitrary[ImagingRound] = Gen.oneOf(arbitrary[BlankImagingRound], arbitrary[RegionalImagingRound], arbitrary[LocusImagingRound]).toArbitrary
     
 end TestImagingSequence
