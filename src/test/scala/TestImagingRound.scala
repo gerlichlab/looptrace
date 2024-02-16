@@ -17,7 +17,7 @@ import org.scalatest.matchers.*
 class TestImagingRound extends AnyFunSuite, DistanceSuite, LooptraceSuite, ScalacheckSuite, should.Matchers:
     def genNameForJson: Gen[String] = (Gen.alphaNumStr, Gen.listOf(Gen.oneOf("_", "-", " ", "."))).mapN(
         (alphaNum, punctuation) => Random.shuffle(alphaNum.toList ::: punctuation.toList).mkString
-    ).suchThat(_.nonEmpty)
+    ).suchThat(n => n.nonEmpty & !n.forall(_.isWhitespace))
 
     test("ImagingRound itself cannot be instantiated.") {
         assertTypeError{ "new ImagingRound{ def name = \"absolutelynot\"; def timepoint = Timepoint(NonnegativeInt(0)) }" }
@@ -84,6 +84,7 @@ class TestImagingRound extends AnyFunSuite, DistanceSuite, LooptraceSuite, Scala
 
     test("BlankImagingRound cannot have a probe.") {
         given rw: (Reader[BlankImagingRound] & Writer[BlankImagingRound]) = ImagingRound.rwForImagingRound.narrow[BlankImagingRound]
+
         assertTypeError{ "BlankImagingRound(\"absolutelynot\", Timepoint(NonnegativeInt(0)), ProbeName(\"irrelevant\"))" }
         forAll { (blank: BlankImagingRound, probe: ProbeName) => 
             val data = ImagingRound.roundToJsonObject(blank).obj.toMap + ("probe" -> ujson.Str(probe.get))
@@ -96,27 +97,68 @@ class TestImagingRound extends AnyFunSuite, DistanceSuite, LooptraceSuite, Scala
     test("Blank vs. locus-specific: either probe or blank flag is required.") {
         given arbName: Arbitrary[String] = genNameForJson.toArbitrary
         given reader: Reader[ImagingRound] = ImagingRound.rwForImagingRound
-        forAll { (name: String, time: Timepoint, explicitlyNonRegional: Boolean, optBlank: Option[Boolean], optProbe: Option[ProbeName], optRepeat: Option[PositiveInt]) =>
-            val baseData = List("name" -> ujson.Str(name), "time" -> ujson.Num(time.get))
+        
+        /* Avoid passing a repeat value for a blank round. */
+        def genBlankAndRepeat = Gen.zip(
+            Gen.option(Gen.oneOf(false, true)), 
+            arbitrary[Option[PositiveInt]]
+            ).suchThat((optBlank, optRep) => !(optBlank.getOrElse(false) && optRep.nonEmpty))
+        
+        forAll (arbitrary[String], arbitrary[Timepoint], arbitrary[Boolean], arbitrary[Option[ProbeName]], genBlankAndRepeat) { 
+            case (name, time, explicitlyNonRegional, optProbe, (optBlank, optRepeat)) =>
+                val baseData = List("name" -> ujson.Str(name), "time" -> ujson.Num(time.get))
+                val extraData = List(
+                    optBlank.map{ p => "isBlank" -> ujson.Bool(p) },
+                    optProbe.map{ p => "probe" -> ujson.Str(p.get) },
+                    explicitlyNonRegional.option{ "isRegional" -> ujson.Bool(false) }, 
+                    optRepeat.map{ n => "repeat" -> ujson.Num(n) },
+                    ).flatten
+                val jsonText = write((baseData ::: extraData).toMap)
+                (optBlank, optProbe) match {
+                    case (None | Some(false), None) => 
+                        val error = intercept[ImagingRound.DecodingError]{ read[ImagingRound](jsonText) }
+                        error.messages.toList.count(_ === "Probe is required when a round isn't blank!") shouldEqual 1
+                    case (None | Some(false), Some(probe)) => read[ImagingRound](jsonText) shouldEqual LocusImagingRound(name.some, time, probe, optRepeat)
+                    case (Some(true), None) => read[ImagingRound](jsonText) shouldEqual BlankImagingRound(name, time)
+                    case (Some(true), Some(_)) => 
+                        val error = intercept[ImagingRound.DecodingError]{ read[ImagingRound](jsonText) }
+                        error.messages.toList.count(_ === "Blank frame cannot have probe specified!") shouldEqual 1
+                }
+        }
+    }
+
+    test("Repeat index is correctly added to locus round name...if and only if name isn't explicitly provided.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given arbName: Arbitrary[String] = genNameForJson.toArbitrary
+        given reader: Reader[ImagingRound] = ImagingRound.rwForImagingRound
+        
+        forAll { (optName: Option[String], time: Timepoint, probe: ProbeName, explicitlyNonBlank: Boolean, explicitlyNonRegional: Boolean, optRepeat: Option[PositiveInt]) => 
+            val baseData = List("time" -> ujson.Num(time.get), "probe" -> ujson.Str(probe.get))
             val extraData = List(
-                optBlank.map{ p => "isBlank" -> ujson.Bool(p) },
-                optProbe.map{ p => "probe" -> ujson.Str(p.get) },
-                explicitlyNonRegional.option{ "isRegional" -> ujson.Bool(false) }, 
-                optRepeat.map{ n => "repeat" -> ujson.Num(n) }
-            ).flatten
+                optName.map{ n => "name" -> ujson.Str(n) },
+                explicitlyNonBlank.option{ "isBlank" -> ujson.Bool(false) }, 
+                explicitlyNonRegional.option{ "isRegional" -> ujson.Bool(false) },
+                optRepeat.map{ n => "repeat" -> ujson.Num(n) },
+                ).flatten
             val jsonText = write((baseData ::: extraData).toMap)
-            (optBlank, optProbe) match {
-                case (None | Some(false), None) => 
-                    val error = intercept[ImagingRound.DecodingError]{ read[ImagingRound](jsonText) }
-                    error.messages.toList.count(_ === "Probe is required when a round isn't blank!") shouldEqual 1
-                case (None | Some(false), Some(probe)) => read[ImagingRound](jsonText) shouldEqual LocusImagingRound(name.some, time, probe, optRepeat)
-                case (Some(true), None) => read[ImagingRound](jsonText) shouldEqual BlankImagingRound(name, time)
-                case (Some(true), Some(_)) => 
-                    val error = intercept[ImagingRound.DecodingError]{ read[ImagingRound](jsonText) }
-                    error.messages.toList.count(_ === "Blank frame cannot have probe specified!") shouldEqual 1
+            val expect = optName.getOrElse{ probe.get ++ optRepeat.fold("")(n => s"_repeat${n.show}") }
+            read[ImagingRound](jsonText) match {
+                case round: LocusImagingRound => round.name shouldEqual expect
+                case round => fail(s"Expected a locus imaging round but got $round")
             }
-            val expect: ImagingRound = optProbe.fold(BlankImagingRound(name, time)){ probe => LocusImagingRound(name.some, time, probe, optRepeat) }
-            
+        }
+    }
+
+    test("Specifying that a blank frame is a repeat is an error, since doing so would have no effect.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given arbName: Arbitrary[String] = genNameForJson.toArbitrary
+        given reader: Reader[ImagingRound] = ImagingRound.rwForImagingRound
+
+        forAll { (name: String, time: Timepoint, repeat: PositiveInt) => 
+            val data = Map("name" -> ujson.Str(name), "time" -> ujson.Num(time.get), "isBlank" -> ujson.Bool(true), "repeat" -> ujson.Num(repeat))
+            val jsonText = write(data)
+            val error = intercept[ImagingRound.DecodingError]{ read[ImagingRound](jsonText) }
+            error.messages.toList.count(_ === "Blank round cannot be a repeat!") shouldEqual 1
         }
     }
 end TestImagingRound

@@ -64,9 +64,10 @@ object ImagingRound:
         val noExtraKeysNel = validateNoExtraKeys(Set("time", "probe", "name", "isRegional", "isBlank", "repeat"), "ImagingRound")(data)
         (timeNel, isRegionalNel, isBlankNel, nameOptNel, probeOptNel, repOptNel, noExtraKeysNel).tupled.toEither.flatMap{
             case (time, isRegional, isBlank, nameOpt, probeOpt, repOpt, _) => 
+                val blankRepNel = (repOpt.isEmpty || !isBlank).either(s"Blank round cannot be a repeat!", ()).toValidatedNel
                 val regRepNel = (repOpt.isEmpty || !isRegional).either(s"Regional round cannot be a repeat!", ()).toValidatedNel
-                val isBlankIsRegionalNel = (!isRegional || !isBlank).either("Image round can't be both blank and regional!", ()).toValidatedNel
-                val isBlankProbeNel = ((probeOpt, isBlank) match {
+                val blankRegionalNel = (!isRegional || !isBlank).either("Image round can't be both blank and regional!", ()).toValidatedNel
+                val blankProbeNel = ((probeOpt, isBlank) match {
                     /* Ensure that blank spec and probe spec are compatible. */
                     case (Some(_), true) => "Blank frame cannot have probe specified!".asLeft
                     case (None, false) => "Probe is required when a round isn't blank!".asLeft
@@ -78,8 +79,8 @@ object ImagingRound:
                     case (None, Some(probe)) => (probe ++ repOpt.fold("")(rep => s"_repeat${rep.show}"), ProbeName(probe)).asRight
                     case (Some(name), _) => (name, ProbeName(probeOpt.getOrElse(name))).asRight
                 }).toValidatedNel
-                (regRepNel, isBlankIsRegionalNel, isBlankProbeNel, nameProbeRepNel).mapN{ 
-                    case (_, _, _, (name, probe)) => 
+                (blankRepNel, regRepNel, blankRegionalNel, blankProbeNel, nameProbeRepNel).mapN{ 
+                    case (_, _, _, _, (name, probe)) => 
                         if isBlank then BlankImagingRound(name, time)
                         else if isRegional then RegionalImagingRound(name, time, probe)
                         else LocusImagingRound(name, time, probe, repOpt)
