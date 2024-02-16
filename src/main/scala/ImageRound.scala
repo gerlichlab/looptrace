@@ -164,12 +164,12 @@ object BlankImagingRound:
 end BlankImagingRound
 
 /** An imaging round in which FISH is done */
-sealed trait FishImagingRound extends ImagingRound:
+sealed trait FishProbed:
     /** Name for the probe used for hybridisation */
     def probe: ProbeName
     /** Number (1-based, inclusive) of repeat of a particular probe that this round represents within the experiment */
     def repeat: Option[PositiveInt]
-end FishImagingRound
+end FishProbed
 
 /**
   * Round of imaging in which a specific locus was targeted during experiment
@@ -179,7 +179,7 @@ end FishImagingRound
   * @param probe Name for the probe used for hybridisation
   * @param repeat  Number (1-based, inclusive) of repeat of a particular probe that this round represents within the experiment
   */
-final case class LocusImagingRound(name: String, time: Timepoint, probe: ProbeName, repeat: Option[PositiveInt]) extends FishImagingRound:
+final case class LocusImagingRound(name: String, time: Timepoint, probe: ProbeName, repeat: Option[PositiveInt]) extends ImagingRound, FishProbed:
     final def isRepeat = repeat.nonEmpty
 
 /** Helpers and alternate constructors for working with imaging rounds of specific genomic loci */
@@ -208,7 +208,7 @@ end LocusImagingRound
   * @param time The timepoint (0-based, inclusive) of this imaging round within an experiment
   * @param probe Name for the probe used for hybridisation
   */
-final case class RegionalImagingRound(name: String, time: Timepoint, probe: ProbeName) extends FishImagingRound:
+final case class RegionalImagingRound(name: String, time: Timepoint, probe: ProbeName) extends ImagingRound, FishProbed:
     override final def repeat: Option[PositiveInt] = None
 end RegionalImagingRound
 
