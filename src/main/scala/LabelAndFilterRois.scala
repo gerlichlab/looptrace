@@ -56,8 +56,8 @@ object LabelAndFilterRois:
         spotsFile: os.Path = null, // unconditionally required
         driftFile: os.Path = null, // unconditionally required
         noRegionGrouping: Boolean = false,
-        proximityPermissions: Option[List[ProbeGroup]] = None, 
-        proximityProhibitions: Option[List[ProbeGroup]] = None, 
+        proximityPermissions: Option[List[RegionalImageRoundGroup]] = None, 
+        proximityProhibitions: Option[List[RegionalImageRoundGroup]] = None, 
         spotSeparationThresholdValue: NonnegativeReal = NonnegativeReal(0), // unconditionally required
         buildDistanceThreshold: NonnegativeReal => DistanceThreshold = null, // unconditionally required
         unfilteredOutputFile: UnfilteredOutputFile = null, // unconditionally required
@@ -73,9 +73,9 @@ object LabelAndFilterRois:
         import parserBuilder.*
 
         /** Parse a direct spec of an empty list, content of JSON file path, or CLI-arg-like mapping spec of probe groups. */
-        given readRegionGrouping: scopt.Read[List[ProbeGroup]] = {
+        given readRegionGrouping: scopt.Read[List[RegionalImageRoundGroup]] = {
             val readAsFile = (s: String) => 
-                Try{ readJsonFile[List[ProbeGroup]](summon[scopt.Read[os.Path]].reads(s)) }.toEither.leftMap(_.getMessage)
+                Try{ readJsonFile[List[RegionalImageRoundGroup]](summon[scopt.Read[os.Path]].reads(s)) }.toEither.leftMap(_.getMessage)
             val readAsMap = (s: String) => {
                 Try{ summon[scopt.Read[Map[Int, Int]]].reads(s) }
                     .toEither
@@ -89,10 +89,10 @@ object LabelAndFilterRois:
                                 )
                         } match {
                             case (Nil, rawGroups) => 
-                                val (histogram, groups) = rawGroups.values.foldRight(Map.empty[NonnegativeInt, Int] -> List.empty[ProbeGroup]){
+                                val (histogram, groups) = rawGroups.values.foldRight(Map.empty[NonnegativeInt, Int] -> List.empty[RegionalImageRoundGroup]){
                                     case (g, (hist, gs)) => {
                                         val subHist = g.map(_.get).groupBy(identity).view.mapValues(_.size).toMap
-                                        (hist |+| subHist, ProbeGroup(g.toNes) :: gs)
+                                        (hist |+| subHist, RegionalImageRoundGroup(g.toNes) :: gs)
                                     }
                                 }
                                 histogram.filter(_._2 > 1).toList.toNel.toLeft(groups).leftMap{ reps => s"Repeated timepoints in grouping: $reps" }
@@ -145,10 +145,10 @@ object LabelAndFilterRois:
             opt[Unit]("noRegionGrouping")
                 .action((_, c) => c.copy(noRegionGrouping = true))
                 .text("Specify that proximity consideration / neighbor finding is to be done among ALL regional spots."),
-            opt[List[ProbeGroup]]("proximityPermissions")
+            opt[List[RegionalImageRoundGroup]]("proximityPermissions")
                 .action((groups, c) => c.copy(proximityPermissions = groups.some))
                 .text("List-of-lists--or path to file specifying one--grouping regional barcode timepoints for which to permit proximity"),
-            opt[List[ProbeGroup]]("proximityProhibitions")
+            opt[List[RegionalImageRoundGroup]]("proximityProhibitions")
                 .action((groups, c) => c.copy(proximityProhibitions = groups.some))
                 .text("List-of-lists--or path to file specifying one--grouping regional barcode timepoints for which to prohibit proximity"),
         )
@@ -158,9 +158,9 @@ object LabelAndFilterRois:
             case Some(opts) => 
                 val threshold = opts.buildDistanceThreshold(opts.spotSeparationThresholdValue)
                 val regionalGrouping = (opts.noRegionGrouping, opts.proximityPermissions, opts.proximityProhibitions) match {
-                    case (true, None, None) => RegionalGrouping.Trivial
-                    case (false, Some(permissions), None) => RegionalGrouping.Permissive(permissions)
-                    case (false, None, Some(prohibitions)) => RegionalGrouping.Prohibitive(prohibitions)
+                    case (true, None, None) => RegionalImageRoundGrouping.Trivial
+                    case (false, Some(permissions), None) => RegionalImageRoundGrouping.Permissive(permissions)
+                    case (false, None, Some(prohibitions)) => RegionalImageRoundGrouping.Prohibitive(prohibitions)
                     case _ => throw new IllegalArgumentException(
                         "Choose exactly 1: no grouping, permissive grouping, or prohibitive grouping. Check --help"
                         )
@@ -180,7 +180,7 @@ object LabelAndFilterRois:
     def workflow(
         spotsFile: os.Path, 
         driftFile: os.Path, 
-        regionalGrouping: RegionalGrouping,
+        regionalGrouping: RegionalImageRoundGrouping,
         minSpotSeparation: DistanceThreshold, 
         unfilteredOutputFile: UnfilteredOutputFile, 
         filteredOutputFile: FilteredOutputFile, 
@@ -299,38 +299,6 @@ object LabelAndFilterRois:
 
     final case class DriftRecordNotFoundError(key: DriftKey) extends NoSuchElementException(s"key not found: ($key)")
 
-    /** How to permit or prohibit regional barcode imaging probes/timepoints from being too physically close */
-    sealed trait RegionalGrouping
-    object RegionalGrouping:
-        case object Trivial extends RegionalGrouping
-        sealed trait Nontrivial extends RegionalGrouping:
-            def groups: List[ProbeGroup]
-        final case class Permissive(groups: List[ProbeGroup]) extends Nontrivial
-        final case class Prohibitive(groups: List[ProbeGroup]) extends Nontrivial
-    end RegionalGrouping
-
-    /**
-      * Designation of regional barcode timepoints which are prohibited from being in (configurably) close proximity.
-      *
-      * @param get The actual collection of indices
-      */
-    final case class ProbeGroup(get: NonEmptySet[Timepoint])
-    
-    /** Helpers for working with timepoint groupings */
-    object ProbeGroup:
-        given rwForProbeGroup: ReadWriter[ProbeGroup] = readwriter[ujson.Value].bimap(
-            group => ujson.Arr(group.get.toList.map(name => ujson.Num(name.get))*), 
-            json => json.arr
-                .toList
-                .toNel
-                .toRight("Empty collection can't parse as probe group!")
-                .flatMap(_.traverse(_.safeInt.flatMap(Timepoint.fromInt)))
-                .flatMap(safeNelToNes)
-                .leftMap(repeats => s"Repeat values for probe group: $repeats")
-                .fold(msg => throw new ujson.Value.InvalidData(json, msg), ProbeGroup.apply)
-        )
-    end ProbeGroup
-
     /** Add the given total drift (coarse + fine) to the given ROI, updating its centroid and its bounding box accordingly. */
     private def applyDrift(roi: Roi, drift: DriftRecord): Roi = {
         require(
@@ -395,13 +363,13 @@ object LabelAndFilterRois:
       *         otherwise, a {@code Left}-wrapped error message about what went wrong
       */
     def buildNeighboringRoisFinder(
-        rois: List[RoiLinenumPair], minDist: DistanceThreshold)(grouping: RegionalGrouping): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
+        rois: List[RoiLinenumPair], minDist: DistanceThreshold)(grouping: RegionalImageRoundGrouping): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
         given orderForRoiLinenumPair: Order[RoiLinenumPair] = Order.by(_._2)
         val getPoint = (_: RoiLinenumPair)._1.centroid
         val groupedRoiLinenumPairs: Either[String, Map[RoiLinenumPair, NonEmptySet[RoiLinenumPair]]] = grouping match {
-            case RegionalGrouping.Trivial => 
+            case RegionalImageRoundGrouping.Trivial => 
                 buildNeighborsLookupKeyed(rois.map{ case pair@(r, _) => r.position -> pair }, (_, _) => true, getPoint, minDist, identity).asRight
-            case g: RegionalGrouping.Nontrivial => 
+            case g: RegionalImageRoundGrouping.Nontrivial => 
                 val (groupIds, repeatedTimes) = NonnegativeInt.indexed(g.groups)
                     .flatMap((g, i) => g.get.toList.map(_ -> i))
                     .foldLeft(Map.empty[Timepoint, NonnegativeInt] -> Map.empty[Timepoint, Int]){ 
@@ -415,9 +383,9 @@ object LabelAndFilterRois:
                 then s"${repeatedTimes.size} repeated timepoint(s): ${repeatedTimes.toList.map(_.leftMap(_.get)).sortBy(_._1).mkString(", ")}".asLeft
                 else Alternative[List].separate(rois.map{ case pair@(roi, _) => groupIds.get(roi.time).toRight(pair).map(_ -> pair)}) match {
                     case (Nil, withGroupsAssigned) => (g match {
-                        case _: RegionalGrouping.Prohibitive => 
+                        case _: RegionalImageRoundGrouping.Prohibitive => 
                             buildNeighborsLookupKeyed(withGroupsAssigned.map{ case (gi, pair@(roi, _)) => roi.position -> (gi -> pair) }, (_._1 === _._1), getPoint, minDist, _._2)
-                        case _: RegionalGrouping.Permissive => 
+                        case _: RegionalImageRoundGrouping.Permissive => 
                             buildNeighborsLookupKeyed(withGroupsAssigned.map{ case (gi, pair@(roi, _)) => roi.position -> (gi -> pair) }, (_._1 =!= _._1), getPoint, minDist, _._2)
                     }).asRight
                     case (groupless, _) => 
