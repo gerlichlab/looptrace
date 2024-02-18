@@ -56,8 +56,8 @@ object LabelAndFilterRois:
         spotsFile: os.Path = null, // unconditionally required
         driftFile: os.Path = null, // unconditionally required
         noRegionGrouping: Boolean = false,
-        proximityPermissions: Option[List[RegionalImageRoundGroup]] = None, 
-        proximityProhibitions: Option[List[RegionalImageRoundGroup]] = None, 
+        proximityPermissions: Option[NonEmptyList[RegionalImageRoundGroup]] = None, 
+        proximityProhibitions: Option[NonEmptyList[RegionalImageRoundGroup]] = None, 
         spotSeparationThresholdValue: NonnegativeReal = NonnegativeReal(0), // unconditionally required
         buildDistanceThreshold: NonnegativeReal => DistanceThreshold = null, // unconditionally required
         unfilteredOutputFile: UnfilteredOutputFile = null, // unconditionally required
@@ -72,10 +72,13 @@ object LabelAndFilterRois:
         import ThresholdSemantic.given
         import parserBuilder.*
 
-        /** Parse a direct spec of an empty list, content of JSON file path, or CLI-arg-like mapping spec of probe groups. */
-        given readRegionGrouping: scopt.Read[List[RegionalImageRoundGroup]] = {
+        /** Parse content of JSON file path or CLI-arg-like mapping spec of probe groups. */
+        given readRegionGrouping: scopt.Read[NonEmptyList[RegionalImageRoundGroup]] = {
             val readAsFile = (s: String) => 
-                Try{ readJsonFile[List[RegionalImageRoundGroup]](summon[scopt.Read[os.Path]].reads(s)) }.toEither.leftMap(_.getMessage)
+                Try{ readJsonFile[List[RegionalImageRoundGroup]](summon[scopt.Read[os.Path]].reads(s)) }
+                    .toEither
+                    .leftMap(_.getMessage)
+                    .flatMap(_.toNel.toRight(s"Empty groups parsed from file! $s"))
             val readAsMap = (s: String) => {
                 Try{ summon[scopt.Read[Map[Int, Int]]].reads(s) }
                     .toEither
@@ -95,7 +98,12 @@ object LabelAndFilterRois:
                                         (hist |+| subHist, RegionalImageRoundGroup(g.toNes) :: gs)
                                     }
                                 }
-                                histogram.filter(_._2 > 1).toList.toNel.toLeft(groups).leftMap{ reps => s"Repeated timepoints in grouping: $reps" }
+                                histogram.filter(_._2 > 1)
+                                    .toList
+                                    .toNel
+                                    .toLeft(groups)
+                                    .leftMap{ reps => s"Repeated timepoints in grouping: $reps" }
+                                    .flatMap(_.toNel.toRight("Empty groups!"))
                             case (negatives, _) => s"Negative timepoint(s) in grouping: $negatives".asLeft
                         }
                     )
@@ -145,10 +153,10 @@ object LabelAndFilterRois:
             opt[Unit]("noRegionGrouping")
                 .action((_, c) => c.copy(noRegionGrouping = true))
                 .text("Specify that proximity consideration / neighbor finding is to be done among ALL regional spots."),
-            opt[List[RegionalImageRoundGroup]]("proximityPermissions")
+            opt[NonEmptyList[RegionalImageRoundGroup]]("proximityPermissions")
                 .action((groups, c) => c.copy(proximityPermissions = groups.some))
                 .text("List-of-lists--or path to file specifying one--grouping regional barcode timepoints for which to permit proximity"),
-            opt[List[RegionalImageRoundGroup]]("proximityProhibitions")
+            opt[NonEmptyList[RegionalImageRoundGroup]]("proximityProhibitions")
                 .action((groups, c) => c.copy(proximityProhibitions = groups.some))
                 .text("List-of-lists--or path to file specifying one--grouping regional barcode timepoints for which to prohibit proximity"),
         )
@@ -370,7 +378,7 @@ object LabelAndFilterRois:
             case RegionalImageRoundGrouping.Trivial => 
                 buildNeighborsLookupKeyed(rois.map{ case pair@(r, _) => r.position -> pair }, (_, _) => true, getPoint, minDist, identity).asRight
             case g: RegionalImageRoundGrouping.Nontrivial => 
-                val (groupIds, repeatedTimes) = NonnegativeInt.indexed(g.groups)
+                val (groupIds, repeatedTimes) = NonnegativeInt.indexed(g.groups.toList)
                     .flatMap((g, i) => g.get.toList.map(_ -> i))
                     .foldLeft(Map.empty[Timepoint, NonnegativeInt] -> Map.empty[Timepoint, Int]){ 
                         case ((ids, repeats), (time, gid)) =>

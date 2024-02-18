@@ -1,6 +1,6 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
-import cats.data.NonEmptySet
+import cats.data.{ NonEmptyList, NonEmptySet }
 import cats.syntax.all.*
 import upickle.default.*
 
@@ -36,9 +36,9 @@ object RegionalImageRoundGrouping:
     /** A nontrivial grouping of regional imaging rounds, which must constitute a partition of those available  */
     sealed trait Nontrivial extends RegionalImageRoundGrouping:
         /** A nontrivial grouping specifies a list of groups which comprise the total grouping.s */
-        def groups: List[RegionalImageRoundGroup]
+        def groups: NonEmptyList[RegionalImageRoundGroup]
     /** A 'permissive' grouping 'allows' members of the same group to violate some rule, while 'forbidding' non-grouped items from doing so. */
-    final case class Permissive(groups: List[RegionalImageRoundGroup]) extends Nontrivial
+    final case class Permissive(groups: NonEmptyList[RegionalImageRoundGroup]) extends Nontrivial
     /** A 'prohibitive' grouping 'forbids' members of the same group to violate some rule, while 'allowing' non-grouped items to violate the rule. */
-    final case class Prohibitive(groups: List[RegionalImageRoundGroup]) extends Nontrivial
+    final case class Prohibitive(groups: NonEmptyList[RegionalImageRoundGroup]) extends Nontrivial
 end RegionalImageRoundGrouping
