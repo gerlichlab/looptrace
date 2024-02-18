@@ -1,11 +1,11 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
+import scala.language.adhocExtensions // for extending ujson.Value.InvalidData
 import scala.util.Try
-import upickle.default.*
-
-import cats.data.*
+import cats.data.NonEmptyList
 import cats.syntax.all.*
 import mouse.boolean.*
+import upickle.default.*
 
 /** A sequence of FISH and blank imaging rounds, constituting a microscopy experiment */
 final case class ImagingSequence private(rounds: NonEmptyList[ImagingRound]):
@@ -16,6 +16,10 @@ end ImagingSequence
 /** Smart constructors and tools for working with sequences of imaging rounds */
 object ImagingSequence:
     
+    /** When JSON can't be decoded as sequence of imaging rounds */
+    class DecodingError(messages: NonEmptyList[String], json: ujson.Value) 
+        extends ujson.Value.InvalidData(json, s"Error(s) decoding ImagingSequence: ${messages.mkString_(", ")}")
+
     /**
       * Create a sequence of imaging rounds constituting an imaging experiment.
       * 

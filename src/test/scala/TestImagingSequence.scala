@@ -12,7 +12,7 @@ import org.scalatest.matchers.*
   * 
   *  @author Vince Reuter
   */
-class TestImagingSequence extends AnyFunSuite, DistanceSuite, ImagingRoundHelpers, LooptraceSuite, ScalacheckSuite, should.Matchers:
+class TestImagingSequence extends AnyFunSuite, ImagingRoundHelpers, LooptraceSuite, ScalacheckSuite, should.Matchers:
     
     test("Empty collection is an error.") {
         ImagingSequence.fromRounds(List()) match {
@@ -26,7 +26,18 @@ class TestImagingSequence extends AnyFunSuite, DistanceSuite, ImagingRoundHelper
         }
     }
     
-    test("Sequence of timepoints other than 0, 1, ..., N-1 is an error") { pending }
+    test("Sequence of timepoints other than 0, 1, ..., N-1 gives expected error.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given arbName: Arbitrary[String] = genNameForJson.toArbitrary
+        forAll (Gen.nonEmptyListOf(genRound).suchThat(namesAreUnique)) { (rounds: List[ImagingRound]) => 
+            ImagingSequence.fromRounds(rounds) match {
+                case Left(messages) => 
+                    val expPrefix = "Ordered timepoints for imaging rounds don't form contiguous sequence"
+                    messages.toList.count(_.startsWith(expPrefix)) shouldEqual 1
+                case Right(_) => fail("Expected ImagingSequence parse error(s) but got success!")
+            }
+        }
+    }
     
     test("Non-unique names is an error.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
@@ -51,7 +62,7 @@ class TestImagingSequence extends AnyFunSuite, DistanceSuite, ImagingRoundHelper
             /* Force satisfaction of the requirement that the timepoints form sequence [0, ..., N-1]. */
             .map(k => (0 until k).map(Timepoint.unsafe).toList)
             .flatMap(_.traverse{ t => genRound(using genNameForJson.toArbitrary, Gen.const(t).toArbitrary) })
-            .suchThat(rounds => rounds.map(_.name).toSet.size === rounds.length) // Names must be unique.
+            .suchThat(namesAreUnique)
         forAll (genRounds) { rounds => 
             val exp = ImagingSequence.fromRounds(rounds)
             val obs = ImagingSequence.fromRounds(read[List[ImagingRound]](write(rounds)))
@@ -59,9 +70,21 @@ class TestImagingSequence extends AnyFunSuite, DistanceSuite, ImagingRoundHelper
         }
     }
 
+    test("Through JSON is identical to directly from rounds.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given arbName: Arbitrary[String] = genNameForJson.toArbitrary
+        given rw: ReadWriter[ImagingRound] = ImagingRound.rwForImagingRound
+        pending
+        // forAll (Gen.nonEmptyListOf(genRound).suchThat(namesAreUnique)) { (rounds: List[ImagingRound]) => 
+        //     pending
+        // }
+    }
+
     private def genRound(using arbName: Arbitrary[String], arbTime: Arbitrary[Timepoint]): Gen[ImagingRound] = Gen.oneOf(
         arbitrary[BlankImagingRound], 
         arbitrary[RegionalImagingRound], 
         arbitrary[LocusImagingRound],
         )
+
+    private def namesAreUnique(rounds: List[ImagingRound]): Boolean = rounds.map(_.name).toSet.size === rounds.length
 end TestImagingSequence
