@@ -30,7 +30,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 // missing driftFile
                 assertTypeError{ "workflow( " +
                     "spotsFile = tmpdir / \"traces.csv\", " + 
-                    "regionalGrouping = RegionalGrouping.Trivial, " + 
+                    "regionalGrouping = RegionalImageRoundGrouping.Trivial, " + 
                     "minSpotSeparation = PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(5.0)), " + 
                     "unfilteredOutputFile = UnfilteredOutputFile.fromPath(tmpdir / \"unfiltered.csv\"), " + 
                     "filteredOutputFile = FilteredOutputFile.fromPath(tmpdir / \"filtered.csv\"), " + 
@@ -41,7 +41,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 assertCompiles{ "workflow( " +
                     "spotsFile = tmpdir / \"traces.csv\", " + 
                     "driftFile = tmpdir / \"drift.csv\", " + 
-                    "regionalGrouping = RegionalGrouping.Trivial, " + 
+                    "regionalGrouping = RegionalImageRoundGrouping.Trivial, " + 
                     "minSpotSeparation = PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(5.0)), " + 
                     "unfilteredOutputFile = UnfilteredOutputFile.fromPath(tmpdir / \"unfiltered.csv\"), " + 
                     "filteredOutputFile = FilteredOutputFile.fromPath(tmpdir / \"filtered.csv\"), " + 
@@ -388,7 +388,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                         workflow(
                             spotsFile = spotsFile, 
                             driftFile = driftFile, 
-                            regionalGrouping = RegionalGrouping.Trivial, 
+                            regionalGrouping = RegionalImageRoundGrouping.Trivial, 
                             minSpotSeparation = threshold, 
                             filteredOutputFile = filteredFile, 
                             unfilteredOutputFile = unfilteredFile, 
@@ -434,11 +434,11 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         
         // NB: the frame value for the groping comes from the spotsLines variable.
         def genGrouping = {
-            val singleGroup: ProbeGroup = ProbeGroup(NonEmptySet.one(Timepoint(NonnegativeInt(27))))
+            val singleGroup: RegionalImageRoundGroup = RegionalImageRoundGroup(NonEmptySet.one(Timepoint(NonnegativeInt(27))))
             Gen.oneOf(
-                RegionalGrouping.Trivial, 
-                RegionalGrouping.Permissive(List(singleGroup)), 
-                RegionalGrouping.Prohibitive(List(singleGroup)),
+                RegionalImageRoundGrouping.Trivial, 
+                RegionalImageRoundGrouping.Permissive(List(singleGroup)), 
+                RegionalImageRoundGrouping.Prohibitive(List(singleGroup)),
                 )
         }
 
@@ -480,7 +480,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         // Generate a reasonable distance threshold.
         given arbThreshold: Arbitrary[DistanceThreshold] = genThreshold(Gen.choose(1.0, 10.0).map(NonnegativeReal.unsafe)).toArbitrary
 
-        def genSpotsDriftsAndProbeGrouping = {
+        def genSpotsDriftsAndRegionalImageRoundGrouping = {
             /* Generate drifts. */
             def genCoarseDrift: Gen[CoarseDrift] = {
                 val genInt = Gen.choose(-100, 100)
@@ -497,7 +497,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             } yield (spots, drifts, grouping)
         }
 
-        forAll (genSpotsDriftsAndProbeGrouping, genThreshold(arbitrary[NonnegativeReal]), arbitrary[ExtantOutputHandler]) {
+        forAll (genSpotsDriftsAndRegionalImageRoundGrouping, genThreshold(arbitrary[NonnegativeReal]), arbitrary[ExtantOutputHandler]) {
             case ((spots, driftRows, grouping), threshold, handleOutput) => 
                 withTempDirectory{ (tmpdir: os.Path) => 
                     val spotsFile = tmpdir / "spots.csv"
@@ -589,16 +589,16 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         val timepoints = List(27, 28, 29, 30).map(Timepoint.unsafe)
         
         // Choose from probe groupings available given the timepoints used in drift file.
-        given arbGrouping: Arbitrary[RegionalGrouping] = {
+        given arbGrouping: Arbitrary[RegionalImageRoundGrouping] = {
             val genGroups = Gen.oneOf(List(
                 List(NonEmptySet.one(27), NonEmptySet.one(29), NonEmptySet.of(28, 30)), 
                 List(NonEmptySet.of(27, 30), NonEmptySet.of(28, 29)),
                 List(NonEmptySet.of(27, 28, 30), NonEmptySet.one(29)), 
                 List(NonEmptySet.of(27, 28, 29, 30)),
-            ).map(_.map(timeSets => ProbeGroup(timeSets.map(Timepoint.unsafe)))))
-            val genSemantic: Gen[List[ProbeGroup] => RegionalGrouping] = Gen.oneOf( RegionalGrouping.Prohibitive.apply, RegionalGrouping.Permissive.apply)
+            ).map(_.map(timeSets => RegionalImageRoundGroup(timeSets.map(Timepoint.unsafe)))))
+            val genSemantic: Gen[List[RegionalImageRoundGroup] => RegionalImageRoundGrouping] = Gen.oneOf( RegionalImageRoundGrouping.Prohibitive.apply, RegionalImageRoundGrouping.Permissive.apply)
             Gen.oneOf(
-                Gen.const(RegionalGrouping.Trivial),
+                Gen.const(RegionalImageRoundGrouping.Trivial),
                 (genSemantic, genGroups).tupled.map((build, groups) => build(groups))
             ).toArbitrary
         }
@@ -614,7 +614,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         // Generate a reasonable distance threshold.
         given arbThreshold: Arbitrary[DistanceThreshold] = genThreshold(Gen.choose(1.0, 10000.0).map(NonnegativeReal.unsafe)).toArbitrary
 
-        forAll { (rois: List[RegionalBarcodeSpotRoi], threshold: DistanceThreshold, grouping: RegionalGrouping, handleOutput: ExtantOutputHandler) =>
+        forAll { (rois: List[RegionalBarcodeSpotRoi], threshold: DistanceThreshold, grouping: RegionalImageRoundGrouping, handleOutput: ExtantOutputHandler) =>
             val inputLines = getSpotsFileLines(rois)
             withTempDirectory{ (tmpdir: os.Path) => 
                 val spotsFile = tmpdir / "spots.csv"
@@ -670,7 +670,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                     val (g1, g2) = obsReg.toList.splitAt(k)
                     List(g1, g2).map(_.toSet.toNonEmptySetUnsafe)
                 }
-        } yield (rois, RegionalGrouping.Permissive(groups.map(ProbeGroup.apply)))
+        } yield (rois, RegionalImageRoundGrouping.Permissive(groups.map(RegionalImageRoundGroup.apply)))
 
         forAll (genRoisAndGrouping(10, 50), genThreshold{ Gen.choose[Double](0, 1).map(NonnegativeReal.unsafe) }, minSuccessful(1000)) { 
             case ((rois, grouping), threshold) =>
@@ -855,8 +855,8 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             } yield rois
             forAll (genRois) { rois => 
                 val grouping = 
-                    if rawGrouping.isEmpty then RegionalGrouping.Trivial
-                    else RegionalGrouping.Prohibitive(rawGrouping.map{ sub => ProbeGroup(sub.map(Timepoint.unsafe)) })
+                    if rawGrouping.isEmpty then RegionalImageRoundGrouping.Trivial
+                    else RegionalImageRoundGrouping.Prohibitive(rawGrouping.map{ sub => RegionalImageRoundGroup(sub.map(Timepoint.unsafe)) })
                 buildNeighboringRoisFinder(NonnegativeInt.indexed(rois), threshold)(grouping) match {
                     case Left(err) => fail(s"Expected success but got error: $err")
                     case Right(observation) => 
@@ -874,7 +874,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-2048.0, 2048.0)
         given arbMargin: Arbitrary[BoundingBox.Margin] = getArbForMargin(NonnegativeReal(1.0), NonnegativeReal(32.0))
         
-        def genSmallRoisAndGrouping: Gen[(List[RegionalBarcodeSpotRoi], NonEmptyList[Timepoint], RegionalGrouping)] = for {
+        def genSmallRoisAndGrouping: Gen[(List[RegionalBarcodeSpotRoi], NonEmptyList[Timepoint], RegionalImageRoundGrouping)] = for {
             // First, generate ROIs timepoints, such that they're few in number (so quicker test), and
             // the number of unique timepoints is at least 2 (at least 1 to be uncovered by the grouping).
             rois <- {
@@ -886,15 +886,15 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             rawFullGrouping <- Gen.oneOf(collections.partition(numGroups, times))
             (skipped, grouping) <- rawFullGrouping
                 .traverse(_.toList.traverse(x => arbitrary[Boolean].map(_.either(x, x))))
-                .map(_.foldLeft(List.empty[Timepoint] -> List.empty[ProbeGroup]){ 
+                .map(_.foldLeft(List.empty[Timepoint] -> List.empty[RegionalImageRoundGroup]){ 
                     // Collect the timepoints to skip, and build up the probe/timepoint grouping.
                     case ((drops, acc), subMaybes) => 
                         val (newSkips, newKeeps) = Alternative[List].separate(subMaybes)
-                        (newSkips ::: drops, newKeeps.toNel.fold(acc){ sub => ProbeGroup(sub.toNes) :: acc })
+                        (newSkips ::: drops, newKeeps.toNel.fold(acc){ sub => RegionalImageRoundGroup(sub.toNes) :: acc })
                 })
                 .suchThat{ (skips, group) => skips.nonEmpty && group.nonEmpty } // At least 1 time is skipped, and grouping is nontrivial.
                 .map(_.bimap(_.toNel.get, _.toNel.get))                         // safe b/c of .suchThat(...) filter
-            semantic <- Gen.oneOf(RegionalGrouping.Permissive.apply, RegionalGrouping.Prohibitive.apply)
+            semantic <- Gen.oneOf(RegionalImageRoundGrouping.Permissive.apply, RegionalImageRoundGrouping.Prohibitive.apply)
         } yield (rois, skipped, semantic(grouping.toList))
         
         forAll (genSmallRoisAndGrouping, genThreshold(arbitrary[NonnegativeReal])) { 
@@ -920,7 +920,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         extension [X : Order](xs: Set[X])
             def unsafeToNes: NonEmptySet[X] = xs.toList.toNel.get.toNes
 
-        def genSmallRoisAndGrouping: Gen[(List[RegionalBarcodeSpotRoi], NonEmptySet[Timepoint], RegionalGrouping)] = for {
+        def genSmallRoisAndGrouping: Gen[(List[RegionalBarcodeSpotRoi], NonEmptySet[Timepoint], RegionalImageRoundGrouping)] = for {
             // First, generate ROIs timepoints, such that they're few in number (so quicker test).
             rois <- {
                 given arbTime: Arbitrary[Timepoint] = Gen.oneOf(List(7, 8, 9).map(Timepoint.unsafe)).toArbitrary
@@ -930,8 +930,8 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             numGroups <- Gen.choose(1, times.size)
             legitGroup <- Gen.oneOf(collections.partition(numGroups, times))
             repeated <- Gen.nonEmptyListOf(Gen.oneOf(times)).map(_.toSet)
-            grouping = (repeated :: legitGroup).map(sub => ProbeGroup(sub.unsafeToNes))
-            semantic <- Gen.oneOf(RegionalGrouping.Permissive.apply, RegionalGrouping.Prohibitive.apply)
+            grouping = (repeated :: legitGroup).map(sub => RegionalImageRoundGroup(sub.unsafeToNes))
+            semantic <- Gen.oneOf(RegionalImageRoundGrouping.Permissive.apply, RegionalImageRoundGrouping.Prohibitive.apply)
         } yield (rois, repeated.unsafeToNes, semantic(grouping.toList))
         
         forAll (genSmallRoisAndGrouping, genThreshold(arbitrary[NonnegativeReal])) { 
@@ -977,7 +977,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 workflow(
                     spotsFile = spotsFile, 
                     driftFile = driftFile, 
-                    regionalGrouping = RegionalGrouping.Trivial,
+                    regionalGrouping = RegionalImageRoundGrouping.Trivial,
                     minSpotSeparation = threshold,
                     unfilteredOutputFile = unfiltFile, 
                     filteredOutputFile = filtFile, 
@@ -1015,7 +1015,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             }
             /* Only bother with 10 successes since threshold really should be irrelevant, and we're testing also over a table. */
             forAll (genThreshold(arbitrary[NonnegativeReal]), minSuccessful(10)) {
-                t => buildNeighboringRoisFinder(roisWithIndex, t)(RegionalGrouping.Trivial) match {
+                t => buildNeighboringRoisFinder(roisWithIndex, t)(RegionalImageRoundGrouping.Trivial) match {
                     case Left(errMsg) => fail(s"Expected test success but got failure/error message: $errMsg")
                     case Right(observed) => observed shouldEqual expected
                 }
@@ -1031,7 +1031,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         
         forAll (genThreshold(NonnegativeReal(0)), genRois) { case (threshold, rois) => 
             val indexed = NonnegativeInt.indexed(rois)
-            val grouping = RegionalGrouping.Prohibitive(rois.map(roi => ProbeGroup(NonEmptySet.one(roi.time))))
+            val grouping = RegionalImageRoundGrouping.Prohibitive(rois.map(roi => RegionalImageRoundGroup(NonEmptySet.one(roi.time))))
             buildNeighboringRoisFinder(indexed, threshold)(grouping) match {
                 case Right(neigbors) => neigbors shouldEqual Map()
                 case Left(errMsg) => fail(s"Expected success, but got error message: $errMsg")
@@ -1041,21 +1041,21 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
 
     test("Regardless of grouping semantic, fewer than 2 ROIs means the neighbors mapping is always empty.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
-        def genRoiDistanceAndProbeGroup: Gen[(RegionalBarcodeSpotRoi, DistanceThreshold, RegionalGrouping)] = {
+        def genRoiDistanceAndRegionalImageRoundGroup: Gen[(RegionalBarcodeSpotRoi, DistanceThreshold, RegionalImageRoundGrouping)] = {
             given arbMargin: Arbitrary[BoundingBox.Margin] = getArbForMargin(NonnegativeReal(1.0), NonnegativeReal(32.0))
             given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-2048.0, 2048.0)
             for {
                 roi <- arbitrary[RegionalBarcodeSpotRoi]
                 threshold <- genThreshold(arbitrary[NonnegativeReal])
                 grouping <- Gen.oneOf(
-                    Gen.const(RegionalGrouping.Trivial), 
-                    Gen.oneOf(RegionalGrouping.Prohibitive.apply, RegionalGrouping.Permissive.apply)
-                        .map(_(List(ProbeGroup(NonEmptySet.one(roi.time))))),
+                    Gen.const(RegionalImageRoundGrouping.Trivial), 
+                    Gen.oneOf(RegionalImageRoundGrouping.Prohibitive.apply, RegionalImageRoundGrouping.Permissive.apply)
+                        .map(_(List(RegionalImageRoundGroup(NonEmptySet.one(roi.time))))),
                     )
             } yield (roi, threshold, grouping)
         }
         
-        forAll (genRoiDistanceAndProbeGroup) { (roi, threshold, grouping) => 
+        forAll (genRoiDistanceAndRegionalImageRoundGroup) { (roi, threshold, grouping) => 
             val rois = NonnegativeInt.indexed(List(roi))
             buildNeighboringRoisFinder(rois, threshold)(grouping) shouldEqual Right(Map())
         }
@@ -1063,7 +1063,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
 
     test("A ROI is never among its own neighbors.") {
         forAll (genThresholdAndRoisToFacilitateCollisions) { case (threshold, rois) => 
-            buildNeighboringRoisFinder(NonnegativeInt.indexed(rois), threshold)(RegionalGrouping.Trivial) match {
+            buildNeighboringRoisFinder(NonnegativeInt.indexed(rois), threshold)(RegionalImageRoundGrouping.Trivial) match {
                 case Left(errMsg) => fail(s"Expected success, but got error message: $errMsg")
                 case Right(neighbors) => neighbors.toList.filter{ case (k, vs) => vs `contains` k } shouldEqual List()
             }
@@ -1073,7 +1073,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
     test("Neighbor relation is bidirectional relation, so each of a ROI's neighbors has the ROI among its own neighbors.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         forAll (genThresholdAndRoisToFacilitateCollisions) { case (threshold, rois) => 
-            buildNeighboringRoisFinder(NonnegativeInt.indexed(rois), threshold)(RegionalGrouping.Trivial) match {
+            buildNeighboringRoisFinder(NonnegativeInt.indexed(rois), threshold)(RegionalImageRoundGrouping.Trivial) match {
                 case Left(errMsg) => fail(s"Expected success, but got error message: $errMsg")
                 case Right(neighbors) => 
                     val (fails, _) = Alternative[List].separate(neighbors.toList.flatMap{ 
@@ -1126,22 +1126,22 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    def genSpotCoveringGrouping(spots: Iterable[RegionalBarcodeSpotRoi]): Gen[RegionalGrouping] = {
-        def genNontrivialGrouping(spots: Iterable[RegionalBarcodeSpotRoi]): Gen[RegionalGrouping.Nontrivial] = {
+    def genSpotCoveringGrouping(spots: Iterable[RegionalBarcodeSpotRoi]): Gen[RegionalImageRoundGrouping] = {
+        def genNontrivialGrouping(spots: Iterable[RegionalBarcodeSpotRoi]): Gen[RegionalImageRoundGrouping.Nontrivial] = {
             given ordTime: Ordering[Timepoint] = Order[Timepoint].toOrdering
             for {
-                semantic <- Gen.oneOf(RegionalGrouping.Permissive.apply, RegionalGrouping.Prohibitive.apply)
+                semantic <- Gen.oneOf(RegionalImageRoundGrouping.Permissive.apply, RegionalImageRoundGrouping.Prohibitive.apply)
                 timepoints = spots.map(_.region.get).toSet
                 maybeSplit <- Gen.option(Gen.choose(1, timepoints.size - 1))
                 groups = maybeSplit match {
-                    case None => List(ProbeGroup(timepoints.toNonEmptySetUnsafe))
+                    case None => List(RegionalImageRoundGroup(timepoints.toNonEmptySetUnsafe))
                     case Some(k) => 
                         val (g1, g2) = timepoints.toList.splitAt(k)
-                        List(g1, g2).map(g => ProbeGroup(g.toSet.toNonEmptySetUnsafe))
+                        List(g1, g2).map(g => RegionalImageRoundGroup(g.toSet.toNonEmptySetUnsafe))
                 }
             } yield semantic(groups)
         }
-        Gen.oneOf(Gen.const(RegionalGrouping.Trivial), genNontrivialGrouping(spots.toList))
+        Gen.oneOf(Gen.const(RegionalImageRoundGrouping.Trivial), genNontrivialGrouping(spots.toList))
     }
 
     /** Use the given drift component generators to create a full drift record for each generated spot record. */
