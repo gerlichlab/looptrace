@@ -18,10 +18,10 @@ object RegionalImageRoundGroup:
         json => json.arr
             .toList
             .toNel
-            .toRight("Empty collection can't parse as probe group!")
+            .toRight("Empty collection can't parse as group of regional imaging rounds!")
             .flatMap(_.traverse(_.safeInt.flatMap(Timepoint.fromInt)))
             .flatMap(safeNelToNes)
-            .leftMap(repeats => s"Repeat values for probe group: $repeats")
+            .leftMap(repeats => s"Repeat values for group of regional imaging rounds: $repeats")
             .fold(msg => throw new ujson.Value.InvalidData(json, msg), RegionalImageRoundGroup.apply)
     )
 end RegionalImageRoundGroup
@@ -29,10 +29,16 @@ end RegionalImageRoundGroup
 /** How to permit or prohibit regional barcode imaging probes/timepoints from being too physically close */
 sealed trait RegionalImageRoundGrouping
 
+/** The (concrete) subtypes of regional image round grouping */
 object RegionalImageRoundGrouping:
+    /** A trivial grouping of regional imaging rounds, which treats all regional rounds as one big group */
     case object Trivial extends RegionalImageRoundGrouping
-    sealed trait Nontrivial extends RegionalImageRoundGrouping:
+    /** A nontrivial grouping of regional imaging rounds, which must constitute a partition of those available  */
+    sealed trait Nontrivial:
+        /** A nontrivial grouping specifies a list of groups which comprise the total grouping.s */
         def groups: List[RegionalImageRoundGroup]
-    final case class Permissive(groups: List[RegionalImageRoundGroup]) extends Nontrivial
-    final case class Prohibitive(groups: List[RegionalImageRoundGroup]) extends Nontrivial
+    /** A 'permissive' grouping 'allows' members of the same group to violate some rule, while 'forbidding' non-grouped items from doing so. */
+    final case class Permissive(groups: List[RegionalImageRoundGroup]) extends RegionalImageRoundGrouping, Nontrivial
+    /** A 'prohibitive' grouping 'forbids' members of the same group to violate some rule, while 'allowing' non-grouped items to violate the rule. */
+    final case class Prohibitive(groups: List[RegionalImageRoundGroup]) extends RegionalImageRoundGrouping, Nontrivial
 end RegionalImageRoundGrouping
