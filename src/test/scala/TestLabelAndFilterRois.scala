@@ -437,8 +437,8 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             val singleGroup: RegionalImageRoundGroup = RegionalImageRoundGroup(NonEmptySet.one(Timepoint(NonnegativeInt(27))))
             Gen.oneOf(
                 RegionalImageRoundGrouping.Trivial, 
-                RegionalImageRoundGrouping.Permissive(List(singleGroup)), 
-                RegionalImageRoundGrouping.Prohibitive(List(singleGroup)),
+                RegionalImageRoundGrouping.Permissive(NonEmptyList.one(singleGroup)), 
+                RegionalImageRoundGrouping.Prohibitive(NonEmptyList.one(singleGroup)),
                 )
         }
 
@@ -591,12 +591,15 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         // Choose from probe groupings available given the timepoints used in drift file.
         given arbGrouping: Arbitrary[RegionalImageRoundGrouping] = {
             val genGroups = Gen.oneOf(List(
-                List(NonEmptySet.one(27), NonEmptySet.one(29), NonEmptySet.of(28, 30)), 
-                List(NonEmptySet.of(27, 30), NonEmptySet.of(28, 29)),
-                List(NonEmptySet.of(27, 28, 30), NonEmptySet.one(29)), 
-                List(NonEmptySet.of(27, 28, 29, 30)),
+                NonEmptyList.of(NonEmptySet.one(27), NonEmptySet.one(29), NonEmptySet.of(28, 30)), 
+                NonEmptyList.of(NonEmptySet.of(27, 30), NonEmptySet.of(28, 29)),
+                NonEmptyList.of(NonEmptySet.of(27, 28, 30), NonEmptySet.one(29)), 
+                NonEmptyList.one(NonEmptySet.of(27, 28, 29, 30)),
             ).map(_.map(timeSets => RegionalImageRoundGroup(timeSets.map(Timepoint.unsafe)))))
-            val genSemantic: Gen[List[RegionalImageRoundGroup] => RegionalImageRoundGrouping] = Gen.oneOf( RegionalImageRoundGrouping.Prohibitive.apply, RegionalImageRoundGrouping.Permissive.apply)
+            val genSemantic: Gen[NonEmptyList[RegionalImageRoundGroup] => RegionalImageRoundGrouping] = Gen.oneOf(
+                RegionalImageRoundGrouping.Prohibitive.apply, 
+                RegionalImageRoundGrouping.Permissive.apply,
+                )
             Gen.oneOf(
                 Gen.const(RegionalImageRoundGrouping.Trivial),
                 (genSemantic, genGroups).tupled.map((build, groups) => build(groups))
@@ -665,10 +668,10 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             obsReg = rois.map(_.region.get).toSet
             groups <- 
                 if obsReg.size === 1 
-                then Gen.const(List(obsReg.toNonEmptySetUnsafe))
+                then Gen.const(NonEmptyList.one(obsReg.toNonEmptySetUnsafe))
                 else Gen.choose(1, obsReg.size - 1).map{ k => 
                     val (g1, g2) = obsReg.toList.splitAt(k)
-                    List(g1, g2).map(_.toSet.toNonEmptySetUnsafe)
+                    NonEmptyList.of(g1, g2).map(_.toSet.toNonEmptySetUnsafe)
                 }
         } yield (rois, RegionalImageRoundGrouping.Permissive(groups.map(RegionalImageRoundGroup.apply)))
 
@@ -854,9 +857,12 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 }
             } yield rois
             forAll (genRois) { rois => 
-                val grouping = 
-                    if rawGrouping.isEmpty then RegionalImageRoundGrouping.Trivial
-                    else RegionalImageRoundGrouping.Prohibitive(rawGrouping.map{ sub => RegionalImageRoundGroup(sub.map(Timepoint.unsafe)) })
+                val grouping = rawGrouping.toNel match {
+                    case None => RegionalImageRoundGrouping.Trivial
+                    case Some(grouping) => RegionalImageRoundGrouping.Prohibitive(
+                        grouping.map{ sub => RegionalImageRoundGroup(sub.map(Timepoint.unsafe))}
+                    )
+                }
                 buildNeighboringRoisFinder(NonnegativeInt.indexed(rois), threshold)(grouping) match {
                     case Left(err) => fail(s"Expected success but got error: $err")
                     case Right(observation) => 
@@ -895,7 +901,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 .suchThat{ (skips, group) => skips.nonEmpty && group.nonEmpty } // At least 1 time is skipped, and grouping is nontrivial.
                 .map(_.bimap(_.toNel.get, _.toNel.get))                         // safe b/c of .suchThat(...) filter
             semantic <- Gen.oneOf(RegionalImageRoundGrouping.Permissive.apply, RegionalImageRoundGrouping.Prohibitive.apply)
-        } yield (rois, skipped, semantic(grouping.toList))
+        } yield (rois, skipped, semantic(grouping))
         
         forAll (genSmallRoisAndGrouping, genThreshold(arbitrary[NonnegativeReal])) { 
             case ((rois, uncoveredTimepoints, grouping), threshold) =>
@@ -930,9 +936,9 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             numGroups <- Gen.choose(1, times.size)
             legitGroup <- Gen.oneOf(collections.partition(numGroups, times))
             repeated <- Gen.nonEmptyListOf(Gen.oneOf(times)).map(_.toSet)
-            grouping = (repeated :: legitGroup).map(sub => RegionalImageRoundGroup(sub.unsafeToNes))
+            grouping = NonEmptyList(repeated, legitGroup).map(sub => RegionalImageRoundGroup(sub.unsafeToNes))
             semantic <- Gen.oneOf(RegionalImageRoundGrouping.Permissive.apply, RegionalImageRoundGrouping.Prohibitive.apply)
-        } yield (rois, repeated.unsafeToNes, semantic(grouping.toList))
+        } yield (rois, repeated.unsafeToNes, semantic(grouping))
         
         forAll (genSmallRoisAndGrouping, genThreshold(arbitrary[NonnegativeReal])) { 
             case ((rois, repeatedTimepoints, grouping), threshold) =>
@@ -1024,15 +1030,17 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
     }
 
     test("All-singleton PROHIBITIVE probe groupings guarantees no neighbors.") {
-        def genRois: Gen[List[Roi]] = for {
-            n <- Gen.choose(0, 10)
+        def noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        def genRois: Gen[NonEmptyList[Roi]] = for {
+            n <- Gen.choose(1, 10)
             regions <- Gen.pick(n, 0 until 100)
-        } yield regions.map(r => canonicalRoi.copy(region = RegionId.unsafe(r))).toList
+        } yield regions.map(r => canonicalRoi.copy(region = RegionId.unsafe(r))).toList.toNel.get
         
         forAll (genThreshold(NonnegativeReal(0)), genRois) { case (threshold, rois) => 
-            val indexed = NonnegativeInt.indexed(rois)
-            val grouping = RegionalImageRoundGrouping.Prohibitive(rois.map(roi => RegionalImageRoundGroup(NonEmptySet.one(roi.time))))
-            buildNeighboringRoisFinder(indexed, threshold)(grouping) match {
+            val grouping = RegionalImageRoundGrouping.Prohibitive(
+                rois.map(roi => RegionalImageRoundGroup(NonEmptySet.one(roi.time)))
+                )
+            buildNeighboringRoisFinder(NonnegativeInt.indexed(rois.toList), threshold)(grouping) match {
                 case Right(neigbors) => neigbors shouldEqual Map()
                 case Left(errMsg) => fail(s"Expected success, but got error message: $errMsg")
             }
@@ -1050,7 +1058,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 grouping <- Gen.oneOf(
                     Gen.const(RegionalImageRoundGrouping.Trivial), 
                     Gen.oneOf(RegionalImageRoundGrouping.Prohibitive.apply, RegionalImageRoundGrouping.Permissive.apply)
-                        .map(_(List(RegionalImageRoundGroup(NonEmptySet.one(roi.time))))),
+                        .map(_(NonEmptyList.one(RegionalImageRoundGroup(NonEmptySet.one(roi.time))))),
                     )
             } yield (roi, threshold, grouping)
         }
@@ -1134,10 +1142,10 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 timepoints = spots.map(_.region.get).toSet
                 maybeSplit <- Gen.option(Gen.choose(1, timepoints.size - 1))
                 groups = maybeSplit match {
-                    case None => List(RegionalImageRoundGroup(timepoints.toNonEmptySetUnsafe))
+                    case None => NonEmptyList.one(RegionalImageRoundGroup(timepoints.toNonEmptySetUnsafe))
                     case Some(k) => 
                         val (g1, g2) = timepoints.toList.splitAt(k)
-                        List(g1, g2).map(g => RegionalImageRoundGroup(g.toSet.toNonEmptySetUnsafe))
+                        NonEmptyList.of(g1, g2).map(g => RegionalImageRoundGroup(g.toSet.toNonEmptySetUnsafe))
                 }
             } yield semantic(groups)
         }
