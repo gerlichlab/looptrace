@@ -26,56 +26,48 @@ final case class ImagingRoundConfiguration private(
 object ImagingRoundConfiguration:
     final case class DecodingError(messages: NonEmptyList[String], json: ujson.Value)
     
-    /**
-      * Read the configuration of imaging rounds for the experiment, including regional grouping and 
-      * exclusions from tracing.
-      *
-      * @param jsonFile Path to the file from which to parse the configuration
-      * @return Either a [[scala.util.Left]]-wrapped nonempty collection of error messages, or 
-      *     a [[scala.util.Right]]-wrapped, successfully parsed configuration instance
-      */
-    def fromJsonFile(jsonFile: os.Path): ErrMsgsOr[ImagingRoundConfiguration] = {
-        given rwForRound: Reader[ImagingRound] = ImagingRound.rwForImagingRound
-        Try{ readJsonFile[Map[String, ujson.Value]](jsonFile) }
-            .toEither
-            .leftMap(e => NonEmptyList.one(e.getMessage)) // some error even getting key-value pairs
-            .flatMap{ data =>
-                val roundsNel: ValidatedNel[String, ImagingSequence] = 
-                    data.get("imagingRounds")
-                        .toRight("Missing imagingRounds key!")
-                        .flatMap(safeReadAs[List[ImagingRound]](_))
-                        .leftMap(NonEmptyList.one)
-                        .flatMap(ImagingSequence.fromRounds)
-                        .toValidated
-                val crudeGroupingNel: ValidatedNel[String, Option[(String, NonEmptyList[NonEmptySet[Timepoint]])]] = 
-                    data.get("regionalGrouping") match {
-                        case None => Validated.Valid(None)
-                        case Some(fullJson) => safeReadAs[Map[String, ujson.Value]](fullJson).leftMap(NonEmptyList.one).flatMap{ currentSection => 
-                            val semanticNel = currentSection.get("semantic")
-                                .toRight("Missing semantic in regional grouping section!")
-                                .flatMap(safeReadAs[String])
-                                .toValidatedNel
-                            val groupsNel = currentSection.get("groups")
-                                .toRight("Missing groups in regional grouping section!")
-                                .flatMap(safeReadAs[List[List[Int]]])
-                                .flatMap(_.traverse(_.traverse(Timepoint.fromInt))) // Lift all ints to timepoints.
-                                .flatMap(liftToNel(_, "regional grouping".some)) // Entire collection must be nonempty.
-                                .flatMap(_.traverse(liftToNes(_, "regional group".some))) // Each group must be nonempty.
-                                .toValidatedNel
-                            (semanticNel, groupsNel).tupled.toEither.map(_.some)
-                        }.toValidated
-                    }
-                val tracingExclusionsNel: ValidatedNel[String, Set[Timepoint]] = 
-                    data.get("regionalGrouping") match {
-                        case None => Validated.Valid(Set())
-                        case Some(json) => safeReadAs[List[Int]](json)
-                            .flatMap(_.traverse(Timepoint.fromInt))
-                            .map(_.toSet)
+    def fromJson(fullJsonData: ujson.Value): ErrMsgsOr[ImagingRoundConfiguration] = safeReadAs[Map[String, ujson.Value]](fullJsonData)
+        .leftMap(NonEmptyList.one)
+        .flatMap{ data =>
+            given rwForRound: Reader[ImagingRound] = ImagingRound.rwForImagingRound
+            val roundsNel: ValidatedNel[String, ImagingSequence] = 
+                data.get("imagingRounds")
+                    .toRight("Missing imagingRounds key!")
+                    .flatMap(safeReadAs[List[ImagingRound]])
+                    .leftMap(NonEmptyList.one)
+                    .flatMap(ImagingSequence.fromRounds)
+                    .toValidated
+            val crudeGroupingNel: ValidatedNel[String, Option[(String, NonEmptyList[NonEmptySet[Timepoint]])]] = 
+                data.get("regionalGrouping") match {
+                    case None => Validated.Valid(None)
+                    case Some(fullJson) => safeReadAs[Map[String, ujson.Value]](fullJson).leftMap(NonEmptyList.one).flatMap{ currentSection => 
+                        val semanticNel = currentSection.get("semantic")
+                            .toRight("Missing semantic in regional grouping section!")
+                            .flatMap(safeReadAs[String])
                             .toValidatedNel
-                    }
-                (roundsNel, crudeGroupingNel, tracingExclusionsNel).tupled.toEither
-            }
-            .flatMap{ case (sequence, maybeCrudeGrouping, exclusions) =>
+                        val groupsNel = currentSection.get("groups")
+                            .toRight("Missing groups in regional grouping section!")
+                            .flatMap(safeReadAs[List[List[Int]]])
+                            .flatMap(_.traverse(_.traverse(Timepoint.fromInt))) // Lift all ints to timepoints.
+                            .flatMap(liftToNel(_, "regional grouping".some)) // Entire collection must be nonempty.
+                            .flatMap(_.traverse(liftToNes(_, "regional group".some))) // Each group must be nonempty.
+                            .toValidatedNel
+                        (semanticNel, groupsNel).tupled.toEither.map(_.some)
+                    }.toValidated
+                }
+            val tracingExclusionsNel: ValidatedNel[String, Set[Timepoint]] = 
+                data.get("regionalGrouping") match {
+                    case None => Validated.Valid(Set())
+                    case Some(json) => safeReadAs[List[Int]](json)
+                        .flatMap(_.traverse(Timepoint.fromInt))
+                        .map(_.toSet)
+                        .toValidatedNel
+                }
+            (roundsNel, crudeGroupingNel, tracingExclusionsNel).tupled.toEither.flatMap{ case (sequence, maybeCrudeGrouping, exclusions) =>
+                val regionalTimepoints = sequence.rounds.toList.flatMap{ 
+                    case (r: RegionalImagingRound) => r.time.some
+                    case _ => None
+                }.toSet
                 // Some of the timepoints specified for tracing exclusion may not correspond to extant imaging rounds.
                 val nonexistentExclusionsNel: ValidatedNel[String, Unit] = 
                     (exclusions -- sequence.rounds.map(_.time).toList)
@@ -88,11 +80,7 @@ object ImagingRoundConfiguration:
                 val groupingNel: ValidatedNel[String, RegionalGrouping] = maybeCrudeGrouping match {
                     case None => Validated.Valid(RegionalGrouping.Trivial)
                     case Some((semantic, grouping)) => 
-                        val existenceNel = {
-                            val regionalTimepoints = sequence.rounds.toList.flatMap{ 
-                                case (r: RegionalImagingRound) => r.time.some
-                                case _ => None
-                                }.toSet
+                        val existenceNel = { // Every regional timepoint in the grouping must exist in the experiment.
                             grouping.reduce(_ ++ _).filterNot(regionalTimepoints.contains).toList.toNel match {
                                 case None => ().validNel[String]
                                 case Some(nonRegExcl) => 
@@ -115,13 +103,35 @@ object ImagingRoundConfiguration:
                             }
                         } ).toValidated
                 }
-                // If regional grouping is present, some regional rounds in the experiment may not have been covered.
-                val uncoveredRounds: ValidatedNel[String, Unit] = ???
+                val uncoveredRounds: ValidatedNel[String, Unit] = maybeCrudeGrouping match {
+                    // If regional grouping is present, some regional rounds in the experiment may not have been covered.
+                    case None => ().validNel[String]
+                    case Some((_, grouping)) => 
+                        val groupedTimepoints: Set[Timepoint] = grouping.reduce(_ ++ _).toSortedSet
+                        regionalTimepoints.filterNot(groupedTimepoints.contains).toList.toNel.toLeft(()).leftMap{ uncovered => 
+                            val timeText = uncovered.map(_.show).mkString_(", ")
+                            s"Timepoint(s) in experiment not covered by regional grouping: $timeText"
+                        }.toValidatedNel
+                }
                 (nonexistentExclusionsNel, groupingNel, uncoveredRounds)
                     .mapN((_, grouping, _) => ImagingRoundConfiguration(sequence, grouping, exclusions))
                     .toEither
             }
-    }
+        }
+
+    /**
+      * Read the configuration of imaging rounds for the experiment, including regional grouping and 
+      * exclusions from tracing.
+      *
+      * @param jsonFile Path to the file from which to parse the configuration
+      * @return Either a [[scala.util.Left]]-wrapped nonempty collection of error messages, or 
+      *     a [[scala.util.Right]]-wrapped, successfully parsed configuration instance
+      */
+    def fromJsonFile(jsonFile: os.Path): ErrMsgsOr[ImagingRoundConfiguration] = 
+        Try{ readJsonFile[ujson.Value](jsonFile) }
+            .toEither
+            .leftMap(e => NonEmptyList.one(e.getMessage))
+            .flatMap(fromJson)
 
     /**
      * Designation of regional barcode timepoints which are prohibited from being in (configurably) close proximity.
