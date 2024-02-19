@@ -159,8 +159,20 @@ object ImagingRoundConfiguration:
             def groups: Groups
         /** A 'permissive' grouping 'allows' members of the same group to violate some rule, while 'forbidding' non-grouped items from doing so. */
         final case class Permissive private[ImagingRoundConfiguration](groups: Groups) extends Nontrivial
+        /** Helpers for working with the permissive regional grouping */
+        object Permissive:
+            /** Construct a grouping with a single group. */
+            private[looptrace] def singleton(group: RegionalImageRoundGroup): Permissive = 
+                new Permissive(NonEmptyList.one(group))
+        end Permissive
         /** A 'prohibitive' grouping 'forbids' members of the same group to violate some rule, while 'allowing' non-grouped items to violate the rule. */
         final case class Prohibitive private[ImagingRoundConfiguration](groups: Groups) extends Nontrivial
+        /** Helpers for working with the prohibitive regional grouping */
+        object Prohibitive:
+            /** Construct a grouping with a single group. */
+            private[looptrace] def singleton(group: RegionalImageRoundGroup): Prohibitive = 
+                new Prohibitive(NonEmptyList.one(group))
+        end Prohibitive
     end RegionalGrouping
 
     /** Check list of items for nonemptiness. */
