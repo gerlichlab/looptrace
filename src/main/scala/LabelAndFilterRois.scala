@@ -324,29 +324,21 @@ object LabelAndFilterRois:
     def buildNeighboringRoisFinder(
         rois: List[RoiLinenumPair], minDist: DistanceThreshold)(grouping: ImagingRoundConfiguration.RegionalGrouping): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
         given orderForRoiLinenumPair: Order[RoiLinenumPair] = Order.by(_._2)
+        type GroupId = NonnegativeInt
+        type IndexedRoi = (RegionalBarcodeSpotRoi, NonnegativeInt)
         val getPoint = (_: RoiLinenumPair)._1.centroid
         val groupedRoiLinenumPairs: Either[String, Map[RoiLinenumPair, NonEmptySet[RoiLinenumPair]]] = grouping match {
             case ImagingRoundConfiguration.RegionalGrouping.Trivial => 
                 buildNeighborsLookupKeyed(rois.map{ case pair@(r, _) => r.position -> pair }, (_, _) => true, getPoint, minDist, identity).asRight
             case g: ImagingRoundConfiguration.RegionalGrouping.Nontrivial => 
-                val (groupIds, repeatedTimes) = NonnegativeInt.indexed(g.groups.toList)
-                    .flatMap((g, i) => g.get.toList.map(_ -> i))
-                    .foldLeft(Map.empty[Timepoint, NonnegativeInt] -> Map.empty[Timepoint, Int]){ 
-                        case ((ids, repeats), (time, gid)) =>
-                            if ids `contains` time
-                            then (ids, repeats + (time -> (repeats.getOrElse(time, 1) + 1)))
-                            else (ids + (time -> gid), repeats)
-                    }
-                if repeatedTimes.nonEmpty 
-                // Probe groupings isn't a partition, because there's overlap between the declared equivalence classes.
-                then s"${repeatedTimes.size} repeated timepoint(s): ${repeatedTimes.toList.map(_.leftMap(_.get)).sortBy(_._1).mkString(", ")}".asLeft
-                else Alternative[List].separate(rois.map{ case pair@(roi, _) => groupIds.get(roi.time).toRight(pair).map(_ -> pair)}) match {
-                    case (Nil, withGroupsAssigned) => (g match {
-                        case _: ImagingRoundConfiguration.RegionalGrouping.Prohibitive => 
-                            buildNeighborsLookupKeyed(withGroupsAssigned.map{ case (gi, pair@(roi, _)) => roi.position -> (gi -> pair) }, (_._1 === _._1), getPoint, minDist, _._2)
-                        case _: ImagingRoundConfiguration.RegionalGrouping.Permissive => 
-                            buildNeighborsLookupKeyed(withGroupsAssigned.map{ case (gi, pair@(roi, _)) => roi.position -> (gi -> pair) }, (_._1 =!= _._1), getPoint, minDist, _._2)
-                    }).asRight
+                val groupIds = NonnegativeInt.indexed(g.groups.toList).flatMap((g, i) => g.get.toList.map(_ -> i)).toMap
+                Alternative[List].separate(rois.map{ case pair@(roi, _) => groupIds.get(roi.time).toRight(pair).map(_ -> pair)}) match {
+                    case (Nil, withGroupsAssigned) => 
+                        val considerRoiPair = g match {
+                            case _: ImagingRoundConfiguration.RegionalGrouping.Prohibitive => { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => a._1 === b._1 }
+                            case _: ImagingRoundConfiguration.RegionalGrouping.Permissive => { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => a._1 =!= b._1 }
+                        }
+                        buildNeighborsLookupKeyed(withGroupsAssigned.map{ case (gi, pair@(roi, _)) => roi.position -> (gi -> pair) }, considerRoiPair, getPoint, minDist, _._2).asRight
                     case (groupless, _) => 
                         val times = groupless.map(_._1.time).toSet
                         val timesText = times.toList.map(_.get).sorted.mkString(", ")
