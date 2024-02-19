@@ -1,12 +1,12 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
 import scala.util.Try
-import cats.data.*
+import cats.data.{ NonEmptyList, NonEmptySet, ValidatedNel}
 import cats.syntax.all.*
 import mouse.boolean.*
-
-import at.ac.oeaw.imba.gerlich.looptrace.collections.*
 import upickle.core.Visitor
+import upickle.default.*
+import at.ac.oeaw.imba.gerlich.looptrace.collections.*
 
 /**
  * Helpers for working with the excellent uJson project 
@@ -113,5 +113,9 @@ object UJsonHelpers:
     /** Try to extract a text value at the given key in the given (presumed Object) JSON value. */
     def safeExtractStr(key: String)(json: ujson.Value): ValidatedNel[String, String] = 
         Try{ json(key).str }.toEither.leftMap(_.getMessage).toValidatedNel
+
+    /** Try to read the given value to an `A`, otherwise give an error message. */
+    def safeReadAs[A : Reader](json: ujson.Readable): Either[String, A] = 
+        Try{ read[A](json) }.toEither.leftMap(_.getMessage)
 
 end UJsonHelpers
