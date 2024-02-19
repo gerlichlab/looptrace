@@ -55,9 +55,7 @@ object LabelAndFilterRois:
     final case class CliConfig(
         spotsFile: os.Path = null, // unconditionally required
         driftFile: os.Path = null, // unconditionally required
-        noRegionGrouping: Boolean = false,
-        proximityPermissions: Option[NonEmptyList[RegionalImageRoundGroup]] = None, 
-        proximityProhibitions: Option[NonEmptyList[RegionalImageRoundGroup]] = None, 
+        configuration: ImagingRoundConfiguration = null, // unconditionally required
         spotSeparationThresholdValue: NonnegativeReal = NonnegativeReal(0), // unconditionally required
         buildDistanceThreshold: NonnegativeReal => DistanceThreshold = null, // unconditionally required
         unfilteredOutputFile: UnfilteredOutputFile = null, // unconditionally required
@@ -73,53 +71,22 @@ object LabelAndFilterRois:
         import parserBuilder.*
 
         /** Parse content of JSON file path or CLI-arg-like mapping spec of probe groups. */
-        given readRegionGrouping: scopt.Read[NonEmptyList[RegionalImageRoundGroup]] = {
-            val readAsFile = (s: String) => 
-                Try{ readJsonFile[List[RegionalImageRoundGroup]](summon[scopt.Read[os.Path]].reads(s)) }
-                    .toEither
-                    .leftMap(_.getMessage)
-                    .flatMap(_.toNel.toRight(s"Empty groups parsed from file! $s"))
-            val readAsMap = (s: String) => {
-                Try{ summon[scopt.Read[Map[Int, Int]]].reads(s) }
-                    .toEither
-                    .leftMap(_.getMessage)
-                    .flatMap(
-                        _.toList.foldRight(List.empty[Int] -> Map.empty[Int, NonEmptyList[Timepoint]]){
-                            // finds negative values and groups the probes (key) by group (value), inverting the mapping and collecting
-                            case ((probe, groupIndex), (neg, acc)) => Timepoint.fromInt(probe).fold(
-                                _ => (probe :: neg, acc),
-                                time => (neg, acc + (groupIndex -> acc.get(groupIndex).fold(NonEmptyList.one(time))(time :: _)))
-                                )
-                        } match {
-                            case (Nil, rawGroups) => 
-                                val (histogram, groups) = rawGroups.values.foldRight(Map.empty[NonnegativeInt, Int] -> List.empty[RegionalImageRoundGroup]){
-                                    case (g, (hist, gs)) => {
-                                        val subHist = g.map(_.get).groupBy(identity).view.mapValues(_.size).toMap
-                                        (hist |+| subHist, RegionalImageRoundGroup(g.toNes) :: gs)
-                                    }
-                                }
-                                histogram.filter(_._2 > 1)
-                                    .toList
-                                    .toNel
-                                    .toLeft(groups)
-                                    .leftMap{ reps => s"Repeated timepoints in grouping: $reps" }
-                                    .flatMap(_.toNel.toRight("Empty groups!"))
-                            case (negatives, _) => s"Negative timepoint(s) in grouping: $negatives".asLeft
-                        }
+        given readRegionGrouping: scopt.Read[ImagingRoundConfiguration] = scopt.Read.reads{ file => 
+            ImagingRoundConfiguration.fromJsonFile(os.Path(file)) match {
+                case Left(messages) => throw new IllegalArgumentException(
+                    s"Cannot read file ($file) as imaging round configuration! Error(s): ${messages.mkString_("; ")}"
                     )
-            }
-            scopt.Read.reads{ arg => readAsMap(arg)
-                // Preserve the first successful result and return it, otherwise accumulate the error messages.
-                // So start with an empty list as a Left, then add error messages while staying in Left, or preserving the value in Right.
-                // TODO: try to replace this with a defined structure, something like Validated + Alternative in Haskell.
-                .leftFlatMap{ e1 => readAsFile(arg).leftMap(e2 => List(e1, e2)) }
-                .fold(msgs => throw new IllegalArgumentException(s"Cannot parse arg ($arg) as probe grouping. Errors: $msgs"), identity)
+                case Right(conf) => conf
             }
         }
 
         val parser = OParser.sequence(
             programName(ProgramName), 
             head(ProgramName, VersionName), 
+            opt[ImagingRoundConfiguration]("configuration")
+                .required()
+                .action((progConf, cliConf) => cliConf.copy(configuration = progConf))
+                .text("Path to file specifying the configuration"),
             opt[os.Path]("spotsFile")
                 .required()
                 .action((f, c) => c.copy(spotsFile = f))
@@ -150,29 +117,13 @@ object LabelAndFilterRois:
                 .required()
                 .action((h, c) => c.copy(extantOutputHandler = h))
                 .text("How to handle writing output when target already exists"),
-            opt[Unit]("noRegionGrouping")
-                .action((_, c) => c.copy(noRegionGrouping = true))
-                .text("Specify that proximity consideration / neighbor finding is to be done among ALL regional spots."),
-            opt[NonEmptyList[RegionalImageRoundGroup]]("proximityPermissions")
-                .action((groups, c) => c.copy(proximityPermissions = groups.some))
-                .text("List-of-lists--or path to file specifying one--grouping regional barcode timepoints for which to permit proximity"),
-            opt[NonEmptyList[RegionalImageRoundGroup]]("proximityProhibitions")
-                .action((groups, c) => c.copy(proximityProhibitions = groups.some))
-                .text("List-of-lists--or path to file specifying one--grouping regional barcode timepoints for which to prohibit proximity"),
         )
 
         OParser.parse(parser, args, CliConfig()) match {
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
             case Some(opts) => 
                 val threshold = opts.buildDistanceThreshold(opts.spotSeparationThresholdValue)
-                val regionalGrouping = (opts.noRegionGrouping, opts.proximityPermissions, opts.proximityProhibitions) match {
-                    case (true, None, None) => RegionalImageRoundGrouping.Trivial
-                    case (false, Some(permissions), None) => RegionalImageRoundGrouping.Permissive(permissions)
-                    case (false, None, Some(prohibitions)) => RegionalImageRoundGrouping.Prohibitive(prohibitions)
-                    case _ => throw new IllegalArgumentException(
-                        "Choose exactly 1: no grouping, permissive grouping, or prohibitive grouping. Check --help"
-                        )
-                }
+                val regionalGrouping = opts.configuration.regionalGrouping
                 workflow(
                     spotsFile = opts.spotsFile, 
                     driftFile = opts.driftFile, 
@@ -188,7 +139,7 @@ object LabelAndFilterRois:
     def workflow(
         spotsFile: os.Path, 
         driftFile: os.Path, 
-        regionalGrouping: RegionalImageRoundGrouping,
+        regionalGrouping: ImagingRoundConfiguration.RegionalGrouping,
         minSpotSeparation: DistanceThreshold, 
         unfilteredOutputFile: UnfilteredOutputFile, 
         filteredOutputFile: FilteredOutputFile, 
@@ -371,13 +322,13 @@ object LabelAndFilterRois:
       *         otherwise, a {@code Left}-wrapped error message about what went wrong
       */
     def buildNeighboringRoisFinder(
-        rois: List[RoiLinenumPair], minDist: DistanceThreshold)(grouping: RegionalImageRoundGrouping): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
+        rois: List[RoiLinenumPair], minDist: DistanceThreshold)(grouping: ImagingRoundConfiguration.RegionalGrouping): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
         given orderForRoiLinenumPair: Order[RoiLinenumPair] = Order.by(_._2)
         val getPoint = (_: RoiLinenumPair)._1.centroid
         val groupedRoiLinenumPairs: Either[String, Map[RoiLinenumPair, NonEmptySet[RoiLinenumPair]]] = grouping match {
-            case RegionalImageRoundGrouping.Trivial => 
+            case ImagingRoundConfiguration.RegionalGrouping.Trivial => 
                 buildNeighborsLookupKeyed(rois.map{ case pair@(r, _) => r.position -> pair }, (_, _) => true, getPoint, minDist, identity).asRight
-            case g: RegionalImageRoundGrouping.Nontrivial => 
+            case g: ImagingRoundConfiguration.RegionalGrouping.Nontrivial => 
                 val (groupIds, repeatedTimes) = NonnegativeInt.indexed(g.groups.toList)
                     .flatMap((g, i) => g.get.toList.map(_ -> i))
                     .foldLeft(Map.empty[Timepoint, NonnegativeInt] -> Map.empty[Timepoint, Int]){ 
@@ -391,9 +342,9 @@ object LabelAndFilterRois:
                 then s"${repeatedTimes.size} repeated timepoint(s): ${repeatedTimes.toList.map(_.leftMap(_.get)).sortBy(_._1).mkString(", ")}".asLeft
                 else Alternative[List].separate(rois.map{ case pair@(roi, _) => groupIds.get(roi.time).toRight(pair).map(_ -> pair)}) match {
                     case (Nil, withGroupsAssigned) => (g match {
-                        case _: RegionalImageRoundGrouping.Prohibitive => 
+                        case _: ImagingRoundConfiguration.RegionalGrouping.Prohibitive => 
                             buildNeighborsLookupKeyed(withGroupsAssigned.map{ case (gi, pair@(roi, _)) => roi.position -> (gi -> pair) }, (_._1 === _._1), getPoint, minDist, _._2)
-                        case _: RegionalImageRoundGrouping.Permissive => 
+                        case _: ImagingRoundConfiguration.RegionalGrouping.Permissive => 
                             buildNeighborsLookupKeyed(withGroupsAssigned.map{ case (gi, pair@(roi, _)) => roi.position -> (gi -> pair) }, (_._1 =!= _._1), getPoint, minDist, _._2)
                     }).asRight
                     case (groupless, _) => 
