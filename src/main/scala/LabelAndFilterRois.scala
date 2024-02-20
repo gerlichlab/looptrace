@@ -321,7 +321,7 @@ object LabelAndFilterRois:
       * @return A mapping from item to set of proximal (closer than given distance threshold) neighbors, omitting each item with no neighbors; 
       *         otherwise, a {@code Left}-wrapped error message about what went wrong
       */
-    def buildNeighboringRoisFinder(
+    private[looptrace] def buildNeighboringRoisFinder(
         rois: List[RoiLinenumPair], minDist: DistanceThreshold)(grouping: ImagingRoundConfiguration.RegionalGrouping): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
         given orderForRoiLinenumPair: Order[RoiLinenumPair] = Order.by(_._2)
         type GroupId = NonnegativeInt
@@ -386,7 +386,7 @@ object LabelAndFilterRois:
      * @param row The simply-parsed (all {@code String}) representation of a line from a CSV
      * @return Either a {@code Left}-wrapped nonempty collection of error messages, or a {@code Right}-wrapped record
      */
-    def rowToDriftRecord(row: CsvRow): ErrMsgsOr[DriftRecord] = {
+    private def rowToDriftRecord(row: CsvRow): ErrMsgsOr[DriftRecord] = {
         val posNel = safeGetFromRow("position", PositionName.apply(_).asRight)(row)
         val timeNel = safeGetFromRow("frame", safeParseInt >>> Timepoint.fromInt)(row)
         val coarseDriftNel = {
