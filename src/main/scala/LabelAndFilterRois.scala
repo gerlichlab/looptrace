@@ -331,7 +331,7 @@ object LabelAndFilterRois:
             case ImagingRoundConfiguration.RegionalGrouping.Trivial => 
                 buildNeighborsLookupKeyed(rois.map{ case pair@(r, _) => r.position -> pair }, (_, _) => true, getPoint, minDist, identity).asRight
             case g: ImagingRoundConfiguration.RegionalGrouping.Nontrivial => 
-                val groupIds = NonnegativeInt.indexed(g.groups.toList).flatMap((g, i) => g.get.toList.map(_ -> i)).toMap
+                val groupIds = NonnegativeInt.indexed(g.groups.toList).flatMap((g, i) => g.toList.map(_ -> i)).toMap
                 Alternative[List].separate(rois.map{ case pair@(roi, _) => groupIds.get(roi.time).toRight(pair).map(_ -> pair)}) match {
                     case (Nil, withGroupsAssigned) => 
                         val considerRoiPair = g match {
