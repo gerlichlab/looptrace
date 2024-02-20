@@ -25,8 +25,29 @@ final case class ImagingRoundConfiguration private(
 /** Tools for working with declaration of imaging rounds and how to use them within an experiment */
 object ImagingRoundConfiguration:
     import RegionalGrouping.Semantic.*
-    final case class DecodingError(messages: NonEmptyList[String], json: ujson.Value)
     
+    /** Error subtype for when JSON decoding fails */
+    final class DecodingError(messages: NonEmptyList[String], json: ujson.Value) 
+        extends ujson.Value.InvalidData(json, s"Error(s) decoding ImagingRoundConfiguration: ${messages.mkString_(", ")}")
+    
+    /**
+      * Read the configuration of imaging rounds for the experiment, including regional grouping and 
+      * exclusions from tracing.
+      *
+      * @param jsonFile Path to the file from which to parse the configuration
+      * @return Either a [[scala.util.Left]]-wrapped nonempty collection of error messages, or 
+      *     a [[scala.util.Right]]-wrapped, successfully parsed configuration instance
+      */
+    def fromJsonFile(jsonFile: os.Path): ErrMsgsOr[ImagingRoundConfiguration] = 
+        Try{ readJsonFile[ujson.Value](jsonFile) }
+            .toEither
+            .leftMap(e => NonEmptyList.one(e.getMessage))
+            .flatMap(fromJson)
+    
+    /** Try to read a configuration directly from JSON. */
+    def fromJson(fullJsonData: ujson.Value): ErrMsgsOr[ImagingRoundConfiguration] = 
+        safeReadAs[Map[String, ujson.Value]](fullJsonData).leftMap(NonEmptyList.one).flatMap(fromJsonMap)
+
     /** Attempt to parse a configuration from a key-value mapping from section name to JSON value. */
     def fromJsonMap(data: Map[String, ujson.Value]): ErrMsgsOr[ImagingRoundConfiguration] = {
         given rwForRound: Reader[ImagingRound] = ImagingRound.rwForImagingRound
@@ -122,24 +143,6 @@ object ImagingRoundConfiguration:
         }
     }
 
-    /** Try to read a configuration directly from JSON. */
-    def fromJson(fullJsonData: ujson.Value): ErrMsgsOr[ImagingRoundConfiguration] = 
-        safeReadAs[Map[String, ujson.Value]](fullJsonData).leftMap(NonEmptyList.one).flatMap(fromJsonMap)
-
-    /**
-      * Read the configuration of imaging rounds for the experiment, including regional grouping and 
-      * exclusions from tracing.
-      *
-      * @param jsonFile Path to the file from which to parse the configuration
-      * @return Either a [[scala.util.Left]]-wrapped nonempty collection of error messages, or 
-      *     a [[scala.util.Right]]-wrapped, successfully parsed configuration instance
-      */
-    def fromJsonFile(jsonFile: os.Path): ErrMsgsOr[ImagingRoundConfiguration] = 
-        Try{ readJsonFile[ujson.Value](jsonFile) }
-            .toEither
-            .leftMap(e => NonEmptyList.one(e.getMessage))
-            .flatMap(fromJson)
-
     /** Alias to give more context-rich meaning to a nonempty collection of timepoints */
     type RegionalImageRoundGroup = NonEmptySet[Timepoint]
 
@@ -200,8 +203,6 @@ object ImagingRoundConfiguration:
         /** Delineate which semantic is desired */
         private[looptrace] enum Semantic:
             case Permissive, Prohibitive
-
-        //private[looptrace] def fromSemanticTimeGroupsAndRounds(semantic: Semantic, timeGroups: NonEmptyList[RegionalImageRoundGroup]):
     end RegionalGrouping
 
     /** Check list of items for nonemptiness. */
