@@ -5,6 +5,7 @@ import cats.*
 import cats.data.{ NonEmptyList, NonEmptySet }
 import cats.syntax.all.*
 import mouse.boolean.*
+import upickle.default.*
 
 import org.scalacheck.{ Arbitrary, Gen, Shrink }
 import org.scalacheck.Arbitrary.arbitrary
@@ -434,11 +435,11 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         
         // NB: the frame value for the groping comes from the spotsLines variable.
         def genGrouping = {
-            val singleGroup: RegionalImageRoundGroup = RegionalImageRoundGroup(NonEmptySet.one(Timepoint(NonnegativeInt(27))))
+            val singleGroup = NonEmptySet.one(Timepoint(NonnegativeInt(27)))
             Gen.oneOf(
                 ImagingRoundConfiguration.RegionalGrouping.Trivial, 
-                ImagingRoundConfiguration.RegionalGrouping.Permissive(NonEmptyList.one(singleGroup)), 
-                ImagingRoundConfiguration.RegionalGrouping.Prohibitive(NonEmptyList.one(singleGroup)),
+                ImagingRoundConfiguration.RegionalGrouping.Permissive.singleton(singleGroup), 
+                ImagingRoundConfiguration.RegionalGrouping.Prohibitive.singleton(singleGroup),
                 )
         }
 
@@ -480,7 +481,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         // Generate a reasonable distance threshold.
         given arbThreshold: Arbitrary[DistanceThreshold] = genThreshold(Gen.choose(1.0, 10.0).map(NonnegativeReal.unsafe)).toArbitrary
 
-        def genSpotsDriftsAndImagingRoundConfiguration.RegionalGrouping = {
+        def genSpotsDriftsAndRegionalGrouping = {
             /* Generate drifts. */
             def genCoarseDrift: Gen[CoarseDrift] = {
                 val genInt = Gen.choose(-100, 100)
@@ -497,7 +498,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             } yield (spots, drifts, grouping)
         }
 
-        forAll (genSpotsDriftsAndImagingRoundConfiguration.RegionalGrouping, genThreshold(arbitrary[NonnegativeReal]), arbitrary[ExtantOutputHandler]) {
+        forAll (genSpotsDriftsAndRegionalGrouping, genThreshold(arbitrary[NonnegativeReal]), arbitrary[ExtantOutputHandler]) {
             case ((spots, driftRows, grouping), threshold, handleOutput) => 
                 withTempDirectory{ (tmpdir: os.Path) => 
                     val spotsFile = tmpdir / "spots.csv"
@@ -580,34 +581,45 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
     test("Regardless of grouping semantic, processing doesn't alter ROIs: the collection of ROIs parsed from input is identical to the collection of ROIs parsed from unfiltered, labeled output.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
 
-        val driftFileText = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
-            |0,27,P0001.zarr,-2.0,8.0,-24.0,0.3048142040458287,0.2167426082715708,0.46295638298323727
-            |1,28,P0001.zarr,2.0,4.0,-20.0,0.6521556133243969,-0.32279031643811845,0.8467576764912169
-            |2,29,P0001.zarr,0.0,6.0,-16.0,-0.32831460930799267,0.5707716296861373,0.768359957646404
-            |3,30,P0001.zarr,-2.0,2.0,-12.0,-0.6267951175716121,0.24476613641147094,0.5547602737043816
+        val time1 = 3
+        val time2 = 4
+        val time3 = 5
+        val time4 = 6
+        val timepoints = List(time1, time2, time3, time4).map(Timepoint.unsafe)
+        val rawPosName = "P0001.zarr"
+        val driftFileText = s""",frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
+            |0,${time1},${rawPosName},-2.0,8.0,-24.0,0.3048142040458287,0.2167426082715708,0.46295638298323727
+            |1,${time2},${rawPosName},2.0,4.0,-20.0,0.6521556133243969,-0.32279031643811845,0.8467576764912169
+            |2,${time3},${rawPosName},0.0,6.0,-16.0,-0.32831460930799267,0.5707716296861373,0.768359957646404
+            |3,${time4},${rawPosName},-2.0,2.0,-12.0,-0.6267951175716121,0.24476613641147094,0.5547602737043816
             |""".stripMargin
-        val timepoints = List(27, 28, 29, 30).map(Timepoint.unsafe)
         
+        def genRegionalRound(t: Timepoint)(using arbProbe: Arbitrary[ProbeName]): Gen[RegionalImagingRound] = 
+            arbitrary[ProbeName].map(RegionalImagingRound(t, _))
+
+        def genLocalRound(t: Timepoint)(using arbProbe: Arbitrary[ProbeName]): Gen[LocusImagingRound] = 
+            arbitrary[ProbeName].map(LocusImagingRound(t, _))
+
+        given writerForRound: Writer[ImagingRound] = ImagingRound.rwForImagingRound
+
         // Choose from probe groupings available given the timepoints used in drift file.
         given arbGrouping: Arbitrary[ImagingRoundConfiguration.RegionalGrouping] = {
             val genGroups = Gen.oneOf(List(
-                NonEmptyList.of(NonEmptySet.one(27), NonEmptySet.one(29), NonEmptySet.of(28, 30)), 
-                NonEmptyList.of(NonEmptySet.of(27, 30), NonEmptySet.of(28, 29)),
-                NonEmptyList.of(NonEmptySet.of(27, 28, 30), NonEmptySet.one(29)), 
-                NonEmptyList.one(NonEmptySet.of(27, 28, 29, 30)),
-            ).map(_.map(timeSets => RegionalImageRoundGroup(timeSets.map(Timepoint.unsafe)))))
-            val genSemantic: Gen[NonEmptyList[RegionalImageRoundGroup] => ImagingRoundConfiguration.RegionalGrouping] = Gen.oneOf(
-                ImagingRoundConfiguration.RegionalGrouping.Prohibitive.apply, 
-                ImagingRoundConfiguration.RegionalGrouping.Permissive.apply,
+                NonEmptyList.of(NonEmptySet.one(time1), NonEmptySet.one(time3), NonEmptySet.of(time2, time4)), 
+                NonEmptyList.of(NonEmptySet.of(time1, time4), NonEmptySet.of(time2, time3)),
+                NonEmptyList.of(NonEmptySet.of(time1, time2, time4), NonEmptySet.one(time3)), 
+                NonEmptyList.one(NonEmptySet.of(time1, time2, time3, time4)),
                 )
-            Gen.oneOf(
-                Gen.const(ImagingRoundConfiguration.RegionalGrouping.Trivial),
-                (genSemantic, genGroups).tupled.map((build, groups) => build(groups))
-            ).toArbitrary
+                .map(_.map(_.map(Timepoint.unsafe)))
+            )
+            Gen.option(arbitrary[ImagingRoundConfiguration.RegionalGrouping.Semantic]).flatMap{
+                case None => Gen.const(ImagingRoundConfiguration.RegionalGrouping.Trivial)
+                case Some(semantic) => genGroups.map(ImagingRoundConfiguration.RegionalGrouping.Nontrivial(semantic, _))
+            }.toArbitrary
         }
 
         /* Control the generation of ROIs to match the drift file text. */
-        given arbPos: Arbitrary[PositionName] = Gen.const(PositionName("P0001.zarr")).toArbitrary
+        given arbPos: Arbitrary[PositionName] = Gen.const(PositionName(rawPosName)).toArbitrary
         given arbTimepoint: Arbitrary[Timepoint] = Gen.oneOf(timepoints).toArbitrary
         
         /* Generate reasonable ROIs (controlling centroid and bounding box). */
@@ -673,7 +685,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                     val (g1, g2) = obsReg.toList.splitAt(k)
                     NonEmptyList.of(g1, g2).map(_.toSet.toNonEmptySetUnsafe)
                 }
-        } yield (rois, ImagingRoundConfiguration.RegionalGrouping.Permissive(groups.map(RegionalImageRoundGroup.apply)))
+        } yield (rois, ImagingRoundConfiguration.RegionalGrouping.Permissive(groups))
 
         forAll (genRoisAndGrouping(10, 50), genThreshold{ Gen.choose[Double](0, 1).map(NonnegativeReal.unsafe) }, minSuccessful(1000)) { 
             case ((rois, grouping), threshold) =>
@@ -685,7 +697,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                         val timeByLine = roisWithLine.map((r, i) => i -> r.region.get).toMap
                         def getGroup(line: LineNumber): Int = {
                             val time = timeByLine(line)
-                            grouping.groups.zipWithIndex.filter((g, _) => g.get.contains(time)) match {
+                            grouping.groups.zipWithIndex.filter((g, _) => g.contains(time)) match {
                                 case (_, i) :: Nil => i
                                 case Nil => throw new Exception(s"No group found for time $time! Grouping: $grouping")
                                 case _ => throw new Exception(s"Multiple groups found for time $time! Grouping: $grouping")
@@ -860,7 +872,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 val grouping = rawGrouping.toNel match {
                     case None => ImagingRoundConfiguration.RegionalGrouping.Trivial
                     case Some(grouping) => ImagingRoundConfiguration.RegionalGrouping.Prohibitive(
-                        grouping.map{ sub => RegionalImageRoundGroup(sub.map(Timepoint.unsafe))}
+                        grouping.map(_.map(Timepoint.unsafe))
                     )
                 }
                 buildNeighboringRoisFinder(NonnegativeInt.indexed(rois), threshold)(grouping) match {
@@ -892,11 +904,11 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             rawFullGrouping <- Gen.oneOf(collections.partition(numGroups, times))
             (skipped, grouping) <- rawFullGrouping
                 .traverse(_.toList.traverse(x => arbitrary[Boolean].map(_.either(x, x))))
-                .map(_.foldLeft(List.empty[Timepoint] -> List.empty[RegionalImageRoundGroup]){ 
+                .map(_.foldLeft(List.empty[Timepoint] -> List.empty[NonEmptySet[Timepoint]]){ 
                     // Collect the timepoints to skip, and build up the probe/timepoint grouping.
                     case ((drops, acc), subMaybes) => 
                         val (newSkips, newKeeps) = Alternative[List].separate(subMaybes)
-                        (newSkips ::: drops, newKeeps.toNel.fold(acc){ sub => RegionalImageRoundGroup(sub.toNes) :: acc })
+                        (newSkips ::: drops, newKeeps.toNel.fold(acc){ sub => sub.toNes :: acc })
                 })
                 .suchThat{ (skips, group) => skips.nonEmpty && group.nonEmpty } // At least 1 time is skipped, and grouping is nontrivial.
                 .map(_.bimap(_.toNel.get, _.toNel.get))                         // safe b/c of .suchThat(...) filter
@@ -916,7 +928,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("Regardless of grouping semantic, it's a partition: A probe grouping that is not DISJOINT (timepoint repeated between groups) is an error.") {
+    test("Regardless of grouping semantic, it's a partition: A probe grouping that is NOT DISJOINT (timepoint repeated between groups) is an ERROR.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
 
         // Generate a reasonable margin on side of each centroid coordinate for ROI bounding boxes.
@@ -936,19 +948,28 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             numGroups <- Gen.choose(1, times.size)
             legitGroup <- Gen.oneOf(collections.partition(numGroups, times))
             repeated <- Gen.nonEmptyListOf(Gen.oneOf(times)).map(_.toSet)
-            grouping = NonEmptyList(repeated, legitGroup).map(sub => RegionalImageRoundGroup(sub.unsafeToNes))
+            grouping = NonEmptyList(repeated, legitGroup).map(_.unsafeToNes)
             semantic <- Gen.oneOf(ImagingRoundConfiguration.RegionalGrouping.Permissive.apply, ImagingRoundConfiguration.RegionalGrouping.Prohibitive.apply)
         } yield (rois, repeated.unsafeToNes, semantic(grouping))
         
-        forAll (genSmallRoisAndGrouping, genThreshold(arbitrary[NonnegativeReal])) { 
-            case ((rois, repeatedTimepoints, grouping), threshold) =>
-                buildNeighboringRoisFinder(NonnegativeInt.indexed(rois), threshold)(grouping) match {
-                    case Left(obsErrMsg) => 
-                        val repTimesText = repeatedTimepoints.toList.map(t => t.get -> 2).sortBy(_._1).mkString(", ")
-                        val expErrMsg = s"${repeatedTimepoints.size} repeated timepoint(s): $repTimesText"
-                        obsErrMsg shouldEqual expErrMsg
-                    case Right(_) => fail("Expected error message about invalid partition (non-disjoint), but didn't get it.")
-                }
+        // TODO: need to remove the pendingUntilFixed wrapper once this test is updated.
+        // Originally, it was supposed to be the call under test which handled the prohibition on grouping components being mutually disjoint.
+        // Now, this is instead handled at the level of the ImagingRoundConfiguration.
+        // The method under test has been made package-private, but in reality it should probably be made object-private, 
+        // for exactly this region that the logic of restricting the structure of the regional imaging round grouping 
+        // is expected to have already been done. Such a change would, however, require a further overhaul of some of these tests.
+        // See: https://github.com/gerlichlab/looptrace/issues/266
+        pendingUntilFixed{
+            forAll (genSmallRoisAndGrouping, genThreshold(arbitrary[NonnegativeReal])) {
+                case ((rois, repeatedTimepoints, grouping), threshold) =>
+                    buildNeighboringRoisFinder(NonnegativeInt.indexed(rois), threshold)(grouping) match {
+                        case Left(obsErrMsg) => 
+                            val repTimesText = repeatedTimepoints.toList.map(t => t.get -> 2).sortBy(_._1).mkString(", ")
+                            val expErrMsg = s"${repeatedTimepoints.size} repeated timepoint(s): $repTimesText"
+                            obsErrMsg shouldEqual expErrMsg
+                        case Right(_) => fail("Expected error message about invalid partition (non-disjoint), but didn't get it.")
+                    }
+            }
         }
     }
 
@@ -1038,7 +1059,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         
         forAll (genThreshold(NonnegativeReal(0)), genRois) { case (threshold, rois) => 
             val grouping = ImagingRoundConfiguration.RegionalGrouping.Prohibitive(
-                rois.map(roi => RegionalImageRoundGroup(NonEmptySet.one(roi.time)))
+                rois.map{ roi => NonEmptySet.one(roi.time) }
                 )
             buildNeighboringRoisFinder(NonnegativeInt.indexed(rois.toList), threshold)(grouping) match {
                 case Right(neigbors) => neigbors shouldEqual Map()
@@ -1058,7 +1079,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 grouping <- Gen.oneOf(
                     Gen.const(ImagingRoundConfiguration.RegionalGrouping.Trivial), 
                     Gen.oneOf(ImagingRoundConfiguration.RegionalGrouping.Prohibitive.apply, ImagingRoundConfiguration.RegionalGrouping.Permissive.apply)
-                        .map(_(NonEmptyList.one(RegionalImageRoundGroup(NonEmptySet.one(roi.time))))),
+                        .map(_(NonEmptyList.one(NonEmptySet.one(roi.time)))),
                     )
             } yield (roi, threshold, grouping)
         }
@@ -1116,6 +1137,11 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
      * Ancillary definitions
      ****************************************************************************************************************/
     
+    given arbitraryForRegionalGroupingSemantic: Arbitrary[ImagingRoundConfiguration.RegionalGrouping.Semantic] = Gen.oneOf(
+        ImagingRoundConfiguration.RegionalGrouping.Semantic.Permissive, 
+        ImagingRoundConfiguration.RegionalGrouping.Semantic.Prohibitive, 
+        ).toArbitrary
+
     private def canonicalRoi: Roi = canonicalRoi(Point3D(XCoordinate(1), YCoordinate(2), ZCoordinate(3)))
     private def canonicalRoi(point: Point3D): Roi = {
         point match { case Point3D(x, y, z) => 
@@ -1142,10 +1168,10 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 timepoints = spots.map(_.region.get).toSet
                 maybeSplit <- Gen.option(Gen.choose(1, timepoints.size - 1))
                 groups = maybeSplit match {
-                    case None => NonEmptyList.one(RegionalImageRoundGroup(timepoints.toNonEmptySetUnsafe))
+                    case None => NonEmptyList.one(timepoints.toNonEmptySetUnsafe)
                     case Some(k) => 
                         val (g1, g2) = timepoints.toList.splitAt(k)
-                        NonEmptyList.of(g1, g2).map(g => RegionalImageRoundGroup(g.toSet.toNonEmptySetUnsafe))
+                        NonEmptyList.of(g1, g2).map(_.toSet.toNonEmptySetUnsafe)
                 }
             } yield semantic(groups)
         }
