@@ -24,8 +24,10 @@ final case class ImagingRoundConfiguration private(
 
 /** Tools for working with declaration of imaging rounds and how to use them within an experiment */
 object ImagingRoundConfiguration:
+    import RegionalGrouping.Semantic.*
     final case class DecodingError(messages: NonEmptyList[String], json: ujson.Value)
     
+    /** Attempt to parse a configuration from a key-value mapping from section name to JSON value. */
     def fromJsonMap(data: Map[String, ujson.Value]): ErrMsgsOr[ImagingRoundConfiguration] = {
         given rwForRound: Reader[ImagingRound] = ImagingRound.rwForImagingRound
         val roundsNel: ValidatedNel[String, ImagingSequence] = 
@@ -35,13 +37,17 @@ object ImagingRoundConfiguration:
                 .leftMap(NonEmptyList.one)
                 .flatMap(ImagingSequence.fromRounds)
                 .toValidated
-        val crudeGroupingNel: ValidatedNel[String, Option[(String, NonEmptyList[NonEmptySet[Timepoint]])]] = 
+        val crudeGroupingNel: ValidatedNel[String, Option[(RegionalGrouping.Semantic, NonEmptyList[NonEmptySet[Timepoint]])]] = 
             data.get("regionalGrouping") match {
                 case None => Validated.Valid(None)
                 case Some(fullJson) => safeReadAs[Map[String, ujson.Value]](fullJson).leftMap(NonEmptyList.one).flatMap{ currentSection => 
                     val semanticNel = currentSection.get("semantic")
                         .toRight("Missing semantic in regional grouping section!")
-                        .flatMap(safeReadAs[String])
+                        .flatMap(safeReadAs[String](_).flatMap{
+                            case ("permissive" | "Permissive" | "PERMISSIVE") => Permissive.asRight
+                            case ("prohibitive" | "Prohibitive" | "PROHIBITIVE") => Prohibitive.asRight
+                            case s => s"Illegal value for regional grouping semantic: $s".asLeft
+                        })
                         .toValidatedNel
                     val groupsNel = currentSection.get("groups")
                         .toRight("Missing groups in regional grouping section!")
@@ -92,14 +98,13 @@ object ImagingRoundConfiguration:
                     }.foldLeft(Set.empty[Timepoint])(_ ++ _.toSortedSet).toList.toNel.toLeft(())
                         .leftMap{ overlaps => s"Overlap(s) among regional grouping: ${overlaps.map(_.show).mkString_(", ")}" }
                         .toValidatedNel
-                    (existenceNel, disjointnessNel).tupled.toEither.flatMap( Function.const{
-                        val unwrappedGrouping = grouping.map(RegionalImageRoundGroup.apply)
-                        semantic match {
-                            case "permissive" => RegionalGrouping.Permissive(unwrappedGrouping).asRight
-                            case "prohibitive" => RegionalGrouping.Prohibitive(unwrappedGrouping).asRight
-                            case _ => NonEmptyList.one(s"Illegal grouping semantic: $semantic").asLeft
-                        }
-                    } ).toValidated
+                    (existenceNel, disjointnessNel)
+                        .tupled
+                        .toEither
+                        .map(Function.const{ semantic match {
+                            case Permissive => RegionalGrouping.Permissive(grouping)
+                            case Prohibitive => RegionalGrouping.Prohibitive(grouping)
+                        }}).toValidated
             }
             val uncoveredRounds: ValidatedNel[String, Unit] = maybeCrudeGrouping match {
                 // If regional grouping is present, some regional rounds in the experiment may not have been covered.
@@ -117,6 +122,7 @@ object ImagingRoundConfiguration:
         }
     }
 
+    /** Try to read a configuration directly from JSON. */
     def fromJson(fullJsonData: ujson.Value): ErrMsgsOr[ImagingRoundConfiguration] = 
         safeReadAs[Map[String, ujson.Value]](fullJsonData).leftMap(NonEmptyList.one).flatMap(fromJsonMap)
 
@@ -134,25 +140,23 @@ object ImagingRoundConfiguration:
             .leftMap(e => NonEmptyList.one(e.getMessage))
             .flatMap(fromJson)
 
-    /**
-     * Designation of regional barcode timepoints which are prohibited from being in (configurably) close proximity.
-     *
-     * @param get The actual collection of indices
-     */
-    final case class RegionalImageRoundGroup(get: NonEmptySet[Timepoint])
+    /** Alias to give more context-rich meaning to a nonempty collection of timepoints */
+    type RegionalImageRoundGroup = NonEmptySet[Timepoint]
 
     /** Helpers for working with timepoint groupings */
     object RegionalImageRoundGroup:
         given rwForRegionalImageRoundGroup: ReadWriter[RegionalImageRoundGroup] = readwriter[ujson.Value].bimap(
-            group => ujson.Arr(group.get.toList.map(name => ujson.Num(name.get))*), 
+            group => ujson.Arr(group.toList.map(name => ujson.Num(name.get))*), 
             json => json.arr
                 .toList
                 .toNel
                 .toRight("Empty collection can't parse as group of regional imaging rounds!")
                 .flatMap(_.traverse(_.safeInt.flatMap(Timepoint.fromInt)))
                 .flatMap(safeNelToNes)
-                .leftMap(repeats => s"Repeat values for group of regional imaging rounds: $repeats")
-                .fold(msg => throw new ujson.Value.InvalidData(json, msg), RegionalImageRoundGroup.apply)
+                .fold(
+                    repeats => throw new ujson.Value.InvalidData(json, s"Repeat values for group of regional imaging rounds: $repeats"), 
+                    identity
+                    )
         )
     end RegionalImageRoundGroup
 
@@ -168,22 +172,36 @@ object ImagingRoundConfiguration:
         sealed trait Nontrivial extends RegionalGrouping:
             /** A nontrivial grouping specifies a list of groups which comprise the total grouping.s */
             def groups: Groups
+        /** Helpers for constructing and owrking with a nontrivial grouping of regional imaging rounds */
+        object Nontrivial:
+            /** Dispatch to the appropriate leaf class constructor based on the value of the semantic. */
+            def apply(semantic: Semantic, groups: Groups): Nontrivial = semantic match {
+                case Semantic.Permissive => Permissive(groups)
+                case Semantic.Prohibitive => Prohibitive(groups)
+            }
+            /** Construct a grouping with a single group. */
+            def singleton(semantic: Semantic, group: RegionalImageRoundGroup): Nontrivial = apply(semantic, NonEmptyList.one(group))
+        end Nontrivial
         /** A 'permissive' grouping 'allows' members of the same group to violate some rule, while 'forbidding' non-grouped items from doing so. */
         final case class Permissive private[ImagingRoundConfiguration](groups: Groups) extends Nontrivial
         /** Helpers for working with the permissive regional grouping */
         object Permissive:
             /** Construct a grouping with a single group. */
-            private[looptrace] def singleton(group: RegionalImageRoundGroup): Permissive = 
-                new Permissive(NonEmptyList.one(group))
+            private[looptrace] def singleton(group: RegionalImageRoundGroup): Permissive = Permissive(NonEmptyList.one(group))
         end Permissive
         /** A 'prohibitive' grouping 'forbids' members of the same group to violate some rule, while 'allowing' non-grouped items to violate the rule. */
         final case class Prohibitive private[ImagingRoundConfiguration](groups: Groups) extends Nontrivial
         /** Helpers for working with the prohibitive regional grouping */
         object Prohibitive:
             /** Construct a grouping with a single group. */
-            private[looptrace] def singleton(group: RegionalImageRoundGroup): Prohibitive = 
-                new Prohibitive(NonEmptyList.one(group))
+            private[looptrace] def singleton(group: RegionalImageRoundGroup): Prohibitive = Prohibitive(NonEmptyList.one(group))
         end Prohibitive
+
+        /** Delineate which semantic is desired */
+        private[looptrace] enum Semantic:
+            case Permissive, Prohibitive
+
+        //private[looptrace] def fromSemanticTimeGroupsAndRounds(semantic: Semantic, timeGroups: NonEmptyList[RegionalImageRoundGroup]):
     end RegionalGrouping
 
     /** Check list of items for nonemptiness. */
