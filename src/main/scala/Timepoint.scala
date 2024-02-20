@@ -13,6 +13,7 @@ final case class Timepoint(get: NonnegativeInt) extends AnyVal
 /** Helpers for working with {@code Timepoint} values */
 object Timepoint:
     given orderForTimepoint: Order[Timepoint] = Order.by(_.get)
+    given orderingForTimepoint(using ord: Order[Timepoint]): Ordering[Timepoint] = ord.toOrdering
     given showForTimepoint: Show[Timepoint] = Show.show(_.get.show)
     
     /** The text prefix before the encoding of the numeric timepoint value in a filename */
