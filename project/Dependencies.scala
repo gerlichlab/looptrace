@@ -3,7 +3,7 @@ import sbt._
 /** Dependencies for the project */
 object Dependencies {
     /* Versions */
-    lazy val scalatestVersion = "3.2.17"
+    lazy val scalatestVersion = "3.2.18"
     lazy val (scalacheckMajor, scalacheckMinor) = ("1", "17")
     
     /* Core libraries */
@@ -13,15 +13,15 @@ object Dependencies {
         "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
     )
     lazy val mouse = "org.typelevel" %% "mouse" % "1.2.2"
-    lazy val netcdf = {
-        val version = "5.5.3"
-        val orgName = "edu.ucar"
-        Seq(
-            orgName % "cdm-core" % version,
-            orgName % "cdm-zarr" % version,
-            orgName % "toolsUI" % "5.5.2"
-        )
-    }
+    // lazy val netcdf = {
+    //     val version = "5.5.3"
+    //     val orgName = "edu.ucar"
+    //     Seq(
+    //         orgName % "cdm-core" % version,
+    //         orgName % "cdm-zarr" % version,
+    //         orgName % "toolsUI" % "5.5.2"
+    //     )
+    // }
     lazy val os = "com.lihaoyi" %% "os-lib" % "0.9.2"
     lazy val scalaCsv = "com.github.tototoshi" %% "scala-csv" % "1.3.10"
     lazy val scopt = "com.github.scopt" %% "scopt" % "4.1.0"
