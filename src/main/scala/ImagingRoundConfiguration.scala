@@ -1,6 +1,5 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
-import scala.language.adhocExtensions // for extending ujson.Value.InvalidData
 import scala.util.Try
 import cats.*
 import cats.data.{ NonEmptyList, NonEmptySet, Validated, ValidatedNel }
@@ -26,10 +25,51 @@ final case class ImagingRoundConfiguration private(
 object ImagingRoundConfiguration:
     import RegionalGrouping.Semantic.*
     
-    /** Error subtype for when JSON decoding fails */
-    final class DecodingError(messages: NonEmptyList[String], json: ujson.Value) 
-        extends ujson.Value.InvalidData(json, s"Error(s) decoding ImagingRoundConfiguration: ${messages.mkString_(", ")}")
-    
+    /** Error for when building an instance fails */
+    class BuildError(val messages: NonEmptyList[String]) 
+        extends Exception(s"Error(s) creating imaging round configuration: ${messages.mkString_(", ")}")
+
+    /** Check that one set of timepoints is a subset of another */
+    def checkTimesSubset(knownTimes: Set[Timepoint])(times: Set[Timepoint], context: String): ValidatedNel[String, Unit] = (times -- knownTimes).toList match {
+        case Nil => ().validNel
+        case unknown => s"Unknown timepoint(s) in $context: ${unknown.map(_.show).mkString(", ")}".invalidNel
+    }
+
+    /**
+      * Validate construction of the imaging round configuration by checking that all timepoints are known and covered.
+      * 
+      * More specifically, any timepoint to exclude from the tracing must exist as a timepoint in the sequence of imaging 
+      * rounds, regardless of whether the grouping of regional timepoints is trivial or not.
+      * 
+      * Furthermore, if the regional grouping is nontrivial, then the set of timepoints in the regional grouping must be 
+      * both a subset and a superset of the set of timepoints from regional rounds in the imaging sequence. 
+      * In other words, those sets of timepoints must be equivalent.
+      *
+      * @param sequence The declaration of sequential FISH rounds that define an experiment
+      * @param grouping How to group regional FISH rounds for proximity filtration
+      * @param tracingExclusions Timepoints to exclude from tracing analysis
+      * @return
+      */
+    def build(sequence: ImagingSequence, grouping: RegionalGrouping, tracingExclusions: Set[Timepoint]): ErrMsgsOr[ImagingRoundConfiguration] = {
+        val knownTimes = sequence.rounds.map(_.time).toList.toSet
+        // Regardless of the subtype of grouping, we need to check that any tracing exclusion timepoint is a known timepoint.
+        val tracingSubsetNel = checkTimesSubset(knownTimes)(tracingExclusions, "tracing exclusions")
+        (grouping match {
+            // TODO: need to use just the regional timepoints from the sequence.
+            case g: RegionalGrouping.Trivial.type => 
+                // In the trivial grouping case, we have no more validation work to do.
+                tracingSubsetNel.map(_ => ImagingRoundConfiguration(sequence, g, tracingExclusions))
+            case g: RegionalGrouping.Nontrivial => 
+                // When the grouping's nontrivial, check for set equivalance of timepoints b/w imaging sequence and regional grouping.
+                val groupedTimes = g.groups.reduce(_ ++ _).toList.toSet
+                val groupingSubsetNel = checkTimesSubset(knownTimes)(groupedTimes, "regional grouping (rel. to imaging sequence)")
+                val groupingSupersetNel = checkTimesSubset(groupedTimes)(knownTimes, "imaging sequence (rel. to regional grouping)")
+                (tracingSubsetNel, groupingSubsetNel, groupingSupersetNel).tupled.map(_ => 
+                    ImagingRoundConfiguration(sequence, grouping, tracingExclusions)
+                )
+        }).toEither
+    }
+
     /**
       * Read the configuration of imaging rounds for the experiment, including regional grouping and 
       * exclusions from tracing.
@@ -143,6 +183,28 @@ object ImagingRoundConfiguration:
         }
     }
 
+    /**
+     * Create instance, throw exception if any failure occurs
+     * 
+     * @see [[ImagingRoundConfiguration.build]]
+     */
+    def unsafe(sequence: ImagingSequence, grouping: RegionalGrouping, tracingExclusions: Set[Timepoint]): ImagingRoundConfiguration = 
+        build(sequence, grouping, tracingExclusions).fold(messages => throw new BuildError(messages), identity)
+
+    /**
+     * Create instance, throw exception if any failure occurs
+     * 
+     * @see [[ImagingRoundConfiguration.build]]
+     */
+    def unsafe(
+        sequence: ImagingSequence, 
+        maybeGrouping: Option[(RegionalGrouping.Semantic, RegionalGrouping.Groups)], 
+        tracingExclusions: Set[Timepoint],
+    ): ImagingRoundConfiguration = {
+        val grouping = maybeGrouping.fold(RegionalGrouping.Trivial)(RegionalGrouping.Nontrivial.apply.tupled)
+        unsafe(sequence, grouping, tracingExclusions)
+    }
+
     /** Alias to give more context-rich meaning to a nonempty collection of timepoints */
     type RegionalImageRoundGroup = NonEmptySet[Timepoint]
 
@@ -186,18 +248,18 @@ object ImagingRoundConfiguration:
             def singleton(semantic: Semantic, group: RegionalImageRoundGroup): Nontrivial = apply(semantic, NonEmptyList.one(group))
         end Nontrivial
         /** A 'permissive' grouping 'allows' members of the same group to violate some rule, while 'forbidding' non-grouped items from doing so. */
-        final case class Permissive private[ImagingRoundConfiguration](groups: Groups) extends Nontrivial
+        final case class Permissive(groups: Groups) extends Nontrivial
         /** Helpers for working with the permissive regional grouping */
         object Permissive:
             /** Construct a grouping with a single group. */
-            private[looptrace] def singleton(group: RegionalImageRoundGroup): Permissive = Permissive(NonEmptyList.one(group))
+            def singleton(group: RegionalImageRoundGroup): Permissive = Permissive(NonEmptyList.one(group))
         end Permissive
         /** A 'prohibitive' grouping 'forbids' members of the same group to violate some rule, while 'allowing' non-grouped items to violate the rule. */
-        final case class Prohibitive private[ImagingRoundConfiguration](groups: Groups) extends Nontrivial
+        final case class Prohibitive(groups: Groups) extends Nontrivial
         /** Helpers for working with the prohibitive regional grouping */
         object Prohibitive:
             /** Construct a grouping with a single group. */
-            private[looptrace] def singleton(group: RegionalImageRoundGroup): Prohibitive = Prohibitive(NonEmptyList.one(group))
+            def singleton(group: RegionalImageRoundGroup): Prohibitive = Prohibitive(NonEmptyList.one(group))
         end Prohibitive
 
         /** Delineate which semantic is desired */
