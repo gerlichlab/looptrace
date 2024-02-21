@@ -22,18 +22,23 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
  * of spots from indiviudal FISH probes in each region would be impossible in a multiplexed 
  * experiment).
  * 
- * If doing proximity-based filtration of spots, the probe groupings may be specified either 
- * as ''permissions'' or as ''prohibitions''; these representations are dual to one another. 
+ * If doing proximity-based filtration of spots, the value for the `"semantic"` key in the config 
+ * file in the `"regionalGrouping"` section should be either `"permissive"` or `"prohibitive"`. 
+ * To treat all regional spots as a single group and prohibit proximal spots, the `"regionalGrouping"` 
+ * section may be omitted. To do 'no' proximity-based filtration, the minimum spot distance \
+ * could be set to 0. 
  * 
  * For prohibitions, the groupings are interpreted by the program to mean that spots from the 
- * grouped regional barcodes may ''not'' violate the proximity threshold; spots from other pairs 
- * of regional barcodes ''are'' permitted to violate that threshold. 
- * For permissions, spots from pairs of regional barcodes in the same group ''may'' violate 
- * the threshold while all others may ''not''.
+ * grouped regional barcodes may 'not' violate the proximity threshold; spots from other pairs 
+ * of regional barcodes 'are' permitted to violate that threshold. 
+ * For permissions, spots from pairs of regional barcodes in the same group 'may' violate 
+ * the threshold while all others may 'not'.
  * 
  * For more, see related discussions on Github:
  * [[https://github.com/gerlichlab/looptrace/issues/71 Original, prohibitive semantics]]
  * [[https://github.com/gerlichlab/looptrace/issues/198 Newer, permissive semantics]]
+ * [[https://github.com/gerlichlab/looptrace/issues/215 How to declare imaging rounds]]
+ * [[https://github.com/gerlichlab/looptrace/pull/267 First config redesign]]
  * 
  * @author Vince Reuter
  */
@@ -86,7 +91,7 @@ object LabelAndFilterRois:
             opt[ImagingRoundConfiguration]("configuration")
                 .required()
                 .action((progConf, cliConf) => cliConf.copy(configuration = progConf))
-                .text("Path to file specifying the configuration"),
+                .text("Path to file specifying the imaging rounds configuration"),
             opt[os.Path]("spotsFile")
                 .required()
                 .action((f, c) => c.copy(spotsFile = f))
