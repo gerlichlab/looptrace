@@ -12,11 +12,11 @@ import org.scalatest.funsuite.AnyFunSuite
   */
 class TestImagingRoundConfiguration extends AnyFunSuite, GenericSuite, ScalacheckSuite, should.Matchers:
     test("Example config parses correctly.") {
-        exampleConfig.numberOfRounds shouldEqual 11
+        exampleConfig.numberOfRounds shouldEqual 12
         exampleConfig.regionalGrouping shouldEqual ImagingRoundConfiguration.RegionalGrouping.Permissive(
-            NonEmptyList.of(NonEmptySet.of(7, 8), NonEmptySet.of(9, 10)).map(_.map(Timepoint.unsafe))
+            NonEmptyList.of(NonEmptySet.of(8, 9), NonEmptySet.of(10, 11)).map(_.map(Timepoint.unsafe))
         )
-        exampleConfig.tracingExclusions shouldEqual Set(0, 7, 8, 9, 10).map(Timepoint.unsafe)
+        exampleConfig.tracingExclusions shouldEqual Set(0, 8, 9, 10, 11).map(Timepoint.unsafe)
         val (blankRounds, locusRounds, regionalRounds) = exampleConfig.sequenceOfRounds.rounds.toList.foldRight(
             (List.empty[BlankImagingRound], List.empty[LocusImagingRound], List.empty[RegionalImagingRound])
             ){ 
@@ -30,8 +30,9 @@ class TestImagingRoundConfiguration extends AnyFunSuite, GenericSuite, Scalachec
                     ???
             }
         blankRounds.map(_.name) shouldEqual List("pre_image", "blank_01")
-        locusRounds.map(_.name) shouldEqual locusRounds.map(_.probe.get)  // Name inferred from probe when not explicit
-        locusRounds.map(_.probe) shouldEqual List("Dp001", "Dp002", "Dp003", "Dp006", "Dp007").map(ProbeName.apply)
+        locusRounds.map(_.name).init shouldEqual locusRounds.map(_.probe.get).init  // Name inferred from probe when not explicit
+        locusRounds.last.name shouldEqual locusRounds.last.probe.get ++ "_repeat1"
+        locusRounds.map(_.probe) shouldEqual List("Dp001", "Dp002", "Dp003", "Dp006", "Dp007", "Dp001").map(ProbeName.apply)
         regionalRounds.map(_.name) shouldEqual regionalRounds.map(_.probe.get)
         regionalRounds.map(_.probe) shouldEqual List("Dp101", "Dp102", "Dp103", "Dp104").map(ProbeName.apply)
     }
