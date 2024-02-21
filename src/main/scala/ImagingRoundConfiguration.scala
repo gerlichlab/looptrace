@@ -59,10 +59,15 @@ object ImagingRoundConfiguration:
                 // In the trivial grouping case, we have no more validation work to do.
                 ().validNel -> ().validNel
             case g: RegionalGrouping.Nontrivial => 
-                // TODO: need to use just the regional timepoints from the sequence.
                 // When the grouping's nontrivial, check for set equivalance of timepoints b/w imaging sequence and regional grouping.
                 val groupedTimes = g.groups.reduce(_ ++ _).toList.toSet
-                checkTimesSubset(knownTimes)(groupedTimes, "regional grouping (rel. to imaging sequence)") -> checkTimesSubset(groupedTimes)(knownTimes, "imaging sequence (rel. to regional grouping)")
+                val regionalTimes = sequence.rounds.toList.flatMap{
+                    case r: RegionalImagingRound => r.time.some
+                    case _ => None
+                }.toSet
+                val subsetNel = checkTimesSubset(regionalTimes)(groupedTimes, "regional grouping (rel. to regionals in imaging sequence)")
+                val supersetNel = checkTimesSubset(groupedTimes)(regionalTimes, "regionals in imaging sequence (rel. to regional grouping)")
+                subsetNel -> supersetNel
         }
         (tracingSubsetNel, groupingSubsetNel, groupingSupersetNel)
             .tupled
