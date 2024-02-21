@@ -10,7 +10,9 @@ import upickle.default.*
 /** A sequence of FISH and blank imaging rounds, constituting a microscopy experiment */
 final case class ImagingSequence private(rounds: NonEmptyList[ImagingRound]):
     lazy val _lookup = rounds.map(r => r.name -> r).toNem
-    def get(name: String): Option[ImagingRound] = _lookup(name)
+    final def get(name: String): Option[ImagingRound] = _lookup(name)
+    final def length: Int = rounds.length
+    final def size: Int = length
 end ImagingSequence
 
 /** Smart constructors and tools for working with sequences of imaging rounds */
