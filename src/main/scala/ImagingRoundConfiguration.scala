@@ -19,7 +19,9 @@ final case class ImagingRoundConfiguration private(
     regionalGrouping: ImagingRoundConfiguration.RegionalGrouping, 
     // TODO: by default, skip regional and blank imaging rounds (but do use repeats).
     tracingExclusions: Set[Timepoint], // Timepoints of imaging rounds to not use for tracing
-    )
+    ):
+    final def numberOfRounds: Int = sequenceOfRounds.length
+end ImagingRoundConfiguration
 
 /** Tools for working with declaration of imaging rounds and how to use them within an experiment */
 object ImagingRoundConfiguration:
@@ -30,10 +32,11 @@ object ImagingRoundConfiguration:
         extends Exception(s"Error(s) creating imaging round configuration: ${messages.mkString_(", ")}")
 
     /** Check that one set of timepoints is a subset of another */
-    def checkTimesSubset(knownTimes: Set[Timepoint])(times: Set[Timepoint], context: String): ValidatedNel[String, Unit] = (times -- knownTimes).toList match {
-        case Nil => ().validNel
-        case unknown => s"Unknown timepoint(s) in $context: ${unknown.map(_.show).mkString(", ")}".invalidNel
-    }
+    def checkTimesSubset(knownTimes: Set[Timepoint])(times: Set[Timepoint], context: String): ValidatedNel[String, Unit] = 
+        (times -- knownTimes).toList match {
+            case Nil => ().validNel
+            case unknown => s"Unknown timepoint(s) in $context: ${unknown.map(_.show).mkString(", ")}".invalidNel
+        }
 
     /**
       * Validate construction of the imaging round configuration by checking that all timepoints are known and covered.
