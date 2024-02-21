@@ -134,18 +134,6 @@ object ImagingRoundConfiguration:
                     .toValidatedNel
             }
         (roundsNel, crudeGroupingNel, tracingExclusionsNel).tupled.toEither.flatMap{ case (sequence, maybeCrudeGrouping, exclusions) =>
-            val regionalTimepoints = sequence.rounds.toList.flatMap{ 
-                case (r: RegionalImagingRound) => r.time.some
-                case _ => None
-            }.toSet
-            // Some of the timepoints specified for tracing exclusion may not correspond to extant imaging rounds.
-            val nonexistentExclusionsNel: ValidatedNel[String, Unit] = 
-                (exclusions -- sequence.rounds.map(_.time).toList)
-                    .toList
-                    .toNel
-                    .toLeft(())
-                    .leftMap(ts => s"Timepoint(s) to exclude from tracing aren't in imaging sequence: ${ts.map(_.show).mkString_(", ")}")
-                    .toValidatedNel
             val unrefinedGrouping = maybeCrudeGrouping match {
                 case None => RegionalGrouping.Trivial
                 case Some((semantic, uncheckedUnwrappedGrouping)) => semantic match {
