@@ -17,7 +17,7 @@ end ImagingRoundConfigurationLike
 /** Typical looptrace declaration/configuration of imaging rounds and how to use them */
 final case class ImagingRoundConfiguration private(
     sequenceOfRounds: ImagingSequence, 
-    regionalGrouping: ImagingRoundConfiguration.RegionalGrouping, 
+    regionGrouping: ImagingRoundConfiguration.RegionGrouping, 
     // TODO: by default, skip regional and blank imaging rounds (but do use repeats).
     tracingExclusions: Set[Timepoint], // Timepoints of imaging rounds to not use for tracing
     ):
@@ -26,7 +26,7 @@ end ImagingRoundConfiguration
 
 /** Tools for working with declaration of imaging rounds and how to use them within an experiment */
 object ImagingRoundConfiguration:
-    import RegionalGrouping.Semantic.*
+    import RegionGrouping.Semantic.*
     
     /** Something went wrong with attempt to instantiate a configuration */
     trait BuildErrorLike:
@@ -47,7 +47,7 @@ object ImagingRoundConfiguration:
         private def condenseMessages(messages: NonEmptyList[String], extraContext: Option[String]): String = 
             s"Error(s) building imaging round configuration:" ++ extraContext.fold("")(" " ++ _) ++ messages.mkString_(", ")
     end BuildError
-    
+
     /** Check that one set of timepoints is a subset of another */
     def checkTimesSubset(knownTimes: Set[Timepoint])(times: Set[Timepoint], context: String): ValidatedNel[String, Unit] = 
         (times -- knownTimes).toList match {
@@ -70,15 +70,15 @@ object ImagingRoundConfiguration:
       * @param tracingExclusions Timepoints to exclude from tracing analysis
       * @return
       */
-    def build(sequence: ImagingSequence, grouping: RegionalGrouping, tracingExclusions: Set[Timepoint]): ErrMsgsOr[ImagingRoundConfiguration] = {
+    def build(sequence: ImagingSequence, grouping: RegionGrouping, tracingExclusions: Set[Timepoint]): ErrMsgsOr[ImagingRoundConfiguration] = {
         val knownTimes = sequence.rounds.map(_.time).toList.toSet
         // Regardless of the subtype of grouping, we need to check that any tracing exclusion timepoint is a known timepoint.
         val tracingSubsetNel = checkTimesSubset(knownTimes)(tracingExclusions, "tracing exclusions")
         val (groupingSubsetNel, groupingSupersetNel) = grouping match {
-            case g: RegionalGrouping.Trivial.type => 
+            case g: RegionGrouping.Trivial.type => 
                 // In the trivial grouping case, we have no more validation work to do.
                 ().validNel -> ().validNel
-            case g: RegionalGrouping.Nontrivial => 
+            case g: RegionGrouping.Nontrivial => 
                 // When the grouping's nontrivial, check for set equivalance of timepoints b/w imaging sequence and regional grouping.
                 val groupedTimes = g.groups.reduce(_ ++ _).toList.toSet
                 val regionalTimes = sequence.rounds.toList.flatMap{
@@ -123,8 +123,8 @@ object ImagingRoundConfiguration:
                 .leftMap(NonEmptyList.one)
                 .flatMap(ImagingSequence.fromRounds)
                 .toValidated
-        val crudeGroupingNel: ValidatedNel[String, Option[(RegionalGrouping.Semantic, NonEmptyList[NonEmptySet[Timepoint]])]] = 
-            data.get("regionalGrouping") match {
+        val crudeGroupingNel: ValidatedNel[String, Option[(RegionGrouping.Semantic, NonEmptyList[NonEmptySet[Timepoint]])]] = 
+            data.get("regionGrouping") match {
                 case None => Validated.Valid(None)
                 case Some(fullJson) => safeReadAs[Map[String, ujson.Value]](fullJson).leftMap(NonEmptyList.one).flatMap{ currentSection => 
                     val semanticNel = currentSection.get("semantic")
@@ -155,10 +155,10 @@ object ImagingRoundConfiguration:
             }
         (roundsNel, crudeGroupingNel, tracingExclusionsNel).tupled.toEither.flatMap{ case (sequence, maybeCrudeGrouping, exclusions) =>
             val unrefinedGrouping = maybeCrudeGrouping match {
-                case None => RegionalGrouping.Trivial
+                case None => RegionGrouping.Trivial
                 case Some((semantic, uncheckedUnwrappedGrouping)) => semantic match {
-                    case Permissive => RegionalGrouping.Permissive(uncheckedUnwrappedGrouping)
-                    case Prohibitive => RegionalGrouping.Prohibitive(uncheckedUnwrappedGrouping)
+                    case Permissive => RegionGrouping.Permissive(uncheckedUnwrappedGrouping)
+                    case Prohibitive => RegionGrouping.Prohibitive(uncheckedUnwrappedGrouping)
                 }
             }
             build(sequence, unrefinedGrouping, exclusions)
@@ -170,7 +170,7 @@ object ImagingRoundConfiguration:
      * 
      * @see [[ImagingRoundConfiguration.build]]
      */
-    def unsafe(sequence: ImagingSequence, grouping: RegionalGrouping, tracingExclusions: Set[Timepoint]): ImagingRoundConfiguration = 
+    def unsafe(sequence: ImagingSequence, grouping: RegionGrouping, tracingExclusions: Set[Timepoint]): ImagingRoundConfiguration = 
         build(sequence, grouping, tracingExclusions).fold(messages => throw new BuildError.FromPure(messages), identity)
 
     /**
@@ -180,10 +180,10 @@ object ImagingRoundConfiguration:
      */
     def unsafe(
         sequence: ImagingSequence, 
-        maybeGrouping: Option[(RegionalGrouping.Semantic, RegionalGrouping.Groups)], 
+        maybeGrouping: Option[(RegionGrouping.Semantic, RegionGrouping.Groups)], 
         tracingExclusions: Set[Timepoint],
     ): ImagingRoundConfiguration = {
-        val grouping = maybeGrouping.fold(RegionalGrouping.Trivial)(RegionalGrouping.Nontrivial.apply.tupled)
+        val grouping = maybeGrouping.fold(RegionGrouping.Trivial)(RegionGrouping.Nontrivial.apply.tupled)
         unsafe(sequence, grouping, tracingExclusions)
     }
 
@@ -217,15 +217,15 @@ object ImagingRoundConfiguration:
     end RegionalImageRoundGroup
 
     /** How to permit or prohibit regional barcode imaging probes/timepoints from being too physically close */
-    sealed trait RegionalGrouping
+    sealed trait RegionGrouping
 
     /** The (concrete) subtypes of regional image round grouping */
-    object RegionalGrouping:
+    object RegionGrouping:
         type Groups = NonEmptyList[RegionalImageRoundGroup]
         /** A trivial grouping of regional imaging rounds, which treats all regional rounds as one big group */
-        case object Trivial extends RegionalGrouping
+        case object Trivial extends RegionGrouping
         /** A nontrivial grouping of regional imaging rounds, which must constitute a partition of those available  */
-        sealed trait Nontrivial extends RegionalGrouping:
+        sealed trait Nontrivial extends RegionGrouping:
             /** A nontrivial grouping specifies a list of groups which comprise the total grouping.s */
             def groups: Groups
         /** Helpers for constructing and owrking with a nontrivial grouping of regional imaging rounds */
@@ -256,7 +256,7 @@ object ImagingRoundConfiguration:
         /** Delineate which semantic is desired */
         private[looptrace] enum Semantic:
             case Permissive, Prohibitive
-    end RegionalGrouping
+    end RegionGrouping
 
     /** Check list of items for nonemptiness. */
     private def liftToNel[A](as: List[A], context: Option[String] = None): Either[String, NonEmptyList[A]] = 

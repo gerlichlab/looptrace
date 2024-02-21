@@ -13,7 +13,7 @@ import org.scalatest.funsuite.AnyFunSuite
 class TestImagingRoundConfiguration extends AnyFunSuite, GenericSuite, ScalacheckSuite, should.Matchers:
     test("Example config parses correctly.") {
         exampleConfig.numberOfRounds shouldEqual 12
-        exampleConfig.regionalGrouping shouldEqual ImagingRoundConfiguration.RegionalGrouping.Permissive(
+        exampleConfig.regionGrouping shouldEqual ImagingRoundConfiguration.RegionGrouping.Permissive(
             NonEmptyList.of(NonEmptySet.of(8, 9), NonEmptySet.of(10, 11)).map(_.map(Timepoint.unsafe))
         )
         exampleConfig.tracingExclusions shouldEqual Set(0, 8, 9, 10, 11).map(Timepoint.unsafe)

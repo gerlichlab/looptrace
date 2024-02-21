@@ -1,5 +1,5 @@
 {
-    "regionalGrouping": {
+    "regionGrouping": {
         "semantic": "permissive",
         "groups": [[8, 9], [10, 11]]
     },
@@ -17,5 +17,11 @@
         {"time": 10, "probe": "Dp103", "isRegional": true},
         {"time": 11, "probe": "Dp104", "isRegional": true}
     ],
+    "locusGrouping": {
+        "8": [1, 6],
+        "9": [2], 
+        "10": [3, 4], 
+        "11": [5]
+    },
     "tracingExclusions": [0, 8, 9, 10, 11]
 }
