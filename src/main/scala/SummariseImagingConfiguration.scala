@@ -36,24 +36,21 @@ object SummariseImagingRoundConfiguration:
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
             case Some(opts) => 
                 println(s"Reading config file: ${opts.configFile}")
-                ImagingRoundConfiguration.fromJsonFile(opts.configFile) match {
-                    case Left(messages) => throw new Exception(s"Error(s): ${messages.mkString_(", ")}")
-                    case Right(config) => 
-                        val exclusions = config.tracingExclusions.map(_.get)
-                        println(s"${exclusions.size} exclusion(s) from tracing: ${exclusions.toList.sorted.map(_.show).mkString(", ")}")
-                        println(s"${config.numberOfRounds} round(s) in total (listed below)")
-                        config.sequenceOfRounds.rounds.map(r => s"${r.time.show}: ${r.name}").toList.foreach(println)
-                        val (groupingName, maybeGroups) = config.regionalGrouping match {
-                            case ImagingRoundConfiguration.RegionalGrouping.Trivial => "Trivial" -> None
-                            case grouping: ImagingRoundConfiguration.RegionalGrouping.Permissive => "Permissive" -> grouping.groups.some
-                            case grouping: ImagingRoundConfiguration.RegionalGrouping.Prohibitive => "Prohibitive" -> grouping.groups.some
-                        }
-                        println(s"$groupingName regional grouping")
-                        maybeGroups.fold(()){ groups => 
-                            groups.zipWithIndex.toList.foreach{ (g, i) => 
-                                println(s"$i: ${g.toList.sorted.mkString(", ")}")
-                            }
-                        }
+                val config = ImagingRoundConfiguration.unsafeFromJsonFile(opts.configFile)
+                val exclusions = config.tracingExclusions.map(_.get)
+                println(s"${exclusions.size} exclusion(s) from tracing: ${exclusions.toList.sorted.map(_.show).mkString(", ")}")
+                println(s"${config.numberOfRounds} round(s) in total (listed below)")
+                config.sequenceOfRounds.rounds.map(r => s"${r.time.show}: ${r.name}").toList.foreach(println)
+                val (groupingName, maybeGroups) = config.regionalGrouping match {
+                    case ImagingRoundConfiguration.RegionalGrouping.Trivial => "Trivial" -> None
+                    case grouping: ImagingRoundConfiguration.RegionalGrouping.Permissive => "Permissive" -> grouping.groups.some
+                    case grouping: ImagingRoundConfiguration.RegionalGrouping.Prohibitive => "Prohibitive" -> grouping.groups.some
+                }
+                println(s"$groupingName regional grouping")
+                maybeGroups.fold(()){ groups => 
+                    groups.zipWithIndex.toList.foreach{ (g, i) => 
+                        println(s"$i: ${g.toList.sorted.mkString(", ")}")
+                    }
                 }
         }
     }

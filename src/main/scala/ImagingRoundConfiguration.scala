@@ -1,5 +1,6 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
+import scala.language.adhocExtensions // to extend ujson.Value.InvalidData
 import scala.util.Try
 import cats.*
 import cats.data.{ NonEmptyList, NonEmptySet, Validated, ValidatedNel }
@@ -27,10 +28,26 @@ end ImagingRoundConfiguration
 object ImagingRoundConfiguration:
     import RegionalGrouping.Semantic.*
     
-    /** Error for when building an instance fails */
-    class BuildError(val messages: NonEmptyList[String]) 
-        extends Exception(s"Error(s) creating imaging round configuration: ${messages.mkString_(", ")}")
+    /** Something went wrong with attempt to instantiate a configuration */
+    trait BuildErrorLike:
+        def messages: NonEmptyList[String]
+    end BuildErrorLike
 
+    /** Construct errors during instantiation */
+    object BuildError:
+        /** An error building a configuration from pure values */
+        final class FromPure(val messages: NonEmptyList[String]) 
+            extends Exception(condenseMessages(messages, None)) with BuildErrorLike
+        final class FromJsonFile(val messages: NonEmptyList[String], file: os.Path)
+            extends Exception(condenseMessages(messages, s"from file $file".some)) with BuildErrorLike
+        /** An error building a configuration from JSON */
+        final class FromJson(val messages: NonEmptyList[String], json: ujson.Value)  
+            extends ujson.Value.InvalidData(json, condenseMessages(messages, None)) with BuildErrorLike
+        /** Combine potentially multiple error messages into one */
+        private def condenseMessages(messages: NonEmptyList[String], extraContext: Option[String]): String = 
+            s"Error(s) building imaging round configuration:" ++ extraContext.fold("")(" " ++ _) ++ messages.mkString_(", ")
+    end BuildError
+    
     /** Check that one set of timepoints is a subset of another */
     def checkTimesSubset(knownTimes: Set[Timepoint])(times: Set[Timepoint], context: String): ValidatedNel[String, Unit] = 
         (times -- knownTimes).toList match {
@@ -154,7 +171,7 @@ object ImagingRoundConfiguration:
      * @see [[ImagingRoundConfiguration.build]]
      */
     def unsafe(sequence: ImagingSequence, grouping: RegionalGrouping, tracingExclusions: Set[Timepoint]): ImagingRoundConfiguration = 
-        build(sequence, grouping, tracingExclusions).fold(messages => throw new BuildError(messages), identity)
+        build(sequence, grouping, tracingExclusions).fold(messages => throw new BuildError.FromPure(messages), identity)
 
     /**
      * Create instance, throw exception if any failure occurs
@@ -169,6 +186,15 @@ object ImagingRoundConfiguration:
         val grouping = maybeGrouping.fold(RegionalGrouping.Trivial)(RegionalGrouping.Nontrivial.apply.tupled)
         unsafe(sequence, grouping, tracingExclusions)
     }
+
+    /**
+      * Build a configuration instance from JSON data on disk.
+      *
+      * @param jsonFile Path to file to parse
+      * @return Configuration instance
+      */
+    def unsafeFromJsonFile(jsonFile: os.Path): ImagingRoundConfiguration = 
+        fromJsonFile(jsonFile).fold(messages => throw BuildError.FromJsonFile(messages, jsonFile), identity)
 
     /** Alias to give more context-rich meaning to a nonempty collection of timepoints */
     type RegionalImageRoundGroup = NonEmptySet[Timepoint]
