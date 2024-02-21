@@ -23,8 +23,8 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
  * experiment).
  * 
  * If doing proximity-based filtration of spots, the value for the `"semantic"` key in the config 
- * file in the `"regionalGrouping"` section should be either `"permissive"` or `"prohibitive"`. 
- * To treat all regional spots as a single group and prohibit proximal spots, the `"regionalGrouping"` 
+ * file in the `"regionGrouping"` section should be either `"permissive"` or `"prohibitive"`. 
+ * To treat all regional spots as a single group and prohibit proximal spots, the `"regionGrouping"` 
  * section may be omitted. To do 'no' proximity-based filtration, the minimum spot distance \
  * could be set to 0. 
  * 
@@ -128,11 +128,11 @@ object LabelAndFilterRois:
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
             case Some(opts) => 
                 val threshold = opts.buildDistanceThreshold(opts.spotSeparationThresholdValue)
-                val regionalGrouping = opts.configuration.regionalGrouping
+                val regionGrouping = opts.configuration.regionGrouping
                 workflow(
                     spotsFile = opts.spotsFile, 
                     driftFile = opts.driftFile, 
-                    regionalGrouping = regionalGrouping, 
+                    regionGrouping = regionGrouping, 
                     minSpotSeparation = threshold, 
                     unfilteredOutputFile = opts.unfilteredOutputFile,
                     filteredOutputFile = opts.filteredOutputFile, 
@@ -144,7 +144,7 @@ object LabelAndFilterRois:
     def workflow(
         spotsFile: os.Path, 
         driftFile: os.Path, 
-        regionalGrouping: ImagingRoundConfiguration.RegionalGrouping,
+        regionGrouping: ImagingRoundConfiguration.RegionGrouping,
         minSpotSeparation: DistanceThreshold, 
         unfilteredOutputFile: UnfilteredOutputFile, 
         filteredOutputFile: FilteredOutputFile, 
@@ -222,7 +222,7 @@ object LabelAndFilterRois:
                 val newRoi = applyDrift(oldRoi, drift)
                 newRoi -> idx
             }
-            buildNeighboringRoisFinder(shiftedRoisNumbered, minSpotSeparation)(regionalGrouping) match {
+            buildNeighboringRoisFinder(shiftedRoisNumbered, minSpotSeparation)(regionGrouping) match {
                 case Left(errMsg) => throw new Exception(errMsg)
                 case Right(neighborsByRecordNumber) => neighborsByRecordNumber.get
             }
@@ -327,21 +327,21 @@ object LabelAndFilterRois:
       *         otherwise, a {@code Left}-wrapped error message about what went wrong
       */
     private[looptrace] def buildNeighboringRoisFinder(
-        rois: List[RoiLinenumPair], minDist: DistanceThreshold)(grouping: ImagingRoundConfiguration.RegionalGrouping): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
+        rois: List[RoiLinenumPair], minDist: DistanceThreshold)(grouping: ImagingRoundConfiguration.RegionGrouping): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
         given orderForRoiLinenumPair: Order[RoiLinenumPair] = Order.by(_._2)
         type GroupId = NonnegativeInt
         type IndexedRoi = (RegionalBarcodeSpotRoi, NonnegativeInt)
         val getPoint = (_: RoiLinenumPair)._1.centroid
         val groupedRoiLinenumPairs: Either[String, Map[RoiLinenumPair, NonEmptySet[RoiLinenumPair]]] = grouping match {
-            case ImagingRoundConfiguration.RegionalGrouping.Trivial => 
+            case ImagingRoundConfiguration.RegionGrouping.Trivial => 
                 buildNeighborsLookupKeyed(rois.map{ case pair@(r, _) => r.position -> pair }, (_, _) => true, getPoint, minDist, identity).asRight
-            case g: ImagingRoundConfiguration.RegionalGrouping.Nontrivial => 
+            case g: ImagingRoundConfiguration.RegionGrouping.Nontrivial => 
                 val groupIds = NonnegativeInt.indexed(g.groups.toList).flatMap((g, i) => g.toList.map(_ -> i)).toMap
                 Alternative[List].separate(rois.map{ case pair@(roi, _) => groupIds.get(roi.time).toRight(pair).map(_ -> pair)}) match {
                     case (Nil, withGroupsAssigned) => 
                         val considerRoiPair = g match {
-                            case _: ImagingRoundConfiguration.RegionalGrouping.Prohibitive => { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => a._1 === b._1 }
-                            case _: ImagingRoundConfiguration.RegionalGrouping.Permissive => { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => a._1 =!= b._1 }
+                            case _: ImagingRoundConfiguration.RegionGrouping.Prohibitive => { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => a._1 === b._1 }
+                            case _: ImagingRoundConfiguration.RegionGrouping.Permissive => { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => a._1 =!= b._1 }
                         }
                         buildNeighborsLookupKeyed(withGroupsAssigned.map{ case (gi, pair@(roi, _)) => roi.position -> (gi -> pair) }, considerRoiPair, getPoint, minDist, _._2).asRight
                     case (groupless, _) => 
