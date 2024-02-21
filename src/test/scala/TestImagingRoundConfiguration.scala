@@ -23,6 +23,11 @@ class TestImagingRoundConfiguration extends AnyFunSuite, GenericSuite, Scalachec
                 case (r: BlankImagingRound, (blanks, locals, regionals)) => (r :: blanks, locals, regionals)
                 case (r: LocusImagingRound, (blanks, locals, regionals)) => (blanks, r :: locals, regionals)
                 case (r: RegionalImagingRound, (blanks, locals, regionals)) => (blanks, locals, r :: regionals)
+                case _ => 
+                    // Impossible, only here b/c as of 2024-02-21, on Scala 3.3.2 this wasn't compiling
+                    // In particular, there was a match exhaustivity error seemingly related to the following: 
+                    // https://github.com/scala/bug/issues/9677
+                    ???
             }
         blankRounds.map(_.name) shouldEqual List("pre_image", "blank_01")
         locusRounds.map(_.name) shouldEqual locusRounds.map(_.probe.get)  // Name inferred from probe when not explicit
