@@ -141,45 +141,14 @@ object ImagingRoundConfiguration:
                     .toLeft(())
                     .leftMap(ts => s"Timepoint(s) to exclude from tracing aren't in imaging sequence: ${ts.map(_.show).mkString_(", ")}")
                     .toValidatedNel
-            // Some of the timepoints specified in regional grouping may not exist as regional imaging rounds.
-            val groupingNel: ValidatedNel[String, RegionalGrouping] = maybeCrudeGrouping match {
-                case None => Validated.Valid(RegionalGrouping.Trivial)
-                case Some((semantic, grouping)) => 
-                    val existenceNel = { // Every regional timepoint in the grouping must exist in the experiment.
-                        grouping.reduce(_ ++ _).filterNot(regionalTimepoints.contains).toList.toNel match {
-                            case None => ().validNel[String]
-                            case Some(nonRegExcl) => 
-                                val timeText = nonRegExcl.map(_.show).mkString_(", ")
-                                s"Timepoint(s) in regional grouping don't exist or aren't regional: $timeText".invalidNel[Unit]
-                        }
-                    }
-                    val disjointnessNel = grouping.toList.combinations(2).toList.flatMap{
-                        case g1 :: g2 :: Nil => (g1 & g2).toNes
-                        case gs => throw new IllegalStateException(s"Got ${gs.size} groups (not 2!) when taking pairs!")
-                    }.foldLeft(Set.empty[Timepoint])(_ ++ _.toSortedSet).toList.toNel.toLeft(())
-                        .leftMap{ overlaps => s"Overlap(s) among regional grouping: ${overlaps.map(_.show).mkString_(", ")}" }
-                        .toValidatedNel
-                    (existenceNel, disjointnessNel)
-                        .tupled
-                        .toEither
-                        .map(Function.const{ semantic match {
-                            case Permissive => RegionalGrouping.Permissive(grouping)
-                            case Prohibitive => RegionalGrouping.Prohibitive(grouping)
-                        }}).toValidated
+            val unrefinedGrouping = maybeCrudeGrouping match {
+                case None => RegionalGrouping.Trivial
+                case Some((semantic, uncheckedUnwrappedGrouping)) => semantic match {
+                    case Permissive => RegionalGrouping.Permissive(uncheckedUnwrappedGrouping)
+                    case Prohibitive => RegionalGrouping.Prohibitive(uncheckedUnwrappedGrouping)
+                }
             }
-            val uncoveredRounds: ValidatedNel[String, Unit] = maybeCrudeGrouping match {
-                // If regional grouping is present, some regional rounds in the experiment may not have been covered.
-                case None => ().validNel[String]
-                case Some((_, grouping)) => 
-                    val groupedTimepoints: Set[Timepoint] = grouping.reduce(_ ++ _).toSortedSet
-                    regionalTimepoints.filterNot(groupedTimepoints.contains).toList.toNel.toLeft(()).leftMap{ uncovered => 
-                        val timeText = uncovered.map(_.show).mkString_(", ")
-                        s"Timepoint(s) in experiment not covered by regional grouping: $timeText"
-                    }.toValidatedNel
-            }
-            (nonexistentExclusionsNel, groupingNel, uncoveredRounds)
-                .mapN((_, grouping, _) => ImagingRoundConfiguration(sequence, grouping, exclusions))
-                .toEither
+            build(sequence, unrefinedGrouping, exclusions)
         }
     }
 
