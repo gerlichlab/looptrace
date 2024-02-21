@@ -18,7 +18,7 @@ final case class ImagingRoundConfiguration private(
     sequenceOfRounds: ImagingSequence, 
     regionalGrouping: ImagingRoundConfiguration.RegionalGrouping, 
     // TODO: by default, skip regional and blank imaging rounds (but do use repeats).
-    notForTracing: Set[Timepoint], // Timepoints of imaging rounds to not use for tracing
+    tracingExclusions: Set[Timepoint], // Timepoints of imaging rounds to not use for tracing
     )
 
 /** Tools for working with declaration of imaging rounds and how to use them within an experiment */
@@ -54,20 +54,20 @@ object ImagingRoundConfiguration:
         val knownTimes = sequence.rounds.map(_.time).toList.toSet
         // Regardless of the subtype of grouping, we need to check that any tracing exclusion timepoint is a known timepoint.
         val tracingSubsetNel = checkTimesSubset(knownTimes)(tracingExclusions, "tracing exclusions")
-        (grouping match {
-            // TODO: need to use just the regional timepoints from the sequence.
+        val (groupingSubsetNel, groupingSupersetNel) = grouping match {
             case g: RegionalGrouping.Trivial.type => 
                 // In the trivial grouping case, we have no more validation work to do.
-                tracingSubsetNel.map(_ => ImagingRoundConfiguration(sequence, g, tracingExclusions))
+                ().validNel -> ().validNel
             case g: RegionalGrouping.Nontrivial => 
+                // TODO: need to use just the regional timepoints from the sequence.
                 // When the grouping's nontrivial, check for set equivalance of timepoints b/w imaging sequence and regional grouping.
                 val groupedTimes = g.groups.reduce(_ ++ _).toList.toSet
-                val groupingSubsetNel = checkTimesSubset(knownTimes)(groupedTimes, "regional grouping (rel. to imaging sequence)")
-                val groupingSupersetNel = checkTimesSubset(groupedTimes)(knownTimes, "imaging sequence (rel. to regional grouping)")
-                (tracingSubsetNel, groupingSubsetNel, groupingSupersetNel).tupled.map(_ => 
-                    ImagingRoundConfiguration(sequence, grouping, tracingExclusions)
-                )
-        }).toEither
+                checkTimesSubset(knownTimes)(groupedTimes, "regional grouping (rel. to imaging sequence)") -> checkTimesSubset(groupedTimes)(knownTimes, "imaging sequence (rel. to regional grouping)")
+        }
+        (tracingSubsetNel, groupingSubsetNel, groupingSupersetNel)
+            .tupled
+            .map(_ => ImagingRoundConfiguration(sequence, grouping, tracingExclusions))
+            .toEither
     }
 
     /**
