@@ -129,7 +129,7 @@ object ImagingRoundConfiguration:
                 }.toValidated
             }
         val tracingExclusionsNel: ValidatedNel[String, Set[Timepoint]] = 
-            data.get("regionalGrouping") match {
+            data.get("tracingExclusions") match {
                 case None => Validated.Valid(Set())
                 case Some(json) => safeReadAs[List[Int]](json)
                     .flatMap(_.traverse(Timepoint.fromInt))
