@@ -47,6 +47,8 @@ class TestImagingRoundConfiguration extends AnyFunSuite, GenericSuite, Scalachec
 
     }
 
+    test("Configuration is allowed to have regional rounds in sequence that have no loci in locus grouping, #270.") { pending }
+
     private lazy val exampleConfig: ImagingRoundConfiguration = {
         val configFile = getResourcePath("example_imaging_round_configuration.json")
         ImagingRoundConfiguration.unsafeFromJsonFile(configFile)
