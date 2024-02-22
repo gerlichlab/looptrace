@@ -4,6 +4,7 @@ import cats.data.{ NonEmptyList, NonEmptySet }
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
 import org.scalatest.funsuite.AnyFunSuite
+import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundConfiguration.LocusGroup
 
 /**
   * Tests for [[at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundConfiguration]]
@@ -35,6 +36,15 @@ class TestImagingRoundConfiguration extends AnyFunSuite, GenericSuite, Scalachec
         locusRounds.map(_.probe) shouldEqual List("Dp001", "Dp002", "Dp003", "Dp006", "Dp007", "Dp001").map(ProbeName.apply)
         regionalRounds.map(_.name) shouldEqual regionalRounds.map(_.probe.get)
         regionalRounds.map(_.probe) shouldEqual List("Dp101", "Dp102", "Dp103", "Dp104").map(ProbeName.apply)
+        exampleConfig.locusGrouping shouldEqual NonEmptySet.of(
+            8 -> NonEmptySet.of(1, 6),
+            9 -> NonEmptySet.one(2), 
+            10 -> NonEmptySet.of(3, 4),
+            11 -> NonEmptySet.one(5)
+            )
+            .map{ (r, ls) => Timepoint.unsafe(r) -> ls.map(Timepoint.unsafe) }
+            .map(ImagingRoundConfiguration.LocusGroup.apply.tupled)
+
     }
 
     private lazy val exampleConfig: ImagingRoundConfiguration = {
