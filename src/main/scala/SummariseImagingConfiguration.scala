@@ -40,7 +40,7 @@ object SummariseImagingRoundsConfiguration:
                 val exclusions = config.tracingExclusions.map(_.get)
                 println(s"${exclusions.size} exclusion(s) from tracing: ${exclusions.toList.sorted.map(_.show).mkString(", ")}")
                 println(s"${config.numberOfRounds} round(s) in total (listed below)")
-                config.sequenceOfRounds.rounds.map(r => s"${r.time.show}: ${r.name}").toList.foreach(println)
+                config.allRounds.map(r => s"${r.time.show}: ${r.name.show}").toList.foreach(println)
                 val (groupingName, maybeGroups) = config.regionGrouping match {
                     case ImagingRoundsConfiguration.RegionGrouping.Trivial => "Trivial" -> None
                     case grouping: ImagingRoundsConfiguration.RegionGrouping.Permissive => "Permissive" -> grouping.groups.some
