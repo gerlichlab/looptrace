@@ -13,6 +13,9 @@ final case class ImagingSequence private(rounds: NonEmptyList[ImagingRound]):
     final def get(name: String): Option[ImagingRound] = _lookup(name)
     final def length: Int = rounds.length
     final def size: Int = length
+    final def numberOfRounds: Int = size
+    final def getLocusRounds: List[LocusImagingRound] = rounds.toList.flatMap(ImagingRound.toLocal)
+    final def getRegionRounds: List[RegionalImagingRound] = rounds.toList.flatMap(ImagingRound.toRegional)
 end ImagingSequence
 
 /** Smart constructors and tools for working with sequences of imaging rounds */
