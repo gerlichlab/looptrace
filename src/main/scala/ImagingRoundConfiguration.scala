@@ -8,15 +8,12 @@ import cats.syntax.all.*
 import mouse.boolean.*
 import upickle.default.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.{ readJsonFile, safeReadAs }
-
-/** Something which admits--at minimum--a sequence of imaging rounds */
-trait ImagingRoundConfigurationLike:
-    def getImagingRoundSequence: ImagingSequence
-end ImagingRoundConfigurationLike
+import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundConfiguration.LocusGroup
 
 /** Typical looptrace declaration/configuration of imaging rounds and how to use them */
 final case class ImagingRoundConfiguration private(
     sequenceOfRounds: ImagingSequence, 
+    locusGrouping: NonEmptySet[LocusGroup],
     regionGrouping: ImagingRoundConfiguration.RegionGrouping, 
     // TODO: by default, skip regional and blank imaging rounds (but do use repeats).
     tracingExclusions: Set[Timepoint], // Timepoints of imaging rounds to not use for tracing
@@ -66,20 +63,21 @@ object ImagingRoundConfiguration:
       * In other words, those sets of timepoints must be equivalent.
       *
       * @param sequence The declaration of sequential FISH rounds that define an experiment
-      * @param grouping How to group regional FISH rounds for proximity filtration
+      * @param locusGrouping How each locus is associated with a region
+      * @param regionGrouping How to group regional FISH rounds for proximity filtration
       * @param tracingExclusions Timepoints to exclude from tracing analysis
-      * @return
+      * @return Either a [[scala.util.Left]]-wrapped nonempty list of error messages, or a [[scala.util.Right]]-wrapped built instance
       */
-    def build(sequence: ImagingSequence, grouping: RegionGrouping, tracingExclusions: Set[Timepoint]): ErrMsgsOr[ImagingRoundConfiguration] = {
+    def build(sequence: ImagingSequence, locusGrouping: NonEmptySet[LocusGroup], regionGrouping: RegionGrouping, tracingExclusions: Set[Timepoint]): ErrMsgsOr[ImagingRoundConfiguration] = {
         val knownTimes = sequence.rounds.map(_.time).toList.toSet
-        // Regardless of the subtype of grouping, we need to check that any tracing exclusion timepoint is a known timepoint.
+        // Regardless of the subtype of regionGrouping, we need to check that any tracing exclusion timepoint is a known timepoint.
         val tracingSubsetNel = checkTimesSubset(knownTimes)(tracingExclusions, "tracing exclusions")
-        val (groupingSubsetNel, groupingSupersetNel) = grouping match {
+        val (regionGroupingSubsetNel, regionGroupingSupersetNel) = regionGrouping match {
             case g: RegionGrouping.Trivial.type => 
-                // In the trivial grouping case, we have no more validation work to do.
+                // In the trivial regionGrouping case, we have no more validation work to do.
                 ().validNel -> ().validNel
             case g: RegionGrouping.Nontrivial => 
-                // When the grouping's nontrivial, check for set equivalance of timepoints b/w imaging sequence and regional grouping.
+                // When the regionGrouping's nontrivial, check for set equivalance of timepoints b/w imaging sequence and regional grouping.
                 val groupedTimes = g.groups.reduce(_ ++ _).toList.toSet
                 val regionalTimes = sequence.rounds.toList.flatMap{
                     case r: RegionalImagingRound => r.time.some
@@ -89,9 +87,44 @@ object ImagingRoundConfiguration:
                 val supersetNel = checkTimesSubset(groupedTimes)(regionalTimes, "regionals in imaging sequence (rel. to regional grouping)")
                 subsetNel -> supersetNel
         }
-        (tracingSubsetNel, groupingSubsetNel, groupingSupersetNel)
+        // TODO: consider checking that every regional timepoint in the sequence is represented in the locusGrouping.
+        // See: https://github.com/gerlichlab/looptrace/issues/270
+        val locusTimeDisjointNel = {
+            val numElements = locusGrouping.foldLeft(0){ (n, s) => n + s.locusTimepoints.length }
+            val numUniqElements = locusGrouping.map(_.locusTimepoints).reduce(_ ++ _).length
+            (numElements === numUniqElements)
+                .either(s"$numElements total, $numUniqElements unique as values in locus grouping", ())
+                .toValidatedNel
+        }
+        val (locusTimeSubsetNel, locusTimeSupersetNel) = {
+            val timesInGrouping = locusGrouping.map(_.locusTimepoints).reduce(_ ++ _)
+            val locusTimesInSequence = sequence.rounds.toList.flatMap{
+                case r: LocusImagingRound => r.time.some
+                case _ => None
+            }.toSet
+            val subsetNel = (timesInGrouping.toSortedSet -- locusTimesInSequence).toList match {
+                case Nil => ().validNel
+                case ts => s"${ts.length} timepoints in locus grouping and not found as locus imaging timepoints: ${ts.sorted.mkString(", ")}".invalidNel
+            }
+            val supersetNel = (locusTimesInSequence -- timesInGrouping.toSortedSet).toList match {
+                case Nil => ().validNel
+                case ts => s"${ts.length} locus timepoints in imaging sequence and not found in locus grouping: ${ts.sorted.mkString(", ")}".invalidNel
+            }
+            (subsetNel, supersetNel)
+        }
+        val locusGroupTimesAreRegionTimesNel = {
+            val match1Regional = (t: Timepoint) => sequence.rounds.filter(_.time === t) match {
+                case (_: RegionalImagingRound) :: Nil => None
+                case _ => t.some
+            }
+            locusGrouping.map(_.regionalTimepoint).toList.flatMap(match1Regional) match {
+                case Nil => ().validNel
+                case ts => s"${ts.size} timepoint(s) as keys in locus grouping that aren't regional.".invalidNel
+            }
+        }
+        (tracingSubsetNel, locusTimeSubsetNel, locusTimeSupersetNel, regionGroupingSubsetNel, regionGroupingSupersetNel)
             .tupled
-            .map(_ => ImagingRoundConfiguration(sequence, grouping, tracingExclusions))
+            .map(_ => ImagingRoundConfiguration(sequence, locusGrouping, regionGrouping, tracingExclusions))
             .toEither
     }
 
@@ -123,7 +156,21 @@ object ImagingRoundConfiguration:
                 .leftMap(NonEmptyList.one)
                 .flatMap(ImagingSequence.fromRounds)
                 .toValidated
-        val crudeGroupingNel: ValidatedNel[String, Option[(RegionGrouping.Semantic, NonEmptyList[NonEmptySet[Timepoint]])]] = 
+        val crudeLocusGroupingNel: ValidatedNel[String, NonEmptySet[LocusGroup]] = 
+            data.get("locusGrouping") match {
+                case None => "Missing locus grouping section!".invalidNel
+                case Some(fullJson) => safeReadAs[Map[Int, List[Int]]](fullJson)
+                .flatMap(_.toList.traverse{ 
+                    (regionTimeRaw, lociTimesRaw) => for {
+                        regTime <- Timepoint.fromInt(regionTimeRaw).leftMap("Bad region time as key in locus group! " ++ _)
+                        maybeLociTimes <- lociTimesRaw.traverse(Timepoint.fromInt).leftMap("Bad locus time(s) in locus group! " ++ _)
+                        lociTimes <- maybeLociTimes.toNel.toRight(s"Empty locus times for region time $regionTimeRaw!").map(_.toNes)
+                    } yield LocusGroup(regTime, lociTimes)
+                })
+                .flatMap(_.toNel.toRight("Empty locus grouping section!").map(_.toNes))
+                .toValidatedNel
+            }
+        val crudeRegionGroupingNel: ValidatedNel[String, Option[(RegionGrouping.Semantic, NonEmptyList[NonEmptySet[Timepoint]])]] = 
             data.get("regionGrouping") match {
                 case None => Validated.Valid(None)
                 case Some(fullJson) => safeReadAs[Map[String, ujson.Value]](fullJson).leftMap(NonEmptyList.one).flatMap{ currentSection => 
@@ -153,15 +200,16 @@ object ImagingRoundConfiguration:
                     .map(_.toSet)
                     .toValidatedNel
             }
-        (roundsNel, crudeGroupingNel, tracingExclusionsNel).tupled.toEither.flatMap{ case (sequence, maybeCrudeGrouping, exclusions) =>
-            val unrefinedGrouping = maybeCrudeGrouping match {
-                case None => RegionGrouping.Trivial
-                case Some((semantic, uncheckedUnwrappedGrouping)) => semantic match {
-                    case Permissive => RegionGrouping.Permissive(uncheckedUnwrappedGrouping)
-                    case Prohibitive => RegionGrouping.Prohibitive(uncheckedUnwrappedGrouping)
+        (roundsNel, crudeLocusGroupingNel, crudeRegionGroupingNel, tracingExclusionsNel).tupled.toEither.flatMap{ 
+            case (sequence, crudeLocusGroups, maybeCrudeRegionGrouping, exclusions) =>
+                val unrefinedRegionGrouping = maybeCrudeRegionGrouping match {
+                    case None => RegionGrouping.Trivial
+                    case Some((semantic, uncheckedUnwrappedGrouping)) => semantic match {
+                        case Permissive => RegionGrouping.Permissive(uncheckedUnwrappedGrouping)
+                        case Prohibitive => RegionGrouping.Prohibitive(uncheckedUnwrappedGrouping)
+                    }
                 }
-            }
-            build(sequence, unrefinedGrouping, exclusions)
+                build(sequence, crudeLocusGroups, unrefinedRegionGrouping, exclusions)
         }
     }
 
@@ -170,8 +218,8 @@ object ImagingRoundConfiguration:
      * 
      * @see [[ImagingRoundConfiguration.build]]
      */
-    def unsafe(sequence: ImagingSequence, grouping: RegionGrouping, tracingExclusions: Set[Timepoint]): ImagingRoundConfiguration = 
-        build(sequence, grouping, tracingExclusions).fold(messages => throw new BuildError.FromPure(messages), identity)
+    def unsafe(sequence: ImagingSequence, locusGrouping: NonEmptySet[LocusGroup], regionGrouping: RegionGrouping, tracingExclusions: Set[Timepoint]): ImagingRoundConfiguration = 
+        build(sequence, locusGrouping, regionGrouping, tracingExclusions).fold(messages => throw new BuildError.FromPure(messages), identity)
 
     /**
      * Create instance, throw exception if any failure occurs
@@ -180,11 +228,12 @@ object ImagingRoundConfiguration:
      */
     def unsafe(
         sequence: ImagingSequence, 
-        maybeGrouping: Option[(RegionGrouping.Semantic, RegionGrouping.Groups)], 
+        locusGrouping: NonEmptySet[LocusGroup],
+        maybeRegionGrouping: Option[(RegionGrouping.Semantic, RegionGrouping.Groups)], 
         tracingExclusions: Set[Timepoint],
     ): ImagingRoundConfiguration = {
-        val grouping = maybeGrouping.fold(RegionGrouping.Trivial)(RegionGrouping.Nontrivial.apply.tupled)
-        unsafe(sequence, grouping, tracingExclusions)
+        val regionGrouping = maybeRegionGrouping.fold(RegionGrouping.Trivial)(RegionGrouping.Nontrivial.apply.tupled)
+        unsafe(sequence, locusGrouping, regionGrouping, tracingExclusions)
     }
 
     /**
@@ -195,6 +244,11 @@ object ImagingRoundConfiguration:
       */
     def unsafeFromJsonFile(jsonFile: os.Path): ImagingRoundConfiguration = 
         fromJsonFile(jsonFile).fold(messages => throw BuildError.FromJsonFile(messages, jsonFile), identity)
+
+    private[looptrace] final case class LocusGroup private[looptrace](regionalTimepoint: Timepoint, locusTimepoints: NonEmptySet[Timepoint])
+    object LocusGroup:
+        given orderForLocusGroup: Order[LocusGroup] = Order.by{ case LocusGroup(regionalTimepoint, locusTimepoints) => regionalTimepoint -> locusTimepoints }
+    end LocusGroup
 
     /** Alias to give more context-rich meaning to a nonempty collection of timepoints */
     type RegionalImageRoundGroup = NonEmptySet[Timepoint]
