@@ -12,13 +12,15 @@ import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.LocusGroup
 
 /** Typical looptrace declaration/configuration of imaging rounds and how to use them */
 final case class ImagingRoundsConfiguration private(
-    sequenceOfRounds: ImagingSequence, 
+    sequence: ImagingSequence, 
     locusGrouping: NonEmptySet[LocusGroup],
     regionGrouping: ImagingRoundsConfiguration.RegionGrouping, 
     // TODO: by default, skip regional and blank imaging rounds (but do use repeats).
     tracingExclusions: Set[Timepoint], // Timepoints of imaging rounds to not use for tracing
     ):
-    final def numberOfRounds: Int = sequenceOfRounds.length
+    final def numberOfRounds: Int = sequence.length
+    def allRounds: NonEmptyList[ImagingRound] = 
+        (sequence.regionRounds ++ sequence.locusRounds ++ sequence.blankRounds).sortBy(_.time)
 end ImagingRoundsConfiguration
 
 /** Tools for working with declaration of imaging rounds and how to use them within an experiment */
@@ -69,9 +71,9 @@ object ImagingRoundsConfiguration:
       * @return Either a [[scala.util.Left]]-wrapped nonempty list of error messages, or a [[scala.util.Right]]-wrapped built instance
       */
     def build(sequence: ImagingSequence, locusGrouping: NonEmptySet[LocusGroup], regionGrouping: RegionGrouping, tracingExclusions: Set[Timepoint]): ErrMsgsOr[ImagingRoundsConfiguration] = {
-        val knownTimes = sequence.rounds.map(_.time).toList.toSet
+        val knownTimes = sequence.allTimepoints
         // Regardless of the subtype of regionGrouping, we need to check that any tracing exclusion timepoint is a known timepoint.
-        val tracingSubsetNel = checkTimesSubset(knownTimes)(tracingExclusions, "tracing exclusions")
+        val tracingSubsetNel = checkTimesSubset(knownTimes.toSortedSet)(tracingExclusions, "tracing exclusions")
         val (regionGroupingSubsetNel, regionGroupingSupersetNel) = regionGrouping match {
             case g: RegionGrouping.Trivial.type => 
                 // In the trivial regionGrouping case, we have no more validation work to do.
@@ -79,7 +81,7 @@ object ImagingRoundsConfiguration:
             case g: RegionGrouping.Nontrivial => 
                 // When the regionGrouping's nontrivial, check for set equivalance of timepoints b/w imaging sequence and regional grouping.
                 val groupedTimes = g.groups.reduce(_ ++ _).toList.toSet
-                val regionalTimes = sequence.getRegionRounds.map(_.time).toSet
+                val regionalTimes = sequence.regionRounds.map(_.time).toList.toSet
                 val subsetNel = checkTimesSubset(regionalTimes)(groupedTimes, "regional grouping (rel. to regionals in imaging sequence)")
                 val supersetNel = checkTimesSubset(groupedTimes)(regionalTimes, "regionals in imaging sequence (rel. to regional grouping)")
                 subsetNel -> supersetNel
@@ -95,7 +97,7 @@ object ImagingRoundsConfiguration:
         }
         val (locusTimeSubsetNel, locusTimeSupersetNel) = {
             val timesInGrouping = locusGrouping.map(_.locusTimepoints).reduce(_ ++ _)
-            val locusTimesInSequence = sequence.getLocusRounds.map(_.time).toSet
+            val locusTimesInSequence = sequence.locusRounds.map(_.time).toSet
             val subsetNel = (timesInGrouping.toSortedSet -- locusTimesInSequence).toList match {
                 case Nil => ().validNel
                 case ts => s"${ts.length} timepoints in locus grouping and not found as locus imaging timepoints: ${ts.sorted.mkString(", ")}".invalidNel
@@ -107,11 +109,7 @@ object ImagingRoundsConfiguration:
             (subsetNel, supersetNel)
         }
         val locusGroupTimesAreRegionTimesNel = {
-            val match1Regional = (t: Timepoint) => sequence.rounds.filter(_.time === t) match {
-                case (_: RegionalImagingRound) :: Nil => None
-                case _ => t.some
-            }
-            locusGrouping.map(_.regionalTimepoint).toList.flatMap(match1Regional) match {
+            locusGrouping.map(_.regionalTimepoint).toList.flatMap(t => sequence.regionRounds.find(_.time === t)) match {
                 case Nil => ().validNel
                 case ts => s"${ts.size} timepoint(s) as keys in locus grouping that aren't regional.".invalidNel
             }
