@@ -94,6 +94,16 @@ object ImagingRound:
         case round: BlankImagingRound => blankRoundToJson(round)
     }
 
+    private[looptrace] def toLocal(round: ImagingRound): Option[LocusImagingRound] = round match {
+        case r: LocusImagingRound => r.some
+        case _ => None
+    }
+
+    private[looptrace] def toRegional(round: ImagingRound): Option[RegionalImagingRound] = round match {
+        case r: RegionalImagingRound => r.some
+        case _ => None
+    }
+
     private def parseTimeValue(v: ujson.Value): Either[String, Timepoint] = 
         Try(v.int).toEither.leftMap(e => s"Non-integral value for time! ${e.getMessage}") 
             >>= NonnegativeInt.either 

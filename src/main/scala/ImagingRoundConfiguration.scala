@@ -79,10 +79,7 @@ object ImagingRoundsConfiguration:
             case g: RegionGrouping.Nontrivial => 
                 // When the regionGrouping's nontrivial, check for set equivalance of timepoints b/w imaging sequence and regional grouping.
                 val groupedTimes = g.groups.reduce(_ ++ _).toList.toSet
-                val regionalTimes = sequence.rounds.toList.flatMap{
-                    case r: RegionalImagingRound => r.time.some
-                    case _ => None
-                }.toSet
+                val regionalTimes = sequence.getRegionRounds.map(_.time).toSet
                 val subsetNel = checkTimesSubset(regionalTimes)(groupedTimes, "regional grouping (rel. to regionals in imaging sequence)")
                 val supersetNel = checkTimesSubset(groupedTimes)(regionalTimes, "regionals in imaging sequence (rel. to regional grouping)")
                 subsetNel -> supersetNel
@@ -98,10 +95,7 @@ object ImagingRoundsConfiguration:
         }
         val (locusTimeSubsetNel, locusTimeSupersetNel) = {
             val timesInGrouping = locusGrouping.map(_.locusTimepoints).reduce(_ ++ _)
-            val locusTimesInSequence = sequence.rounds.toList.flatMap{
-                case r: LocusImagingRound => r.time.some
-                case _ => None
-            }.toSet
+            val locusTimesInSequence = sequence.getLocusRounds.map(_.time).toSet
             val subsetNel = (timesInGrouping.toSortedSet -- locusTimesInSequence).toList match {
                 case Nil => ().validNel
                 case ts => s"${ts.length} timepoints in locus grouping and not found as locus imaging timepoints: ${ts.sorted.mkString(", ")}".invalidNel
@@ -275,7 +269,7 @@ object ImagingRoundsConfiguration:
 
     /** The (concrete) subtypes of regional image round grouping */
     object RegionGrouping:
-        type Groups = NonEmptyList[RegionalImageRoundGroup]
+        private[ImagingRoundsConfiguration] type Groups = NonEmptyList[RegionalImageRoundGroup]
         /** A trivial grouping of regional imaging rounds, which treats all regional rounds as one big group */
         case object Trivial extends RegionGrouping
         /** A nontrivial grouping of regional imaging rounds, which must constitute a partition of those available  */
