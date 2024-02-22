@@ -44,11 +44,24 @@ class TestImagingRoundConfiguration extends AnyFunSuite, GenericSuite, Scalachec
             )
             .map{ (r, ls) => Timepoint.unsafe(r) -> ls.map(Timepoint.unsafe) }
             .map(ImagingRoundConfiguration.LocusGroup.apply.tupled)
-
     }
 
-    test("Configuration is allowed to have regional rounds in sequence that have no loci in locus grouping, #270.") { pending }
+    test("Timepoints in imaging sequence must form (0, 1, 2, ..., N-1).") { pending }
+    
+    test("Names--explicit or derived--in imaging sequence must be unique") { pending }
 
+    test("Region grouping must either be entirely absent or must specify a valid semantic.") { pending }
+
+    test("Region grouping must be either entirely absent or specify groups that constitute a partition of regional round timepoints from the imaging sequence.") { pending }
+
+    test("Locus grouping must be present and have a collection of values that constitutes a partition of locus imaging rounds from the imaging sequence.") { pending }
+
+    test("Each of the locus grouping's keys must be a regional round timepoint from the imaging sequence") { pending }
+
+    test("Any timepoint to exclude from tracing must be a timepoint in the imaging sequence.") { pending }
+
+    test("Configuration IS allowed to have regional rounds in sequence that have no loci in locus grouping, #270.") { pending }
+    
     private lazy val exampleConfig: ImagingRoundConfiguration = {
         val configFile = getResourcePath("example_imaging_round_configuration.json")
         ImagingRoundConfiguration.unsafeFromJsonFile(configFile)
