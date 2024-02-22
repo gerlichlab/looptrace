@@ -60,7 +60,7 @@ object LabelAndFilterRois:
     final case class CliConfig(
         spotsFile: os.Path = null, // unconditionally required
         driftFile: os.Path = null, // unconditionally required
-        configuration: ImagingRoundConfiguration = null, // unconditionally required
+        configuration: ImagingRoundsConfiguration = null, // unconditionally required
         spotSeparationThresholdValue: NonnegativeReal = NonnegativeReal(0), // unconditionally required
         buildDistanceThreshold: NonnegativeReal => DistanceThreshold = null, // unconditionally required
         unfilteredOutputFile: UnfilteredOutputFile = null, // unconditionally required
@@ -76,8 +76,8 @@ object LabelAndFilterRois:
         import parserBuilder.*
 
         /** Parse content of JSON file path or CLI-arg-like mapping spec of probe groups. */
-        given readRegionGrouping: scopt.Read[ImagingRoundConfiguration] = scopt.Read.reads{ file => 
-            ImagingRoundConfiguration.fromJsonFile(os.Path(file)) match {
+        given readRegionGrouping: scopt.Read[ImagingRoundsConfiguration] = scopt.Read.reads{ file => 
+            ImagingRoundsConfiguration.fromJsonFile(os.Path(file)) match {
                 case Left(messages) => throw new IllegalArgumentException(
                     s"Cannot read file ($file) as imaging round configuration! Error(s): ${messages.mkString_("; ")}"
                     )
@@ -88,7 +88,7 @@ object LabelAndFilterRois:
         val parser = OParser.sequence(
             programName(ProgramName), 
             head(ProgramName, VersionName), 
-            opt[ImagingRoundConfiguration]("configuration")
+            opt[ImagingRoundsConfiguration]("configuration")
                 .required()
                 .action((progConf, cliConf) => cliConf.copy(configuration = progConf))
                 .text("Path to file specifying the imaging rounds configuration"),
@@ -144,7 +144,7 @@ object LabelAndFilterRois:
     def workflow(
         spotsFile: os.Path, 
         driftFile: os.Path, 
-        regionGrouping: ImagingRoundConfiguration.RegionGrouping,
+        regionGrouping: ImagingRoundsConfiguration.RegionGrouping,
         minSpotSeparation: DistanceThreshold, 
         unfilteredOutputFile: UnfilteredOutputFile, 
         filteredOutputFile: FilteredOutputFile, 
@@ -327,21 +327,21 @@ object LabelAndFilterRois:
       *         otherwise, a {@code Left}-wrapped error message about what went wrong
       */
     private[looptrace] def buildNeighboringRoisFinder(
-        rois: List[RoiLinenumPair], minDist: DistanceThreshold)(grouping: ImagingRoundConfiguration.RegionGrouping): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
+        rois: List[RoiLinenumPair], minDist: DistanceThreshold)(grouping: ImagingRoundsConfiguration.RegionGrouping): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
         given orderForRoiLinenumPair: Order[RoiLinenumPair] = Order.by(_._2)
         type GroupId = NonnegativeInt
         type IndexedRoi = (RegionalBarcodeSpotRoi, NonnegativeInt)
         val getPoint = (_: RoiLinenumPair)._1.centroid
         val groupedRoiLinenumPairs: Either[String, Map[RoiLinenumPair, NonEmptySet[RoiLinenumPair]]] = grouping match {
-            case ImagingRoundConfiguration.RegionGrouping.Trivial => 
+            case ImagingRoundsConfiguration.RegionGrouping.Trivial => 
                 buildNeighborsLookupKeyed(rois.map{ case pair@(r, _) => r.position -> pair }, (_, _) => true, getPoint, minDist, identity).asRight
-            case g: ImagingRoundConfiguration.RegionGrouping.Nontrivial => 
+            case g: ImagingRoundsConfiguration.RegionGrouping.Nontrivial => 
                 val groupIds = NonnegativeInt.indexed(g.groups.toList).flatMap((g, i) => g.toList.map(_ -> i)).toMap
                 Alternative[List].separate(rois.map{ case pair@(roi, _) => groupIds.get(roi.time).toRight(pair).map(_ -> pair)}) match {
                     case (Nil, withGroupsAssigned) => 
                         val considerRoiPair = g match {
-                            case _: ImagingRoundConfiguration.RegionGrouping.Prohibitive => { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => a._1 === b._1 }
-                            case _: ImagingRoundConfiguration.RegionGrouping.Permissive => { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => a._1 =!= b._1 }
+                            case _: ImagingRoundsConfiguration.RegionGrouping.Prohibitive => { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => a._1 === b._1 }
+                            case _: ImagingRoundsConfiguration.RegionGrouping.Permissive => { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => a._1 =!= b._1 }
                         }
                         buildNeighborsLookupKeyed(withGroupsAssigned.map{ case (gi, pair@(roi, _)) => roi.position -> (gi -> pair) }, considerRoiPair, getPoint, minDist, _._2).asRight
                     case (groupless, _) => 
