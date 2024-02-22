@@ -1,20 +1,28 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
 import cats.data.{ NonEmptyList, NonEmptySet }
+
+import org.scalacheck.{ Arbitrary, Gen, Shrink }
+import org.scalacheck.Arbitrary.arbitrary
+import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
-import org.scalatest.funsuite.AnyFunSuite
-import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundConfiguration.LocusGroup
+import org.scalatest.prop.Configuration.PropertyCheckConfiguration
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+
+import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.LocusGroup
 
 /**
-  * Tests for [[at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundConfiguration]]
+  * Tests for [[at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration]]
   * 
   * @author Vince Reuter
   */
-class TestImagingRoundConfiguration extends AnyFunSuite, GenericSuite, ScalacheckSuite, should.Matchers:
+class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaCheckPropertyChecks, should.Matchers:
+    implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
+
     test("Example config parses correctly.") {
         exampleConfig.numberOfRounds shouldEqual 12
-        exampleConfig.regionGrouping shouldEqual ImagingRoundConfiguration.RegionGrouping.Permissive(
+        exampleConfig.regionGrouping shouldEqual ImagingRoundsConfiguration.RegionGrouping.Permissive(
             NonEmptyList.of(NonEmptySet.of(8, 9), NonEmptySet.of(10, 11)).map(_.map(Timepoint.unsafe))
         )
         exampleConfig.tracingExclusions shouldEqual Set(0, 8, 9, 10, 11).map(Timepoint.unsafe)
@@ -43,12 +51,8 @@ class TestImagingRoundConfiguration extends AnyFunSuite, GenericSuite, Scalachec
             11 -> NonEmptySet.one(5)
             )
             .map{ (r, ls) => Timepoint.unsafe(r) -> ls.map(Timepoint.unsafe) }
-            .map(ImagingRoundConfiguration.LocusGroup.apply.tupled)
+            .map(ImagingRoundsConfiguration.LocusGroup.apply.tupled)
     }
-
-    test("Timepoints in imaging sequence must form (0, 1, 2, ..., N-1).") { pending }
-    
-    test("Names--explicit or derived--in imaging sequence must be unique") { pending }
 
     test("Region grouping must either be entirely absent or must specify a valid semantic.") { pending }
 
@@ -62,11 +66,20 @@ class TestImagingRoundConfiguration extends AnyFunSuite, GenericSuite, Scalachec
 
     test("Configuration IS allowed to have regional rounds in sequence that have no loci in locus grouping, #270.") { pending }
     
-    private lazy val exampleConfig: ImagingRoundConfiguration = {
+    private lazy val exampleConfig: ImagingRoundsConfiguration = {
         val configFile = getResourcePath("example_imaging_round_configuration.json")
-        ImagingRoundConfiguration.unsafeFromJsonFile(configFile)
+        ImagingRoundsConfiguration.unsafeFromJsonFile(configFile)
     }
     
     private def getResourcePath(name: String): os.Path = 
-        os.Path(getClass.getResource(s"/TestImagingRoundConfiguration/$name").getPath)
-end TestImagingRoundConfiguration
+        os.Path(getClass.getResource(s"/TestImagingRoundsConfiguration/$name").getPath)
+
+
+    private def genRound(using arbName: Arbitrary[String], arbTime: Arbitrary[Timepoint]): Gen[ImagingRound] = Gen.oneOf(
+        arbitrary[BlankImagingRound], 
+        arbitrary[RegionalImagingRound], 
+        arbitrary[LocusImagingRound],
+        )
+
+    private def namesAreUnique(rounds: List[ImagingRound]): Boolean = rounds.map(_.name).toSet.size === rounds.length
+end TestImagingRoundsConfiguration

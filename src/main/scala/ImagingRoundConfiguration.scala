@@ -8,21 +8,21 @@ import cats.syntax.all.*
 import mouse.boolean.*
 import upickle.default.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.{ readJsonFile, safeReadAs }
-import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundConfiguration.LocusGroup
+import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.LocusGroup
 
 /** Typical looptrace declaration/configuration of imaging rounds and how to use them */
-final case class ImagingRoundConfiguration private(
+final case class ImagingRoundsConfiguration private(
     sequenceOfRounds: ImagingSequence, 
     locusGrouping: NonEmptySet[LocusGroup],
-    regionGrouping: ImagingRoundConfiguration.RegionGrouping, 
+    regionGrouping: ImagingRoundsConfiguration.RegionGrouping, 
     // TODO: by default, skip regional and blank imaging rounds (but do use repeats).
     tracingExclusions: Set[Timepoint], // Timepoints of imaging rounds to not use for tracing
     ):
     final def numberOfRounds: Int = sequenceOfRounds.length
-end ImagingRoundConfiguration
+end ImagingRoundsConfiguration
 
 /** Tools for working with declaration of imaging rounds and how to use them within an experiment */
-object ImagingRoundConfiguration:
+object ImagingRoundsConfiguration:
     import RegionGrouping.Semantic.*
     
     /** Something went wrong with attempt to instantiate a configuration */
@@ -68,7 +68,7 @@ object ImagingRoundConfiguration:
       * @param tracingExclusions Timepoints to exclude from tracing analysis
       * @return Either a [[scala.util.Left]]-wrapped nonempty list of error messages, or a [[scala.util.Right]]-wrapped built instance
       */
-    def build(sequence: ImagingSequence, locusGrouping: NonEmptySet[LocusGroup], regionGrouping: RegionGrouping, tracingExclusions: Set[Timepoint]): ErrMsgsOr[ImagingRoundConfiguration] = {
+    def build(sequence: ImagingSequence, locusGrouping: NonEmptySet[LocusGroup], regionGrouping: RegionGrouping, tracingExclusions: Set[Timepoint]): ErrMsgsOr[ImagingRoundsConfiguration] = {
         val knownTimes = sequence.rounds.map(_.time).toList.toSet
         // Regardless of the subtype of regionGrouping, we need to check that any tracing exclusion timepoint is a known timepoint.
         val tracingSubsetNel = checkTimesSubset(knownTimes)(tracingExclusions, "tracing exclusions")
@@ -124,7 +124,7 @@ object ImagingRoundConfiguration:
         }
         (tracingSubsetNel, locusTimeSubsetNel, locusTimeSupersetNel, regionGroupingSubsetNel, regionGroupingSupersetNel)
             .tupled
-            .map(_ => ImagingRoundConfiguration(sequence, locusGrouping, regionGrouping, tracingExclusions))
+            .map(_ => ImagingRoundsConfiguration(sequence, locusGrouping, regionGrouping, tracingExclusions))
             .toEither
     }
 
@@ -136,18 +136,18 @@ object ImagingRoundConfiguration:
       * @return Either a [[scala.util.Left]]-wrapped nonempty collection of error messages, or 
       *     a [[scala.util.Right]]-wrapped, successfully parsed configuration instance
       */
-    def fromJsonFile(jsonFile: os.Path): ErrMsgsOr[ImagingRoundConfiguration] = 
+    def fromJsonFile(jsonFile: os.Path): ErrMsgsOr[ImagingRoundsConfiguration] = 
         Try{ readJsonFile[ujson.Value](jsonFile) }
             .toEither
             .leftMap(e => NonEmptyList.one(e.getMessage))
             .flatMap(fromJson)
     
     /** Try to read a configuration directly from JSON. */
-    def fromJson(fullJsonData: ujson.Value): ErrMsgsOr[ImagingRoundConfiguration] = 
+    def fromJson(fullJsonData: ujson.Value): ErrMsgsOr[ImagingRoundsConfiguration] = 
         safeReadAs[Map[String, ujson.Value]](fullJsonData).leftMap(NonEmptyList.one).flatMap(fromJsonMap)
 
     /** Attempt to parse a configuration from a key-value mapping from section name to JSON value. */
-    def fromJsonMap(data: Map[String, ujson.Value]): ErrMsgsOr[ImagingRoundConfiguration] = {
+    def fromJsonMap(data: Map[String, ujson.Value]): ErrMsgsOr[ImagingRoundsConfiguration] = {
         given rwForRound: Reader[ImagingRound] = ImagingRound.rwForImagingRound
         val roundsNel: ValidatedNel[String, ImagingSequence] = 
             data.get("imagingRounds")
@@ -216,22 +216,22 @@ object ImagingRoundConfiguration:
     /**
      * Create instance, throw exception if any failure occurs
      * 
-     * @see [[ImagingRoundConfiguration.build]]
+     * @see [[ImagingRoundsConfiguration.build]]
      */
-    def unsafe(sequence: ImagingSequence, locusGrouping: NonEmptySet[LocusGroup], regionGrouping: RegionGrouping, tracingExclusions: Set[Timepoint]): ImagingRoundConfiguration = 
+    def unsafe(sequence: ImagingSequence, locusGrouping: NonEmptySet[LocusGroup], regionGrouping: RegionGrouping, tracingExclusions: Set[Timepoint]): ImagingRoundsConfiguration = 
         build(sequence, locusGrouping, regionGrouping, tracingExclusions).fold(messages => throw new BuildError.FromPure(messages), identity)
 
     /**
      * Create instance, throw exception if any failure occurs
      * 
-     * @see [[ImagingRoundConfiguration.build]]
+     * @see [[ImagingRoundsConfiguration.build]]
      */
     def unsafe(
         sequence: ImagingSequence, 
         locusGrouping: NonEmptySet[LocusGroup],
         maybeRegionGrouping: Option[(RegionGrouping.Semantic, RegionGrouping.Groups)], 
         tracingExclusions: Set[Timepoint],
-    ): ImagingRoundConfiguration = {
+    ): ImagingRoundsConfiguration = {
         val regionGrouping = maybeRegionGrouping.fold(RegionGrouping.Trivial)(RegionGrouping.Nontrivial.apply.tupled)
         unsafe(sequence, locusGrouping, regionGrouping, tracingExclusions)
     }
@@ -242,7 +242,7 @@ object ImagingRoundConfiguration:
       * @param jsonFile Path to file to parse
       * @return Configuration instance
       */
-    def unsafeFromJsonFile(jsonFile: os.Path): ImagingRoundConfiguration = 
+    def unsafeFromJsonFile(jsonFile: os.Path): ImagingRoundsConfiguration = 
         fromJsonFile(jsonFile).fold(messages => throw BuildError.FromJsonFile(messages, jsonFile), identity)
 
     private[looptrace] final case class LocusGroup private[looptrace](regionalTimepoint: Timepoint, locusTimepoints: NonEmptySet[Timepoint])
@@ -327,4 +327,4 @@ object ImagingRoundConfiguration:
                 candidate
                 )
         )
-end ImagingRoundConfiguration
+end ImagingRoundsConfiguration

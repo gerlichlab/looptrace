@@ -12,8 +12,8 @@ import scopt.OParser
  * 
  * @author Vince Reuter
  */
-object SummariseImagingRoundConfiguration:
-    val ProgramName = "SummariseImagingRoundConfiguration"
+object SummariseImagingRoundsConfiguration:
+    val ProgramName = "SummariseImagingRoundsConfiguration"
     
     final case class CliConfig(configFile: os.Path = null)
     val parserBuilder = OParser.builder[CliConfig]
@@ -36,15 +36,15 @@ object SummariseImagingRoundConfiguration:
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
             case Some(opts) => 
                 println(s"Reading config file: ${opts.configFile}")
-                val config = ImagingRoundConfiguration.unsafeFromJsonFile(opts.configFile)
+                val config = ImagingRoundsConfiguration.unsafeFromJsonFile(opts.configFile)
                 val exclusions = config.tracingExclusions.map(_.get)
                 println(s"${exclusions.size} exclusion(s) from tracing: ${exclusions.toList.sorted.map(_.show).mkString(", ")}")
                 println(s"${config.numberOfRounds} round(s) in total (listed below)")
                 config.sequenceOfRounds.rounds.map(r => s"${r.time.show}: ${r.name}").toList.foreach(println)
                 val (groupingName, maybeGroups) = config.regionGrouping match {
-                    case ImagingRoundConfiguration.RegionGrouping.Trivial => "Trivial" -> None
-                    case grouping: ImagingRoundConfiguration.RegionGrouping.Permissive => "Permissive" -> grouping.groups.some
-                    case grouping: ImagingRoundConfiguration.RegionGrouping.Prohibitive => "Prohibitive" -> grouping.groups.some
+                    case ImagingRoundsConfiguration.RegionGrouping.Trivial => "Trivial" -> None
+                    case grouping: ImagingRoundsConfiguration.RegionGrouping.Permissive => "Permissive" -> grouping.groups.some
+                    case grouping: ImagingRoundsConfiguration.RegionGrouping.Prohibitive => "Prohibitive" -> grouping.groups.some
                 }
                 println(s"$groupingName regional grouping")
                 maybeGroups.fold(()){ groups => 
@@ -54,4 +54,4 @@ object SummariseImagingRoundConfiguration:
                 }
         }
     }
-end SummariseImagingRoundConfiguration
+end SummariseImagingRoundsConfiguration
