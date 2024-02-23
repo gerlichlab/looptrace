@@ -172,35 +172,46 @@ object ImagingRoundsConfiguration:
                 .map(_.toSet)
                 .toValidatedNel
             }
-        val crudeRegionGroupingNel: ValidatedNel[String, Option[(RegionGrouping.Semantic, NonEmptyList[NonEmptySet[Timepoint]])]] = 
+        val crudeRegionGroupingNel: ValidatedNel[String, (DistanceThreshold, Option[(RegionGrouping.Semantic, NonEmptyList[NonEmptySet[Timepoint]])])] = 
             data.get("regionGrouping") match {
-                case None => Validated.Valid(None)
+                case None => "Missing regionGrouping section!".invalidNel
                 case Some(fullJson) => safeReadAs[Map[String, ujson.Value]](fullJson).leftMap(NonEmptyList.one).flatMap{ currentSection => 
-                    val semanticNel = currentSection.get("semantic")
-                        .toRight("Missing semantic in regional grouping section!")
-                        .flatMap(safeReadAs[String](_).flatMap{
-                            case ("permissive" | "Permissive" | "PERMISSIVE") => Permissive.asRight
-                            case ("prohibitive" | "Prohibitive" | "PROHIBITIVE") => Prohibitive.asRight
-                            case s => s"Illegal value for regional grouping semantic: $s".asLeft
-                        })
-                        .toValidatedNel
-                    val groupsNel = currentSection.get("groups")
-                        .toRight("Missing groups in regional grouping section!")
-                        .flatMap(safeReadAs[List[List[Int]]])
-                        .flatMap(_.traverse(_.traverse(Timepoint.fromInt))) // Lift all ints to timepoints.
-                        .flatMap(liftToNel(_, "regional grouping".some)) // Entire collection must be nonempty.
-                        .flatMap(_.traverse(liftToNes(_, "regional group".some))) // Each group must be nonempty.
-                        .toValidatedNel
-                    (semanticNel, groupsNel).tupled.toEither.map(_.some)
+                    val regionThresholdNel: ValidatedNel[String, DistanceThreshold] = 
+                        currentSection.get("min_spot_dist")
+                            .toRight(s"Missing regional spot separation key (min_spot_dist)")
+                            .flatMap(safeReadAs[Double])
+                            .flatMap(NonnegativeReal.either)
+                            .map(PiecewiseDistance.ConjunctiveThreshold.apply)
+                            .toValidatedNel
+                    val semanticNel: ValidatedNel[String, Option[RegionGrouping.Semantic]] = 
+                        currentSection.get("semantic")
+                            .toRight("Missing semantic in regional grouping section!")
+                            .flatMap(safeReadAs[String](_).flatMap{
+                                case ("permissive" | "Permissive" | "PERMISSIVE") => Permissive.some.asRight
+                                case ("prohibitive" | "Prohibitive" | "PROHIBITIVE") => Prohibitive.some.asRight
+                                case ("trivial" | "Trivial" | "TRIVIAL") => None.asRight
+                                case s => s"Illegal value for regional grouping semantic: $s".asLeft
+                            })
+                            .toValidatedNel
+                    val groupsNel: ValidatedNel[String, Option[NonEmptyList[NonEmptySet[Timepoint]]]] = currentSection.get("groups") match {
+                        case None => None.validNel
+                        case Some(subdata) => safeReadAs[List[List[Int]]](subdata)
+                            .flatMap(_.traverse(_.traverse(Timepoint.fromInt))) // Lift all ints to timepoints.
+                            .flatMap(liftToNel(_, "regional grouping".some)) // Entire collection must be nonempty.
+                            .flatMap(_.traverse(liftToNes(_, "regional group".some))) // Each group must be nonempty.
+                            .map(_.some)
+                            .toValidatedNel
+                    }
+                    (regionThresholdNel, semanticNel, groupsNel).tupled.toEither.flatMap{
+                        case (threshold, None, None) => (threshold, None).asRight
+                        case (threshold, Some(semantic), Some(groups)) => (threshold, (semantic -> groups).some).asRight
+                        case (_, None, Some(_)) => 
+                            // NB: This would be OK if the grouping had a single group, but that would be very odd user behavior.
+                            NonEmptyList.one("Missing or trivial distance grouping semantic, but groups specified!").asLeft
+                        case (_, Some(s), None) => NonEmptyList.one(s"Nontrivial grouping semantic ($s), but no groups!").asLeft
+                    }
                 }.toValidated
             }
-        val regionThresholdNel: ValidatedNel[String, DistanceThreshold] = 
-            data.get("min_spot_dist")
-                .toRight(s"Missing regional spot separation key (min_spot_dist)")
-                .flatMap(safeReadAs[Double])
-                .flatMap(NonnegativeReal.either)
-                .map(PiecewiseDistance.ConjunctiveThreshold.apply)
-                .toValidatedNel
         val tracingExclusionsNel: ValidatedNel[String, Set[Timepoint]] = 
             data.get("tracingExclusions") match {
                 case None => Validated.Valid(Set())
@@ -209,9 +220,9 @@ object ImagingRoundsConfiguration:
                     .map(_.toSet)
                     .toValidatedNel
             }
-        (roundsNel, crudeLocusGroupingNel, crudeRegionGroupingNel, regionThresholdNel, tracingExclusionsNel).tupled.toEither.flatMap{ 
-            case (sequence, crudeLocusGroups, maybeCrudeRegionGrouping, regionThreshold, exclusions) =>
-                val unrefinedRegionGrouping = RegionGrouping(regionThreshold, maybeCrudeRegionGrouping)
+        (roundsNel, crudeLocusGroupingNel, crudeRegionGroupingNel, tracingExclusionsNel).tupled.toEither.flatMap{ 
+            case (sequence, crudeLocusGroups, (minSpotSeparation, maybeCrudeRegionGrouping), exclusions) =>
+                val unrefinedRegionGrouping = RegionGrouping(minSpotSeparation, maybeCrudeRegionGrouping)
                 build(sequence, crudeLocusGroups, unrefinedRegionGrouping, exclusions)
         }
     }
