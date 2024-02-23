@@ -7,15 +7,18 @@ import cats.data.{ NonEmptyList, NonEmptySet, Validated, ValidatedNel }
 import cats.syntax.all.*
 import mouse.boolean.*
 import upickle.default.*
-import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.{ readJsonFile, safeReadAs }
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.LocusGroup
+import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.{ readJsonFile, safeReadAs }
+import at.ac.oeaw.imba.gerlich.looptrace.space.DistanceThreshold
+import at.ac.oeaw.imba.gerlich.looptrace.space.PiecewiseDistance
 
 /** Typical looptrace declaration/configuration of imaging rounds and how to use them */
 final case class ImagingRoundsConfiguration private(
     sequence: ImagingSequence, 
     locusGrouping: Set[LocusGroup], // should be empty iff there are no locus rounds in the sequence
     regionGrouping: ImagingRoundsConfiguration.RegionGrouping, 
-    // TODO: by default, skip regional and blank imaging rounds (but do use repeats).
+    regionSpotSeparationThreshold: DistanceThreshold,
+    // TODO: We could, by default, skip regional and blank imaging rounds (but do use repeats).
     tracingExclusions: Set[Timepoint], // Timepoints of imaging rounds to not use for tracing
     ):
     final def numberOfRounds: Int = sequence.length
@@ -69,22 +72,10 @@ object ImagingRoundsConfiguration:
       * @param tracingExclusions Timepoints to exclude from tracing analysis
       * @return Either a [[scala.util.Left]]-wrapped nonempty list of error messages, or a [[scala.util.Right]]-wrapped built instance
       */
-    def build(sequence: ImagingSequence, locusGrouping: Set[LocusGroup], regionGrouping: RegionGrouping, tracingExclusions: Set[Timepoint]): ErrMsgsOr[ImagingRoundsConfiguration] = {
+    def build(sequence: ImagingSequence, locusGrouping: Set[LocusGroup], regionGrouping: RegionGrouping, regionThreshold: DistanceThreshold, tracingExclusions: Set[Timepoint]): ErrMsgsOr[ImagingRoundsConfiguration] = {
         val knownTimes = sequence.allTimepoints
         // Regardless of the subtype of regionGrouping, we need to check that any tracing exclusion timepoint is a known timepoint.
         val tracingSubsetNel = checkTimesSubset(knownTimes.toSortedSet)(tracingExclusions, "tracing exclusions")
-        val (regionGroupingSubsetNel, regionGroupingSupersetNel) = regionGrouping match {
-            case g: RegionGrouping.Trivial.type => 
-                // In the trivial regionGrouping case, we have no more validation work to do.
-                ().validNel -> ().validNel
-            case g: RegionGrouping.Nontrivial => 
-                // When the regionGrouping's nontrivial, check for set equivalance of timepoints b/w imaging sequence and regional grouping.
-                val groupedTimes = g.groups.reduce(_ ++ _).toList.toSet
-                val regionalTimes = sequence.regionRounds.map(_.time).toList.toSet
-                val subsetNel = checkTimesSubset(regionalTimes)(groupedTimes, "regional grouping (rel. to regionals in imaging sequence)")
-                val supersetNel = checkTimesSubset(groupedTimes)(regionalTimes, "regionals in imaging sequence (rel. to regional grouping)")
-                subsetNel -> supersetNel
-        }
         // TODO: consider checking that every regional timepoint in the sequence is represented in the locusGrouping.
         // See: https://github.com/gerlichlab/looptrace/issues/270
         val uniqueTimepointsInLocusGrouping = locusGrouping.map(_.locusTimepoints).foldLeft(Set.empty[Timepoint])(_ ++ _.toSortedSet)
@@ -113,9 +104,21 @@ object ImagingRoundsConfiguration:
                 case ts => s"${ts.size} timepoint(s) as keys in locus grouping that aren't regional.".invalidNel
             }
         }
+        val (regionGroupingSubsetNel, regionGroupingSupersetNel) = regionGrouping match {
+            case g: RegionGrouping.Trivial.type => 
+                // In the trivial regionGrouping case, we have no more validation work to do.
+                ().validNel -> ().validNel
+            case g: RegionGrouping.Nontrivial => 
+                // When the regionGrouping's nontrivial, check for set equivalance of timepoints b/w imaging sequence and regional grouping.
+                val groupedTimes = g.groups.reduce(_ ++ _).toList.toSet
+                val regionalTimes = sequence.regionRounds.map(_.time).toList.toSet
+                val subsetNel = checkTimesSubset(regionalTimes)(groupedTimes, "regional grouping (rel. to regionals in imaging sequence)")
+                val supersetNel = checkTimesSubset(groupedTimes)(regionalTimes, "regionals in imaging sequence (rel. to regional grouping)")
+                subsetNel -> supersetNel
+        }
         (tracingSubsetNel, locusTimeSubsetNel, locusTimeSupersetNel, regionGroupingSubsetNel, regionGroupingSupersetNel)
             .tupled
-            .map(_ => ImagingRoundsConfiguration(sequence, locusGrouping, regionGrouping, tracingExclusions))
+            .map(_ => ImagingRoundsConfiguration(sequence, locusGrouping, regionGrouping, regionThreshold, tracingExclusions))
             .toEither
     }
 
@@ -192,6 +195,13 @@ object ImagingRoundsConfiguration:
                     (semanticNel, groupsNel).tupled.toEither.map(_.some)
                 }.toValidated
             }
+        val regionThrehsoldNel: ValidatedNel[String, DistanceThreshold] = 
+            data.get("min_spot_dist")
+                .toRight(s"Missing regional spot separation key (min_spot_dist)")
+                .flatMap(safeReadAs[Double])
+                .flatMap(NonnegativeReal.either)
+                .map(PiecewiseDistance.ConjunctiveThreshold.apply)
+                .toValidatedNel
         val tracingExclusionsNel: ValidatedNel[String, Set[Timepoint]] = 
             data.get("tracingExclusions") match {
                 case None => Validated.Valid(Set())
@@ -200,8 +210,8 @@ object ImagingRoundsConfiguration:
                     .map(_.toSet)
                     .toValidatedNel
             }
-        (roundsNel, crudeLocusGroupingNel, crudeRegionGroupingNel, tracingExclusionsNel).tupled.toEither.flatMap{ 
-            case (sequence, crudeLocusGroups, maybeCrudeRegionGrouping, exclusions) =>
+        (roundsNel, crudeLocusGroupingNel, crudeRegionGroupingNel, regionThrehsoldNel, tracingExclusionsNel).tupled.toEither.flatMap{ 
+            case (sequence, crudeLocusGroups, maybeCrudeRegionGrouping, regionThreshold, exclusions) =>
                 val unrefinedRegionGrouping = maybeCrudeRegionGrouping match {
                     case None => RegionGrouping.Trivial
                     case Some((semantic, uncheckedUnwrappedGrouping)) => semantic match {
@@ -209,7 +219,7 @@ object ImagingRoundsConfiguration:
                         case Prohibitive => RegionGrouping.Prohibitive(uncheckedUnwrappedGrouping)
                     }
                 }
-                build(sequence, crudeLocusGroups, unrefinedRegionGrouping, exclusions)
+                build(sequence, crudeLocusGroups, unrefinedRegionGrouping, regionThreshold, exclusions)
         }
     }
 
@@ -218,8 +228,14 @@ object ImagingRoundsConfiguration:
      * 
      * @see [[ImagingRoundsConfiguration.build]]
      */
-    def unsafe(sequence: ImagingSequence, locusGrouping: Set[LocusGroup], regionGrouping: RegionGrouping, tracingExclusions: Set[Timepoint]): ImagingRoundsConfiguration = 
-        build(sequence, locusGrouping, regionGrouping, tracingExclusions).fold(messages => throw new BuildError.FromPure(messages), identity)
+    def unsafe(
+        sequence: ImagingSequence, 
+        locusGrouping: Set[LocusGroup], 
+        regionGrouping: RegionGrouping, 
+        regionThreshold: DistanceThreshold, 
+        tracingExclusions: Set[Timepoint],
+        ): ImagingRoundsConfiguration = 
+        build(sequence, locusGrouping, regionGrouping, regionThreshold, tracingExclusions).fold(messages => throw new BuildError.FromPure(messages), identity)
 
     /**
      * Create instance, throw exception if any failure occurs
@@ -230,10 +246,11 @@ object ImagingRoundsConfiguration:
         sequence: ImagingSequence, 
         locusGrouping: Set[LocusGroup],
         maybeRegionGrouping: Option[(RegionGrouping.Semantic, RegionGrouping.Groups)], 
+        regionThreshold: DistanceThreshold,
         tracingExclusions: Set[Timepoint],
     ): ImagingRoundsConfiguration = {
         val regionGrouping = maybeRegionGrouping.fold(RegionGrouping.Trivial)(RegionGrouping.Nontrivial.apply.tupled)
-        unsafe(sequence, locusGrouping, regionGrouping, tracingExclusions)
+        unsafe(sequence, locusGrouping, regionGrouping, regionThreshold, tracingExclusions)
     }
 
     /**
