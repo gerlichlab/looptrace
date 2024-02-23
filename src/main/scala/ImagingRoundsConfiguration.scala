@@ -19,8 +19,7 @@ final case class ImagingRoundsConfiguration private(
     tracingExclusions: Set[Timepoint], // Timepoints of imaging rounds to not use for tracing
     ):
     final def numberOfRounds: Int = sequence.length
-    def allRounds: NonEmptyList[ImagingRound] = 
-        (sequence.regionRounds ++ sequence.locusRounds ++ sequence.blankRounds).sortBy(_.time)
+    def allRounds: NonEmptyList[ImagingRound] = sequence.allRounds
 end ImagingRoundsConfiguration
 
 /** Tools for working with declaration of imaging rounds and how to use them within an experiment */
@@ -88,23 +87,23 @@ object ImagingRoundsConfiguration:
         }
         // TODO: consider checking that every regional timepoint in the sequence is represented in the locusGrouping.
         // See: https://github.com/gerlichlab/looptrace/issues/270
+        val uniqueTimepointsInLocusGrouping = locusGrouping.map(_.locusTimepoints).foldLeft(Set.empty[Timepoint])(_ ++ _.toSortedSet)
         val locusTimeDisjointNel = {
             val numElements = locusGrouping.foldLeft(0){ (n, s) => n + s.locusTimepoints.length }
-            val numUniqElements = locusGrouping.map(_.locusTimepoints).reduce(_ ++ _).length
+            val numUniqElements = uniqueTimepointsInLocusGrouping.size
             (numElements === numUniqElements)
                 .either(s"$numElements total, $numUniqElements unique as values in locus grouping", ())
                 .toValidatedNel
         }
         val (locusTimeSubsetNel, locusTimeSupersetNel) = {
-            val timesInGrouping = locusGrouping.map(_.locusTimepoints).reduce(_ ++ _)
             val locusTimesInSequence = sequence.locusRounds.map(_.time).toSet
-            val subsetNel = (timesInGrouping.toSortedSet -- locusTimesInSequence).toList match {
+            val subsetNel = (uniqueTimepointsInLocusGrouping -- locusTimesInSequence).toList match {
                 case Nil => ().validNel
                 case ts => s"${ts.length} timepoints in locus grouping and not found as locus imaging timepoints: ${ts.sorted.mkString(", ")}".invalidNel
             }
-            val supersetNel = (locusTimesInSequence -- timesInGrouping.toSortedSet).toList match {
+            val supersetNel = (locusTimesInSequence -- uniqueTimepointsInLocusGrouping).toList match {
                 case Nil => ().validNel
-                case ts => s"${ts.length} locus timepoints in imaging sequence and not found in locus grouping: ${ts.sorted.mkString(", ")}".invalidNel
+                case ts => s"${ts.length} locus timepoint(s) in imaging sequence and not found in locus grouping: ${ts.sorted.mkString(", ")}".invalidNel
             }
             (subsetNel, supersetNel)
         }
@@ -138,15 +137,24 @@ object ImagingRoundsConfiguration:
     def fromJson(fullJsonData: ujson.Value): ErrMsgsOr[ImagingRoundsConfiguration] = 
         safeReadAs[Map[String, ujson.Value]](fullJsonData).leftMap(NonEmptyList.one).flatMap(fromJsonMap)
 
+    private def safeReadImagingSequence(json: ujson.Value)(using Reader[ImagingRound]): ErrMsgsOr[ImagingSequence] = 
+        safeReadAs[List[ImagingRound]](json)
+            .leftMap(NonEmptyList.one)
+            .flatMap(ImagingSequence.fromRounds)
+
+    /** JSON codec for an imaging sequence as would be used in a configuration */
+    def rwForImagingSequence(using ReadWriter[ImagingRound]): ReadWriter[ImagingSequence] = readwriter[ujson.Value].bimap(
+        seq => write(seq.allRounds.toList, indent=2),
+        json => safeReadImagingSequence(json).fold(messages => throw new ImagingSequence.DecodingError(messages, json), identity)
+    )
+
     /** Attempt to parse a configuration from a key-value mapping from section name to JSON value. */
     def fromJsonMap(data: Map[String, ujson.Value]): ErrMsgsOr[ImagingRoundsConfiguration] = {
         given rwForRound: Reader[ImagingRound] = ImagingRound.rwForImagingRound
         val roundsNel: ValidatedNel[String, ImagingSequence] = 
             data.get("imagingRounds")
-                .toRight("Missing imagingRounds key!")
-                .flatMap(safeReadAs[List[ImagingRound]])
-                .leftMap(NonEmptyList.one)
-                .flatMap(ImagingSequence.fromRounds)
+                .toRight(NonEmptyList.one("Missing imagingRounds key!"))
+                .flatMap(safeReadImagingSequence)
                 .toValidated
         val crudeLocusGroupingNel: ValidatedNel[String, Set[LocusGroup]] = 
             data.get("locusGrouping") match {

@@ -145,6 +145,8 @@ package object looptrace {
         extension (n: PositiveInt)
             def asNonnegative: NonnegativeInt = NonnegativeInt.unsafe(n)
         def either(z: Int): Either[String, PositiveInt] = maybe(z).toRight(s"Cannot refine as positive: $z")
+        def lengthOfNonempty(xs: NonEmptyList[?]): PositiveInt = unsafe(xs.length)
+        def lengthOfNonempty[A : Order](xs: NonEmptySet[A]): PositiveInt = unsafe(xs.length)
         def maybe(z: Int): Option[PositiveInt] = (z > 0).option{ (z: PositiveInt) }
         def unsafe(z: Int): PositiveInt = either(z).fold(msg => throw new NumberFormatException(msg), identity)
         given posIntOrder(using intOrd: Order[Int]): Order[PositiveInt] = intOrd.contramap(identity)

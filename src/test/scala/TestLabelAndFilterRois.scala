@@ -1136,12 +1136,6 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
     /****************************************************************************************************************
      * Ancillary definitions
      ****************************************************************************************************************/
-    
-    given arbitraryForRegionGroupingSemantic: Arbitrary[ImagingRoundsConfiguration.RegionGrouping.Semantic] = Gen.oneOf(
-        ImagingRoundsConfiguration.RegionGrouping.Semantic.Permissive, 
-        ImagingRoundsConfiguration.RegionGrouping.Semantic.Prohibitive, 
-        ).toArbitrary
-
     private def canonicalRoi: Roi = canonicalRoi(Point3D(XCoordinate(1), YCoordinate(2), ZCoordinate(3)))
     private def canonicalRoi(point: Point3D): Roi = {
         point match { case Point3D(x, y, z) => 
