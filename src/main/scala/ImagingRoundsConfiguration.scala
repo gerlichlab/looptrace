@@ -183,13 +183,13 @@ object ImagingRoundsConfiguration:
                             .flatMap(NonnegativeReal.either)
                             .map(PiecewiseDistance.ConjunctiveThreshold.apply)
                             .toValidatedNel
-                    val semanticNel: ValidatedNel[String, Option[RegionGrouping.Semantic]] = 
+                    val semanticNel: ValidatedNel[String, (String, Option[RegionGrouping.Semantic])] = 
                         currentSection.get("semantic")
                             .toRight("Missing semantic in regional grouping section!")
                             .flatMap(safeReadAs[String](_).flatMap{
-                                case ("permissive" | "Permissive" | "PERMISSIVE") => Permissive.some.asRight
-                                case ("prohibitive" | "Prohibitive" | "PROHIBITIVE") => Prohibitive.some.asRight
-                                case ("trivial" | "Trivial" | "TRIVIAL") => None.asRight
+                                case s@("permissive" | "Permissive" | "PERMISSIVE") => (s -> Permissive.some).asRight
+                                case s@("prohibitive" | "Prohibitive" | "PROHIBITIVE") => (s -> Prohibitive.some).asRight
+                                case s@("trivial" | "Trivial" | "TRIVIAL") => (s -> None).asRight
                                 case s => s"Illegal value for regional grouping semantic: $s".asLeft
                             })
                             .toValidatedNel
@@ -203,12 +203,12 @@ object ImagingRoundsConfiguration:
                             .toValidatedNel
                     }
                     (regionThresholdNel, semanticNel, groupsNel).tupled.toEither.flatMap{
-                        case (threshold, None, None) => (threshold, None).asRight
-                        case (threshold, Some(semantic), Some(groups)) => (threshold, (semantic -> groups).some).asRight
-                        case (_, None, Some(_)) => 
+                        case (threshold, (_, None), None) => (threshold, None).asRight
+                        case (threshold, (_, Some(semantic)), Some(groups)) => (threshold, (semantic -> groups).some).asRight
+                        case (_, (_, None), Some(_)) => 
                             // NB: This would be OK if the grouping had a single group, but that would be very odd user behavior.
                             NonEmptyList.one("Trivial distance grouping semantic, but groups specified!").asLeft
-                        case (_, Some(s), None) => NonEmptyList.one(s"Nontrivial grouping semantic ($s), but no groups!").asLeft
+                        case (_, (original, Some(s)), None) => NonEmptyList.one(s"Nontrivial grouping semantic ($s, from '$original'), but no groups!").asLeft
                     }
                 }.toValidated
             }

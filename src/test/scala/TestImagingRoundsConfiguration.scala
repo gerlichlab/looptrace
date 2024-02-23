@@ -177,15 +177,58 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
                     else {
                         println(s"MESSAGES: ${messages.mkString_("; ")}")
                         println(s"DATA (below)\n${write(data, indent = 4)}")
-                        fail(s"Expected exactly 1 matching message match but got $numMatchMessages. Data and messages are above.")
+                        fail(s"Expected exactly 1 matching message ($expMsg) but got $numMatchMessages. Data and messages are above.")
                     }
             }
         }
     }
 
-    test("Without groups present, region grouping semantic must be trivial.") { pending }
+    test("Without groups present, region grouping semantic must be trivial.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        type RawSemanticValue = String // Give context-specific meaning to bare String.
+        type RawThreshold = NonnegativeReal
 
-    test("Region grouping must either be trivial or must specify groups that constitute a partition of regional round timepoints from the imaging sequence.") {
+        def mygen: Gen[(ImagingSequence, RawSemanticValue, RawThreshold, Option[NonEmptyList[LocusGroup]], Set[Timepoint], Either[String, Unit])] = for {
+            (seq, locusGroupingOpt, exclusions) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt(10))
+            (semantic, altExpectMessage) <- Gen.oneOf(
+                Gen.oneOf(
+                    List("permissive", "Permissive", "PERMISSIVE").map(_ -> RegionGrouping.Semantic.Permissive) ++ 
+                    List("prohibitive", "Prohibitive", "PROHIBITIVE").map(_ -> RegionGrouping.Semantic.Prohibitive)
+                ).map((original, s) => original -> s"Nontrivial grouping semantic ($s, from '$original'), but no groups!".asLeft),
+                Gen.alphaNumStr
+                    .suchThat{ s => ! Set("permissive", "prohibitive", "trivial").contains(s.toLowerCase) }
+                    .map(s => s -> s"Illegal value for regional grouping semantic: $s".asLeft),
+                Gen.oneOf("trivial", "Trivial", "TRIVIAL").map(_ -> ().asRight)
+            )
+            optRawThreshold <- arbitrary[NonnegativeReal]
+        } yield (seq, semantic, optRawThreshold, locusGroupingOpt, exclusions, altExpectMessage)
+
+        forAll (mygen, minSuccessful(1000)) { case (seq, semantic, rawThreshold, locusGroupingOpt, exclusions, altExpectMessage) => 
+            val baseData: Map[String, ujson.Value] = {
+                val records: NonEmptyList[ujson.Obj] = 
+                    Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
+                val regionGroupingJsonData = ujson.Obj("semantic" -> ujson.Str(semantic), "min_spot_dist" -> ujson.Num(rawThreshold))
+                Map("imagingRounds" -> ujson.Arr(records.toList*), "regionGrouping" -> regionGroupingJsonData)
+            }
+            val data: Map[String, ujson.Value] = addLocusGroupingAndExclusions(baseData, locusGroupingOpt, exclusions)
+            
+            (ImagingRoundsConfiguration.fromJsonMap(data), altExpectMessage) match {
+                case (Right(_), Right(_)) => succeed
+                case (Left(messages), Right(_)) => fail(s"Expected parse success (semantic = $semantic), but got failure(s): ${messages.mkString_("; ")}")
+                case (Right(_), Left(_)) => fail(s"Expected parse failure based on semantic '$semantic', but it succeeded!")
+                case (Left(messages), Left(expectMessage)) => 
+                    val numMatchMessages = messages.count(_ === expectMessage).toInt
+                    if numMatchMessages === 1 then succeed
+                    else {
+                        println(s"MESSAGES: ${messages.mkString_("; ")}")
+                        println(s"DATA (below)\n${write(data, indent = 4)}")
+                        fail(s"Expected exactly 1 matching message ($expectMessage) but got $numMatchMessages. Data and messages are above.")
+                    }
+            }
+        }
+    }
+
+    test("Nontrivial region grouping must specify groups that constitute a partition of regional round timepoints from the imaging sequence.") {
         pending
     }
 
