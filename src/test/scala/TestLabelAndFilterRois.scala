@@ -31,7 +31,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 // missing driftFile
                 assertTypeError{ "workflow( " +
                     "spotsFile = tmpdir / \"traces.csv\", " + 
-                    "regionGrouping = ImagingRoundsConfiguration.RegionGrouping.Trivial, " + 
+                    "regionGrouping = ImagingRoundsConfiguration.RegionGrouping.Trivial(PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(5.0))), " + 
                     "minSpotSeparation = PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(5.0)), " + 
                     "unfilteredOutputFile = UnfilteredOutputFile.fromPath(tmpdir / \"unfiltered.csv\"), " + 
                     "filteredOutputFile = FilteredOutputFile.fromPath(tmpdir / \"filtered.csv\"), " + 
@@ -42,8 +42,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 assertCompiles{ "workflow( " +
                     "spotsFile = tmpdir / \"traces.csv\", " + 
                     "driftFile = tmpdir / \"drift.csv\", " + 
-                    "regionGrouping = ImagingRoundsConfiguration.RegionGrouping.Trivial, " + 
-                    "minSpotSeparation = PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(5.0)), " + 
+                    "regionGrouping = ImagingRoundsConfiguration.RegionGrouping.Trivial(PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(5.0))), " + 
                     "unfilteredOutputFile = UnfilteredOutputFile.fromPath(tmpdir / \"unfiltered.csv\"), " + 
                     "filteredOutputFile = FilteredOutputFile.fromPath(tmpdir / \"filtered.csv\"), " + 
                     "extantOutputHandler = extantHandler " + 
