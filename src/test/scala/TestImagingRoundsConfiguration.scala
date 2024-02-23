@@ -3,6 +3,8 @@ package at.ac.oeaw.imba.gerlich.looptrace
 import scala.util.Random
 import cats.data.{ NonEmptyList, NonEmptySet }
 import cats.syntax.all.*
+import mouse.boolean.*
+import upickle.default.*
 
 import org.scalacheck.{ Arbitrary, Gen, Shrink }
 import org.scalacheck.Arbitrary.arbitrary
@@ -12,7 +14,7 @@ import org.scalatest.matchers.*
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
-import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.LocusGroup
+import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.{ LocusGroup, RegionGrouping }
 
 /**
   * Tests for [[at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration]]
@@ -24,7 +26,7 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
 
     test("Example config parses correctly.") {
         exampleConfig.numberOfRounds shouldEqual 12
-        exampleConfig.regionGrouping shouldEqual ImagingRoundsConfiguration.RegionGrouping.Permissive(
+        exampleConfig.regionGrouping shouldEqual RegionGrouping.Permissive(
             NonEmptyList.of(NonEmptySet.of(8, 9), NonEmptySet.of(10, 11)).map(_.map(Timepoint.unsafe))
         )
         exampleConfig.tracingExclusions shouldEqual Set(0, 8, 9, 10, 11).map(Timepoint.unsafe)
@@ -42,23 +44,87 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
             11 -> NonEmptySet.one(5)
             )
             .map{ (r, ls) => Timepoint.unsafe(r) -> ls.map(Timepoint.unsafe) }
-            .map(ImagingRoundsConfiguration.LocusGroup.apply.tupled)
+            .map(LocusGroup.apply.tupled)
     }
 
-    // test("Region grouping must either be trivial or must specify a valid semantic.") {
-    //     def mygen = for {
-    //         seq <- genTimeValidSequence(Gen.choose(1, 10).map(PositiveInt.unsafe))
-    //         regionGrouping <- Gen.option(genValidParitionForRegionGrouping(seq)).flatMap{
-    //             case None => Gen.const(ImagingRoundsConfiguration.RegionGrouping.Trivial)
-    //             case Some(parts) => 
-    //                 arbitrary[ImagingRoundsConfiguration.RegionGrouping.Semantic].map{
-    //                     semantic => ImagingRoundsConfiguration.RegionGrouping.Nontrivial(_, parts)
-    //                 }
-    //         }
-    //         locusGrouping <- 
-    //         exclusions <- genExclusions(seq)
-    //     } yield (seq, regionGrouping, exclusions)
-    // }
+    test("Region grouping must either be trivial or must specify a valid semantic.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given rwForSeq: ReadWriter[ImagingSequence] = 
+            ImagingRoundsConfiguration.rwForImagingSequence(using ImagingRound.rwForImagingRound)
+        given rwForTime: ReadWriter[Timepoint] = readwriter[ujson.Value]
+            .bimap(time => ujson.Num(time.get), json => Timepoint.unsafe(json.int))
+
+        def mygen = for {
+            seq <- genTimeValidSequence(Gen.choose(1, 10).map(PositiveInt.unsafe))
+            locusGroupingOpt: Option[NonEmptyList[LocusGroup]] <- seq.locusRounds.toNel match {
+                case None => Gen.const(None)
+                case Some(loci) => 
+                    if seq.regionRounds.length === PositiveInt(1) 
+                    then Gen.const(NonEmptyList.one(LocusGroup(seq.regionRounds.head.time, loci.map(_.time).toNes)).some)
+                    else {
+                        val numLoci = seq.locusRounds.length
+                        val numRegions: PositiveInt = seq.numberOfRegionRounds
+                        (for {
+                            // >= locus and >= 1 region, per the pattern match and conditional
+                            k <- Gen.choose(1, math.min(numRegions, numLoci))
+                            breaks <- Gen.pick(k - 1, 0 to numLoci).map(_.sorted :+ numLoci) // Ensure all loci are accounted for.
+                        } yield breaks.zip(seq.regionRounds.toList).foldRight(loci.toList.map(_.time) -> List.empty[LocusGroup]){
+                            case (_, (Nil, acc)) => Nil -> acc
+                            case ((pt, reg), (remaining, acc)) => 
+                                val (maybeNewGroup, newRemaining) = remaining.splitAt(pt)
+                                val newAcc = maybeNewGroup.toNel.fold(acc)(ts => LocusGroup(reg.time, ts.toNes) :: acc)
+                                (newRemaining, newAcc)
+                        }._2.toNel)
+                        .suchThat(_.nonEmpty)
+                        .map(_.get.some)
+                    }
+            }
+            badSemanticAndRegionGroupingOpt <- Gen.option(genValidParitionForRegionGrouping(seq)).flatMap{
+                case None => Gen.const(None)
+                case Some(grouping) => Gen.alphaNumStr.suchThat(_.nonEmpty).map(msg => (msg -> grouping).some)
+            }
+            exclusions <- genExclusions(seq)
+        } yield (seq, badSemanticAndRegionGroupingOpt, locusGroupingOpt, exclusions)
+
+        forAll (mygen, minSuccessful(1000)) { case (seq, regionGroupingPartsOpt, locusGroupingOpt, exclusions) => 
+            val baseData: Map[String, ujson.Value] = {
+                val records: NonEmptyList[ujson.Obj] = 
+                    Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
+                Map("imagingRounds" -> ujson.Arr(records.toList*))
+            }
+            val extras: List[(String, ujson.Value)] = List(
+                regionGroupingPartsOpt.map{ (semantic, grouping) => 
+                    val timeData = ujson.Arr(grouping.toList.map(ts => ujson.Arr(ts.toList.map(t => ujson.Num(t.get))*))*)
+                    "regionGrouping" -> ujson.Obj("semantic" -> ujson.Str(semantic), "groups" -> timeData)
+                }: Option[(String, ujson.Value)],
+                locusGroupingOpt.map{ gs => 
+                    val data: NonEmptyList[(String, ujson.Value)] = gs.map{ g => 
+                        g.regionalTimepoint.show -> ujson.Arr(g.locusTimepoints.toList.map(t => ujson.Num(t.get))*)
+                    }
+                    "locusGrouping" -> ujson.Obj(data.head, data.tail*)
+                }: Option[(String, ujson.Value)],
+                exclusions.nonEmpty.option{
+                    "tracingExclusions" -> 
+                    ujson.Arr(exclusions.toList.map(t => ujson.Num(t.get))*)
+                }: Option[(String, ujson.Value)]
+            ).flatten
+            val data: Map[String, ujson.Value] = baseData ++ extras.toMap
+            (ImagingRoundsConfiguration.fromJsonMap(data), regionGroupingPartsOpt) match {
+                case (Right(_), None) => succeed
+                case (Left(messages), None) => fail(s"Expected parse to succeed, but got error(s): ${messages.mkString_(", ")}")
+                case (Right(_), Some((semantic, _))) => fail(s"Expected parse failure based on semantic '$semantic', but it succeeded")
+                case (Left(messages), Some((semantic, _))) => 
+                    val expMsg = s"Illegal value for regional grouping semantic: $semantic"
+                    val numMatchMessages = messages.count(_ === expMsg).toInt
+                    if numMatchMessages === 1 then succeed
+                    else {
+                        println("DATA (below)")
+                        println(write(data, indent = 4))
+                        fail(s"Expected exactly one message match but got $numMatchMessages. Data are above.")
+                    }
+            }
+        }
+    }
 
     test("Region grouping must either be trivial or must specify groups that constitute a partition of regional round timepoints from the imaging sequence.") { pending }
 

@@ -51,6 +51,11 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
     given arbitraryForPoint3D(using arbX: Arbitrary[Double]): Arbitrary[Point3D] = Arbitrary{
         Gen.zip(arbitrary[XCoordinate], arbitrary[YCoordinate], arbitrary[ZCoordinate]).map(Point3D.apply.tupled)
     }
+    
+    given arbitraryForRegionGroupingSemantic: Arbitrary[ImagingRoundsConfiguration.RegionGrouping.Semantic] = Gen.oneOf(
+        ImagingRoundsConfiguration.RegionGrouping.Semantic.Permissive, 
+        ImagingRoundsConfiguration.RegionGrouping.Semantic.Prohibitive, 
+        ).toArbitrary
 
     given arbitraryForBlankImagingRound(using arbName: Arbitrary[String], arbTime: Arbitrary[Timepoint]): Arbitrary[BlankImagingRound] = 
         (arbName, arbTime).mapN(BlankImagingRound.apply)

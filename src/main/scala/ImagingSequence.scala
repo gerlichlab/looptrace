@@ -25,16 +25,18 @@ final case class ImagingSequence private(
             } yield ()).swap.toOption.flatMap(lookup.put(name, _))
         }
     }
+    def allRounds: NonEmptyList[ImagingRound] = (regionRounds ++ locusRounds ++ blankRounds).sortBy(_.time)
     final lazy val allTimepoints: NonEmptySet[Timepoint] = 
         (blankRounds ::: locusRounds).foldRight(regionRounds.map(_.time).toNes){ (r, acc) => acc.add(r.time) }
     final def length: Int = allTimepoints.length
     final def size: Int = length
     final def numberOfRounds: Int = length
+    final def numberOfRegionRounds: PositiveInt = PositiveInt.lengthOfNonempty(regionRounds)
 end ImagingSequence
 
 /** Smart constructors and tools for working with sequences of imaging rounds */
-object ImagingSequence:
-    
+object ImagingSequence:    
+
     /** When JSON can't be decoded as sequence of imaging rounds */
     class DecodingError(messages: NonEmptyList[String], json: ujson.Value) 
         extends ujson.Value.InvalidData(json, s"Error(s) decoding ImagingSequence: ${messages.mkString_(", ")}")
