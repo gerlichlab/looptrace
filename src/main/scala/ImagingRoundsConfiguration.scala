@@ -39,13 +39,13 @@ object ImagingRoundsConfiguration:
         final class FromPure(val messages: NonEmptyList[String]) 
             extends Exception(condenseMessages(messages, None)) with BuildErrorLike
         final class FromJsonFile(val messages: NonEmptyList[String], file: os.Path)
-            extends Exception(condenseMessages(messages, s"from file $file".some)) with BuildErrorLike
+            extends Exception(condenseMessages(messages, s"(from file $file)".some)) with BuildErrorLike
         /** An error building a configuration from JSON */
         final class FromJson(val messages: NonEmptyList[String], json: ujson.Value)  
             extends ujson.Value.InvalidData(json, condenseMessages(messages, None)) with BuildErrorLike
         /** Combine potentially multiple error messages into one */
         private def condenseMessages(messages: NonEmptyList[String], extraContext: Option[String]): String = 
-            s"Error(s) building imaging round configuration:" ++ extraContext.fold("")(" " ++ _) ++ messages.mkString_(", ")
+            s"Error(s) building imaging round configuration:" ++ extraContext.fold("")(" " ++ _ ++ " ") ++ messages.mkString_(", ")
     end BuildError
 
     /** Check that one set of timepoints is a subset of another */
