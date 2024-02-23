@@ -81,7 +81,9 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
             }
             badSemanticAndRegionGroupingOpt <- Gen.option(genValidParitionForRegionGrouping(seq)).flatMap{
                 case None => Gen.const(None)
-                case Some(grouping) => Gen.alphaNumStr.suchThat(_.nonEmpty).map(msg => (msg -> grouping).some)
+                case Some(grouping) => Gen.alphaNumStr
+                    .suchThat(s => s.nonEmpty && s.toLowerCase =!= "permissive" && s.toLowerCase =!= "prohibitive")
+                    .map(msg => (msg -> grouping).some)
             }
             exclusions <- genExclusions(seq)
         } yield (seq, badSemanticAndRegionGroupingOpt, locusGroupingOpt, exclusions)
@@ -118,15 +120,16 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
                     val numMatchMessages = messages.count(_ === expMsg).toInt
                     if numMatchMessages === 1 then succeed
                     else {
-                        println("DATA (below)")
-                        println(write(data, indent = 4))
+                        println(s"DATA (below)\n${write(data, indent = 4)}")
                         fail(s"Expected exactly one message match but got $numMatchMessages. Data are above.")
                     }
             }
         }
     }
 
-    test("Region grouping must either be trivial or must specify groups that constitute a partition of regional round timepoints from the imaging sequence.") { pending }
+    test("Region grouping must either be trivial or must specify groups that constitute a partition of regional round timepoints from the imaging sequence.") {
+        pending
+    }
 
     test("Locus grouping must be present and have a collection of values that constitutes a partition of locus imaging rounds from the imaging sequence.") { pending }
 
