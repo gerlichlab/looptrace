@@ -42,7 +42,7 @@ object SummariseImagingRoundsConfiguration:
                 println(s"${config.numberOfRounds} round(s) in total (listed below)")
                 config.allRounds.map(r => s"${r.time.show}: ${r.name.show}").toList.foreach(println)
                 val (groupingName, maybeGroups) = config.regionGrouping match {
-                    case ImagingRoundsConfiguration.RegionGrouping.Trivial => "Trivial" -> None
+                    case _: ImagingRoundsConfiguration.RegionGrouping.Trivial => "Trivial" -> None
                     case grouping: ImagingRoundsConfiguration.RegionGrouping.Permissive => "Permissive" -> grouping.groups.some
                     case grouping: ImagingRoundsConfiguration.RegionGrouping.Prohibitive => "Prohibitive" -> grouping.groups.some
                 }
