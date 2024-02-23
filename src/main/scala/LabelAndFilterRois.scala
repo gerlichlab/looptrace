@@ -72,7 +72,6 @@ object LabelAndFilterRois:
 
     def main(args: Array[String]): Unit = {
         import ScoptCliReaders.given
-        import ThresholdSemantic.given
         import parserBuilder.*
 
         /** Parse content of JSON file path or CLI-arg-like mapping spec of probe groups. */
@@ -102,14 +101,6 @@ object LabelAndFilterRois:
                 .action((f, c) => c.copy(driftFile = f))
                 .validate(f => os.isFile(f).either(f"Alleged drift file isn't a file: $f", ()))
                 .text("Path to drift correction file"),
-            opt[NonnegativeReal]("spotSeparationThresholdValue")
-                .required()
-                .action((d, c) => c.copy(spotSeparationThresholdValue = d))
-                .text("Min separation between centers of pair of spots, discard otherwise; contextualised by --spotSeparationThresholdType"),
-            opt[NonnegativeReal => DistanceThreshold]("spotSeparationThresholdType")
-                .required()
-                .action((f, c) => c.copy(buildDistanceThreshold = f))
-                .text("How to use the raw numeric value given for minimum spot separation"),
             opt[UnfilteredOutputFile]("unfilteredOutputFile")
                 .required()
                 .action((f, c) => c.copy(unfilteredOutputFile = f))
@@ -127,13 +118,11 @@ object LabelAndFilterRois:
         OParser.parse(parser, args, CliConfig()) match {
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
             case Some(opts) => 
-                val threshold = opts.buildDistanceThreshold(opts.spotSeparationThresholdValue)
                 val regionGrouping = opts.configuration.regionGrouping
                 workflow(
                     spotsFile = opts.spotsFile, 
                     driftFile = opts.driftFile, 
                     regionGrouping = regionGrouping, 
-                    minSpotSeparation = threshold, 
                     unfilteredOutputFile = opts.unfilteredOutputFile,
                     filteredOutputFile = opts.filteredOutputFile, 
                     extantOutputHandler = opts.extantOutputHandler
@@ -145,7 +134,6 @@ object LabelAndFilterRois:
         spotsFile: os.Path, 
         driftFile: os.Path, 
         regionGrouping: ImagingRoundsConfiguration.RegionGrouping,
-        minSpotSeparation: DistanceThreshold, 
         unfilteredOutputFile: UnfilteredOutputFile, 
         filteredOutputFile: FilteredOutputFile, 
         extantOutputHandler: ExtantOutputHandler
@@ -222,7 +210,7 @@ object LabelAndFilterRois:
                 val newRoi = applyDrift(oldRoi, drift)
                 newRoi -> idx
             }
-            buildNeighboringRoisFinder(shiftedRoisNumbered, minSpotSeparation)(regionGrouping) match {
+            buildNeighboringRoisFinder(shiftedRoisNumbered, regionGrouping) match {
                 case Left(errMsg) => throw new Exception(errMsg)
                 case Right(neighborsByRecordNumber) => neighborsByRecordNumber.get
             }
@@ -321,20 +309,18 @@ object LabelAndFilterRois:
       * A ROI is not considered its own neigbor, and this is omitting from the result any item with no proximal neighbors.
       * 
       * @param rois Pair of {@code Roi} and its record number (0-based) from a CSV file
-      * @param minDist The threshold on distance, beneath which two points are to be considered proximal
-      * @param grouping The grouping of regional barcode timepoints, optional
+      * @param grouping The grouping of regional barcode timepoints, how to consider subsets of the ROIs for proximity filtering
       * @return A mapping from item to set of proximal (closer than given distance threshold) neighbors, omitting each item with no neighbors; 
       *         otherwise, a {@code Left}-wrapped error message about what went wrong
       */
-    private[looptrace] def buildNeighboringRoisFinder(
-        rois: List[RoiLinenumPair], minDist: DistanceThreshold)(grouping: ImagingRoundsConfiguration.RegionGrouping): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
+    private[looptrace] def buildNeighboringRoisFinder(rois: List[RoiLinenumPair], grouping: ImagingRoundsConfiguration.RegionGrouping): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
         given orderForRoiLinenumPair: Order[RoiLinenumPair] = Order.by(_._2)
         type GroupId = NonnegativeInt
         type IndexedRoi = (RegionalBarcodeSpotRoi, NonnegativeInt)
         val getPoint = (_: RoiLinenumPair)._1.centroid
         val groupedRoiLinenumPairs: Either[String, Map[RoiLinenumPair, NonEmptySet[RoiLinenumPair]]] = grouping match {
-            case ImagingRoundsConfiguration.RegionGrouping.Trivial => 
-                buildNeighborsLookupKeyed(rois.map{ case pair@(r, _) => r.position -> pair }, (_, _) => true, getPoint, minDist, identity).asRight
+            case ImagingRoundsConfiguration.RegionGrouping.Trivial(minSpotSeparation) => 
+                buildNeighborsLookupKeyed(rois.map{ case pair@(r, _) => r.position -> pair }, (_, _) => true, getPoint, minSpotSeparation, identity).asRight
             case g: ImagingRoundsConfiguration.RegionGrouping.Nontrivial => 
                 val groupIds = NonnegativeInt.indexed(g.groups.toList).flatMap((g, i) => g.toList.map(_ -> i)).toMap
                 Alternative[List].separate(rois.map{ case pair@(roi, _) => groupIds.get(roi.time).toRight(pair).map(_ -> pair)}) match {
@@ -343,7 +329,7 @@ object LabelAndFilterRois:
                             case _: ImagingRoundsConfiguration.RegionGrouping.Prohibitive => { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => a._1 === b._1 }
                             case _: ImagingRoundsConfiguration.RegionGrouping.Permissive => { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => a._1 =!= b._1 }
                         }
-                        buildNeighborsLookupKeyed(withGroupsAssigned.map{ case (gi, pair@(roi, _)) => roi.position -> (gi -> pair) }, considerRoiPair, getPoint, minDist, _._2).asRight
+                        buildNeighborsLookupKeyed(withGroupsAssigned.map{ case (gi, pair@(roi, _)) => roi.position -> (gi -> pair) }, considerRoiPair, getPoint, g.minSpotSeparation, _._2).asRight
                     case (groupless, _) => 
                         val times = groupless.map(_._1.time).toSet
                         val timesText = times.toList.map(_.get).sorted.mkString(", ")
@@ -449,18 +435,6 @@ object LabelAndFilterRois:
     final case class FineDrift(z: ZDir[Double], y: YDir[Double], x: XDir[Double]) extends Drift[Double]
     final case class TotalDrift(z: ZDir[Double], y: YDir[Double], x: XDir[Double]) extends Drift[Double]
 
-    /** Helpers for working with spot separation semantic values */
-    object ThresholdSemantic:
-        /** How to parse a spot separation semantic from a command-line argument */
-        given readForDistanceThresholdSemantic: scopt.Read[NonnegativeReal => DistanceThreshold] = scopt.Read.reads(
-            (_: String) match {
-                case ("EachAxisAND" | "PiecewiseAND") => PiecewiseDistance.ConjunctiveThreshold.apply
-                case ("Euclidean" | "EUCLIDEAN" | "euclidean" | "eucl" | "EUCL" | "euc" | "EUC") => EuclideanDistance.Threshold.apply
-                case s => throw new IllegalArgumentException(s"Cannot parse as threshold semantic: $s")
-            }
-        )
-    end ThresholdSemantic
-    
     /* Type aliases */
     type DriftKey = (PositionName, Timepoint)
     type LineNumber = NonnegativeInt

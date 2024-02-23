@@ -15,6 +15,7 @@ import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.{ LocusGroup, RegionGrouping }
+import at.ac.oeaw.imba.gerlich.looptrace.space.*
 
 /**
   * Tests for [[at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration]]
@@ -27,6 +28,7 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
     test("Example config parses correctly.") {
         exampleConfig.numberOfRounds shouldEqual 12
         exampleConfig.regionGrouping shouldEqual RegionGrouping.Permissive(
+            PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(5.0)), 
             NonEmptyList.of(NonEmptySet.of(8, 9), NonEmptySet.of(10, 11)).map(_.map(Timepoint.unsafe))
         )
         exampleConfig.tracingExclusions shouldEqual Set(0, 8, 9, 10, 11).map(Timepoint.unsafe)

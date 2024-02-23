@@ -17,7 +17,6 @@ final case class ImagingRoundsConfiguration private(
     sequence: ImagingSequence, 
     locusGrouping: Set[LocusGroup], // should be empty iff there are no locus rounds in the sequence
     regionGrouping: ImagingRoundsConfiguration.RegionGrouping, 
-    regionSpotSeparationThreshold: DistanceThreshold,
     // TODO: We could, by default, skip regional and blank imaging rounds (but do use repeats).
     tracingExclusions: Set[Timepoint], // Timepoints of imaging rounds to not use for tracing
     ):
@@ -72,7 +71,7 @@ object ImagingRoundsConfiguration:
       * @param tracingExclusions Timepoints to exclude from tracing analysis
       * @return Either a [[scala.util.Left]]-wrapped nonempty list of error messages, or a [[scala.util.Right]]-wrapped built instance
       */
-    def build(sequence: ImagingSequence, locusGrouping: Set[LocusGroup], regionGrouping: RegionGrouping, regionThreshold: DistanceThreshold, tracingExclusions: Set[Timepoint]): ErrMsgsOr[ImagingRoundsConfiguration] = {
+    def build(sequence: ImagingSequence, locusGrouping: Set[LocusGroup], regionGrouping: RegionGrouping, tracingExclusions: Set[Timepoint]): ErrMsgsOr[ImagingRoundsConfiguration] = {
         val knownTimes = sequence.allTimepoints
         // Regardless of the subtype of regionGrouping, we need to check that any tracing exclusion timepoint is a known timepoint.
         val tracingSubsetNel = checkTimesSubset(knownTimes.toSortedSet)(tracingExclusions, "tracing exclusions")
@@ -105,7 +104,7 @@ object ImagingRoundsConfiguration:
             }
         }
         val (regionGroupingSubsetNel, regionGroupingSupersetNel) = regionGrouping match {
-            case g: RegionGrouping.Trivial.type => 
+            case g: RegionGrouping.Trivial => 
                 // In the trivial regionGrouping case, we have no more validation work to do.
                 ().validNel -> ().validNel
             case g: RegionGrouping.Nontrivial => 
@@ -118,7 +117,7 @@ object ImagingRoundsConfiguration:
         }
         (tracingSubsetNel, locusTimeSubsetNel, locusTimeSupersetNel, regionGroupingSubsetNel, regionGroupingSupersetNel)
             .tupled
-            .map(_ => ImagingRoundsConfiguration(sequence, locusGrouping, regionGrouping, regionThreshold, tracingExclusions))
+            .map(_ => ImagingRoundsConfiguration(sequence, locusGrouping, regionGrouping, tracingExclusions))
             .toEither
     }
 
@@ -195,7 +194,7 @@ object ImagingRoundsConfiguration:
                     (semanticNel, groupsNel).tupled.toEither.map(_.some)
                 }.toValidated
             }
-        val regionThrehsoldNel: ValidatedNel[String, DistanceThreshold] = 
+        val regionThresholdNel: ValidatedNel[String, DistanceThreshold] = 
             data.get("min_spot_dist")
                 .toRight(s"Missing regional spot separation key (min_spot_dist)")
                 .flatMap(safeReadAs[Double])
@@ -210,16 +209,10 @@ object ImagingRoundsConfiguration:
                     .map(_.toSet)
                     .toValidatedNel
             }
-        (roundsNel, crudeLocusGroupingNel, crudeRegionGroupingNel, regionThrehsoldNel, tracingExclusionsNel).tupled.toEither.flatMap{ 
+        (roundsNel, crudeLocusGroupingNel, crudeRegionGroupingNel, regionThresholdNel, tracingExclusionsNel).tupled.toEither.flatMap{ 
             case (sequence, crudeLocusGroups, maybeCrudeRegionGrouping, regionThreshold, exclusions) =>
-                val unrefinedRegionGrouping = maybeCrudeRegionGrouping match {
-                    case None => RegionGrouping.Trivial
-                    case Some((semantic, uncheckedUnwrappedGrouping)) => semantic match {
-                        case Permissive => RegionGrouping.Permissive(uncheckedUnwrappedGrouping)
-                        case Prohibitive => RegionGrouping.Prohibitive(uncheckedUnwrappedGrouping)
-                    }
-                }
-                build(sequence, crudeLocusGroups, unrefinedRegionGrouping, regionThreshold, exclusions)
+                val unrefinedRegionGrouping = RegionGrouping(regionThreshold, maybeCrudeRegionGrouping)
+                build(sequence, crudeLocusGroups, unrefinedRegionGrouping, exclusions)
         }
     }
 
@@ -232,10 +225,9 @@ object ImagingRoundsConfiguration:
         sequence: ImagingSequence, 
         locusGrouping: Set[LocusGroup], 
         regionGrouping: RegionGrouping, 
-        regionThreshold: DistanceThreshold, 
         tracingExclusions: Set[Timepoint],
         ): ImagingRoundsConfiguration = 
-        build(sequence, locusGrouping, regionGrouping, regionThreshold, tracingExclusions).fold(messages => throw new BuildError.FromPure(messages), identity)
+        build(sequence, locusGrouping, regionGrouping, tracingExclusions).fold(messages => throw new BuildError.FromPure(messages), identity)
 
     /**
      * Create instance, throw exception if any failure occurs
@@ -245,12 +237,12 @@ object ImagingRoundsConfiguration:
     def unsafe(
         sequence: ImagingSequence, 
         locusGrouping: Set[LocusGroup],
+        minSpotSeparation: DistanceThreshold,
         maybeRegionGrouping: Option[(RegionGrouping.Semantic, RegionGrouping.Groups)], 
-        regionThreshold: DistanceThreshold,
         tracingExclusions: Set[Timepoint],
     ): ImagingRoundsConfiguration = {
-        val regionGrouping = maybeRegionGrouping.fold(RegionGrouping.Trivial)(RegionGrouping.Nontrivial.apply.tupled)
-        unsafe(sequence, locusGrouping, regionGrouping, regionThreshold, tracingExclusions)
+        val regionGrouping = RegionGrouping(minSpotSeparation, maybeRegionGrouping)
+        unsafe(sequence, locusGrouping, regionGrouping, tracingExclusions)
     }
 
     /**
@@ -267,12 +259,9 @@ object ImagingRoundsConfiguration:
         given orderForLocusGroup: Order[LocusGroup] = Order.by{ case LocusGroup(regionalTimepoint, locusTimepoints) => regionalTimepoint -> locusTimepoints }
     end LocusGroup
 
-    /** Alias to give more context-rich meaning to a nonempty collection of timepoints */
-    type RegionalImageRoundGroup = NonEmptySet[Timepoint]
-
     /** Helpers for working with timepoint groupings */
     object RegionalImageRoundGroup:
-        given rwForRegionalImageRoundGroup: ReadWriter[RegionalImageRoundGroup] = readwriter[ujson.Value].bimap(
+        given rwForRegionalImageRoundGroup: ReadWriter[NonEmptySet[Timepoint]] = readwriter[ujson.Value].bimap(
             group => ujson.Arr(group.toList.map(name => ujson.Num(name.get))*), 
             json => json.arr
                 .toList
@@ -288,13 +277,21 @@ object ImagingRoundsConfiguration:
     end RegionalImageRoundGroup
 
     /** How to permit or prohibit regional barcode imaging probes/timepoints from being too physically close */
-    sealed trait RegionGrouping
+    sealed trait RegionGrouping:
+        def minSpotSeparation: DistanceThreshold
 
     /** The (concrete) subtypes of regional image round grouping */
     object RegionGrouping:
-        private[ImagingRoundsConfiguration] type Groups = NonEmptyList[RegionalImageRoundGroup]
+        private[ImagingRoundsConfiguration] type Groups = NonEmptyList[NonEmptySet[Timepoint]]
+        
+        def apply(minSpotSeparation: DistanceThreshold, maybeRegionGrouping: Option[(RegionGrouping.Semantic, RegionGrouping.Groups)]): RegionGrouping = 
+            maybeRegionGrouping match {
+                case None => Trivial(minSpotSeparation)
+                case Some((semantic, groups)) => Nontrivial(minSpotSeparation, semantic, groups)
+            }
+
         /** A trivial grouping of regional imaging rounds, which treats all regional rounds as one big group */
-        case object Trivial extends RegionGrouping
+        case class Trivial(minSpotSeparation: DistanceThreshold) extends RegionGrouping
         /** A nontrivial grouping of regional imaging rounds, which must constitute a partition of those available  */
         sealed trait Nontrivial extends RegionGrouping:
             /** A nontrivial grouping specifies a list of groups which comprise the total grouping.s */
@@ -302,26 +299,15 @@ object ImagingRoundsConfiguration:
         /** Helpers for constructing and owrking with a nontrivial grouping of regional imaging rounds */
         object Nontrivial:
             /** Dispatch to the appropriate leaf class constructor based on the value of the semantic. */
-            def apply(semantic: Semantic, groups: Groups): Nontrivial = semantic match {
-                case Semantic.Permissive => Permissive(groups)
-                case Semantic.Prohibitive => Prohibitive(groups)
+            def apply(minSpotSeparation: DistanceThreshold, semantic: Semantic, groups: Groups): Nontrivial = semantic match {
+                case Semantic.Permissive => Permissive(minSpotSeparation, groups)
+                case Semantic.Prohibitive => Prohibitive(minSpotSeparation, groups)
             }
-            /** Construct a grouping with a single group. */
-            def singleton(semantic: Semantic, group: RegionalImageRoundGroup): Nontrivial = apply(semantic, NonEmptyList.one(group))
         end Nontrivial
         /** A 'permissive' grouping 'allows' members of the same group to violate some rule, while 'forbidding' non-grouped items from doing so. */
-        final case class Permissive(groups: Groups) extends Nontrivial
-        /** Helpers for working with the permissive regional grouping */
-        object Permissive:
-            /** Construct a grouping with a single group. */
-            def singleton(group: RegionalImageRoundGroup): Permissive = Permissive(NonEmptyList.one(group))
-        end Permissive
+        final case class Permissive(minSpotSeparation: DistanceThreshold, groups: Groups) extends Nontrivial
         /** A 'prohibitive' grouping 'forbids' members of the same group to violate some rule, while 'allowing' non-grouped items to violate the rule. */
-        final case class Prohibitive(groups: Groups) extends Nontrivial
-        /** Helpers for working with the prohibitive regional grouping */
-        object Prohibitive:
-            /** Construct a grouping with a single group. */
-            def singleton(group: RegionalImageRoundGroup): Prohibitive = Prohibitive(NonEmptyList.one(group))
+        final case class Prohibitive(minSpotSeparation: DistanceThreshold, groups: Groups) extends Nontrivial
         end Prohibitive
 
         /** Delineate which semantic is desired */
