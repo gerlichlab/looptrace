@@ -67,47 +67,107 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
         }
     }
 
-    test("Trivial region grouping with groups specified is an error.") { pending }
-
-    test("Region grouping missing semantic gives error, regardless of presence of groups.") { pending }
-
-    test("Region grouping with groups but invalid semantic gives expected error.") { pending }
-
-    test("Without groups list, region grouping semantic must be trivial.") { pending }
-
-    test("Without groups present, semantic must be trivial (or a variant thereof).") {
-        pending
+    test("Trivial region grouping with groups specified is an error.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        
+        def mygen = for {
+            (seq, optLocusGrouping, exclusions) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt(10))
+            semantic <- Gen.oneOf("trivial", "TRIVIAL", "Trivial")
+            regionGrouping <- genValidParitionForRegionGrouping(seq)
+        } yield (seq, optLocusGrouping, semantic, regionGrouping, exclusions)
+        
+        forAll (mygen, arbitrary[NonnegativeReal]) { case ((seq, optLocusGrouping, semantic, regionGrouping, exclusions), rawThreshold) => 
+            val baseData: Map[String, ujson.Value] = {
+                val records: NonEmptyList[ujson.Obj] = Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
+                Map(
+                    "imagingRounds" -> ujson.Arr(records.toList*),
+                    "regionGrouping" -> ujson.Obj(
+                        "semantic" -> ujson.Str(semantic), 
+                        "min_spot_dist" -> ujson.Num(rawThreshold),
+                        "groups" -> regionGroupingToJson(regionGrouping)
+                    )
+                )
+            }
+            val data: Map[String, ujson.Value] = addLocusGroupingAndExclusions(baseData, optLocusGrouping, exclusions)
+            ImagingRoundsConfiguration.fromJsonMap(data) match {
+                case Right(_) => fail(s"Expected parse failure on account presence of groups with trivial semantic, but it succeeded!")
+                case Left(messages) => 
+                    val numMatchMessages = messages.count(_ === "Trivial distance grouping semantic, but groups specified!").toInt
+                    if numMatchMessages === 1 then succeed else {
+                        println(s"MESSAGES: ${messages.mkString_("; ")}")
+                        println(s"DATA (below)\n${write(data, indent = 4)}")
+                        fail(s"Expected exactly 1 matching message but got $numMatchMessages. Data and messages are above.")
+                    }
+            }
+        }
     }
 
-    test("With groups present, regionGrouping section must specify a valid semantic.") {
+    test("Region grouping missing semantic gives error, regardless of presence of groups or minimum separation distance.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        
+        def mygen = for {
+            (seq, optLocusGrouping, exclusions) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt(10))
+            optRegionGrouping <- Gen.option(genValidParitionForRegionGrouping(seq))
+            optRawThreshold <- optRegionGrouping match {
+                // Ensure that at least the region grouping or the raw threshold is nonempty.
+                // That way, the region grouping section--already here we're omitting the semantic--will be nonempty.
+                case None => arbitrary[NonnegativeReal].map(_.some)
+                case _ => Gen.option(arbitrary[NonnegativeReal])
+            }
+        } yield (seq, optLocusGrouping, optRegionGrouping, optRawThreshold, exclusions)
+        
+        forAll (mygen) { (seq, optLocusGrouping, optRegionGrouping, optRawThreshold, exclusions) => 
+            val baseData = {
+                val records: NonEmptyList[ujson.Obj] = Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
+                val regionGroupingJsonData = List(
+                    optRawThreshold.map(t => "min_spot_dist" -> ujson.Num(t)),
+                    optRegionGrouping.map(g => "groups" -> regionGroupingToJson(g))
+                ).flatten match {
+                    case Nil => throw new IllegalStateException("Either optional threshold or optional grouping is empty!")
+                    case kv1 :: rest => ujson.Obj(kv1, rest*)
+                }
+                Map("imagingRounds" -> ujson.Arr(records.toList*), "regionGrouping" -> regionGroupingJsonData)
+            }
+            val data: Map[String, ujson.Value] = addLocusGroupingAndExclusions(baseData, optLocusGrouping, exclusions)
+            
+            ImagingRoundsConfiguration.fromJsonMap(data) match {
+                case Right(_) => fail(s"Expected parse failure on account presence of groups with trivial semantic, but it succeeded!")
+                case Left(messages) => 
+                    val expectMessage = "Missing semantic in regional grouping section!"
+                    val numMatchMessages = messages.count(_ === expectMessage).toInt
+                    if numMatchMessages === 1 then succeed else {
+                        println(s"MESSAGES: ${messages.mkString_("; ")}")
+                        println(s"DATA (below)\n${write(data, indent = 4)}")
+                        fail(s"Expected exactly 1 matching message ($expectMessage) but got $numMatchMessages. Data and messages are above.")
+                    }
+            }
+        }
+    }
+
+    test("With or without other elements present, invalid semantic is an error.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         type BadSemanticValue = String // Give context-specific meaning to bare String.
         type RawThreshold = NonnegativeReal
 
-        def mygen: Gen[(ImagingSequence, (BadSemanticValue, RawThreshold, NonEmptyList[NonEmptySet[Timepoint]]), Option[NonEmptyList[LocusGroup]], Set[Timepoint])] = for {
+        def mygen: Gen[(ImagingSequence, BadSemanticValue, Option[NonEmptyList[NonEmptySet[Timepoint]]], Option[RawThreshold], Option[NonEmptyList[LocusGroup]], Set[Timepoint])] = for {
             (seq, locusGroupingOpt, exclusions) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt(10))
-            (semantic, grouping) <- genValidParitionForRegionGrouping(seq).flatMap{ grouping => 
-                Gen.alphaNumStr
-                    .suchThat{ s => ! Set("permissive", "prohibitive", "trivial").contains(s.toLowerCase) }
-                    .map(_ -> grouping)
-            }
-            rawThreshold <- arbitrary[NonnegativeReal]
-        } yield (seq, (semantic, rawThreshold, grouping), locusGroupingOpt, exclusions)
+            semantic <- Gen.alphaNumStr.suchThat{ s => ! Set("permissive", "prohibitive", "trivial").contains(s.toLowerCase) }
+            optRegionGrouping <- Gen.option(genValidParitionForRegionGrouping(seq))
+            optRawThreshold <- Gen.option(arbitrary[NonnegativeReal])
+        } yield (seq, semantic, optRegionGrouping, optRawThreshold, locusGroupingOpt, exclusions)
 
-        forAll (mygen, minSuccessful(1000)) { case (seq, (semantic, rawThreshold, grouping), locusGroupingOpt, exclusions) => 
+        forAll (mygen, minSuccessful(1000)) { case (seq, semantic, optRegionGrouping, optRawThreshold, locusGroupingOpt, exclusions) => 
             val baseData: Map[String, ujson.Value] = {
                 val records: NonEmptyList[ujson.Obj] = 
                     Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
-                Map(
-                    "imagingRounds" -> ujson.Arr(records.toList*), 
-                    "regionGrouping" -> ujson.Obj(
-                        "semantic" -> ujson.Str(semantic),
-                        "min_spot_dist" -> ujson.Num(rawThreshold),
-                        "groups" -> ujson.Arr(grouping.toList.map(ts => ujson.Arr(ts.toList.map(t => ujson.Num(t.get))*))*)
-                        )
+                val regionGroupingJsonData = ujson.Obj(
+                    "semantic" -> ujson.Str(semantic),
+                    List(optRawThreshold.map(t => "min_spot_dist" -> ujson.Num(t)), optRegionGrouping.map(g => "groups" -> regionGroupingToJson(g))).flatten*
                 )
+                Map("imagingRounds" -> ujson.Arr(records.toList*), "regionGrouping" -> regionGroupingJsonData)
             }
             val data: Map[String, ujson.Value] = addLocusGroupingAndExclusions(baseData, locusGroupingOpt, exclusions)
+            
             ImagingRoundsConfiguration.fromJsonMap(data) match {
                 case Right(_) => fail(s"Expected parse failure based on semantic '$semantic', but it succeeded!")
                 case Left(messages) => 
@@ -115,12 +175,15 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
                     val numMatchMessages = messages.count(_ === expMsg).toInt
                     if numMatchMessages === 1 then succeed
                     else {
+                        println(s"MESSAGES: ${messages.mkString_("; ")}")
                         println(s"DATA (below)\n${write(data, indent = 4)}")
-                        fail(s"Expected exactly one message match but got $numMatchMessages. Data are above.")
+                        fail(s"Expected exactly 1 matching message match but got $numMatchMessages. Data and messages are above.")
                     }
             }
         }
     }
+
+    test("Without groups present, region grouping semantic must be trivial.") { pending }
 
     test("Region grouping must either be trivial or must specify groups that constitute a partition of regional round timepoints from the imaging sequence.") {
         pending
@@ -139,10 +202,12 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
     given rwForSeq: ReadWriter[ImagingSequence] = 
             ImagingRoundsConfiguration.rwForImagingSequence(using ImagingRound.rwForImagingRound)
     
-    given rwForTime: ReadWriter[Timepoint] = readwriter[ujson.Value]
-        .bimap(time => ujson.Num(time.get), json => Timepoint.unsafe(json.int))
+    given rwForTime: ReadWriter[Timepoint] = readwriter[ujson.Value].bimap(time => ujson.Num(time.get), json => Timepoint.unsafe(json.int))
 
-            private def addLocusGroupingAndExclusions(baseData: Map[String, ujson.Value], optLocusGrouping: Option[NonEmptyList[LocusGroup]], exclusions: Set[Timepoint]): Map[String, ujson.Value] = {
+    private def regionGroupingToJson(grouping: NonEmptyList[NonEmptySet[Timepoint]]): ujson.Value = 
+        ujson.Arr(grouping.toList.map(ts => ujson.Arr(ts.toList.map(t => ujson.Num(t.get))*))*)
+
+    private def addLocusGroupingAndExclusions(baseData: Map[String, ujson.Value], optLocusGrouping: Option[NonEmptyList[LocusGroup]], exclusions: Set[Timepoint]): Map[String, ujson.Value] = {
         baseData ++ List(
             optLocusGrouping.map{ gs => 
                 val data: NonEmptyList[(String, ujson.Value)] = gs.map{ g => 

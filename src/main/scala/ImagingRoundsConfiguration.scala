@@ -207,7 +207,7 @@ object ImagingRoundsConfiguration:
                         case (threshold, Some(semantic), Some(groups)) => (threshold, (semantic -> groups).some).asRight
                         case (_, None, Some(_)) => 
                             // NB: This would be OK if the grouping had a single group, but that would be very odd user behavior.
-                            NonEmptyList.one("Missing or trivial distance grouping semantic, but groups specified!").asLeft
+                            NonEmptyList.one("Trivial distance grouping semantic, but groups specified!").asLeft
                         case (_, Some(s), None) => NonEmptyList.one(s"Nontrivial grouping semantic ($s), but no groups!").asLeft
                     }
                 }.toValidated
