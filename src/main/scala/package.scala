@@ -16,12 +16,6 @@ package object looptrace {
     type CsvRow = Map[String, String]
     type ErrorMessages = NonEmptyList[String]
     type ErrMsgsOr[A] = Either[ErrorMessages, A]
-    
-    /** Nonempty set wrapped in {@code Right} if no duplicates, or {@code Left}-wrapped pairs of element and repeat count */
-    def safeNelToNes[A : Order](xs: NonEmptyList[A]): Either[NonEmptyList[(A, Int)], NonEmptySet[A]] = {
-        val histogram = xs.groupByNem(identity).toNel.map(_.map(_.size))
-        histogram.filter(_._2 > 1).toNel.toLeft(histogram.map(_._1).toNes)
-    }
 
     /** Use rows from a CSV file in arbitrary code. */
     def withCsvData(filepath: os.Path)(code: Iterable[CsvRow] => Any): Any = {

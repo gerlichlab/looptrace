@@ -84,7 +84,7 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
                     "regionGrouping" -> ujson.Obj(
                         "semantic" -> ujson.Str(semantic), 
                         "min_spot_dist" -> ujson.Num(rawThreshold),
-                        "groups" -> regionGroupingToJson(regionGrouping)
+                        "groups" -> regionGroupingToJson(regionGrouping.map(_.toList))
                     )
                 )
             }
@@ -121,7 +121,7 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
                 val records: NonEmptyList[ujson.Obj] = Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
                 val regionGroupingJsonData = List(
                     optRawThreshold.map(t => "min_spot_dist" -> ujson.Num(t)),
-                    optRegionGrouping.map(g => "groups" -> regionGroupingToJson(g))
+                    optRegionGrouping.map(g => "groups" -> regionGroupingToJson(g.map(_.toList)))
                 ).flatten match {
                     case Nil => throw new IllegalStateException("Either optional threshold or optional grouping is empty!")
                     case kv1 :: rest => ujson.Obj(kv1, rest*)
@@ -162,7 +162,10 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
                     Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
                 val regionGroupingJsonData = ujson.Obj(
                     "semantic" -> ujson.Str(semantic),
-                    List(optRawThreshold.map(t => "min_spot_dist" -> ujson.Num(t)), optRegionGrouping.map(g => "groups" -> regionGroupingToJson(g))).flatten*
+                    List(
+                        optRawThreshold.map(t => "min_spot_dist" -> ujson.Num(t)), 
+                        optRegionGrouping.map(g => "groups" -> regionGroupingToJson(g.map(_.toList))),
+                        ).flatten*
                 )
                 Map("imagingRounds" -> ujson.Arr(records.toList*), "regionGrouping" -> regionGroupingJsonData)
             }
@@ -229,7 +232,88 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
     }
 
     test("Nontrivial region grouping must specify groups that constitute a partition of regional round timepoints from the imaging sequence.") {
-        pending
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        val maxTime = 100
+        given arbTime: Arbitrary[Timepoint] = 
+            // Limit range to encourage overlap b/w regional rounds in sequence and grouping.
+            Gen.choose(0, maxTime).map(Timepoint.unsafe).toArbitrary
+
+        type TestName = String
+        type ErrMsg = String
+
+        def mygen = for {
+            (seq, optLocusGrouping, exclusions) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt.unsafe(maxTime / 2))
+            regionalTimes = seq.regionRounds.map(_.time).toList.toSet
+            semantic <- Gen.oneOf(RegionGrouping.Semantic.Permissive, RegionGrouping.Semantic.Prohibitive).map(_.toString)
+            (regionGroups, findExpMessages) <- Gen.nonEmptyListOf{ Gen.nonEmptyListOf(arbitrary[Timepoint]).map(_.toNel.get) }
+                .map(_.toNel.get)
+                // Ensure that subsets fail uniqueness, disjointness, fail to cover regionals, or fail to be covered by regionals
+                // In the process, determine the expected error message.
+                .map{ gs => (for {
+                    // First, try for duplicates within an alleged subset of the grouping.
+                    _ <- gs.toList.traverse{ ts => 
+                        if ts.toList.toSet.size === ts.length then ().asRight
+                        else NonEmptyList.one{(
+                            "Not proper sets",
+                            (_: String).endsWith("repeated items for regional group")
+                        )}.asLeft
+                    }
+                    _ <- {
+                        // No duplicates within subsets, so try to find overlap between them.
+                        // In the process, determine the flattened set of timepoints in the grouping.
+                        val (isDisjoint, seen) = gs.toList.foldLeft(false -> Set.empty[Timepoint]){ case ((isDisjoint, acc), g) => 
+                            val ts = g.toList.toSet
+                            (isDisjoint || (ts & acc).nonEmpty, acc ++ ts)
+                        }
+                        // Determine which error messages to search for.
+                        List(
+                            isDisjoint.option{(
+                                "Overlapping subsets",
+                                (_: String) === "Regional grouping's subsets are not disjoint!"
+                            )},
+                            (seen -- regionalTimes).nonEmpty.option{(
+                                "Not in sequence",
+                                (_: String).startsWith(s"Unknown timepoint(s) (regional grouping (rel. to regionals in imaging sequence))")
+                            )},
+                            (regionalTimes -- seen).nonEmpty.option{(
+                                "Not in grouping", 
+                                (_: String).startsWith(s"Unknown timepoint(s) (regionals in imaging sequence (rel. to regional grouping))")
+                            )}
+                        ).flatten.toNel.toLeft(())
+                    }
+                } yield ()).leftMap(gs -> _) }
+                .suchThat(_.isLeft)
+                .map(_.swap.getOrElse{ throw new IllegalStateException("Allegedly generated a Left but then failed to get value after .swap!") })
+        } yield (seq, optLocusGrouping, semantic, regionGroups, exclusions, findExpMessages)
+        
+        forAll (mygen, arbitrary[NonnegativeReal], minSuccessful(10000)) {
+            case ((seq, optLocusGrouping, semantic, regionGroups, exclusions, findExpMessages), threshold) =>
+                val baseData: Map[String, ujson.Value] = {
+                    val records: NonEmptyList[ujson.Obj] = 
+                        Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
+                    val regionGroupingJsonData = ujson.Obj(
+                        "semantic" -> ujson.Str(semantic), 
+                        "groups" -> regionGroupingToJson(regionGroups.map(_.toList)),
+                        "min_spot_dist" -> ujson.Num(threshold)
+                    )
+                    Map("imagingRounds" -> ujson.Arr(records.toList*), "regionGrouping" -> regionGroupingJsonData)
+                }
+                val data: Map[String, ujson.Value] = addLocusGroupingAndExclusions(baseData, optLocusGrouping, exclusions)
+
+                ImagingRoundsConfiguration.fromJsonMap(data) match {
+                    case Right(_) => 
+                        println(s"GROUPING: $regionGroups")
+                        println(s"REGIONAL TIMES: ${seq.regionRounds.map(_.time).mkString_(", ")}")
+                        fail("Expected parse failure for non-partition of imaging sequence's regional rounds, but got success. Data are above.")
+                    case Left(messages) => 
+                        val unmetChecks = findExpMessages.filterNot{ (testName, check) => messages.count(check) === 1 }.map(_._1)
+                        if unmetChecks.isEmpty then succeed else {
+                            println(s"MESSAGES: ${messages.mkString_("; ")}")
+                            println(s"DATA (below)\n${write(data, indent = 4)}")
+                            fail(s"Unmet check(s): ${unmetChecks.mkString("; ")}")
+                        }
+                }
+        }
     }
 
     test("Locus grouping must be present and have a collection of values that constitutes a partition of locus imaging rounds from the imaging sequence.") {
@@ -247,8 +331,8 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
     
     given rwForTime: ReadWriter[Timepoint] = readwriter[ujson.Value].bimap(time => ujson.Num(time.get), json => Timepoint.unsafe(json.int))
 
-    private def regionGroupingToJson(grouping: NonEmptyList[NonEmptySet[Timepoint]]): ujson.Value = 
-        ujson.Arr(grouping.toList.map(ts => ujson.Arr(ts.toList.map(t => ujson.Num(t.get))*))*)
+    private def regionGroupingToJson(grouping: NonEmptyList[List[Timepoint]]): ujson.Value = 
+        ujson.Arr(grouping.toList.map(ts => ujson.Arr(ts.map(t => ujson.Num(t.get))*))*)
 
     private def addLocusGroupingAndExclusions(baseData: Map[String, ujson.Value], optLocusGrouping: Option[NonEmptyList[LocusGroup]], exclusions: Set[Timepoint]): Map[String, ujson.Value] = {
         baseData ++ List(
