@@ -238,9 +238,6 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
             // Limit range to encourage overlap b/w regional rounds in sequence and grouping.
             Gen.choose(0, maxTime).map(Timepoint.unsafe).toArbitrary
 
-        type TestName = String
-        type ErrMsg = String
-
         def mygen = for {
             (seq, optLocusGrouping, exclusions) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt.unsafe(maxTime / 2))
             regionalTimes = seq.regionRounds.map(_.time).toList.toSet
@@ -316,15 +313,105 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
         }
     }
 
-    test("Locus grouping must be present and have a collection of values that constitutes a partition of locus imaging rounds from the imaging sequence.") {
-        pending
+    test("Locus grouping must partition locus imaging rounds from the imaging sequence.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        val maxTime = 100
+        given arbTime: Arbitrary[Timepoint] = 
+            // Limit range to encourage overlap b/w regional rounds in sequence and grouping.
+            Gen.choose(0, maxTime).map(Timepoint.unsafe).toArbitrary
+
+        def mygen = for {
+            (seq, optLocusGrouping, exclusions) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt.unsafe(maxTime / 2))
+            regionalTimes = seq.regionRounds.map(_.time).toList.toSet
+            locusTimes = seq.locusRounds.map(_.time).toSet
+            (modLocusGrouping, altMessagesTests) <- {
+                optLocusGrouping match {
+                    case None => Gen.oneOf(
+                        Gen.const(None -> ().asRight), 
+                        {
+                            val gen = for {
+                                ts <- Gen.nonEmptyListOf(arbitrary[Timepoint])
+                                r <- Gen.oneOf(regionalTimes)
+                            } yield NonEmptyList.one(LocusGroup(r, ts.toNel.get.toNes))
+                            gen.map{ g => 
+                                val numExtra = g.head.locusTimepoints.size
+                                val f = { (_: String).startsWith(s"$numExtra timepoint(s) in locus grouping and not found as locus imaging timepoints") }
+                                g.some -> NonEmptyList.one("Extra in grouping 1" -> f).asLeft[Unit]
+                            }
+                        }
+                    )
+                    case Some(groups) => Gen.oneOf(
+                        Gen.const{
+                            val prefix = s"${locusTimes.size} locus timepoint(s) in imaging sequence and not found in locus grouping"
+                            (None, NonEmptyList.one{ ("Extra in grouping 2", (_: String).startsWith(prefix)) }.asLeft[Unit])
+                        }, 
+                        if groups.length === 1 && groups.head.locusTimepoints.size === 1 
+                        then Gen.const{
+                            val prefix = "1 locus timepoint(s) in imaging sequence and not found in locus grouping"
+                            (None, NonEmptyList.one{ ("Uncovered in sequence 1", (_: String).startsWith(prefix)) }.asLeft[Unit])
+                        }
+                        else for {
+                            subtracted <- Gen.oneOf(locusTimes)
+                                .map{ t => groups.toList.foldRight(List.empty[LocusGroup]){
+                                    case (g, acc) => (g.locusTimepoints - t).toNes.fold(acc)(ts => g.copy(locusTimepoints = ts) :: acc)
+                                } }
+                            subtractedAndAdded <- subtracted.toList.traverse{ g => 
+                                arbitrary[Timepoint]
+                                    .suchThat(t => !locusTimes.contains(t))
+                                    .map(t => g.copy(locusTimepoints = g.locusTimepoints.add(t)))
+                            }
+                            missingPointTests = NonEmptyList.of(
+                                ("Uncovered in sequence 2", (_: String).startsWith("1 locus timepoint(s) in imaging sequence and not found in locus grouping")), 
+                                ("Extra in grouping 4", (_: String).startsWith(s"${subtractedAndAdded.length} timepoint(s) in locus grouping and not found as locus imaging timepoints"))
+                            )
+                        } yield (subtractedAndAdded.toNel.get.some, missingPointTests.asLeft[Unit])
+                    )
+                }
+            }
+            semantic <- Gen.option(arbitrary[RegionGrouping.Semantic])
+            regionGroups <- genValidParitionForRegionGrouping(seq)
+        } yield (seq, modLocusGrouping, semantic, regionGroups, exclusions, altMessagesTests)
+        
+        forAll (mygen, arbitrary[NonnegativeReal], minSuccessful(10000)) {
+            case ((seq, optLocusGrouping, semantic, regionGroups, exclusions, altMessagesTests), threshold) =>
+                val baseData: Map[String, ujson.Value] = {
+                    val records: NonEmptyList[ujson.Obj] = 
+                        Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
+                    val (sem, extra) = semantic match {
+                        case None => "Trivial" -> List()
+                        case Some(s) => s.toString -> List("groups" -> regionGroupingToJson(regionGroups.map(_.toList)))
+                    }
+                    val regionGroupingJsonData = ujson.Obj(
+                        "semantic" -> ujson.Str(sem), 
+                        (List("min_spot_dist" -> ujson.Num(threshold)) ++ extra)*,
+                    )
+                    Map("imagingRounds" -> ujson.Arr(records.toList*), "regionGrouping" -> regionGroupingJsonData)
+                }
+                val data: Map[String, ujson.Value] = addLocusGroupingAndExclusions(baseData, optLocusGrouping, exclusions)
+
+                (ImagingRoundsConfiguration.fromJsonMap(data), altMessagesTests) match {
+                    case (Right(_), Right(_)) => succeed
+                    case (Right(_), Left(tests)) => 
+                        println(s"DATA (below)\n${write(data, indent = 4)}")
+                        fail(s"Got parse success when expecting failure(s) for these reason(s): ${tests.map(_._1).mkString_("; ")}")
+                    case (Left(messages), Right(_)) => 
+                        println(s"MESSAGES: ${messages.mkString_("; ")}")
+                        println(s"DATA (below)\n${write(data, indent = 4)}")
+                        fail(s"Expected parse success but got failure(s): ${messages.mkString_("; ")}")
+                    case (Left(messages), Left(tests)) => 
+                        val unmetChecks = tests.filterNot{ (testName, check) => messages.count(check) === 1 }.map(_._1)
+                        if unmetChecks.isEmpty then succeed else {
+                            println(s"MESSAGES: ${messages.mkString_("; ")}")
+                            println(s"DATA (below)\n${write(data, indent = 4)}")
+                            fail(s"Unmet check(s): ${unmetChecks.mkString("; ")}")
+                        }
+                }
+        }
     }
 
     test("Each of the locus grouping's keys must be a regional round timepoint from the imaging sequence") { pending }
 
     test("Any timepoint to exclude from tracing must be a timepoint in the imaging sequence.") { pending }
-
-    test("Configuration IS allowed to have regional rounds in sequence that have no loci in locus grouping, #270.") { pending }
     
     given rwForSeq: ReadWriter[ImagingSequence] = 
             ImagingRoundsConfiguration.rwForImagingSequence(using ImagingRound.rwForImagingRound)
@@ -350,7 +437,7 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
     }
 
     def genValidSeqAndLocusGroupOptAndExclusions(maxNumRounds: PositiveInt): Gen[(ImagingSequence, Option[NonEmptyList[LocusGroup]], Set[Timepoint])] = for {
-        seq <- genTimeValidSequence(Gen.choose(1, 10).map(PositiveInt.unsafe))
+        seq <- genTimeValidSequence(Gen.choose(1, maxNumRounds).map(PositiveInt.unsafe))
         locusGroupingOpt: Option[NonEmptyList[LocusGroup]] <- seq.locusRounds.toNel match {
             case None => Gen.const(None)
             case Some(loci) => 
@@ -385,7 +472,15 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
             .flatMap(Gen.pick(_, sequence.allTimepoints.toList))
             .map(_.toSet)
 
-    private def genValidLocusGrouping(sequence: ImagingSequence): Gen[NonEmptyList[LocusGroup]] = ???
+    private def genValidParitionForLocusGrouping(sequence: ImagingSequence): Gen[Option[NonEmptyList[NonEmptySet[Timepoint]]]] = {
+        val loci = sequence.locusRounds
+        if loci.isEmpty then Gen.const(None)
+        else Gen.option{ 
+            Gen.choose(1, loci.length)
+                .flatMap{ k => Random.shuffle(loci).toList.splitAt(k) }
+                .map{ (g1, g2) => List(g1, g2).flatMap(_.toNel).map(_.map(_.time).toNes).toNel.get }
+        }
+    }
 
     private def genValidParitionForRegionGrouping(sequence: ImagingSequence): Gen[NonEmptyList[NonEmptySet[Timepoint]]] = {
         for {
