@@ -89,7 +89,7 @@ object ImagingRoundsConfiguration:
             val locusTimesInSequence = sequence.locusRounds.map(_.time).toSet
             val subsetNel = (uniqueTimepointsInLocusGrouping -- locusTimesInSequence).toList match {
                 case Nil => ().validNel
-                case ts => s"${ts.length} timepoints in locus grouping and not found as locus imaging timepoints: ${ts.sorted.mkString(", ")}".invalidNel
+                case ts => s"${ts.length} timepoint(s) in locus grouping and not found as locus imaging timepoints: ${ts.sorted.mkString(", ")}".invalidNel
             }
             val supersetNel = (locusTimesInSequence -- uniqueTimepointsInLocusGrouping).toList match {
                 case Nil => ().validNel
