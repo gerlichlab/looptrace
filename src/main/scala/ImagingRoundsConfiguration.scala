@@ -98,10 +98,9 @@ object ImagingRoundsConfiguration:
             (subsetNel, supersetNel)
         }
         val locusGroupTimesAreRegionTimesNel = {
-            locusGrouping.map(_.regionalTimepoint).toList.flatMap(t => sequence.regionRounds.find(_.time === t)) match {
-                case Nil => ().validNel
-                case ts => s"${ts.size} timepoint(s) as keys in locus grouping that aren't regional.".invalidNel
-            }
+            val nonRegional = locusGrouping.map(_.regionalTimepoint) -- sequence.regionRounds.map(_.time).toList
+            if nonRegional.isEmpty then ().validNel 
+            else s"${nonRegional.size} timepoint(s) as keys in locus grouping that aren't regional.".invalidNel
         }
         val (regionGroupingDisjointNel, regionGroupingSubsetNel, regionGroupingSupersetNel) = regionGrouping match {
             case g: RegionGrouping.Trivial => 
@@ -118,7 +117,7 @@ object ImagingRoundsConfiguration:
                 val supersetNel = checkTimesSubset(uniqueGroupedTimes)(uniqueRegionalTimes, "regionals in imaging sequence (rel. to regional grouping)")
                 (disjointNel, subsetNel, supersetNel)
         }
-        (tracingSubsetNel, locusTimeSubsetNel, locusTimeSupersetNel, regionGroupingDisjointNel, regionGroupingSubsetNel, regionGroupingSupersetNel)
+        (tracingSubsetNel, locusTimeSubsetNel, locusTimeSupersetNel, locusGroupTimesAreRegionTimesNel, regionGroupingDisjointNel, regionGroupingSubsetNel, regionGroupingSupersetNel)
             .tupled
             .map(_ => ImagingRoundsConfiguration(sequence, locusGrouping, regionGrouping, tracingExclusions))
             .toEither
