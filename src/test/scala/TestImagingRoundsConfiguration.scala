@@ -465,7 +465,54 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
         }
     }
 
-    test("Any timepoint to exclude from tracing must be a timepoint in the imaging sequence.") { pending }
+    test("Any timepoint to exclude from tracing must be a timepoint in the imaging sequence.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        val maxTime = 100
+        given arbTime: Arbitrary[Timepoint] = 
+            // Limit range to encourage overlap b/w regional rounds in sequence and grouping.
+            Gen.choose(0, maxTime).map(Timepoint.unsafe).toArbitrary
+
+        def mygen = for {
+            (seq, optLocusGrouping, _) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt.unsafe(maxTime / 2))
+            optSemantic <- Gen.option(arbitrary[RegionGrouping.Semantic])
+            regionGroups <- genValidParitionForRegionGrouping(seq)
+            exclusions <- arbitrary[List[Timepoint]].suchThat(_.exists(t => !seq.allTimepoints.contains(t)))
+        } yield (seq, optLocusGrouping, optSemantic, regionGroups, exclusions.toSet)
+
+        forAll (mygen, arbitrary[NonnegativeReal]) { 
+            case ((seq, optLocusGrouping, optSemantic, regionGroups, exclusions), threshold) => 
+                val baseData: Map[String, ujson.Value] = {
+                    val records: NonEmptyList[ujson.Obj] = 
+                        Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
+                    val (sem, extra) = optSemantic match {
+                        case None => "Trivial" -> List()
+                        case Some(s) => s.toString -> List("groups" -> regionGroupingToJson(regionGroups.map(_.toList)))
+                    }
+                    val regionGroupingJsonData = ujson.Obj(
+                        "semantic" -> ujson.Str(sem), 
+                        (List("min_spot_dist" -> ujson.Num(threshold)) ++ extra)*,
+                    )
+                    Map("imagingRounds" -> ujson.Arr(records.toList*), "regionGrouping" -> regionGroupingJsonData)
+                }
+                val data: Map[String, ujson.Value] = addLocusGroupingAndExclusions(baseData, optLocusGrouping, exclusions)
+
+                ImagingRoundsConfiguration.fromJsonMap(data) match {
+                    case Right(_) => 
+                        println(s"DATA (below)\n${write(data, indent = 4)}")
+                        fail("Parse succeeded when failure was expected!")
+                    case Left(messages) => 
+                        val unknown = exclusions -- seq.allTimepoints.toList
+                        val expectMessage = s"Unknown timepoint(s) (tracing exclusions): ${unknown.toList.sorted.map(_.show).mkString(", ")}"
+                        val numMatchMessages = messages.count(_ === expectMessage).toInt
+                        if numMatchMessages === 1 then succeed
+                        else {
+                            println(s"MESSAGES: ${messages.mkString_("; ")}")
+                            println(s"DATA (below)\n${write(data, indent = 4)}")
+                            fail(s"Expected exactly 1 matching message ($expectMessage) but got $numMatchMessages. Data and messages are above.")
+                        }
+                }
+        }
+    }
     
     given rwForSeq: ReadWriter[ImagingSequence] = 
             ImagingRoundsConfiguration.rwForImagingSequence(using ImagingRound.rwForImagingRound)
