@@ -52,7 +52,7 @@ object ImagingRoundsConfiguration:
     def checkTimesSubset(knownTimes: Set[Timepoint])(times: Set[Timepoint], context: String): ValidatedNel[String, Unit] = 
         (times -- knownTimes).toList match {
             case Nil => ().validNel
-            case unknown => s"Unknown timepoint(s) in $context: ${unknown.map(_.show).mkString(", ")}".invalidNel
+            case unknown => s"Unknown timepoint(s) ($context): ${unknown.sorted.map(_.show).mkString(", ")}".invalidNel
         }
 
     /**
@@ -103,19 +103,22 @@ object ImagingRoundsConfiguration:
                 case ts => s"${ts.size} timepoint(s) as keys in locus grouping that aren't regional.".invalidNel
             }
         }
-        val (regionGroupingSubsetNel, regionGroupingSupersetNel) = regionGrouping match {
+        val (regionGroupingDisjointNel, regionGroupingSubsetNel, regionGroupingSupersetNel) = regionGrouping match {
             case g: RegionGrouping.Trivial => 
                 // In the trivial regionGrouping case, we have no more validation work to do.
-                ().validNel -> ().validNel
+                (().validNel, ().validNel, ().validNel)
             case g: RegionGrouping.Nontrivial => 
                 // When the regionGrouping's nontrivial, check for set equivalance of timepoints b/w imaging sequence and regional grouping.
-                val groupedTimes = g.groups.reduce(_ ++ _).toList.toSet
-                val regionalTimes = sequence.regionRounds.map(_.time).toList.toSet
-                val subsetNel = checkTimesSubset(regionalTimes)(groupedTimes, "regional grouping (rel. to regionals in imaging sequence)")
-                val supersetNel = checkTimesSubset(groupedTimes)(regionalTimes, "regionals in imaging sequence (rel. to regional grouping)")
-                subsetNel -> supersetNel
+                val uniqueGroupedTimes = g.groups.reduce(_ ++ _).toList.toSet
+                val uniqueRegionalTimes = sequence.regionRounds.map(_.time).toList.toSet
+                val disjointNel = g.groups.foldLeft(true -> Set.empty[Timepoint]){ 
+                    case ((p, acc), ts) => (p && (acc & ts.toSortedSet).isEmpty, acc ++ ts.toSortedSet)
+                }._1.either("Regional grouping's subsets are not disjoint!", ()).toValidatedNel
+                val subsetNel = checkTimesSubset(uniqueRegionalTimes)(uniqueGroupedTimes, "regional grouping (rel. to regionals in imaging sequence)")
+                val supersetNel = checkTimesSubset(uniqueGroupedTimes)(uniqueRegionalTimes, "regionals in imaging sequence (rel. to regional grouping)")
+                (disjointNel, subsetNel, supersetNel)
         }
-        (tracingSubsetNel, locusTimeSubsetNel, locusTimeSupersetNel, regionGroupingSubsetNel, regionGroupingSupersetNel)
+        (tracingSubsetNel, locusTimeSubsetNel, locusTimeSupersetNel, regionGroupingDisjointNel, regionGroupingSubsetNel, regionGroupingSupersetNel)
             .tupled
             .map(_ => ImagingRoundsConfiguration(sequence, locusGrouping, regionGrouping, tracingExclusions))
             .toEither
@@ -193,15 +196,16 @@ object ImagingRoundsConfiguration:
                                 case s => s"Illegal value for regional grouping semantic: $s".asLeft
                             })
                             .toValidatedNel
-                    val groupsNel: ValidatedNel[String, Option[NonEmptyList[NonEmptySet[Timepoint]]]] = currentSection.get("groups") match {
-                        case None => None.validNel
-                        case Some(subdata) => safeReadAs[List[List[Int]]](subdata)
-                            .flatMap(_.traverse(_.traverse(Timepoint.fromInt))) // Lift all ints to timepoints.
-                            .flatMap(liftToNel(_, "regional grouping".some)) // Entire collection must be nonempty.
-                            .flatMap(_.traverse(liftToNes(_, "regional group".some))) // Each group must be nonempty.
-                            .map(_.some)
-                            .toValidatedNel
-                    }
+                    val groupsNel: ValidatedNel[String, Option[NonEmptyList[NonEmptySet[Timepoint]]]] = 
+                        currentSection.get("groups") match {
+                            case None => None.validNel
+                            case Some(subdata) => safeReadAs[List[List[Int]]](subdata)
+                                .flatMap(_.traverse(_.traverse(Timepoint.fromInt))) // Lift all ints to timepoints.
+                                .flatMap(liftToNel(_, "regional grouping".some)) // Entire collection must be nonempty.
+                                .flatMap(_.traverse(liftToNes(_, "regional group".some))) // Each group must be nonempty.
+                                .map(_.some)
+                                .toValidatedNel
+                        }
                     (regionThresholdNel, semanticNel, groupsNel).tupled.toEither.flatMap{
                         case (threshold, (_, None), None) => (threshold, None).asRight
                         case (threshold, (_, Some(semantic)), Some(groups)) => (threshold, (semantic -> groups).some).asRight
@@ -279,7 +283,7 @@ object ImagingRoundsConfiguration:
                 .toNel
                 .toRight("Empty collection can't parse as group of regional imaging rounds!")
                 .flatMap(_.traverse(_.safeInt.flatMap(Timepoint.fromInt)))
-                .flatMap(safeNelToNes)
+                .flatMap(ts => liftToNes(ts.toList))
                 .fold(
                     repeats => throw new ujson.Value.InvalidData(json, s"Repeat values for group of regional imaging rounds: $repeats"), 
                     identity
@@ -337,7 +341,7 @@ object ImagingRoundsConfiguration:
             val unique = candidate.size.toInt
             val total = nel.length
             (unique === total).either(
-                s"$total total - $unique unique = ${total - unique} repeated items" ++ context.fold("")(ctx => s"for $ctx"), 
+                s"$total total - $unique unique = ${total - unique} repeated items" ++ context.fold("")(ctx => s" for $ctx"), 
                 candidate
                 )
         )
