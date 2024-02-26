@@ -14,6 +14,8 @@ import napari
 import numpy as np
 import pandas as pd
 
+from gertils import ExtantFile
+
 from looptrace.ImageHandler import ImageHandler
 from looptrace.SpotPicker import SpotPicker, compute_downsampled_image
 from looptrace.image_processing_functions import subtract_crosstalk
@@ -119,13 +121,18 @@ def napari_view(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Visualise preview spot detection in given position.")
-    parser.add_argument("config_path", help="Config file path")
+    parser.add_argument("rounds_config", type=ExtantFile.from_string, help="Imaging rounds config file path")
+    parser.add_argument("params_config", type=ExtantFile.from_string, help="Looptrace parameters config file path")
     parser.add_argument("image_path", help="Path to folder with images to read.")
     parser.add_argument('--position', type=int, help='(Optional): Index of position to view.', default=0)
     args = parser.parse_args()
         
     logger.info(f"Building image handler: {args.image_path}")
-    H = ImageHandler(config_path=args.config_path, image_path=args.image_path)
+    H = ImageHandler(
+        rounds_config=args.rounds_config,
+        params_config=args.params_config, 
+        image_path=args.image_path,
+        )
     S = SpotPicker(H)
     params = S.detection_parameters
     for (i, frame), ch in S.iter_frames_and_channels():
