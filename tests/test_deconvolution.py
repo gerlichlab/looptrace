@@ -1,8 +1,12 @@
 """Tests for deconvolution step of pipeline"""
 
+import json
 import hypothesis as hyp
 import pytest
 import yaml
+
+from gertils import ExtantFile, ExtantFolder
+
 from looptrace.Deconvolver import Deconvolver, DECON_CHANNEL_KEY, DECON_ITER_KEY, NON_DECON_CHANNEL_KEY
 from looptrace.ImageHandler import ImageHandler
 from looptrace.exceptions import MissingInputException
@@ -17,8 +21,13 @@ def deconvolver(tmp_path, prepped_minimal_config_data):
     conf_data = {**prepped_minimal_config_data}
     with open(conf_path, 'w') as fh:
         yaml.dump(conf_data, fh)
-    imgs_path = prep_images_folder(folder=conf_path.parent, create=True)
-    H = ImageHandler(config_path=conf_path, image_path=imgs_path)
+    rounds_config = tmp_path / "rounds.json"
+    with open(rounds_config, "w") as fh:
+        json.dump({}, fh)
+    rounds_config = ExtantFile(rounds_config)
+    params_config = ExtantFile(conf_path)
+    imgs_path = ExtantFolder(prep_images_folder(folder=conf_path.parent, create=True))
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, image_path=imgs_path)
     return Deconvolver(H)
 
 
