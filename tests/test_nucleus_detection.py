@@ -15,6 +15,8 @@ from numpy.random import uniform as runif
 import pytest
 import yaml
 
+from gertils import ExtantFile
+
 from looptrace import ArrayDimensionalityError, MissingImagesError
 from looptrace.ImageHandler import ImageHandler
 from looptrace.NucDetector import NucDetector, SegmentationMethod
@@ -41,11 +43,18 @@ def complete_config_data(tmp_path, base_conf) -> dict:
     return conf_data
 
 
-def get_nuc_detector(conf_data: dict, conf_file: Path, images_folder: Optional[Path] = None) -> NucDetector:
+def get_nuc_detector(
+    rounds_config: ExtantFile,
+    conf_data: dict, 
+    conf_file: Path, 
+    *, 
+    images_folder: Optional[Path] = None, 
+    ) -> NucDetector:
     """Write config data to file, then parse to nuclei detector, through image handler."""
     with open(conf_file, "w") as fh:
         yaml.dump(conf_data, fh)
-    return NucDetector(ImageHandler(conf_file, images_folder))
+    params_config = ExtantFile(conf_file)
+    return NucDetector(ImageHandler(rounds_config=rounds_config, params_config=params_config, image_path=images_folder))
 
 
 @pytest.mark.parametrize(
@@ -60,10 +69,10 @@ def get_nuc_detector(conf_data: dict, conf_file: Path, images_folder: Optional[P
         ]
     ]
     )
-def test_accessing_certain_attrs__is_defined_iff_certain_3d_status(complete_config_data, config_update, attr_name, expect, tmp_path):
+def test_accessing_certain_attrs__is_defined_iff_certain_3d_status(dummy_rounds_config, complete_config_data, config_update, attr_name, expect, tmp_path):
     conf_data = copy.deepcopy(complete_config_data)
     conf_data.update(config_update)
-    N = get_nuc_detector(conf_data=conf_data, conf_file=tmp_path / "conf.yaml")
+    N = get_nuc_detector(rounds_config=dummy_rounds_config, conf_data=conf_data, conf_file=tmp_path / "conf.yaml")
     assert N.do_in_3d == config_update[NucDetector.KEY_3D]
     assert N.do_in_3d == conf_data[NucDetector.KEY_3D]
     run = lambda: getattr(N, attr_name)
@@ -75,9 +84,9 @@ def test_accessing_certain_attrs__is_defined_iff_certain_3d_status(complete_conf
         assert run() == expect
 
 
-def test_position_names_images_list_relationship(complete_config_data, tmp_path):
+def test_position_names_images_list_relationship(dummy_rounds_config, complete_config_data, tmp_path):
     input_key = complete_config_data["nuc_input_name"]
-    N = get_nuc_detector(complete_config_data, tmp_path / "conf.yaml")
+    N = get_nuc_detector(rounds_config=dummy_rounds_config, conf_data=complete_config_data, conf_file=tmp_path / "conf.yaml")
     # Initially, the input images don't exist, and so there are no position names.
     with pytest.raises(MissingImagesError):
         N.input_images
@@ -120,10 +129,10 @@ def test_position_names_images_list_relationship(complete_config_data, tmp_path)
     ]
     )
 def test_bad_image_dimensionality__generates_expected_error__enforcing_single_timepoint_issue_250(
-    complete_config_data, img_by_name, expect, tmp_path,
+    dummy_rounds_config, complete_config_data, img_by_name, expect, tmp_path,
     ):
     input_key = complete_config_data["nuc_input_name"]
-    N = get_nuc_detector(complete_config_data, tmp_path / "conf.yaml")
+    N = get_nuc_detector(rounds_config=dummy_rounds_config, conf_data=complete_config_data, conf_file=tmp_path / "conf.yaml")
     img_names, img_arrays = zip(*sorted(img_by_name.items(), key=itemgetter(0)))
     N.image_handler.images = {}
     N.image_handler.images[input_key] = img_arrays
@@ -148,13 +157,19 @@ def test_bad_image_dimensionality__generates_expected_error__enforcing_single_ti
 # NB: for this test we suppress the health check about function-scoped fixture because we clear the 
 #     images folder at the end, which should make new data examples independent.
 #     We also set deadline=None since the first run will likely take longer, as folders are made.
-def test_nuc_detector__generates_image_of_proper_dimension(complete_config_data, config_update, num_pos, tmp_path):
+def test_nuc_detector__generates_image_of_proper_dimension(
+    dummy_rounds_config, 
+    complete_config_data, 
+    config_update, 
+    num_pos, 
+    tmp_path,
+    ):
     """This tests the generation of images for nuclei segmentation. Cellpose expects single-channel."""
     # Prepare the config data and the nucleus detector instance.
     conf_data = copy.deepcopy(complete_config_data)
     conf_data.update(config_update)
     input_key = conf_data["nuc_input_name"]
-    N = get_nuc_detector(conf_data=conf_data, conf_file=tmp_path / "conf.yaml")
+    N = get_nuc_detector(rounds_config=dummy_rounds_config, conf_data=conf_data, conf_file=tmp_path / "conf.yaml")
     
     # pretest to ensure we have expected 3D setting
     assert N.do_in_3d == config_update[NucDetector.KEY_3D]

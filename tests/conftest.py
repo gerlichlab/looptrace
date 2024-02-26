@@ -1,8 +1,13 @@
 """Test fixtures and utilities"""
 
-import os
+import json
 from pathlib import Path
 import pytest
+
+from gertils import ExtantFile
+
+__author__ = "Vince Reuter"
+__credits__ = ["Vince Reuter"]
 
 PIPE_NAME = "looptrace_pipeline"
 
@@ -10,6 +15,14 @@ PIPE_NAME = "looptrace_pipeline"
 #################################################################
 # Fixtures
 #################################################################
+@pytest.fixture
+def dummy_rounds_config(tmp_path) -> ExtantFile:
+    fp = tmp_path / "rounds.json"
+    with open(fp, "w") as fh:
+        json.dump({}, fh)
+    return ExtantFile(fp)
+
+
 @pytest.fixture
 def images_all_path(tmp_path):
     return tmp_path / "images_all"
