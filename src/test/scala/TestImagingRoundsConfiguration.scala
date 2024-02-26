@@ -83,7 +83,7 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
                     "imagingRounds" -> ujson.Arr(records.toList*),
                     "regionGrouping" -> ujson.Obj(
                         "semantic" -> ujson.Str(semantic), 
-                        "min_spot_dist" -> ujson.Num(rawThreshold),
+                        "minimumPixelLikeSeparation" -> ujson.Num(rawThreshold),
                         "groups" -> regionGroupingToJson(regionGrouping.map(_.toList))
                     )
                 )
@@ -120,7 +120,7 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
             val baseData = {
                 val records: NonEmptyList[ujson.Obj] = Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
                 val regionGroupingJsonData = List(
-                    optRawThreshold.map(t => "min_spot_dist" -> ujson.Num(t)),
+                    optRawThreshold.map(t => "minimumPixelLikeSeparation" -> ujson.Num(t)),
                     optRegionGrouping.map(g => "groups" -> regionGroupingToJson(g.map(_.toList)))
                 ).flatten match {
                     case Nil => throw new IllegalStateException("Either optional threshold or optional grouping is empty!")
@@ -163,7 +163,7 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
                 val regionGroupingJsonData = ujson.Obj(
                     "semantic" -> ujson.Str(semantic),
                     List(
-                        optRawThreshold.map(t => "min_spot_dist" -> ujson.Num(t)), 
+                        optRawThreshold.map(t => "minimumPixelLikeSeparation" -> ujson.Num(t)), 
                         optRegionGrouping.map(g => "groups" -> regionGroupingToJson(g.map(_.toList))),
                         ).flatten*
                 )
@@ -210,7 +210,7 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
             val baseData: Map[String, ujson.Value] = {
                 val records: NonEmptyList[ujson.Obj] = 
                     Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
-                val regionGroupingJsonData = ujson.Obj("semantic" -> ujson.Str(semantic), "min_spot_dist" -> ujson.Num(rawThreshold))
+                val regionGroupingJsonData = ujson.Obj("semantic" -> ujson.Str(semantic), "minimumPixelLikeSeparation" -> ujson.Num(rawThreshold))
                 Map("imagingRounds" -> ujson.Arr(records.toList*), "regionGrouping" -> regionGroupingJsonData)
             }
             val data: Map[String, ujson.Value] = addLocusGroupingAndExclusions(baseData, locusGroupingOpt, exclusions)
@@ -291,7 +291,7 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
                     val regionGroupingJsonData = ujson.Obj(
                         "semantic" -> ujson.Str(semantic), 
                         "groups" -> regionGroupingToJson(regionGroups.map(_.toList)),
-                        "min_spot_dist" -> ujson.Num(threshold)
+                        "minimumPixelLikeSeparation" -> ujson.Num(threshold)
                     )
                     Map("imagingRounds" -> ujson.Arr(records.toList*), "regionGrouping" -> regionGroupingJsonData)
                 }
@@ -383,7 +383,7 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
                     }
                     val regionGroupingJsonData = ujson.Obj(
                         "semantic" -> ujson.Str(sem), 
-                        (List("min_spot_dist" -> ujson.Num(threshold)) ++ extra)*,
+                        (List("minimumPixelLikeSeparation" -> ujson.Num(threshold)) ++ extra)*,
                     )
                     Map("imagingRounds" -> ujson.Arr(records.toList*), "regionGrouping" -> regionGroupingJsonData)
                 }
@@ -436,7 +436,7 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
                     }
                     val regionGroupingJsonData = ujson.Obj(
                         "semantic" -> ujson.Str(sem), 
-                        (List("min_spot_dist" -> ujson.Num(threshold)) ++ extra)*,
+                        (List("minimumPixelLikeSeparation" -> ujson.Num(threshold)) ++ extra)*,
                     )
                     Map("imagingRounds" -> ujson.Arr(records.toList*), "regionGrouping" -> regionGroupingJsonData)
                 }
@@ -490,7 +490,7 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
                     }
                     val regionGroupingJsonData = ujson.Obj(
                         "semantic" -> ujson.Str(sem), 
-                        (List("min_spot_dist" -> ujson.Num(threshold)) ++ extra)*,
+                        (List("minimumPixelLikeSeparation" -> ujson.Num(threshold)) ++ extra)*,
                     )
                     Map("imagingRounds" -> ujson.Arr(records.toList*), "regionGrouping" -> regionGroupingJsonData)
                 }

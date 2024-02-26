@@ -27,7 +27,8 @@ __credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 
 
 def workflow(
-    config_file: ExtantFile, 
+    rounds_config: ExtantFile,
+    params_config: ExtantFile, 
     images_folder: ExtantFolder, 
     *, 
     save_images: bool = True, 
@@ -40,7 +41,9 @@ def workflow(
 
     Parameters
     ----------
-    config_file : gertils.ExtantFile
+    rounds_config : gertils.ExtantFile
+        Path to the configuration file for declaration of imaging rounds
+    params_config : gertils.ExtantFile
         Path to the main looptrace processing configuration file
     images_folder : gertils.ExtantFolder
         Path to an experiment's main images folder
@@ -67,7 +70,7 @@ def workflow(
     
     prep_image_to_add = np.array if do_qc else (lambda img: img)
 
-    H = ImageHandler(config_file, images_folder)
+    H = ImageHandler(rounds_config, params_config, images_folder)
     N = NucDetector(H)
     
     # Gather the images to use and determine what to do for each FOV.
@@ -127,12 +130,13 @@ def workflow(
     shutdown_napari()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Extract experimental PSF from bead images.", 
+        description="Label detected nuclei with masks / mask images, optionally performing QC.", 
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         )
-    parser.add_argument("config_file", type=ExtantFile.from_string, help="Config file path")
+    parser.add_argument("rounds_config", type=ExtantFile.from_string, help="Imaging rounds config file path")
+    parser.add_argument("params_config", type=ExtantFile.from_string, help="Looptrace parameters config file path")
     parser.add_argument("images_folder", type=ExtantFolder.from_string, help="Path to folder with images to read.")
     exec_flow = parser.add_mutually_exclusive_group(required=True)
     exec_flow.add_argument("--save-images", action="store_true", help="Save comuted mask images.")
@@ -143,7 +147,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     workflow(
-        config_file=args.config_file, 
+        rounds_config=args.rounds_config,
+        params_config=args.params_config, 
         images_folder=args.images_folder, 
         save_images=args.save_images, 
         do_qc=args.qc, 

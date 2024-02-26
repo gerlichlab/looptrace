@@ -241,9 +241,9 @@ class MultiprocessingPoolSpecification:
     n_workers: int    
 
 
-def coarse_correction_workflow(config_file: ExtantFile, images_folder: ExtantFolder):
+def coarse_correction_workflow(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder):
     """The workflow for the initial (and sometimes only), coarse, drift correction."""
-    D = Drifter(image_handler=ImageHandler(config_file, images_folder))
+    D = Drifter(image_handler=ImageHandler(rounds_config, params_config, images_folder))
     try:
         pos_halt_point = D.config["dc_pos_limit"]
     except KeyError:
@@ -279,9 +279,9 @@ def coarse_correction_workflow(config_file: ExtantFile, images_folder: ExtantFol
     return outfile
 
 
-def fine_correction_workflow(config_file: ExtantFile, images_folder: ExtantFolder) -> str:
+def fine_correction_workflow(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> str:
     """The workflow for the second, optional, fine drift correction"""
-    D = Drifter(image_handler=ImageHandler(config_file, images_folder))
+    D = Drifter(image_handler=ImageHandler(rounds_config=rounds_config, params_config=params_config, image_path=images_folder))
     print("Computing fine drifts")
     compute_fine_drifts(D)
     all_drifts = D.read_all_fine_drifts() # Read each per-FOV file, aggregating to single table

@@ -50,7 +50,8 @@ def iterate_over_select_pos_subset(S: SpotPicker, positions: Optional[Set[int]] 
 
 
 def workflow(
-    config_file: ExtantFile, 
+    rounds_config: ExtantFile, 
+    params_config: ExtantFile, 
     images_folder: ExtantFolder, 
     image_save_path: Optional[ExtantFolder] = None,
     *,
@@ -61,7 +62,12 @@ def workflow(
     if not interactive and not save_projections:
         raise ValueError("Detected spot visualisation must be for interactivity or for image saving; set to True at least interactive or save_projections.")
 
-    H = ImageHandler(config_path=config_file, image_path=images_folder, image_save_path=image_save_path)
+    H = ImageHandler(
+        rounds_config=rounds_config, 
+        params_config=params_config, 
+        images_folder=images_folder, 
+        image_save_path=image_save_path,
+        )
     S = SpotPicker(H)
     print(f"Reading ROIs file: {H.nuclei_filtered_spots_file_path}")
     rois = read_table_pandas(H.nuclei_filtered_spots_file_path)
@@ -115,7 +121,8 @@ if __name__ == "__main__":
         description="Visualise the detected spot ROIs.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         )
-    parser.add_argument("config_path", type=ExtantFile.from_string, help="Config file path")
+    parser.add_argument("rounds_config", type=ExtantFile.from_string, help="Imaging rounds config file path")
+    parser.add_argument("params_config", type=ExtantFile.from_string, help="Looptrace parameters config file path")
     parser.add_argument("image_path", type=ExtantFolder.from_string, help="Path to folder with images to read.")
     parser.add_argument("--image_save_path", type=ExtantFolder.from_string, help="(Optional): Path to folder to save images to.")
     position_subset_spec = parser.add_mutually_exclusive_group()
@@ -134,7 +141,8 @@ if __name__ == "__main__":
         if positions else "All positions will be used for spot detection visualisation."
     print(pos_use_msg)
     workflow(
-        config_file=args.config_path, 
+        rounds_config=args.rounds_config,
+        params_config=args.params_config, 
         images_folder=args.image_path, 
         image_save_path=args.image_save_path, 
         interactive=args.interactive,

@@ -16,8 +16,9 @@ import mouse.boolean.*
 import scopt.OParser
 
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
-import at.ac.oeaw.imba.gerlich.looptrace.space.{ Point3D, XCoordinate, YCoordinate, ZCoordinate }
 import at.ac.oeaw.imba.gerlich.looptrace.LabelAndFilterTracesQC.ParserConfig.traceIdKey
+import at.ac.oeaw.imba.gerlich.looptrace.space.{ Point3D, XCoordinate, YCoordinate, ZCoordinate }
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
 
 /** Label points underlying traces with various QC pass-or-fail values. */
 object LabelAndFilterTracesQC:
@@ -28,7 +29,8 @@ object LabelAndFilterTracesQC:
     
     /** Deinition of the command-line interface */
     case class CliConfig(
-        traces: os.Path = null,
+        configuration: ImagingRoundsConfiguration = null, // unconditionally required
+        traces: os.Path = null, // unconditionally required
         maxDistanceToRegionCenter: DistanceToRegion = DistanceToRegion(NonnegativeReal(Double.MaxValue)),
         minSignalToNoise: SignalToNoise = SignalToNoise(PositiveReal(1e-10)),
         maxSigmaXY: SigmaXY = SigmaXY(PositiveReal(Double.MaxValue)),
@@ -44,7 +46,7 @@ object LabelAndFilterTracesQC:
         fovColumn: String,
         regionColumn: String,
         traceIdColumn: String,
-        probeNameColumn: String,
+        timeColumn: String,
         xySigmaColumn: String, 
         zSigmaColumn: String, 
         zPointColumn: PointColumnZ,
@@ -60,7 +62,7 @@ object LabelAndFilterTracesQC:
     
     /** Helpers for working with the parser configuration */
     object ParserConfig:
-        val (fovKey, regionKey, traceIdKey, probeNameKey, xySigKey, zSigKey, zPtKey, yPtKey, xPtKey, zBoxKey, yBoxKey, xBoxKey, aKey, bgKey, refDistKey) = 
+        val (fovKey, regionKey, traceIdKey, timeKey, xySigKey, zSigKey, zPtKey, yPtKey, xPtKey, zBoxKey, yBoxKey, xBoxKey, aKey, bgKey, refDistKey) = 
             labelsOf[ParserConfig]
         
         /** Enable reading from and writing to JSON representation. */
@@ -69,7 +71,7 @@ object LabelAndFilterTracesQC:
                 fovKey -> ujson.Str(pc.fovColumn),
                 regionKey -> ujson.Str(pc.regionColumn),
                 traceIdKey -> ujson.Str(pc.traceIdColumn),
-                probeNameKey -> ujson.Str(pc.probeNameColumn),
+                timeKey -> ujson.Str(pc.timeColumn),
                 xySigKey -> ujson.Str(pc.xySigmaColumn),
                 zSigKey -> ujson.Str(pc.zSigmaColumn), 
                 zPtKey -> ujson.Str(pc.zPointColumn.get), 
@@ -86,7 +88,7 @@ object LabelAndFilterTracesQC:
                 val fovNel = safeExtractStr(fovKey)(json)
                 val regionNel = safeExtractStr(regionKey)(json)
                 val traceIdNel = safeExtractStr(traceIdKey)(json)
-                val probeNameNel = safeExtractStr(probeNameKey)(json)
+                val probeNameNel = safeExtractStr(timeKey)(json)
                 val xySigNel = safeExtractStr(xySigKey)(json)
                 val zSigNel = safeExtractStr(zSigKey)(json)
                 val zPtNel = safeExtract(zPtKey, PointColumnZ.apply)(json)
@@ -109,7 +111,7 @@ object LabelAndFilterTracesQC:
             fovColumn = "pos_index",
             regionColumn = "ref_frame",
             traceIdColumn = "trace_id",
-            probeNameColumn = "frame_name",
+            timeColumn = "frame",
             xySigmaColumn = "sigma_xy", 
             zSigmaColumn = "sigma_z", 
             zPointColumn = PointColumnZ("z"),
@@ -135,6 +137,10 @@ object LabelAndFilterTracesQC:
         val parser = OParser.sequence(
             programName(ProgramName), 
             head(ProgramName, VersionName), 
+            opt[ImagingRoundsConfiguration]("configuration")
+                .required()
+                .action((progConf, cliConf) => cliConf.copy(configuration = progConf))
+                .text("Path to file specifying the imaging rounds configuration"),
             opt[os.Path]("tracesFile")
                 .required()
                 .action((f, c) => c.copy(traces = f))
@@ -156,9 +162,6 @@ object LabelAndFilterTracesQC:
                 .required()
                 .action((r, c) => c.copy(maxSigmaZ = SigmaZ(r)))
                 .text("Maximum allowed standard deviation of Gaussian fit in z for a record to still be used to support traces"),
-            opt[Seq[String]]("exclusions")
-                .action((xs, c) => c.copy(probesToIgnore = xs.map(ProbeName.apply)))
-                .text("Names of probes to exclude from traces"),
             opt[os.Path]("parserConfig")
                 .action((f, c) => c.copy(parserConfig = f.some))
                 .validate(f => os.isFile(f).either(s"Alleged parser config isn't a file: $f", ()))
@@ -172,15 +175,15 @@ object LabelAndFilterTracesQC:
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
             case Some(opts) => 
                 val outfolder = opts.outputFolder.getOrElse(opts.traces.parent)
-                val conf: os.Path | ParserConfig = opts.parserConfig.getOrElse(ParserConfig.default)
+                val parserConfiguration: os.Path | ParserConfig = opts.parserConfig.getOrElse(ParserConfig.default)
                 workflow(
-                    conf, 
+                    opts.configuration,
+                    parserConfiguration, 
                     opts.traces, 
                     opts.maxDistanceToRegionCenter, 
                     opts.minSignalToNoise, 
                     opts.maxSigmaXY, 
                     opts.maxSigmaZ, 
-                    opts.probesToIgnore, 
                     opts.minTraceLength, 
                     outfolder
                     )
@@ -188,19 +191,19 @@ object LabelAndFilterTracesQC:
     }
 
     def workflow(
-        pathOrConf: os.Path | ParserConfig, 
+        imagingRoundsConfiguration: ImagingRoundsConfiguration,
+        parserConfigPathOrConf: os.Path | ParserConfig, 
         tracesFile: os.Path, 
         maxDistFromRegion: DistanceToRegion, 
         minSignalToNoise: SignalToNoise, 
         maxSigmaXY: SigmaXY, 
         maxSigmaZ: SigmaZ,
-        probeExclusions: Iterable[ProbeName], 
         minTraceLength: NonnegativeInt, 
         outfolder: os.Path
         ): Unit = {
         
-        val conf: ParserConfig = pathOrConf match {
-            case pc: ParserConfig => pc
+        val pc: ParserConfig = parserConfigPathOrConf match {
+            case c: ParserConfig => c
             case confFile: os.Path => 
                 println(s"Reading parser configuration file: $confFile")
                 readJsonFile[ParserConfig](confFile)
@@ -212,26 +215,29 @@ object LabelAndFilterTracesQC:
             case (Nil | (_ :: Nil)) => println("Traces file has no records, skipping QC labeling and filtering")
             case header :: records => 
                 val maybeParse: ErrMsgsOr[Array[String] => ErrMsgsOr[(TraceSpotId, QCData)]] = {
-                    val maybeParseFov = buildFieldParse(conf.fovColumn, safeParseInt.fmap(_ >>= PositionIndex.fromInt))(header)
-                    val maybeParseRegion = buildFieldParse(conf.regionColumn, safeParseInt.fmap(_ >>= RegionId.fromInt))(header)
-                    val maybeParseTraceId = buildFieldParse(conf.traceIdColumn, safeParseInt.fmap(_ >>= TraceId.fromInt))(header)
-                    val maybeParseProbeName = buildFieldParse(conf.probeNameColumn, _.asRight.map(ProbeName.apply))(header)
-                    val maybeParseZ = buildFieldParse(conf.zPointColumn.get, safeParseDouble.andThen(_.map(ZCoordinate.apply)))(header)
-                    val maybeParseY = buildFieldParse(conf.yPointColumn.get, safeParseDouble.andThen(_.map(YCoordinate.apply)))(header)
-                    val maybeParseX = buildFieldParse(conf.xPointColumn.get, safeParseDouble.andThen(_.map(XCoordinate.apply)))(header)
-                    val maybeParseRefDist = buildFieldParse(conf.distanceToReferenceColumn, safeParseDouble.andThen(_.flatMap(NonnegativeReal.either).map(DistanceToRegion.apply)))(header)
-                    val maybeParseSignal = buildFieldParse(conf.signalColumn, safeParseDouble.andThen(_.map(Signal.apply)))(header)
-                    val maybeParseBackground = buildFieldParse(conf.backgroundColumn, safeParseDouble.andThen(_.map(Background.apply)))(header)
-                    val maybeParseSigmaXY = buildFieldParse(conf.xySigmaColumn, safeParseDouble)(header)
-                    val maybeParseSigmaZ = buildFieldParse(conf.zSigmaColumn, safeParseDouble)(header)
-                    val maybeParseBoxZ = buildFieldParse(conf.zBoxSizeColumn.get, safeParsePosNum.fmap(_.map(BoxSizeZ.apply)))(header)
-                    val maybeParseBoxY = buildFieldParse(conf.yBoxSizeColumn.get, safeParsePosNum.fmap(_.map(BoxSizeY.apply)))(header)
-                    val maybeParseBoxX = buildFieldParse(conf.xBoxSizeColumn.get, safeParsePosNum.fmap(_.map(BoxSizeX.apply)))(header)
+                    val maybeParseFov = buildFieldParse(pc.fovColumn, safeParseInt >>> PositionIndex.fromInt)(header)
+                    val maybeParseRegion = buildFieldParse(pc.regionColumn, safeParseInt >>> RegionId.fromInt)(header)
+                    val maybeParseTraceId = buildFieldParse(pc.traceIdColumn, safeParseInt >>> TraceId.fromInt)(header)
+                    val maybeParseTime = buildFieldParse(pc.timeColumn, safeParseInt >>> Timepoint.fromInt)(header)
+                    val maybeParseZ = buildFieldParse(pc.zPointColumn.get, safeParseDouble >> ZCoordinate.apply)(header)
+                    val maybeParseY = buildFieldParse(pc.yPointColumn.get, safeParseDouble >> YCoordinate.apply)(header)
+                    val maybeParseX = buildFieldParse(pc.xPointColumn.get, safeParseDouble >> XCoordinate.apply)(header)
+                    val maybeParseRefDist = buildFieldParse(
+                        pc.distanceToReferenceColumn, 
+                        safeParseDouble.andThen(_.flatMap(NonnegativeReal.either).map(DistanceToRegion.apply)),
+                        )(header)
+                    val maybeParseSignal = buildFieldParse(pc.signalColumn, safeParseDouble >> Signal.apply)(header)
+                    val maybeParseBackground = buildFieldParse(pc.backgroundColumn, safeParseDouble >> Background.apply)(header)
+                    val maybeParseSigmaXY = buildFieldParse(pc.xySigmaColumn, safeParseDouble)(header)
+                    val maybeParseSigmaZ = buildFieldParse(pc.zSigmaColumn, safeParseDouble)(header)
+                    val maybeParseBoxZ = buildFieldParse(pc.zBoxSizeColumn.get, safeParsePosNum >> BoxSizeZ.apply)(header)
+                    val maybeParseBoxY = buildFieldParse(pc.yBoxSizeColumn.get, safeParsePosNum >> BoxSizeY.apply)(header)
+                    val maybeParseBoxX = buildFieldParse(pc.xBoxSizeColumn.get, safeParsePosNum >> BoxSizeX.apply)(header)
                     (
                         maybeParseFov,
                         maybeParseRegion, 
                         maybeParseTraceId, 
-                        maybeParseProbeName, 
+                        maybeParseTime, 
                         maybeParseZ, 
                         maybeParseY, 
                         maybeParseX, 
@@ -247,7 +253,7 @@ object LabelAndFilterTracesQC:
                         parseFov,
                         parseRegion, 
                         parseTraceId,
-                        parseProbeName, 
+                        parseTime, 
                         parseZ, 
                         parseY, 
                         parseX, 
@@ -265,7 +271,7 @@ object LabelAndFilterTracesQC:
                                     parseFov(record),
                                     parseRegion(record), 
                                     parseTraceId(record),
-                                    parseProbeName(record),
+                                    parseTime(record),
                                     parseZ(record),
                                     parseY(record),
                                     parseX(record),
@@ -277,8 +283,8 @@ object LabelAndFilterTracesQC:
                                     parseBoxZ(record), 
                                     parseBoxY(record), 
                                     parseBoxX(record)
-                                    ).mapN((fov, rid, tid, probeName, z, y, x, refDist, a, bg, sigXY, sigZ, boxZ, boxY, boxX) => 
-                                        val uniqId = TraceSpotId(TraceGroupId(fov, rid, tid), probeName)
+                                    ).mapN((fov, rid, tid, time, z, y, x, refDist, a, bg, sigXY, sigZ, boxZ, boxY, boxX) => 
+                                        val uniqId = TraceSpotId(TraceGroupId(fov, rid, tid), time)
                                         val qcData = QCData((boxZ, boxY, boxX), Point3D(x, y, z), refDist, a, bg, sigXY, sigZ)
                                         uniqId -> qcData
                                     ).toEither
@@ -319,7 +325,7 @@ object LabelAndFilterTracesQC:
                             /* Throw an exception if any error occurred, otherwise write 2 results files. */
                             case (Nil, recordsWithQC) => 
                                 val recordsToWrite = recordsWithQC
-                                    .filterNot((uniqId, _) => probeExclusions.toSet.contains(uniqId.probe))
+                                    .filterNot((uniqId, _) => imagingRoundsConfiguration.tracingExclusions.contains(uniqId.time))
                                     .map((uniqId, recAndRes) => uniqId.groupId -> recAndRes)
                                 writeResults(header, outfolder, tracesFile.baseName, delimiter)(minTraceLength, recordsToWrite)
                             case (badRecords, _) => throw new Exception(s"${badRecords.length} problem(s) reading records: $badRecords")
@@ -377,7 +383,7 @@ object LabelAndFilterTracesQC:
     final case class TraceGroupId(position: PositionIndex, region: RegionId, trace: TraceId)
 
     /** A single spot belongs to a trace group. Neither the group ID nor probe ID is unique, but together they are. */
-    final case class TraceSpotId(groupId: TraceGroupId, probe: ProbeName)
+    final case class TraceSpotId(groupId: TraceGroupId, time: Timepoint)
 
     /** A bundle of the QC pass/fail components for individual rows/records supporting traces */
     final case class QCResult(withinRegion: Boolean, sufficientSNR: Boolean, denseXY: Boolean, denseZ: Boolean, inBoundsX: Boolean, inBoundsY: Boolean, inBoundsZ: Boolean):

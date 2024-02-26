@@ -9,14 +9,15 @@ import pandas as pd
 from gertils import ExtantFile, ExtantFolder
 
 from looptrace.Drifter import Drifter
-from looptrace.ImageHandler import ImageHandler, handler_from_cli
+from looptrace.ImageHandler import ImageHandler
 from looptrace.bead_roi_generation import generate_all_bead_rois_from_getter
 
 __author__ = "Vince Reuter"
 
 
 def workflow(
-        config_file: ExtantFile, 
+        rounds_config: ExtantFile, 
+        params_config: ExtantFile,
         images_folder: ExtantFolder, 
         output_folder: Union[None, Path, ExtantFolder] = None, 
         frame_range: Optional[Iterable[int]] = None,
@@ -24,7 +25,7 @@ def workflow(
         ) -> Iterable[Tuple[Path, pd.DataFrame]]:
     
     # Instantiate the main values needed for this workflow.
-    H = handler_from_cli(config_file=config_file, images_folder=images_folder)
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     D = Drifter(image_handler=H)
     
     # Finalise and prepare the output folder.
@@ -32,7 +33,7 @@ def workflow(
     output_folder.mkdir(exist_ok=True, parents=False)
 
     # Determine the range of frames / hybridisation rounds to use.
-    frame_range = frame_range or range(H.num_frames)
+    frame_range = frame_range or range(H.num_rounds)
 
     # Function to get (z, y, x) (stack of 2D images) for a particular FOV and imaging round.
     def get_image_stack(pos_idx: int, frame_idx: int) -> np.ndarray:
@@ -58,7 +59,8 @@ def get_beads_channel(drifter: Drifter) -> int:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Driver for computing all fiducial bead ROIs for a particular imaging experiment")
-    parser.add_argument("config_path", type=ExtantFile.from_string, help="Config file path")
+    parser.add_argument("rounds_config", type=ExtantFile.from_string, help="Imaging rounds config file path")
+    parser.add_argument("params_config", type=ExtantFile.from_string, help="Looptrace parameters config file path")
     parser.add_argument("image_path", type=ExtantFolder.from_string, help="Path to folder with images to read.")
     
     parser.add_argument("-O", "--output-folder", type=Path, help="Path to folder in which to place output")
@@ -69,7 +71,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     workflow(
-        config_file=args.config_path, 
+        rounds_config=args.rounds_config,
+        params_config=args.params_config, 
         images_folder=args.image_path, 
         output_folder=args.output_folder, 
         prefer=args.prefer_for_joblib, 

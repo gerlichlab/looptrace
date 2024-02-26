@@ -14,42 +14,17 @@ import warnings
 import numpy as np
 import pandas as pd
 import tqdm
-import yaml
 
 from gertils import ExtantFile, ExtantFolder
 
 from looptrace import image_io, read_table_pandas, SIGNAL_NOISE_RATIO_NAME
+from looptrace.configuration import read_parameters_configuration_file
 from looptrace.Drifter import Drifter
 from looptrace.ImageHandler import ImageHandler, handler_from_cli
 from looptrace.bead_roi_generation import extract_single_bead
 from looptrace.filepaths import get_analysis_path
 from looptrace.gaussfit import fitSymmetricGaussian3D
 from looptrace.numeric_types import NumberLike
-
-
-def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
-    """Define and parse command-line arguments."""
-    parser = argparse.ArgumentParser(
-        description="Quality control / analysis of the drift correction step; namely, how effective has drift correction been at reducing the distance between points which should coincide?", 
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
-        )
-    parser.add_argument(
-        "-C", "--config-file", required=True, type=ExtantFile.from_string, 
-        help="Path to the main looptrace config file used for current data processing and analysis",
-        )
-    parser.add_argument(
-        "-I", "--images-folder", required=True, type=ExtantFolder.from_string, 
-        help="Path to folder with images used for drift correction",
-        )
-    parser.add_argument(
-        "--drift-correction-table", type=ExtantFile.from_string, 
-        help="Path to drift correction table; if unspecified, infer from the config file and images folder",
-        )
-    parser.add_argument(
-        "--reference-FOV", type=int, 
-        help="Index of single FOV to use as reference; if unspecified, all FOVs will be used.",
-        )
-    return parser.parse_args(cmdl)
 
 
 class IllegalParametersError(Exception):
@@ -304,22 +279,25 @@ def get_beads_channel(config: Dict[str, Any]) -> int:
 
 
 def workflow(
-        config_file: ExtantFile, 
-        images_folder: ExtantFolder, 
-        drift_correction_table_file: Union[None, Path, ExtantFile] = None, 
-        reference_fov: Optional[int] = None, 
+    rounds_config: ExtantFile, 
+    params_config: ExtantFile, 
+    images_folder: ExtantFolder, 
+    drift_correction_table_file: Union[None, Path, ExtantFile] = None, 
+    reference_fov: Optional[int] = None, 
     ) -> pd.DataFrame:
     """
     Pull random subset of beads and compute the distance that remains even after drift correction.
 
     Parameters
     ----------
-    config_file : gertils.ExtantFile
-        Path to the main looptrace configuration file
+    rounds_config : gertils.ExtantFile
+        Path to the looptrace imaging rounds configuration file
+    params_config : gertils.ExtantFile
+        Path to the looptrace parameters configuration file
     images_folder : gertils.ExtantFolder
         Path to the folder with an experiment's imaging data
     drift_correction_table_file : gertils.ExtantFile, optional
-        Path to the table of drift correction values; if unspecified, this can be inferred from config_file and images_folder
+        Path to the table of drift correction values; if unspecified, this can be inferred
     reference_fov : int, optional
         Index (0-based) of position/field-of-view to use; if unspecified, use all FOVs
         
@@ -331,7 +309,7 @@ def workflow(
     """
     # TODO: how to handle case when output already exists
 
-    H = handler_from_cli(config_file=config_file, images_folder=images_folder)
+    H = handler_from_cli(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     if drift_correction_table_file is None:
         print("Determining drift correction table path...")
         drift_correction_table_file = Drifter(H).dc_file_path__fine
@@ -340,10 +318,7 @@ def workflow(
     if not os.path.isfile(drift_correction_table_file):
         raise FileNotFoundError(drift_correction_table_file)
 
-    print(f"Parsing looptrace configuration file: {config_file.path}")
-    with open(config_file.path, 'r') as fh:
-        config = yaml.safe_load(fh)
-
+    config = read_parameters_configuration_file(params_config)
     output_folder = Path(get_analysis_path(config))
     
     # Detection parameters
@@ -382,7 +357,7 @@ def workflow(
             )
 
     # Read the actual FISH images.
-    seqfish_images_folder = images_folder.path / config['reg_input_moving'] # TODO: reconcile with 'reg_input_template'
+    seqfish_images_folder = images_folder.path / config["reg_input_moving"] # TODO: reconcile with 'reg_input_template'
     print(f"Reading zarr to dask: {seqfish_images_folder}")
     imgs, _ = image_io.multi_ome_zarr_to_dask(str(seqfish_images_folder))
     
@@ -417,9 +392,8 @@ def workflow(
     return fits
 
 
-def run_visualisation(config_file: ExtantFile):
-    with open(config_file.path, 'r') as fh:
-        config = yaml.safe_load(fh)
+def run_visualisation(params_config: ExtantFile):
+    config = read_parameters_configuration_file(params_config)
     output_folder = get_analysis_path(config)
     fits_file = _get_dc_fits_filepath(output_folder)
     analysis_script_file = Path(os.path.dirname(__file__)) / "drift_correct_accuracy_analysis.R"
@@ -443,11 +417,26 @@ def _get_dc_fits_filepath(folder: Union[str, Path]) -> str:
     return os.path.join(folder, "drift_correction_accuracy.fits.csv")
 
 
+def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
+    """Define and parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Quality control / analysis of drift correction step; namely, how effective has drift correction been at reducing distance between points which should coincide?", 
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        )
+    parser.add_argument("--rounds-config", required=True, type=ExtantFile.from_string, help="Path to the looptrace imaging rounds config file")
+    parser.add_argument("--params-config", required=True, type=ExtantFile.from_string, help="Path to the looptrace parameters config file")
+    parser.add_argument("-I", "--images-folder", required=True, type=ExtantFolder.from_string, help="Path to folder with images used for drift correction")
+    parser.add_argument("--drift-correction-table", type=ExtantFile.from_string, help="Path to drift correction table; if unspecified, infer from the config file and images folder")
+    parser.add_argument("--reference-FOV", type=int, help="Index of single FOV to use as reference; if unspecified, all FOVs will be used.")
+    return parser.parse_args(cmdl)
+
+
 if __name__ == "__main__":
-    opts = parse_cmdl(sys.argv[1:])
+    args = parse_cmdl(sys.argv[1:])
     workflow(
-        config_file=opts.config_file,
-        images_folder=opts.images_folder, 
-        drift_correction_table_file=opts.drift_correction_table, 
-        reference_fov=opts.reference_FOV,
+        rounds_config=args.rounds_config,
+        params_config=args.params_config, 
+        images_folder=args.images_folder, 
+        drift_correction_table_file=args.drift_correction_table, 
+        reference_fov=args.reference_FOV,
     )

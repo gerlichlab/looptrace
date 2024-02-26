@@ -2,7 +2,7 @@
     "regionGrouping": {
         "semantic": "permissive",
         "groups": [[8, 9], [10, 11]], 
-        "min_spot_dist": 5
+        "minimumPixelLikeSeparation": 5
     },
     "imagingRounds": [
         {"time": 0, "name": "pre_image", "isBlank": true},

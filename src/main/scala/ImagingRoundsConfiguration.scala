@@ -179,8 +179,8 @@ object ImagingRoundsConfiguration:
                 case None => "Missing regionGrouping section!".invalidNel
                 case Some(fullJson) => safeReadAs[Map[String, ujson.Value]](fullJson).leftMap(NonEmptyList.one).flatMap{ currentSection => 
                     val regionThresholdNel: ValidatedNel[String, DistanceThreshold] = 
-                        currentSection.get("min_spot_dist")
-                            .toRight(s"Missing regional spot separation key (min_spot_dist)")
+                        currentSection.get("minimumPixelLikeSeparation")
+                            .toRight(s"Missing regional spot separation key (minimumPixelLikeSeparation)")
                             .flatMap(safeReadAs[Double])
                             .flatMap(NonnegativeReal.either)
                             .map(PiecewiseDistance.ConjunctiveThreshold.apply)

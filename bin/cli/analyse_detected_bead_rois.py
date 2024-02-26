@@ -7,36 +7,33 @@ import subprocess
 from gertils import ExtantFile, ExtantFolder
 
 from looptrace.Drifter import Drifter
-from looptrace.ImageHandler import handler_from_cli
+from looptrace.ImageHandler import ImageHandler
 
 
-def workflow(config_file: ExtantFile, images_folder: ExtantFolder):
-    """
-    Run the bead detection workflow, driving the R script to count lines in each relevant file and visualise.
-
-    Parameters
-    ----------
-    config_file : gertils.ExtantFile
-        Path to the main looptrace processing configuration file, with which to build a looptrace.ImageHandler 
-        to determine the counts of positions (fields of view) and hybridisation rounds/timepoints (frames) 
-        to pass to the script to know which files to look at to count records.
-    images_folder : gertils.ExtantFolder
-        Path to the folder with experiment's imaging files
-    """
-    H = handler_from_cli(config_file=config_file, images_folder=images_folder)
+def workflow(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder):
+    H = ImageHandler(
+        rounds_config=rounds_config, 
+        params_config=params_config, 
+        images_folder=images_folder,
+        )
     D = Drifter(image_handler=H)
     rois_path = H.bead_rois_path
     n_pos = D.num_positions
     n_time = H.num_timepoints
     script = os.path.join(os.path.dirname(__file__), 'analyse_detected_bead_rois.R')
-    cmd_to_run = f"Rscript {script} -i {rois_path} -o {os.path.dirname(rois_path)} --num-positions {n_pos} --num-frames {n_time}"
+    cmd_to_run = f"Rscript {script} -i {rois_path} -o {os.path.dirname(rois_path)} --num-positions {n_pos} --num-rounds {n_time}"
     print("Running command: ", cmd_to_run)
     subprocess.check_call(cmd_to_run.split(" "))
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Deconvolve image data.')
-    parser.add_argument("config_path", type=ExtantFile.from_string, help="Config file path")
+    parser = argparse.ArgumentParser(description="Analyse detected bead ROIs.")
+    parser.add_argument("rounds_config", type=ExtantFile.from_string, help="Imaging rounds config file path")
+    parser.add_argument("params_config", type=ExtantFile.from_string, help="Looptrace parameters config file path")
     parser.add_argument("images_folder", type=ExtantFolder.from_string, help="Images folder path")
     args = parser.parse_args()
-    workflow(config_file=args.config_path, images_folder=args.images_folder)
+    workflow(
+        rounds_config=args.rounds_config,
+        params_config=args.params_config, 
+        images_folder=args.images_folder,
+        )

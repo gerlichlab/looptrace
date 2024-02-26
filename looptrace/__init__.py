@@ -10,11 +10,9 @@ __all__ = [
     "LOOPTRACE_JAR_PATH", 
     "LOOPTRACE_JAVA_PACKAGE",
     "MAX_DISTANCE_SPOT_FROM_REGION_NAME",
-    "MINIMUM_SPOT_SEPARATION_KEY",
     "SIGMA_XY_MAX_NAME",
     "SIGMA_Z_MAX_NAME",
     "SIGNAL_NOISE_RATIO_NAME",
-    "TRACING_SUPPORT_EXCLUSIONS_KEY",
     "ZARR_CONVERSIONS_KEY",
     "ArrayDimensionalityError",
     "ConfigurationValueError",
@@ -30,11 +28,9 @@ LOOPTRACE_JAR_PATH = importlib.resources.files(__name__).joinpath("looptrace-ass
 LOOPTRACE_JAVA_PACKAGE = "at.ac.oeaw.imba.gerlich.looptrace"
 
 MAX_DISTANCE_SPOT_FROM_REGION_NAME = "max_dist"
-MINIMUM_SPOT_SEPARATION_KEY = "min_spot_dist"
 SIGMA_XY_MAX_NAME = "sigma_xy_max"
 SIGMA_Z_MAX_NAME = "sigma_z_max"
 SIGNAL_NOISE_RATIO_NAME = "A_to_BG"
-TRACING_SUPPORT_EXCLUSIONS_KEY = "illegal_frames_for_trace_support"
 ZARR_CONVERSIONS_KEY = "zarr_conversions"
 
 
