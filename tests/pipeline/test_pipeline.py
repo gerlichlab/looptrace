@@ -61,17 +61,27 @@ class CliOptProvision:
 
 @dataclass
 class CliSpecMinimal:
-    config_file: CliOptProvision
+    params_config: CliOptProvision
+    rounds_config: CliOptProvision
     images_folder: CliOptProvision
     output_folder: CliOptProvision
 
     @property
+    def _members(self) -> List[CliOptProvision]:
+        return [
+            self.params_config,
+            self.rounds_config,
+            self.images_folder, 
+            self.output_folder,
+            ]
+
+    @property
     def is_legitimate(self) -> bool:
-        return self.config_file.is_legitimate and self.images_folder.is_legitimate and self.output_folder.is_legitimate
+        return all(m.is_legitimate for m in self._members)
 
     def prepare_list(self, folder: Path) -> List[str]:
         result = []
-        for o in (self.config_file, self.images_folder, self.output_folder):
+        for o in self._members:
             if o.optname is None:
                 continue
             path = o.get_path(folder)
@@ -81,27 +91,42 @@ class CliSpecMinimal:
         return result
     
     def __repr__(self) -> str:
-        return repr((self.config_file, self.images_folder, self.output_folder))
+        return repr(tuple(self._members))
 
     def __str__(self) -> str:
-        return str((self.config_file, self.images_folder, self.output_folder))
+        return str(tuple(self._members))
 
-_BOOL_GRID = (False, True)
-CONFIG_FILE_SPECS = [
-    CliOptProvision(opt, lambda p: p / "config.yaml", (lambda p: p.write_text("", encoding='utf-8')) if create else None) 
-    for opt, create in itertools.product((None, "-C", "--config-file"), _BOOL_GRID)
+BOOL_GRID = (False, True)
+
+PARAMS_CONFIG_SPECS = [
+    CliOptProvision(opt, lambda p: p / "params.yaml", (lambda p: p.write_text("", encoding='utf-8')) if create else None) 
+    for opt, create in itertools.product((None, "--params-config"), BOOL_GRID)
     ]
+
+ROUNDS_CONFIG_SPECS = [
+    CliOptProvision(opt, lambda p: p / "rounds.json", (lambda p: p.write_text("\{\}", encoding='utf-8')) if create else None) 
+    for opt, create in itertools.product((None, "--rounds-config"), BOOL_GRID)
+    ]
+
 IMAGE_FOLDER_SPECS = [
     CliOptProvision(opt, lambda p: p / "images", (lambda p: p.mkdir()) if create else None) 
-    for opt, create in itertools.product((None, "-I", "--images-folder"), _BOOL_GRID)
+    for opt, create in itertools.product((None, "--images-folder"), BOOL_GRID)
     ]
+
 OUTPUT_FOLDER_SPECS = [
     CliOptProvision(opt, lambda p: p / "output", (lambda p: p.mkdir()) if create else None) 
-    for opt, create in itertools.product((None, "-O", "--output-folder"), _BOOL_GRID)
+    for opt, create in itertools.product((None, "-O", "--output-folder"), BOOL_GRID)
     ]
 
-
-COMMAND_LINES = [CliSpecMinimal(config_file=conf, images_folder=imgs, output_folder=out) for conf, imgs, out in itertools.product(CONFIG_FILE_SPECS, IMAGE_FOLDER_SPECS, OUTPUT_FOLDER_SPECS)]
+COMMAND_LINES = [CliSpecMinimal(
+    params_config=params, 
+    rounds_config=rounds, 
+    images_folder=imgs, 
+    output_folder=out,
+    ) 
+    for params, rounds, imgs, out 
+    in itertools.product(PARAMS_CONFIG_SPECS, ROUNDS_CONFIG_SPECS, IMAGE_FOLDER_SPECS, OUTPUT_FOLDER_SPECS)
+]
 
 
 @pytest.mark.parametrize(["cli", "expect_success"], [(cli, cli.is_legitimate) for cli in COMMAND_LINES], ids=str)
@@ -123,10 +148,11 @@ def test_required_inputs(tmp_path, cli, expect_success):
             pytest.fail("When testing, unexpected success is a failure!")
 
 
-@pytest.mark.parametrize("config_file_option", ["-C", "--config-file"])
-@pytest.mark.parametrize("images_folder_option", ["-I", "--images-folder"])
+@pytest.mark.parametrize("params_config_option", ["--params-config"])
+@pytest.mark.parametrize("rounds_config_option", ["--rounds-config"])
+@pytest.mark.parametrize("images_folder_option", ["--images-folder"])
 @pytest.mark.parametrize("output_folder_option", ["-O", "--output-folder"])
-def test_logging(tmp_path, prepped_minimal_config_data, caplog, config_file_option, images_folder_option, output_folder_option):
+def test_logging(tmp_path, dummy_rounds_config, prepped_minimal_config_data, caplog, params_config_option, rounds_config_option, images_folder_option, output_folder_option):
     caplog.set_level(logging.INFO)
     conf_path = tmp_path / "config.yaml"
     with open(conf_path, 'w') as fh:
@@ -134,7 +160,8 @@ def test_logging(tmp_path, prepped_minimal_config_data, caplog, config_file_opti
     imgs_path = prep_images_folder(tmp_path, create=True)
     output_folder = prep_subfolder(folder=tmp_path, name="output", create=True)
     opts = looptrace_pipeline.parse_cli([
-        config_file_option, str(conf_path), 
+        params_config_option, str(conf_path), 
+        rounds_config_option, str(dummy_rounds_config.path), 
         images_folder_option, str(imgs_path), 
         output_folder_option, str(output_folder), 
         looptrace_pipeline.NO_TEE_LOGS_OPTNAME,
@@ -142,7 +169,7 @@ def test_logging(tmp_path, prepped_minimal_config_data, caplog, config_file_opti
     # Add a .stop_pipeline() call here to avoid (non-fatal) errors from logging system.
     # See: https://github.com/databio/pypiper/issues/186
     looptrace_pipeline.init(opts).manager.stop_pipeline()
-    assert f"Building {looptrace_pipeline.PIPE_NAME} pipeline from {conf_path}, to use images from {imgs_path}" in caplog.text
+    assert f"Building {looptrace_pipeline.PIPE_NAME} pipeline, using images from {imgs_path}" in caplog.text
 
 
 @pytest.mark.skip("not implemented")
