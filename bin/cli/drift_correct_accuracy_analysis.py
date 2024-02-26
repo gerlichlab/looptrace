@@ -20,7 +20,7 @@ from gertils import ExtantFile, ExtantFolder
 from looptrace import image_io, read_table_pandas, SIGNAL_NOISE_RATIO_NAME
 from looptrace.configuration import read_parameters_configuration_file
 from looptrace.Drifter import Drifter
-from looptrace.ImageHandler import ImageHandler, handler_from_cli
+from looptrace.ImageHandler import ImageHandler
 from looptrace.bead_roi_generation import extract_single_bead
 from looptrace.filepaths import get_analysis_path
 from looptrace.gaussfit import fitSymmetricGaussian3D
@@ -309,7 +309,7 @@ def workflow(
     """
     # TODO: how to handle case when output already exists
 
-    H = handler_from_cli(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     if drift_correction_table_file is None:
         print("Determining drift correction table path...")
         drift_correction_table_file = Drifter(H).dc_file_path__fine

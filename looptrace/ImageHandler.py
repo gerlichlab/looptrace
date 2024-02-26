@@ -26,7 +26,7 @@ from gertils import ExtantFile
 __author__ = "Kai Sandvold Beckwith"
 __credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 
-__all__ = ["ImageHandler", "handler_from_cli", "read_images"]
+__all__ = ["ImageHandler", "read_images"]
 
 logger = logging.getLogger()
 
@@ -74,7 +74,7 @@ class ImageHandler:
         # Update the overall config with what's parsed from the imaging rounds one.
         if set(self.config) & set(rounds):
             raise ValueError(
-                f"Overlap of keys from parameters config and imaging config: {", ".join(set(self.config) & set(rounds))}"
+                f"Overlap of keys from parameters config and imaging config: {', '.join(set(self.config) & set(rounds))}"
                 )
         self.config.update(rounds)
 

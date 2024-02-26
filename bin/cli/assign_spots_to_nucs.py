@@ -10,7 +10,7 @@ import tqdm
 
 from gertils import ExtantFile, ExtantFolder
 from looptrace import DimensionalityError, read_table_pandas
-from looptrace.ImageHandler import handler_from_cli
+from looptrace.ImageHandler import ImageHandler
 from looptrace.NucDetector import NucDetector
 
 __author__ = "Kai Sandvold Beckwith"
@@ -110,7 +110,7 @@ def workflow(
     ) -> None:
     
     # Set up the spot picker and the nuclei detector instances, to manage paths and settings.
-    H = handler_from_cli(
+    H = ImageHandler(
         rounds_config=rounds_config, 
         params_config=params_config, 
         images_folder=images_folder, 
