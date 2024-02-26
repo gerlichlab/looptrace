@@ -316,7 +316,7 @@ def init(opts: argparse.Namespace) -> LooptracePipeline:
         }
     if opts.do_not_tee_logs:
         kwargs["multi"] = True
-    logger.info(f"Building {PIPE_NAME} pipeline to use images from {opts.images_folder.path}")
+    logger.info(f"Building {PIPE_NAME} pipeline, using images from {opts.images_folder.path}")
     return LooptracePipeline(**kwargs)
 
 
