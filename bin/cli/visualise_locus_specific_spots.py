@@ -27,8 +27,8 @@ QC_PASS_COLUMN = "qcPass"
 COORDINATE_COLUMNS = ["z_px", "y_px", "x_px"]
 
 
-def workflow(config_file: ExtantFile, images_folder: ExtantFolder):
-    H = ImageHandler(config_path=config_file, image_path=images_folder)
+def workflow(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder):
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     T = Tracer(H)
     extra_columns = [POSITION_COLUMN, ROI_NUMBER_COLUMN, FRAME_COLUMN, QC_PASS_COLUMN]
     print(f"Reading ROIs file: {H.traces_file_qc_unfiltered}")
@@ -110,7 +110,14 @@ if __name__ == "__main__":
         description="Visualisation of retained (after QC filters) locus-specific FISH spots", 
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         )
-    parser.add_argument("config_path", type=ExtantFile.from_string, help="Config file path")
+    parser.add_argument("rounds_config", type=ExtantFile.from_string, help="Imaging rounds config file path")
+    parser.add_argument("params_config", type=ExtantFile.from_string, help="Looptrace parameters config file path")
     parser.add_argument("image_path", type=ExtantFolder.from_string, help="Path to folder with images to read.")
+    parser.add_argument("--interactive", action="store_true", help="Run the program interactively")
+    parser.add_argument("--save-points", action="store_true", help="Save points")
     args = parser.parse_args()
-    workflow(config_file=args.config_path, images_folder=args.image_path)
+    workflow(
+        rounds_config=args.rounds_config,
+        params_config=args.params_config, 
+        images_folder=args.image_path,
+        )

@@ -14,16 +14,22 @@ from looptrace.NucDetector import NucDetector
 from gertils import ExtantFile, ExtantFolder
 
 
-def workflow(config_file: ExtantFile, images_folder: ExtantFolder, image_save_path: Optional[ExtantFolder] = None) -> str:
-    image_handler = handler_from_cli(config_file=config_file, images_folder=images_folder, image_save_path=image_save_path)
+def workflow(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder, image_save_path: Optional[ExtantFolder] = None) -> str:
+    image_handler = handler_from_cli(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder, image_save_path=image_save_path)
     detector = NucDetector(image_handler=image_handler)
     return detector.segment_nuclei()
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Run nucleus detection on images.')
-    parser.add_argument("config_path", type=ExtantFile.from_string, help="Config file path")
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run nucleus detection on images.")
+    parser.add_argument("rounds_config", type=ExtantFile.from_string, help="Path to file with declaration of imaging rounds, needed for ImageHandler")
+    parser.add_argument("params_config", type=ExtantFile.from_string, help="Path to parameters configuration file, needed for ImageHandler")
     parser.add_argument("image_path", type=ExtantFolder.from_string, help="Path to folder with images to read.")
     parser.add_argument("--image_save_path", type=ExtantFolder.from_string, help="(Optional): Path to folder to save images to.")
     args = parser.parse_args()
-    workflow(config_file=args.config_path, images_folder=args.image_path, image_save_path=args.image_save_path)
+    workflow(
+        rounds_config=args.rounds_config,
+        params_config=args.params_config, 
+        images_folder=args.image_path, 
+        image_save_path=args.image_save_path,
+        )

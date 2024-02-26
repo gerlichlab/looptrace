@@ -17,19 +17,19 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from looptrace import MINIMUM_SPOT_SEPARATION_KEY, TRACING_SUPPORT_EXCLUSIONS_KEY, ZARR_CONVERSIONS_KEY, RoiImageSize, read_table_pandas
-from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, get_analysis_path, simplify_path
+from looptrace import ZARR_CONVERSIONS_KEY, RoiImageSize, read_table_pandas
+from looptrace.configuration import get_minimum_regional_spot_separation
+from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, FilePathLike, FolderPathLike, get_analysis_path, simplify_path
 from looptrace.image_io import ignore_path, NPZ_wrapper
-from gertils import ExtantFile, ExtantFolder
+from gertils import ExtantFile
 
-__all__ = ["ImageHandler", "handler_from_cli", "read_images"]
 __author__ = "Kai Sandvold Beckwith"
 __credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 
+__all__ = ["ImageHandler", "handler_from_cli", "read_images"]
+
 logger = logging.getLogger()
 
-
-FolderLike = Union[str, Path, ExtantFolder]
 PathFilter = Callable[[Union[os.DirEntry, Path]], bool]
 
 
@@ -40,7 +40,7 @@ def bead_rois_filename(pos_idx: int, frame: int, purpose: Optional[str]) -> str:
 
 
 def _read_bead_rois_file(fp: ExtantFile) -> np.ndarray[int]:
-    with open(fp, 'r') as fh:
+    with open(fp, "r") as fh:
         data = json.load(fh)
     return np.round(np.array(list(map(lambda obj: np.array(obj["centroid"]), data)))).astype(int)
 
@@ -48,9 +48,10 @@ def _read_bead_rois_file(fp: ExtantFile) -> np.ndarray[int]:
 class ImageHandler:
     def __init__(
             self, 
-            config_path: Union[str, Path, ExtantFile], 
-            image_path: Union[str, Path, ExtantFolder, None] = None, 
-            image_save_path: Union[str, Path, ExtantFolder, None] = None, 
+            rounds_config: FilePathLike, 
+            params_config: FilePathLike, 
+            image_path: Optional[FolderPathLike] = None, 
+            image_save_path: Optional[FolderPathLike] = None, 
             strict_load_tables: bool = True,
             ):
         '''
@@ -59,17 +60,33 @@ class ImageHandler:
         Will try to use zarr file if present.
         '''
         self._strict_load_tables = strict_load_tables
-        self.config_path = simplify_path(config_path)
-        self.reload_config()
+        self.rounds_config = simplify_path(rounds_config)
+        self.params_config = simplify_path(params_config)
+        
+        print(f"Loading parameters config file: {self.params_config}")
+        with open(self.params_config, "r") as fh:
+            self.config = yaml.safe_load(fh)
+        
+        print(f"Loading imaging config file: {self.rounds_config}")
+        with open(self.rounds_config, "r") as fh:
+            rounds = json.load(fh)
+
+        # Update the overall config with what's parsed from the imaging rounds one.
+        if set(self.config) & set(rounds):
+            raise ValueError(
+                f"Overlap of keys from parameters config and imaging config: {", ".join(set(self.config) & set(rounds))}"
+                )
+        self.config.update(rounds)
+
         self.image_path = simplify_path(image_path)
         if self.image_path is not None:
             self.read_images()
-        self.image_save_path = simplify_path(image_save_path if image_save_path is not None else self.image_path)
+        self.image_save_path = simplify_path(image_save_path or self.image_path)
         self.load_tables()
 
     @property
     def analysis_filename_prefix(self) -> str:
-        return self.config['analysis_prefix']
+        return self.config["analysis_prefix"]
 
     @property
     def analysis_path(self) -> str:
@@ -77,7 +94,7 @@ class ImageHandler:
 
     @property
     def background_subtraction_frame(self) -> Optional[int]:
-        return self.config.get('subtract_background')
+        return self.config.get("subtract_background")
     
     @property
     def bead_rois_path(self) -> Path:
@@ -163,18 +180,21 @@ class ImageHandler:
 
     @property
     def frame_names(self) -> List[str]:
-        return self.config["frame_name"]
-    
-    @property
-    def illegal_frames_for_trace_support(self) -> List[str]:
-        exclusions = self.config[TRACING_SUPPORT_EXCLUSIONS_KEY]
-        if not isinstance(exclusions, list):
-            raise TypeError(f"Probes to exclude ('{TRACING_SUPPORT_EXCLUSIONS_KEY}' in config) should be list, not {type(exclusions).__name__}")
-        return exclusions
+        """The sequence of names corresponding to the imaging rounds used in the experiment"""
+        names = []
+        for round in self.config["imagingRounds"]:
+            try:
+                names.append(round["name"])
+            except KeyError:
+                probe = round["probe"]
+                rep = round.get("repeat")
+                n = probe + ("" if rep is None else f"_repeat{rep}")
+                names.append(n)
+        return names
 
     @property
     def minimum_spot_separation(self) -> Union[int, float]:
-        return self.config[MINIMUM_SPOT_SEPARATION_KEY]
+        return get_minimum_regional_spot_separation(self.config)
 
     @property
     def nuclear_mask_screenshots_folder(self) -> Path:
@@ -201,8 +221,8 @@ class ImageHandler:
         return self.config["num_bead_rois_for_drift_correction_accuracy"]
 
     @property
-    def num_frames(self) -> int:
-        n1 = self.config.get("num_frames")
+    def num_rounds(self) -> int:
+        n1 = self.config.get("num_rounds")
         if n1 is None: # no frame count defined, try counting names
             return len(self.frame_names)
         try:
@@ -212,14 +232,10 @@ class ImageHandler:
         if n1 == n2:
             return n1
         raise Exception(f"Declared frame count ({n1}) from config disagrees with frame name count ({n2})")
-    
-    @property
-    def num_rounds(self) -> int:
-        return self.num_frames
 
     @property
     def num_timepoints(self) -> int:
-        return self.num_frames
+        return self.num_rounds
 
     def out_path(self, fn_extra: str) -> str:
         return os.path.join(self.analysis_path, self.analysis_filename_prefix + fn_extra)
@@ -326,18 +342,6 @@ class ImageHandler:
         '''
         self.images, self.image_lists = read_images_folder(self.image_path, is_eligible=is_eligible)
 
-    def reload_config(self):
-        print(f"Loading config file: {self.config_path}")
-        with open(self.config_path, 'r') as fh:
-            self.config = yaml.safe_load(fh)
-        return self.config
-
-
-def handler_from_cli(config_file: ExtantFile, images_folder: Optional[ExtantFolder], image_save_path: Optional[ExtantFolder] = None) -> ImageHandler:
-    image_path = None if images_folder is None else images_folder.to_string()
-    image_save_path = None if image_save_path is None else image_save_path.to_string()
-    return ImageHandler(config_path=config_file.to_string(), image_path=image_path, image_save_path=image_save_path)
-
 
 def read_images_folder(folder: Path, is_eligible: PathFilter = lambda _: True) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     if folder is None:
@@ -382,5 +386,5 @@ def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[
         else:
             print(f"WARNING -- cannot process image path: {image_path}")
             continue
-        print('Loaded images: ', image_name)
+        print("Loaded images: ", image_name)
     return images, image_lists

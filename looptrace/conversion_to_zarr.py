@@ -6,7 +6,6 @@ Ellenberg group
 EMBL Heidelberg
 """
 
-import argparse
 import os
 from pathlib import *
 from typing import *
@@ -16,7 +15,7 @@ import tqdm
 
 from gertils import ExtantFile, ExtantFolder
 from looptrace import image_io, nd2io
-from looptrace.ImageHandler import handler_from_cli
+from looptrace.ImageHandler import ImageHandler
 from looptrace.integer_naming import get_position_name_short
 
 
@@ -47,8 +46,8 @@ def workflow(n_pos: int, input_folders: Iterable[Path], output_folder: Path) -> 
             z[t] = imgs[t]
 
 
-def one_to_one(config_file: ExtantFile, images_folder: ExtantFolder):
-    H = handler_from_cli(config_file=config_file, images_folder=images_folder)
+def one_to_one(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder):
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     for input_folder_name, output_folder_name in H.zarr_conversions.items():
         infolder = images_folder.path / input_folder_name
         outfolder = images_folder.path / output_folder_name
@@ -56,13 +55,3 @@ def one_to_one(config_file: ExtantFile, images_folder: ExtantFolder):
         num_fov = len(H.image_lists[input_folder_name])
         print(f"Converting ({num_fov} FOV): {infolder} --> {outfolder}")
         workflow(n_pos=num_fov, input_folders=(infolder, ), output_folder=outfolder)
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Convert datasets to OME-ZARR (for now ND2, will make general as needed).')
-    parser.add_argument("--input_folders", nargs='+', help='<Required> Folderpath(s) with ND2 images to convert to zarr. Assumes Time00000_Point0000_ naming convention.', required=True)
-    parser.add_argument("--output_folder", help='<Required> Folderpath to save zarr images.', required=True)
-    parser.add_argument("--n_pos", required=True, type=int, help='Number of positions to convert; [0, n] will be the FOV indices')
-    args = parser.parse_args()
-    print(args)
-    workflow(n_pos=args.n_pos, input_folders=args.input_folders, output_folder=args.output_folder)

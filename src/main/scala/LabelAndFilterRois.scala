@@ -58,9 +58,9 @@ object LabelAndFilterRois:
       * @param extantOutputHandler How to handle if an output target already exists
       */
     final case class CliConfig(
+        configuration: ImagingRoundsConfiguration = null, // unconditionally required
         spotsFile: os.Path = null, // unconditionally required
         driftFile: os.Path = null, // unconditionally required
-        configuration: ImagingRoundsConfiguration = null, // unconditionally required
         spotSeparationThresholdValue: NonnegativeReal = NonnegativeReal(0), // unconditionally required
         buildDistanceThreshold: NonnegativeReal => DistanceThreshold = null, // unconditionally required
         unfilteredOutputFile: UnfilteredOutputFile = null, // unconditionally required
@@ -73,16 +73,6 @@ object LabelAndFilterRois:
     def main(args: Array[String]): Unit = {
         import ScoptCliReaders.given
         import parserBuilder.*
-
-        /** Parse content of JSON file path or CLI-arg-like mapping spec of probe groups. */
-        given readRegionGrouping: scopt.Read[ImagingRoundsConfiguration] = scopt.Read.reads{ file => 
-            ImagingRoundsConfiguration.fromJsonFile(os.Path(file)) match {
-                case Left(messages) => throw new IllegalArgumentException(
-                    s"Cannot read file ($file) as imaging round configuration! Error(s): ${messages.mkString_("; ")}"
-                    )
-                case Right(conf) => conf
-            }
-        }
 
         val parser = OParser.sequence(
             programName(ProgramName), 

@@ -54,9 +54,18 @@ class FunctionalForm:
             raise NotImplementedError("Only currently supporting dimensionality = 3 for functional form fit")
 
 
-def run_frame_name_and_distance_application(config_file: ExtantFile, images_path: ExtantFolder) -> Tuple[pd.DataFrame, Path]:
-    T = Tracer(image_handler=ImageHandler(config_path=config_file, image_path=images_path))
-    traces = apply_frame_names_and_spatial_information(traces_file=T.traces_path, config_file=config_file.path)
+def run_frame_name_and_distance_application(
+    rounds_config: ExtantFile, 
+    params_config: ExtantFile, 
+    images_path: ExtantFolder,
+    ) -> Tuple[pd.DataFrame, Path]:
+    H = ImageHandler(
+        rounds_config=rounds_config, 
+        params_config=params_config, 
+        image_path=images_path,
+        )
+    T = Tracer(H)
+    traces = apply_frame_names_and_spatial_information(traces_file=T.traces_path, frame_names=H.frame_names)
     outfile = T.traces_path_enriched
     print(f"Writing enriched traces file: {outfile}")
     traces.to_csv(outfile)
@@ -64,13 +73,8 @@ def run_frame_name_and_distance_application(config_file: ExtantFile, images_path
 
 
 class Tracer:
-
     def __init__(self, image_handler: ImageHandler, trace_beads: bool = False):
-        '''
-        Initialize Tracer class with config read in from YAML file.
-        '''
         self.image_handler = image_handler
-        self.config_path = image_handler.config_path
         self.config = image_handler.config
         self.drift_table = image_handler.tables[image_handler.spot_input_name + '_drift_correction_fine']
         self.pos_list = self.image_handler.image_lists[image_handler.spot_input_name]

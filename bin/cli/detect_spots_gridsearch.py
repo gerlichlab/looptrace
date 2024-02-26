@@ -62,28 +62,17 @@ def read_params_file(params_file: ExtantFile) -> Iterable[Parameters]:
     return params
 
 
-def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run spot detection over a range of parameters.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    
-    # Base CLI for this project
-    parser.add_argument("config_path", type=ExtantFile.from_string, help="Config file path")
-    parser.add_argument("image_path", type=ExtantFolder.from_string, help="Path to folder with images to read.")
-    
-    # Specifics for gridsearch
-    parser.add_argument("--parameters-grid-file", type=ExtantFile.from_string, help="Path to file which declares the gridsearch parameters")
-    parser.add_argument("-O", "--output-folder", type=Path, required=True, help="Path to root folder for output")
-    
-    # Control flow customisation
-    parser.add_argument("--cores", type=int, default=1, help="Number of processing cores to use")
-    parser.add_argument("--overwrite", action="store_true", help="Overwrite existing results file(s)")
-    parser.add_argument("--index-range", type=IndexRange.from_string, nargs="*", help="Ranges of parameter indices to use, only when running through written configs code path")
-
-    return parser.parse_args(cmdl)
-
-
-def run_one_detection(params: ParamPatch, config_file: ExtantFile, images_folder: ExtantFolder, output_file: Union[NonExtantPath, Path], updated_config_file: Optional[NonExtantPath]):
+def run_one_detection(
+    params: ParamPatch, 
+    rounds_config: ExtantFile, 
+    params_config: ExtantFile, 
+    images_folder: ExtantFolder, 
+    output_file: Union[NonExtantPath, Path], 
+    updated_config_file: Optional[NonExtantPath],
+    ):
     return run_spot_detection(
-        config_file=config_file, 
+        rounds_config=rounds_config,
+        params_config=params_config, 
         images_folder=images_folder, 
         image_save_path=None, 
         params_update=params, 
@@ -92,7 +81,14 @@ def run_one_detection(params: ParamPatch, config_file: ExtantFile, images_folder
         )
 
 
-def workflow_new_configs(config_file: ExtantFile, images_folder: ExtantFolder, params_file: ExtantFile, output_folder: ExtantFolder, cores: Optional[int] = None) -> Iterable[str]:
+def workflow_new_configs(
+    rounds_config: ExtantFile, 
+    params_config: ExtantFile, 
+    images_folder: ExtantFolder, 
+    params_file: ExtantFile, 
+    output_folder: ExtantFolder, 
+    cores: Optional[int] = None,
+    ) -> Iterable[str]:
     """Run the gridsearch from a collection of parameters for which looptrace config files haven't yet been generated."""
     parameterizations = read_params_file(params_file=params_file)
     print(f"Parameterizations count: {len(parameterizations)}")
@@ -104,7 +100,8 @@ def workflow_new_configs(config_file: ExtantFile, images_folder: ExtantFolder, p
             json.dump(params.to_dict_for_json(), fh, indent=4)
         args = (
             params, 
-            config_file, 
+            rounds_config,
+            params_config,
             images_folder, 
             NonExtantPath(output_folder.path / idx.to_roi_filename()), 
             NonExtantPath(output_folder.path / idx.to_config_filename()), 
@@ -113,7 +110,13 @@ def workflow_new_configs(config_file: ExtantFile, images_folder: ExtantFolder, p
     return execute(argument_bundles=argument_bundles, cores=cores)
 
 
-def workflow_preexisting_configs(config_file: ExtantFile, images_folder: ExtantFolder, params_outfile_pairs: Iterable[Tuple[ParamPatch, NonExtantPath]], cores: Optional[int] = None) -> Iterable[str]:
+def workflow_preexisting_configs(
+    rounds_config: ExtantFile, 
+    params_config: ExtantFile, 
+    images_folder: ExtantFolder, 
+    params_outfile_pairs: Iterable[Tuple[ParamPatch, NonExtantPath]], 
+    cores: Optional[int] = None,
+    ) -> Iterable[str]:
     """Run the gridsearch from a collection of pre-existing, pre-generated config files ready to run looptrace."""
     print(f"Parameterizations count: {len(params_outfile_pairs)}")
     cores = cores or 1
@@ -121,7 +124,8 @@ def workflow_preexisting_configs(config_file: ExtantFile, images_folder: ExtantF
     for params, outfile in params_outfile_pairs:
         args = (
             params, 
-            config_file, 
+            rounds_config,
+            params_config,
             images_folder, 
             outfile, 
             None,
@@ -214,6 +218,26 @@ class IndexRange:
         return map(ParamIndex, range(self.lo, self.hi + 1))
 
 
+def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run spot detection over a range of parameters.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    
+    # Base CLI for this project
+    parser.add_argument("rounds_config", type=ExtantFile.from_string, help="Imaging rounds config file path")
+    parser.add_argument("params_config", type=ExtantFile.from_string, help="Looptrace parameters config file path")
+    parser.add_argument("image_path", type=ExtantFolder.from_string, help="Path to folder with images to read.")
+    
+    # Specifics for gridsearch
+    parser.add_argument("--parameters-grid-file", type=ExtantFile.from_string, help="Path to file which declares the gridsearch parameters")
+    parser.add_argument("-O", "--output-folder", type=Path, required=True, help="Path to root folder for output")
+    
+    # Control flow customisation
+    parser.add_argument("--cores", type=int, default=1, help="Number of processing cores to use")
+    parser.add_argument("--overwrite", action="store_true", help="Overwrite existing results file(s)")
+    parser.add_argument("--index-range", type=IndexRange.from_string, nargs="*", help="Ranges of parameter indices to use, only when running through written configs code path")
+
+    return parser.parse_args(cmdl)
+
+
 def main(cmdl: List[str]) -> None:
     opts = parse_cmdl(cmdl)
     
@@ -248,7 +272,12 @@ def main(cmdl: List[str]) -> None:
             with open(conf_path, 'r') as fh:
                 conf_data = json.load(fh)
             params_outfile_pairs.append((conf_data, result_path))
-        workflow_preexisting_configs(config_file=opts.config_path, images_folder=opts.image_path, params_outfile_pairs=params_outfile_pairs, cores=opts.cores)
+        workflow_preexisting_configs(
+            rounds_config=opts.rounds_config,
+            params_config=opts.params_config, 
+            images_folder=opts.image_path, 
+            params_outfile_pairs=params_outfile_pairs, cores=opts.cores,
+            )
     else:
         if opts.output_folder.exists():
             raise FileExistsError(f"Output folder already exists: {opts.output_folder}")
@@ -256,7 +285,8 @@ def main(cmdl: List[str]) -> None:
         os.makedirs(opts.output_folder, exist_ok=False)
         print(f"Starting spot detection gridsearch, based on parameters file: {opts.parameters_grid_file}")
         workflow_new_configs(
-            config_file=opts.config_path, 
+            rounds_config=opts.rounds_config,
+            params_config=opts.params_config, 
             images_folder=opts.image_path, 
             params_file=opts.parameters_grid_file, 
             output_folder=ExtantFolder(opts.output_folder), 

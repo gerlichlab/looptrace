@@ -103,13 +103,19 @@ def filter_rois_in_nucs(
 
 
 def workflow(
-        config_file: ExtantFile, 
-        images_folder: ExtantFolder, 
-        image_save_path: Optional[ExtantFolder] = None,
-        ) -> None:
+    rounds_config: ExtantFile, 
+    params_config: ExtantFile, 
+    images_folder: ExtantFolder, 
+    image_save_path: Optional[ExtantFolder] = None,
+    ) -> None:
     
     # Set up the spot picker and the nuclei detector instances, to manage paths and settings.
-    H = handler_from_cli(config_file=config_file, images_folder=images_folder, image_save_path=image_save_path)
+    H = handler_from_cli(
+        rounds_config=rounds_config, 
+        params_config=params_config, 
+        images_folder=images_folder, 
+        image_save_path=image_save_path,
+        )
     N = NucDetector(H)
 
     def query_table_for_pos(table: pd.DataFrame) -> Callable[[str], pd.DataFrame]:
@@ -160,10 +166,16 @@ def workflow(
     logger.info("Done!")
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Assign detected spots to nuclei (or not).')
-    parser.add_argument("config_path", type=ExtantFile.from_string, help="Config file path")
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Assign detected spots to nuclei (or not).")
+    parser.add_argument("rounds_config", type=ExtantFile.from_string, help="Imaging rounds config file path")
+    parser.add_argument("params_config", type=ExtantFile.from_string, help="Looptrace parameters config file path")
     parser.add_argument("image_path", type=ExtantFolder.from_string, help="Path to folder with images to read.")
     parser.add_argument("--image_save_path", type=ExtantFolder.from_string, help="(Optional): Path to folder to save images to.")
     args = parser.parse_args()
-    workflow(config_file=args.config_path, images_folder=args.image_path, image_save_path=args.image_save_path)
+    workflow(
+        rounds_config=args.rounds_config,
+        params_config=args.params_config, 
+        images_folder=args.image_path, 
+        image_save_path=args.image_save_path,
+        )

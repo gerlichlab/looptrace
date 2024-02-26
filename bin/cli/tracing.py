@@ -8,22 +8,34 @@ EMBL Heidelberg
 """
 
 import argparse
-import os
 
-from looptrace.ImageHandler import handler_from_cli
+from looptrace.ImageHandler import ImageHandler
 from looptrace.Tracer import Tracer
 from gertils import ExtantFile, ExtantFolder
 
+__author__ = "Kai Sandvold Beckwith"
+__credits__ = ["Kai Sandvold Beckwith", "Vincent Reuter"]
 
-def workflow(config_file: ExtantFile, images_folder: ExtantFolder):
-    image_handler = handler_from_cli(config_file=config_file, images_folder=images_folder, image_save_path=None)
+
+def workflow(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder):
+    image_handler = ImageHandler(
+        rounds_config=rounds_config, 
+        params_config=params_config, 
+        images_folder=images_folder, 
+        image_save_path=None,
+        )
     tracer = Tracer(image_handler)
     return tracer.trace_all_rois()
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Run chromatin tracing.')
-    parser.add_argument("config_path", type=ExtantFile.from_string, help="Config file path")
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run chromatin tracing.")
+    parser.add_argument("rounds_config", type=ExtantFile.from_string, help="Imaging rounds config file path")
+    parser.add_argument("params_config", type=ExtantFile.from_string, help="Looptrace parameters config file path")
     parser.add_argument("image_path", type=ExtantFolder.from_string, help="Path to folder with images to read.")
     args = parser.parse_args()
-    workflow(config_file=args.config_path, images_folder=args.image_path)
+    workflow(
+        rounds_config=args.rounds_config,
+        params_config=args.params_config, 
+        images_folder=args.image_path,
+        )

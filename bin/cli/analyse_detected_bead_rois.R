@@ -12,7 +12,7 @@ cli_parser <- ArgumentParser(description="Visualise bead ROI detection results")
 cli_parser$add_argument("-i", "--input-folder", required = TRUE, help = "Path to folder with detected bead ROIs, 1 file per combination of FOV and hybridistaion round / timepoint")
 cli_parser$add_argument("-o", "--output-folder", required = TRUE, help = "Path to folder in which to place output files")
 cli_parser$add_argument("--num-positions", type = "integer", required = TRUE, help="Number of positions (fields of view) for the experiment, used for validation of found files collection")
-cli_parser$add_argument("--num-frames", type = "integer", required = TRUE, help="Number of frames (hybridisation rounds / timepoints) for the experiment, used for validation of found files collection")
+cli_parser$add_argument("--num-rounds", type = "integer", required = TRUE, help="Number of imaging rounds/timepoints for the experiment, used for validation of found files collection")
 ## Optional
 cli_parser$add_argument("--counts-files-prefix", default = "bead_rois__", help = "Prefix for files to find to count ROIs")
 cli_parser$add_argument("--counts-files-extension", default = "csv", help = "Extension for files to fine to count ROIs")
@@ -104,9 +104,9 @@ if (1 != nrow(roi_counts[filename == "total", ])) {
 roi_counts <- roi_counts[filename != "total", ]
 ## TODO: could validate here not just on total row count as proudct of count of field of view and number of timepoints, 
 ##       but also validate that hierarchy / particular counts, too.
-exp_rows_counts <- opts$num_positions * opts$num_frames
+exp_rows_counts <- opts$num_positions * opts$num_rounds
 if (nrow(roi_counts) != exp_rows_counts) {
-    stop(sprintf("For %s positions and %s frames, %s counts are expected, but got %s", opts$num_positions, opts$num_frames, exp_rows_counts, nrow(roi_counts)))
+    stop(sprintf("For %s positions and %s frames, %s counts are expected, but got %s", opts$num_positions, opts$num_rounds, exp_rows_counts, nrow(roi_counts)))
 }
 if (any(!startsWith(roi_counts$filename, opts$counts_files_prefix))) {
     stop("Number of rows with invalid prefix: ", sum(!startsWith(roi_counts$filename, opts$counts_files_prefix)))
