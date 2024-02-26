@@ -65,7 +65,7 @@ class TestLabelAndFilterTracesQC extends AnyFunSuite, GenericSuite, ScalacheckSu
                 val (expUnfilteredPath, expFilteredPath) = pretest(tempdir = tempdir, infile = infile)
 
                 // With the pretest passed, run the action that generate outputs from inputs.
-                runStandardWorkflow(infile = infile, outfolder = tempdir)
+                runStandardWorkflow(defaultRoundsConfig, infile = infile, outfolder = tempdir)
 
                 /* Now, first, just do basic existence check of files... */
                 List(infile, expUnfilteredPath, expFilteredPath).map(os.isFile) shouldEqual List(true, true, true)
@@ -109,39 +109,46 @@ class TestLabelAndFilterTracesQC extends AnyFunSuite, GenericSuite, ScalacheckSu
     test("Probe exclusion is correct.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
 
-        // probe names taken from the frame_name column of the traces input file
-        val probeNames = Set("pre_image", "Dp027", "Dp028", "Dp027_repeat", "Dp105", "Dp107", "blank_1", "Dp019", "Dp020", "Dp021")
-        forAll (Gen.zip(Gen.someOf(probeNames), Gen.oneOf(tracesInputFile, tracesInputFileWithoutIndex))) {
-            case (exclusions, infile) => 
-                withCsvData(infile){ (rows: CsvRows) => rows.map(_(ParserConfig.default.probeNameColumn)).toSet shouldEqual probeNames }
-                withTempDirectory{ (tempdir: os.Path) => 
-                    // Perform the pretest and get the expected result paths.
-                    val (expUnfilteredPath, expFilteredPath) = pretest(tempdir = tempdir, infile = infile)
-                    // Run the output-generating action under test.
-                    runStandardWorkflow(infile = infile, outfolder = tempdir, probeExclusions = exclusions.map(ProbeName.apply).toList)
-                    // Now, first, just do basic existence check of files...
-                    List(infile, expUnfilteredPath, expFilteredPath).map(os.isFile) shouldEqual List(true, true, true)
+        // taken from the frame column of the traces input file
+        val expectedTimepoints = (0 to 9).toSet
+        forAll (Gen.someOf(expectedTimepoints), Gen.oneOf(tracesInputFile, tracesInputFileWithoutIndex)) { (exclusions, infile) => 
+            withCsvData(infile){ (rows: CsvRows) => 
+                rows.map(_(ParserConfig.default.timeColumn)).toSet shouldEqual expectedTimepoints.map(_.toString)
+            }
+            val roundsConfig = {
+                val seq = defaultRoundsConfig.sequence
+                val loc = defaultRoundsConfig.locusGrouping
+                val reg = defaultRoundsConfig.regionGrouping
+                ImagingRoundsConfiguration.unsafe(seq, loc, reg, exclusions.map(Timepoint.unsafe).toSet)
+            }
+            withTempDirectory{ (tempdir: os.Path) => 
+                // Perform the pretest and get the expected result paths.
+                val (expUnfilteredPath, expFilteredPath) = pretest(tempdir = tempdir, infile = infile)
+                // Run the output-generating action under test.
+                runStandardWorkflow(roundsConfig, infile = infile, outfolder = tempdir)
+                // Now, first, just do basic existence check of files...
+                List(infile, expUnfilteredPath, expFilteredPath).map(os.isFile) shouldEqual List(true, true, true)
 
-                    if (exclusions === probeNames) {
-                        /* Each file should be just a header. */
-                        withCsvData(expUnfilteredPath)((_: CsvRows).isEmpty shouldBe true)
-                        withCsvData(expFilteredPath)((_: CsvRows).isEmpty shouldBe true)
-                        os.read.lines(expUnfilteredPath).length shouldEqual 1
-                        os.read.lines(expFilteredPath).length shouldEqual 1
-                    } else {
-                        val discard = (r: CsvRow) => exclusions.contains(r("frame_name"))
-                        /* Each file should exhibit row-by-row equality with expectation. */
-                        withCsvPair(expUnfilteredPath, componentExpectationFile){ (obsRows: CsvRows, expRowsAll: CsvRows) =>
-                            val expRows = expRowsAll.filterNot(discard)
-                            assertPairwiseEquality(observed = obsRows.toList, expected = expRows.toList)
-                        }
-                        withCsvPair(expFilteredPath, wholemealFilteredExpectationFile){ (obsRows: CsvRows, expRowsAll: CsvRows) =>
-                            val expRowsFilt = expRowsAll.filterNot(discard)
-                            assertPairwiseEquality(observed = obsRows.toList, expected = expRowsFilt.toList)
-                        }
+                if (exclusions === expectedTimepoints) {
+                    /* Each file should be just a header. */
+                    withCsvData(expUnfilteredPath)((_: CsvRows).isEmpty shouldBe true)
+                    withCsvData(expFilteredPath)((_: CsvRows).isEmpty shouldBe true)
+                    os.read.lines(expUnfilteredPath).length shouldEqual 1
+                    os.read.lines(expFilteredPath).length shouldEqual 1
+                } else {
+                    val discard = (r: CsvRow) => exclusions.contains(r("frame_name"))
+                    /* Each file should exhibit row-by-row equality with expectation. */
+                    withCsvPair(expUnfilteredPath, componentExpectationFile){ (obsRows: CsvRows, expRowsAll: CsvRows) =>
+                        val expRows = expRowsAll.filterNot(discard)
+                        assertPairwiseEquality(observed = obsRows.toList, expected = expRows.toList)
+                    }
+                    withCsvPair(expFilteredPath, wholemealFilteredExpectationFile){ (obsRows: CsvRows, expRowsAll: CsvRows) =>
+                        val expRowsFilt = expRowsAll.filterNot(discard)
+                        assertPairwiseEquality(observed = obsRows.toList, expected = expRowsFilt.toList)
                     }
                 }
             }
+        }
     }
 
     test("Trace length filter is effective.") {
@@ -164,7 +171,7 @@ class TestLabelAndFilterTracesQC extends AnyFunSuite, GenericSuite, ScalacheckSu
                 withTempDirectory{ (tempdir: os.Path) =>
                     val (expUnfilteredPath, expFilteredPath) = pretest(tempdir = tempdir, infile = infile)
                     // With the pretest passed, run the action that generate outputs from inputs.
-                    runStandardWorkflow(infile = infile, outfolder = tempdir, minTraceLength = minTraceLen)
+                    runStandardWorkflow(defaultRoundsConfig, infile = infile, outfolder = tempdir, minTraceLength = minTraceLen)
                     // Now, first, just do basic existence check of files...
                     List(infile, expUnfilteredPath, expFilteredPath).map(os.isFile) shouldEqual List(true, true, true)
 
@@ -195,6 +202,8 @@ class TestLabelAndFilterTracesQC extends AnyFunSuite, GenericSuite, ScalacheckSu
         os.isFile(expFilteredPath) shouldBe false // Filtered output doesn't yet exist.
         (expUnfilteredPath, expFilteredPath)
     }
+
+    private def defaultRoundsConfig = ImagingRoundsConfiguration.unsafeFromJsonFile(getResourcePath("rounds_config.json"))
     private def tracesInputFile = getResourcePath("traces__with_index.raw.csv")
     private def tracesInputFileWithoutIndex = getResourcePath("traces__without_index.raw.csv")
 
@@ -204,15 +213,16 @@ class TestLabelAndFilterTracesQC extends AnyFunSuite, GenericSuite, ScalacheckSu
     }
 
     private def runStandardWorkflow(
+        roundsConfig: ImagingRoundsConfiguration,
         infile: os.Path = tracesInputFile,
         outfolder: os.Path, 
-        config: ParserConfig = ParserConfig.default, 
+        parserConfig: ParserConfig = ParserConfig.default, 
         maxDistFromRegion: DistanceToRegion = DistanceToRegion(NonnegativeReal(800)), 
         minSignalToNoise: SignalToNoise = SignalToNoise(PositiveReal(2)), 
         maxSigmaXY: SigmaXY = SigmaXY(PositiveReal(150)), 
         maxSigmaZ: SigmaZ = SigmaZ(PositiveReal(400)),
         probeExclusions: List[ProbeName] = List(), 
         minTraceLength: NonnegativeInt = NonnegativeInt(0)
-        ) = workflow(config, infile, maxDistFromRegion, minSignalToNoise, maxSigmaXY, maxSigmaZ, probeExclusions, minTraceLength, outfolder)
+        ) = workflow(roundsConfig, parserConfig, infile, maxDistFromRegion, minSignalToNoise, maxSigmaXY, maxSigmaZ, minTraceLength, outfolder)
 
 end TestLabelAndFilterTracesQC
