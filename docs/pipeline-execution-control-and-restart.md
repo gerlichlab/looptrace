@@ -7,7 +7,7 @@ To do so, the start and end points must be specified by name of processing stage
 
 To __start__ the pipeline from a specific point, use `--start-point <stage name>`. Example:
 ```python
-python run_processing_pipeline.py -C conf.yaml -I images_folder -O pypiper_output --start-point spot_detection --stop-before tracing_QC
+python run_processing_pipeline.py     --rounds-config rounds.json     --params-config params.yaml     --images-folder images_folder     -O pypiper_output     --start-point spot_detection     --stop-before tracing_QC
 ```
 
 To __stop__ the pipeline...<br>
@@ -19,8 +19,11 @@ When experimenting with different parameter settings for one or more stages, it'
 Before rerunning the pipeline with the appropriate `--start-point` value, take care of the following:
 
 1. __Analysis folder__: It's wise to create a new analysis / output folder for a restart, particularly if it corresponds to updated parameter settings.
-1. __Configuration file__: It's wise to create a new config file for a resart if it corresponds to updated parameter settings. 
+1. __Parameters configuration file__: It's wise to create a new parameters config file for a resart if it corresponds to updated parameter settings. 
 Regardless of whether that's done, ensure that the `analysis_path` value corresponds to the output folder you'd like to use.
+1. __Imaging rounds configuration file__: If a new analysis for the same experimental data affects something about the imaging rounds configuration, 
+e.g. the minimum separation distance required between regional spots, you may want to create this config file anew, copying the old one and updating 
+the relevant parameter(s).
 1. __Pipeline (pypiper) folder__: You should create a new pypiper folder for a restart with new parameters.
 This is critical since the semaphore / checkpoint files will influence pipeline control flow.
 You should copy to this folder any checkpoint files of any stages upstream of the one from which you want the restart to begin.

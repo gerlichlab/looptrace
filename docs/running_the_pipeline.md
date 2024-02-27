@@ -17,7 +17,45 @@ To be able to run this pipeline on the lab machine, these are the basic requirem
 * __Analysis subfolder__ (created on lab machine or on cluster): something like `2023-08-10_Analysis01`, though can be anything and just must match the name of the subfolder you supply in the config file, as the leaf of the path in the `analysis_path` value
 
 
-## Configuration file
+## _Imaging rounds_ configuration file
+This is a file that declares the imaging rounds executed over the course of an experiment.
+These data should take the form of a mapping, stored as a JSON object; the sections are described below.
+An example is available in the [test data](../src/test/resources/TestImagingRoundsConfiguration/example_imaging_round_configuration.json).
+
+* `regionGrouping` is required and should be a mapping, with at minimum a `semantic` key. The value for the semantic may be "Trivial", "Permissive", or "Prohibitive", depending on how you want the groupings to be interpreted with respect to excluding proximal spots. 
+"Trivial" treats all regional spots as one big group and will exclude any that violate the proximity threshold; it's like "Prohibitive" but with no grouping.
+"Permissive" allows spots from timepoints grouped together to violate the proximity threshold; spots from timepoints not grouped together may not violate the proximity threshold.
+"Prohibitive" forbids spots from timepoints grouped together to violate the proximity threshold; spots from timepoints not grouped together may violate the proximity threshold.
+* If `semantic` is set to "Trivial", there can be no `groups`; otherwise, `groups` is required and must be an array-of-arrays.
+* `semantic` and `groups` must be nested within the `regionGrouping` mapping.
+* If specified, the value for `groups` must satisfy these properties:
+    * Each group must have no repeat value.
+    * The groups must be disjoint.
+    * The union of the groups must cover the set of regional round timepoints from the `imagingRounds`.
+    * The set of regional round timepoints from the `imagingRounds` must cover the union of groups.
+* `minimumPixelLikeSeparation` must be a key in the `regionGrouping` mapping and should be a nonnegative integer. 
+This represents the minimum separation (in pixels) in each dimension between the centroids of regional spots. 
+NB: For z, this is slices not pixels.
+* `imagingRounds` must be present, and it enumerates the imaging rounds that comprise the experiment. 
+For every entry, `time` is required, and either `probe` or `name` is required.
+No `time` value can be repeated, and the timepoints should form the sequence (0, 1, 2, ..., *N*-1), where *N* is the number of imaging rounds in the experiment.
+Each value in this array represents a single imaging round; each round is one of 3 cases:
+    * _Blank_ round: `time` must be present, `isBlank` must be present and set to `true`, `probe` must be absent, and `name` must be present. `isRegional` must be absent.
+    * _Locus_ FISH round: `time` must be present, `isBlank` must be absent or set to `false`, `probe` must be present, `name` is optional, and `isRegional` is absent or set to `false`.
+    * _Regional_ FISH round: `time` must be present, `isBlank` must be absent or set to `false`, `probe` must be present, `name` is optional, `isRegional` is absent or set to `false`, and `repeat` must be absent.
+* For any non-regional round, `repeat` may be included with a natural number as the value. In that case, if `name` is absent (derived from `probe`), the suffix `_repeatX` will be added to the `probe` value to determine the name.
+* In general, if `name` is absent, it's set to `probe` value (though this is not possible for a blank round, which is why `name` is required when `isBlank` is `true`).
+* The set of names for the rounds of the imaging sequence must have no repeated value (including a collision of a derived value with some explicit or derived value).
+* `locusGrouping` must be present as a top-level key if and only if there's one or more locus imaging rounds in the `imagingRounds`.
+    * Each key must be a string, but specifying the timepoint of one of the _regional_ rounds from the `imagingRounds` sequence.
+    * Each value is a list of locus imaging timepoints associated with the regional timepoint to which it's keyed.
+    * If present, the values in the lists must be such that the union of the lists is the set of locus imaging timepoints from the `imagingRounds` seuqence.
+    * The values lists should have unique values, and they should be disjoint.
+* Check that the list of `illegal_frames_for_trace_support` values is correct, most likely any pre-imaging timepoint names, "blank" timepoints, and all regional barcode timepoint names.
+* `tracingExclusions` should generally be specified, and its value should be a list of timepoints of imaging rounds to exclude from tracing, typically the blank / pre-imaging rounds, and regional barcode rounds. The list can't contain any timepoints not seen in the values of the `imagingRounds`.
+
+
+## _Parameters_ configuration file
 Looptrace uses a configuration file to define values for processing parameters and pointers to places on disk from which to read and write data. 
 The path to the configuration file is a required parameter to [run the pipeline](#general-workflow), and it should be created (or copied and edited) before running anything.
 
@@ -45,30 +83,25 @@ Judge in accordance with how many beads you anticipate having per image.
 * `subtract_crosstalk` should be set to `False`, rendering `crosstalk_ch` irrelevant.
 * `parallelise_spot_detection` should be set to `False`.
 * `spot_downsample` should be a small integer, often just 2 or even 1 (no downsampling).
-* `regional_spots_grouping` (if specified) should be a mapping, with a `groups` key and a `semantic` key. 
-The `semantic` value should be either `permissive` or `prohibitive`, depending on how you want the groupings to be handled for regional spot exclusion based on proximity. The `groups` value should be a list-of-lists specifying the grouped regional barcode imaging timepoints.
 * `spot_in_nuc` should be set to `True`, generally.
 * `padding_method` should be set to `edge`.
 * `tracing_cores` should be a value no more than the number of CPUs on the machine on which the processing will run.
 * `mask_fits` should be set to `False`.
 * `roi_image_size` should be a 3-element list and should most likely be (8, 16, 16) or (16, 32, 32).
 * `subtract_background` should be set to 0.
-* Check that the tracing QC parameters are as desired
+* Check that the tracing QC parameters are as desired:
     * For `A_to_BG`, 2 is often a good setting.
     * For `sigma_xy_max`, 150 is often a good setting.
     * For `sigma_z_max`, 400 is often a good setting.
     * For `max_dist`, 800 is often a good setting.
 * If you want the Numpy arrays representing the spot images for tracing (the `*.npy` files) to be kept even after zipping, set `keep_spot_images_folder` to `True`.
-* Check that the list of `spot_frame` values corresponds to the timepoints (0-based) use for regional barcode imaging.
-* Check that the list of `frame_name` values corresponds to how you'd like the probes/frames/timepoints to be labeled.
-* Check that the list of `illegal_frames_for_trace_support` values is correct, most likely any pre-imaging timepoint names, "blank" timepoints, and all regional barcode timepoint names.
-* __If multiplexing__: Check that the `regional_spots_grouping` specifies the correct groupings of regional barcode imaging timepoints to reflect the regional barcodes which _ARE_ allowed to be in close proximity (in violation of `min_spot_dist`).
+* Check that the list of `spot_frame` values corresponds to the timepoints (0-based) use for regional barcode imaging in the [imaging rounds config file](#imaging-rounds-configuration-file).
 
 
 ## General workflow
 Once you have the [minimal requirements](#minimal-requirements), this will be the typical workflow for running the pipeline:
 1. __Login__ to the machine: something like `ssh username@ask-Vince-or-Chris-for-the-machine-domain`
-1. __Path creation__: Assure that the necessary filepaths exist; particularly easy to forget are the path to the folder in which analysis output will be placed (the value of `analysis_path` in the config file), and the path to the folder in which the pipeline will place its own files (`-O / --output-folder` argument at the command-line). See the [data layout section](#data-layout-and-organisation).
+1. __Path creation__: Assure that the necessary filepaths exist; particularly easy to forget are the path to the folder in which analysis output will be placed (the value of `analysis_path` in the parameters config file), and the path to the folder in which the pipeline will place its own files (`-O / --output-folder` argument at the command-line). See the [data layout section](#data-layout-and-organisation).
 1. `tmux`: attach to an existing `tmux` session, or start a new one. See the [tmux section](#tmux) for more info.
 1. __Docker__: Start the relevant Docker container:
     ```shell
@@ -76,12 +109,12 @@ Once you have the [minimal requirements](#minimal-requirements), this will be th
     ```
 1. __Run pipeline__: Once in the Docker container, run the pipeline, replacing the file and folder names as needed / desired:
     ```shell
-    python /looptrace/bin/cli/run_processing_pipeline.py -C /home/experiment/looptrace_00XXXX.yaml --images-folder /home/experiment/images_all -O /home/experiment/pypiper_output
+    python /looptrace/bin/cli/run_processing_pipeline.py --rounds-config /home/experiment/looptrace_00XXXX.rounds.json --params-config /home/experiment/looptrace_00XXXX.params.yaml --images-folder /home/experiment/images_all -O /home/experiment/pypiper_output
     ```
 1. __Detach__: `Ctrl+b d` -- for more, see the [tmux section](#tmux).
 
 
-## tmux
+## `tmux`
 In this context, for running the pipeline, think of the _terminal multiplexer_ (`tmux`) as a way to start a long-running process and be assured that an interruption in Internet connectivity (e.g., computer sleep or network failure) won't also be an interruption in the long-running process. If your connection to the remote machine is interrupted, but you've started your long-running process in `tmux`, that process won't be interrupted.
 
 ### Basic usage
