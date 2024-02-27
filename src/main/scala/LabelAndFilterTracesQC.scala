@@ -228,9 +228,9 @@ object LabelAndFilterTracesQC:
                     val maybeParseBackground = buildFieldParse(pc.backgroundColumn, safeParseDouble >> LocusSpotQC.Background.apply)(header)
                     val maybeParseSigmaXY = buildFieldParse(pc.xySigmaColumn, safeParseDouble)(header)
                     val maybeParseSigmaZ = buildFieldParse(pc.zSigmaColumn, safeParseDouble)(header)
-                    val maybeParseBoxZ = buildFieldParse(pc.zBoxSizeColumn.get, safeParsePosNum >> LocusSpotQC.BoxSizeZ.apply)(header)
-                    val maybeParseBoxY = buildFieldParse(pc.yBoxSizeColumn.get, safeParsePosNum >> LocusSpotQC.BoxSizeY.apply)(header)
-                    val maybeParseBoxX = buildFieldParse(pc.xBoxSizeColumn.get, safeParsePosNum >> LocusSpotQC.BoxSizeX.apply)(header)
+                    val maybeParseBoxZ = buildFieldParse(pc.zBoxSizeColumn.get, safeParsePosNum >> LocusSpotQC.BoxBoundZ.apply)(header)
+                    val maybeParseBoxY = buildFieldParse(pc.yBoxSizeColumn.get, safeParsePosNum >> LocusSpotQC.BoxBoundY.apply)(header)
+                    val maybeParseBoxX = buildFieldParse(pc.xBoxSizeColumn.get, safeParsePosNum >> LocusSpotQC.BoxBoundX.apply)(header)
                     (
                         maybeParseFov,
                         maybeParseRegion, 
@@ -283,7 +283,9 @@ object LabelAndFilterTracesQC:
                                     parseBoxX(record)
                                     ).mapN((fov, rid, tid, time, z, y, x, refDist, a, bg, sigXY, sigZ, boxZ, boxY, boxX) => 
                                         val uniqId = TraceSpotId(TraceGroupId(fov, rid, tid), time)
-                                        val qcData = LocusSpotQC.DataRecord((boxZ, boxY, boxX), Point3D(x, y, z), refDist, a, bg, sigXY, sigZ)
+                                        val bounds = LocusSpotQC.BoxUpperBounds(boxX, boxY, boxZ)
+                                        val center = Point3D(x, y, z)
+                                        val qcData = LocusSpotQC.DataRecord(bounds, center, refDist, a, bg, sigXY, sigZ)
                                         uniqId -> qcData
                                     ).toEither
                                 }
@@ -299,24 +301,7 @@ object LabelAndFilterTracesQC:
                         Alternative[List].separate(NonnegativeInt.indexed(records).map{ (rec, idx) => parse(rec).bimap(
                             idx -> _, 
                             (uniqId, qcData: LocusSpotQC.DataRecord) => 
-                                val (boxZ, boxY, boxX): (LocusSpotQC.BoxSizeZ, LocusSpotQC.BoxSizeY, LocusSpotQC.BoxSizeX) = qcData.box
-                                val (z, y, x): (ZCoordinate, YCoordinate, XCoordinate) = qcData.centroid match { case Point3D(x, y, z) => (z, y, x) }
-                                val passDist = qcData.distanceToRegion < maxDistFromRegion
-                                val passSNR = qcData.passesSNR(minSignalToNoise)
-                                val passSigmaXY = 0 < qcData.sigmaXY && qcData.sigmaXY < maxSigmaXY.get
-                                val passSigmaZ = 0 < qcData.sigmaZ && qcData.sigmaZ < maxSigmaZ.get
-                                val passBoxZ = max(0, qcData.sigmaZ) < z.get && z.get <  boxZ.get - qcData.sigmaZ
-                                val passBoxY = max(0, qcData.sigmaXY) < y.get && y.get <  boxY.get - qcData.sigmaXY
-                                val passBoxX = max(0, qcData.sigmaXY) < x.get && x.get <  boxX.get - qcData.sigmaXY
-                                val qcResult = LocusSpotQC.ResultRecord(
-                                    withinRegion = passDist, 
-                                    sufficientSNR = passSNR, 
-                                    denseXY = passSigmaXY, 
-                                    denseZ = passSigmaZ, 
-                                    inBoundsX = passBoxX, 
-                                    inBoundsY = passBoxY, 
-                                    inBoundsZ = passBoxZ
-                                    )
+                                val qcResult = qcData.toQCResult(maxDistFromRegion, minSignalToNoise, maxSigmaXY, maxSigmaZ)
                                 (uniqId, (rec -> qcResult))
                             )
                         }) match {
