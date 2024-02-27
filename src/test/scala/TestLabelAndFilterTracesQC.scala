@@ -136,7 +136,9 @@ class TestLabelAndFilterTracesQC extends AnyFunSuite, GenericSuite, ScalacheckSu
                     os.read.lines(expUnfilteredPath).length shouldEqual 1
                     os.read.lines(expFilteredPath).length shouldEqual 1
                 } else {
-                    val discard = (r: CsvRow) => exclusions.contains(r("frame_name"))
+                    // Just use strings here since Int-to-String is 1:1 (essentially), 
+                    // and this obviates need to unsafely lift String to Int.
+                    val discard = (r: CsvRow) => exclusions.map(_.toString).toSet.contains(r("frame"))
                     /* Each file should exhibit row-by-row equality with expectation. */
                     withCsvPair(expUnfilteredPath, componentExpectationFile){ (obsRows: CsvRows, expRowsAll: CsvRows) =>
                         val expRows = expRowsAll.filterNot(discard)
