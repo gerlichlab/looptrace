@@ -40,6 +40,10 @@ class TestLabelAndFilterTracesQC extends AnyFunSuite, GenericSuite, ScalacheckSu
 
     test("Missing probe names column, specifically, fails the parse expectedly.") { pending }
 
+    test("A spot can only be retained if the distance between the centroid of its Gaussian fit and each edge is at least the standard deviation of the spot's Gaussian fit. #265") {
+        pending
+    }
+
     test("Basic golden path test") {
         withTempDirectory{ (tempdir: os.Path) => 
 
