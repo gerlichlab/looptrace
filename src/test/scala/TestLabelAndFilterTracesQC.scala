@@ -7,16 +7,8 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
 import org.scalatest.funsuite.AnyFunSuite
 
-import LabelAndFilterTracesQC.{
-    DistanceToRegion, 
-    ParserConfig, 
-    QcPassColumn, 
-    QCResult, 
-    SigmaXY, 
-    SigmaZ, 
-    SignalToNoise, 
-    workflow
-}
+import LocusSpotQC.{ DistanceToRegion, SigmaXY, SigmaZ, SignalToNoise }
+import LabelAndFilterTracesQC.{ ParserConfig, QcPassColumn, LocusSpotQCResult, workflow }
 import PathHelpers.*
 
 /** Tests for the filtration of the individual supports (single FISH probes) of chromatin fiber traces */
@@ -53,7 +45,7 @@ class TestLabelAndFilterTracesQC extends AnyFunSuite, GenericSuite, ScalacheckSu
                 val sep = Delimiter.fromPathUnsafe(componentExpectationFile)
                 sep `split` expLinesUnfiltered.head
             }.toList
-            val componentLabelColumns: List[String] = labelsOf[QCResult].productIterator.toList.map(_.asInstanceOf[String])
+            val componentLabelColumns: List[String] = labelsOf[LocusSpotQCResult].productIterator.toList.map(_.asInstanceOf[String])
             val inputHeaderFields = {
                 val headline = os.read.lines(tracesInputFile).head
                 val sep = Delimiter.fromPathUnsafe(componentExpectationFile)
