@@ -24,17 +24,15 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
 object LabelAndFilterTracesQC:
     val ProgramName = "LabelAndFilterTracesQC"
     val QcPassColumn = "qcPass"
-
-    type Real = Double
     
     /** Deinition of the command-line interface */
     case class CliConfig(
         configuration: ImagingRoundsConfiguration = null, // unconditionally required
         traces: os.Path = null, // unconditionally required
-        maxDistanceToRegionCenter: DistanceToRegion = DistanceToRegion(NonnegativeReal(Double.MaxValue)),
-        minSignalToNoise: SignalToNoise = SignalToNoise(PositiveReal(1e-10)),
-        maxSigmaXY: SigmaXY = SigmaXY(PositiveReal(Double.MaxValue)),
-        maxSigmaZ: SigmaZ = SigmaZ(PositiveReal(Double.MaxValue)),
+        maxDistanceToRegionCenter: LocusSpotQC.DistanceToRegion = LocusSpotQC.DistanceToRegion(NonnegativeReal(Double.MaxValue)),
+        minSignalToNoise: LocusSpotQC.SignalToNoise = LocusSpotQC.SignalToNoise(PositiveReal(1e-10)),
+        maxSigmaXY: LocusSpotQC.SigmaXY = LocusSpotQC.SigmaXY(PositiveReal(Double.MaxValue)),
+        maxSigmaZ: LocusSpotQC.SigmaZ = LocusSpotQC.SigmaZ(PositiveReal(Double.MaxValue)),
         probesToIgnore: Seq[ProbeName] = List(),
         minTraceLength: NonnegativeInt = NonnegativeInt(0),
         parserConfig: Option[os.Path] = None, 
@@ -148,19 +146,19 @@ object LabelAndFilterTracesQC:
                 .text("Path to the traces data file"),
             opt[NonnegativeReal]("maxDistanceToRegionCenter")
                 .required()
-                .action((d, c) => c.copy(maxDistanceToRegionCenter = DistanceToRegion(d)))
+                .action((d, c) => c.copy(maxDistanceToRegionCenter = LocusSpotQC.DistanceToRegion(d)))
                 .text("Maximum allowed distance between a sigle FISH probe centroid and a regional centroid"),
             opt[PositiveReal]("minSNR")
                 .required()
-                .action((r, c) => c.copy(minSignalToNoise = SignalToNoise(r)))
+                .action((r, c) => c.copy(minSignalToNoise = LocusSpotQC.SignalToNoise(r)))
                 .text("Maximum allowed distance between a sigle FISH probe centroid and a regional centroid"),
             opt[PositiveReal]("maxSigmaXY")
                 .required()
-                .action((r, c) => c.copy(maxSigmaXY = SigmaXY(r)))
+                .action((r, c) => c.copy(maxSigmaXY = LocusSpotQC.SigmaXY(r)))
                 .text("Maximum allowed standard deviation of Gaussian fit in xy for a record to still be used to support traces"),
             opt[PositiveReal]("maxSigmaZ")
                 .required()
-                .action((r, c) => c.copy(maxSigmaZ = SigmaZ(r)))
+                .action((r, c) => c.copy(maxSigmaZ = LocusSpotQC.SigmaZ(r)))
                 .text("Maximum allowed standard deviation of Gaussian fit in z for a record to still be used to support traces"),
             opt[os.Path]("parserConfig")
                 .action((f, c) => c.copy(parserConfig = f.some))
@@ -194,10 +192,10 @@ object LabelAndFilterTracesQC:
         imagingRoundsConfiguration: ImagingRoundsConfiguration,
         parserConfigPathOrConf: os.Path | ParserConfig, 
         tracesFile: os.Path, 
-        maxDistFromRegion: DistanceToRegion, 
-        minSignalToNoise: SignalToNoise, 
-        maxSigmaXY: SigmaXY, 
-        maxSigmaZ: SigmaZ,
+        maxDistFromRegion: LocusSpotQC.DistanceToRegion, 
+        minSignalToNoise: LocusSpotQC.SignalToNoise, 
+        maxSigmaXY: LocusSpotQC.SigmaXY, 
+        maxSigmaZ: LocusSpotQC.SigmaZ,
         minTraceLength: NonnegativeInt, 
         outfolder: os.Path
         ): Unit = {
@@ -214,7 +212,7 @@ object LabelAndFilterTracesQC:
         os.read.lines(tracesFile).map(delimiter.split).toList match {
             case (Nil | (_ :: Nil)) => println("Traces file has no records, skipping QC labeling and filtering")
             case header :: records => 
-                val maybeParse: ErrMsgsOr[Array[String] => ErrMsgsOr[(TraceSpotId, QCData)]] = {
+                val maybeParse: ErrMsgsOr[Array[String] => ErrMsgsOr[(TraceSpotId, LocusSpotQC.DataRecord)]] = {
                     val maybeParseFov = buildFieldParse(pc.fovColumn, safeParseInt >>> PositionIndex.fromInt)(header)
                     val maybeParseRegion = buildFieldParse(pc.regionColumn, safeParseInt >>> RegionId.fromInt)(header)
                     val maybeParseTraceId = buildFieldParse(pc.traceIdColumn, safeParseInt >>> TraceId.fromInt)(header)
@@ -224,15 +222,15 @@ object LabelAndFilterTracesQC:
                     val maybeParseX = buildFieldParse(pc.xPointColumn.get, safeParseDouble >> XCoordinate.apply)(header)
                     val maybeParseRefDist = buildFieldParse(
                         pc.distanceToReferenceColumn, 
-                        safeParseDouble.andThen(_.flatMap(NonnegativeReal.either).map(DistanceToRegion.apply)),
+                        safeParseDouble.andThen(_.flatMap(NonnegativeReal.either).map(LocusSpotQC.DistanceToRegion.apply)),
                         )(header)
-                    val maybeParseSignal = buildFieldParse(pc.signalColumn, safeParseDouble >> Signal.apply)(header)
-                    val maybeParseBackground = buildFieldParse(pc.backgroundColumn, safeParseDouble >> Background.apply)(header)
+                    val maybeParseSignal = buildFieldParse(pc.signalColumn, safeParseDouble >> LocusSpotQC.Signal.apply)(header)
+                    val maybeParseBackground = buildFieldParse(pc.backgroundColumn, safeParseDouble >> LocusSpotQC.Background.apply)(header)
                     val maybeParseSigmaXY = buildFieldParse(pc.xySigmaColumn, safeParseDouble)(header)
                     val maybeParseSigmaZ = buildFieldParse(pc.zSigmaColumn, safeParseDouble)(header)
-                    val maybeParseBoxZ = buildFieldParse(pc.zBoxSizeColumn.get, safeParsePosNum >> BoxSizeZ.apply)(header)
-                    val maybeParseBoxY = buildFieldParse(pc.yBoxSizeColumn.get, safeParsePosNum >> BoxSizeY.apply)(header)
-                    val maybeParseBoxX = buildFieldParse(pc.xBoxSizeColumn.get, safeParsePosNum >> BoxSizeX.apply)(header)
+                    val maybeParseBoxZ = buildFieldParse(pc.zBoxSizeColumn.get, safeParsePosNum >> LocusSpotQC.BoxSizeZ.apply)(header)
+                    val maybeParseBoxY = buildFieldParse(pc.yBoxSizeColumn.get, safeParsePosNum >> LocusSpotQC.BoxSizeY.apply)(header)
+                    val maybeParseBoxX = buildFieldParse(pc.xBoxSizeColumn.get, safeParsePosNum >> LocusSpotQC.BoxSizeX.apply)(header)
                     (
                         maybeParseFov,
                         maybeParseRegion, 
@@ -285,7 +283,7 @@ object LabelAndFilterTracesQC:
                                     parseBoxX(record)
                                     ).mapN((fov, rid, tid, time, z, y, x, refDist, a, bg, sigXY, sigZ, boxZ, boxY, boxX) => 
                                         val uniqId = TraceSpotId(TraceGroupId(fov, rid, tid), time)
-                                        val qcData = QCData((boxZ, boxY, boxX), Point3D(x, y, z), refDist, a, bg, sigXY, sigZ)
+                                        val qcData = LocusSpotQC.DataRecord((boxZ, boxY, boxX), Point3D(x, y, z), refDist, a, bg, sigXY, sigZ)
                                         uniqId -> qcData
                                     ).toEither
                                 }
@@ -300,8 +298,8 @@ object LabelAndFilterTracesQC:
                     case Right(parse) => 
                         Alternative[List].separate(NonnegativeInt.indexed(records).map{ (rec, idx) => parse(rec).bimap(
                             idx -> _, 
-                            (uniqId, qcData: QCData) => 
-                                val (boxZ, boxY, boxX): (BoxSizeZ, BoxSizeY, BoxSizeX) = qcData.box
+                            (uniqId, qcData: LocusSpotQC.DataRecord) => 
+                                val (boxZ, boxY, boxX): (LocusSpotQC.BoxSizeZ, LocusSpotQC.BoxSizeY, LocusSpotQC.BoxSizeX) = qcData.box
                                 val (z, y, x): (ZCoordinate, YCoordinate, XCoordinate) = qcData.centroid match { case Point3D(x, y, z) => (z, y, x) }
                                 val passDist = qcData.distanceToRegion < maxDistFromRegion
                                 val passSNR = qcData.passesSNR(minSignalToNoise)
@@ -310,7 +308,7 @@ object LabelAndFilterTracesQC:
                                 val passBoxZ = max(0, qcData.sigmaZ) < z.get && z.get <  boxZ.get - qcData.sigmaZ
                                 val passBoxY = max(0, qcData.sigmaXY) < y.get && y.get <  boxY.get - qcData.sigmaXY
                                 val passBoxX = max(0, qcData.sigmaXY) < x.get && x.get <  boxX.get - qcData.sigmaXY
-                                val qcResult = QCResult(
+                                val qcResult = LocusSpotQCResult(
                                     withinRegion = passDist, 
                                     sufficientSNR = passSNR, 
                                     denseXY = passSigmaXY, 
@@ -337,9 +335,9 @@ object LabelAndFilterTracesQC:
     /** Write filtered and unfiltered results files, filtered having just QC pass flag column uniformly 1, unfiltered having causal components. */
     def writeResults(
         header: Array[String], outfolder: os.Path, basename: String, delimiter: Delimiter
-        )(minTraceLength: NonnegativeInt, records: Iterable[(TraceGroupId, (Array[String], QCResult))]): Unit = {
+        )(minTraceLength: NonnegativeInt, records: Iterable[(TraceGroupId, (Array[String], LocusSpotQCResult))]): Unit = {
         require(os.isDir(outfolder), s"Output folder path isn't a directory: $outfolder")
-        val (withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol) = labelsOf[QCResult]
+        val (withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol) = labelsOf[LocusSpotQCResult]
         Alternative[List].separate(NonnegativeInt.indexed(records.toList).map { 
             case (rec@(_, (original, qcResult)), recnum) => 
                 (header.length === original.length).either(
@@ -354,7 +352,7 @@ object LabelAndFilterTracesQC:
                 }
                 
                 /* Unfiltered output */
-                val getQCFlagsText = (qc: QCResult) => (qc.components :+ qc.all).map(p => if p then "1" else "0")
+                val getQCFlagsText = (qc: LocusSpotQCResult) => (qc.components :+ qc.all).map(p => if p then "1" else "0")
                 val unfilteredOutputFile = outfolder / s"${basename}.unfiltered.${delimiter.ext}" // would need to update ImageHandler.traces_file_qc_unfiltered if changed
                 val unfilteredHeader = actualHeader ++ List(withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol, QcPassColumn)
                 val unfilteredRows = unfiltered.map{ case (_, (original, qc)) => finaliseOriginal(original) ++ getQCFlagsText(qc) }
@@ -386,65 +384,11 @@ object LabelAndFilterTracesQC:
     final case class TraceSpotId(groupId: TraceGroupId, time: Timepoint)
 
     /** A bundle of the QC pass/fail components for individual rows/records supporting traces */
-    final case class QCResult(withinRegion: Boolean, sufficientSNR: Boolean, denseXY: Boolean, denseZ: Boolean, inBoundsX: Boolean, inBoundsY: Boolean, inBoundsZ: Boolean):
+    final case class LocusSpotQCResult(withinRegion: Boolean, sufficientSNR: Boolean, denseXY: Boolean, denseZ: Boolean, inBoundsX: Boolean, inBoundsY: Boolean, inBoundsZ: Boolean):
         final def components: Array[Boolean] = Array(withinRegion, sufficientSNR, denseXY, denseZ, inBoundsX, inBoundsY, inBoundsZ)
         final def all: Boolean = components.all
-    end QCResult
-
-    final case class DistanceToRegion(get: NonnegativeReal) extends AnyVal
-    object DistanceToRegion:
-        given distToRegionOrd: Order[DistanceToRegion] = Order.by(_.get)
-    end DistanceToRegion
-
-    final case class SignalToNoise(get: PositiveReal) extends AnyVal
-    object SignalToNoise:
-        given snrOrder: Order[SignalToNoise] = Order.by(_.get)
-    end SignalToNoise
-
-    final case class Signal(get: Real) extends AnyVal
+    end LocusSpotQCResult
     
-    final case class Background(get: Real) extends AnyVal
-
-    final case class SigmaXY(get: PositiveReal) extends AnyVal
-    object SigmaXY:
-        given sigmaXYOrder: Order[SigmaXY] = Order.by(_.get)
-    end SigmaXY
-
-    final case class SigmaZ(get: PositiveReal) extends AnyVal
-    object SigmaZ:
-        given sigmaZOrder: Order[SigmaZ] = Order.by(_.get)
-    end SigmaZ
-
-    final case class BoxSizeZ(get: PositiveReal) extends AnyVal
-    object BoxSizeZ:
-        given boxZOrder: Order[BoxSizeZ] = Order.by(_.get)
-    end BoxSizeZ
-
-    final case class BoxSizeY(get: PositiveReal) extends AnyVal
-    object BoxSizeY:
-        given boxZOrder: Order[BoxSizeY] = Order.by(_.get)
-    end BoxSizeY
-
-    final case class BoxSizeX(get: PositiveReal) extends AnyVal
-    object BoxSizeX:
-        given boxZOrder: Order[BoxSizeX] = Order.by(_.get)
-    end BoxSizeX
-    
-    final case class QCData(
-        box: (BoxSizeZ, BoxSizeY, BoxSizeX),
-        centroid: Point3D,
-        distanceToRegion: DistanceToRegion, 
-        signal: Signal, 
-        background: Background, 
-        sigmaXY: Real, 
-        sigmaZ: Real
-        ):
-        final def x: XCoordinate = centroid.x
-        final def y: YCoordinate = centroid.y
-        final def z: ZCoordinate = centroid.z
-        final def passesSNR(minSNR: SignalToNoise): Boolean = signal.get > minSNR.get * background.get
-    end QCData
-
     final case class BoxSizeColumnX(get: String) extends AnyVal
     final case class BoxSizeColumnY(get: String) extends AnyVal
     final case class BoxSizeColumnZ(get: String) extends AnyVal
