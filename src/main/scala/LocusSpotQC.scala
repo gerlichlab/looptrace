@@ -46,6 +46,14 @@ object LocusSpotQC:
         final def passesSNR(minSNR: SignalToNoise): Boolean = signal.get > minSNR.get * background.get
     end DataRecord
     
+    /** A bundle of the QC pass/fail components for individual rows/records supporting traces */
+    final case class ResultRecord(withinRegion: Boolean, sufficientSNR: Boolean, denseXY: Boolean, denseZ: Boolean, inBoundsX: Boolean, inBoundsY: Boolean, inBoundsZ: Boolean):
+        /** The individual true/false components indicating QC pass or fail. */
+        final def components: Array[Boolean] = Array(withinRegion, sufficientSNR, denseXY, denseZ, inBoundsX, inBoundsY, inBoundsZ)
+        /** Whether all of the QC check components in this instance indicate a pass */
+        final def allPass: Boolean = components.all
+    end ResultRecord
+
     /** The (Euclidean)  distance between a locus-specific spot's center and the center of its associated regional spot */
     final case class DistanceToRegion(get: NonnegativeReal) extends AnyVal
 
