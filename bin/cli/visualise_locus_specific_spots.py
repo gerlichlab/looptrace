@@ -86,6 +86,7 @@ def compute_points(cur_pts_tab, *, num_times: int, roi_size: RoiImageSize):
             try:
                 qc_pass, coords = lookup[t]
             except KeyError:
+                # TODO: when can this actually happen??
                 coords = np.zeros(3)
                 visible = False
                 point_shape = bad_shape

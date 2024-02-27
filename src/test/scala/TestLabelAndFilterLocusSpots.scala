@@ -8,11 +8,11 @@ import org.scalatest.matchers.*
 import org.scalatest.funsuite.AnyFunSuite
 
 import LocusSpotQC.{ DistanceToRegion, SigmaXY, SigmaZ, SignalToNoise }
-import LabelAndFilterTracesQC.{ ParserConfig, QcPassColumn, workflow }
+import LabelAndFilterLocusSpots.{ ParserConfig, QcPassColumn, workflow }
 import PathHelpers.*
 
 /** Tests for the filtration of the individual supports (single FISH probes) of chromatin fiber traces */
-class TestLabelAndFilterTracesQC extends AnyFunSuite, GenericSuite, ScalacheckSuite, should.Matchers:
+class TestLabelAndFilterLocusSpots extends AnyFunSuite, GenericSuite, ScalacheckSuite, should.Matchers:
     
     test("Collision between any of the column name values in a parser config is prohibited.") { pending }
     
@@ -190,7 +190,7 @@ class TestLabelAndFilterTracesQC extends AnyFunSuite, GenericSuite, ScalacheckSu
     private def componentExpectationFile = getResourcePath("traces.labeled.unfiltered.csv")
     private def wholemealFilteredExpectationFile = getResourcePath("traces.labeled.filtered.csv")
     private def getResourcePath(name: String): os.Path = 
-        os.Path(getClass.getResource(s"/TestLabelAndFilterTracesQC/$name").getPath)
+        os.Path(getClass.getResource(s"/TestLabelAndFilterLocusSpots/$name").getPath)
     
     private def pretest(tempdir: os.Path, infile: os.Path) = {
         val expUnfilteredPath = tempdir / s"${infile.baseName}.unfiltered.csv"
@@ -223,4 +223,4 @@ class TestLabelAndFilterTracesQC extends AnyFunSuite, GenericSuite, ScalacheckSu
         minTraceLength: NonnegativeInt = NonnegativeInt(0)
         ) = workflow(roundsConfig, parserConfig, infile, maxDistFromRegion, minSignalToNoise, maxSigmaXY, maxSigmaZ, minTraceLength, outfolder)
 
-end TestLabelAndFilterTracesQC
+end TestLabelAndFilterLocusSpots
