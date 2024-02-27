@@ -308,7 +308,7 @@ object LabelAndFilterTracesQC:
                                 val passBoxZ = max(0, qcData.sigmaZ) < z.get && z.get <  boxZ.get - qcData.sigmaZ
                                 val passBoxY = max(0, qcData.sigmaXY) < y.get && y.get <  boxY.get - qcData.sigmaXY
                                 val passBoxX = max(0, qcData.sigmaXY) < x.get && x.get <  boxX.get - qcData.sigmaXY
-                                val qcResult = LocusSpotQCResult(
+                                val qcResult = LocusSpotQC.ResultRecord(
                                     withinRegion = passDist, 
                                     sufficientSNR = passSNR, 
                                     denseXY = passSigmaXY, 
@@ -335,9 +335,9 @@ object LabelAndFilterTracesQC:
     /** Write filtered and unfiltered results files, filtered having just QC pass flag column uniformly 1, unfiltered having causal components. */
     def writeResults(
         header: Array[String], outfolder: os.Path, basename: String, delimiter: Delimiter
-        )(minTraceLength: NonnegativeInt, records: Iterable[(TraceGroupId, (Array[String], LocusSpotQCResult))]): Unit = {
+        )(minTraceLength: NonnegativeInt, records: Iterable[(TraceGroupId, (Array[String], LocusSpotQC.ResultRecord))]): Unit = {
         require(os.isDir(outfolder), s"Output folder path isn't a directory: $outfolder")
-        val (withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol) = labelsOf[LocusSpotQCResult]
+        val (withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol) = labelsOf[LocusSpotQC.ResultRecord]
         Alternative[List].separate(NonnegativeInt.indexed(records.toList).map { 
             case (rec@(_, (original, qcResult)), recnum) => 
                 (header.length === original.length).either(
@@ -352,7 +352,7 @@ object LabelAndFilterTracesQC:
                 }
                 
                 /* Unfiltered output */
-                val getQCFlagsText = (qc: LocusSpotQCResult) => (qc.components :+ qc.all).map(p => if p then "1" else "0")
+                val getQCFlagsText = (qc: LocusSpotQC.ResultRecord) => (qc.components :+ qc.allPass).map(p => if p then "1" else "0")
                 val unfilteredOutputFile = outfolder / s"${basename}.unfiltered.${delimiter.ext}" // would need to update ImageHandler.traces_file_qc_unfiltered if changed
                 val unfilteredHeader = actualHeader ++ List(withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol, QcPassColumn)
                 val unfilteredRows = unfiltered.map{ case (_, (original, qc)) => finaliseOriginal(original) ++ getQCFlagsText(qc) }
@@ -363,7 +363,7 @@ object LabelAndFilterTracesQC:
                 val filteredOutputFile = outfolder / s"${basename}.filtered.${delimiter.ext}" // would need to update ImageHandler.traces_file_qc_filtered if changed
                 val filteredHeader = actualHeader :+ QcPassColumn
                 val filteredRows = unfiltered.flatMap{ 
-                    case (groupId, (original, qc)) => qc.all.option{ (groupId, finaliseOriginal(original) :+ "1") }
+                    case (groupId, (original, qc)) => qc.allPass.option{ (groupId, finaliseOriginal(original) :+ "1") }
                 }
                 val hist = filteredRows.groupBy(_._1).view.mapValues(_.length).toMap
                 val keepKeys = hist.filter(_._2 >= minTraceLength).keySet
@@ -382,12 +382,6 @@ object LabelAndFilterTracesQC:
 
     /** A single spot belongs to a trace group. Neither the group ID nor probe ID is unique, but together they are. */
     final case class TraceSpotId(groupId: TraceGroupId, time: Timepoint)
-
-    /** A bundle of the QC pass/fail components for individual rows/records supporting traces */
-    final case class LocusSpotQCResult(withinRegion: Boolean, sufficientSNR: Boolean, denseXY: Boolean, denseZ: Boolean, inBoundsX: Boolean, inBoundsY: Boolean, inBoundsZ: Boolean):
-        final def components: Array[Boolean] = Array(withinRegion, sufficientSNR, denseXY, denseZ, inBoundsX, inBoundsY, inBoundsZ)
-        final def all: Boolean = components.all
-    end LocusSpotQCResult
     
     final case class BoxSizeColumnX(get: String) extends AnyVal
     final case class BoxSizeColumnY(get: String) extends AnyVal
