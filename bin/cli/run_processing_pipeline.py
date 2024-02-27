@@ -157,7 +157,7 @@ def plot_spot_counts(rounds_config: ExtantFile, params_config: ExtantFile, spot_
 
 def qc_label_and_filter_traces(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> None:
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config, image_path=images_folder)
-    prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.LabelAndFilterTracesQC"
+    prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.LabelAndFilterLocusSpots"
     cmd_parts = [
         "java", 
         "-cp",

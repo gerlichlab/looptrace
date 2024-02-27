@@ -5,24 +5,26 @@ import scala.util.Try
 import upickle.default.*
 import cats.{ Alternative, Order }
 import cats.data.{ NonEmptyList as NEL, ValidatedNel }
-import cats.syntax.apply.*
-import cats.syntax.either.*
-import cats.syntax.eq.*
-import cats.syntax.flatMap.*
-import cats.syntax.functor.*
-import cats.syntax.option.*
-import cats.syntax.order.*
+import cats.syntax.all.*
 import mouse.boolean.*
 import scopt.OParser
 
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
-import at.ac.oeaw.imba.gerlich.looptrace.LabelAndFilterTracesQC.ParserConfig.traceIdKey
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ Point3D, XCoordinate, YCoordinate, ZCoordinate }
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
 
-/** Label points underlying traces with various QC pass-or-fail values. */
-object LabelAndFilterTracesQC:
-    val ProgramName = "LabelAndFilterTracesQC"
+/**
+  * Label points underlying traces with various QC pass-or-fail values.
+  * 
+  * Includes computation of the data needed for `napari` to visualise the locus-specific spots, with QC label info
+  * 
+  * @author Vince Reuter
+  * @see [[https://github.com/gerlichlab/looptrace/issues/269 Issue 269]]
+  * @see [[https://github.com/gerlichlab/looptrace/issues/268 Issue 268]]
+  * @see [[https://github.com/gerlichlab/looptrace/issues/259 Issue 259]]
+  */
+object LabelAndFilterLocusSpots:
+    val ProgramName = "LabelAndFilterLocusSpots"
     val QcPassColumn = "qcPass"
     
     /** Deinition of the command-line interface */
@@ -375,4 +377,4 @@ object LabelAndFilterTracesQC:
     final case class PointColumnX(get: String) extends AnyVal
     final case class PointColumnY(get: String) extends AnyVal
     final case class PointColumnZ(get: String) extends AnyVal
-end LabelAndFilterTracesQC
+end LabelAndFilterLocusSpots
