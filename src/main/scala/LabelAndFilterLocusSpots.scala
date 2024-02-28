@@ -214,7 +214,7 @@ object LabelAndFilterLocusSpots:
         os.read.lines(tracesFile).map(delimiter.split).toList match {
             case (Nil | (_ :: Nil)) => println("Traces file has no records, skipping QC labeling and filtering")
             case header :: records => 
-                val maybeParse: ErrMsgsOr[Array[String] => ErrMsgsOr[(TraceSpotId, LocusSpotQC.DataRecord)]] = {
+                val maybeParse: ErrMsgsOr[Array[String] => ErrMsgsOr[(TraceSpotId, LocusSpotQC.InputRecord)]] = {
                     val maybeParseFov = buildFieldParse(pc.fovColumn, safeParseInt >>> PositionIndex.fromInt)(header)
                     val maybeParseRegion = buildFieldParse(pc.regionColumn, safeParseInt >>> RegionId.fromInt)(header)
                     val maybeParseTraceId = buildFieldParse(pc.traceIdColumn, safeParseInt >>> TraceId.fromInt)(header)
@@ -287,7 +287,7 @@ object LabelAndFilterLocusSpots:
                                         val uniqId = TraceSpotId(TraceGroupId(fov, rid, tid), time)
                                         val bounds = LocusSpotQC.BoxUpperBounds(boxX, boxY, boxZ)
                                         val center = Point3D(x, y, z)
-                                        val qcData = LocusSpotQC.DataRecord(bounds, center, refDist, a, bg, sigXY, sigZ)
+                                        val qcData = LocusSpotQC.InputRecord(bounds, center, refDist, a, bg, sigXY, sigZ)
                                         uniqId -> qcData
                                     ).toEither
                                 }
@@ -302,7 +302,7 @@ object LabelAndFilterLocusSpots:
                     case Right(parse) => 
                         Alternative[List].separate(NonnegativeInt.indexed(records).map{ (rec, idx) => parse(rec).bimap(
                             idx -> _, 
-                            (uniqId, qcData: LocusSpotQC.DataRecord) => 
+                            (uniqId, qcData: LocusSpotQC.InputRecord) => 
                                 val qcResult = qcData.toQCResult(maxDistFromRegion, minSignalToNoise, maxSigmaXY, maxSigmaZ)
                                 (uniqId, (rec -> qcResult))
                             )

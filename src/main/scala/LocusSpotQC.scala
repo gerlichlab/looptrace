@@ -1,10 +1,17 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
+import scala.language.adhocExtensions // to extend ujson.Value.InvalidData
 import scala.math.max
 import cats.*
+import cats.data.*
+import cats.data.Validated.{ Invalid, Valid }
 import cats.syntax.all.*
 import mouse.boolean.*
+import upickle.default.*
+
+import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
 
 /**
  * Tools for working with the quality control filtration and visualisation of locus-specific spots
@@ -12,6 +19,81 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.*
  * @author Vince Reuter
  */
 object LocusSpotQC:
+
+    object PointCodec:
+        private[LocusSpotQC] def toJsonObject(p: Point3D): ujson.Obj = ujson.Obj(
+            "x" -> ujson.Num(p.x.get),
+            "y" -> ujson.Num(p.y.get),
+            "z" -> ujson.Num(p.z.get),
+        )
+
+        private[LocusSpotQC] def fromJson(json: ujson.Value): ErrMsgsOr[Point3D] = ???
+
+    /**
+      * Bundle of data that uniquely identifies a spot and gives its coordinates and QC result.
+      *
+      * @param identifier The context with which to identify the spot within an experiment
+      * @param point The coordinates of the centroid of the 3D Gaussian fit to the pixels
+      * @param result The results of the QC filters
+      */
+    final case class OutputRecord(identifier: SpotIdentifier, point: Point3D, qcResult: ResultRecord)
+
+    object OutputRecord:
+        /** JSON codec */
+        def rwForOutputRecord: ReadWriter[OutputRecord] = readwriter[ujson.Value].bimap(
+            record => ujson.Obj(
+                "identifier" -> SpotIdentifier.toJsonObject(record.identifier), 
+                "point" -> PointCodec.toJsonObject(record.point), 
+                "qcResult" -> ResultRecord.toJsonObject(record.qcResult),
+            ), 
+            json => ???
+        )
+
+    /**
+      * Bundle of data with which to uniquely identify a locus-specific spot in an experiment
+      *
+      * @param position Field of view, 0-based index
+      * @param regionId Wrapper around the timepoint at which the spot's associated region was imaged
+      * @param traceId 0-based index identifying the trace, ideally uniquely within the experiment but perhaps not
+      * @param locusId Wrapper around the timepoint at which the spot was imaged
+      */
+    final case class SpotIdentifier(position: PositionIndex, regionId: RegionId, traceId: TraceId, locusId: LocusId)
+    
+    /** Helpers for working with identifiers of locus-specific spots */
+    object SpotIdentifier:
+        /**
+          * Error subtype for when something goes wrong decoding an instance from JSON
+          *
+          * @param messages Why decoding was not possible
+          * @param json The data on which the decoding attempt was made
+          */
+        final class DecodingError(messages: NonEmptyList[String], json: ujson.Value) 
+            extends ujson.Value.InvalidData(json, s"Error(s) decoding locus spot identifier: ${messages.mkString_("; ")}")
+        
+        private[LocusSpotQC] def toJsonObject(spotId: SpotIdentifier): ujson.Obj = ujson.Obj(
+            "position" -> ujson.Num(spotId.position.get),
+            "regionId" -> ujson.Num(spotId.regionId.get.get),
+            "traceId" -> ujson.Num(spotId.traceId.get), 
+            "locusId" -> ujson.Num(spotId.locusId.get.get), 
+        )
+
+        private[looptrace] def fromJson(json: ujson.Value): ErrMsgsOr[SpotIdentifier] = ???
+
+        /** A JSON codec which unwraps the components and maps field names to the refined values */
+        def rwForSpotIdentifier: ReadWriter[SpotIdentifier] = readwriter[ujson.Value].bimap(
+            toJsonObject,
+            json => 
+                val posIdNel = safeExtractE("position", safeParseInt >>> PositionIndex.fromInt)(json)
+                val regIdNel = safeExtractE("regionId", safeParseInt >>> RegionId.fromInt)(json)
+                val traceIdNel = safeExtractE("traceId", safeParseInt >>> TraceId.fromInt)(json)
+                val locusIdNel = safeExtractE("locusId", safeParseInt >>> LocusId.fromInt)(json)
+                (posIdNel, regIdNel, traceIdNel, locusIdNel).mapN(SpotIdentifier.apply) match {
+                    case Invalid(messages) => throw new DecodingError(messages, json)
+                    case Valid(spotId) => spotId
+                }
+        )
+    end SpotIdentifier
+
     /**
       * Data, from a single looptrace tracing record, that's associated with quality control of a locus-specific spot
       *
@@ -25,7 +107,7 @@ object LocusSpotQC:
       * @param sigmaXY The standard deviation, in the 'xy' plane, of the 3D Gaussian fit to this spot
       * @param sigmaZ The standard deviation, in 'z', of the 3D Gaussian fit to this spot
       */
-    final case class DataRecord(
+    final case class InputRecord(
         bounds: BoxUpperBounds,
         centroid: Point3D,
         distanceToRegion: DistanceToRegion, 
@@ -85,7 +167,7 @@ object LocusSpotQC:
         /** Helper to factor out the common structure in this comarison for each of the dimensions */
         private final def withinSigmaOfBound(sigma: Double, boxBound: PositiveReal)(p: Double): Either[Boolean, Boolean] = 
             (sigma > 0).either(0.0, sigma).mapBoth(s => p > s && p < boxBound - s)
-    end DataRecord
+    end InputRecord
     
     /** A bundle of the QC pass/fail components for individual rows/records supporting traces */
     final case class ResultRecord(withinRegion: Boolean, sufficientSNR: Boolean, denseXY: Boolean, denseZ: Boolean, inBoundsX: Boolean, inBoundsY: Boolean, inBoundsZ: Boolean):
@@ -93,6 +175,22 @@ object LocusSpotQC:
         final def components: Array[Boolean] = Array(withinRegion, sufficientSNR, denseXY, denseZ, inBoundsX, inBoundsY, inBoundsZ)
         /** Whether all of the QC check components in this instance indicate a pass */
         final def allPass: Boolean = components.all
+    end ResultRecord
+
+    /** Helpers for working with a bundle of QC result components for a single locus-specific spot */
+    object ResultRecord:
+        /** Write the record to a JSON object. */
+        private[LocusSpotQC] def toJsonObject(r: ResultRecord): ujson.Obj = ujson.Obj(
+            "withinRegion" -> ujson.Bool(r.withinRegion),
+            "sufficientSNR" -> ujson.Bool(r.sufficientSNR), 
+            "denseXY" -> ujson.Bool(r.denseXY), 
+            "denseZ" -> ujson.Bool(r.denseZ), 
+            "inBoundsX" -> ujson.Bool(r.inBoundsX),
+            "inBoundsY" -> ujson.Bool(r.inBoundsY),
+            "inBoundsZ" -> ujson.Bool(r.inBoundsZ),
+        )
+
+        private[LocusSpotQC] def fromJson(json: ujson.Value): ErrMsgsOr[ResultRecord] = ???
     end ResultRecord
 
     /** The (Euclidean)  distance between a locus-specific spot's center and the center of its associated regional spot */
@@ -115,19 +213,19 @@ object LocusSpotQC:
 
     /** The amplitude/peak of a 3D Gaussian fit to a spot.
      * 
-     * @see [[DataRecord]]
+     * @see [[InputRecord]]
      */
     final case class Signal(get: Double) extends AnyVal
     
     /** The background/baseline of a 3D Gaussian fit to a spot.
      * 
-     * @see [[DataRecord]]
+     * @see [[InputRecord]]
      */
     final case class Background(get: Double) extends AnyVal
 
     /** The standard deviation, in 'x' and 'y', of a 3D Gaussian fit to a spot.
      * 
-     * @see [[DataRecord]]
+     * @see [[InputRecord]]
      */
     final case class SigmaXY(get: PositiveReal) extends AnyVal
     
@@ -139,7 +237,7 @@ object LocusSpotQC:
 
     /** The standard deviation, in 'z', of a 3D Gaussian fit to a spot.
      * 
-     * @see [[DataRecord]]
+     * @see [[InputRecord]]
      */
     final case class SigmaZ(get: PositiveReal) extends AnyVal
 
