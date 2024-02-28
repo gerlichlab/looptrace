@@ -132,14 +132,12 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, GenericSuite, Scalacheck
                     os.read.lines(expUnfilteredPath).length shouldEqual 1
                     os.read.lines(expFilteredPath).length shouldEqual 1
                 } else {
-                    // Just use strings here since Int-to-String is 1:1 (essentially), 
-                    // and this obviates need to unsafely lift String to Int.
-                    val discard = (r: CsvRow) => exclusions.map(_.toString).toSet.contains(r("frame"))
                     /* Each file should exhibit row-by-row equality with expectation. */
                     withCsvPair(expUnfilteredPath, componentExpectationFile){ (obsRows: CsvRows, expRowsAll: CsvRows) =>
-                        val expRows = expRowsAll.filterNot(discard)
-                        assertPairwiseEquality(observed = obsRows.toList, expected = expRows.toList)
+                        assertPairwiseEquality(observed = obsRows.toList, expected = expRowsAll.toList)
                     }
+                    // Just use strings here since Int-to-String is 1:1 (essentially), and this obviates need to unsafely lift String to Int.
+                    val discard = (r: CsvRow) => exclusions.map(_.toString).toSet.contains(r("frame"))
                     withCsvPair(expFilteredPath, wholemealFilteredExpectationFile){ (obsRows: CsvRows, expRowsAll: CsvRows) =>
                         val expRowsFilt = expRowsAll.filterNot(discard)
                         assertPairwiseEquality(observed = obsRows.toList, expected = expRowsFilt.toList)
@@ -158,13 +156,13 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, GenericSuite, Scalacheck
         // Take the rows grouped together by (pos ID, region ID, roi ID) where group size is at least the demarcation size.
         // Drop the first 5 lines, which correspond to 1 for the header and 4 records before the block of 3 (pid=0, rid=23, tid=1).
         val expWhenEqualToDemarcation = allLinesFilteredExpectation.head :: allLinesFilteredExpectation.drop(5).take(minLenDemarcation)
-        val expWhenMoreThanDemarcation = allLinesFilteredExpectation.head :: List()
+        val expWhenMoreThanDemarcation = List(allLinesFilteredExpectation.head)
         def genMinLenAndExp = Gen.oneOf(
             Gen.choose(0, 2).map(NonnegativeInt.unsafe).map(_ -> expWhenLessThanDemarcation),
             Gen.const(NonnegativeInt(3)).map(_ -> expWhenEqualToDemarcation), 
             Gen.choose(4, Int.MaxValue).map(NonnegativeInt.unsafe).map(_ -> expWhenMoreThanDemarcation)
             )
-        forAll (Gen.zip(genMinLenAndExp, Gen.oneOf(tracesInputFile, tracesInputFileWithoutIndex))) {
+        forAll (genMinLenAndExp, Gen.oneOf(tracesInputFile, tracesInputFileWithoutIndex)) {
             case ((minTraceLen, expLinesFiltered), infile) => 
                 withTempDirectory{ (tempdir: os.Path) =>
                     val (expUnfilteredPath, expFilteredPath) = pretest(tempdir = tempdir, infile = infile)
@@ -180,7 +178,8 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, GenericSuite, Scalacheck
                         )
                     
                     /* Do a check of the lines of the filtered output file. */
-                    assertPairwiseEquality(observed = os.read.lines(expFilteredPath).toList, expected = expLinesFiltered)
+                    val observed = os.read.lines(expFilteredPath).toList
+                    assertPairwiseEquality(observed = observed, expected = expLinesFiltered)
                 }
         }
     }

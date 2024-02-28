@@ -343,8 +343,11 @@ object LabelAndFilterLocusSpots:
                     case _ => (header, identity(_: Array[String]))
                 }
                 
+                val qcPassRepr: String = "1"
+                val qcFailRepr: String = "0"
+
                 /* Unfiltered output */
-                val getQCFlagsText = (qc: LocusSpotQC.ResultRecord) => (qc.components :+ qc.allPass).map(p => if p then "1" else "0")
+                val getQCFlagsText = (qc: LocusSpotQC.ResultRecord) => (qc.components :+ qc.allPass).map(p => if p then qcPassRepr else qcFailRepr)
                 val unfilteredOutputFile = outfolder / s"${basename}.unfiltered.${delimiter.ext}" // would need to update ImageHandler.traces_file_qc_unfiltered if changed
                 val unfilteredHeader = actualHeader ++ List(withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol, QcPassColumn)
                 // Here, still a records even if its timepoint is in exclusions, as it may be useful to know when such "spots" actually pass QC.
@@ -357,13 +360,13 @@ object LabelAndFilterLocusSpots:
                 val filteredHeader = actualHeader :+ QcPassColumn
                 val filteredRows = unfiltered.flatMap{ case (groupId, (original, qc)) => 
                     if qc.allPass && !exclusions.contains(groupId.time) // For filtered output, use the timepoint exclusion filter in addition to QC.
-                    then (groupId, finaliseOriginal(original) :+ "1").some
+                    then (groupId, finaliseOriginal(original) :+ qcPassRepr).some
                     else None
                 }
-                val hist = filteredRows.groupBy(_._1).view.mapValues(_.length).toMap
+                val hist = filteredRows.groupBy(_._1.groupId).view.mapValues(_.length).toMap
                 val keepKeys = hist.filter(_._2 >= minTraceLength).keySet
                 val recordsToWrite = filteredRows
-                    .filter((groupId, _) => keepKeys.contains(groupId))
+                    .filter((spotId, _) => keepKeys.contains(spotId.groupId))
                     .map((_, fields) => fields)
                 println(s"Writing filtered output: $filteredOutputFile")
                 writeTextFile(filteredOutputFile, filteredHeader :: recordsToWrite, delimiter)
