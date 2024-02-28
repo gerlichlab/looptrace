@@ -37,19 +37,19 @@ An example is available in the [test data](../src/test/resources/TestImagingRoun
 This represents the minimum separation (in pixels) in each dimension between the centroids of regional spots. 
 NB: For z, this is slices not pixels.
 * `imagingRounds` must be present, and it enumerates the imaging rounds that comprise the experiment. 
-For every entry, `time` is required, and either `probe` or `name` is required.
+For every entry, `time` is required (as a nonnegative integer), and either `probe` or `name` is required.
 No `time` value can be repeated, and the timepoints should form the sequence (0, 1, 2, ..., *N*-1), where *N* is the number of imaging rounds in the experiment.
 Each value in this array represents a single imaging round; each round is one of 3 cases:
-    * _Blank_ round: `time` must be present, `isBlank` must be present and set to `true`, `probe` must be absent, and `name` must be present. `isRegional` must be absent.
-    * _Locus_ FISH round: `time` must be present, `isBlank` must be absent or set to `false`, `probe` must be present, `name` is optional, and `isRegional` is absent or set to `false`.
-    * _Regional_ FISH round: `time` must be present, `isBlank` must be absent or set to `false`, `probe` must be present, `name` is optional, `isRegional` is absent or set to `false`, and `repeat` must be absent.
+    * _Blank_ round: specify `time` as a nonnegative integer, and `name` as a string; set `isBlank` to `true`.
+    * _Locus_ FISH round: specify `time` as a nonnegative integer, omit `isBlank` or set it to `false`, and specify `probe` as a string. If this is a repeat of some earlier timepoint, specify `repeat` as a positive integer. `name` can be specified or inferred from `probe` and `repeat`; `isRegional` must be absent or `false`.
+    * _Regional_ FISH round: this is as for a locus-specific round, but ensure that `isRegional` is set to `true`, and this cannot have a `repeat` (omit it.)
 * For any non-regional round, `repeat` may be included with a natural number as the value. In that case, if `name` is absent (derived from `probe`), the suffix `_repeatX` will be added to the `probe` value to determine the name.
 * In general, if `name` is absent, it's set to `probe` value (though this is not possible for a blank round, which is why `name` is required when `isBlank` is `true`).
 * The set of names for the rounds of the imaging sequence must have no repeated value (including a collision of a derived value with some explicit or derived value).
 * `locusGrouping` must be present as a top-level key if and only if there's one or more locus imaging rounds in the `imagingRounds`.
     * Each key must be a string, but specifying the timepoint of one of the _regional_ rounds from the `imagingRounds` sequence.
     * Each value is a list of locus imaging timepoints associated with the regional timepoint to which it's keyed.
-    * If present, the values in the lists must be such that the union of the lists is the set of locus imaging timepoints from the `imagingRounds` seuqence.
+    * If present, the values in the lists must be such that the union of the lists is the set of locus imaging timepoints from the `imagingRounds` sequence.
     * The values lists should have unique values, and they should be disjoint.
 * Check that the list of `illegal_frames_for_trace_support` values is correct, most likely any pre-imaging timepoint names, "blank" timepoints, and all regional barcode timepoint names.
 * `tracingExclusions` should generally be specified, and its value should be a list of timepoints of imaging rounds to exclude from tracing, typically the blank / pre-imaging rounds, and regional barcode rounds. The list can't contain any timepoints not seen in the values of the `imagingRounds`.
