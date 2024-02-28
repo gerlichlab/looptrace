@@ -45,7 +45,11 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, GenericSuite, Scalacheck
                 val sep = Delimiter.fromPathUnsafe(componentExpectationFile)
                 sep `split` expLinesUnfiltered.head
             }.toList
-            val componentLabelColumns: List[String] = labelsOf[LocusSpotQC.ResultRecord].productIterator.toList.map(_.asInstanceOf[String])
+            val componentLabelColumns: List[String] = labelsOf[LocusSpotQC.ResultRecord]
+                .productIterator
+                .toList
+                .map(_.asInstanceOf[String])
+                .filterNot(_ === "canDisplayLabel")
             val inputHeaderFields = {
                 val headline = os.read.lines(tracesInputFile).head
                 val sep = Delimiter.fromPathUnsafe(componentExpectationFile)
