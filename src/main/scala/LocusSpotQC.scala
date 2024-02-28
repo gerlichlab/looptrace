@@ -162,15 +162,53 @@ object LocusSpotQC:
                 inBoundsX = withinSigmaOfBound(sigma = sigmaXY, boxBound = bounds.x.get)(x.get).merge, 
                 inBoundsY = withinSigmaOfBound(sigma = sigmaXY, boxBound = bounds.y.get)(y.get).merge, 
                 inBoundsZ = withinSigmaOfBound(sigma = sigmaZ, boxBound = bounds.z.get)(z.get).merge, 
+                canDisplayLabel = (
+                    centroid.z.get > 0 && 
+                    centroid.z.get < bounds.z.get && 
+                    centroid.y.get > 0 && 
+                    centroid.y.get < bounds.y.get && 
+                    centroid.x.get > 0 && 
+                    centroid.x.get < bounds.x.get
+                    )
                 )
 
-        /** Helper to factor out the common structure in this comarison for each of the dimensions */
+        /**
+         * Helper to factor out the common structure in this comarison for each of the dimensions, used along each of the 3 coordinate axes
+         *
+         * @param sigma The standard deviation, along a particular axis, of a 3D Gaussian fit to the locus spot
+         * @param boxBound The (upper) bound in a particular dimension of the bounding box around a locus-specific spot
+         * @param p The coordinate of a locus spot's center in a particular dimension
+         * @return Whether the given point is sufficiently "inside" (more than 1 `sigma`) the interval of the locus spot's 
+         *     bounding box, with the interval being in a particular one of the three dimensions
+         */
         private final def withinSigmaOfBound(sigma: Double, boxBound: PositiveReal)(p: Double): Either[Boolean, Boolean] = 
             (sigma > 0).either(0.0, sigma).mapBoth(s => p > s && p < boxBound - s)
     end InputRecord
     
-    /** A bundle of the QC pass/fail components for individual rows/records supporting traces */
-    final case class ResultRecord(withinRegion: Boolean, sufficientSNR: Boolean, denseXY: Boolean, denseZ: Boolean, inBoundsX: Boolean, inBoundsY: Boolean, inBoundsZ: Boolean):
+    /** A bundle of the QC pass/fail components for individual rows/records supporting traces
+      *
+      * @param withinRegion Whether a locus spot's center was sufficiently close to the center of its regional spot
+      * @param sufficientSNR Whether the 3D Gaussian fit to a locus spot's pixels had sufficient signal-to-noise ratio
+      * @param denseXY Whether the 3D Gaussian fit to a locus spot has a standard deviation of no more than a certain value in 'x' and 'y'
+      * @param denseZ Whether the 3D Gaussian fit to a locus spot has a standard deviation of no more than a certain value in 'z'
+      * @param inBoundsX Whether the center of a 3D Gaussian fit to a locus spot is more than 1 standar deviation away from both of the 'x' bounds 
+      *     of the spot's bounding box
+      * @param inBoundsY Whether the center of a 3D Gaussian fit to a locus spot is more than 1 standar deviation away from both of the 'y' bounds 
+      *     of the spot's bounding box
+      * @param inBoundsZ Whether the center of a 3D Gaussian fit to a locus spot is more than 1 standar deviation away from both of the 'z' bounds 
+      *     of the spot's bounding box
+      * @param canDisplayLabel Whether the locus spot's QC label will be able to be displayed in `napari`
+      */
+    final case class ResultRecord(
+        withinRegion: Boolean, 
+        sufficientSNR: Boolean, 
+        denseXY: Boolean, 
+        denseZ: Boolean, 
+        inBoundsX: Boolean, 
+        inBoundsY: Boolean, 
+        inBoundsZ: Boolean,
+        canDisplayLabel: Boolean,
+        ):
         /** The individual true/false components indicating QC pass or fail. */
         final def components: Array[Boolean] = Array(withinRegion, sufficientSNR, denseXY, denseZ, inBoundsX, inBoundsY, inBoundsZ)
         /** Whether all of the QC check components in this instance indicate a pass */
@@ -188,6 +226,7 @@ object LocusSpotQC:
             "inBoundsX" -> ujson.Bool(r.inBoundsX),
             "inBoundsY" -> ujson.Bool(r.inBoundsY),
             "inBoundsZ" -> ujson.Bool(r.inBoundsZ),
+            "canDisplayLabel" -> ujson.Bool(r.canDisplayLabel),
         )
 
         private[LocusSpotQC] def fromJson(json: ujson.Value): ErrMsgsOr[ResultRecord] = ???

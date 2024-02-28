@@ -214,7 +214,7 @@ object LabelAndFilterLocusSpots:
         os.read.lines(tracesFile).map(delimiter.split).toList match {
             case (Nil | (_ :: Nil)) => println("Traces file has no records, skipping QC labeling and filtering")
             case header :: records => 
-                val maybeParse: ErrMsgsOr[Array[String] => ErrMsgsOr[(TraceSpotId, LocusSpotQC.InputRecord)]] = {
+                val maybeParse: ErrMsgsOr[Array[String] => ErrMsgsOr[(LocusSpotQC.SpotIdentifier, LocusSpotQC.InputRecord)]] = {
                     val maybeParseFov = buildFieldParse(pc.fovColumn, safeParseInt >>> PositionIndex.fromInt)(header)
                     val maybeParseRegion = buildFieldParse(pc.regionColumn, safeParseInt >>> RegionId.fromInt)(header)
                     val maybeParseTraceId = buildFieldParse(pc.traceIdColumn, safeParseInt >>> TraceId.fromInt)(header)
@@ -284,7 +284,7 @@ object LabelAndFilterLocusSpots:
                                     parseBoxY(record), 
                                     parseBoxX(record)
                                     ).mapN((fov, rid, tid, time, z, y, x, refDist, a, bg, sigXY, sigZ, boxZ, boxY, boxX) => 
-                                        val uniqId = TraceSpotId(TraceGroupId(fov, rid, tid), time)
+                                        val uniqId = LocusSpotQC.SpotIdentifier(fov, rid, tid, LocusId(time))
                                         val bounds = LocusSpotQC.BoxUpperBounds(boxX, boxY, boxZ)
                                         val center = Point3D(x, y, z)
                                         val qcData = LocusSpotQC.InputRecord(bounds, center, refDist, a, bg, sigXY, sigZ)
@@ -304,7 +304,8 @@ object LabelAndFilterLocusSpots:
                             idx -> _, 
                             (uniqId, qcData: LocusSpotQC.InputRecord) => 
                                 val qcResult = qcData.toQCResult(maxDistFromRegion, minSignalToNoise, maxSigmaXY, maxSigmaZ)
-                                (uniqId, (rec -> qcResult))
+                                val totalResult = LocusSpotQC.OutputRecord(uniqId, qcData.centroid, qcResult)
+                                totalResult -> rec
                             )
                         }) match {
                             /* Throw an exception if any error occurred, otherwise write 2 results files. */
@@ -318,7 +319,7 @@ object LabelAndFilterLocusSpots:
 
     /** Write filtered and unfiltered results files, filtered having just QC pass flag column uniformly 1, unfiltered having causal components. */
     def writeResults(
-        records: Iterable[(TraceSpotId, (Array[String], LocusSpotQC.ResultRecord))], 
+        records: Iterable[(LocusSpotQC.OutputRecord, Array[String])], 
         exclusions: Set[Timepoint], 
         minTraceLength: NonnegativeInt,
         header: Array[String], 
@@ -327,13 +328,10 @@ object LabelAndFilterLocusSpots:
         delimiter: Delimiter,
         ): Unit = {
         require(os.isDir(outfolder), s"Output folder path isn't a directory: $outfolder")
-        val (withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol) = labelsOf[LocusSpotQC.ResultRecord]
-        Alternative[List].separate(NonnegativeInt.indexed(records.toList).map { 
-            case (rec@(_, (original, _)), recnum) => 
-                (header.length === original.length).either(
-                    ((s"Header has ${header.length}, original has ${original.length}"), recnum), 
-                    rec
-                    )
+        // Include placeholder for field for label displayability column, which we don't need for CSV writing (only JSON, handled via codec).
+        val (withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol, _) = labelsOf[LocusSpotQC.ResultRecord]
+        Alternative[List].separate(NonnegativeInt.indexed(records.toList).map { case (rec@(_, arr), recnum) => 
+            (header.length === arr.length).either( ((s"Header has ${header.length}, original has ${arr.length}"), recnum), rec )
         }) match {
             case (Nil, unfiltered) => // success (no errors) case --> write output files
                 val (actualHeader, finaliseOriginal) = header.head match {
@@ -351,22 +349,29 @@ object LabelAndFilterLocusSpots:
                 val unfilteredOutputFile = outfolder / s"${basename}.unfiltered.${delimiter.ext}" // would need to update ImageHandler.traces_file_qc_unfiltered if changed
                 val unfilteredHeader = actualHeader ++ List(withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol, QcPassColumn)
                 // Here, still a records even if its timepoint is in exclusions, as it may be useful to know when such "spots" actually pass QC.
-                val unfilteredRows = unfiltered.map{ case (_, (original, qc)) => finaliseOriginal(original) ++ getQCFlagsText(qc) }
+                val unfilteredRows = unfiltered.map{ (outrec, original) => finaliseOriginal(original) ++ getQCFlagsText(outrec.qcResult) }
                 println(s"Writing unfiltered output: $unfilteredOutputFile")
                 writeTextFile(unfilteredOutputFile, unfilteredHeader :: unfilteredRows, delimiter)
+                // TODO: write the JSON records here.
 
                 /* Filtered output */
                 val filteredOutputFile = outfolder / s"${basename}.filtered.${delimiter.ext}" // would need to update ImageHandler.traces_file_qc_filtered if changed
                 val filteredHeader = actualHeader :+ QcPassColumn
-                val filteredRows = unfiltered.flatMap{ case (groupId, (original, qc)) => 
-                    if qc.allPass && !exclusions.contains(groupId.time) // For filtered output, use the timepoint exclusion filter in addition to QC.
-                    then (groupId, finaliseOriginal(original) :+ qcPassRepr).some
+                val filteredRows = unfiltered.flatMap{ (outrec, original) => 
+                    if outrec.qcResult.allPass && !exclusions.contains(outrec.identifier.locusId.get) // For filtered output, use the timepoint exclusion filter in addition to QC.
+                    then (outrec.identifier, finaliseOriginal(original) :+ qcPassRepr).some
                     else None
                 }
-                val hist = filteredRows.groupBy(_._1.groupId).view.mapValues(_.length).toMap
-                val keepKeys = hist.filter(_._2 >= minTraceLength).keySet
+                val keepKeys = filteredRows
+                    .map(_._1)
+                    .groupBy(getGroupId)
+                    .view
+                    .mapValues(_.length)
+                    .toMap
+                    .filter(_._2 > minTraceLength)
+                    .keySet
                 val recordsToWrite = filteredRows
-                    .filter((spotId, _) => keepKeys.contains(spotId.groupId))
+                    .filter{ (spotId, _) => keepKeys.contains(getGroupId(spotId)) }
                     .map((_, fields) => fields)
                 println(s"Writing filtered output: $filteredOutputFile")
                 writeTextFile(filteredOutputFile, filteredHeader :: recordsToWrite, delimiter)
@@ -379,12 +384,9 @@ object LabelAndFilterLocusSpots:
     private def writeTextFile(target: os.Path, data: Iterable[Array[String]], delimiter: Delimiter) = 
         os.write(target, data.map(delimiter.join(_: Array[String]) ++ "\n"))
 
-    /** Supports for the same trace must share not only the same {@code TraceId}, but also be from the same FOV and region. */
-    final case class TraceGroupId(position: PositionIndex, region: RegionId, trace: TraceId)
+    /** From a spot identifier, obtain the elements needed to group it by logical tracing unit. */
+    def getGroupId(identifier: LocusSpotQC.SpotIdentifier): (PositionIndex, RegionId, TraceId) = (identifier.position, identifier.regionId, identifier.traceId)
 
-    /** A single spot belongs to a trace group. Neither the group ID nor probe ID is unique, but together they are. */
-    final case class TraceSpotId(groupId: TraceGroupId, time: Timepoint)
-    
     final case class BoxSizeColumnX(get: String) extends AnyVal
     final case class BoxSizeColumnY(get: String) extends AnyVal
     final case class BoxSizeColumnZ(get: String) extends AnyVal
