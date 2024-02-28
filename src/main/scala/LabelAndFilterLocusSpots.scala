@@ -309,10 +309,7 @@ object LabelAndFilterLocusSpots:
                         }) match {
                             /* Throw an exception if any error occurred, otherwise write 2 results files. */
                             case (Nil, recordsWithQC) => 
-                                val recordsToWrite = recordsWithQC
-                                    .filterNot((uniqId, _) => imagingRoundsConfiguration.tracingExclusions.contains(uniqId.time))
-                                    .map((uniqId, recAndRes) => uniqId.groupId -> recAndRes)
-                                writeResults(header, outfolder, tracesFile.baseName, delimiter)(minTraceLength, recordsToWrite)
+                                writeResults(recordsWithQC, imagingRoundsConfiguration.tracingExclusions, minTraceLength, header, outfolder, tracesFile.baseName, delimiter)
                             case (badRecords, _) => throw new Exception(s"${badRecords.length} problem(s) reading records: $badRecords")
                         }
                 }
@@ -321,12 +318,18 @@ object LabelAndFilterLocusSpots:
 
     /** Write filtered and unfiltered results files, filtered having just QC pass flag column uniformly 1, unfiltered having causal components. */
     def writeResults(
-        header: Array[String], outfolder: os.Path, basename: String, delimiter: Delimiter
-        )(minTraceLength: NonnegativeInt, records: Iterable[(TraceGroupId, (Array[String], LocusSpotQC.ResultRecord))]): Unit = {
+        records: Iterable[(TraceSpotId, (Array[String], LocusSpotQC.ResultRecord))], 
+        exclusions: Set[Timepoint], 
+        minTraceLength: NonnegativeInt,
+        header: Array[String], 
+        outfolder: os.Path, 
+        basename: String, 
+        delimiter: Delimiter,
+        ): Unit = {
         require(os.isDir(outfolder), s"Output folder path isn't a directory: $outfolder")
         val (withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol) = labelsOf[LocusSpotQC.ResultRecord]
         Alternative[List].separate(NonnegativeInt.indexed(records.toList).map { 
-            case (rec@(_, (original, qcResult)), recnum) => 
+            case (rec@(_, (original, _)), recnum) => 
                 (header.length === original.length).either(
                     ((s"Header has ${header.length}, original has ${original.length}"), recnum), 
                     rec
@@ -334,6 +337,8 @@ object LabelAndFilterLocusSpots:
         }) match {
             case (Nil, unfiltered) => // success (no errors) case --> write output files
                 val (actualHeader, finaliseOriginal) = header.head match {
+                    // Handle the fact that original input may've had index column and therefore an empty first header field.
+                    // TODO: https://github.com/gerlichlab/looptrace/issues/261
                     case "" => (header.tail, (_: Array[String]).tail)
                     case _ => (header, identity(_: Array[String]))
                 }
@@ -342,6 +347,7 @@ object LabelAndFilterLocusSpots:
                 val getQCFlagsText = (qc: LocusSpotQC.ResultRecord) => (qc.components :+ qc.allPass).map(p => if p then "1" else "0")
                 val unfilteredOutputFile = outfolder / s"${basename}.unfiltered.${delimiter.ext}" // would need to update ImageHandler.traces_file_qc_unfiltered if changed
                 val unfilteredHeader = actualHeader ++ List(withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol, QcPassColumn)
+                // Here, still a records even if its timepoint is in exclusions, as it may be useful to know when such "spots" actually pass QC.
                 val unfilteredRows = unfiltered.map{ case (_, (original, qc)) => finaliseOriginal(original) ++ getQCFlagsText(qc) }
                 println(s"Writing unfiltered output: $unfilteredOutputFile")
                 writeTextFile(unfilteredOutputFile, unfilteredHeader :: unfilteredRows, delimiter)
@@ -349,8 +355,10 @@ object LabelAndFilterLocusSpots:
                 /* Filtered output */
                 val filteredOutputFile = outfolder / s"${basename}.filtered.${delimiter.ext}" // would need to update ImageHandler.traces_file_qc_filtered if changed
                 val filteredHeader = actualHeader :+ QcPassColumn
-                val filteredRows = unfiltered.flatMap{ 
-                    case (groupId, (original, qc)) => qc.allPass.option{ (groupId, finaliseOriginal(original) :+ "1") }
+                val filteredRows = unfiltered.flatMap{ case (groupId, (original, qc)) => 
+                    if qc.allPass && !exclusions.contains(groupId.time) // For filtered output, use the timepoint exclusion filter in addition to QC.
+                    then (groupId, finaliseOriginal(original) :+ "1").some
+                    else None
                 }
                 val hist = filteredRows.groupBy(_._1).view.mapValues(_.length).toMap
                 val keepKeys = hist.filter(_._2 >= minTraceLength).keySet
@@ -363,6 +371,10 @@ object LabelAndFilterLocusSpots:
             case (bads, _) => throw new Exception(s"${bads.length} problem(s) with writing results: $bads")
         }
     }
+
+    /** Wrapper around {@code os.write} to handle writing an iterable of lines. */
+    private def writeTextFile(target: os.Path, data: Iterable[Array[String]], delimiter: Delimiter) = 
+        os.write(target, data.map(delimiter.join(_: Array[String]) ++ "\n"))
 
     /** Supports for the same trace must share not only the same {@code TraceId}, but also be from the same FOV and region. */
     final case class TraceGroupId(position: PositionIndex, region: RegionId, trace: TraceId)
