@@ -368,7 +368,7 @@ object LabelAndFilterLocusSpots:
                     .view
                     .mapValues(_.length)
                     .toMap
-                    .filter(_._2 > minTraceLength)
+                    .filter(_._2 >= minTraceLength)
                     .keySet
                 val recordsToWrite = filteredRows
                     .filter{ (spotId, _) => keepKeys.contains(getGroupId(spotId)) }
