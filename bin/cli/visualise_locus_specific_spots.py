@@ -29,7 +29,6 @@ COORDINATE_COLUMNS = ["z_px", "y_px", "x_px"]
 
 def workflow(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder):
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
-    T = Tracer(H)
     extra_columns = [POSITION_COLUMN, ROI_NUMBER_COLUMN, FRAME_COLUMN, QC_PASS_COLUMN]
     print(f"Reading ROIs file: {H.traces_file_qc_unfiltered}")
     # NB: we do NOT use the drift-corrected pixel values here, since we're interested 
@@ -42,7 +41,7 @@ def workflow(rounds_config: ExtantFile, params_config: ExtantFile, images_folder
         print(f"DEBUG -- Column '{POSITION_COLUMN}' is not in the spots table parsed in package-standard pandas fashion")
         print(f"DEBUG -- Retrying the spots table parse while assuming no index: {H.traces_file_qc_unfiltered}")
         point_table = pd.read_csv(H.traces_file_qc_unfiltered, index_col=None)[COORDINATE_COLUMNS + extra_columns]
-    data_path = T.all_spot_images_zarr_root_path
+    data_path = H.locus_spot_images_root_path
     print(f"INFO -- Reading image data: {data_path}")
     images, positions = multi_ome_zarr_to_dask(data_path)
     step_through_positions(zip(positions, images), point_table=point_table, roi_size=H.roi_image_size)
@@ -86,7 +85,7 @@ def compute_points(cur_pts_tab, *, num_times: int, roi_size: RoiImageSize):
             try:
                 qc_pass, coords = lookup[t]
             except KeyError:
-                # TODO: when can this actually happen??
+                # TODO: this is when the unfiltered traces file misses the exclusions, which should no longer continue to be the case.
                 coords = np.zeros(3)
                 visible = False
                 point_shape = bad_shape

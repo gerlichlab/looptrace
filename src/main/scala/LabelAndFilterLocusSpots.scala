@@ -3,7 +3,7 @@ package at.ac.oeaw.imba.gerlich.looptrace
 import scala.math.max
 import scala.util.Try
 import upickle.default.*
-import cats.{ Alternative, Order }
+import cats.*
 import cats.data.{ NonEmptyList as NEL, ValidatedNel }
 import cats.syntax.all.*
 import mouse.boolean.*
@@ -12,6 +12,7 @@ import scopt.OParser
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ Point3D, XCoordinate, YCoordinate, ZCoordinate }
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
+import at.ac.oeaw.imba.gerlich.looptrace.HeadedFileWriter.DelimitedTextTarget.eqForDelimitedTextTarget
 
 /**
   * Label points underlying traces with various QC pass-or-fail values.
@@ -31,6 +32,7 @@ object LabelAndFilterLocusSpots:
     case class CliConfig(
         configuration: ImagingRoundsConfiguration = null, // unconditionally required
         traces: os.Path = null, // unconditionally required
+        pointsDataOutputFolder: os.Path = null, // unconditionally required
         maxDistanceToRegionCenter: LocusSpotQC.DistanceToRegion = LocusSpotQC.DistanceToRegion(NonnegativeReal(Double.MaxValue)),
         minSignalToNoise: LocusSpotQC.SignalToNoise = LocusSpotQC.SignalToNoise(PositiveReal(1e-10)),
         maxSigmaXY: LocusSpotQC.SigmaXY = LocusSpotQC.SigmaXY(PositiveReal(Double.MaxValue)),
@@ -38,7 +40,7 @@ object LabelAndFilterLocusSpots:
         probesToIgnore: Seq[ProbeName] = List(),
         minTraceLength: NonnegativeInt = NonnegativeInt(0),
         parserConfig: Option[os.Path] = None, 
-        outputFolder: Option[os.Path] = None
+        analysisOutputFolder: Option[os.Path] = None, 
     )
 
     /** The definition of how to build the parser for the data (traces) file */
@@ -146,6 +148,11 @@ object LabelAndFilterLocusSpots:
                 .action((f, c) => c.copy(traces = f))
                 .validate(f => os.isFile(f).either(s"Alleged traces file isn't a file: $f", ()))
                 .text("Path to the traces data file"),
+            opt[os.Path]("pointsDataOutputFolder")
+                .required()
+                .action((d, c) => c.copy(pointsDataOutputFolder = d))
+                .validate(d => os.isDir(d).either(s"Alleged folder for points data output isn't an extant directory: $d", ()))
+                .text("Path to folder in which to place the data to support overlaying spot image visualisation with centroid and QC results"),
             opt[NonnegativeReal]("maxDistanceToRegionCenter")
                 .required()
                 .action((d, c) => c.copy(maxDistanceToRegionCenter = LocusSpotQC.DistanceToRegion(d)))
@@ -166,15 +173,16 @@ object LabelAndFilterLocusSpots:
                 .action((f, c) => c.copy(parserConfig = f.some))
                 .validate(f => os.isFile(f).either(s"Alleged parser config isn't a file: $f", ()))
                 .text("Path to file defining how to build the parser"),
-            opt[os.Path]('O', "outputFolder")
-                .action((d, c) => c.copy(outputFolder = d.some))
+            opt[os.Path]("analysisOutputFolder")
+                .action((d, c) => c.copy(analysisOutputFolder = d.some))
                 .validate(d => os.isDir(d).either(s"Alleged output folder isn't a directory: $d", ()))
+                .text("Path to the folder in whicht to place the filtered and unfiltered CSV files with output records"),
         )
 
         OParser.parse(parser, args, CliConfig()) match {
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
             case Some(opts) => 
-                val outfolder = opts.outputFolder.getOrElse(opts.traces.parent)
+                val analysisOutfolder = opts.analysisOutputFolder.getOrElse(opts.traces.parent)
                 val parserConfiguration: os.Path | ParserConfig = opts.parserConfig.getOrElse(ParserConfig.default)
                 workflow(
                     opts.configuration,
@@ -185,7 +193,8 @@ object LabelAndFilterLocusSpots:
                     opts.maxSigmaXY, 
                     opts.maxSigmaZ, 
                     opts.minTraceLength, 
-                    outfolder
+                    analysisOutfolder, 
+                    opts.pointsDataOutputFolder,
                     )
         }
     }
@@ -199,7 +208,8 @@ object LabelAndFilterLocusSpots:
         maxSigmaXY: LocusSpotQC.SigmaXY, 
         maxSigmaZ: LocusSpotQC.SigmaZ,
         minTraceLength: NonnegativeInt, 
-        outfolder: os.Path
+        analysisOutfolder: os.Path, 
+        pointsOutfolder: os.Path,
         ): Unit = {
         
         val pc: ParserConfig = parserConfigPathOrConf match {
@@ -310,7 +320,16 @@ object LabelAndFilterLocusSpots:
                         }) match {
                             /* Throw an exception if any error occurred, otherwise write 2 results files. */
                             case (Nil, recordsWithQC) => 
-                                writeResults(recordsWithQC, imagingRoundsConfiguration.tracingExclusions, minTraceLength, header, outfolder, tracesFile.baseName, delimiter)
+                                writeResults(
+                                    recordsWithQC, 
+                                    imagingRoundsConfiguration.tracingExclusions, 
+                                    minTraceLength, 
+                                    header, 
+                                    analysisOutfolder, 
+                                    pointsOutfolder,
+                                    tracesFile.baseName, 
+                                    delimiter, 
+                                    )
                             case (badRecords, _) => throw new Exception(s"${badRecords.length} problem(s) reading records: $badRecords")
                         }
                 }
@@ -323,11 +342,13 @@ object LabelAndFilterLocusSpots:
         exclusions: Set[Timepoint], 
         minTraceLength: NonnegativeInt,
         header: Array[String], 
-        outfolder: os.Path, 
+        analysisOutfolder: os.Path, 
+        pointsOutfolder: os.Path,
         basename: String, 
         delimiter: Delimiter,
         ): Unit = {
-        require(os.isDir(outfolder), s"Output folder path isn't a directory: $outfolder")
+        require(os.isDir(analysisOutfolder), s"Analysis output folder path isn't a directory: $analysisOutfolder")
+        require(os.isDir(pointsOutfolder), s"Points output folder path isn't a directory: $pointsOutfolder")
         // Include placeholder for field for label displayability column, which we don't need for CSV writing (only JSON, handled via codec).
         val (withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol, _) = labelsOf[LocusSpotQC.ResultRecord]
         Alternative[List].separate(NonnegativeInt.indexed(records.toList).map { case (rec@(_, arr), recnum) => 
@@ -346,16 +367,15 @@ object LabelAndFilterLocusSpots:
 
                 /* Unfiltered output */
                 val getQCFlagsText = (qc: LocusSpotQC.ResultRecord) => (qc.components :+ qc.allPass).map(p => if p then qcPassRepr else qcFailRepr)
-                val unfilteredOutputFile = outfolder / s"${basename}.unfiltered.${delimiter.ext}" // would need to update ImageHandler.traces_file_qc_unfiltered if changed
+                val unfilteredOutputFile = analysisOutfolder / s"${basename}.unfiltered.${delimiter.ext}" // would need to update ImageHandler.traces_file_qc_unfiltered if changed
                 val unfilteredHeader = actualHeader ++ List(withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol, QcPassColumn)
                 // Here, still a records even if its timepoint is in exclusions, as it may be useful to know when such "spots" actually pass QC.
                 val unfilteredRows = unfiltered.map{ (outrec, original) => finaliseOriginal(original) ++ getQCFlagsText(outrec.qcResult) }
                 println(s"Writing unfiltered output: $unfilteredOutputFile")
                 writeTextFile(unfilteredOutputFile, unfilteredHeader :: unfilteredRows, delimiter)
-                // TODO: write the JSON records here.
-
+                
                 /* Filtered output */
-                val filteredOutputFile = outfolder / s"${basename}.filtered.${delimiter.ext}" // would need to update ImageHandler.traces_file_qc_filtered if changed
+                val filteredOutputFile = analysisOutfolder / s"${basename}.filtered.${delimiter.ext}" // would need to update ImageHandler.traces_file_qc_filtered if changed
                 val filteredHeader = actualHeader :+ QcPassColumn
                 val filteredRows = unfiltered.flatMap{ (outrec, original) => 
                     if outrec.qcResult.allPass && !exclusions.contains(outrec.identifier.locusId.get) // For filtered output, use the timepoint exclusion filter in addition to QC.
@@ -376,7 +396,38 @@ object LabelAndFilterLocusSpots:
                 println(s"Writing filtered output: $filteredOutputFile")
                 writeTextFile(filteredOutputFile, filteredHeader :: recordsToWrite, delimiter)
             
+                /** Points CSVs for visualisation with `napari` */
+                val groupedAndTagged = unfiltered.map(_._1)
+                    .groupBy(_.identifier.position)
+                    .view
+                    .mapValues(_.fproduct(PointDisplayType.forRecord))
+                println(s"Writing data for spot points visualisation: ${analysisOutfolder}")
+                val groupedPassQC = groupedAndTagged.view.mapValues(_.filter(_._2 === PointDisplayType.QCPass))
+                writePointsForNapari(pointsOutfolder, PointDisplayType.QCPass)(groupedPassQC.toList.map{ (pos, g) => pos -> g.map(_._1) })
+                println("Wrote QC pass data")
+                val groupedFailQC = groupedAndTagged.view.mapValues(_.filter(_._2 === PointDisplayType.QCFail))
+                writePointsForNapari(pointsOutfolder, PointDisplayType.QCFail)(groupedFailQC.toList.map{ (pos, g) => pos -> g.map(_._1) })
+                println("Wrote QC fail data")
+                println("Done!")
+
             case (bads, _) => throw new Exception(s"${bads.length} problem(s) with writing results: $bads")
+        }
+    }
+
+    private def writePointsForNapari(folder: os.Path, qcType: PointDisplayType)(groupedByPos: List[(PositionIndex, Iterable[LocusSpotQC.OutputRecord])]) = {
+        import NapariSortKey.given
+        import NapariSortKey.*
+        val getOutfile = (pos: PositionIndex) => 
+            val numText = "%04d".format(pos.get)
+            folder /  s"P${numText}.${qcType.toString.toLowerCase}.csv"
+        val header = "index" :: (0 to 4).map(i => s"axis-$i").toList
+        groupedByPos.toList.sortBy(_._1)(using Order[PositionIndex].toOrdering).map{ (pos, records) => 
+            val outfile = getOutfile(pos)
+            val outrecs = records.toList
+                .sortForNapari
+                .zipWithIndex.map{ (r, i) => List(i.show, r.traceId.show, r.time.show, r.z.get.show, r.y.get.show, r.x.get.show) }
+            os.write(outfile, (header :: outrecs).map(_.mkString(", ") ++ "\n"))
+            pos -> outfile
         }
     }
 
@@ -386,6 +437,46 @@ object LabelAndFilterLocusSpots:
 
     /** From a spot identifier, obtain the elements needed to group it by logical tracing unit. */
     def getGroupId(identifier: LocusSpotQC.SpotIdentifier): (PositionIndex, RegionId, TraceId) = (identifier.position, identifier.regionId, identifier.traceId)
+
+    /**
+     * A type that can be ordered for visualisation with `napari`, ordering along one or more slider bars for the viewer
+     * 
+     * @tparam A The type to be ordered
+     */
+    trait NapariSortable[A]:
+        def getSortKey: A => NapariSortKey
+    object NapariSortable:
+        given contravariantForNapariSortable: Contravariant[NapariSortable] with
+            def contramap[A, B](s: NapariSortable[A])(f: B => A): NapariSortable[B] = 
+                new NapariSortable[B]:
+                    def getSortKey: B => NapariSortKey = f `andThen` s.getSortKey
+
+        given napariSortableForSpotIdentifier: NapariSortable[LocusSpotQC.SpotIdentifier] with
+            def getSortKey = (ident: LocusSpotQC.SpotIdentifier) => NapariSortKey(ident.position, ident.traceId, ident.locusId.get)
+        
+        given napariSortableForOutputRecord(using ev: NapariSortable[LocusSpotQC.SpotIdentifier]): NapariSortable[LocusSpotQC.OutputRecord] = 
+            ev.contramap(_.identifier)
+    end NapariSortable
+    
+    /** Status of a point to display in napari, based on QC results and its position within the spot image frame */
+    enum PointDisplayType:
+        case QCPass, QCFail, Invisible
+
+    /** Helpers for working with the point display type classification */
+    object PointDisplayType:
+        given eqForPointDisplayType: Eq[PointDisplayType] = Eq.fromUniversalEquals[PointDisplayType]
+        
+        def forRecord(r: LocusSpotQC.OutputRecord): PointDisplayType = 
+            if r.canBeDisplayed 
+            then if r.passesQC then QCPass else QCFail
+            else Invisible
+    end PointDisplayType
+
+    private[LabelAndFilterLocusSpots] final case class NapariSortKey(position: PositionIndex, traceId: TraceId, time: Timepoint)
+    object NapariSortKey:
+        given orderForNapariSortKey: Order[NapariSortKey] = Order.by{ k => (k.position, k.traceId, k.time) }
+        extension [A](as: List[A])(using ev: NapariSortable[A])
+            def sortForNapari: List[A] = as.sortBy(ev.getSortKey)(orderForNapariSortKey.toOrdering)
 
     final case class BoxSizeColumnX(get: String) extends AnyVal
     final case class BoxSizeColumnY(get: String) extends AnyVal

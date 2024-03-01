@@ -49,7 +49,7 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, GenericSuite, Scalacheck
                 .productIterator
                 .toList
                 .map(_.asInstanceOf[String])
-                .filterNot(_ === "canDisplayLabel")
+                .filterNot(_ === "canBeDisplayed")
             val inputHeaderFields = {
                 val headline = os.read.lines(tracesInputFile).head
                 val sep = Delimiter.fromPathUnsafe(componentExpectationFile)

@@ -103,10 +103,6 @@ class Tracer:
         self.traces_path_enriched = finalise_suffix(image_handler.traces_path_enriched)
 
     @property
-    def all_spot_images_zarr_root_path(self) -> Path:
-        return Path(self.image_handler.analysis_path) / "all_spot_images_zarr"
-
-    @property
     def background_specification(self) -> BackgroundSpecification:
         bg_frame_idx = self.image_handler.background_subtraction_frame
         if bg_frame_idx is None:
@@ -117,7 +113,7 @@ class Tracer:
 
     def write_all_spot_images_to_one_per_fov_zarr(self, overwrite: bool = False) -> List[Path]:
         name_data_pairs = compute_spot_images_multiarray_per_fov(npz=self._images_wrapper)
-        return write_jvm_compatible_zarr_store(name_data_pairs, root_path=self.all_spot_images_zarr_root_path, dtype=np.uint16, overwrite=overwrite)
+        return write_jvm_compatible_zarr_store(name_data_pairs, root_path=self.locus_spot_images_root_path, dtype=np.uint16, overwrite=overwrite)
 
     def write_spot_images_subset_to_single_highly_nested_zarr(self, overwrite: bool = False, stop_after_n: Optional[int] = None) -> Path:
         data = compute_spot_images_subset_highly_nested_multiarray(npz=self._images_wrapper, stop_after_n=stop_after_n)
