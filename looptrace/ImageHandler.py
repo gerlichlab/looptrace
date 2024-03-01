@@ -193,6 +193,10 @@ class ImageHandler:
         return names
 
     @property
+    def locus_spot_images_root_path(self) -> Path:
+        return Path(self.analysis_path) / "locus_spot_images"
+
+    @property
     def minimum_spot_separation(self) -> Union[int, float]:
         return get_minimum_regional_spot_separation(self.config)
 

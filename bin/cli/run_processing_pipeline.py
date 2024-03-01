@@ -33,7 +33,6 @@ from extract_spots_table import workflow as run_spot_bounding
 from extract_spots import workflow as run_spot_extraction
 from zip_spot_image_files_for_tracing import workflow as run_spot_zipping
 from tracing import workflow as run_chromatin_tracing
-from visualise_detected_spots import workflow as visualise_regional_spots
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +174,8 @@ def qc_label_and_filter_traces(rounds_config: ExtantFile, params_config: ExtantF
         str(H.config[SIGMA_XY_MAX_NAME]),
         "--maxSigmaZ",
         str(H.config[SIGMA_Z_MAX_NAME]),
+        "--pointsDataOutputFolder", 
+        str(H.locus_spot_images_root_path),
     ]    
     print(f"Running QC filtering of tracing supports: {' '.join(cmd_parts)}")
     subprocess.check_call(cmd_parts)
@@ -218,16 +219,6 @@ def drift_correct_nuclei(rounds_config: ExtantFile, params_config: ExtantFile, i
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config, image_path=images_folder)
     N = NucDetector(H)
     return N.coarse_drift_correction_workflow()
-
-
-def run_regional_spot_visualisation(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder):
-    return visualise_regional_spots(
-        rounds_config=rounds_config,
-        params_config=params_config, 
-        images_folder=images_folder,
-        interactive=False,
-        save_projections=True,
-        )
 
 
 def prep_locus_specific_spots_visualisation(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> Tuple[Path, List[Path]]:
@@ -282,7 +273,6 @@ class LooptracePipeline(pypiper.Pipeline):
             ("pairwise_distances__locus_specific", compute_locus_pairwise_distances, take2),
             ("pairwise_distances__regional", compute_region_pairwise_distances, take2),
             ("locus_specific_spots_visualisation_data_prep", prep_locus_specific_spots_visualisation, take3),
-            ("regional_spots_visualisation", run_regional_spot_visualisation, take3),
         ]
 
     def stages(self) -> List[Callable]:

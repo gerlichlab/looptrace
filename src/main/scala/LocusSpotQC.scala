@@ -36,7 +36,14 @@ object LocusSpotQC:
       * @param point The coordinates of the centroid of the 3D Gaussian fit to the pixels
       * @param result The results of the QC filters
       */
-    final case class OutputRecord(identifier: SpotIdentifier, point: Point3D, qcResult: ResultRecord)
+    final case class OutputRecord(identifier: SpotIdentifier, point: Point3D, qcResult: ResultRecord):
+        final def passesQC: Boolean = qcResult.allPass
+        final def canBeDisplayed: Boolean = qcResult.canBeDisplayed
+        final def traceId: TraceId = identifier.traceId
+        final def time: Timepoint = identifier.locusId.get
+        final def z: ZCoordinate = point.z
+        final def y: YCoordinate = point.y
+        final def x: XCoordinate = point.x
 
     object OutputRecord:
         /** JSON codec */
@@ -162,7 +169,7 @@ object LocusSpotQC:
                 inBoundsX = withinSigmaOfBound(sigma = sigmaXY, boxBound = bounds.x.get)(x.get).merge, 
                 inBoundsY = withinSigmaOfBound(sigma = sigmaXY, boxBound = bounds.y.get)(y.get).merge, 
                 inBoundsZ = withinSigmaOfBound(sigma = sigmaZ, boxBound = bounds.z.get)(z.get).merge, 
-                canDisplayLabel = (
+                canBeDisplayed = (
                     centroid.z.get > 0 && 
                     centroid.z.get < bounds.z.get && 
                     centroid.y.get > 0 && 
@@ -197,7 +204,7 @@ object LocusSpotQC:
       *     of the spot's bounding box
       * @param inBoundsZ Whether the center of a 3D Gaussian fit to a locus spot is more than 1 standar deviation away from both of the 'z' bounds 
       *     of the spot's bounding box
-      * @param canDisplayLabel Whether the locus spot's QC label will be able to be displayed in `napari`
+      * @param canBeDisplayed Whether the locus spot's QC label will be able to be displayed in `napari`
       */
     final case class ResultRecord(
         withinRegion: Boolean, 
@@ -207,7 +214,7 @@ object LocusSpotQC:
         inBoundsX: Boolean, 
         inBoundsY: Boolean, 
         inBoundsZ: Boolean,
-        canDisplayLabel: Boolean,
+        canBeDisplayed: Boolean,
         ):
         /** The individual true/false components indicating QC pass or fail. */
         final def components: Array[Boolean] = Array(withinRegion, sufficientSNR, denseXY, denseZ, inBoundsX, inBoundsY, inBoundsZ)
@@ -226,7 +233,7 @@ object LocusSpotQC:
             "inBoundsX" -> ujson.Bool(r.inBoundsX),
             "inBoundsY" -> ujson.Bool(r.inBoundsY),
             "inBoundsZ" -> ujson.Bool(r.inBoundsZ),
-            "canDisplayLabel" -> ujson.Bool(r.canDisplayLabel),
+            "canBeDisplayed" -> ujson.Bool(r.canBeDisplayed),
         )
 
         private[LocusSpotQC] def fromJson(json: ujson.Value): ErrMsgsOr[ResultRecord] = ???
