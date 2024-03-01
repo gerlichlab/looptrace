@@ -418,7 +418,7 @@ object LabelAndFilterLocusSpots:
         import NapariSortKey.given
         import NapariSortKey.*
         val getOutfile = (pos: PositionIndex) => 
-            val numText = "%04d".format(pos.get)
+            val numText = "%04d".format(pos.get + 1)
             folder /  s"P${numText}.${qcType.toString.toLowerCase}.csv"
         val header = "index" :: (0 to 4).map(i => s"axis-$i").toList
         groupedByPos.toList.sortBy(_._1)(using Order[PositionIndex].toOrdering).map{ (pos, records) => 
