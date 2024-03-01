@@ -426,7 +426,7 @@ object LabelAndFilterLocusSpots:
             val outrecs = records.toList
                 .sortForNapari
                 .zipWithIndex.map{ (r, i) => List(i.show, r.traceId.show, r.time.show, r.z.get.show, r.y.get.show, r.x.get.show) }
-            os.write(outfile, (header :: outrecs).map(_.mkString(", ") ++ "\n"))
+            os.write(outfile, (header :: outrecs).map(_.mkString(",") ++ "\n"))
             pos -> outfile
         }
     }
