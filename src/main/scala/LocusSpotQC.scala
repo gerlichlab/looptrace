@@ -20,6 +20,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
  */
 object LocusSpotQC:
 
+    /** A roundtrip through JSON for a 3D point, in the context of locus spot QC */
     object PointCodec:
         private[LocusSpotQC] def toJsonObject(p: Point3D): ujson.Obj = ujson.Obj(
             "x" -> ujson.Num(p.x.get),
@@ -28,6 +29,7 @@ object LocusSpotQC:
         )
 
         private[LocusSpotQC] def fromJson(json: ujson.Value): ErrMsgsOr[Point3D] = ???
+    end PointCodec
 
     /**
       * Bundle of data that uniquely identifies a spot and gives its coordinates and QC result.
@@ -45,8 +47,9 @@ object LocusSpotQC:
         final def y: YCoordinate = point.y
         final def x: XCoordinate = point.x
 
+    /** Helpers for working with QC data bundles for locus-specific spots */
     object OutputRecord:
-        /** JSON codec */
+        /** JSON codec for a locus spot QC output record */
         def rwForOutputRecord: ReadWriter[OutputRecord] = readwriter[ujson.Value].bimap(
             record => ujson.Obj(
                 "identifier" -> SpotIdentifier.toJsonObject(record.identifier), 
@@ -77,6 +80,7 @@ object LocusSpotQC:
         final class DecodingError(messages: NonEmptyList[String], json: ujson.Value) 
             extends ujson.Value.InvalidData(json, s"Error(s) decoding locus spot identifier: ${messages.mkString_("; ")}")
         
+        /** Create a [[ujson.Obj]] representation of the given spot identifier, mapping each of its field names to simplified value. */
         private[LocusSpotQC] def toJsonObject(spotId: SpotIdentifier): ujson.Obj = ujson.Obj(
             "position" -> ujson.Num(spotId.position.get),
             "regionId" -> ujson.Num(spotId.regionId.get.get),
