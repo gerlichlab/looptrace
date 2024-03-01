@@ -154,7 +154,7 @@ def plot_spot_counts(rounds_config: ExtantFile, params_config: ExtantFile, spot_
     return subprocess.check_call(cmd_parts)
 
 
-def qc_label_and_filter_traces(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> None:
+def qc_locus_spots_and_prep_points(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> None:
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config, image_path=images_folder)
     prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.LabelAndFilterLocusSpots"
     cmd_parts = [
@@ -166,6 +166,12 @@ def qc_label_and_filter_traces(rounds_config: ExtantFile, params_config: ExtantF
         prog_path, 
         "--tracesFile",
         str(H.traces_path_enriched),
+        "--roiPixelsZ",
+        str(H.roi_image_size.z),
+        "--roiPixelsY",
+        str(H.roi_image_size.y),
+        "--roiPixelsX",
+        str(H.roi_image_size.x),
         "--maxDistanceToRegionCenter", 
         str(H.config[MAX_DISTANCE_SPOT_FROM_REGION_NAME]),
         "--minSNR",
@@ -268,7 +274,7 @@ class LooptracePipeline(pypiper.Pipeline):
             ("spot_zipping", run_spot_zipping, lambda _1, params_config, images_folder: (params_config, images_folder)),
             ("tracing", run_chromatin_tracing, take3),
             ("spot_region_distances", run_frame_name_and_distance_application, take3), 
-            (TRACING_QC_STAGE_NAME, qc_label_and_filter_traces, take3),
+            (TRACING_QC_STAGE_NAME, qc_locus_spots_and_prep_points, take3),
             ("spot_counts_visualisation__locus_specific", plot_spot_counts, take2_with_spot_type(SpotType.LOCUS_SPECIFIC)), 
             ("pairwise_distances__locus_specific", compute_locus_pairwise_distances, take2),
             ("pairwise_distances__regional", compute_region_pairwise_distances, take2),
