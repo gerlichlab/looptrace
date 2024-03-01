@@ -7,9 +7,9 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
 import org.scalatest.funsuite.AnyFunSuite
 
-import LocusSpotQC.{ DistanceToRegion, SigmaXY, SigmaZ, SignalToNoise }
-import LabelAndFilterLocusSpots.{ ParserConfig, QcPassColumn, workflow }
-import PathHelpers.*
+import at.ac.oeaw.imba.gerlich.looptrace.LabelAndFilterLocusSpots.{ ParserConfig, QcPassColumn, workflow }
+import at.ac.oeaw.imba.gerlich.looptrace.LocusSpotQC.*
+import at.ac.oeaw.imba.gerlich.looptrace.PathHelpers.*
 
 /** Tests for the filtration of the individual supports (single FISH probes) of chromatin fiber traces */
 class TestLabelAndFilterLocusSpots extends AnyFunSuite, GenericSuite, ScalacheckSuite, should.Matchers:
@@ -45,7 +45,7 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, GenericSuite, Scalacheck
                 val sep = Delimiter.fromPathUnsafe(componentExpectationFile)
                 sep `split` expLinesUnfiltered.head
             }.toList
-            val componentLabelColumns: List[String] = labelsOf[LocusSpotQC.ResultRecord]
+            val componentLabelColumns: List[String] = labelsOf[ResultRecord]
                 .productIterator
                 .toList
                 .map(_.asInstanceOf[String])
@@ -218,12 +218,32 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, GenericSuite, Scalacheck
         infile: os.Path = tracesInputFile,
         outfolder: os.Path, 
         parserConfig: ParserConfig = ParserConfig.default, 
+        roiSize: RoiImageSize = RoiImageSize(
+            PixelCountZ(PositiveInt(16)), 
+            PixelCountY(PositiveInt(32)), 
+            PixelCountX(PositiveInt(32)), 
+            ),
         maxDistFromRegion: DistanceToRegion = DistanceToRegion(NonnegativeReal(800)), 
         minSignalToNoise: SignalToNoise = SignalToNoise(PositiveReal(2)), 
         maxSigmaXY: SigmaXY = SigmaXY(PositiveReal(150)), 
         maxSigmaZ: SigmaZ = SigmaZ(PositiveReal(400)),
         probeExclusions: List[ProbeName] = List(), 
         minTraceLength: NonnegativeInt = NonnegativeInt(0)
-        ) = workflow(roundsConfig, parserConfig, infile, maxDistFromRegion, minSignalToNoise, maxSigmaXY, maxSigmaZ, minTraceLength, outfolder)
+        ) = {
+
+            workflow(
+                roiSize,
+                roundsConfig, 
+                parserConfig, 
+                infile, 
+                maxDistFromRegion, 
+                minSignalToNoise, 
+                maxSigmaXY, 
+                maxSigmaZ, 
+                minTraceLength, 
+                analysisOutfolder = outfolder,
+                pointsOutfolder = outfolder,
+                )
+        }
 
 end TestLabelAndFilterLocusSpots
