@@ -35,25 +35,22 @@ object LocusSpotQC:
       * Bundle of data that uniquely identifies a spot and gives its coordinates and QC result.
       *
       * @param identifier The context with which to identify the spot within an experiment
-      * @param point The coordinates of the centroid of the 3D Gaussian fit to the pixels
+      * @param centerInPixels The coordinates of the centroid of the 3D Gaussian fit to the pixels, in pixels
       * @param result The results of the QC filters
       */
-    final case class OutputRecord(identifier: SpotIdentifier, point: Point3D, qcResult: ResultRecord):
+    final case class OutputRecord(identifier: SpotIdentifier, centerInPixels: Point3D, qcResult: ResultRecord):
         final def passesQC: Boolean = qcResult.allPass
         final def canBeDisplayed: Boolean = qcResult.canBeDisplayed
         final def traceId: TraceId = identifier.traceId
         final def time: Timepoint = identifier.locusId.get
-        final def z: ZCoordinate = point.z
-        final def y: YCoordinate = point.y
-        final def x: XCoordinate = point.x
-
+        
     /** Helpers for working with QC data bundles for locus-specific spots */
     object OutputRecord:
         /** JSON codec for a locus spot QC output record */
         def rwForOutputRecord: ReadWriter[OutputRecord] = readwriter[ujson.Value].bimap(
             record => ujson.Obj(
                 "identifier" -> SpotIdentifier.toJsonObject(record.identifier), 
-                "point" -> PointCodec.toJsonObject(record.point), 
+                "point" -> PointCodec.toJsonObject(record.centerInPixels), 
                 "qcResult" -> ResultRecord.toJsonObject(record.qcResult),
             ), 
             json => ???
@@ -108,8 +105,12 @@ object LocusSpotQC:
     /**
       * Data, from a single looptrace tracing record, that's associated with quality control of a locus-specific spot
       *
+      * @param roiSize The dimensions of the locus spot's bounding box
+      * @param centerInImageUnits The center of the 3D Gaussian fit to (possibly transformed) pixel intensity values 
+      *     in the `box`, in pixels
       * @param bounds Upper bound on the pixel coordinate in each dimension for the box associated with this record
-      * @param centroid The center of the 3D Gaussian fit to (possibly transformed) pixel intensity values in the `box`
+      * @param centerInPhysical units The center of the 3D Gaussian fit to (possibly transformed) pixel intensity values 
+      *     in the `box`, in physical microscope units
       * @param distanceToRegion The (Euclidean) distance between `centroid` of this spot and the centroid of the 3D Gaussian 
       *     fit to the regional barcode spot with which the locus-specific spot is associated
       * @param signal Measure of the peak intensity of the 3D Gaussian fit to this spot's pixel values; 
@@ -119,23 +120,16 @@ object LocusSpotQC:
       * @param sigmaZ The standard deviation, in 'z', of the 3D Gaussian fit to this spot
       */
     final case class InputRecord(
+        roiSize: RoiImageSize,
+        centerInImageUnits: Point3D,
         bounds: BoxUpperBounds,
-        centroid: Point3D,
+        centerInPhysicalUnits: Point3D,
         distanceToRegion: DistanceToRegion, 
         signal: Signal, 
         background: Background, 
         sigmaXY: Double, 
         sigmaZ: Double,
         ):
-        
-        /** 'x'-coordinate of the `centroid` */
-        final def x: XCoordinate = centroid.x
-        
-        /** 'y'-coordinate of the `centroid` */
-        final def y: YCoordinate = centroid.y
-        
-        /** 'z'-coordinate of the `centroid` */
-        final def z: ZCoordinate = centroid.z
         
         /** Whether this record's spot's centroid is within the given distance of the center of the associated regional spot */
         final def isCloseEnoughToRegion(maxDist: DistanceToRegion): Boolean = distanceToRegion < maxDist
@@ -170,16 +164,16 @@ object LocusSpotQC:
                 sufficientSNR = hasSufficientSNR(minSNR), 
                 denseXY = isConcentratedXY(maxSigmaXY), 
                 denseZ = isConcentratedZ(maxSigmaZ), 
-                inBoundsX = withinSigmaOfBound(sigma = sigmaXY, boxBound = bounds.x.get)(x.get).merge, 
-                inBoundsY = withinSigmaOfBound(sigma = sigmaXY, boxBound = bounds.y.get)(y.get).merge, 
-                inBoundsZ = withinSigmaOfBound(sigma = sigmaZ, boxBound = bounds.z.get)(z.get).merge, 
+                inBoundsX = withinSigmaOfBound(sigma = sigmaXY, boxBound = bounds.x.get)(centerInPhysicalUnits.x.get).merge, 
+                inBoundsY = withinSigmaOfBound(sigma = sigmaXY, boxBound = bounds.y.get)(centerInPhysicalUnits.y.get).merge, 
+                inBoundsZ = withinSigmaOfBound(sigma = sigmaZ, boxBound = bounds.z.get)(centerInPhysicalUnits.z.get).merge, 
                 canBeDisplayed = (
-                    centroid.z.get > 0 && 
-                    centroid.z.get < bounds.z.get && 
-                    centroid.y.get > 0 && 
-                    centroid.y.get < bounds.y.get && 
-                    centroid.x.get > 0 && 
-                    centroid.x.get < bounds.x.get
+                    centerInImageUnits.z.get > 0 && 
+                    centerInImageUnits.z.get < roiSize.z.get && 
+                    centerInImageUnits.y.get > 0 && 
+                    centerInImageUnits.y.get < roiSize.y.get && 
+                    centerInImageUnits.x.get > 0 && 
+                    centerInImageUnits.x.get < roiSize.x.get
                     )
                 )
 
@@ -324,6 +318,19 @@ object LocusSpotQC:
         given boxZOrder: Order[BoxBoundX] = Order.by(_.get)
     end BoxBoundX
 
+    /** The upper bound on ROI box in each coordinate, in physical units */
     final case class BoxUpperBounds(x: BoxBoundX, y: BoxBoundY, z: BoxBoundZ)
+
+    /** Representation of the size of a spot ROI in pixels */
+    final case class RoiImageSize(z: PixelCountZ, y: PixelCountY, x: PixelCountX)
+    
+    /** Representation of the size in 'z' of a spot ROI in pixels */
+    final case class PixelCountZ(get: PositiveInt)
+    
+    /** Representation of the size in 'y' of a spot ROI in pixels */
+    final case class PixelCountY(get: PositiveInt)
+    
+    /** Representation of the size in 'x' of a spot ROI in pixels */
+    final case class PixelCountX(get: PositiveInt)
 
 end LocusSpotQC

@@ -28,11 +28,16 @@ object LabelAndFilterLocusSpots:
     val ProgramName = "LabelAndFilterLocusSpots"
     val QcPassColumn = "qcPass"
     
+    private type CenterInPixels = Point3D
+
     /** Deinition of the command-line interface */
     case class CliConfig(
         configuration: ImagingRoundsConfiguration = null, // unconditionally required
         traces: os.Path = null, // unconditionally required
         pointsDataOutputFolder: os.Path = null, // unconditionally required
+        roiSizeZ: LocusSpotQC.PixelCountZ = LocusSpotQC.PixelCountZ(PositiveInt(1)), // unconditionally required
+        roiSizeY: LocusSpotQC.PixelCountY = LocusSpotQC.PixelCountY(PositiveInt(1)), // unconditionally required
+        roiSizeX: LocusSpotQC.PixelCountX = LocusSpotQC.PixelCountX(PositiveInt(1)), // unconditionally required
         maxDistanceToRegionCenter: LocusSpotQC.DistanceToRegion = LocusSpotQC.DistanceToRegion(NonnegativeReal(Double.MaxValue)),
         minSignalToNoise: LocusSpotQC.SignalToNoise = LocusSpotQC.SignalToNoise(PositiveReal(1e-10)),
         maxSigmaXY: LocusSpotQC.SigmaXY = LocusSpotQC.SigmaXY(PositiveReal(Double.MaxValue)),
@@ -153,6 +158,18 @@ object LabelAndFilterLocusSpots:
                 .action((d, c) => c.copy(pointsDataOutputFolder = d))
                 .validate(d => os.isDir(d).either(s"Alleged folder for points data output isn't an extant directory: $d", ()))
                 .text("Path to folder in which to place the data to support overlaying spot image visualisation with centroid and QC results"),
+            opt[PositiveInt]("roiPixelsZ")
+                .required()
+                .action((z, c) => c.copy(roiSizeZ = LocusSpotQC.PixelCountZ(z)))
+                .text("Number of pixels of each ROI, in Z dimension"),
+            opt[PositiveInt]("roiPixelsY")
+                .required()
+                .action((y, c) => c.copy(roiSizeY = LocusSpotQC.PixelCountY(y)))
+                .text("Number of pixels of each ROI, in Y dimension"),
+            opt[PositiveInt]("roiPixelsX")
+                .required()
+                .action((x, c) => c.copy(roiSizeX = LocusSpotQC.PixelCountX(x)))
+                .text("Number of pixels of each ROI, in X dimension"),
             opt[NonnegativeReal]("maxDistanceToRegionCenter")
                 .required()
                 .action((d, c) => c.copy(maxDistanceToRegionCenter = LocusSpotQC.DistanceToRegion(d)))
@@ -184,7 +201,9 @@ object LabelAndFilterLocusSpots:
             case Some(opts) => 
                 val analysisOutfolder = opts.analysisOutputFolder.getOrElse(opts.traces.parent)
                 val parserConfiguration: os.Path | ParserConfig = opts.parserConfig.getOrElse(ParserConfig.default)
+                val roiSizeZ = 
                 workflow(
+                    roiSize = LocusSpotQC.RoiImageSize(opts.roiSizeZ, opts.roiSizeY, opts.roiSizeX),
                     opts.configuration,
                     parserConfiguration, 
                     opts.traces, 
@@ -200,6 +219,7 @@ object LabelAndFilterLocusSpots:
     }
 
     def workflow(
+        roiSize: LocusSpotQC.RoiImageSize,
         imagingRoundsConfiguration: ImagingRoundsConfiguration,
         parserConfigPathOrConf: os.Path | ParserConfig, 
         tracesFile: os.Path, 
@@ -243,6 +263,9 @@ object LabelAndFilterLocusSpots:
                     val maybeParseBoxZ = buildFieldParse(pc.zBoxSizeColumn.get, safeParsePosNum >> LocusSpotQC.BoxBoundZ.apply)(header)
                     val maybeParseBoxY = buildFieldParse(pc.yBoxSizeColumn.get, safeParsePosNum >> LocusSpotQC.BoxBoundY.apply)(header)
                     val maybeParseBoxX = buildFieldParse(pc.xBoxSizeColumn.get, safeParsePosNum >> LocusSpotQC.BoxBoundX.apply)(header)
+                    val maybeParsePixelZ = buildFieldParse("z_px", safeParseDouble >> ZCoordinate.apply)(header)
+                    val maybeParsePixelY = buildFieldParse("y_px", safeParseDouble >> YCoordinate.apply)(header)
+                    val maybeParsePixelX = buildFieldParse("x_px", safeParseDouble >> XCoordinate.apply)(header)
                     (
                         maybeParseFov,
                         maybeParseRegion, 
@@ -258,7 +281,10 @@ object LabelAndFilterLocusSpots:
                         maybeParseSigmaZ, 
                         maybeParseBoxZ, 
                         maybeParseBoxY, 
-                        maybeParseBoxX
+                        maybeParseBoxX, 
+                        maybeParsePixelZ,
+                        maybeParsePixelY,
+                        maybeParsePixelX,
                     ).mapN((
                         parseFov,
                         parseRegion, 
@@ -274,7 +300,10 @@ object LabelAndFilterLocusSpots:
                         parseSigmaZ, 
                         parseBoxZ, 
                         parseBoxY, 
-                        parseBoxX
+                        parseBoxX, 
+                        parsePixelZ, 
+                        parsePixelY, 
+                        parsePixelX,
                         ) => { (record: Array[String]) => 
                             (record.length === header.length).either(NEL.one(s"Record has ${record.length} fields but header has ${header.length}"), ()).flatMap{
                                 Function.const{(
@@ -292,13 +321,17 @@ object LabelAndFilterLocusSpots:
                                     parseSigmaZ(record), 
                                     parseBoxZ(record), 
                                     parseBoxY(record), 
-                                    parseBoxX(record)
-                                    ).mapN((fov, rid, tid, time, z, y, x, refDist, a, bg, sigXY, sigZ, boxZ, boxY, boxX) => 
+                                    parseBoxX(record),
+                                    parsePixelZ(record), 
+                                    parsePixelY(record), 
+                                    parsePixelX(record), 
+                                    ).mapN((fov, rid, tid, time, z, y, x, refDist, a, bg, sigXY, sigZ, boxZ, boxY, boxX, zPix, yPix, xPix) => 
                                         val uniqId = LocusSpotQC.SpotIdentifier(fov, rid, tid, LocusId(time))
                                         val bounds = LocusSpotQC.BoxUpperBounds(boxX, boxY, boxZ)
-                                        val center = Point3D(x, y, z)
-                                        val qcData = LocusSpotQC.InputRecord(bounds, center, refDist, a, bg, sigXY, sigZ)
-                                        uniqId -> qcData
+                                        val physicalCenter = Point3D(x, y, z)
+                                        val pixelCenter = Point3D(xPix, yPix, zPix)
+                                        val qcData = LocusSpotQC.InputRecord(roiSize, pixelCenter, bounds, physicalCenter, refDist, a, bg, sigXY, sigZ)
+                                        (uniqId, qcData)
                                     ).toEither
                                 }
                             }
@@ -312,10 +345,11 @@ object LabelAndFilterLocusSpots:
                     case Right(parse) => 
                         Alternative[List].separate(NonnegativeInt.indexed(records).map{ (rec, idx) => parse(rec).bimap(
                             idx -> _, 
-                            (uniqId, qcData: LocusSpotQC.InputRecord) => 
+                            (uniqId, qcData) => 
                                 val qcResult = qcData.toQCResult(maxDistFromRegion, minSignalToNoise, maxSigmaXY, maxSigmaZ)
-                                val totalResult = LocusSpotQC.OutputRecord(uniqId, qcData.centroid, qcResult)
-                                totalResult -> rec
+                                val totalResult = LocusSpotQC.OutputRecord(uniqId, qcData.centerInImageUnits, qcResult)
+                                // NB: We've retained the whole original record, so the QC info and napari points info are supplemental.
+                                (totalResult, rec)
                             )
                         }) match {
                             /* Throw an exception if any error occurred, otherwise write 2 results files. */
@@ -382,31 +416,52 @@ object LabelAndFilterLocusSpots:
                     then (outrec.identifier, finaliseOriginal(original) :+ qcPassRepr).some
                     else None
                 }
-                val keepKeys = filteredRows
-                    .map(_._1)
-                    .groupBy(getGroupId)
-                    .view
-                    .mapValues(_.length)
-                    .toMap
-                    .filter(_._2 >= minTraceLength)
-                    .keySet
-                val recordsToWrite = filteredRows
-                    .filter{ (spotId, _) => keepKeys.contains(getGroupId(spotId)) }
-                    .map((_, fields) => fields)
+                
+                val recordsToWrite = {
+                    val keepKeys = filteredRows
+                        .map(_._1)
+                        .groupBy(getGroupId)
+                        .view.mapValues(_.length)
+                        .toMap
+                        .filter(_._2 >= minTraceLength)
+                        .keySet
+                    filteredRows
+                        .filter{ (spotId, _) => keepKeys.contains(getGroupId(spotId)) }
+                        .map((_, fields) => fields)
+                }
                 println(s"Writing filtered output: $filteredOutputFile")
                 writeTextFile(filteredOutputFile, filteredHeader :: recordsToWrite, delimiter)
             
                 /** Points CSVs for visualisation with `napari` */
-                val groupedAndTagged = unfiltered.map(_._1)
-                    .groupBy(_.identifier.position)
-                    .view
-                    .mapValues(_.fproduct(PointDisplayType.forRecord))
+                val groupedAndTagged: List[(PositionIndex, List[(List[(LocusSpotQC.OutputRecord, PointDisplayType)], NonnegativeInt)])] = 
+                    unfiltered.map(_._1)
+                        .groupBy(_.identifier.position)
+                        .view.mapValues(_.fproduct(PointDisplayType.forRecord))
+                        .toList
+                        .sortBy(_._1)(using Order[PositionIndex].toOrdering)
+                        .map{ (pos, posGroup) => 
+                            val processedGroup = posGroup.groupBy(_._1.traceId)
+                                .toList
+                                .sortBy(_._1)(Order[TraceId].toOrdering)
+                                .map(_._2)
+                            pos -> NonnegativeInt.indexed(processedGroup)
+                        }
+
+
+                val (groupedFailQC, groupedPassQC): (List[(PositionIndex, List[TraceRecordPair])], List[(PositionIndex, List[TraceRecordPair])]) = 
+                    Alternative[List].separate(groupedAndTagged.flatMap{ (pos, traceGroups) =>
+                        val (failed, passed) = Alternative[List].separate(traceGroups.flatMap((g, t) => g.flatMap{
+                            case (_, PointDisplayType.Invisible) => None
+                            case (r, PointDisplayType.QCFail) => (t, r).asLeft.some
+                            case (r, PointDisplayType.QCPass) => (t, r).asRight.some
+                        }))
+                        List((pos, failed).asLeft, (pos, passed).asRight)
+                    })
+                
                 println(s"Writing data for spot points visualisation: ${analysisOutfolder}")
-                val groupedPassQC = groupedAndTagged.view.mapValues(_.filter(_._2 === PointDisplayType.QCPass))
-                writePointsForNapari(pointsOutfolder, PointDisplayType.QCPass)(groupedPassQC.toList.map{ (pos, g) => pos -> g.map(_._1) })
+                writePointsForNapari(pointsOutfolder, PointDisplayType.QCPass)(groupedPassQC)
                 println("Wrote QC pass data")
-                val groupedFailQC = groupedAndTagged.view.mapValues(_.filter(_._2 === PointDisplayType.QCFail))
-                writePointsForNapari(pointsOutfolder, PointDisplayType.QCFail)(groupedFailQC.toList.map{ (pos, g) => pos -> g.map(_._1) })
+                writePointsForNapari(pointsOutfolder, PointDisplayType.QCFail)(groupedFailQC)
                 println("Wrote QC fail data")
                 println("Done!")
 
@@ -414,18 +469,23 @@ object LabelAndFilterLocusSpots:
         }
     }
 
-    private def writePointsForNapari(folder: os.Path, qcType: PointDisplayType)(groupedByPos: List[(PositionIndex, Iterable[LocusSpotQC.OutputRecord])]) = {
+    private type TraceRecordPair = (NonnegativeInt, LocusSpotQC.OutputRecord)
+
+    private def writePointsForNapari(folder: os.Path, qcType: PointDisplayType)(groupedByPos: List[(PositionIndex, List[TraceRecordPair])]) = {
         import NapariSortKey.given
         import NapariSortKey.*
         val getOutfile = (pos: PositionIndex) => 
             val numText = "%04d".format(pos.get + 1)
             folder /  s"P${numText}.${qcType.toString.toLowerCase}.csv"
         val header = "index" :: (0 to 4).map(i => s"axis-$i").toList
-        groupedByPos.toList.sortBy(_._1)(using Order[PositionIndex].toOrdering).map{ (pos, records) => 
+        groupedByPos.map{ case (pos, traceRecordPairs) => 
             val outfile = getOutfile(pos)
-            val outrecs = records.toList
-                .sortForNapari
-                .zipWithIndex.map{ (r, i) => List(i.show, r.traceId.show, r.time.show, r.z.get.show, r.y.get.show, r.x.get.show) }
+            val outrecs = traceRecordPairs
+                .zipWithIndex
+                .map{ case ((t, r), i) => 
+                    val p = r.centerInPixels
+                    List(i.show, t.show, r.time.show, p.z.get.show, p.y.get.show, p.x.get.show)
+                }
             os.write(outfile, (header :: outrecs).map(_.mkString(",") ++ "\n"))
             pos -> outfile
         }
@@ -466,10 +526,11 @@ object LabelAndFilterLocusSpots:
     object PointDisplayType:
         given eqForPointDisplayType: Eq[PointDisplayType] = Eq.fromUniversalEquals[PointDisplayType]
         
-        def forRecord(r: LocusSpotQC.OutputRecord): PointDisplayType = 
-            if r.canBeDisplayed 
-            then if r.passesQC then QCPass else QCFail
-            else Invisible
+        def forRecord(r: LocusSpotQC.OutputRecord): PointDisplayType = (r.canBeDisplayed, r.passesQC) match {
+            case (false, _) => Invisible
+            case (_, true) => QCPass
+            case (_, false) => QCFail 
+        }
     end PointDisplayType
 
     private[LabelAndFilterLocusSpots] final case class NapariSortKey(position: PositionIndex, traceId: TraceId, time: Timepoint)
