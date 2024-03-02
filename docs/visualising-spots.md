@@ -15,4 +15,5 @@ Alternatively, if you have [Nix package manager](https://nixos.org/download) ins
 1. Open the Napari viewer by typing `napari` into a terminal where the command is available.
 1. In `Finder` or a similar file browser program, open the analysis subfolder of an experiment folder to which `looptrace` has written results, and navigate to the `locus_spot_images` subfolder, and then click-and-drag the image data for the field of view you're interested in and the correspinding QC pass/fail files into the Napari window.
 1. For each points layers in turn, select all the point with `Shift+A`, and then set color, shape, size, etc. as desired.
-1. When you want to view a different field of view (FOV), simply delete the layers and repeat the process.
+1. When you want to view a different field of view (FOV), simply delete the layers within the Napari viewer, and the repeat the process with the image file and points files for the new FOV.
+
