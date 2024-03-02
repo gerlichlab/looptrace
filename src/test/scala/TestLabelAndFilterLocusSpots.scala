@@ -37,31 +37,31 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, GenericSuite, Scalacheck
     }
 
     test("Basic golden path test") {
-        withTempDirectory{ (tempdir: os.Path) => 
 
-            /* Pretest: equivalence between expected columns and concatenation of input columns with QC component fields */
-            val expLinesUnfiltered = os.read.lines(componentExpectationFile)
-            val expColumnsUnfiltered = {
-                val sep = Delimiter.fromPathUnsafe(componentExpectationFile)
-                sep `split` expLinesUnfiltered.head
-            }.toList
-            val componentLabelColumns: List[String] = labelsOf[ResultRecord]
-                .productIterator
-                .toList
-                .map(_.asInstanceOf[String])
-                .filterNot(_ === "canBeDisplayed")
-            val inputHeaderFields = {
-                val headline = os.read.lines(tracesInputFile).head
-                val sep = Delimiter.fromPathUnsafe(componentExpectationFile)
-                sep `split` headline
-            }.toList
-            val qcColumns = componentLabelColumns :+ QcPassColumn
-            expColumnsUnfiltered shouldEqual {
-                (if inputHeaderFields.head === "" then inputHeaderFields.tail else inputHeaderFields) ++ qcColumns
-            }
+        /* Pretest: equivalence between expected columns and concatenation of input columns with QC component fields */
+        val expLinesUnfiltered = os.read.lines(componentExpectationFile)
+        val expColumnsUnfiltered = {
+            val sep = Delimiter.fromPathUnsafe(componentExpectationFile)
+            sep `split` expLinesUnfiltered.head
+        }.toList
+        val componentLabelColumns: List[String] = labelsOf[ResultRecord]
+            .productIterator
+            .toList
+            .map(_.asInstanceOf[String])
+            .filterNot(_ === "canBeDisplayed")
+        val inputHeaderFields = {
+            val headline = os.read.lines(tracesInputFile).head
+            val sep = Delimiter.fromPathUnsafe(componentExpectationFile)
+            sep `split` headline
+        }.toList
+        val qcColumns = componentLabelColumns :+ QcPassColumn
+        expColumnsUnfiltered shouldEqual {
+            (if inputHeaderFields.head === "" then inputHeaderFields.tail else inputHeaderFields) ++ qcColumns
+        }
 
-            // Run all tests over both input files -- with or without index_col=0 -- as results should be invariant.
-            forAll (Table("infile", tracesInputFile, tracesInputFileWithoutIndex)) { infile => 
+        // Run all tests over both input files -- with or without index_col=0 -- as results should be invariant.
+        forAll (Table("infile", tracesInputFile, tracesInputFileWithoutIndex)) { infile => 
+            withTempDirectory{ (tempdir: os.Path) => 
                 val (expUnfilteredPath, expFilteredPath) = pretest(tempdir = tempdir, infile = infile)
 
                 // With the pretest passed, run the action that generate outputs from inputs.
@@ -102,8 +102,8 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, GenericSuite, Scalacheck
                     assertPairwiseEquality(observed = obsLinesFiltered.toList, expected = expLinesFiltered.toList)
                 }
             }
-            
         }
+            
     }
 
     test("Probe exclusion is correct.") {
