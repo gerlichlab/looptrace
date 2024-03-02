@@ -36,17 +36,33 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, GenericSuite, Scalacheck
         pending
     }
 
-    test("The two points files--1 for QC pass and 1 for QC fail--are always produced for each field of view") { pending }
+    test("The two points files--1 for QC pass and 1 for QC fail--are always produced for each field of view, even if empty.") { pending }
 
-    test("The combined number of non-header records in the QC pass and QC fail files is the number of non-header records in the unfiltered, labeled file.") { pending }
+    test("The combined number of non-header records in the QC pass and QC fail files is the number of non-header records in the unfiltered, labeled file which are displayable.") { pending }
 
-    test("Counds of QC pass and fail records in their files correspond to summing over the qcPass column from the unfiltered file.") { pending }
+    test("Counts of QC pass and fail records in their files correspond to summing over the qcPass column from the unfiltered file, and deducting non-displayable records.") { pending }
 
     test("Each points file has a header that works for napari (index, axis-0, axis-1, axis-2, axis-3, axis-4).") { pending }
 
-    test("The seequence of axis-0 values ('trace_id') in each points file matchs (0, 1, ..., T - 1), where T is the number of unique trace IDs for the field of view.") { pending }
+    test("The seequence of axis-0 values ('trace_id') in each points file has endpoints 0 and T, where T is the number of unique trace IDs for the field of view.") { pending }
+
+    test("The seequence of axis-0 values ('trace_id') in each points file has a 'hole' exactly where there's a trace ID with no displayable points.") { pending }
 
     test("Each points file is correctly sorted in ascending order of (traceId, timepont), i.e. ('axis-0', 'axis-1') for napar.") { pending }
+
+    test("Filter for maximal distance between a locus spot center and its from region spot center works.") { pending }
+    
+    test("Filter for minimum signal-to-noise ratio (SNR) works.") { pending }
+
+    test("Filter for concentration in XY works (maxSigmaXY is respected.)") { pending }
+
+    test("Filter for concentration in Z works (maxSigmaZ is respected.)") { pending }
+
+    test("Filter for within-1-stanard-deviation-of-bounds is correct in Z.") { pending }
+    
+    test("Filter for within-1-stanard-deviation-of-bounds is correct in Y.") { pending }
+    
+    test("Filter for within-1-stanard-deviation-of-bounds is correct in X.") { pending }
 
     test("Basic golden path test") {
 
