@@ -78,24 +78,19 @@ object ImagingRoundsConfiguration:
         // TODO: consider checking that every regional timepoint in the sequence is represented in the locusGrouping.
         // See: https://github.com/gerlichlab/looptrace/issues/270
         val uniqueTimepointsInLocusGrouping = locusGrouping.map(_.locusTimepoints).foldLeft(Set.empty[Timepoint])(_ ++ _.toSortedSet)
-        val locusTimeDisjointNel = {
-            val numElements = locusGrouping.foldLeft(0){ (n, s) => n + s.locusTimepoints.length }
-            val numUniqElements = uniqueTimepointsInLocusGrouping.size
-            (numElements === numUniqElements)
-                .either(s"$numElements total, $numUniqElements unique as values in locus grouping", ())
-                .toValidatedNel
-        }
         val (locusTimeSubsetNel, locusTimeSupersetNel) = {
-            val locusTimesInSequence = sequence.locusRounds.map(_.time).toSet
-            val subsetNel = (uniqueTimepointsInLocusGrouping -- locusTimesInSequence).toList match {
-                case Nil => ().validNel
-                case ts => s"${ts.length} timepoint(s) in locus grouping and not found as locus imaging timepoints: ${ts.sorted.mkString(", ")}".invalidNel
+            if locusGrouping.isEmpty then (().validNel, ().validNel) else {
+                val locusTimesInSequence = sequence.locusRounds.map(_.time).toSet
+                val subsetNel = (uniqueTimepointsInLocusGrouping -- locusTimesInSequence).toList match {
+                    case Nil => ().validNel
+                    case ts => s"${ts.length} timepoint(s) in locus grouping and not found as locus imaging timepoints: ${ts.sorted.mkString(", ")}".invalidNel
+                }
+                val supersetNel = (locusTimesInSequence -- uniqueTimepointsInLocusGrouping).toList match {
+                    case Nil => ().validNel
+                    case ts => s"${ts.length} locus timepoint(s) in imaging sequence and not found in locus grouping: ${ts.sorted.mkString(", ")}".invalidNel
+                }
+                (subsetNel, supersetNel)
             }
-            val supersetNel = (locusTimesInSequence -- uniqueTimepointsInLocusGrouping).toList match {
-                case Nil => ().validNel
-                case ts => s"${ts.length} locus timepoint(s) in imaging sequence and not found in locus grouping: ${ts.sorted.mkString(", ")}".invalidNel
-            }
-            (subsetNel, supersetNel)
         }
         val locusGroupTimesAreRegionTimesNel = {
             val nonRegional = locusGrouping.map(_.regionalTimepoint) -- sequence.regionRounds.map(_.time).toList
