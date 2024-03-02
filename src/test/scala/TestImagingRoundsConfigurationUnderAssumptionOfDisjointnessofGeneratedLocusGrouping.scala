@@ -313,7 +313,7 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
         }
     }
 
-    test("Locus grouping must either be absent or partition locus imaging rounds from the imaging sequence.") {
+    test("Locus grouping must either be absent or be identical in union over timepoints to timepoints from locus imaging rounds from imaging sequence.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val maxTime = 100
         given arbTime: Arbitrary[Timepoint] = 
@@ -321,19 +321,24 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
             Gen.choose(0, maxTime).map(Timepoint.unsafe).toArbitrary
 
         def mygen = for {
+            // First, generate the basic imaging rounds sequence, with (maybe empty) locus grouping, and round exclusions.
             (seq, optLocusGrouping, exclusions) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt.unsafe(maxTime / 2))
+            /* Collect all regional and local timepoint for set-theoretic comparisons. */
             regionalTimes = seq.regionRounds.map(_.time).toList.toSet
             locusTimes = seq.locusRounds.map(_.time).toSet
+            /* Determine the final locus grouping, and method call expectation (Right-wrapped () for success, Left-wrapped NEL of tests o/w). */
             (modLocusGrouping, altMessagesTests) <- {
                 optLocusGrouping match {
                     case None => Gen.oneOf(
-                        Gen.const(None -> ().asRight), 
+                        Gen.const(None -> ().asRight), // Absence of locus grouping is always valid.
                         {
+                            // Here, we generate dummy "locus" timepoints and assign to one of the real regional times.
                             val gen = for {
-                                ts <- Gen.nonEmptyListOf(arbitrary[Timepoint])
+                                ts <- Gen.nonEmptyListOf(arbitrary[Timepoint].suchThat(t => !locusTimes.contains(t)))
                                 r <- Gen.oneOf(regionalTimes)
                             } yield NonEmptyList.one(LocusGroup(r, ts.toNel.get.toNes))
                             gen.map{ g => 
+                                // Since each timepoint is generated to NOT be in the imaging sequence, anything added here is to be expected as extra.
                                 val numExtra = g.head.locusTimepoints.size
                                 val f = { (_: String).startsWith(s"$numExtra timepoint(s) in locus grouping and not found as locus imaging timepoints") }
                                 g.some -> NonEmptyList.one("Extra in grouping 1" -> f).asLeft[Unit]
@@ -341,28 +346,38 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
                         }
                     )
                     case Some(groups) => Gen.oneOf(
-                        Gen.const{ (None, ().asRight) }, 
+                        Gen.const{ (None, ().asRight) }, // Absence of locus grouping is always valid.
                         if groups.length === 1 && groups.head.locusTimepoints.size === 1 
                         then Gen.const{
+                            // There's only 1 group, and it has 1 value...
                             val msgTest = 
+                                // ...If it's a real locus timepoint, then the grouping is valid...
                                 if locusTimes.contains(groups.head.locusTimepoints.toNonEmptyList.head)
                                 then ().asRight
+                                // ...otherwise, we have an invalid grouping.
                                 else {
                                     val prefix = "1 locus timepoint(s) in imaging sequence and not found in locus grouping"
                                     NonEmptyList.one{ ("Uncovered in sequence 1", (_: String).startsWith(prefix)) }.asLeft[Unit]
                                 }
-                            None -> msgTest
+                            groups.some -> msgTest
                         }
                         else for {
+                            // We have at least 1 group and more than 1 locus timepoint in total, so we can 
+                            // definitely generate at least 1 to remove and still have a structurally (nonempty-of-nonempty) grouping.
+                            // First, remove a single locus timepoint in the imaging rounds sequence from the locus grouping.
                             subtracted <- Gen.oneOf(locusTimes)
                                 .map{ t => groups.toList.foldRight(List.empty[LocusGroup]){
                                     case (g, acc) => (g.locusTimepoints - t).toNes.fold(acc)(ts => g.copy(locusTimepoints = ts) :: acc)
                                 } }
+                            // Then, add a new timepoint to each group.
+                            // NB: here we seemingly don't check for possibility of introducing non-disjointness among the subgroups.
                             subtractedAndAdded <- subtracted.toList.traverse{ g => 
                                 arbitrary[Timepoint]
                                     .suchThat(t => !locusTimes.contains(t))
                                     .map(t => g.copy(locusTimepoints = g.locusTimepoints.add(t)))
                             }
+                            // Since we've both removed and added timepoints to the grouping that originally partitioned 
+                            // the locus timepoints from the imaging rounds sequence, we expect both kinds of error message.
                             missingPointTests = NonEmptyList.of(
                                 ("Uncovered in sequence 2", (_: String).startsWith("1 locus timepoint(s) in imaging sequence and not found in locus grouping")), 
                                 ("Extra in grouping 3", (_: String).startsWith(s"${subtractedAndAdded.length} timepoint(s) in locus grouping and not found as locus imaging timepoints"))
