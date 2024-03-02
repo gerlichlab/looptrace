@@ -313,7 +313,7 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
         }
     }
 
-    test("Locus grouping must partition locus imaging rounds from the imaging sequence.") {
+    test("Locus grouping must either be absent or partition locus imaging rounds from the imaging sequence.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val maxTime = 100
         given arbTime: Arbitrary[Timepoint] = 
@@ -341,14 +341,17 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
                         }
                     )
                     case Some(groups) => Gen.oneOf(
-                        Gen.const{
-                            val prefix = s"${locusTimes.size} locus timepoint(s) in imaging sequence and not found in locus grouping"
-                            (None, NonEmptyList.one{ ("Extra in grouping 2", (_: String).startsWith(prefix)) }.asLeft[Unit])
-                        }, 
+                        Gen.const{ (None, ().asRight) }, 
                         if groups.length === 1 && groups.head.locusTimepoints.size === 1 
                         then Gen.const{
-                            val prefix = "1 locus timepoint(s) in imaging sequence and not found in locus grouping"
-                            (None, NonEmptyList.one{ ("Uncovered in sequence 1", (_: String).startsWith(prefix)) }.asLeft[Unit])
+                            val msgTest = 
+                                if locusTimes.contains(groups.head.locusTimepoints.toNonEmptyList.head)
+                                then ().asRight
+                                else {
+                                    val prefix = "1 locus timepoint(s) in imaging sequence and not found in locus grouping"
+                                    NonEmptyList.one{ ("Uncovered in sequence 1", (_: String).startsWith(prefix)) }.asLeft[Unit]
+                                }
+                            None -> msgTest
                         }
                         else for {
                             subtracted <- Gen.oneOf(locusTimes)
@@ -362,7 +365,7 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
                             }
                             missingPointTests = NonEmptyList.of(
                                 ("Uncovered in sequence 2", (_: String).startsWith("1 locus timepoint(s) in imaging sequence and not found in locus grouping")), 
-                                ("Extra in grouping 4", (_: String).startsWith(s"${subtractedAndAdded.length} timepoint(s) in locus grouping and not found as locus imaging timepoints"))
+                                ("Extra in grouping 3", (_: String).startsWith(s"${subtractedAndAdded.length} timepoint(s) in locus grouping and not found as locus imaging timepoints"))
                             )
                         } yield (subtractedAndAdded.toNel.get.some, missingPointTests.asLeft[Unit])
                     )
