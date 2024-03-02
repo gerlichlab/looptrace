@@ -1,5 +1,6 @@
 <!--- DO NOT EDIT THIS GENERATED DOCUMENT DIRECTLY; instead, edit generate_excution_control_document.py --->
 # Controlling pipeline execution
+
 ## Overview
 The main `looptrace` processing pipeline is built with [pypiper](https://pypi.org/project/piper/).
 One feature of such a pipeline is that it may be started and stopped at arbitrary points.
@@ -19,7 +20,7 @@ When experimenting with different parameter settings for one or more stages, it'
 Before rerunning the pipeline with the appropriate `--start-point` value, take care of the following:
 
 1. __Analysis folder__: It's wise to create a new analysis / output folder for a restart, particularly if it corresponds to updated parameter settings.
-1. __Parameters configuration file__: It's wise to create a new parameters config file for a resart if it corresponds to updated parameter settings. 
+1. __Parameters configuration file__: It's wise to create a new parameters config file for a restart if the restart includes updated parameter settings. 
 Regardless of whether that's done, ensure that the `analysis_path` value corresponds to the output folder you'd like to use.
 1. __Imaging rounds configuration file__: If a new analysis for the same experimental data affects something about the imaging rounds configuration, 
 e.g. the minimum separation distance required between regional spots, you may want to create this config file anew, copying the old one and updating 
@@ -62,4 +63,3 @@ Below are the sequential pipeline stage names.
 * pairwise_distances__locus_specific
 * pairwise_distances__regional
 * locus_specific_spots_visualisation_data_prep
-* regional_spots_visualisation
