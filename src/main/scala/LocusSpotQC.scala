@@ -20,6 +20,19 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
  */
 object LocusSpotQC:
 
+    /** The reasons a locus spot can fail QC */
+    enum FailureReason:
+        case FarFromRegionCenter, InsufficientSNR, DiffuseXY, DiffuseZ, OutOfBounds
+
+        /** Short name for napari display */
+        private[looptrace] def abbreviation: String = this match {
+            case FarFromRegionCenter => "R"
+            case InsufficientSNR => "S"
+            case DiffuseXY => "xy"
+            case DiffuseZ => "z"
+            case OutOfBounds => "O"
+        }
+
     /** A roundtrip through JSON for a 3D point, in the context of locus spot QC */
     object PointCodec:
         private[LocusSpotQC] def toJsonObject(p: Point3D): ujson.Obj = ujson.Obj(
@@ -43,6 +56,7 @@ object LocusSpotQC:
         final def canBeDisplayed: Boolean = qcResult.canBeDisplayed
         final def traceId: TraceId = identifier.traceId
         final def time: Timepoint = identifier.locusId.get
+        final def failureReasons: List[FailureReason] = qcResult.toFailureReasons
         
     /** Helpers for working with QC data bundles for locus-specific spots */
     object OutputRecord:
@@ -214,10 +228,23 @@ object LocusSpotQC:
         inBoundsZ: Boolean,
         canBeDisplayed: Boolean,
         ):
+        
         /** The individual true/false components indicating QC pass or fail. */
         final def components: Array[Boolean] = Array(withinRegion, sufficientSNR, denseXY, denseZ, inBoundsX, inBoundsY, inBoundsZ)
+        
         /** Whether all of the QC check components in this instance indicate a pass */
         final def allPass: Boolean = components.all
+        
+        // TODO: testing -- should enforce that allPass === toFailureReasons.isEmpty
+
+        /** Represent the same data as a list of failure reasons. */
+        def toFailureReasons: List[FailureReason] = List(
+            (!withinRegion).option(FailureReason.FarFromRegionCenter), 
+            (!sufficientSNR).option(FailureReason.InsufficientSNR), 
+            (!denseXY).option(FailureReason.DiffuseXY),
+            (!denseZ).option(FailureReason.DiffuseZ),
+            (!(inBoundsX && inBoundsY && inBoundsZ)).option(FailureReason.OutOfBounds),
+        ).flatten
     end ResultRecord
 
     /** Helpers for working with a bundle of QC result components for a single locus-specific spot */

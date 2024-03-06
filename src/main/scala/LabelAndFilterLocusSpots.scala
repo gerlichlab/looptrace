@@ -29,6 +29,8 @@ object LabelAndFilterLocusSpots:
     val QcPassColumn = "qcPass"
     
     private type CenterInPixels = Point3D
+    private type TraceRecordPair = (NonnegativeInt, LocusSpotQC.OutputRecord)
+
 
     /** Deinition of the command-line interface */
     case class CliConfig(
@@ -458,37 +460,48 @@ object LabelAndFilterLocusSpots:
                         List((pos, failed).asLeft, (pos, passed).asRight)
                     })
                 
-                println(s"Writing data for spot points visualisation: ${analysisOutfolder}")
-                writePointsForNapari(pointsOutfolder, PointDisplayType.QCPass)(groupedPassQC)
-                println("Wrote QC pass data")
-                writePointsForNapari(pointsOutfolder, PointDisplayType.QCFail)(groupedFailQC)
-                println("Wrote QC fail data")
+                writePointsForNapari(pointsOutfolder)(groupedFailQC)
+                writePointsForNapari(pointsOutfolder)(groupedPassQC)
                 println("Done!")
 
             case (bads, _) => throw new Exception(s"${bads.length} problem(s) with writing results: $bads")
         }
     }
 
-    private type TraceRecordPair = (NonnegativeInt, LocusSpotQC.OutputRecord)
-
-    private def writePointsForNapari(folder: os.Path, qcType: PointDisplayType)(groupedByPos: List[(PositionIndex, List[TraceRecordPair])]) = {
+    private def writePointsForNapari(folder: os.Path)(groupedByPos: List[(PositionIndex, List[TraceRecordPair])]) = {
         import NapariSortKey.given
         import NapariSortKey.*
-        val getOutfile = (pos: PositionIndex) => 
+        val getOutfile = (pos: PositionIndex, qcType: PointDisplayType) => 
             val numText = "%04d".format(pos.get + 1)
             folder /  s"P${numText}.${qcType.toString.toLowerCase}.csv"
-        val header = "index" :: (0 to 4).map(i => s"axis-$i").toList
-        groupedByPos.map{ case (pos, traceRecordPairs) => 
-            val outfile = getOutfile(pos)
-            val outrecs = traceRecordPairs
-                .zipWithIndex
-                .map{ case ((t, r), i) => 
-                    val p = r.centerInPixels
-                    List(i.show, t.show, r.time.show, p.z.get.show, p.y.get.show, p.x.get.show)
+        
+        groupedByPos
+            .flatMap{ (pos, traceRecordPairs) => traceRecordPairs.toNel.map(pos -> _) }
+            .map{ (pos, traceRecordPairs) => 
+                val (qcType, addFailCodes): (PointDisplayType, (List[String], List[LocusSpotQC.FailureReason]) => List[String]) = {
+                    if (traceRecordPairs.head._2.passesQC) {
+                        val updateFields = (fields: List[String], codes: List[LocusSpotQC.FailureReason]) => 
+                            if codes.nonEmpty 
+                            then throw new IllegalArgumentException(s"Nonempty fail codes for allegedly QC-passed record (FOV $pos)! $fields")
+                            else fields
+                        (PointDisplayType.QCPass, updateFields)
+                    } else {
+                        val updateFields = (fields: List[String], codes: List[LocusSpotQC.FailureReason]) => 
+                            if codes.isEmpty 
+                            then throw new IllegalArgumentException(s"Empty fail codes for allegedly QC-failed record (FOV $pos)! $fields")
+                            else fields :+ codes.map(_.abbreviation).mkString(";")
+                        (PointDisplayType.QCFail, updateFields)
+                    }
                 }
-            os.write(outfile, (header :: outrecs).map(_.mkString(",") ++ "\n"))
-            pos -> outfile
-        }
+                val outfile = getOutfile(pos, qcType)
+                val outrecs = traceRecordPairs.map{ (t, r) => 
+                    val p = r.centerInPixels
+                    val base = List(t.show, r.time.show, p.z.get.show, p.y.get.show, p.x.get.show)
+                    addFailCodes(base, r.failureReasons)
+                }
+                os.write(outfile, outrecs.toList.map(_.mkString(",") ++ "\n"))
+                (pos, outfile)
+            }
     }
 
     /** Wrapper around {@code os.write} to handle writing an iterable of lines. */
