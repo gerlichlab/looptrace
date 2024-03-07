@@ -46,8 +46,8 @@ def workflow(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run spot detection on all frames and channels listed in config.')
     parser.add_argument("params_config", type=ExtantFile.from_string, help="Looptrace parameters config file path")
-    parser.add_argument("image_path", type=ExtantFolder.from_string, help=f"Path to folder containing '{SPOT_IMAGES_SUBFOLDER}' folder")
+    parser.add_argument("images_folder", type=ExtantFolder.from_string, help=f"Path to folder containing '{SPOT_IMAGES_SUBFOLDER}' folder")
     parser.add_argument("--keep", action="store_true", help="Keep the original data, even after zipping.")
     args = parser.parse_args()
-    workflow(args.params_config, args.image_path)
+    workflow(args.params_config, args.images_folder)
     

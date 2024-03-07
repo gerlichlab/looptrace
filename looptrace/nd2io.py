@@ -100,26 +100,26 @@ def stack_nd2_to_dask(folder: str, position_id: int = None):
     '''
     image_files = sorted([p.path for p in os.scandir(folder) if (p.name.endswith('.nd2') and not p.name.startswith('_'))])
     
-    keyed_image_paths = key_image_file_names_by_point_and_time(image_files)
-    pos_names = get_position_names_N(len(keyed_image_paths))
+    keyed_images_folders = key_image_file_names_by_point_and_time(image_files)
+    pos_names = get_position_names_N(len(keyed_images_folders))
 
     if position_id is not None:
         # Allow caller to specify single FOV to use, and select it here.
         try:
-            keyed_image_paths = dict([list(sorted(keyed_image_paths.items(), key=itemgetter(0)))[position_id]])
+            keyed_images_folders = dict([list(sorted(keyed_images_folders.items(), key=itemgetter(0)))[position_id]])
             pos_names = [pos_names[position_id]]
         except IndexError as e:
             raise IndexError(f"{len(pos_names)} position name(s) available, but tried to select index {position_id}") from e
 
     try:
-        sample_file = next(itertools.chain(*[by_time.values() for by_time in keyed_image_paths.values()]))
+        sample_file = next(itertools.chain(*[by_time.values() for by_time in keyed_images_folders.values()]))
     except StopIteration as e:
         raise EmptyImagesError(f"No usable .nd2 files in folder: {folder}") from e
     metadata = parse_nd2_metadata(sample_file)
 
     pos_stack = []
     errors = {}
-    for _, file_path_by_time_name in tqdm.tqdm(sorted(keyed_image_paths.items(), key=itemgetter(0))):
+    for _, file_path_by_time_name in tqdm.tqdm(sorted(keyed_images_folders.items(), key=itemgetter(0))):
         t_stack = []
         for _, path in sorted(file_path_by_time_name.items(), key=itemgetter(0)):
             try:

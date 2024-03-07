@@ -170,12 +170,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Assign detected spots to nuclei (or not).")
     parser.add_argument("rounds_config", type=ExtantFile.from_string, help="Imaging rounds config file path")
     parser.add_argument("params_config", type=ExtantFile.from_string, help="Looptrace parameters config file path")
-    parser.add_argument("image_path", type=ExtantFolder.from_string, help="Path to folder with images to read.")
+    parser.add_argument("images_folder", type=ExtantFolder.from_string, help="Path to folder with images to read.")
     parser.add_argument("--image_save_path", type=ExtantFolder.from_string, help="(Optional): Path to folder to save images to.")
     args = parser.parse_args()
     workflow(
         rounds_config=args.rounds_config,
         params_config=args.params_config, 
-        images_folder=args.image_path, 
+        images_folder=args.images_folder, 
         image_save_path=args.image_save_path,
         )

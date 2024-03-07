@@ -62,7 +62,7 @@ def run_frame_name_and_distance_application(
     H = ImageHandler(
         rounds_config=rounds_config, 
         params_config=params_config, 
-        image_path=images_path,
+        images_folder=images_path,
         )
     T = Tracer(H)
     traces = apply_frame_names_and_spatial_information(traces_file=T.traces_path, frame_names=H.frame_names)

@@ -422,17 +422,17 @@ def match_file_lists_decon(t_list,o_list):
 
     return o_list_match
 
-def read_czi_image(image_path):
+def read_czi_image(images_folder):
     '''
     Reads czi files as arrays using czifile package. Returns only CZYX image.
     '''
     import czifile
-    with czifile.CziFile(image_path) as czi:
+    with czifile.CziFile(images_folder) as czi:
         image=czi.asarray()[0,0,:,0,:,:,:,0]
     return image
 
 
-def read_czi_meta(image_path, tags, save_meta=False):
+def read_czi_meta(images_folder, tags, save_meta=False):
     '''
     Function to read metadata and image data for CZI files.
     Define the information to be extracted from the xml tags dict in config file.
@@ -452,7 +452,7 @@ def read_czi_meta(image_path, tags, save_meta=False):
                 yield node.tag, node.text
             root.clear()
     
-    with czifile.CziFile(image_path) as czi:
+    with czifile.CziFile(images_folder) as czi:
         meta=czi.metadata()
     
     with io.StringIO(meta) as f:
@@ -461,7 +461,7 @@ def read_czi_meta(image_path, tags, save_meta=False):
         for tag, text in results:
             metadict[tag]=text
     if save_meta:
-        with open(image_path[:-4]+'_meta.yaml', 'w') as myfile:
+        with open(images_folder[:-4]+'_meta.yaml', 'w') as myfile:
             yaml.safe_dump(metadict, myfile)
     return metadict
 

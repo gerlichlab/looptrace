@@ -37,7 +37,7 @@ if __name__ == '__main__':
     
     parser.add_argument('--bin_path', help='Path to python file to run.')
     parser.add_argument("--config_path", help="Config file path")
-    parser.add_argument("--image_path", help="Path to folder with images to read.")
+    parser.add_argument("--images_folder", help="Path to folder with images to read.")
     parser.add_argument("--image_save_path", help="(Optional): Path to folder to save images to.")
     parser.add_argument('--additional_options', help = 'Additional options to script.')
     
@@ -82,9 +82,9 @@ if __name__ == '__main__':
         command_base = ["conda", "run"] + env_spec + ["python3", args.bin_path, args.config_path]
 
         if args.additional_options is not None:
-            command_extras = [args.image_path, args.additional_options]
-        elif args.image_path is not None:
-            command_extras = [args.image_path]
+            command_extras = [args.images_folder, args.additional_options]
+        elif args.images_folder is not None:
+            command_extras = [args.images_folder]
         else:
             command_extras = []
         fh.writelines(' '.join(command_base + command_extras))

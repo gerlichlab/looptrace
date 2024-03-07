@@ -281,7 +281,7 @@ def coarse_correction_workflow(rounds_config: ExtantFile, params_config: ExtantF
 
 def fine_correction_workflow(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> str:
     """The workflow for the second, optional, fine drift correction"""
-    D = Drifter(image_handler=ImageHandler(rounds_config=rounds_config, params_config=params_config, image_path=images_folder))
+    D = Drifter(image_handler=ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder))
     print("Computing fine drifts")
     compute_fine_drifts(D)
     all_drifts = D.read_all_fine_drifts() # Read each per-FOV file, aggregating to single table

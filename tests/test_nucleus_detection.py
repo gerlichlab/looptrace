@@ -54,7 +54,7 @@ def get_nuc_detector(
     with open(conf_file, "w") as fh:
         yaml.dump(conf_data, fh)
     params_config = ExtantFile(conf_file)
-    return NucDetector(ImageHandler(rounds_config=rounds_config, params_config=params_config, image_path=images_folder))
+    return NucDetector(ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder))
 
 
 @pytest.mark.parametrize(
@@ -202,7 +202,7 @@ def test_nuc_detector__generates_image_of_proper_dimension(
     N.generate_images_for_segmentation()
     
     # Now the preprocessed images should be present and as expected...only AFTER image reloading.
-    N.image_handler.image_path = images_folder
+    N.image_handler.images_folder = images_folder
     assert not N.has_images_for_segmentation
     N.image_handler.read_images()
     assert N.has_images_for_segmentation

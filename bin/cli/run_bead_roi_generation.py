@@ -61,7 +61,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Driver for computing all fiducial bead ROIs for a particular imaging experiment")
     parser.add_argument("rounds_config", type=ExtantFile.from_string, help="Imaging rounds config file path")
     parser.add_argument("params_config", type=ExtantFile.from_string, help="Looptrace parameters config file path")
-    parser.add_argument("image_path", type=ExtantFolder.from_string, help="Path to folder with images to read.")
+    parser.add_argument("images_folder", type=ExtantFolder.from_string, help="Path to folder with images to read.")
     
     parser.add_argument("-O", "--output-folder", type=Path, help="Path to folder in which to place output")
     
@@ -73,7 +73,7 @@ if __name__ == "__main__":
     workflow(
         rounds_config=args.rounds_config,
         params_config=args.params_config, 
-        images_folder=args.image_path, 
+        images_folder=args.images_folder, 
         output_folder=args.output_folder, 
         prefer=args.prefer_for_joblib, 
         n_jobs=args.num_jobs,

@@ -136,8 +136,8 @@ class Deconvolver:
         bead_d = self.bead_roi_size # diameter
         bead_r = bead_d // 2 # radius
         
-        bead_image_path, bead_image_data = self.get_input_filepath_and_input_image
-        print(f"Using image for empirical PSF computation: {bead_image_path}")
+        bead_images_folder, bead_image_data = self.get_input_filepath_and_input_image
+        print(f"Using image for empirical PSF computation: {bead_images_folder}")
         
         bead_img = bead_image_data[t_slice, ch].compute()
         bead_pos = generate_bead_rois(t_img=bead_img, threshold=threshold, min_bead_int=min_bead_int, bead_roi_px=bead_d, n_points=self.num_beads)
@@ -156,7 +156,7 @@ class Deconvolver:
         exp_psf = np.mean(np.stack(beads_c), axis=0)[1:, 1:, 1:]
         exp_psf = exp_psf / np.max(exp_psf)
         
-        outfile = Path(self.image_handler.image_path) / "exp_psf.npy"
+        outfile = Path(self.image_handler.images_folder) / "exp_psf.npy"
         print(f"Saving empirical point-spread function: {outfile}")
         np.save(str(outfile), exp_psf)
         print("Empirical PSF saved.")
