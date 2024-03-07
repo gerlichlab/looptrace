@@ -224,7 +224,7 @@ def parse_cmdl(cmdl: List[str]) -> argparse.Namespace:
     # Base CLI for this project
     parser.add_argument("rounds_config", type=ExtantFile.from_string, help="Imaging rounds config file path")
     parser.add_argument("params_config", type=ExtantFile.from_string, help="Looptrace parameters config file path")
-    parser.add_argument("image_path", type=ExtantFolder.from_string, help="Path to folder with images to read.")
+    parser.add_argument("images_folder", type=ExtantFolder.from_string, help="Path to folder with images to read.")
     
     # Specifics for gridsearch
     parser.add_argument("--parameters-grid-file", type=ExtantFile.from_string, help="Path to file which declares the gridsearch parameters")
@@ -275,7 +275,7 @@ def main(cmdl: List[str]) -> None:
         workflow_preexisting_configs(
             rounds_config=opts.rounds_config,
             params_config=opts.params_config, 
-            images_folder=opts.image_path, 
+            images_folder=opts.images_folder, 
             params_outfile_pairs=params_outfile_pairs, cores=opts.cores,
             )
     else:
@@ -287,7 +287,7 @@ def main(cmdl: List[str]) -> None:
         workflow_new_configs(
             rounds_config=opts.rounds_config,
             params_config=opts.params_config, 
-            images_folder=opts.image_path, 
+            images_folder=opts.images_folder, 
             params_file=opts.parameters_grid_file, 
             output_folder=ExtantFolder(opts.output_folder), 
             cores=opts.cores

@@ -50,7 +50,7 @@ class SpotType(Enum):
 
 def partition_bead_rois(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder):
     """Run the bead ROIs partitioning program / pipeline step."""
-    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, image_path=images_folder)
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.PartitionIndexedDriftCorrectionRois"
     cmd_parts = [
         "java", 
@@ -71,7 +71,7 @@ def partition_bead_rois(rounds_config: ExtantFile, params_config: ExtantFile, im
 
 
 def run_spot_proximity_filtration(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> None:
-    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, image_path=images_folder)
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     min_spot_sep = H.minimum_spot_separation
     if min_spot_sep <= 0:
         print(f"No spot filtration on proximity to be done, as minimum separation is nonpositive: {min_spot_sep}")
@@ -155,7 +155,7 @@ def plot_spot_counts(rounds_config: ExtantFile, params_config: ExtantFile, spot_
 
 
 def qc_locus_spots_and_prep_points(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> None:
-    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, image_path=images_folder)
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.LabelAndFilterLocusSpots"
     cmd_parts = [
         "java", 
@@ -222,13 +222,13 @@ def compute_region_pairwise_distances(rounds_config: ExtantFile, params_config: 
 
 
 def drift_correct_nuclei(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> Path:
-    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, image_path=images_folder)
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     N = NucDetector(H)
     return N.coarse_drift_correction_workflow()
 
 
 def prep_locus_specific_spots_visualisation(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> Tuple[Path, List[Path]]:
-    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, image_path=images_folder)
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     T = Tracer(H)
     all_one_zarr = T.write_spot_images_subset_to_single_highly_nested_zarr()
     per_fov_zarr = T.write_all_spot_images_to_one_per_fov_zarr()

@@ -123,15 +123,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Visualise preview spot detection in given position.")
     parser.add_argument("rounds_config", type=ExtantFile.from_string, help="Imaging rounds config file path")
     parser.add_argument("params_config", type=ExtantFile.from_string, help="Looptrace parameters config file path")
-    parser.add_argument("image_path", help="Path to folder with images to read.")
+    parser.add_argument("images_folder", help="Path to folder with images to read.")
     parser.add_argument('--position', type=int, help='(Optional): Index of position to view.', default=0)
     args = parser.parse_args()
         
-    logger.info(f"Building image handler: {args.image_path}")
+    logger.info(f"Building image handler: {args.images_folder}")
     H = ImageHandler(
         rounds_config=args.rounds_config,
         params_config=args.params_config, 
-        image_path=args.image_path,
+        images_folder=args.images_folder,
         )
     S = SpotPicker(H)
     params = S.detection_parameters

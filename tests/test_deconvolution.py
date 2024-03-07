@@ -23,7 +23,7 @@ def deconvolver(tmp_path, dummy_rounds_config, prepped_minimal_config_data):
         yaml.dump(conf_data, fh)
     params_config = ExtantFile(conf_path)
     imgs_path = ExtantFolder(prep_images_folder(folder=conf_path.parent, create=True))
-    H = ImageHandler(rounds_config=dummy_rounds_config, params_config=params_config, image_path=imgs_path)
+    H = ImageHandler(rounds_config=dummy_rounds_config, params_config=params_config, images_folder=imgs_path)
     return Deconvolver(H)
 
 

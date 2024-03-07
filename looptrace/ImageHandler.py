@@ -50,7 +50,7 @@ class ImageHandler:
             self, 
             rounds_config: FilePathLike, 
             params_config: FilePathLike, 
-            image_path: Optional[FolderPathLike] = None, 
+            images_folder: Optional[FolderPathLike] = None, 
             image_save_path: Optional[FolderPathLike] = None, 
             strict_load_tables: bool = True,
             ):
@@ -78,10 +78,10 @@ class ImageHandler:
                 )
         self.config.update(rounds)
 
-        self.image_path = simplify_path(image_path)
-        if self.image_path is not None:
+        self.images_folder = simplify_path(images_folder)
+        if self.images_folder is not None:
             self.read_images()
-        self.image_save_path = simplify_path(image_save_path or self.image_path)
+        self.image_save_path = simplify_path(image_save_path or self.images_folder)
         self.load_tables()
 
     @property
@@ -344,28 +344,28 @@ class ImageHandler:
         Standardized to either folders with OME-ZARR, single NPY files or NPZ collections.
         More can be added as needed.
         '''
-        self.images, self.image_lists = read_images_folder(self.image_path, is_eligible=is_eligible)
+        self.images, self.image_lists = read_images_folder(self.images_folder, is_eligible=is_eligible)
 
 
 def read_images_folder(folder: Path, is_eligible: PathFilter = lambda _: True) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     if folder is None:
         raise ValueError(f"To read images folder, a folder must be supplied.")
     print(f"Finding image paths in folder: {folder}")
-    image_paths = ((p.name, p.path) for p in os.scandir(folder) if is_eligible(p))
+    images_folders = ((p.name, p.path) for p in os.scandir(folder) if is_eligible(p))
     print(f"Reading images from folder: {folder}")
-    return read_images(image_paths)
+    return read_images(images_folders)
 
 
 def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     images, image_lists = {}, {}
-    for image_name, image_path in image_name_path_pairs:
-        print(f"Attempting to read images: {image_path}...")
-        if os.path.isdir(image_path):
-            exts = set(os.path.splitext(fn)[1] for fn in os.listdir(image_path))
+    for image_name, images_folder in image_name_path_pairs:
+        print(f"Attempting to read images: {images_folder}...")
+        if os.path.isdir(images_folder):
+            exts = set(os.path.splitext(fn)[1] for fn in os.listdir(images_folder))
             if len(exts) == 0:
                 continue
             if len(exts) != 1:
-                print(f"WARNING -- multiple ({len(exts)}) extensions found in folder {image_path}: {', '.join(exts)}")
+                print(f"WARNING -- multiple ({len(exts)}) extensions found in folder {images_folder}: {', '.join(exts)}")
             sample_ext = list(exts)[0]
             if sample_ext == '.nd2':
                 from .nd2io import stack_nd2_to_dask
@@ -374,21 +374,21 @@ def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[
                     return arrays, pos_names
             elif sample_ext in [".tif", ".tiff"]:
                 raise NotImplementedError(
-                    f"Parsing TIFF-like isn't supported! Found extension '{sample_ext}' in folder {image_path}"
+                    f"Parsing TIFF-like isn't supported! Found extension '{sample_ext}' in folder {images_folder}"
                     )
             else:
                 from .image_io import multi_ome_zarr_to_dask
                 parse = multi_ome_zarr_to_dask
-            images[image_name], image_lists[image_name] = parse(image_path)
+            images[image_name], image_lists[image_name] = parse(images_folder)
         elif image_name.endswith('.npz'):
-            images[os.path.splitext(image_name)[0]] = NPZ_wrapper(image_path)
+            images[os.path.splitext(image_name)[0]] = NPZ_wrapper(images_folder)
         elif image_name.endswith('.npy'):
             try:
-                images[os.path.splitext(image_name)[0]] = np.load(image_path, mmap_mode = 'r')
+                images[os.path.splitext(image_name)[0]] = np.load(images_folder, mmap_mode = 'r')
             except ValueError: #This is for legacy datasets, will be removed after dataset cleanup!
-                images[os.path.splitext(image_name)[0]] = np.load(image_path, allow_pickle = True)
+                images[os.path.splitext(image_name)[0]] = np.load(images_folder, allow_pickle = True)
         else:
-            print(f"WARNING -- cannot process image path: {image_path}")
+            print(f"WARNING -- cannot process image path: {images_folder}")
             continue
         print("Loaded images: ", image_name)
     return images, image_lists

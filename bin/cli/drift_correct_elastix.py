@@ -20,19 +20,19 @@ import tqdm
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Extract experimental PSF from bead images.')
     parser.add_argument("config_path", help="Experiment config file path")
-    parser.add_argument("image_path", help="Path to folder with images to read.")
-    parser.add_argument('template_image_name', help='Name of images in image_path to use as template')
-    parser.add_argument('template_image_frame', help='Channel of images in image_path to use as template')
-    parser.add_argument('template_image_channel', help='Channel of images in image_path to use as template')
-    parser.add_argument('moving_image_name', help='Name of images in image_path to use as template')
-    parser.add_argument('moving_image_channel', help='Channel of images in image_path to use as template')
+    parser.add_argument("images_folder", help="Path to folder with images to read.")
+    parser.add_argument('template_image_name', help='Name of images in images_folder to use as template')
+    parser.add_argument('template_image_frame', help='Channel of images in images_folder to use as template')
+    parser.add_argument('template_image_channel', help='Channel of images in images_folder to use as template')
+    parser.add_argument('moving_image_name', help='Name of images in images_folder to use as template')
+    parser.add_argument('moving_image_channel', help='Channel of images in images_folder to use as template')
     parser.add_argument('downsample', help='Factor to downsample by.', default='4')
     parser.add_argument('elastix_config_file', help='Path to elastix config file.')
     parser.add_argument('cells_crop', help='Toggle to additionally center and crop cells images.')
     parser.add_argument("--image_save_path", help="(Optional): Path to folder to save images to.", default=None)
     
     args = parser.parse_args()
-    H = ImageHandler(config_path=args.config_path, image_path=args.image_path, image_save_path=args.image_save_path)
+    H = ImageHandler(config_path=args.config_path, images_folder=args.images_folder, image_save_path=args.image_save_path)
     positions = H.image_lists[args.template_image_name]
     if args.cells_crop == 'on':
         crop_size = H.config['cells_crop_size']
