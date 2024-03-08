@@ -18,7 +18,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
 /**
  * Measure data across all timepoints in the regions identified during spot detection.
  * 
- * Optionally, also filter out spots that are too close together (e.g., because disambiguation 
+ * Filter out spots that are too close together (e.g., because disambiguation 
  * of spots from indiviudal FISH probes in each region would be impossible in a multiplexed 
  * experiment).
  * 
@@ -48,7 +48,7 @@ object LabelAndFilterRois:
     /**
       * The command-line configuration/interface definition
       *
-      * @param spotsFile Path to the (enriched, filtered) traces file to label and filter
+      * @param spotsFile Path to the regional spots file in which to label records as too proximal or not
       * @param driftFile Path to the file with drift correction information for all ROIs, across all timepoints
       * @param probeGroups Specification of which regional barcode probes 
       * @param minSpotSeparation Number of units of separation required for points to not be considered proximal
