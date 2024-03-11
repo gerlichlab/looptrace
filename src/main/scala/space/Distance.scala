@@ -38,6 +38,14 @@ object DistanceThreshold:
         s"${typeName}Threshold(${t.get})"
     }
 
+    /**
+      * Define a proximity comparison for 3D points values.
+      *
+      * @param threshold The distance beneath which to consider a given pair of points as proximal
+      * @return An instance with which to check pairs of points for proximity, according to the given 
+      *     threshold value ('think': decision boundary)
+      * @see [[at.ac.oeaw.imba.gerlich.looptrace.space.Point3D]]
+      */
     def defineProximityPointwise(threshold: DistanceThreshold): ProximityComparable[Point3D] = threshold match {
         case t: EuclideanDistance.Threshold => new ProximityComparable[Point3D] {
             override def proximal = (a, b) => 
@@ -51,6 +59,15 @@ object DistanceThreshold:
             }
     }
 
+    /**
+      * Define a proximity comparison for values of arbitrary type, according to given threshold and how to extract a 3D point value.
+      *
+      * @tparam A The type of value from which a 3D point will be extracted for purpose of proximity check / comparison
+      * @param threshold The distance beneath which to consider a given pair of points as proximal
+      * @return An instance with which to check pairs of values for proximity, according to the given 
+      *     threshold value ('think': decision boundary), and how to get a 3D point from a value of type `A`
+      * @see [[at.ac.oeaw.imba.gerlich.looptrace.space.Point3D]]
+      */
     def defineProximityPointwise[A](threshold: DistanceThreshold): (A => Point3D) => ProximityComparable[A] = 
         defineProximityPointwise(threshold).contramap
 end DistanceThreshold
