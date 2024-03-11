@@ -3,18 +3,18 @@ The imaging rounds configuration file is where you tell `looptrace` about the ro
 It's from this file that a name becomes associated with each imaging round, rounds are conceptually distinguished from one another (e.g., blank vs. regional or local FISH), and the relationships between rounds are defined for analysis.
 
 ## Requirements and suggestions
-* `regionGrouping` is required and should be a mapping, with at minimum a `semantic` key. The value for the semantic may be "Trivial", "Permissive", or "Prohibitive", depending on how you want the groupings to be interpreted with respect to excluding proximal spots. 
+* `proximityFilterStrategy` is required and should be a mapping, with at minimum a `semantic` key. The value for the semantic may be "Trivial", "Permissive", or "Prohibitive", depending on how you want the groupings to be interpreted with respect to excluding proximal spots. 
 "Trivial" treats all regional spots as one big group and will exclude any that violate the proximity threshold; it's like "Prohibitive" but with no grouping.
 "Permissive" allows spots from timepoints grouped together to violate the proximity threshold; spots from timepoints not grouped together may not violate the proximity threshold.
 "Prohibitive" forbids spots from timepoints grouped together to violate the proximity threshold; spots from timepoints not grouped together may violate the proximity threshold.
 * If `semantic` is set to "Trivial", there can be no `groups`; otherwise, `groups` is required and must be an array-of-arrays.
-* `semantic` and `groups` must be nested within the `regionGrouping` mapping.
+* `semantic` and `groups` must be nested within the `proximityFilterStrategy` mapping.
 * If specified, the value for `groups` must satisfy these properties:
     * Each group must have no repeat value.
     * The groups must be disjoint.
     * The union of the groups must cover the set of regional round timepoints from the `imagingRounds`.
     * The set of regional round timepoints from the `imagingRounds` must cover the union of groups.
-* `minimumPixelLikeSeparation` must be a key in the `regionGrouping` mapping and should be a nonnegative integer. 
+* `minimumPixelLikeSeparation` must be a key in the `proximityFilterStrategy` mapping and should be a nonnegative integer. 
 This represents the minimum separation (in pixels) in each dimension between the centroids of regional spots. 
 NB: For z, this is slices not pixels.
 * `imagingRounds` must be present, and it enumerates the imaging rounds that comprise the experiment. 

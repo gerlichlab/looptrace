@@ -72,7 +72,7 @@ object ImagingRoundsConfiguration:
       */
     def build(sequence: ImagingSequence, locusGrouping: Set[LocusGroup], proximityFilterStrategy: ProximityFilterStrategy, tracingExclusions: Set[Timepoint]): ErrMsgsOr[ImagingRoundsConfiguration] = {
         val knownTimes = sequence.allTimepoints
-        // Regardless of the subtype of regionGrouping, we need to check that any tracing exclusion timepoint is a known timepoint.
+        // Regardless of the subtype of proximityFilterStrategy, we need to check that any tracing exclusion timepoint is a known timepoint.
         val tracingSubsetNel = checkTimesSubset(knownTimes.toSortedSet)(tracingExclusions, "tracing exclusions")
         // TODO: consider checking that every regional timepoint in the sequence is represented in the locusGrouping.
         // See: https://github.com/gerlichlab/looptrace/issues/270
@@ -170,8 +170,8 @@ object ImagingRoundsConfiguration:
                     .toValidatedNel
             }
         val proximityFilterStrategyNel: ValidatedNel[String, ProximityFilterStrategy] = {
-            data.get("regionGrouping") match {
-                case None => "Missing regionGrouping section!".invalidNel
+            data.get("proximityFilterStrategy") match {
+                case None => "Missing proximityFilterStrategy section!".invalidNel
                 case Some(fullJson) => safeReadAs[Map[String, ujson.Value]](fullJson) match {
                     case Left(message) => message.invalidNel
                     case Right(currentSection) => 
@@ -192,22 +192,22 @@ object ImagingRoundsConfiguration:
                             }
                         currentSection.get("semantic").toRight("Missing semantic for proximity filter config section!").flatMap(safeReadAs[String]) match {
                             case Left(message) => message.invalidNel
-                            case Right("UniversalPermission") => (thresholdNel, groupsNel).tupled match {
+                            case Right("UniversalProximityPermission") => (thresholdNel, groupsNel).tupled match {
                                 case fail@Invalid(_) => fail
                                 case Valid((None, None)) => UniversalProximityPermission.validNel
                                 case Valid(_) => "For universal proximity permissiveness, both threshold and groups must be absent.".invalidNel
                             }
-                            case Right("UniversalProhibition") => (thresholdNel, groupsNel).tupled match {
+                            case Right("UniversalProximityProhibition") => (thresholdNel, groupsNel).tupled match {
                                 case fail@Invalid(_) => fail
                                 case Valid((Some(t), None)) => UniversalProximityProhibition(t).validNel
                                 case Valid(_) => "For universal proximity prohibition, threshold must be present and groups must be absent.".invalidNel
                             }
-                            case Right("SelectivePermission") => (thresholdNel, groupsNel).tupled match {
+                            case Right("SelectiveProximityPermission") => (thresholdNel, groupsNel).tupled match {
                                 case fail@Invalid(_) => fail
                                 case Valid((Some(t), Some(g))) => SelectiveProximityPermission(t, g).validNel
                                 case Valid(_) => "For selective proximity permission, threshold and grouping must be present.".invalidNel
                             }
-                            case Right("SelectiveProhibition") => (thresholdNel, groupsNel).tupled match {
+                            case Right("SelectiveProximityProhibition") => (thresholdNel, groupsNel).tupled match {
                                 case fail@Invalid(_) => fail
                                 case Valid((Some(t), Some(g))) => SelectiveProximityProhibition(t, g).validNel
                                 case Valid(_) => "For selective proximity prohibition, threshold and grouping must be present.".invalidNel

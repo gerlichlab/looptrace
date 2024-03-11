@@ -31,7 +31,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 // missing driftFile
                 assertTypeError{ "workflow( " +
                     "spotsFile = tmpdir / \"traces.csv\", " + 
-                    "regionGrouping = ImagingRoundsConfiguration.RegionGrouping.Trivial(PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(5.0))), " + 
+                    "proximityFilterStrategy = ImagingRoundsConfiguration.RegionGrouping.Trivial(PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(5.0))), " + 
                     "minSpotSeparation = PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(5.0)), " + 
                     "unfilteredOutputFile = UnfilteredOutputFile.fromPath(tmpdir / \"unfiltered.csv\"), " + 
                     "filteredOutputFile = FilteredOutputFile.fromPath(tmpdir / \"filtered.csv\"), " + 
@@ -42,7 +42,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 assertCompiles{ "workflow( " +
                     "spotsFile = tmpdir / \"traces.csv\", " + 
                     "driftFile = tmpdir / \"drift.csv\", " + 
-                    "regionGrouping = ImagingRoundsConfiguration.RegionGrouping.Trivial(PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(5.0))), " + 
+                    "proximityFilterStrategy = ImagingRoundsConfiguration.RegionGrouping.Trivial(PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(5.0))), " + 
                     "unfilteredOutputFile = UnfilteredOutputFile.fromPath(tmpdir / \"unfiltered.csv\"), " + 
                     "filteredOutputFile = FilteredOutputFile.fromPath(tmpdir / \"filtered.csv\"), " + 
                     "extantOutputHandler = extantHandler " + 
@@ -388,7 +388,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                         workflow(
                             spotsFile = spotsFile, 
                             driftFile = driftFile, 
-                            regionGrouping = ImagingRoundsConfiguration.RegionGrouping.Trivial(threshold),
+                            proximityFilterStrategy = ImagingRoundsConfiguration.RegionGrouping.Trivial(threshold),
                             filteredOutputFile = filteredFile, 
                             unfilteredOutputFile = unfilteredFile, 
                             extantOutputHandler = handleOutput,
@@ -455,7 +455,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                         val caught = intercept[Exception]{ workflow(
                             spotsFile = spotsFile, 
                             driftFile = driftFile, 
-                            regionGrouping = grouping, 
+                            proximityFilterStrategy = grouping, 
                             filteredOutputFile = FilteredOutputFile.fromPath(tmpdir / "filtered.csv"),
                             unfilteredOutputFile = UnfilteredOutputFile.fromPath(tmpdir / "unfiltered.csv"),
                             extantOutputHandler = outputHandler,
@@ -504,7 +504,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                     workflow(
                         spotsFile = spotsFile, 
                         driftFile = driftFile, 
-                        regionGrouping = grouping, 
+                        proximityFilterStrategy = grouping, 
                         unfilteredOutputFile = unfilteredFile,
                         filteredOutputFile = filteredFile,
                         extantOutputHandler = handleOutput,
@@ -557,7 +557,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                     def call() = workflow(
                         spotsFile = spotsFile, 
                         driftFile = driftFile, 
-                        regionGrouping = grouping, 
+                        proximityFilterStrategy = grouping, 
                         unfilteredOutputFile = UnfilteredOutputFile.fromPath(tmpdir / "unfiltered.csv"),
                         filteredOutputFile = FilteredOutputFile.fromPath(tmpdir / "filtered.csv"),
                         extantOutputHandler = handleOutput,
@@ -631,7 +631,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 workflow(
                     spotsFile = spotsFile, 
                     driftFile = driftFile, 
-                    regionGrouping = grouping, 
+                    proximityFilterStrategy = grouping, 
                     unfilteredOutputFile = unfiltFile, 
                     filteredOutputFile = filtFile, 
                     extantOutputHandler = handleOutput,
@@ -1000,7 +1000,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 workflow(
                     spotsFile = spotsFile, 
                     driftFile = driftFile, 
-                    regionGrouping = ImagingRoundsConfiguration.RegionGrouping.Trivial(threshold),
+                    proximityFilterStrategy = ImagingRoundsConfiguration.RegionGrouping.Trivial(threshold),
                     unfilteredOutputFile = unfiltFile, 
                     filteredOutputFile = filtFile, 
                     extantOutputHandler = handleOutput,
