@@ -26,7 +26,7 @@ def get_minimum_regional_spot_separation(conf_data) -> int:
 
 def get_region_grouping_config(conf_data: Mapping[str, Any]) -> Mapping[str, Any]:
     """Get the regional spots imaging configuration data for a particular analysis / experiment."""
-    return conf_data["regionGrouping"]
+    return conf_data["proximityFilterStrategy"]
 
 
 def read_parameters_configuration_file(params_config: ExtantFile) -> Mapping[str, Any]:
