@@ -102,7 +102,7 @@ package object looptrace {
         given posIntRead(using intRead: Read[Int]): Read[PositiveInt] = intRead.map(PositiveInt.unsafe)
         given posRealRead(using numRead: Read[Double]): Read[PositiveReal] = numRead.map(PositiveReal.unsafe)
         /** Parse content of JSON file path to imaging rounds configuration instance. */
-        given readRegionGrouping: scopt.Read[ImagingRoundsConfiguration] = scopt.Read.reads{ file => 
+        given readForImagingRoundsConfiguration: scopt.Read[ImagingRoundsConfiguration] = scopt.Read.reads{ file => 
             ImagingRoundsConfiguration.fromJsonFile(os.Path(file)) match {
                 case Left(messages) => throw new IllegalArgumentException(
                     s"Cannot read file ($file) as imaging round configuration! Error(s): ${messages.mkString_("; ")}"
@@ -141,6 +141,7 @@ package object looptrace {
         inline def apply(z: Int): PositiveInt = 
             inline if z <= 0 then compiletime.error("Non-positive integer where positive is required!")
             else (z: PositiveInt)
+        /** Enable a guaranteed-safe case of a positive integer to a nonnegative integer. */
         extension (n: PositiveInt)
             def asNonnegative: NonnegativeInt = NonnegativeInt.unsafe(n)
         def either(z: Int): Either[String, PositiveInt] = maybe(z).toRight(s"Cannot refine as positive: $z")
@@ -161,6 +162,9 @@ package object looptrace {
         inline def apply(x: Double): PositiveReal = 
             inline if x > 0 then (x: PositiveReal)
             else compiletime.error("Non-positive value where positive is required!")
+        /** Enable a guaranteed-safe case of a positive real number to a nonnegative real number. */
+        extension (x: PositiveReal)
+            def asNonnegative: NonnegativeReal = NonnegativeReal.unsafe(x)
         def either(x: Double): Either[String, PositiveReal] = maybe(x).toRight(s"Cannot refine as positive: $x")
         def maybe(x: Double): Option[PositiveReal] = (x > 0).option{ (x: PositiveReal) }
         def unsafe(x: Double): PositiveReal = either(x).fold(msg => throw new NumberFormatException(msg), identity)

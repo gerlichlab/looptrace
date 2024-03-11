@@ -41,10 +41,11 @@ object SummariseImagingRoundsConfiguration:
                 println(s"${exclusions.size} exclusion(s) from tracing: ${exclusions.toList.sorted.map(_.show).mkString(", ")}")
                 println(s"${config.numberOfRounds} round(s) in total (listed below)")
                 config.allRounds.map(r => s"${r.time.show}: ${r.name.show}").toList.foreach(println)
-                val (groupingName, maybeGroups) = config.regionGrouping match {
-                    case _: ImagingRoundsConfiguration.RegionGrouping.Trivial => "Trivial" -> None
-                    case grouping: ImagingRoundsConfiguration.RegionGrouping.Permissive => "Permissive" -> grouping.groups.some
-                    case grouping: ImagingRoundsConfiguration.RegionGrouping.Prohibitive => "Prohibitive" -> grouping.groups.some
+                val (groupingName, maybeGroups) = config.proximityFilterStrategy match {
+                    case _: ImagingRoundsConfiguration.UniversalProximityPermission.type => "Permissive" -> None
+                    case _: ImagingRoundsConfiguration.UniversalProximityProhibition => "Prohibitive" -> None
+                    case s: ImagingRoundsConfiguration.SelectiveProximityPermission => "Permissive" -> s.grouping.some
+                    case s: ImagingRoundsConfiguration.SelectiveProximityProhibition => "Prohibitive" -> s.grouping.some
                 }
                 println(s"$groupingName regional grouping")
                 maybeGroups.fold(()){ groups => 
