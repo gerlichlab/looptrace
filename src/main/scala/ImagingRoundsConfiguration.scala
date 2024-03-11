@@ -277,26 +277,33 @@ object ImagingRoundsConfiguration:
         )
     end RegionalImageRoundGroup
 
+    /** A way to filter spots if they're too close together */
     sealed trait ProximityFilterStrategy
     
+    /** A non-no-op case for exclusion of spots that are too close */
     sealed trait NontrivialProximityFilter extends ProximityFilterStrategy:
         def minSpotSeparation: PositiveReal
     
+    /** An exclusion strategy for spots too close that defines which ones are to be considered too close */
     sealed trait SelectiveProximityFilter:
-        def grouping: RegionGrouping.Groups
+        def grouping: NonEmptyList[NonEmptySet[Timepoint]]
     
+    /** "No-op" case for spot filtration--all spots are allowed to occur close together. */
     case object UniversalProximityPermission extends ProximityFilterStrategy
     
+    /** Any spot may be deemed "too close" to any other spot. */
     final case class UniversalProximityProhibition(minSpotSeparation: PositiveReal) extends NontrivialProximityFilter
     
+    /** Allow spots from timepoints grouped together to violate given separation threshold. */
     final case class SelectiveProximityPermission(
         minSpotSeparation: PositiveReal,
-        grouping: RegionGrouping.Groups,
+        grouping: NonEmptyList[NonEmptySet[Timepoint]],
         ) extends NontrivialProximityFilter with SelectiveProximityFilter
     
+    /** Forbid spots from timepoints grouped together to violate given separation threshold. */
     final case class SelectiveProximityProhibition(
         minSpotSeparation: PositiveReal, 
-        grouping: RegionGrouping.Groups,
+        grouping: NonEmptyList[NonEmptySet[Timepoint]],
         ) extends NontrivialProximityFilter with SelectiveProximityFilter
 
     /** How to permit or prohibit regional barcode imaging probes/timepoints from being too physically close */
@@ -305,9 +312,7 @@ object ImagingRoundsConfiguration:
 
     /** The (concrete) subtypes of regional image round grouping */
     object RegionGrouping:
-        private[ImagingRoundsConfiguration] type Groups = NonEmptyList[NonEmptySet[Timepoint]]
-        
-        def apply(minSpotSeparation: DistanceThreshold, maybeRegionGrouping: Option[(RegionGrouping.Semantic, RegionGrouping.Groups)]): RegionGrouping = 
+        def apply(minSpotSeparation: DistanceThreshold, maybeRegionGrouping: Option[(RegionGrouping.Semantic, NonEmptyList[NonEmptySet[Timepoint]])]): RegionGrouping = 
             maybeRegionGrouping match {
                 case None => Trivial(minSpotSeparation)
                 case Some((semantic, groups)) => Nontrivial(minSpotSeparation, semantic, groups)
@@ -318,19 +323,19 @@ object ImagingRoundsConfiguration:
         /** A nontrivial grouping of regional imaging rounds, which must constitute a partition of those available  */
         sealed trait Nontrivial extends RegionGrouping:
             /** A nontrivial grouping specifies a list of groups which comprise the total grouping.s */
-            def groups: Groups
+            def groups: NonEmptyList[NonEmptySet[Timepoint]]
         /** Helpers for constructing and owrking with a nontrivial grouping of regional imaging rounds */
         object Nontrivial:
             /** Dispatch to the appropriate leaf class constructor based on the value of the semantic. */
-            def apply(minSpotSeparation: DistanceThreshold, semantic: Semantic, groups: Groups): Nontrivial = semantic match {
+            def apply(minSpotSeparation: DistanceThreshold, semantic: Semantic, groups: NonEmptyList[NonEmptySet[Timepoint]]): Nontrivial = semantic match {
                 case Semantic.Permissive => Permissive(minSpotSeparation, groups)
                 case Semantic.Prohibitive => Prohibitive(minSpotSeparation, groups)
             }
         end Nontrivial
         /** A 'permissive' grouping 'allows' members of the same group to violate some rule, while 'forbidding' non-grouped items from doing so. */
-        final case class Permissive(minSpotSeparation: DistanceThreshold, groups: Groups) extends Nontrivial
+        final case class Permissive(minSpotSeparation: DistanceThreshold, groups: NonEmptyList[NonEmptySet[Timepoint]]) extends Nontrivial
         /** A 'prohibitive' grouping 'forbids' members of the same group to violate some rule, while 'allowing' non-grouped items to violate the rule. */
-        final case class Prohibitive(minSpotSeparation: DistanceThreshold, groups: Groups) extends Nontrivial
+        final case class Prohibitive(minSpotSeparation: DistanceThreshold, groups: NonEmptyList[NonEmptySet[Timepoint]]) extends Nontrivial
         end Prohibitive
 
         /** Delineate which semantic is desired */
