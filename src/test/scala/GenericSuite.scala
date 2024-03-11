@@ -13,6 +13,7 @@ trait GenericSuite:
     given nonnegativeIntArbitray: Arbitrary[NonnegativeInt] = Arbitrary(genNonnegativeInt)
     given positiveIntArbitrary: Arbitrary[PositiveInt] = Arbitrary(genPositiveInt)
     given nonnegativeRealArbitrary: Arbitrary[NonnegativeReal] = Arbitrary(genNonnegativeReal)
+    given positiveRealArbitrary: Arbitrary[PositiveReal] = Arbitrary(genPositiveReal)
 
     /********************/
     /* Generators       */
@@ -21,6 +22,7 @@ trait GenericSuite:
     def genNonnegativeInt: Gen[NonnegativeInt] = Gen.choose(0, Int.MaxValue).map(NonnegativeInt.unsafe)
     def genNonnegativeReal: Gen[NonnegativeReal] = Gen.choose(0.0, Double.MaxValue).map(NonnegativeReal.unsafe)
     def genPositiveInt: Gen[PositiveInt] = Gen.posNum[Int].map(PositiveInt.unsafe)
+    def genPositiveReal: Gen[PositiveReal] = Gen.posNum[Double].map(PositiveReal.unsafe)
 
     /********************/
     /* Other defintions */
