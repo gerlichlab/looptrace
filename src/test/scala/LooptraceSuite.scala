@@ -100,6 +100,7 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
      ***********************/
     protected def genNonNegInt(limit: NonnegativeInt): Gen[NonnegativeInt] = Gen.choose(0, limit).map(NonnegativeInt.unsafe)
     protected def genNonNegReal(limit: NonnegativeReal): Gen[NonnegativeReal] = Gen.choose(0.0, limit).map(NonnegativeReal.unsafe)
+    protected def genPosReal(limit: PositiveReal): Gen[PositiveReal] = Gen.choose(0.0, limit).suchThat(_ > 0).map(PositiveReal.unsafe)
     protected def buildRectangularBox(pt: Point3D)(xMargin: BoundingBox.Margin, yMargin: BoundingBox.Margin, zMargin: BoundingBox.Margin): BoundingBox = {
         def buildInterval[C <: Coordinate : [C] =>> NotGiven[C =:= Coordinate]](lift: Double => C)(center: Double, margin: BoundingBox.Margin): BoundingBox.Interval[C] = 
             BoundingBox.Interval.apply[C].tupled((center - margin.get, center + margin.get).mapBoth(lift))
