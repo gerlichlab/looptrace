@@ -1,5 +1,5 @@
 {
-    "regionGrouping": {
+    "proximityFilterStrategy": {
         "semantic": "Trivial",
         "minimumPixelLikeSeparation": 5
     },

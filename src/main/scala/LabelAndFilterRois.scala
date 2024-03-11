@@ -23,8 +23,8 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
  * experiment).
  * 
  * If doing proximity-based filtration of spots, the value for the `"semantic"` key in the config 
- * file in the `"regionGrouping"` section should be either `"permissive"` or `"prohibitive"`. 
- * To treat all regional spots as a single group and prohibit proximal spots, the `"regionGrouping"` 
+ * file in the `"proximityFilterStrategy"` section should be either `"permissive"` or `"prohibitive"`. 
+ * To treat all regional spots as a single group and prohibit proximal spots, the `"proximityFilterStrategy"` 
  * section may be omitted. To do 'no' proximity-based filtration, the minimum spot distance \
  * could be set to 0. 
  * 

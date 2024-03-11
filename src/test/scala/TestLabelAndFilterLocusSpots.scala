@@ -146,8 +146,8 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, GenericSuite, Scalacheck
             val roundsConfig = {
                 val seq = defaultRoundsConfig.sequence
                 val loc = defaultRoundsConfig.locusGrouping
-                val reg = defaultRoundsConfig.regionGrouping
-                ImagingRoundsConfiguration.unsafe(seq, loc, reg, exclusions.map(Timepoint.unsafe).toSet)
+                val proxFilt = defaultRoundsConfig.proximityFilterStrategy
+                ImagingRoundsConfiguration.unsafe(seq, loc, proxFilt, exclusions.map(Timepoint.unsafe).toSet)
             }
             withTempDirectory{ (tempdir: os.Path) => 
                 // Perform the pretest and get the expected result paths.

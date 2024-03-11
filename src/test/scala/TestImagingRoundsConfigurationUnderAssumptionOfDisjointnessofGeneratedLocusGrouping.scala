@@ -31,7 +31,7 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
             ImagingRoundsConfiguration.unsafeFromJsonFile(configFile)
         }
         exampleConfig.numberOfRounds shouldEqual 12
-        exampleConfig.regionGrouping shouldEqual RegionGrouping.Permissive(
+        exampleConfig.proximityFilterStrategy shouldEqual RegionGrouping.Permissive(
             PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(5.0)), 
             NonEmptyList.of(NonEmptySet.of(8, 9), NonEmptySet.of(10, 11)).map(_.map(Timepoint.unsafe))
         )
@@ -62,7 +62,7 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
             val data: Map[String, ujson.Value] = addLocusGroupingAndExclusions(baseData, optLocusGrouping, exclusions)
             ImagingRoundsConfiguration.fromJsonMap(data) match {
                 case Right(_) => fail(s"Expected parse failure on account of missing region grouping, but it succeeded!")
-                case Left(messages) => messages.count(_ === "Missing regionGrouping section!") shouldEqual 1
+                case Left(messages) => messages.count(_ === "Missing proximityFilterStrategy section!") shouldEqual 1
             }
         }
     }
@@ -73,18 +73,18 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
         def mygen = for {
             (seq, optLocusGrouping, exclusions) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt(10))
             semantic <- Gen.oneOf("trivial", "TRIVIAL", "Trivial")
-            regionGrouping <- genValidParitionForRegionGrouping(seq)
-        } yield (seq, optLocusGrouping, semantic, regionGrouping, exclusions)
+            proximityFilterStrategy <- genValidParitionForRegionGrouping(seq)
+        } yield (seq, optLocusGrouping, semantic, proximityFilterStrategy, exclusions)
         
-        forAll (mygen, arbitrary[NonnegativeReal]) { case ((seq, optLocusGrouping, semantic, regionGrouping, exclusions), rawThreshold) => 
+        forAll (mygen, arbitrary[NonnegativeReal]) { case ((seq, optLocusGrouping, semantic, proximityFilterStrategy, exclusions), rawThreshold) => 
             val baseData: Map[String, ujson.Value] = {
                 val records: NonEmptyList[ujson.Obj] = Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
                 Map(
                     "imagingRounds" -> ujson.Arr(records.toList*),
-                    "regionGrouping" -> ujson.Obj(
+                    "proximityFilterStrategy" -> ujson.Obj(
                         "semantic" -> ujson.Str(semantic), 
                         "minimumPixelLikeSeparation" -> ujson.Num(rawThreshold),
-                        "groups" -> regionGroupingToJson(regionGrouping.map(_.toList))
+                        "groups" -> proximityFilterStrategyToJson(proximityFilterStrategy.map(_.toList))
                     )
                 )
             }
@@ -119,14 +119,14 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
         forAll (mygen) { (seq, optLocusGrouping, optRegionGrouping, optRawThreshold, exclusions) => 
             val baseData = {
                 val records: NonEmptyList[ujson.Obj] = Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
-                val regionGroupingJsonData = List(
+                val proximityFilterStrategyJsonData = List(
                     optRawThreshold.map(t => "minimumPixelLikeSeparation" -> ujson.Num(t)),
-                    optRegionGrouping.map(g => "groups" -> regionGroupingToJson(g.map(_.toList)))
+                    optRegionGrouping.map(g => "groups" -> proximityFilterStrategyToJson(g.map(_.toList)))
                 ).flatten match {
                     case Nil => throw new IllegalStateException("Either optional threshold or optional grouping is empty!")
                     case kv1 :: rest => ujson.Obj(kv1, rest*)
                 }
-                Map("imagingRounds" -> ujson.Arr(records.toList*), "regionGrouping" -> regionGroupingJsonData)
+                Map("imagingRounds" -> ujson.Arr(records.toList*), "proximityFilterStrategy" -> proximityFilterStrategyJsonData)
             }
             val data: Map[String, ujson.Value] = addLocusGroupingAndExclusions(baseData, optLocusGrouping, exclusions)
             
@@ -160,14 +160,14 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
             val baseData: Map[String, ujson.Value] = {
                 val records: NonEmptyList[ujson.Obj] = 
                     Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
-                val regionGroupingJsonData = ujson.Obj(
+                val proximityFilterStrategyJsonData = ujson.Obj(
                     "semantic" -> ujson.Str(semantic),
                     List(
                         optRawThreshold.map(t => "minimumPixelLikeSeparation" -> ujson.Num(t)), 
-                        optRegionGrouping.map(g => "groups" -> regionGroupingToJson(g.map(_.toList))),
+                        optRegionGrouping.map(g => "groups" -> proximityFilterStrategyToJson(g.map(_.toList))),
                         ).flatten*
                 )
-                Map("imagingRounds" -> ujson.Arr(records.toList*), "regionGrouping" -> regionGroupingJsonData)
+                Map("imagingRounds" -> ujson.Arr(records.toList*), "proximityFilterStrategy" -> proximityFilterStrategyJsonData)
             }
             val data: Map[String, ujson.Value] = addLocusGroupingAndExclusions(baseData, locusGroupingOpt, exclusions)
             
@@ -210,8 +210,8 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
             val baseData: Map[String, ujson.Value] = {
                 val records: NonEmptyList[ujson.Obj] = 
                     Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
-                val regionGroupingJsonData = ujson.Obj("semantic" -> ujson.Str(semantic), "minimumPixelLikeSeparation" -> ujson.Num(rawThreshold))
-                Map("imagingRounds" -> ujson.Arr(records.toList*), "regionGrouping" -> regionGroupingJsonData)
+                val proximityFilterStrategyJsonData = ujson.Obj("semantic" -> ujson.Str(semantic), "minimumPixelLikeSeparation" -> ujson.Num(rawThreshold))
+                Map("imagingRounds" -> ujson.Arr(records.toList*), "proximityFilterStrategy" -> proximityFilterStrategyJsonData)
             }
             val data: Map[String, ujson.Value] = addLocusGroupingAndExclusions(baseData, locusGroupingOpt, exclusions)
             
@@ -288,12 +288,12 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
                 val baseData: Map[String, ujson.Value] = {
                     val records: NonEmptyList[ujson.Obj] = 
                         Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
-                    val regionGroupingJsonData = ujson.Obj(
+                    val proximityFilterStrategyJsonData = ujson.Obj(
                         "semantic" -> ujson.Str(semantic), 
-                        "groups" -> regionGroupingToJson(regionGroups.map(_.toList)),
+                        "groups" -> proximityFilterStrategyToJson(regionGroups.map(_.toList)),
                         "minimumPixelLikeSeparation" -> ujson.Num(threshold)
                     )
-                    Map("imagingRounds" -> ujson.Arr(records.toList*), "regionGrouping" -> regionGroupingJsonData)
+                    Map("imagingRounds" -> ujson.Arr(records.toList*), "proximityFilterStrategy" -> proximityFilterStrategyJsonData)
                 }
                 val data: Map[String, ujson.Value] = addLocusGroupingAndExclusions(baseData, optLocusGrouping, exclusions)
 
@@ -397,13 +397,13 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
                         Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
                     val (sem, extra) = semantic match {
                         case None => "Trivial" -> List()
-                        case Some(s) => s.toString -> List("groups" -> regionGroupingToJson(regionGroups.map(_.toList)))
+                        case Some(s) => s.toString -> List("groups" -> proximityFilterStrategyToJson(regionGroups.map(_.toList)))
                     }
-                    val regionGroupingJsonData = ujson.Obj(
+                    val proximityFilterStrategyJsonData = ujson.Obj(
                         "semantic" -> ujson.Str(sem), 
                         (List("minimumPixelLikeSeparation" -> ujson.Num(threshold)) ++ extra)*,
                     )
-                    Map("imagingRounds" -> ujson.Arr(records.toList*), "regionGrouping" -> regionGroupingJsonData)
+                    Map("imagingRounds" -> ujson.Arr(records.toList*), "proximityFilterStrategy" -> proximityFilterStrategyJsonData)
                 }
                 val data: Map[String, ujson.Value] = addLocusGroupingAndExclusions(baseData, optLocusGrouping, exclusions)
 
@@ -450,13 +450,13 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
                         Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
                     val (sem, extra) = optSemantic match {
                         case None => "Trivial" -> List()
-                        case Some(s) => s.toString -> List("groups" -> regionGroupingToJson(regionGroups.map(_.toList)))
+                        case Some(s) => s.toString -> List("groups" -> proximityFilterStrategyToJson(regionGroups.map(_.toList)))
                     }
-                    val regionGroupingJsonData = ujson.Obj(
+                    val proximityFilterStrategyJsonData = ujson.Obj(
                         "semantic" -> ujson.Str(sem), 
                         (List("minimumPixelLikeSeparation" -> ujson.Num(threshold)) ++ extra)*,
                     )
-                    Map("imagingRounds" -> ujson.Arr(records.toList*), "regionGrouping" -> regionGroupingJsonData)
+                    Map("imagingRounds" -> ujson.Arr(records.toList*), "proximityFilterStrategy" -> proximityFilterStrategyJsonData)
                 }
                 val data: Map[String, ujson.Value] = {
                     val newLocusGrouping = NonEmptyList(
@@ -504,13 +504,13 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
                         Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
                     val (sem, extra) = optSemantic match {
                         case None => "Trivial" -> List()
-                        case Some(s) => s.toString -> List("groups" -> regionGroupingToJson(regionGroups.map(_.toList)))
+                        case Some(s) => s.toString -> List("groups" -> proximityFilterStrategyToJson(regionGroups.map(_.toList)))
                     }
-                    val regionGroupingJsonData = ujson.Obj(
+                    val proximityFilterStrategyJsonData = ujson.Obj(
                         "semantic" -> ujson.Str(sem), 
                         (List("minimumPixelLikeSeparation" -> ujson.Num(threshold)) ++ extra)*,
                     )
-                    Map("imagingRounds" -> ujson.Arr(records.toList*), "regionGrouping" -> regionGroupingJsonData)
+                    Map("imagingRounds" -> ujson.Arr(records.toList*), "proximityFilterStrategy" -> proximityFilterStrategyJsonData)
                 }
                 val data: Map[String, ujson.Value] = addLocusGroupingAndExclusions(baseData, optLocusGrouping, exclusions)
 
@@ -537,7 +537,7 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
     
     given rwForTime: ReadWriter[Timepoint] = readwriter[ujson.Value].bimap(time => ujson.Num(time.get), json => Timepoint.unsafe(json.int))
 
-    private def regionGroupingToJson(grouping: NonEmptyList[List[Timepoint]]): ujson.Value = 
+    private def proximityFilterStrategyToJson(grouping: NonEmptyList[List[Timepoint]]): ujson.Value = 
         ujson.Arr(grouping.toList.map(ts => ujson.Arr(ts.map(t => ujson.Num(t.get))*))*)
 
     private def addLocusGroupingAndExclusions(baseData: Map[String, ujson.Value], optLocusGrouping: Option[NonEmptyList[LocusGroup]], exclusions: Set[Timepoint]): Map[String, ujson.Value] = {

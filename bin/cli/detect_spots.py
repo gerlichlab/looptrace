@@ -64,7 +64,7 @@ class Parameters:
             # Nothing to do in this case, as there's no value to update
             pass
         else:
-            old_data["regionGrouping"][cls._MIN_SEP_KEY] = new_min_sep
+            old_data["proximityFilterStrategy"][cls._MIN_SEP_KEY] = new_min_sep
         old_data.update(new_data)
 
     def to_dict_for_json(self) -> ConfigMapping:
