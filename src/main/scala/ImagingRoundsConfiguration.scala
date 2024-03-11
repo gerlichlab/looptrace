@@ -4,6 +4,7 @@ import scala.language.adhocExtensions // to extend ujson.Value.InvalidData
 import scala.util.Try
 import cats.*
 import cats.data.{ NonEmptyList, NonEmptySet, Validated, ValidatedNel }
+import cats.data.Validated.{ Invalid, Valid }
 import cats.syntax.all.*
 import mouse.boolean.*
 import upickle.default.*
@@ -65,69 +66,6 @@ object ImagingRoundsConfiguration:
       *
       * @param sequence The declaration of sequential FISH rounds that define an experiment
       * @param locusGrouping How each locus is associated with a region
-      * @param regionGrouping How to group regional FISH rounds for proximity filtration
-      * @param tracingExclusions Timepoints to exclude from tracing analysis
-      * @return Either a [[scala.util.Left]]-wrapped nonempty list of error messages, or a [[scala.util.Right]]-wrapped built instance
-      */
-    // def buildOld(sequence: ImagingSequence, locusGrouping: Set[LocusGroup], regionGrouping: RegionGrouping, tracingExclusions: Set[Timepoint]): ErrMsgsOr[ImagingRoundsConfiguration] = {
-    //     val knownTimes = sequence.allTimepoints
-    //     // Regardless of the subtype of regionGrouping, we need to check that any tracing exclusion timepoint is a known timepoint.
-    //     val tracingSubsetNel = checkTimesSubset(knownTimes.toSortedSet)(tracingExclusions, "tracing exclusions")
-    //     // TODO: consider checking that every regional timepoint in the sequence is represented in the locusGrouping.
-    //     // See: https://github.com/gerlichlab/looptrace/issues/270
-    //     val uniqueTimepointsInLocusGrouping = locusGrouping.map(_.locusTimepoints).foldLeft(Set.empty[Timepoint])(_ ++ _.toSortedSet)
-    //     val (locusTimeSubsetNel, locusTimeSupersetNel) = {
-    //         if locusGrouping.isEmpty then (().validNel, ().validNel) else {
-    //             val locusTimesInSequence = sequence.locusRounds.map(_.time).toSet
-    //             val subsetNel = (uniqueTimepointsInLocusGrouping -- locusTimesInSequence).toList match {
-    //                 case Nil => ().validNel
-    //                 case ts => s"${ts.length} timepoint(s) in locus grouping and not found as locus imaging timepoints: ${ts.sorted.mkString(", ")}".invalidNel
-    //             }
-    //             val supersetNel = (locusTimesInSequence -- uniqueTimepointsInLocusGrouping).toList match {
-    //                 case Nil => ().validNel
-    //                 case ts => s"${ts.length} locus timepoint(s) in imaging sequence and not found in locus grouping: ${ts.sorted.mkString(", ")}".invalidNel
-    //             }
-    //             (subsetNel, supersetNel)
-    //         }
-    //     }
-    //     val locusGroupTimesAreRegionTimesNel = {
-    //         val nonRegional = locusGrouping.map(_.regionalTimepoint) -- sequence.regionRounds.map(_.time).toList
-    //         if nonRegional.isEmpty then ().validNel 
-    //         else s"${nonRegional.size} timepoint(s) as keys in locus grouping that aren't regional.".invalidNel
-    //     }
-    //     val (regionGroupingDisjointNel, regionGroupingSubsetNel, regionGroupingSupersetNel) = regionGrouping match {
-    //         case g: RegionGrouping.Trivial => 
-    //             // In the trivial regionGrouping case, we have no more validation work to do.
-    //             (().validNel, ().validNel, ().validNel)
-    //         case g: RegionGrouping.Nontrivial => 
-    //             // When the regionGrouping's nontrivial, check for set equivalance of timepoints b/w imaging sequence and regional grouping.
-    //             val uniqueGroupedTimes = g.groups.reduce(_ ++ _).toList.toSet
-    //             val uniqueRegionalTimes = sequence.regionRounds.map(_.time).toList.toSet
-    //             val disjointNel = g.groups.foldLeft(true -> Set.empty[Timepoint]){ 
-    //                 case ((p, acc), ts) => (p && (acc & ts.toSortedSet).isEmpty, acc ++ ts.toSortedSet)
-    //             }._1.either("Proximity filter strategy's subsets are not disjoint!", ()).toValidatedNel
-    //             val subsetNel = checkTimesSubset(uniqueRegionalTimes)(uniqueGroupedTimes, "proximity filter's grouping (rel. to regionals in imaging sequence)")
-    //             val supersetNel = checkTimesSubset(uniqueGroupedTimes)(uniqueRegionalTimes, "regionals in imaging sequence (rel. to proximity filter strategy)")
-    //             (disjointNel, subsetNel, supersetNel)
-    //     }
-    //     (tracingSubsetNel, locusTimeSubsetNel, locusTimeSupersetNel, locusGroupTimesAreRegionTimesNel, regionGroupingDisjointNel, regionGroupingSubsetNel, regionGroupingSupersetNel)
-    //         .tupled
-    //         .map(_ => ImagingRoundsConfiguration(sequence, locusGrouping, regionGrouping, tracingExclusions))
-    //         .toEither
-    // }
-
-    /**
-      * Validate construction of the imaging round configuration by checking that all timepoints are known and covered.
-      * 
-      * More specifically, any timepoint to exclude from the tracing must exist as a timepoint in the sequence of imaging 
-      * rounds, regardless of whether the grouping of regional timepoints is trivial or not.
-      * 
-      * Furthermore, if the regional grouping is nontrivial, then the set of timepoints in the regional grouping must be 
-      * both a subset and a superset of the set of timepoints from regional rounds in the imaging sequence. 
-      * In other words, those sets of timepoints must be equivalent.
-      *
-      * @param sequence The declaration of sequential FISH rounds that define an experiment
-      * @param locusGrouping How each locus is associated with a region
       * @param proximityFilterStrategy How to filter regional spots based on proximity
       * @param tracingExclusions Timepoints to exclude from tracing analysis
       * @return Either a [[scala.util.Left]]-wrapped nonempty list of error messages, or a [[scala.util.Right]]-wrapped built instance
@@ -159,7 +97,7 @@ object ImagingRoundsConfiguration:
             else s"${nonRegional.size} timepoint(s) as keys in locus grouping that aren't regional.".invalidNel
         }
         val (proximityGroupingDisjointNel, proximityGroupingSubsetNel, proximityGroupingSupersetNel) = proximityFilterStrategy match {
-            case _: (UniversalProximityPermission.type | UniversalProximityProhibition.type) => 
+            case (UniversalProximityPermission | UniversalProximityProhibition(_)) => 
                 // In the trivial case, we have no more validation work to do.
                 (().validNel, ().validNel, ().validNel)
             case s: (SelectiveProximityPermission | SelectiveProximityProhibition) => 
@@ -252,28 +190,32 @@ object ImagingRoundsConfiguration:
                                     .map(_.some)
                                     .toValidatedNel
                             }
-                        currentSection.get("semantic")
-                            .toRight("Missing semantic for proximity filter config section!")
-                            .flatMap(safeReadAs[String])
-                            .leftMap(NonEmptyList.one)
-                            .flatMap {
-                                case "UniversalPermission" => (thresholdNel, groupsNel).tupled.toEither.flatMap{
-                                    case (None, None) => UniversalProximityPermission.asRight
-                                    case _ => NonEmptyList.one("For universal proximity permissiveness, both threshold and groups must be absent.").asLeft
-                                }
-                                case "UniversalProhibition" => (thresholdNel, groupsNel).tupled.toEither.flatMap{
-                                    case (Some(t), None) => UniversalProximityProhibition(t).asRight
-                                    case _ => NonEmptyList.one("For universal proximity prohibition, threshold must be present and groups must be absent.").asLeft
-                                }
-                                case "SelectivePermission" => (thresholdNel, groupsNel).tupled.toEither.flatMap{
-                                    case (Some(t), Some(g)) => SelectiveProximityPermission(t, g).asRight
-                                    case _ => NonEmptyList.one("For selective proximity permission, threshold and grouping must be present.").asLeft
-                                }
-                                case "SelectiveProhibition" => (thresholdNel, groupsNel).tupled.toEither.flatMap{
-                                    case (Some(t), Some(g)) => SelectiveProximityProhibition(t, g).asRight
-                                    case _ => NonEmptyList.one("For selective proximity prohibition, threshold and grouping must be present.").asLeft
-                                }
-                            }.toValidated
+                        currentSection.get("semantic").toRight("Missing semantic for proximity filter config section!").flatMap(safeReadAs[String]) match {
+                            case Left(message) => message.invalidNel
+                            case Right("UniversalPermission") => (thresholdNel, groupsNel).tupled match {
+                                case fail@Invalid(_) => fail
+                                case Valid((None, None)) => UniversalProximityPermission.validNel
+                                case Valid(_) => "For universal proximity permissiveness, both threshold and groups must be absent.".invalidNel
+                            }
+                            case Right("UniversalProhibition") => (thresholdNel, groupsNel).tupled match {
+                                case fail@Invalid(_) => fail
+                                case Valid((Some(t), None)) => UniversalProximityProhibition(t).validNel
+                                case Valid(_) => "For universal proximity prohibition, threshold must be present and groups must be absent.".invalidNel
+                            }
+                            case Right("SelectivePermission") => (thresholdNel, groupsNel).tupled match {
+                                case fail@Invalid(_) => fail
+                                case Valid((Some(t), Some(g))) => SelectiveProximityPermission(t, g).validNel
+                                case Valid(_) => "For selective proximity permission, threshold and grouping must be present.".invalidNel
+                            }
+                            case Right("SelectiveProhibition") => (thresholdNel, groupsNel).tupled match {
+                                case fail@Invalid(_) => fail
+                                case Valid((Some(t), Some(g))) => SelectiveProximityProhibition(t, g).validNel
+                                case Valid(_) => "For selective proximity prohibition, threshold and grouping must be present.".invalidNel
+                            }
+                            case Right(semantic) => 
+                                val errMsg = ""
+                                Invalid{ (thresholdNel, groupsNel).tupled.fold(es => NonEmptyList(errMsg, es.toList), _ => NonEmptyList.one(errMsg)) }
+                        }
                     }
             }
         }
