@@ -277,15 +277,15 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
                         List(
                             isDisjoint.option{(
                                 "Overlapping subsets",
-                                (_: String) === "Regional grouping's subsets are not disjoint!"
+                                (_: String) === "Proximity filter strategy's subsets are not disjoint!"
                             )},
                             (seen -- regionalTimes).nonEmpty.option{(
                                 "Not in sequence",
-                                (_: String).startsWith(s"Unknown timepoint(s) (regional grouping (rel. to regionals in imaging sequence))")
+                                (_: String).startsWith(s"Unknown timepoint(s) (proximity filter's grouping (rel. to regionals in imaging sequence))")
                             )},
                             (regionalTimes -- seen).nonEmpty.option{(
                                 "Not in grouping", 
-                                (_: String).startsWith(s"Unknown timepoint(s) (regionals in imaging sequence (rel. to regional grouping))")
+                                (_: String).startsWith(s"Unknown timepoint(s) (regionals in imaging sequence (rel. to proximity filter strategy))")
                             )}
                         ).flatten.toNel.toLeft(())
                     }

@@ -7,16 +7,14 @@ import cats.data.{ NonEmptyList, NonEmptySet, Validated, ValidatedNel }
 import cats.syntax.all.*
 import mouse.boolean.*
 import upickle.default.*
-import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.LocusGroup
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.{ readJsonFile, safeReadAs }
-import at.ac.oeaw.imba.gerlich.looptrace.space.DistanceThreshold
-import at.ac.oeaw.imba.gerlich.looptrace.space.PiecewiseDistance
+import at.ac.oeaw.imba.gerlich.looptrace.space.{ DistanceThreshold, PiecewiseDistance }
 
 /** Typical looptrace declaration/configuration of imaging rounds and how to use them */
 final case class ImagingRoundsConfiguration private(
     sequence: ImagingSequence, 
-    locusGrouping: Set[LocusGroup], // should be empty iff there are no locus rounds in the sequence
-    regionGrouping: ImagingRoundsConfiguration.RegionGrouping, 
+    locusGrouping: Set[ImagingRoundsConfiguration.LocusGroup], // should be empty iff there are no locus rounds in the sequence
+    proximityFilterStrategy: ImagingRoundsConfiguration.ProximityFilterStrategy,
     // TODO: We could, by default, skip regional and blank imaging rounds (but do use repeats).
     tracingExclusions: Set[Timepoint], // Timepoints of imaging rounds to not use for tracing
     ):
@@ -71,7 +69,70 @@ object ImagingRoundsConfiguration:
       * @param tracingExclusions Timepoints to exclude from tracing analysis
       * @return Either a [[scala.util.Left]]-wrapped nonempty list of error messages, or a [[scala.util.Right]]-wrapped built instance
       */
-    def build(sequence: ImagingSequence, locusGrouping: Set[LocusGroup], regionGrouping: RegionGrouping, tracingExclusions: Set[Timepoint]): ErrMsgsOr[ImagingRoundsConfiguration] = {
+    // def buildOld(sequence: ImagingSequence, locusGrouping: Set[LocusGroup], regionGrouping: RegionGrouping, tracingExclusions: Set[Timepoint]): ErrMsgsOr[ImagingRoundsConfiguration] = {
+    //     val knownTimes = sequence.allTimepoints
+    //     // Regardless of the subtype of regionGrouping, we need to check that any tracing exclusion timepoint is a known timepoint.
+    //     val tracingSubsetNel = checkTimesSubset(knownTimes.toSortedSet)(tracingExclusions, "tracing exclusions")
+    //     // TODO: consider checking that every regional timepoint in the sequence is represented in the locusGrouping.
+    //     // See: https://github.com/gerlichlab/looptrace/issues/270
+    //     val uniqueTimepointsInLocusGrouping = locusGrouping.map(_.locusTimepoints).foldLeft(Set.empty[Timepoint])(_ ++ _.toSortedSet)
+    //     val (locusTimeSubsetNel, locusTimeSupersetNel) = {
+    //         if locusGrouping.isEmpty then (().validNel, ().validNel) else {
+    //             val locusTimesInSequence = sequence.locusRounds.map(_.time).toSet
+    //             val subsetNel = (uniqueTimepointsInLocusGrouping -- locusTimesInSequence).toList match {
+    //                 case Nil => ().validNel
+    //                 case ts => s"${ts.length} timepoint(s) in locus grouping and not found as locus imaging timepoints: ${ts.sorted.mkString(", ")}".invalidNel
+    //             }
+    //             val supersetNel = (locusTimesInSequence -- uniqueTimepointsInLocusGrouping).toList match {
+    //                 case Nil => ().validNel
+    //                 case ts => s"${ts.length} locus timepoint(s) in imaging sequence and not found in locus grouping: ${ts.sorted.mkString(", ")}".invalidNel
+    //             }
+    //             (subsetNel, supersetNel)
+    //         }
+    //     }
+    //     val locusGroupTimesAreRegionTimesNel = {
+    //         val nonRegional = locusGrouping.map(_.regionalTimepoint) -- sequence.regionRounds.map(_.time).toList
+    //         if nonRegional.isEmpty then ().validNel 
+    //         else s"${nonRegional.size} timepoint(s) as keys in locus grouping that aren't regional.".invalidNel
+    //     }
+    //     val (regionGroupingDisjointNel, regionGroupingSubsetNel, regionGroupingSupersetNel) = regionGrouping match {
+    //         case g: RegionGrouping.Trivial => 
+    //             // In the trivial regionGrouping case, we have no more validation work to do.
+    //             (().validNel, ().validNel, ().validNel)
+    //         case g: RegionGrouping.Nontrivial => 
+    //             // When the regionGrouping's nontrivial, check for set equivalance of timepoints b/w imaging sequence and regional grouping.
+    //             val uniqueGroupedTimes = g.groups.reduce(_ ++ _).toList.toSet
+    //             val uniqueRegionalTimes = sequence.regionRounds.map(_.time).toList.toSet
+    //             val disjointNel = g.groups.foldLeft(true -> Set.empty[Timepoint]){ 
+    //                 case ((p, acc), ts) => (p && (acc & ts.toSortedSet).isEmpty, acc ++ ts.toSortedSet)
+    //             }._1.either("Proximity filter strategy's subsets are not disjoint!", ()).toValidatedNel
+    //             val subsetNel = checkTimesSubset(uniqueRegionalTimes)(uniqueGroupedTimes, "proximity filter's grouping (rel. to regionals in imaging sequence)")
+    //             val supersetNel = checkTimesSubset(uniqueGroupedTimes)(uniqueRegionalTimes, "regionals in imaging sequence (rel. to proximity filter strategy)")
+    //             (disjointNel, subsetNel, supersetNel)
+    //     }
+    //     (tracingSubsetNel, locusTimeSubsetNel, locusTimeSupersetNel, locusGroupTimesAreRegionTimesNel, regionGroupingDisjointNel, regionGroupingSubsetNel, regionGroupingSupersetNel)
+    //         .tupled
+    //         .map(_ => ImagingRoundsConfiguration(sequence, locusGrouping, regionGrouping, tracingExclusions))
+    //         .toEither
+    // }
+
+    /**
+      * Validate construction of the imaging round configuration by checking that all timepoints are known and covered.
+      * 
+      * More specifically, any timepoint to exclude from the tracing must exist as a timepoint in the sequence of imaging 
+      * rounds, regardless of whether the grouping of regional timepoints is trivial or not.
+      * 
+      * Furthermore, if the regional grouping is nontrivial, then the set of timepoints in the regional grouping must be 
+      * both a subset and a superset of the set of timepoints from regional rounds in the imaging sequence. 
+      * In other words, those sets of timepoints must be equivalent.
+      *
+      * @param sequence The declaration of sequential FISH rounds that define an experiment
+      * @param locusGrouping How each locus is associated with a region
+      * @param proximityFilterStrategy How to filter regional spots based on proximity
+      * @param tracingExclusions Timepoints to exclude from tracing analysis
+      * @return Either a [[scala.util.Left]]-wrapped nonempty list of error messages, or a [[scala.util.Right]]-wrapped built instance
+      */
+    def build(sequence: ImagingSequence, locusGrouping: Set[LocusGroup], proximityFilterStrategy: ProximityFilterStrategy, tracingExclusions: Set[Timepoint]): ErrMsgsOr[ImagingRoundsConfiguration] = {
         val knownTimes = sequence.allTimepoints
         // Regardless of the subtype of regionGrouping, we need to check that any tracing exclusion timepoint is a known timepoint.
         val tracingSubsetNel = checkTimesSubset(knownTimes.toSortedSet)(tracingExclusions, "tracing exclusions")
@@ -97,26 +158,27 @@ object ImagingRoundsConfiguration:
             if nonRegional.isEmpty then ().validNel 
             else s"${nonRegional.size} timepoint(s) as keys in locus grouping that aren't regional.".invalidNel
         }
-        val (regionGroupingDisjointNel, regionGroupingSubsetNel, regionGroupingSupersetNel) = regionGrouping match {
-            case g: RegionGrouping.Trivial => 
-                // In the trivial regionGrouping case, we have no more validation work to do.
+        val (proximityGroupingDisjointNel, proximityGroupingSubsetNel, proximityGroupingSupersetNel) = proximityFilterStrategy match {
+            case _: (UniversalProximityPermission.type | UniversalProximityProhibition.type) => 
+                // In the trivial case, we have no more validation work to do.
                 (().validNel, ().validNel, ().validNel)
-            case g: RegionGrouping.Nontrivial => 
-                // When the regionGrouping's nontrivial, check for set equivalance of timepoints b/w imaging sequence and regional grouping.
-                val uniqueGroupedTimes = g.groups.reduce(_ ++ _).toList.toSet
+            case s: (SelectiveProximityPermission | SelectiveProximityProhibition) => 
+                // In the nontrivial case, check for set equivalance of timepoints b/w imaging sequence and grouping.
+                val uniqueGroupedTimes = s.grouping.reduce(_ ++ _).toList.toSet
                 val uniqueRegionalTimes = sequence.regionRounds.map(_.time).toList.toSet
-                val disjointNel = g.groups.foldLeft(true -> Set.empty[Timepoint]){ 
+                val disjointNel = s.grouping.foldLeft(true -> Set.empty[Timepoint]){ 
                     case ((p, acc), ts) => (p && (acc & ts.toSortedSet).isEmpty, acc ++ ts.toSortedSet)
-                }._1.either("Regional grouping's subsets are not disjoint!", ()).toValidatedNel
-                val subsetNel = checkTimesSubset(uniqueRegionalTimes)(uniqueGroupedTimes, "regional grouping (rel. to regionals in imaging sequence)")
-                val supersetNel = checkTimesSubset(uniqueGroupedTimes)(uniqueRegionalTimes, "regionals in imaging sequence (rel. to regional grouping)")
+                }._1.either("Proximity filter strategy's subsets are not disjoint!", ()).toValidatedNel
+                val subsetNel = checkTimesSubset(uniqueRegionalTimes)(uniqueGroupedTimes, "proximity filter's grouping (rel. to regionals in imaging sequence)")
+                val supersetNel = checkTimesSubset(uniqueGroupedTimes)(uniqueRegionalTimes, "regionals in imaging sequence (rel. to proximity filter strategy)")
                 (disjointNel, subsetNel, supersetNel)
         }
-        (tracingSubsetNel, locusTimeSubsetNel, locusTimeSupersetNel, locusGroupTimesAreRegionTimesNel, regionGroupingDisjointNel, regionGroupingSubsetNel, regionGroupingSupersetNel)
+        (tracingSubsetNel, locusTimeSubsetNel, locusTimeSupersetNel, locusGroupTimesAreRegionTimesNel, proximityGroupingDisjointNel, proximityGroupingSubsetNel, proximityGroupingSupersetNel)
             .tupled
-            .map(_ => ImagingRoundsConfiguration(sequence, locusGrouping, regionGrouping, tracingExclusions))
+            .map(_ => ImagingRoundsConfiguration(sequence, locusGrouping, proximityFilterStrategy, tracingExclusions))
             .toEither
     }
+    
 
     /**
       * Read the configuration of imaging rounds for the experiment, including regional grouping and 
@@ -169,47 +231,52 @@ object ImagingRoundsConfiguration:
                     .map(_.toSet)
                     .toValidatedNel
             }
-        val crudeRegionGroupingNel: ValidatedNel[String, (DistanceThreshold, Option[(RegionGrouping.Semantic, NonEmptyList[NonEmptySet[Timepoint]])])] = 
+        val proximityFilterStrategyNel: ValidatedNel[String, ProximityFilterStrategy] = {
             data.get("regionGrouping") match {
                 case None => "Missing regionGrouping section!".invalidNel
-                case Some(fullJson) => safeReadAs[Map[String, ujson.Value]](fullJson).leftMap(NonEmptyList.one).flatMap{ currentSection => 
-                    val regionThresholdNel: ValidatedNel[String, DistanceThreshold] = 
-                        currentSection.get("minimumPixelLikeSeparation")
-                            .toRight(s"Missing regional spot separation key (minimumPixelLikeSeparation)")
-                            .flatMap(safeReadAs[Double])
-                            .flatMap(NonnegativeReal.either)
-                            .map(PiecewiseDistance.ConjunctiveThreshold.apply)
-                            .toValidatedNel
-                    val semanticNel: ValidatedNel[String, (String, Option[RegionGrouping.Semantic])] = 
+                case Some(fullJson) => safeReadAs[Map[String, ujson.Value]](fullJson) match {
+                    case Left(message) => message.invalidNel
+                    case Right(currentSection) => 
+                        val thresholdNel: ValidatedNel[String, Option[PositiveReal]] = 
+                            currentSection.get("minimumPixelLikeSeparation") match {
+                                case None => None.validNel
+                                case Some(json) => safeReadAs[Double](json).flatMap(PositiveReal.either).map(_.some).toValidatedNel
+                            }
+                        val groupsNel: ValidatedNel[String, Option[NonEmptyList[NonEmptySet[Timepoint]]]] = 
+                            currentSection.get("groups") match {
+                                case None => None.validNel
+                                case Some(subdata) => safeReadAs[List[List[Int]]](subdata)
+                                    .flatMap(_.traverse(_.traverse(Timepoint.fromInt))) // Lift all ints to timepoints.
+                                    .flatMap(liftToNel(_, "regional grouping".some)) // Entire collection must be nonempty.
+                                    .flatMap(_.traverse(liftToNes(_, "regional group".some))) // Each group must be nonempty.
+                                    .map(_.some)
+                                    .toValidatedNel
+                            }
                         currentSection.get("semantic")
-                            .toRight("Missing semantic in regional grouping section!")
-                            .flatMap(safeReadAs[String](_).flatMap{
-                                case s@("permissive" | "Permissive" | "PERMISSIVE") => (s -> Permissive.some).asRight
-                                case s@("prohibitive" | "Prohibitive" | "PROHIBITIVE") => (s -> Prohibitive.some).asRight
-                                case s@("trivial" | "Trivial" | "TRIVIAL") => (s -> None).asRight
-                                case s => s"Illegal value for regional grouping semantic: $s".asLeft
-                            })
-                            .toValidatedNel
-                    val groupsNel: ValidatedNel[String, Option[NonEmptyList[NonEmptySet[Timepoint]]]] = 
-                        currentSection.get("groups") match {
-                            case None => None.validNel
-                            case Some(subdata) => safeReadAs[List[List[Int]]](subdata)
-                                .flatMap(_.traverse(_.traverse(Timepoint.fromInt))) // Lift all ints to timepoints.
-                                .flatMap(liftToNel(_, "regional grouping".some)) // Entire collection must be nonempty.
-                                .flatMap(_.traverse(liftToNes(_, "regional group".some))) // Each group must be nonempty.
-                                .map(_.some)
-                                .toValidatedNel
-                        }
-                    (regionThresholdNel, semanticNel, groupsNel).tupled.toEither.flatMap{
-                        case (threshold, (_, None), None) => (threshold, None).asRight
-                        case (threshold, (_, Some(semantic)), Some(groups)) => (threshold, (semantic -> groups).some).asRight
-                        case (_, (_, None), Some(_)) => 
-                            // NB: This would be OK if the grouping had a single group, but that would be very odd user behavior.
-                            NonEmptyList.one("Trivial distance grouping semantic, but groups specified!").asLeft
-                        case (_, (original, Some(s)), None) => NonEmptyList.one(s"Nontrivial grouping semantic ($s, from '$original'), but no groups!").asLeft
+                            .toRight("Missing semantic for proximity filter config section!")
+                            .flatMap(safeReadAs[String])
+                            .leftMap(NonEmptyList.one)
+                            .flatMap {
+                                case "UniversalPermission" => (thresholdNel, groupsNel).tupled.toEither.flatMap{
+                                    case (None, None) => UniversalProximityPermission.asRight
+                                    case _ => NonEmptyList.one("For universal proximity permissiveness, both threshold and groups must be absent.").asLeft
+                                }
+                                case "UniversalProhibition" => (thresholdNel, groupsNel).tupled.toEither.flatMap{
+                                    case (Some(t), None) => UniversalProximityProhibition(t).asRight
+                                    case _ => NonEmptyList.one("For universal proximity prohibition, threshold must be present and groups must be absent.").asLeft
+                                }
+                                case "SelectivePermission" => (thresholdNel, groupsNel).tupled.toEither.flatMap{
+                                    case (Some(t), Some(g)) => SelectiveProximityPermission(t, g).asRight
+                                    case _ => NonEmptyList.one("For selective proximity permission, threshold and grouping must be present.").asLeft
+                                }
+                                case "SelectiveProhibition" => (thresholdNel, groupsNel).tupled.toEither.flatMap{
+                                    case (Some(t), Some(g)) => SelectiveProximityProhibition(t, g).asRight
+                                    case _ => NonEmptyList.one("For selective proximity prohibition, threshold and grouping must be present.").asLeft
+                                }
+                            }.toValidated
                     }
-                }.toValidated
             }
+        }
         val tracingExclusionsNel: ValidatedNel[String, Set[Timepoint]] = 
             data.get("tracingExclusions") match {
                 case None | Some(ujson.Null) => Validated.Valid(Set())
@@ -218,10 +285,9 @@ object ImagingRoundsConfiguration:
                     .map(_.toSet)
                     .toValidatedNel
             }
-        (roundsNel, crudeLocusGroupingNel, crudeRegionGroupingNel, tracingExclusionsNel).tupled.toEither.flatMap{ 
-            case (sequence, crudeLocusGroups, (minSpotSeparation, maybeCrudeRegionGrouping), exclusions) =>
-                val unrefinedRegionGrouping = RegionGrouping(minSpotSeparation, maybeCrudeRegionGrouping)
-                build(sequence, crudeLocusGroups, unrefinedRegionGrouping, exclusions)
+        (roundsNel, crudeLocusGroupingNel, proximityFilterStrategyNel, tracingExclusionsNel).tupled.toEither.flatMap{ 
+            case (sequence, crudeLocusGroups, proximityFilterStrategy, exclusions) =>
+                build(sequence, crudeLocusGroups, proximityFilterStrategy, exclusions)
         }
     }
 
@@ -233,26 +299,10 @@ object ImagingRoundsConfiguration:
     def unsafe(
         sequence: ImagingSequence, 
         locusGrouping: Set[LocusGroup], 
-        regionGrouping: RegionGrouping, 
+        proximityFilterStrategy: ProximityFilterStrategy, 
         tracingExclusions: Set[Timepoint],
         ): ImagingRoundsConfiguration = 
-        build(sequence, locusGrouping, regionGrouping, tracingExclusions).fold(messages => throw new BuildError.FromPure(messages), identity)
-
-    /**
-     * Create instance, throw exception if any failure occurs
-     * 
-     * @see [[ImagingRoundsConfiguration.build]]
-     */
-    def unsafe(
-        sequence: ImagingSequence, 
-        locusGrouping: Set[LocusGroup],
-        minSpotSeparation: DistanceThreshold,
-        maybeRegionGrouping: Option[(RegionGrouping.Semantic, RegionGrouping.Groups)], 
-        tracingExclusions: Set[Timepoint],
-    ): ImagingRoundsConfiguration = {
-        val regionGrouping = RegionGrouping(minSpotSeparation, maybeRegionGrouping)
-        unsafe(sequence, locusGrouping, regionGrouping, tracingExclusions)
-    }
+        build(sequence, locusGrouping, proximityFilterStrategy, tracingExclusions).fold(messages => throw new BuildError.FromPure(messages), identity)
 
     /**
       * Build a configuration instance from JSON data on disk.
@@ -284,6 +334,28 @@ object ImagingRoundsConfiguration:
                     )
         )
     end RegionalImageRoundGroup
+
+    sealed trait ProximityFilterStrategy
+    
+    sealed trait NontrivialProximityFilter extends ProximityFilterStrategy:
+        def minSpotSeparation: PositiveReal
+    
+    sealed trait SelectiveProximityFilter:
+        def grouping: RegionGrouping.Groups
+    
+    case object UniversalProximityPermission extends ProximityFilterStrategy
+    
+    final case class UniversalProximityProhibition(minSpotSeparation: PositiveReal) extends NontrivialProximityFilter
+    
+    final case class SelectiveProximityPermission(
+        minSpotSeparation: PositiveReal,
+        grouping: RegionGrouping.Groups,
+        ) extends NontrivialProximityFilter with SelectiveProximityFilter
+    
+    final case class SelectiveProximityProhibition(
+        minSpotSeparation: PositiveReal, 
+        grouping: RegionGrouping.Groups,
+        ) extends NontrivialProximityFilter with SelectiveProximityFilter
 
     /** How to permit or prohibit regional barcode imaging probes/timepoints from being too physically close */
     sealed trait RegionGrouping:
