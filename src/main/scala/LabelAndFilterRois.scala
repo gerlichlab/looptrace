@@ -317,10 +317,15 @@ object LabelAndFilterRois:
                 val groupIds = NonnegativeInt.indexed(strat.grouping.toList).flatMap((g, i) => g.toList.map(_ -> i)).toMap
                 Alternative[List].separate(rois.map{ case pair@(roi, _) => groupIds.get(roi.time).toRight(pair).map(_ -> pair)}) match {
                     case (Nil, withGroupsAssigned) => 
-                        val considerRoiPair = strat match {
+                        // NB: "eligible" refers to eligibility to be deemed in violation of proximity rule, not "eligible" to be kept for further processing.
+                        val eligibleByTime = { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => a._2._1.time =!= b._2._1.time }
+                        val eligibleByGroup = strat match {
+                            // In the grouping, we declare which regional timepoints are "together" for the purpose of BEING REGARDED AS IN VIOLATION OF PROXIMITY.
+                            // That is, it's NOT about which timepoints' spots are allowed or not to exist in close proximity (in fact, the opposite).
                             case _: ImagingRoundsConfiguration.SelectiveProximityProhibition => { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => a._1 === b._1 }
                             case _: ImagingRoundsConfiguration.SelectiveProximityPermission => { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => a._1 =!= b._1 }
                         }
+                        val considerRoiPair = { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => eligibleByTime(a, b) && eligibleByGroup(a, b) }
                         buildNeighborsLookupKeyed(withGroupsAssigned.map{ case (gi, pair@(roi, _)) => roi.position -> (gi -> pair) }, considerRoiPair, getPoint, minSep, _._2).asRight
                     case (groupless, _) => 
                         val times = groupless.map(_._1.time).toSet
