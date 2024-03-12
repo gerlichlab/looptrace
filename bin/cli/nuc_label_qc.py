@@ -33,8 +33,6 @@ def workflow(
     *, 
     save_images: bool = True, 
     do_qc: bool = False, 
-    start_from: Optional[int] = None, 
-    stop_after: Optional[int] = None,
     ):
     """
     Either save detected nuclei / mask images, or examine them interactively with napari.
@@ -74,12 +72,11 @@ def workflow(
     N = NucDetector(H)
     
     # Gather the images to use and determine what to do for each FOV.
-    seg_imgs = N.images_for_segmentation
     mask_imgs = N.mask_images
     class_imgs = N.class_images
     get_class_layer = (lambda *_: None) if class_imgs is None else (lambda view, pos_idx: view.add_labels(prep_image_to_add(class_imgs[pos_idx])))
 
-    for i, nuc_img in takewhile(lambda i_: i_[0] <= stop_after, dropwhile(lambda i_: i_[0] < start_from, enumerate(seg_imgs))):
+    for i, nuc_img in enumerate(N.images_for_segmentation):
         viewer = napari.view_image(nuc_img)
         mask = mask_imgs[i]
         point_table = pd.DataFrame(regionprops_table(mask, properties=("label", "centroid")))
@@ -141,8 +138,6 @@ if __name__ == "__main__":
     exec_flow = parser.add_mutually_exclusive_group(required=True)
     exec_flow.add_argument("--save-images", action="store_true", help="Save comuted mask images.")
     exec_flow.add_argument("--qc", action="store_true", help="Additionally run QC (allows edits).")
-    parser.add_argument("--start-from", type=int, default=0, help="Minimum (inclusive) position index (0-based) to use")
-    parser.add_argument("--stop-after", type=int, default=sys.maxsize, help="Maximum (inclusive) position index (0-based) to use")
     
     args = parser.parse_args()
     
@@ -152,7 +147,5 @@ if __name__ == "__main__":
         images_folder=args.images_folder, 
         save_images=args.save_images, 
         do_qc=args.qc, 
-        start_from=args.start_from, 
-        stop_after=args.stop_after,
         )
     
