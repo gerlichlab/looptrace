@@ -27,11 +27,11 @@ dask = "^2023.5.1"
 flowdec = { version = "^1.1.0", optional = true }
 gertils = { git = "https://github.com/gerlichlab/gertils.git", tag = "2023-08-01" }
 hypothesis = { version = "^6.92.1", optional = true }
-joblib = { version = "^1.3.1", optional = true }
+joblib = "^1.3.1"
 matplotlib = { version = "^3.7.0", optional = true }
 #napari = { version = "^0.4.17", extras = ["all", "pyqt"], optional = true } # most computers
 napari = { version = "^0.4.17", optional = true } # newer Macs (M1, M2)
-nd2 = { version = "^0.5.3", optional = true }
+nd2 = "^0.5.3"
 numba = { version = "^0.57.0", optional = true }
 numcodecs = "^0.11.0"
 numpy = ">= 1.24.2, < 1.25"
@@ -52,11 +52,11 @@ zarr = "^2.4.12"
 [tool.poetry.extras]
 analysis = ["matplotlib", "numba", "seaborn"]
 deconvolution = ["flowdec", "tensorflow", "tensorrt"]
-dev = ["czifile", "matplotlib", "joblib", "nd2", "numba", "seaborn"]
+dev = ["czifile", "matplotlib", "numba", "seaborn"]
 interactive-visualisation = ["napari"]
 new-mac-napari = ["pyqt6"] # needed for visual support on newer Macs (M1, M2)
 nuclei = ["cellpose"]
-pipeline = ["cellpose", "joblib", "napari", "nd2", "piper"]
+pipeline = ["cellpose", "napari", "piper"]
 polymer = ["numba"]
 test = ["hypothesis", "pytest", "pytest-skip-slow"]
 
