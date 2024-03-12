@@ -74,7 +74,8 @@ def workflow(
     # Gather the images to use and determine what to do for each FOV.
     mask_imgs = N.mask_images
     class_imgs = N.class_images
-    get_class_layer = (lambda *_: None) if class_imgs is None else (lambda view, pos_idx: view.add_labels(prep_image_to_add(class_imgs[pos_idx])))
+    get_class_layer = (lambda *_: None) if class_imgs is None else \
+        (lambda view, pos_idx: view.add_labels(prep_image_to_add(class_imgs[pos_idx])))
 
     for i, nuc_img in enumerate(N.images_for_segmentation):
         viewer = napari.view_image(nuc_img)
@@ -86,18 +87,19 @@ def workflow(
             point_table[["centroid-0", "centroid-1"]].values, 
             properties={"label": point_table["label"].values},
             text={
-                "string": "{label}",
+                "string": "{label}", # From cellpose, this should be a nonnegative integer 0, 1, ...
                 "size": 10,
-                "color": "black",
+                "color": "black", # The nuclei are randomly colored, so black text looks good as overlay.
                 'translation': np.array([-30, 0]),
                 },
             size=1,
+            # We don't want the points actually shown; we care only about the label of each one.
             face_color="transparent", 
             edge_color="transparent"
             )
         if save_images:
             print(f"DEBUG -- saving nuclei image for position: {i}")
-            outfile = H.nuclear_mask_screenshots_folder / f"nuc_maks.{i}.png"
+            outfile = H.nuclear_mask_screenshots_folder / f"nuc_masks.{i}.png"
             save_screenshot(viewer=viewer, outfile=outfile)
             print(f"DEBUG -- saved nuclei image: {outfile}")
         else:
