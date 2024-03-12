@@ -16,10 +16,9 @@ __credits__ = ["Vince Reuter"]
 __all__ = [
     "SIGNAL_TO_QUIT", 
     "add_points_to_viewer", 
-    "add_screenshot", 
     "extract_roi_centers", 
     "prompt_continue_napari",
-    "save_screenshot",
+    "save_napari_screenshot",
     "shutdown_napari",
     ]
 
@@ -73,13 +72,6 @@ def add_points_to_viewer(
         )
 
 
-def add_screenshot(viewer: napari.Viewer, *, flash: bool = False, **kwargs) -> np.ndarray:
-    """Take a screenshot with the given viewer, and add and return the resulting image."""
-    screenshot = viewer.screenshot(flash=flash, **kwargs)
-    viewer.add_image(screenshot)
-    return screenshot
-
-
 def extract_roi_centers(rois: pd.DataFrame) -> np.ndarray:
     return rois[["zc", "yc", "xc"]].to_numpy()
 
@@ -88,10 +80,11 @@ def prompt_continue_napari() -> str:
     return input(f"Close window when done, then press enter to continue to the next image or {SIGNAL_TO_QUIT} to quit.")
 
 
-def save_screenshot(viewer: napari.Viewer, outfile: Union[str, Path], *, flash: bool = False, **kwargs):
-    screenshot = add_screenshot(viewer, flash=flash, **kwargs)
+def save_napari_screenshot(viewer: napari.Viewer, outfile: Union[str, Path], *, flash: bool = False, **kwargs) -> np.ndarray:
+    screenshot = viewer.screenshot(flash=flash, **kwargs)
     os.makedirs(outfile.parent, exist_ok=True)
-    return imsave(outfile, screenshot)
+    imsave(outfile, screenshot)
+    return screenshot
 
 
 def shutdown_napari() -> None:

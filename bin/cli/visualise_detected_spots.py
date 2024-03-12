@@ -10,7 +10,7 @@ from gertils import ExtantFile, ExtantFolder
 from looptrace import read_table_pandas
 from looptrace.ImageHandler import ImageHandler
 from looptrace.SpotPicker import SpotPicker, compute_downsampled_image as compute_subimage
-from looptrace.napari_helpers import SIGNAL_TO_QUIT, add_points_to_viewer, prompt_continue_napari, save_screenshot, shutdown_napari
+from looptrace.napari_helpers import SIGNAL_TO_QUIT, add_points_to_viewer, prompt_continue_napari, save_napari_screenshot, shutdown_napari
 
 __author__ = "Vince Reuter"
 __credits__ = ["Vince Reuter"]
@@ -55,8 +55,8 @@ def workflow(
     images_folder: ExtantFolder, 
     image_save_path: Optional[ExtantFolder] = None,
     *,
-    interactive : bool = False,
-    save_projections : bool = True,
+    interactive: bool = False,
+    save_projections: bool = True,
     positions_to_use: Optional[Set[int]] = None,
     ):
     if not interactive and not save_projections:
@@ -95,7 +95,7 @@ def workflow(
                 )
             outfile = S.path_to_detected_spot_image_file(position=pos, time=frame, channel=ch)
             print(f"DEBUG: saving image for ({outfile})")
-            save_screenshot(viewer=viewer, outfile=outfile, scale=2)
+            save_napari_screenshot(viewer=viewer, outfile=outfile, scale=2)
             print(f"DEBUG: saved {outfile}")
             viewer.close()
         if interactive:
@@ -129,7 +129,7 @@ if __name__ == "__main__":
     position_subset_spec.add_argument("--positions", nargs="*", type=int, help="Indices (0-based) of positions to use, otherwise use all.")
     position_subset_spec.add_argument("--num-positions", type=int, help="Number of positions to use")
     parser.add_argument("--interactive", action="store_true", help="Do interactive image viewing.")
-    parser.add_argument("--save-projections", action="store_true", help="Save (max-z-projected) 2D images with bounding boxes.")
+    parser.add_argument("--do-not-save-projections", action="store_true", help="Skip saving (max-z-projected) 2D images with bounding boxes.")
     args = parser.parse_args()
     if args.positions:
         positions = args.positions
@@ -146,6 +146,6 @@ if __name__ == "__main__":
         images_folder=args.images_folder, 
         image_save_path=args.image_save_path, 
         interactive=args.interactive,
-        save_projections=args.save_projections, 
+        save_projections=args.do_not_save_projections, 
         positions_to_use=positions,
         )

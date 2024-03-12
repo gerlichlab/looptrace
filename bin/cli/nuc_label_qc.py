@@ -18,7 +18,7 @@ from skimage.measure import regionprops_table
 from gertils import ExtantFile, ExtantFolder
 from looptrace.ImageHandler import ImageHandler
 from looptrace.NucDetector import NucDetector
-from looptrace.napari_helpers import SIGNAL_TO_QUIT, prompt_continue_napari, save_screenshot, shutdown_napari
+from looptrace.napari_helpers import SIGNAL_TO_QUIT, prompt_continue_napari, save_napari_screenshot, shutdown_napari
 
 __author__ = "Kai Sandvold Beckwith"
 __credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
@@ -98,7 +98,7 @@ def workflow(
         if save_images:
             print(f"DEBUG -- saving nuclei image for position: {i}")
             outfile = H.nuclear_mask_screenshots_folder / f"nuc_masks.{i}.png"
-            save_screenshot(viewer=viewer, outfile=outfile)
+            save_napari_screenshot(viewer=viewer, outfile=outfile)
             print(f"DEBUG -- saved nuclei image: {outfile}")
         else:
             napari.run()
