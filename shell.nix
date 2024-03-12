@@ -4,9 +4,11 @@
     ref = "refs/tags/23.11";
   }) {}, 
   pipeline ? false,
+  new-mac-napari ? true,
+  deconvolution ? false,
   analysis ? false, 
-  interactive ? false,
-  test ? false,
+  interactive-visualisation ? true,
+  test ? true,
   rDev ? true,
   pyDev ? true, 
   scalaDev ? true, 
@@ -20,10 +22,10 @@ let baseBuildInputs = with pkgs; [ poetry stdenv.cc.cc.lib zlib ] ++ [ pkgs.${jd
         (if rDev then [ pkgs.rPackages.languageserver ] else [ ]);
     };
     poetryExtras = [] ++ 
-      (if test then [ "test" "pipeline-test" ] else (
+      (if test then [ "test" "pipeline" ] else (
         (if pipeline then [ "pipeline" ] else []) ++
         (if analysis then [ "analysis" ] else []) ++ 
-        (if interactive then [ "interactive" ] else []) ++
+        (if interactive-visualisation then [ "interactive-visualisation" ] else []) ++
         (if pyDev then ["dev"] else [])
       ));
     poetryInstallExtras = (

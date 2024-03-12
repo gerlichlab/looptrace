@@ -45,7 +45,7 @@ ENV PATH=/opt/conda/bin:${PATH}
 
 # Build the looptrace package, with extra dependencies for pipeline.
 # This group of extras should be declared in the pyproject.toml.
-RUN pip install .[pipeline]
+RUN pip install .[deconvolution,pipeline]
 
 RUN cd /opt/conda/lib/python3.10/site-packages/tensorrt_libs && \
     ln -s libnvinfer.so.8 libnvinfer.so.7 && \
