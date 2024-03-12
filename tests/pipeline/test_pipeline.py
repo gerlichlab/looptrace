@@ -110,12 +110,12 @@ ROUNDS_CONFIG_SPECS = [
 
 IMAGE_FOLDER_SPECS = [
     CliOptProvision(opt, lambda p: p / "images", (lambda p: p.mkdir()) if create else None) 
-    for opt, create in itertools.product((None, "--images-folder"), BOOL_GRID)
+    for opt, create in itertools.product((None, "-I", "--images-folder"), BOOL_GRID)
     ]
 
 OUTPUT_FOLDER_SPECS = [
     CliOptProvision(opt, lambda p: p / "output", (lambda p: p.mkdir()) if create else None) 
-    for opt, create in itertools.product((None, "-O", "--output-folder"), BOOL_GRID)
+    for opt, create in itertools.product((None, "--pypiper-folder"), BOOL_GRID)
     ]
 
 COMMAND_LINES = [CliSpecMinimal(
@@ -150,8 +150,8 @@ def test_required_inputs(tmp_path, cli, expect_success):
 
 @pytest.mark.parametrize("params_config_option", ["--params-config"])
 @pytest.mark.parametrize("rounds_config_option", ["--rounds-config"])
-@pytest.mark.parametrize("images_folder_option", ["--images-folder"])
-@pytest.mark.parametrize("output_folder_option", ["-O", "--output-folder"])
+@pytest.mark.parametrize("images_folder_option", ["-I", "--images-folder"])
+@pytest.mark.parametrize("output_folder_option", ["--pypiper-folder"])
 def test_logging(tmp_path, dummy_rounds_config, prepped_minimal_config_data, caplog, params_config_option, rounds_config_option, images_folder_option, output_folder_option):
     caplog.set_level(logging.INFO)
     conf_path = tmp_path / "config.yaml"

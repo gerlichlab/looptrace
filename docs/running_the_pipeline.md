@@ -13,7 +13,7 @@ To be able to run this pipeline on the lab machine, these are the basic requirem
 * __Images subfolder__ (created on lab machine or cluster): something like `images_all`, but just needs to match the value you'll give with the `--images-folder` argument when running the pipeline.
     * _Raw nuclei images_ subfolder: something like `nuc_images_raw`, though just must match the corresponding key in the config file
     * _FISH images_ subfolder: something like `seq_images_raw`, though just must match the corresponding key in the config file
-* __Pypiper subfolder__ (created on lab machine or on cluster): something like `pypiper_output`, where pipeline logs and checkpoints are written; this will be passed by you to the pipeline runner through the `-O / --output-folder` argument when you run the pipeline.
+* __Pypiper subfolder__ (created on lab machine or on cluster): something like `pypiper_output`, where pipeline logs and checkpoints are written; this will be passed by you to the pipeline runner through the `--pypiper-folder` argument when you run the pipeline.
 * __Analysis subfolder__ (created on lab machine or on cluster): something like `2023-08-10_Analysis01`, though can be anything and just must match the name of the subfolder you supply in the config file, as the leaf of the path in the `analysis_path` value
 
 
@@ -32,7 +32,7 @@ For requirements and suggestions on settings, refer to the separate documentatio
 ## General workflow
 Once you have the [minimal requirements](#minimal-requirements), this will be the typical workflow for running the pipeline:
 1. __Login__ to the machine: something like `ssh username@ask-Vince-or-Chris-for-the-machine-domain`
-1. __Path creation__: Assure that the necessary filepaths exist; particularly easy to forget are the path to the folder in which analysis output will be placed (the value of `analysis_path` in the parameters config file), and the path to the folder in which the pipeline will place its own files (`-O / --output-folder` argument at the command-line). See the [data layout section](#data-layout-and-organisation).
+1. __Path creation__: Assure that the necessary filepaths exist; particularly easy to forget are the path to the folder in which analysis output will be placed (the value of `analysis_path` in the parameters config file), and the path to the folder in which the pipeline will place its own files (`--pypiper-folder` argument at the command-line). See the [data layout section](#data-layout-and-organisation).
 1. `tmux`: attach to an existing `tmux` session, or start a new one. See the [tmux section](#tmux) for more info.
 1. __Docker__: Start the relevant Docker container:
     ```shell

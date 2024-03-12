@@ -251,5 +251,5 @@ def segmentation_method_does_not_parse_incorrect_values(parser_method_name_exp_p
 
 @pytest.mark.skip("not implemented")
 def test_nuclei_labels__are_contiguous_nonnegative_integers_from_zero():
-    # This is a cellpose property that could be enforced.
+    # This is a cellpose property that could be enforced. See #241
     pass

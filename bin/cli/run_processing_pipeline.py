@@ -292,8 +292,8 @@ def parse_cli(args: Iterable[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="A pipeline to process microscopy imaging data to trace chromatin fiber with FISH probes")
     parser.add_argument("--rounds-config", type=ExtantFile.from_string, required=True, help="Path to the imaging rounds configuration file")
     parser.add_argument("--params-config", type=ExtantFile.from_string, required=True, help="Path to the parameters configuration file")
-    parser.add_argument("--images-folder", type=ExtantFolder.from_string, required=True, help="Path to the root folder with imaging data to process")
-    parser.add_argument("-O", "--output-folder", type=ExtantFolder.from_string, required=True, help="Path to folder for pypiper output")
+    parser.add_argument("-I", "--images-folder", type=ExtantFolder.from_string, required=True, help="Path to the root folder with imaging data to process")
+    parser.add_argument("--pypiper-folder", type=ExtantFolder.from_string, required=True, help="Path to folder for pypiper output")
     parser.add_argument(NO_TEE_LOGS_OPTNAME, action="store_true", help="Do not tee logging output from pypiper manager")
     parser = pypiper.add_pypiper_args(
         parser, 
@@ -308,7 +308,7 @@ def init(opts: argparse.Namespace) -> LooptracePipeline:
         "rounds_config": opts.rounds_config, 
         "params_config": opts.params_config, 
         "images_folder": opts.images_folder, 
-        "output_folder": opts.output_folder,
+        "output_folder": opts.pypiper_folder,
         }
     if opts.do_not_tee_logs:
         kwargs["multi"] = True
