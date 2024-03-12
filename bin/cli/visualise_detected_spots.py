@@ -56,7 +56,7 @@ def workflow(
     image_save_path: Optional[ExtantFolder] = None,
     *,
     interactive : bool = False,
-    save_projections : bool = False,
+    save_projections : bool = True,
     positions_to_use: Optional[Set[int]] = None,
     ):
     if not interactive and not save_projections:
@@ -83,7 +83,7 @@ def workflow(
         print(f"INFO: Visualising spot detection in position {pos}, frame {frame}, channel {ch}...")
         sub_rois = get_sub_rois(p=pos, t=frame, c=ch)
         if save_projections:
-            viewer = napari.view_image(np.amax(img, axis=0))
+            viewer = napari.view_image(np.amax(img, axis=0), show=not interactive)
             add_points_to_viewer(
                 viewer=viewer, 
                 points=sub_rois[["yc", "xc"]], 
