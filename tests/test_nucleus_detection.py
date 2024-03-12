@@ -3,7 +3,6 @@
 import copy
 import itertools
 from operator import itemgetter
-import os
 from pathlib import Path
 import shutil
 from typing import *
@@ -17,7 +16,7 @@ import yaml
 
 from gertils import ExtantFile
 
-from looptrace import ArrayDimensionalityError, MissingImagesError
+from looptrace import ArrayDimensionalityError, ConfigurationValueError, MissingImagesError
 from looptrace.ImageHandler import ImageHandler
 from looptrace.NucDetector import NucDetector, SegmentationMethod
 from looptrace.image_io import write_jvm_compatible_zarr_store
@@ -150,7 +149,7 @@ def test_bad_image_dimensionality__generates_expected_error__enforcing_single_ti
 @pytest.mark.parametrize("config_update", [
     {NucDetector.DETECTION_METHOD_KEY: method, NucDetector.KEY_3D: do_3d, "nuc_slice": z_slice} 
     for method, do_3d, z_slice 
-    in itertools.product(["cellpose", "nuclei", "threshold"], [False, True], [-1, 0, 1])
+    in itertools.product(["cellpose", "threshold"], [False, True], [-1, 0, 1])
 ])
 @hyp.given(num_pos=hyp.strategies.integers(min_value=1, max_value=3))
 @hyp.settings(suppress_health_check=(hyp.HealthCheck.function_scoped_fixture, ), deadline=None)
@@ -170,9 +169,6 @@ def test_nuc_detector__generates_image_of_proper_dimension(
     conf_data.update(config_update)
     input_key = conf_data["nuc_input_name"]
     N = get_nuc_detector(rounds_config=dummy_rounds_config, conf_data=conf_data, conf_file=tmp_path / "conf.yaml")
-    
-    # pretest to ensure we have expected 3D setting
-    assert N.do_in_3d == config_update[NucDetector.KEY_3D]
     
     # With no images, we should get the expected error.
     assert not N.has_images_for_segmentation
@@ -209,14 +205,48 @@ def test_nuc_detector__generates_image_of_proper_dimension(
     get_single_channel = lambda img: img[conf_data["nuc_channel"]]
     all_imgs_obs = N.images_for_segmentation
     if conf_data[NucDetector.KEY_3D] or N.segmentation_method == SegmentationMethod.THRESHOLD:
+        assert N.do_in_3d is True
         get_exp = get_single_channel
     else:
+        assert N.do_in_3d is False
         get_single_z = lambda img: da.max(img, axis=0) if conf_data["nuc_slice"] == -1 else img[conf_data["nuc_slice"]]
         get_exp = lambda img: get_single_z(get_single_channel(img))
     all_imgs_exp = map(get_exp, input_images)
     assert [img.shape for img in all_imgs_obs] == [img.shape for img in all_imgs_exp]
     assert all((obs == exp).all() for obs, exp in zip(all_imgs_obs, all_imgs_exp))
     shutil.rmtree(images_folder)
+
+
+@pytest.mark.parametrize("parser_method_name", ["from_string", "unsafe_from_string"])
+@pytest.mark.parametrize(
+    "arg_exp_pair", [
+        ("cellpose", SegmentationMethod.CELLPOSE), 
+        ("threshold", SegmentationMethod.THRESHOLD),
+        ]
+)
+def segmentation_method_parses_correct_values(parser_method_name, arg_exp_pair):
+    arg, exp = arg_exp_pair
+    parse = getattr(SegmentationMethod, parser_method_name)
+    obs = parse(arg)
+    assert obs == exp
+
+
+@pytest.mark.parametrize(
+    "parser_method_name_exp_pair", [
+        ("from_string", None), 
+        ("unsafe_from_string", ConfigurationValueError),
+        ]
+)
+@hyp.given(arg=hyp.strategies.text().filter(lambda s: s not in ["cellpose", "threshold"]))
+def segmentation_method_does_not_parse_incorrect_values(parser_method_name_exp_pair, arg):
+    parser_method_name, exp = parser_method_name_exp_pair
+    parse = getattr(SegmentationMethod, parser_method_name)
+    if issubclass(exp, Exception):
+        with pytest.raises(exp):
+            parse(arg)
+    else:
+        obs = parse(arg)
+        assert obs == exp
 
 
 @pytest.mark.skip("not implemented")

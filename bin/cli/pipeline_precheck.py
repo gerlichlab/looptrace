@@ -80,7 +80,7 @@ def find_config_file_errors(rounds_config: ExtantFile, params_config: ExtantFile
     except KeyError:
         errors.append(ConfigurationValueError(f"Missing nuclei detection method key: {NucDetector.DETECTION_METHOD_KEY}!"))
     else:
-        if nuclei_detection_method != "nuclei":
+        if nuclei_detection_method != NucSegMethod.CELLPOSE.value:
             errors.append(f"Unsupported nuclei detection method (key '{NucDetector.DETECTION_METHOD_KEY}')! {nuclei_detection_method}")
     try:
         nuc_ref_frame = parameters["nuc_ref_frame"]

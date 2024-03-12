@@ -4,7 +4,7 @@ The parameters configuration file is where you tell `looptrace` about various al
 ## Requirements and suggestions
 * Check that each channel setting (often with a `_ch` or `_channel` suffix) matches what's been used in the imaging experiment which generated the data to be processed.
 * `xy_nm` and `z_nm` should be adjusted to match your microscope settings (number of nanomerters per step in xy or in z).
-* `nuc_method` should be set to "nuclei".
+* `nuc_method` should be set to "cellpose".
 * `nuc_3d` should be absent or set to `False`.
 * `analysis_path` should be an _absolute_ path but may use environment and/or user variables.
 * `analysis_path` should specify the path to a folder that exists before the pipeline is run.

@@ -12,7 +12,7 @@ nuc_channel: 0
 nuc_ref_frame: 0
 nuc_slice: -1
 nuc_3d: False
-nuc_method: nuclei
+nuc_method: cellpose
 nuc_diameter: 170
 nuc_dilation: 2
 nuc_downscaling_xy: 4

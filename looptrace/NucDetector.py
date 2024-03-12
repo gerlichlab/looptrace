@@ -30,9 +30,6 @@ __author__ = "Kai Sandvold Beckwith"
 __credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 
 
-CELLPOSE_NUCLEI_MODEL_NAME = "nuclei"
-
-
 class SegmentationMethod(Enum):
     """Encoding of the methods available for nuclei segmentation"""
     CELLPOSE = "cellpose"
@@ -40,8 +37,7 @@ class SegmentationMethod(Enum):
 
     @classmethod
     def from_string(cls, s: str) -> Optional["SegmentationMethod"]:
-        extra = {CELLPOSE_NUCLEI_MODEL_NAME: SegmentationMethod.CELLPOSE}
-        lookup = {**extra, **{k: m for m in cls for k in [m.name, m.value]}}
+        lookup = {k: m for m in cls for k in [m.name, m.value]}
         return lookup.get(s)
 
     @classmethod
@@ -50,6 +46,7 @@ class SegmentationMethod(Enum):
         if member is None:
             choices = ", ".join(m.value for m in cls)
             raise ConfigurationValueError(f"Cannot parse '{s}' as nuceli segmentation method; choose from: {choices}")
+        return member
 
 
 class NucDetector:
