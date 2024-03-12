@@ -4423,11 +4423,11 @@ dev = ["czifile", "matplotlib", "numba", "seaborn"]
 interactive-visualisation = ["napari"]
 new-mac-napari = ["pyqt6"]
 nuclei = ["cellpose"]
-pipeline = ["cellpose", "napari", "piper"]
+pipeline = ["cellpose", "piper"]
 polymer = ["numba"]
 test = ["hypothesis", "pytest", "pytest-skip-slow"]
 
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "5f8ac44dec4de45de9debe77714a02f6b32090ec4e701bc83217094318d09aec"
+content-hash = "6424c5b4eeccdd10e0c97539cf8fa2f741b733f20c870d3e22417bfdd3b74d1d"

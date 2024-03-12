@@ -76,7 +76,7 @@ def workflow(
         (lambda view, pos_idx: view.add_labels(prep_image_to_add(class_imgs[pos_idx])))
 
     for i, nuc_img in enumerate(N.images_for_segmentation):
-        viewer = napari.view_image(nuc_img, show=not do_qc)
+        viewer = napari.view_image(nuc_img)
         mask = mask_imgs[i]
         point_table = pd.DataFrame(regionprops_table(mask, properties=("label", "centroid")))
         masks_layer = viewer.add_labels(prep_image_to_add(mask))

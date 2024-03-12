@@ -33,7 +33,6 @@ from extract_spots_table import workflow as run_spot_bounding
 from extract_spots import workflow as run_spot_extraction
 from zip_spot_image_files_for_tracing import workflow as run_spot_zipping
 from tracing import workflow as run_chromatin_tracing
-from visualise_detected_spots import workflow as save_regional_spot_2D_projections
 
 logger = logging.getLogger(__name__)
 
@@ -279,7 +278,6 @@ class LooptracePipeline(pypiper.Pipeline):
             ("pairwise_distances__locus_specific", compute_locus_pairwise_distances, take2),
             ("pairwise_distances__regional", compute_region_pairwise_distances, take2),
             ("locus_specific_spots_visualisation_data_prep", prep_locus_specific_spots_visualisation, take3),
-            ("save_regional_spot_2D_projections", save_regional_spot_2D_projections, take3), 
         ]
 
     def stages(self) -> List[Callable]:

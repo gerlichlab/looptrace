@@ -56,7 +56,7 @@ def workflow(
     image_save_path: Optional[ExtantFolder] = None,
     *,
     interactive: bool = False,
-    save_projections: bool = True,
+    save_projections: bool = False,
     positions_to_use: Optional[Set[int]] = None,
     ):
     if not interactive and not save_projections:
@@ -83,7 +83,7 @@ def workflow(
         print(f"INFO: Visualising spot detection in position {pos}, frame {frame}, channel {ch}...")
         sub_rois = get_sub_rois(p=pos, t=frame, c=ch)
         if save_projections:
-            viewer = napari.view_image(np.amax(img, axis=0), show=not interactive)
+            viewer = napari.view_image(np.amax(img, axis=0))
             add_points_to_viewer(
                 viewer=viewer, 
                 points=sub_rois[["yc", "xc"]], 
@@ -129,7 +129,7 @@ if __name__ == "__main__":
     position_subset_spec.add_argument("--positions", nargs="*", type=int, help="Indices (0-based) of positions to use, otherwise use all.")
     position_subset_spec.add_argument("--num-positions", type=int, help="Number of positions to use")
     parser.add_argument("--interactive", action="store_true", help="Do interactive image viewing.")
-    parser.add_argument("--do-not-save-projections", action="store_true", help="Skip saving (max-z-projected) 2D images with bounding boxes.")
+    parser.add_argument("--save-projections", action="store_true", help="Save (max-z-projected) 2D images with bounding boxes.")
     args = parser.parse_args()
     if args.positions:
         positions = args.positions
@@ -146,6 +146,6 @@ if __name__ == "__main__":
         images_folder=args.images_folder, 
         image_save_path=args.image_save_path, 
         interactive=args.interactive,
-        save_projections=args.do_not_save_projections, 
+        save_projections=args.save_projections, 
         positions_to_use=positions,
         )
