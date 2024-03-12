@@ -44,7 +44,6 @@ Below are the sequential pipeline stage names.
 * pipeline_precheck
 * zarr_production
 * nuclei_detection
-* nuclei_visualisation
 * nuclei_drift_correction
 * psf_extraction
 * deconvolution

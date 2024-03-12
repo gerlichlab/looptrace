@@ -21,7 +21,6 @@ from looptrace.conversion_to_zarr import one_to_one as run_zarr_production
 
 from pipeline_precheck import workflow as pretest
 from nuc_label import workflow as run_nuclei_detection
-from nuc_label_qc import workflow as run_nuclei_visualisation
 from extract_exp_psf import workflow as run_psf_extraction
 from run_bead_roi_generation import workflow as gen_all_bead_rois
 from analyse_detected_bead_rois import workflow as run_all_bead_roi_detection_analysis
@@ -252,7 +251,7 @@ class LooptracePipeline(pypiper.Pipeline):
             ("pipeline_precheck", pretest, take2),
             ("zarr_production", run_zarr_production, take3),
             ("nuclei_detection", run_nuclei_detection, take3),
-            ("nuclei_visualisation", run_nuclei_visualisation, take3), 
+            # TODO: compute table for visualisation in napari, of nuclear masks.
             ("nuclei_drift_correction", drift_correct_nuclei, take3),
             ("psf_extraction", run_psf_extraction, take3),
             (DECON_STAGE_NAME, run_deconvolution, take3), # Really just for denoising, no need for structural disambiguation
