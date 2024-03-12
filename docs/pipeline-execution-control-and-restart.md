@@ -7,8 +7,14 @@ One feature of such a pipeline is that it may be started and stopped at arbitrar
 To do so, the start and end points must be specified by name of processing stage.
 
 To __start__ the pipeline from a specific point, use `--start-point <stage name>`. Example:
-```python
-python run_processing_pipeline.py     --rounds-config rounds.json     --params-config params.yaml     --images-folder images_folder     -O pypiper_output     --start-point spot_detection     --stop-before tracing_QC
+```
+python run_processing_pipeline.py \
+    --rounds-config rounds.json \
+    --params-config params.yaml \
+    --images-folder images_folder \
+    --pypiper-folder pypiper_output \
+    --start-point spot_detection \
+    --stop-before tracing_QC
 ```
 
 To __stop__ the pipeline...<br>
