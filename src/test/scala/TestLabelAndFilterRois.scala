@@ -366,7 +366,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         given arbMargin: Arbitrary[BoundingBox.Margin] = getArbForMargin(NonnegativeReal(1.0), NonnegativeReal(32.0))
         given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-2048.0, 2048.0)
         
-        def genSpotsDriftsAndRegionGrouping = {
+        def genSpotsAndDriftsAndStrategy = {
             /* Generate drifts. */
             def genCoarseDrift: Gen[CoarseDrift] = {
                 val genInt = Gen.choose(-100, 100)
@@ -390,7 +390,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             } yield (spots, drifts, proxFilterStrategy)
         }
 
-        forAll (genSpotsDriftsAndRegionGrouping, arbitrary[ExtantOutputHandler]) {
+        forAll (genSpotsAndDriftsAndStrategy, arbitrary[ExtantOutputHandler]) {
             case ((spots, driftRows, proxFilterStrategy), handleOutput) => 
                 withTempDirectory{ (tmpdir: os.Path) => 
                     val spotsFile = tmpdir / "spots.csv"

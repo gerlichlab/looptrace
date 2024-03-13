@@ -22,7 +22,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.*
   * 
   * @author Vince Reuter
   */
-class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaCheckPropertyChecks, should.Matchers:
+class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocusGrouping extends AnyFunSuite, LooptraceSuite, ScalaCheckPropertyChecks, should.Matchers:
     implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
 
     test("Example config parses correctly.") {
@@ -658,4 +658,4 @@ class TestImagingRoundsConfiguration extends AnyFunSuite, LooptraceSuite, ScalaC
         arbitrary[RegionalImagingRound], 
         arbitrary[LocusImagingRound],
         )
-end TestImagingRoundsConfiguration
+end TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocusGrouping
