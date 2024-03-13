@@ -912,7 +912,7 @@ files = [
 
 [[package]]
 name = "gertils"
-version = "0.1dev"
+version = "0.2dev"
 description = "General computing utilities for data processing and analysis in the Gerlich group at IMBA"
 optional = false
 python-versions = "^3.10.0"
@@ -922,8 +922,8 @@ develop = false
 [package.source]
 type = "git"
 url = "https://github.com/gerlichlab/gertils.git"
-reference = "2023-08-01"
-resolved_reference = "f925ca64ed1fcf643fe67a8972776671e4727331"
+reference = "2024-03-13"
+resolved_reference = "7072163106f68019701900fd59d7d1863d60fbbb"
 
 [[package]]
 name = "google-auth"
@@ -4430,4 +4430,4 @@ test = ["hypothesis", "pytest", "pytest-skip-slow"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "6424c5b4eeccdd10e0c97539cf8fa2f741b733f20c870d3e22417bfdd3b74d1d"
+content-hash = "e0fc18f717e4f855f2cddb6dc3af049aa5184caad1a65437b6b66ae996d2df1c"
