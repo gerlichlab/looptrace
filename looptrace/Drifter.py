@@ -24,7 +24,7 @@ from scipy import ndimage as ndi
 from scipy.stats import trim_mean
 import tqdm
 
-from gertils import ExtantFile, ExtantFolder
+from gertils import ExtantFile, ExtantFolder, PathWrapperException
 
 from looptrace import image_io, read_table_pandas
 from looptrace.ImageHandler import ImageHandler
@@ -352,7 +352,7 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
                 # Use current (FOV, time) pair if and only if it has a beads partition defined.
                 try:
                     _ = drifter.image_handler.get_bead_rois_file(pos_idx=pos_idx, frame=frame, purpose="shifting")
-                except TypeError: # arises iff the file doesn't exist for current (FOV, time), because ExtantFile wrapping fails
+                except PathWrapperException: # arises iff the file doesn't exist for current (FOV, time), because ExtantFile wrapping fails
                     print(f"WARNING: {get_no_partition_message(frame)}")
                     assert (pos_idx, frame) in pos_time_problems, \
                         f"No bead ROIs for fine DC for (FOV={pos_idx}, time={frame}), but no evidence of a problem there"
@@ -377,7 +377,7 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
                 # Use current (FOV, time) pair if and only if it has a beads partition defined.
                 try:
                     _ = drifter.image_handler.get_bead_rois_file(pos_idx=pos_idx, frame=frame, purpose="shifting")
-                except TypeError: # Current (FOV, time) pair doesn't have a beads partition defined.
+                except PathWrapperException: # Current (FOV, time) pair doesn't have a beads partition defined.
                     print(f"WARNING: {get_no_partition_message(frame)}")
                     assert (pos_idx, frame) in pos_time_problems, \
                         f"No bead ROIs for fine DC for (FOV={pos_idx}, time={frame}), but no evidence of a problem there"

@@ -37,7 +37,7 @@ def workflow(
     image_io.zip_folder(folder=str(folder_to_zip.path), out_file=str(file_to_zip_to), remove_folder=not keep_folder)
     try:
         return ExtantFile(file_to_zip_to)
-    except (PathWrapperException, TypeError) as e:
+    except PathWrapperException as e:
         if require_outfile:
             raise
         print(f"ERROR finalising spots zipfile ({file_to_zip_to}), so it may not exist! {e}")
