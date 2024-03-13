@@ -32,7 +32,6 @@ object PartitionIndexedDriftCorrectionRois:
         numShifting: ShiftingCount = ShiftingCount(10), // bogus, unconditionally required
         numAccuracy: PositiveInt = PositiveInt(1), // bogus, unconditionally required
         outputFolder: Option[os.Path] = None, 
-        referenceTimepoint: Timepoint = Timepoint(NonnegativeInt(Int.MaxValue)) // bogus, conditionally required
     )
 
     val parserBuilder = OParser.builder[CliConfig]
@@ -121,11 +120,6 @@ object PartitionIndexedDriftCorrectionRois:
         
         // Here, write (severe) warnings (if in development mode) or raise an exception.
         val zeroAccuracyProblems = if (bads.nonEmpty) {
-            /* Check if we can tolerate (implicitly, by provision of reference timepoint) cases of too few ROIs.
-             * If so, AND we have no parser errors (just too-few-ROI errors), AND none of the errors concerns 
-             * the timepoint designated as the reference, simply emit a warnings file rather than 
-             * fatally crashing with an exception.
-             */
             Alternative[List].separate(bads.map{ // Partition the list of problems by type of error.
                 case kv@(_, _: RoisFileParseError) => kv.asLeft
                 case ((pt, _), e: RoisSplit.TooFewShifting) => (pt, e).asRight
