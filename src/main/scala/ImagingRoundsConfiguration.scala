@@ -25,7 +25,6 @@ end ImagingRoundsConfiguration
 
 /** Tools for working with declaration of imaging rounds and how to use them within an experiment */
 object ImagingRoundsConfiguration:
-    import RegionGrouping.Semantic.*
     
     /** Something went wrong with attempt to instantiate a configuration */
     trait BuildErrorLike:
@@ -305,43 +304,6 @@ object ImagingRoundsConfiguration:
         minSpotSeparation: PositiveReal, 
         grouping: NonEmptyList[NonEmptySet[Timepoint]],
         ) extends NontrivialProximityFilter with SelectiveProximityFilter
-
-    /** How to permit or prohibit regional barcode imaging probes/timepoints from being too physically close */
-    sealed trait RegionGrouping:
-        def minSpotSeparation: DistanceThreshold
-
-    /** The (concrete) subtypes of regional image round grouping */
-    object RegionGrouping:
-        def apply(minSpotSeparation: DistanceThreshold, maybeRegionGrouping: Option[(RegionGrouping.Semantic, NonEmptyList[NonEmptySet[Timepoint]])]): RegionGrouping = 
-            maybeRegionGrouping match {
-                case None => Trivial(minSpotSeparation)
-                case Some((semantic, groups)) => Nontrivial(minSpotSeparation, semantic, groups)
-            }
-
-        /** A trivial grouping of regional imaging rounds, which treats all regional rounds as one big group */
-        case class Trivial(minSpotSeparation: DistanceThreshold) extends RegionGrouping
-        /** A nontrivial grouping of regional imaging rounds, which must constitute a partition of those available  */
-        sealed trait Nontrivial extends RegionGrouping:
-            /** A nontrivial grouping specifies a list of groups which comprise the total grouping.s */
-            def groups: NonEmptyList[NonEmptySet[Timepoint]]
-        /** Helpers for constructing and owrking with a nontrivial grouping of regional imaging rounds */
-        object Nontrivial:
-            /** Dispatch to the appropriate leaf class constructor based on the value of the semantic. */
-            def apply(minSpotSeparation: DistanceThreshold, semantic: Semantic, groups: NonEmptyList[NonEmptySet[Timepoint]]): Nontrivial = semantic match {
-                case Semantic.Permissive => Permissive(minSpotSeparation, groups)
-                case Semantic.Prohibitive => Prohibitive(minSpotSeparation, groups)
-            }
-        end Nontrivial
-        /** A 'permissive' grouping 'allows' members of the same group to violate some rule, while 'forbidding' non-grouped items from doing so. */
-        final case class Permissive(minSpotSeparation: DistanceThreshold, groups: NonEmptyList[NonEmptySet[Timepoint]]) extends Nontrivial
-        /** A 'prohibitive' grouping 'forbids' members of the same group to violate some rule, while 'allowing' non-grouped items to violate the rule. */
-        final case class Prohibitive(minSpotSeparation: DistanceThreshold, groups: NonEmptyList[NonEmptySet[Timepoint]]) extends Nontrivial
-        end Prohibitive
-
-        /** Delineate which semantic is desired */
-        private[looptrace] enum Semantic:
-            case Permissive, Prohibitive
-    end RegionGrouping
 
     /** Check list of items for nonemptiness. */
     private def liftToNel[A](as: List[A], context: Option[String] = None): Either[String, NonEmptyList[A]] = 
