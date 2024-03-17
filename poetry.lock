@@ -3761,6 +3761,27 @@ lint = ["docutils-stubs", "flake8", "mypy"]
 test = ["pytest"]
 
 [[package]]
+name = "spotfishing"
+version = "0.1dev"
+description = "Detecting spots in FISH images"
+optional = false
+python-versions = "^3.10.0"
+files = []
+develop = false
+
+[package.dependencies]
+numpy = {version = "^1.24.2", markers = "python_version < \"3.12\""}
+pandas = "^1.5.3"
+scikit-image = "^0.20.0"
+scipy = "^1.10.1"
+
+[package.source]
+type = "git"
+url = "https://github.com/gerlichlab/spotfishing.git"
+reference = "main"
+resolved_reference = "900361e1638e9c4932226238f116634b7f141d7c"
+
+[[package]]
 name = "stack-data"
 version = "0.6.2"
 description = "Extract data from python stack frames and tracebacks for informative displays"
@@ -4430,4 +4451,4 @@ test = ["hypothesis", "pytest", "pytest-skip-slow"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "e0fc18f717e4f855f2cddb6dc3af049aa5184caad1a65437b6b66ae996d2df1c"
+content-hash = "507737d39698870573a0bbcd214ed91e7557bd422fe8f29c11babd39369512d7"

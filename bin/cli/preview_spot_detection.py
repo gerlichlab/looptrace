@@ -141,7 +141,9 @@ if __name__ == "__main__":
         if params.subtract_beads:
             bead_img = compute_downsampled_image(S.images[args.position], frame=frame, channel=params.crosstalk_channel, downsampling=S.downsampling)
             img, orig = subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
-        spot_props, filt_img, _ = params.detection_function(img, S.spot_threshold[i])
+        spot_detection_result = params.detection_function(img, threshold=S.spot_threshold[i])
+        spot_props = spot_detection_result.table
+        filt_img = spot_detection_result.image
         spot_props["position"] = S.pos_list[args.position]
         spot_props = spot_props.reset_index().rename(columns={"index": "roi_id_pos"})
         spot_props = params.try_centering_spot_box_coordinates(spots_table=spot_props)
