@@ -72,100 +72,66 @@ def subtract_crosstalk(source, bleed, threshold=500):
     return out, bleed
 
 
-def detect_spots(input_img, spot_threshold: NumberLike, expand_px: int = 10):
-    """Spot detection by difference of Gaussians filter
-
-    Arguments
-    ---------
-    img : ndarray
-        Input 3D image
-    spot_threshold : NumberLike
-        Threshold to use for spots
-    expand_px : int
-        Number of pixels by which to expand contiguous subregion, 
-        up to point of overlap with neighboring subregion of image
-        
-    Returns
-    -------
-    pd.DataFrame, np.ndarray, np.ndarray: 
-        The centroids and roi_IDs of the spots found, 
-        the image used for spot detection, and 
-        numpy array with only sufficiently large regions 
-        retained (bigger than threshold number of pixels), 
-        and dilated by expansion amount (possibly)
-    """
-    # TODO: Do not use hard-coded sigma values (second parameter to gaussian(...)).
-    # See: https://github.com/gerlichlab/looptrace/issues/124
-
-    img = white_tophat(image=input_img, footprint=ball(2))
-    img = gaussian(img, 0.8) - gaussian(img, 1.3)
-    img = img / gaussian(input_img, 3)
-    img = (img - np.mean(img)) / np.std(img)
-    labels, _ = ndi.label(img > spot_threshold)
-    labels = expand_labels(labels, expand_px)
-    
-    # Make a DataFrame with the ROI info.
-    spot_props = _reindex_to_roi_id(pd.DataFrame(regionprops_table(
-        label_image=labels, 
-        intensity_image=input_img, 
-        properties=('label', 'centroid_weighted', 'intensity_mean')
-        )).drop(['label'], axis=1).rename(columns=CENTROID_COLUMNS_REMAPPING))
-
-    return spot_props, img, labels
-
-
-def detect_spots_int(input_img, spot_threshold: NumberLike, expand_px: int = 1):
-    """Spot detection by intensity filter
-
-    Arguments
-    ---------
-    img : ndarray
-        Input 3D image
-    spot_threshold : NumberLike
-        Threshold to use for spots
-    expand_px : int
-        Number of pixels by which to expand contiguous subregion, 
-        up to point of overlap with neighboring subregion of image
-        
-    Returns
-    -------
-    pd.DataFrame, np.ndarray, np.ndarray: 
-        The centroids and roi_IDs of the spots found, 
-        the image used for spot detection, and 
-        numpy array with only sufficiently large regions 
-        retained (bigger than threshold number of pixels), 
-        and dilated by expansion amount (possibly)
-    """
-    # TODO: enforce that output column names don't vary with code path walked.
-    # See: https://github.com/gerlichlab/looptrace/issues/125
-
-    binary = input_img > spot_threshold
-    binary = ndi.binary_fill_holes(binary)
-    struct = ndi.generate_binary_structure(input_img.ndim, 2)
-    labels, n_obj = ndi.label(binary, structure=struct)
-    if n_obj > 1: # Do not need this with area filtering below
-        labels = remove_small_objects(labels, min_size=5)
-    if expand_px > 0:
-        labels = expand_labels(labels, expand_px)
-    if np.all(labels == 0): # No substructures (ROIs) exist after filtering.
-        spot_props = pd.DataFrame(columns=['label', 'z_min', 'y_min', 'x_min', 'z_max', 'y_max', 'x_max', 'area', 'zc', 'yc', 'xc', 'intensity_mean'])
+def pad_to_shape(arr, shape, mode='constant'):
+    '''
+    Pads an array with fill to a given shape (list or tuple).
+    Shape must be of length equal to array ndim.
+    Adds on both sides as far as possible, then at end if missing one.
+    Returns padded array.
+    '''
+    if 0 in arr.shape:
+        return np.zeros(shape)
+    p = np.subtract(shape,arr.shape)//2
+    try:
+        assert all(p>=0), 'Cannot pad to smaller than original size. Cropping instead.'
+    except AssertionError:
+        exp_shape=tuple([np.max((i,j)) for i,j in zip(arr.shape,shape)])
+        arr=pad_to_shape(arr, exp_shape, mode)
+        arr=crop_to_shape(arr,shape)
+        return arr
+    ps = tuple((n,n) for n in p)
+    arr=np.pad(arr,ps,mode)
+    if arr.shape == shape:
+        return arr
     else:
-        spot_props = _reindex_to_roi_id(
-            pd.DataFrame(regionprops_table(
-                labels, input_img, properties=('label', 'bbox', 'area', 'centroid_weighted', 'intensity_mean')
-                )).rename(
-                    columns={**CENTROID_COLUMNS_REMAPPING,
-                        'bbox-0': 'z_min',
-                        'bbox-1': 'y_min',
-                        'bbox-2': 'x_min',
-                        'bbox-3': 'z_max',
-                        'bbox-4': 'y_max',
-                        'bbox-5': 'x_max'
-                        }
-                    )
-            )
+        p=np.subtract(shape,arr.shape)
+        ps = tuple((0,n) for n in p)
+        arr=np.pad(arr,ps,mode)
+        return arr
+    
+def crop_to_shape(arr, shape):
+    '''
+    Crops an array to a given shape (list or tuple) at center.
+    Shape must be same length as array ndim.
+    Crops on both sides as far as possible, crops rest at start of each ndim.
+    Returns cropped array.
+    '''
+           
+    new_s=np.subtract(arr.shape,shape)//2
+    assert all(new_s>=0), 'Cannot crop to larger than original size.'
+    s=tuple([slice(None,None) if s==0 else slice(s,-s) for s in new_s])
+    arr=arr[s]
+    if arr.shape == shape:
+        return arr
+    else:
+        new_s=np.subtract(arr.shape,shape)
+        s=tuple([slice(s,None) for s in new_s])
+        return arr[s]
+    
+def crop_at_pos(arr, tl_pos, size):
+    '''
+    Crops an nd array to given size from a position in the
+    corner closest to the origin.
+    Enforce int type.
+    '''
+    s=tuple([slice(int(pos),int(pos+si)) for pos,si in zip(tl_pos,size)])
 
-    return spot_props, input_img, labels
+    return arr[s]
+
+def crop_to_center(arr, center, size):
+    #Crop array to size centered at center position.
+    s=tuple([slice(min(0,int(c-s//2)),max(int(c+s//2), arr_s)) for c, s, arr_s in zip(center,size,arr.shape)])
+    return arr[s]
 
 
 def drift_corr_coarse(t_img, o_img, downsample=1):
