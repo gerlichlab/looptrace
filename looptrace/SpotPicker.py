@@ -27,6 +27,7 @@ from scipy import ndimage as ndi
 import tqdm
 
 from gertils import ExtantFolder, NonExtantPath
+import spotfishing
 
 from looptrace import RoiImageSize, image_processing_functions as ip
 from looptrace.exceptions import MissingRoisTableException
@@ -45,6 +46,16 @@ DETECTION_METHOD_KEY = "detection_method"
 logger = logging.getLogger()
 
 SkipReasonsMapping = Mapping[int, Mapping[int, Mapping[int, str]]]
+
+
+def detect_spots_dog(input_image, *, threshold: NumberLike, expand_px: Optional[int] = 10) -> spotfishing.DetectionResult:
+    """Spot detection by difference of Gaussians filter"""
+    return spotfishing.detect_spots_dog(input_image, spot_threshold=threshold, expand_px=expand_px)
+
+
+def detect_spots_int(input_image, *, threshold: NumberLike, expand_px: Optional[int] = 1) -> spotfishing.DetectionResult:
+    """Spot detection by intensity filter"""
+    return spotfishing.detect_spots_int(input_image, spot_threshold=threshold, expand_px=expand_px)
 
 
 class RoiOrderingSpecification:
@@ -174,7 +185,8 @@ def detect_spot_single_fov_single_frame(
         # TODO: non-nullity requirement for crosstalk_channel is coupled to this condition, and this should be reflected in the types.
         bead_img = compute_downsampled_image(single_fov_img, frame=crosstalk_frame, channel=detection_parameters.crosstalk_channel, downsampling=detection_parameters.downsampling)
         img, _ = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
-    spot_props, _, _ = detection_parameters.detection_function(img, spot_threshold)
+    spot_detection_result: spotfishing.DetectionResult = detection_parameters.detection_function(img, threshold=spot_threshold)
+    spot_props: pd.DataFrame = spot_detection_result.table
     spot_props = detection_parameters.try_centering_spot_box_coordinates(spots_table=spot_props)
     columns_to_scale = ["z_min", "y_min", "x_min", "z_max", "y_max", "x_max", "zc", "yc", "xc"]
     spot_props[columns_to_scale] = spot_props[columns_to_scale] * detection_parameters.downsampling
@@ -381,7 +393,7 @@ class SpotPicker:
     @property
     def detection_function(self) -> Callable:
         try:
-            return {DetectionMethod.INTENSITY.value: ip.detect_spots_int, DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC: ip.detect_spots}[self.detection_method_name]
+            return {DetectionMethod.INTENSITY.value: detect_spots_int, DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC: detect_spots_dog}[self.detection_method_name]
         except KeyError as e:
             raise ValueError(f"Illegal value for spot detection method in config: {self.detection_method_name}") from e
 

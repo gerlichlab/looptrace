@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 from pandas.testing import assert_frame_equal
 import pytest
 
-from looptrace.image_processing_functions import detect_spots as detect_spots_dog, detect_spots_int
+from looptrace.SpotPicker import detect_spots_dog, detect_spots_int
 from looptrace import read_table_pandas
 
 
@@ -37,17 +37,14 @@ def test_spot_detection__matches_expectation_on_data_examples(detect, func_type_
     input_file_name = f"img__{data_name}__smaller.npy"
     output_file_name=f"expect__spots_table__{func_type_name}__threshold_{threshold}__{data_name}.csv"
     input_image = read_input_data(input_file_name)
-    obs_table, _, _ = detect(input_image, threshold)
-    obs_table = obs_table[["zc", "yc", "xc", "intensity_mean"]]
+    obs_result = detect(input_image, threshold=threshold)
+    obs_table = obs_result.table[["zc", "yc", "xc", "intensity_mean"]]
     exp_table = read_expected_output_table(output_file_name)
-    try:
-        assert_frame_equal(obs_table, exp_table)
-    except AssertionError:
-        print("OBS:\n")
-        print(obs_table)
-        print("EXP:\n")
-        print(exp_table)
-        raise
+    print("OBS (below):\n")
+    print(obs_table)
+    print("EXPECTED (below):\n")
+    print(exp_table)
+    assert_frame_equal(obs_table, exp_table)
 
 
 class InOrOut(Enum):
