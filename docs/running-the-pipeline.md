@@ -34,13 +34,17 @@ Once you have the [minimal requirements](#minimal-requirements), this will be th
 1. __Login__ to the machine: something like `ssh username@ask-Vince-or-Chris-for-the-machine-domain`
 1. __Path creation__: Assure that the necessary filepaths exist; particularly easy to forget are the path to the folder in which analysis output will be placed (the value of `analysis_path` in the parameters config file), and the path to the folder in which the pipeline will place its own files (`--pypiper-folder` argument at the command-line). See the [data layout section](#data-layout-and-organisation).
 1. `tmux`: attach to an existing `tmux` session, or start a new one. See the [tmux section](#tmux) for more info.
-1. __Docker__: Start the relevant Docker container:
+1. __Docker__: Start the relevant Docker container, using just `docker` rather than `nvidia-docker` if you _don't_ want to run deconvolution (setting `decon_iter` to $0$, see [the parameters configuration file](./parameters-configuration-file.md))
     ```shell
     nvidia-docker run --rm -it -u root -v /groups/gerlich/experiments/.../00XXXX:/home/experiment looptrace:2023-12-12 bash
     ```
 1. __Run pipeline__: Once in the Docker container, run the pipeline, replacing the file and folder names as needed / desired:
     ```shell
-    python /looptrace/bin/cli/run_processing_pipeline.py --rounds-config /home/experiment/looptrace_00XXXX.rounds.json --params-config /home/experiment/looptrace_00XXXX.params.yaml --images-folder /home/experiment/images_all -O /home/experiment/pypiper_output
+    python /looptrace/bin/cli/run_processing_pipeline.py \
+        --rounds-config /home/experiment/looptrace_00XXXX.rounds.json \
+        --params-config /home/experiment/looptrace_00XXXX.params.yaml  \
+        --images-folder /home/experiment/images_all \
+        --pypiper-folder /home/experiment/pypiper_output
     ```
 1. __Detach__: `Ctrl+b d` -- for more, see the [tmux section](#tmux).
 
@@ -49,11 +53,11 @@ Once you have the [minimal requirements](#minimal-requirements), this will be th
 In this context, for running the pipeline, think of the _terminal multiplexer_ (`tmux`) as a way to start a long-running process and be assured that an interruption in Internet connectivity (e.g., computer sleep or network failure) won't also be an interruption in the long-running process. If your connection to the remote machine is interrupted, but you've started your long-running process in `tmux`, that process won't be interrupted.
 
 ### Basic usage
-1. Start a session: `tmux`
-1. Detach from the active session: `Ctrl+b d` (i.e., press `Ctrl` and `b` at the same time, and then `d` afterward.)
-1. List sessions: `tmux list-sessions`
-1. Attach to a session: `tmux attach -t <session-number>`
-1. Detach again: `Ctrl+b d`
-1. (Eventually) stop a session: `tmux kill-session -t <session-number>`
+* Start a session: `tmux`
+* Detach from the active session: `Ctrl+b d` (i.e., press `Ctrl` and `b` at the same time, and then `d` afterward.)
+* List sessions: `tmux list-sessions`
+* Attach to a session: `tmux attach -t <session-number>`
+* Detach again: `Ctrl+b d`
+* (Eventually) stop a session: `tmux kill-session -t <session-number>`
 
 For more, search for "tmux key bindings" or similar, or refer to [this helpful Gist](https://gist.github.com/mloskot/4285396)/
