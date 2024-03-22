@@ -127,7 +127,7 @@ object CombineImagingFolders:
             UnusableTimepointUpdateException(oldPath, newTime, _),  
             (oldTime, i) => 
                 val (preFields, postFields) = oldFields.splitAt(i)
-                val newFields = preFields :+ Timepoint.printForFilename(newTime) ++ postFields.tail
+                val newFields: Array[String] = preFields ++ Array(Timepoint.printForFilename(newTime)) ++ postFields.tail
                 val fn = newFields `mkString` sep
                 oldPath -> (targetFolder / fn)
             )
