@@ -158,7 +158,6 @@ object LabelAndFilterLocusSpots:
             opt[os.Path]("pointsDataOutputFolder")
                 .required()
                 .action((d, c) => c.copy(pointsDataOutputFolder = d))
-                .validate(d => os.isDir(d).either(s"Alleged folder for points data output isn't an extant directory: $d", ()))
                 .text("Path to folder in which to place the data to support overlaying spot image visualisation with centroid and QC results"),
             opt[PositiveInt]("roiPixelsZ")
                 .required()
@@ -195,7 +194,7 @@ object LabelAndFilterLocusSpots:
             opt[os.Path]("analysisOutputFolder")
                 .action((d, c) => c.copy(analysisOutputFolder = d.some))
                 .validate(d => os.isDir(d).either(s"Alleged output folder isn't a directory: $d", ()))
-                .text("Path to the folder in whicht to place the filtered and unfiltered CSV files with output records"),
+                .text("Path to the folder in which to place the filtered and unfiltered CSV files with output records"),
         )
 
         OParser.parse(parser, args, CliConfig()) match {
@@ -206,16 +205,16 @@ object LabelAndFilterLocusSpots:
                 val roiSizeZ = 
                 workflow(
                     roiSize = LocusSpotQC.RoiImageSize(opts.roiSizeZ, opts.roiSizeY, opts.roiSizeX),
-                    opts.configuration,
-                    parserConfiguration, 
-                    opts.traces, 
-                    opts.maxDistanceToRegionCenter, 
-                    opts.minSignalToNoise, 
-                    opts.maxSigmaXY, 
-                    opts.maxSigmaZ, 
-                    opts.minTraceLength, 
-                    analysisOutfolder, 
-                    opts.pointsDataOutputFolder,
+                    imagingRoundsConfiguration = opts.configuration,
+                    parserConfigPathOrPath = parserConfiguration, 
+                    tracesFile = opts.traces, 
+                    maxDistFromRegion = opts.maxDistanceToRegionCenter, 
+                    minSignalToNoise = opts.minSignalToNoise, 
+                    maxSigmaXY = opts.maxSigmaXY, 
+                    maxSigmaZ = opts.maxSigmaZ, 
+                    minTraceLength = opts.minTraceLength, 
+                    analysisOutfolder = analysisOutfolder, 
+                    pointsOutfolder = opts.pointsDataOutputFolder,
                     )
         }
     }
@@ -383,8 +382,8 @@ object LabelAndFilterLocusSpots:
         basename: String, 
         delimiter: Delimiter,
         ): Unit = {
-        require(os.isDir(analysisOutfolder), s"Analysis output folder path isn't a directory: $analysisOutfolder")
-        require(os.isDir(pointsOutfolder), s"Points output folder path isn't a directory: $pointsOutfolder")
+        if (!os.isDir(analysisOutfolder)) { os.makeDir.all(analysisOutfolder) }
+        if (!os.isDir(pointsOutfolder)) { os.makeDir.all(pointsOutfolder) }
         // Include placeholder for field for label displayability column, which we don't need for CSV writing (only JSON, handled via codec).
         val (withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol, _) = labelsOf[LocusSpotQC.ResultRecord]
         Alternative[List].separate(NonnegativeInt.indexed(records.toList).map { case (rec@(_, arr), recnum) => 
