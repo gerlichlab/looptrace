@@ -206,7 +206,7 @@ object LabelAndFilterLocusSpots:
                 workflow(
                     roiSize = LocusSpotQC.RoiImageSize(opts.roiSizeZ, opts.roiSizeY, opts.roiSizeX),
                     imagingRoundsConfiguration = opts.configuration,
-                    parserConfigPathOrPath = parserConfiguration, 
+                    parserConfigPathOrConf = parserConfiguration, 
                     tracesFile = opts.traces, 
                     maxDistFromRegion = opts.maxDistanceToRegionCenter, 
                     minSignalToNoise = opts.minSignalToNoise, 
