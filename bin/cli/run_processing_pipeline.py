@@ -267,8 +267,8 @@ class LooptracePipeline(pypiper.Pipeline):
             ("drift_correction_accuracy_visualisation", run_drift_correction_accuracy_visualisation, lambda _1, params_config, _3: (params_config, )), 
             (SPOT_DETECTION_STAGE_NAME, run_spot_detection, take3), # generates *_rois.csv (regional spots)
             ("spot_proximity_filtration", run_spot_proximity_filtration, take3),
-            ("spot_counts_visualisation__regional", plot_spot_counts, take2_with_spot_type(SpotType.REGIONAL)), 
             ("spot_nucleus_filtration", run_spot_nucleus_filtration, take3), 
+            ("spot_counts_visualisation__regional", plot_spot_counts, take2_with_spot_type(SpotType.REGIONAL)), 
             ("spot_bounding", run_spot_bounding, take3), # computes pad_x_min, etc.; writes *_dc_rois.csv (much bigger, since regional spots x frames)
             ("spot_extraction", run_spot_extraction, take3),
             ("spot_zipping", run_spot_zipping, lambda _1, params_config, images_folder: (params_config, images_folder)),
