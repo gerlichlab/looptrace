@@ -164,7 +164,6 @@ def qc_locus_spots_and_prep_points(rounds_config: ExtantFile, params_config: Ext
         prog_path,
         "--configuration", 
         str(rounds_config.path),
-        prog_path, 
         "--tracesFile",
         str(H.traces_path_enriched),
         "--roiPixelsZ",
