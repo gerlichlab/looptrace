@@ -10,7 +10,7 @@ from looptrace import read_table_pandas
 
 
 def apply_frame_names_and_spatial_information(traces_file: Path, frame_names: List[str]) -> pd.DataFrame:
-    traces, _ = read_traces_and_apply_frame_names(traces_file=traces_file, frame_names=frame_names)
+    traces = read_traces_and_apply_frame_names(traces_file=traces_file, frame_names=frame_names)
     if "ref_dist" not in traces.columns:
         traces["ref_dist"] = compute_ref_frame_spatial_information(traces)
     return traces
@@ -27,7 +27,7 @@ def compute_ref_frame_spatial_information(df: pd.DataFrame) -> pd.DataFrame:
     return np.sqrt((df['z_ref'] - df['z'])**2 + (df['y_ref'] - df['y'])**2 + (df['x_ref'] - df['x'])**2)
 
 
-def read_traces_and_apply_frame_names(traces_file: Path, frame_names: List[str]) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+def read_traces_and_apply_frame_names(traces_file: Path, frame_names: List[str]) -> pd.DataFrame:
     print(f"{len(frame_names)} frame names: {', '.join(frame_names)}")
     print(f"Reading traces: {traces_file}")
     traces = read_table_pandas(traces_file)
