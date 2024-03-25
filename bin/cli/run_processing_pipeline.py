@@ -161,6 +161,7 @@ def qc_locus_spots_and_prep_points(rounds_config: ExtantFile, params_config: Ext
         "java", 
         "-cp",
         str(LOOPTRACE_JAR_PATH),
+        prog_path,
         "--configuration", 
         str(rounds_config.path),
         prog_path, 
