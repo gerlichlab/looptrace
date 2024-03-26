@@ -131,6 +131,11 @@ class Tracer:
         return self.image_handler.images[self._input_name]
 
     @property
+    def locus_spot_images_root_path(self) -> Path:
+        """Where to write the locus-specific spot images visualisation data"""
+        return self.image_handler.locus_spot_images_root_path
+
+    @property
     def nanometers_per_pixel_xy(self) -> NumberLike:
         return self.config["xy_nm"]
 
