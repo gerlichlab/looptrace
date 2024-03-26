@@ -227,12 +227,11 @@ def drift_correct_nuclei(rounds_config: ExtantFile, params_config: ExtantFile, i
     return N.coarse_drift_correction_workflow()
 
 
-def prep_locus_specific_spots_visualisation(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> Tuple[Path, List[Path]]:
+def prep_locus_specific_spots_visualisation(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> List[Path]:
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     T = Tracer(H)
-    all_one_zarr = T.write_spot_images_subset_to_single_highly_nested_zarr()
     per_fov_zarr = T.write_all_spot_images_to_one_per_fov_zarr()
-    return all_one_zarr, per_fov_zarr
+    return per_fov_zarr
 
 
 class LooptracePipeline(pypiper.Pipeline):

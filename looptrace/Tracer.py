@@ -115,13 +115,6 @@ class Tracer:
         name_data_pairs = compute_spot_images_multiarray_per_fov(npz=self._images_wrapper)
         return write_jvm_compatible_zarr_store(name_data_pairs, root_path=self.locus_spot_images_root_path, dtype=np.uint16, overwrite=overwrite)
 
-    def write_spot_images_subset_to_single_highly_nested_zarr(self, overwrite: bool = False, stop_after_n: Optional[int] = None) -> Path:
-        data = compute_spot_images_subset_highly_nested_multiarray(npz=self._images_wrapper, stop_after_n=stop_after_n)
-        target = Path(self.image_handler.analysis_path) / "spot_images_subset.zarr"
-        dataset = zarr.creation.open_array(target, shape=data.shape, dtype=np.uint16, mode="w" if overwrite else "w-")
-        dataset[:] = data
-        return target
-
     @property
     def images(self) -> Iterable[np.ndarray]:
         """Iterate over the small, single spot images for tracing (1 per timepoint per ROI)."""
@@ -411,67 +404,6 @@ def compute_spot_images_multiarray_per_fov(npz: Union[str, Path, NPZ_wrapper]) -
         (pos, np.stack([npz[fn] for _, fn in pos_group])) 
         for pos, pos_group in itertools.groupby(keyed, lambda k_: k_[0].position)
         ]
-
-
-def compute_spot_images_subset_highly_nested_multiarray(npz: Union[str, Path, NPZ_wrapper], stop_after_n: Optional[int] = None) -> np.ndarray:
-    """
-    For the given spot images NPZ file, create a multidimensional array ready to write as ZARR.
-
-    The expectation is that the data underlying the NPZ input will be a list of 4D arrays, each corresponding to 
-    one of the retained (after filtering) regional barcode spots. The 4 dimensions: (time, z, y, x). 
-    The time dimension represents the extraction of the bounding box corresponding to the spot ROI, extracting 
-    pixel intensity data in each of the imaging timepoints for the entire experiment.
-
-    The expectation is that this data is flattened over the hypothetical FOV, regional barcode, and channel dimensions. 
-    That is, the underlying arrays may come from any field of view imaged during the experiment, any channel, and 
-    any of the regional barcode imaging timepoints. The names of the underlying arrays in the NPZ must encode 
-    this information (about FOV, regional barcode timepoint, and ROI ID).
-
-    Note that since the arrays must be rectangular (not ragged), the length of the ROI ID axis/dimension will be 
-    equal to the minimum number of ROIs in any field of view (FOV).
-
-    Parameters
-    ----------
-    npz : str or pathlib.Path or looptrace.image_io.NPZ_wrapper
-        The collection of 4D arrays representing the extraction of data from each regional spot ROI across all 
-        timepoints in the experiment
-    stop_after_n : int, optional
-        Number of fields of view (FOVs) to use before stopping; useful for testing or sampling a small data portion. 
-        If not provided, all available fields of view will be used.
-
-    Returns
-    -------
-    np.ndarray
-        An array created by stacking--according to regional barcode and field of view--the 4D arrays in the input. 
-        The output will have dimensions where the values index (FOV, ref_frame, ROI ID, time, z, y, x). 
-        Note, however, that the indices are 0-based inclusive, so the real values of e.g. regional barcode timepoint 
-        and ROI ID will be reset.
-    """
-    npz, keyed = _prep_npz_to_zarr(npz)
-    stop_after_n = sys.maxsize if stop_after_n is None else stop_after_n
-    by_pos_by_time = {}
-    for i, (pos, pos_group) in enumerate(itertools.groupby(keyed, lambda pair: pair[0].position)):
-        if i == stop_after_n:
-            break
-        for time, time_group in itertools.groupby(pos_group, lambda pair: pair[0].ref_frame):
-            by_pos_by_time.setdefault(pos, {})[time] = [fn for _, fn in time_group]
-    if not by_pos_by_time:
-        raise ValueError("No images to write!")
-    num_times_by_pos = [(p, len(g)) for p, g in by_pos_by_time.items()]
-    num_times = max(nt for _, nt in num_times_by_pos)
-    print(f"Will have data from {num_times} timepoints per position")
-    bad_time_positions = [(p, nt) for p, nt in num_times_by_pos if nt != num_times]
-    if bad_time_positions:
-        raise ValueError(f"Positions with fewer than max number of times ({num_times}): {bad_time_positions}")
-    num_per_time_to_use = min(len(tg) for _, pg in by_pos_by_time.items() for _, tg in pg.items())
-    print(f"Will use data from {num_per_time_to_use} ROIs per timepoint per position")
-    return np.stack([
-        np.stack([
-            np.stack([npz[fn] for _, fn in itertools.takewhile(lambda i_: i_[0] < num_per_time_to_use, enumerate(tg))]) 
-            for _, tg in pg.items()
-        ]) 
-        for _, pg in by_pos_by_time.items()
-    ])
 
 
 def _prep_npz_to_zarr(npz: Union[str, Path, NPZ_wrapper]) -> Tuple[NPZ_wrapper, Iterable[Tuple[RoiOrderingSpecification.FilenameKey, str]]]:
