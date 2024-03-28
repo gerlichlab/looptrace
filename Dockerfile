@@ -8,11 +8,7 @@ RUN apt-get update -y && \
     apt-get install build-essential software-properties-common -y && \
     add-apt-repository ppa:ubuntu-toolchain-r/test -y && \
     apt-get update -y && \
-    apt-get install gcc-9 g++-9 -y && \
-    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 60 --slave /usr/bin/g++ g++ /usr/bin/g++-9 && \
-    update-alternatives --config gcc && \
-    apt-get install git wget libz-dev libbz2-dev liblzma-dev -y && \
-    apt-get install vim -y
+    apt-get install git wget vim -y
 
 # Copy repo code, to be built later.
 RUN mkdir /looptrace
