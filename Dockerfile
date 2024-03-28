@@ -3,10 +3,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG C.UTF-8  
 ENV LC_ALL C.UTF-8
 
-# Include the cuda-compat-11-4 version to match what's on whatever machine for nvidia driver. Check nvidia-smi output.
-# Include vim to facilitate editing the package and other files when in development
 RUN apt-get update -y && \
-    apt-get upgrade -y && \
     apt-get dist-upgrade -y && \
     apt-get install build-essential software-properties-common -y && \
     add-apt-repository ppa:ubuntu-toolchain-r/test -y && \
@@ -15,7 +12,6 @@ RUN apt-get update -y && \
     update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 60 --slave /usr/bin/g++ g++ /usr/bin/g++-9 && \
     update-alternatives --config gcc && \
     apt-get install git wget libz-dev libbz2-dev liblzma-dev -y && \
-    apt-get install cuda-compat-11-4 -y && \
     apt-get install vim -y
 
 # Copy repo code, to be built later.
@@ -25,15 +21,15 @@ COPY . /looptrace
 RUN mv /looptrace/target/scala-3.3.3/looptrace-assembly-0.3.0-SNAPSHOT.jar /looptrace/looptrace
 
 # Install new-ish R and necessary packages.
-RUN echo "Installing R..." && \
-    /bin/bash /looptrace/setup_image/allow_new_R.sh && \
-    apt-get install r-base -y && \
-    R -e "install.packages(c('argparse', 'data.table', 'ggplot2', 'stringi'), dependencies=TRUE, repos='http://cran.rstudio.com/')" && \
-    echo "Installed R!"
+#RUN echo "Installing R..." && \
+#    /bin/bash /looptrace/setup_image/allow_new_R.sh && \
+#    apt-get install r-base -y && \
+#    R -e "install.packages(c('argparse', 'data.table', 'ggplot2', 'stringi'), dependencies=TRUE, repos='http://cran.rstudio.com/')" && \
+#    echo "Installed R!"
 
 # Install minimal Java 21 runtime, in updates repo for Ubuntu 20 (focal) as of 2024-01-19.
-RUN apt-get update -y && \
-    apt-get install openjdk-21-jre-headless -y
+#RUN apt-get update -y && \
+#    apt-get install openjdk-21-jre-headless -y
 
 # Install miniconda.
 ## The installation home should be /opt/conda; if not, we need -p /path/to/install/home
@@ -47,12 +43,8 @@ ENV PATH=/opt/conda/bin:${PATH}
 # This group of extras should be declared in the pyproject.toml.
 RUN pip install .[deconvolution,pipeline]
 
-RUN cd /opt/conda/lib/python3.10/site-packages/tensorrt_libs && \
-    ln -s libnvinfer.so.8 libnvinfer.so.7 && \
-    ln -s libnvinfer_plugin.so.8 libnvinfer_plugin.so.7
-
-# For the CUDA-based container, we only need to add the tensorrt libraries path.
-ENV LD_LIBRARY_PATH=/opt/conda/lib/python3.10/site-packages/tensorrt_libs:/usr/local/cuda-11.4/compat:${LD_LIBRARY_PATH}
+# Point to the CUDA libraries for integration with TensorFlow
+ENV LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/opt/conda/lib/python3.10/site-packages/nvidia/cudnn/lib:/usr/local/cuda-12.3/targets/x86_64-linux/lib
 
 # Establish the current experiment data mount point, for convenient config file match and path operations.
 ENV CURR_EXP_HOME=/home/experiment
