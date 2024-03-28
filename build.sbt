@@ -29,6 +29,7 @@ lazy val root = (project in file("."))
     ),
     libraryDependencies ++= Seq(
       catsCore,
+      clij2,
       mouse,
       os, 
       scalaCsv,

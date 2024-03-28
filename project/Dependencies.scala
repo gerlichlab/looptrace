@@ -8,6 +8,8 @@ object Dependencies {
     
     /* Core libraries */
     lazy val catsCore = "org.typelevel" %% "cats-core" % "2.10.0"
+    // https://mvnrepository.com/artifact/net.haesleinhuepf/clij2_
+    lazy val clij2 = "net.haesleinhuepf" % "clij2_" % "2.5.3.1"
     lazy val logging = Seq(
         "ch.qos.logback" % "logback-classic" % "1.4.14", 
         "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
