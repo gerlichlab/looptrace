@@ -21,15 +21,15 @@ COPY . /looptrace
 RUN mv /looptrace/target/scala-3.3.3/looptrace-assembly-0.3.0-SNAPSHOT.jar /looptrace/looptrace
 
 # Install new-ish R and necessary packages.
-#RUN echo "Installing R..." && \
-#    /bin/bash /looptrace/setup_image/allow_new_R.sh && \
-#    apt-get install r-base -y && \
-#    R -e "install.packages(c('argparse', 'data.table', 'ggplot2', 'stringi'), dependencies=TRUE, repos='http://cran.rstudio.com/')" && \
-#    echo "Installed R!"
+RUN echo "Installing R..." && \
+    /bin/bash /looptrace/setup_image/allow_new_R.sh && \
+    apt-get install r-base -y && \
+    R -e "install.packages(c('argparse', 'data.table', 'ggplot2', 'stringi'), dependencies=TRUE, repos='http://cran.rstudio.com/')" && \
+    echo "Installed R!"
 
 # Install minimal Java 21 runtime, in updates repo for Ubuntu 20 (focal) as of 2024-01-19.
-#RUN apt-get update -y && \
-#    apt-get install openjdk-21-jre-headless -y
+RUN apt-get update -y && \
+    apt-get install openjdk-21-jre-headless -y
 
 # Install miniconda.
 ## The installation home should be /opt/conda; if not, we need -p /path/to/install/home
