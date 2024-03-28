@@ -44,7 +44,7 @@ ENV PATH=/opt/conda/bin:${PATH}
 RUN pip install .[deconvolution,pipeline]
 
 # Point to the CUDA libraries for integration with TensorFlow
-ENV LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/opt/conda/lib/python3.10/site-packages/nvidia/cudnn/lib:/usr/local/cuda-12.3/targets/x86_64-linux/lib
+ENV LD_LIBRARY_PATH=/opt/conda/lib/python3.10/site-packages/nvidia/cudnn/lib:/usr/local/cuda-12.3/targets/x86_64-linux/lib
 
 # Establish the current experiment data mount point, for convenient config file match and path operations.
 ENV CURR_EXP_HOME=/home/experiment
