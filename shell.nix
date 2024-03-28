@@ -4,11 +4,11 @@
     ref = "refs/tags/23.11";
   }) {}, 
   pipeline ? false,
-  new-mac-napari ? true,
+  test ? true,
   deconvolution ? false,
   analysis ? false, 
   interactive-visualisation ? true,
-  test ? true,
+  new-mac-napari ? true,
   rDev ? true,
   pyDev ? true, 
   scalaDev ? true, 
@@ -21,13 +21,15 @@ let baseBuildInputs = with pkgs; [ poetry stdenv.cc.cc.lib zlib ] ++ [ pkgs.${jd
       packages = with pkgs.rPackages; [ argparse data_table ggplot2 stringi ] ++ 
         (if rDev then [ pkgs.rPackages.languageserver ] else [ ]);
     };
-    poetryExtras = [] ++ 
-      (if test then [ "test" "pipeline" ] else (
-        (if pipeline then [ "pipeline" ] else []) ++
-        (if analysis then [ "analysis" ] else []) ++ 
-        (if interactive-visualisation then [ "interactive-visualisation" ] else []) ++
-        (if pyDev then ["dev"] else [])
-      ));
+    poetryExtras = [] ++ (
+      (if pipeline then [ "pipeline" ] else []) ++
+      (if test then [ "test" "pipeline" ] else []) ++ 
+      (if deconvolution then [ "deconvolution" ] else []) ++
+      (if analysis then [ "analysis" ] else []) ++ 
+      (if interactive-visualisation then [ "interactive-visualisation" ] else []) ++
+      (if new-mac-napari then [ "new-mac-napari" ] else []) ++
+      (if pyDev then ["dev"] else [])
+    );
     poetryInstallExtras = (
       if poetryExtras == [] then ""
       else pkgs.lib.concatStrings [ " -E " (pkgs.lib.concatStringsSep " -E " poetryExtras) ]
@@ -51,7 +53,9 @@ pkgs.mkShell {
     export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
     poetry env use "${py310}/bin/python"
     export LD_LIBRARY_PATH="${pkgs.zlib}/lib:${pkgs.stdenv.cc.cc.lib}/lib"
-    poetry install -vv --sync${poetryInstallExtras}
+    installcmd="poetry install -vv --sync${poetryInstallExtras}"
+    echo "Running installation command: $installcmd"
+    eval "$installcmd"
     source "$(poetry env info --path)/bin/activate"
   '';
 }
