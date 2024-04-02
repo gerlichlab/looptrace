@@ -157,17 +157,17 @@ object ImagingRoundsConfiguration:
                 .toValidated
         val crudeLocusGroupingNel: ValidatedNel[String, Set[LocusGroup]] = 
             data.get("locusGrouping") match {
-                case None => Set().validNel
+                case None | Some(ujson.Null) => Set().validNel
                 case Some(fullJson) => safeReadAs[Map[Int, List[Int]]](fullJson)
-                .flatMap(_.toList.traverse{ 
-                    (regionTimeRaw, lociTimesRaw) => for {
-                        regTime <- Timepoint.fromInt(regionTimeRaw).leftMap("Bad region time as key in locus group! " ++ _)
-                        maybeLociTimes <- lociTimesRaw.traverse(Timepoint.fromInt).leftMap("Bad locus time(s) in locus group! " ++ _)
-                        lociTimes <- maybeLociTimes.toNel.toRight(s"Empty locus times for region time $regionTimeRaw!").map(_.toNes)
-                    } yield LocusGroup(regTime, lociTimes)
-                })
-                .map(_.toSet)
-                .toValidatedNel
+                    .flatMap(_.toList.traverse{ 
+                        (regionTimeRaw, lociTimesRaw) => for {
+                            regTime <- Timepoint.fromInt(regionTimeRaw).leftMap("Bad region time as key in locus group! " ++ _)
+                            maybeLociTimes <- lociTimesRaw.traverse(Timepoint.fromInt).leftMap("Bad locus time(s) in locus group! " ++ _)
+                            lociTimes <- maybeLociTimes.toNel.toRight(s"Empty locus times for region time $regionTimeRaw!").map(_.toNes)
+                        } yield LocusGroup(regTime, lociTimes)
+                    })
+                    .map(_.toSet)
+                    .toValidatedNel
             }
         val crudeRegionGroupingNel: ValidatedNel[String, (DistanceThreshold, Option[(RegionGrouping.Semantic, NonEmptyList[NonEmptySet[Timepoint]])])] = 
             data.get("regionGrouping") match {
@@ -212,7 +212,7 @@ object ImagingRoundsConfiguration:
             }
         val tracingExclusionsNel: ValidatedNel[String, Set[Timepoint]] = 
             data.get("tracingExclusions") match {
-                case None => Validated.Valid(Set())
+                case None | Some(ujson.Null) => Validated.Valid(Set())
                 case Some(json) => safeReadAs[List[Int]](json)
                     .flatMap(_.traverse(Timepoint.fromInt))
                     .map(_.toSet)

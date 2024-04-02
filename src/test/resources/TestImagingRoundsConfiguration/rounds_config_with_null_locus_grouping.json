@@ -1,0 +1,23 @@
+{
+    "regionGrouping": {
+        "semantic": "permissive",
+        "groups": [[8, 9], [10, 11]], 
+        "minimumPixelLikeSeparation": 5
+    },
+    "imagingRounds": [
+        {"time": 0, "name": "pre_image", "isBlank": true},
+        {"time": 1, "probe": "Dp001"},
+        {"time": 2, "probe": "Dp002"},
+        {"time": 3, "probe": "Dp003"},
+        {"time": 4, "probe": "Dp006"},
+        {"time": 5, "probe": "Dp007"},
+        {"time": 6, "probe": "Dp001", "repeat": 1},
+        {"time": 7, "name": "blank_01", "isBlank": true},
+        {"time": 8, "probe": "Dp101", "isRegional": true},
+        {"time": 9, "probe": "Dp102", "isRegional": true},
+        {"time": 10, "probe": "Dp103", "isRegional": true},
+        {"time": 11, "probe": "Dp104", "isRegional": true}
+    ],
+    "locusGrouping": null,
+    "tracingExclusions": [0, 8, 9, 10, 11]
+}
