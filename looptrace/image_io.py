@@ -243,7 +243,13 @@ def nuc_multipos_single_time_max_z_proj_zarr(
     bad_name_shape_pairs = [(name, img.shape) for name, img in name_img_pairs if len(img.shape) != len(axes)]
     if bad_name_shape_pairs:
         raise ValueError(f"{len(bad_name_shape_pairs)}/{len(name_img_pairs)} images with bad shape given {len(axes)} axes: {bad_name_shape_pairs}")
-    write_jvm_compatible_zarr_store(name_data_pairs=[(p + ".zarr", img) for p, img in name_img_pairs], root_path=root_path, dtype=dtype, metadata=metadata, overwrite=overwrite)
+    write_jvm_compatible_zarr_store(
+        name_data_pairs=[(p if p.endswith(".zarr") else p + ".zarr", img) for p, img in name_img_pairs], 
+        root_path=root_path, 
+        dtype=dtype, 
+        metadata=metadata, 
+        overwrite=overwrite,
+        )
 
 
 def write_jvm_compatible_zarr_store(

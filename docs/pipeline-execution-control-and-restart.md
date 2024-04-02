@@ -68,3 +68,4 @@ Below are the sequential pipeline stage names.
 * pairwise_distances__locus_specific
 * pairwise_distances__regional
 * locus_specific_spots_visualisation_data_prep
+* nuclear_masks_visualisation_data_prep

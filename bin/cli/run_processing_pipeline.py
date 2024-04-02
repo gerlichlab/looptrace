@@ -18,6 +18,13 @@ from looptrace.ImageHandler import ImageHandler
 from looptrace.NucDetector import NucDetector
 from looptrace.Tracer import Tracer, run_frame_name_and_distance_application
 from looptrace.conversion_to_zarr import one_to_one as run_zarr_production
+from looptrace.image_processing_functions import (
+    extract_labeled_centroids, 
+    X_CENTER_COLNAME,  
+    Y_CENTER_COLNAME, 
+    Z_CENTER_COLNAME,
+)
+from looptrace.integer_naming import get_position_name_short
 
 from pipeline_precheck import workflow as pretest
 from nuc_label import workflow as run_nuclei_detection
@@ -233,6 +240,19 @@ def prep_locus_specific_spots_visualisation(rounds_config: ExtantFile, params_co
     return per_fov_zarr
 
 
+def prep_nuclear_masks_data(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> list[Path]:
+    """Write simple CSV data for visualisation of nuclear masks with napari plugin."""
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
+    N = NucDetector(H)
+    for i, nuc_img in enumerate(N.images_for_segmentation):
+        fn = f"{get_position_name_short(i)}.nuclear_masks.csv"
+        fp = Path(H.images_folder) / fn
+        print(f"Writing nuclear masks data for FOV {i}: {fp}")
+        cols = ["label", Z_CENTER_COLNAME, Y_CENTER_COLNAME, X_CENTER_COLNAME]
+        table = extract_labeled_centroids(nuc_img)
+        table[cols].to_csv(fp, index=None)
+
+
 class LooptracePipeline(pypiper.Pipeline):
     """Main looptrace processing pipeline"""
 
@@ -277,6 +297,7 @@ class LooptracePipeline(pypiper.Pipeline):
             ("pairwise_distances__locus_specific", compute_locus_pairwise_distances, take2),
             ("pairwise_distances__regional", compute_region_pairwise_distances, take2),
             ("locus_specific_spots_visualisation_data_prep", prep_locus_specific_spots_visualisation, take3),
+            ("nuclear_masks_visualisation_data_prep", prep_locus_specific_spots_visualisation, take3),
         ]
 
     def stages(self) -> List[Callable]:

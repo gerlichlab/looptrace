@@ -403,26 +403,6 @@ class NucDetector:
         coarse_drifts.to_csv(outfile)
         return outfile
 
-    def update_masks_after_qc(self, new_mask: np.ndarray, old_mask: np.ndarray, mask_name: str, position: str):
-        s = tuple([slice(None, None, 4)] * len(new_mask.ndim))
-        if not np.allclose(new_mask[s], old_mask[s]):
-            print("Segmentation labels have changed; resaving...")
-            nuc_mask = _relabel_nucs(new_mask)
-            pos_index = self.image_handler.image_lists[mask_name].index(position)
-            self.image_handler.images[mask_name] = nuc_mask.astype(np.uint16)
-            # TODO: need to adjust axes argument probably.
-            # See: https://github.com/gerlichlab/looptrace/issues/245
-            image_io.single_position_to_zarr(
-                images=self.image_handler.images[mask_name][pos_index], 
-                path = self.nuclear_masks_path / position, 
-                name=mask_name, 
-                axes=('z','y','x') if self.do_in_3d else ('y','x'), 
-                dtype=np.uint16, 
-                chunk_split=(1,1),
-                )
-        else:
-            print("Nothing to update, as all values are approximately equal")
-
 
 def _mask_to_binary(mask):
     '''Converts masks from nuclear segmentation to masks with 

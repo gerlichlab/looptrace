@@ -9,6 +9,7 @@ EMBL Heidelberg
 
 from typing import *
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 
 import scipy.ndimage as ndi
@@ -24,7 +25,22 @@ from looptrace.wrappers import phase_xcor
 __author__ = "Kai Sandvold Beckwith"
 __credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 
-CENTROID_COLUMNS_REMAPPING = {'centroid_weighted-0': 'zc', 'centroid_weighted-1': 'yc', 'centroid_weighted-2': 'xc'}
+X_CENTER_COLNAME = "xc"
+Y_CENTER_COLNAME = "yc"
+Z_CENTER_COLNAME = "zc"
+CENTROID_COLUMNS_REMAPPING = {
+    "centroid_weighted-0": Z_CENTER_COLNAME, 
+    "centroid_weighted-1": Y_CENTER_COLNAME, 
+    "centroid_weighted-2": X_CENTER_COLNAME,
+    }
+
+PixelValue = Union[np.uint8, np.uint16]
+
+
+def extract_labeled_centroids(img: npt.NDArray[PixelValue]) -> pd.DataFrame:
+    props = regionprops_table(img, properties=("label", "centroid"))
+    table = pd.DataFrame(props)
+    return table.rename(CENTROID_COLUMNS_REMAPPING)
 
 
 def update_roi_points(point_layer, roi_table, position, downscale):
