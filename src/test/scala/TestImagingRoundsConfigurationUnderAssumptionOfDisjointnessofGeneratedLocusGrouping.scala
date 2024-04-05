@@ -26,37 +26,12 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
     implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
 
     test("Example config parses correctly.") {
-<<<<<<< HEAD
         val expectedNonemptyLocusGrouping = 
             NonEmptySet.of(
                 8 -> NonEmptySet.of(1, 6),
                 9 -> NonEmptySet.one(2), 
                 10 -> NonEmptySet.of(3, 4),
                 11 -> NonEmptySet.one(5)
-=======
-        val exampleConfig: ImagingRoundsConfiguration = {
-            val configFile = getResourcePath("example_imaging_round_configuration.json")
-            ImagingRoundsConfiguration.unsafeFromJsonFile(configFile)
-        }
-        exampleConfig.numberOfRounds shouldEqual 12
-        exampleConfig.proximityFilterStrategy shouldEqual RegionGrouping.Permissive(
-            PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(5.0)), 
-            NonEmptyList.of(NonEmptySet.of(8, 9), NonEmptySet.of(10, 11)).map(_.map(Timepoint.unsafe))
-        )
-        exampleConfig.tracingExclusions shouldEqual Set(0, 8, 9, 10, 11).map(Timepoint.unsafe)
-        val seq = exampleConfig.sequence
-        seq.blankRounds.map(_.name) shouldEqual List("pre_image", "blank_01")
-        seq.locusRounds.map(_.name).init shouldEqual seq.locusRounds.map(_.probe.get).init  // Name inferred from probe when not explicit
-        seq.locusRounds.last.name shouldEqual seq.locusRounds.last.probe.get ++ "_repeat1"
-        seq.locusRounds.map(_.probe) shouldEqual List("Dp001", "Dp002", "Dp003", "Dp006", "Dp007", "Dp001").map(ProbeName.apply)
-        seq.regionRounds.map(_.name) shouldEqual seq.regionRounds.map(_.probe.get)
-        seq.regionRounds.map(_.probe) shouldEqual NonEmptyList.of("Dp101", "Dp102", "Dp103", "Dp104").map(ProbeName.apply)
-        exampleConfig.locusGrouping shouldEqual NonEmptySet.of(
-            8 -> NonEmptySet.of(1, 6),
-            9 -> NonEmptySet.one(2), 
-            10 -> NonEmptySet.of(3, 4),
-            11 -> NonEmptySet.one(5)
->>>>>>> 5a61b3a (get one test source compiling, and rename regionGrouping to updated proximityFilterStrategy)
             )
             .map{ (r, ls) => Timepoint.unsafe(r) -> ls.map(Timepoint.unsafe) }
             .map(LocusGroup.apply.tupled)
