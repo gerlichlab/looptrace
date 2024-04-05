@@ -18,12 +18,7 @@ from looptrace.ImageHandler import ImageHandler
 from looptrace.NucDetector import NucDetector
 from looptrace.Tracer import Tracer, run_frame_name_and_distance_application
 from looptrace.conversion_to_zarr import one_to_one as run_zarr_production
-from looptrace.image_processing_functions import (
-    extract_labeled_centroids, 
-    X_CENTER_COLNAME,  
-    Y_CENTER_COLNAME, 
-    Z_CENTER_COLNAME,
-)
+from looptrace.image_processing_functions import extract_labeled_centroids
 from looptrace.integer_naming import get_position_name_short
 
 from pipeline_precheck import workflow as pretest
@@ -248,9 +243,8 @@ def prep_nuclear_masks_data(rounds_config: ExtantFile, params_config: ExtantFile
         fn = f"{get_position_name_short(i)}.nuclear_masks.csv"
         fp = Path(H.images_folder) / fn
         print(f"Writing nuclear masks data for FOV {i}: {fp}")
-        cols = ["label", Z_CENTER_COLNAME, Y_CENTER_COLNAME, X_CENTER_COLNAME]
         table = extract_labeled_centroids(nuc_img)
-        table[cols].to_csv(fp, index=None)
+        table.to_csv(fp, index=None)
 
 
 class LooptracePipeline(pypiper.Pipeline):
