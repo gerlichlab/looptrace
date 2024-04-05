@@ -237,6 +237,13 @@ def prep_locus_specific_spots_visualisation(rounds_config: ExtantFile, params_co
     return per_fov_zarr
 
 
+def _compute_nuclear_mask_centroids(*, fov, img) -> Tuple[int, pd.DataFrame]:
+    print(f"Computing nuclear mask centroids for FOV: {fov}")
+    table = extract_labeled_centroids(img)
+    print(f"Finished nuclear mask centroids for FOV: {fov}")
+    return fov, table
+
+
 def _write_nuc_mask_table(*, fov: int, masks_table: pd.DataFrame, output_folder: Path) -> Path:
     fn = f"{get_position_name_short(fov)}.nuclear_masks.csv"
     fp = output_folder / fn
@@ -251,8 +258,9 @@ def prep_nuclear_masks_data(rounds_config: ExtantFile, params_config: ExtantFile
     N = NucDetector(H)
     return {
         i: _write_nuc_mask_table(fov=i, masks_table=t, output_folder=N.nuclear_segmentation_images_path) 
-        for i, t in joblib.Parallel(n_jobs=-1, prefer="threads")(
-            joblib.delayed(lambda i, img: (i, extract_labeled_centroids(img)))(i=i, img=img) 
+        # TODO: parameterise the number of processors / CPUs / cores to use.
+        for i, t in joblib.Parallel(n_jobs=10, prefer="threads")(
+            joblib.delayed(lambda i, img: (i, _compute_nuclear_mask_centroids(fov=i, img=img)))(i=i, img=img) 
             for i, img in enumerate(N.images_for_segmentation)
         )
     }
