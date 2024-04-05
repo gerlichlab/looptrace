@@ -4081,12 +4081,12 @@ name = "spotfishing"
 version = "0.1dev"
 description = "Detecting spots in FISH images"
 optional = false
-python-versions = ">= 3.10.0, < 3.13"
+python-versions = ">= 3.10.0, < 3.12"
 files = []
 develop = false
 
 [package.dependencies]
-numpy = {version = "^1.24.2", markers = "python_version < \"3.12\""}
+numpy = "^1.24.2"
 numpydoc_decorator = {git = "https://github.com/alimanfoo/numpydoc_decorator.git", branch = "main"}
 pandas = "^1.5.3"
 scikit-image = "^0.20.0"
@@ -4095,8 +4095,8 @@ scipy = "^1.10.1"
 [package.source]
 type = "git"
 url = "https://github.com/gerlichlab/spotfishing.git"
-reference = "main"
-resolved_reference = "cdce32d39f13ea62d38197a0c00adbace49b6eb9"
+reference = "bbbab105c4832d178036d1ce066977858751671c"
+resolved_reference = "bbbab105c4832d178036d1ce066977858751671c"
 
 [[package]]
 name = "stack-data"
@@ -4798,4 +4798,4 @@ test = ["hypothesis", "pytest", "pytest-skip-slow"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "0004669b0e6e0913fe1cd6001c7c1a68eda66a4be33366900e94c5d90af296e5"
+content-hash = "15ce2dea945c27b7bcbca07183b3e736b6dd34c8d5c4f948fa9f0c8f5aa8f58c"

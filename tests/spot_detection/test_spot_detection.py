@@ -11,8 +11,9 @@ if TYPE_CHECKING:
 from pandas.testing import assert_frame_equal
 import pytest
 
-from looptrace.SpotPicker import detect_spots_dog, detect_spots_int
 from looptrace import read_table_pandas
+from looptrace.SpotPicker import detect_spots_dog, detect_spots_int
+from looptrace.image_processing_functions import Z_CENTER_COLNAME, Y_CENTER_COLNAME, X_CENTER_COLNAME
 
 
 __author__ = "Vince Reuter"
@@ -38,7 +39,7 @@ def test_spot_detection__matches_expectation_on_data_examples(detect, func_type_
     output_file_name=f"expect__spots_table__{func_type_name}__threshold_{threshold}__{data_name}.csv"
     input_image = read_input_data(input_file_name)
     obs_result = detect(input_image, threshold=threshold)
-    obs_table = obs_result.table[["zc", "yc", "xc", "intensity_mean"]]
+    obs_table = obs_result.table[[Z_CENTER_COLNAME, Y_CENTER_COLNAME, X_CENTER_COLNAME, "intensity_mean"]]
     exp_table = read_expected_output_table(output_file_name)
     print("OBS (below):\n")
     print(obs_table)
