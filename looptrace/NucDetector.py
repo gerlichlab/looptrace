@@ -177,7 +177,7 @@ class NucDetector:
                 ) from e
 
     @property
-    def mask_images(self) -> Optional[Sequence[np.ndarray]]:
+    def mask_images(self) -> Sequence[np.ndarray]:
         try:
             all_imgs = self.image_handler.images
         except ArithmeticError as e:
