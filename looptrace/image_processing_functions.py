@@ -13,13 +13,10 @@ import numpy.typing as npt
 import pandas as pd
 
 import scipy.ndimage as ndi
-from scipy.stats import trim_mean
 from skimage.segmentation import clear_border, expand_labels
 from skimage.filters import gaussian, threshold_otsu
-from skimage.morphology import ball, remove_small_objects, white_tophat
 from skimage.measure import regionprops_table
 
-from looptrace.numeric_types import NumberLike
 from looptrace.wrappers import phase_xcor
 
 __author__ = "Kai Sandvold Beckwith"
@@ -72,68 +69,6 @@ def subtract_crosstalk(source, bleed, threshold=500):
     return out, bleed
 
 
-def pad_to_shape(arr, shape, mode='constant'):
-    '''
-    Pads an array with fill to a given shape (list or tuple).
-    Shape must be of length equal to array ndim.
-    Adds on both sides as far as possible, then at end if missing one.
-    Returns padded array.
-    '''
-    if 0 in arr.shape:
-        return np.zeros(shape)
-    p = np.subtract(shape,arr.shape)//2
-    try:
-        assert all(p>=0), 'Cannot pad to smaller than original size. Cropping instead.'
-    except AssertionError:
-        exp_shape=tuple([np.max((i,j)) for i,j in zip(arr.shape,shape)])
-        arr=pad_to_shape(arr, exp_shape, mode)
-        arr=crop_to_shape(arr,shape)
-        return arr
-    ps = tuple((n,n) for n in p)
-    arr=np.pad(arr,ps,mode)
-    if arr.shape == shape:
-        return arr
-    else:
-        p=np.subtract(shape,arr.shape)
-        ps = tuple((0,n) for n in p)
-        arr=np.pad(arr,ps,mode)
-        return arr
-    
-def crop_to_shape(arr, shape):
-    '''
-    Crops an array to a given shape (list or tuple) at center.
-    Shape must be same length as array ndim.
-    Crops on both sides as far as possible, crops rest at start of each ndim.
-    Returns cropped array.
-    '''
-           
-    new_s=np.subtract(arr.shape,shape)//2
-    assert all(new_s>=0), 'Cannot crop to larger than original size.'
-    s=tuple([slice(None,None) if s==0 else slice(s,-s) for s in new_s])
-    arr=arr[s]
-    if arr.shape == shape:
-        return arr
-    else:
-        new_s=np.subtract(arr.shape,shape)
-        s=tuple([slice(s,None) for s in new_s])
-        return arr[s]
-    
-def crop_at_pos(arr, tl_pos, size):
-    '''
-    Crops an nd array to given size from a position in the
-    corner closest to the origin.
-    Enforce int type.
-    '''
-    s=tuple([slice(int(pos),int(pos+si)) for pos,si in zip(tl_pos,size)])
-
-    return arr[s]
-
-def crop_to_center(arr, center, size):
-    #Crop array to size centered at center position.
-    s=tuple([slice(min(0,int(c-s//2)),max(int(c+s//2), arr_s)) for c, s, arr_s in zip(center,size,arr.shape)])
-    return arr[s]
-
-
 def drift_corr_coarse(t_img, o_img, downsample=1):
     '''
     Calculates coarse and fine 
@@ -152,55 +87,6 @@ def drift_corr_coarse(t_img, o_img, downsample=1):
     s = tuple(slice(None, None, downsample) for i in t_img.shape)
     coarse_drift = phase_xcor(np.array(t_img[s]), np.array(o_img[s])) * downsample
     return coarse_drift
-
-def drift_corr_multipoint_cc(t_img, o_img, coarse_drift, threshold, min_bead_int, n_points=50, upsampling=100):
-    '''
-    Function for fine scale drift correction. 
-
-    Parameters
-    ----------
-    t_img : Template image, 2D or 3D ndarray.
-    o_img : Offset image, 2D or 3D ndarray.
-    threshold : Int, threshold to segment fiducials.
-    min_bead_int : Int, minimal value for maxima of fiducials 
-    n_points : Int, number of fiducials to use for drift correction. The default is 5.
-    upsampling : Int, upsampling grid for subpixel correlation. The default is 100.
-
-    Returns
-    -------
-    A trimmed mean (default 20% on each side) of the drift for each fiducial.
-
-    '''
-    import joblib
-
-    #Label fiducial candidates and find maxima.
-    t_img_label,num_labels=ndi.label(t_img>threshold)
-    print('Number of unfiltered beads found: ', num_labels)
-    t_img_maxima = pd.DataFrame(regionprops_table(t_img_label, t_img, properties=('label', 'centroid', 'max_intensity')))
-    t_img_maxima = t_img_maxima.query('max_intensity > @min_bead_int').sample(n=n_points, random_state=1)[['centroid-0', 'centroid-1', 'centroid-2']].to_numpy()
-    t_img_maxima = np.round(t_img_maxima).astype(int)
-
-    def extract_and_correlate(point, t_img, o_img, upsampling):
-
-        #Calculate fine scale drift for all selected fiducials.
-        s_t = tuple([slice(ind-8, ind+8) for ind in point])
-        s_o = tuple([slice(ind-int(shift)-8, ind-int(shift)+8) for (ind, shift) in zip(point, coarse_drift)])
-        t = t_img[s_t]
-        o = o_img[s_o]
-        
-        try:
-            shift = phase_xcor(t, o, upsample_factor=upsampling)
-        except (ValueError, AttributeError):
-            shift = np.array([0,0,0])
-        return shift
-
-    shifts = joblib.Parallel(n_jobs=-1, prefer='threads')(joblib.delayed(extract_and_correlate)(point, t_img, o_img, upsampling) for point in t_img_maxima)
-    shifts = np.array(shifts)
-
-    fine_drift = trim_mean(shifts, proportiontocut=0.2, axis=0)
-    print(f'Fine drift: {fine_drift} with untrimmed STD of {np.std(shifts, axis=0)} .')
-    #Return the 60% central mean to avoid outliers.
-    return fine_drift#, np.std(shifts, axis=0)
 
 
 def decon_RL_setup(size_x=8, size_y=8, size_z=8, pz=0., wavelength=.660,
