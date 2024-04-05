@@ -10,7 +10,6 @@ import sys
 from typing import *
 
 from gertils import ExtantFile, ExtantFolder
-import joblib
 import pandas as pd
 import pypiper
 
@@ -237,13 +236,6 @@ def prep_locus_specific_spots_visualisation(rounds_config: ExtantFile, params_co
     return per_fov_zarr
 
 
-def _compute_nuclear_mask_centroids(*, fov, img) -> Tuple[int, pd.DataFrame]:
-    print(f"Computing nuclear mask centroids for FOV: {fov}")
-    table = extract_labeled_centroids(img)
-    print(f"Finished nuclear mask centroids for FOV: {fov}")
-    return fov, table
-
-
 def _write_nuc_mask_table(*, fov: int, masks_table: pd.DataFrame, output_folder: Path) -> Path:
     fn = f"{get_position_name_short(fov)}.nuclear_masks.csv"
     fp = output_folder / fn
@@ -256,14 +248,13 @@ def prep_nuclear_masks_data(rounds_config: ExtantFile, params_config: ExtantFile
     """Write simple CSV data for visualisation of nuclear masks with napari plugin."""
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     N = NucDetector(H)
-    return {
-        i: _write_nuc_mask_table(fov=i, masks_table=t, output_folder=N.nuclear_segmentation_images_path) 
-        # TODO: parameterise the number of processors / CPUs / cores to use.
-        for i, t in joblib.Parallel(n_jobs=10, prefer="threads")(
-            joblib.delayed(lambda i, img: (i, _compute_nuclear_mask_centroids(fov=i, img=img)))(i=i, img=img) 
-            for i, img in enumerate(N.images_for_segmentation)
-        )
-    }
+    result: Dict[int, Path] = {}
+    for fov, img in enumerate(N.images_for_segmentation):
+        print(f"Computing nuclear mask centroids for FOV: {fov}")
+        table = extract_labeled_centroids(img)
+        print(f"Finished nuclear mask centroids for FOV: {fov}")
+        result[fov] = _write_nuc_mask_table(fov=fov, masks_table=table, output_folder=N.nuclear_segmentation_images_path)
+    return result
 
 
 class LooptracePipeline(pypiper.Pipeline):
