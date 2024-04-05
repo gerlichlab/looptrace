@@ -46,14 +46,18 @@ PixelValue = Union[np.uint8, np.uint16]
 #     see_also=dict(regionprops_table="Function from scikit-image which computes the centroids"),
 # )
 def extract_labeled_centroids(img: npt.NDArray[PixelValue]) -> pd.DataFrame:
+    centroid_key = "centroid"
     ndim = len(img.shape)
+    # Here we need to account for 2D or 3D image, and the fact that these centroids can't be weighted, 
+    # since we don't pass the intensity image, just rather the masks image.
     if ndim == 2:
-        colname_mapping = dict((k, v) for k, v in CENTROID_COLUMNS_REMAPPING.items() if v != Z_CENTER_COLNAME)
+        newcols = [Y_CENTER_COLNAME, X_CENTER_COLNAME]
     elif ndim == 3:
-        colname_mapping = CENTROID_COLUMNS_REMAPPING
+        newcols = [Z_CENTER_COLNAME, Y_CENTER_COLNAME, X_CENTER_COLNAME]
     else:
         raise ValueError("Image from which to extract region centroids is neither 2- nor 3-D, but {ndim}-D!")
-    props = regionprops_table(img, properties=("label", "centroid"))
+    colname_mapping = {f"{centroid_key}-{i}": newcol for i, newcol in enumerate(newcols)}
+    props = regionprops_table(img, properties=("label", centroid_key))
     table = pd.DataFrame(props)
     return table.rename(columns=colname_mapping, errors="raise", inplace=False)
 
