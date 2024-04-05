@@ -40,7 +40,7 @@ PixelValue = Union[np.uint8, np.uint16]
 def extract_labeled_centroids(img: npt.NDArray[PixelValue]) -> pd.DataFrame:
     props = regionprops_table(img, properties=("label", "centroid"))
     table = pd.DataFrame(props)
-    return table.rename(columns=CENTROID_COLUMNS_REMAPPING)
+    return table.rename(columns=CENTROID_COLUMNS_REMAPPING, errors="raise", inplace=False)
 
 
 def update_roi_points(point_layer, roi_table, position, downscale):
