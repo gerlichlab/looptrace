@@ -249,7 +249,7 @@ def prep_nuclear_masks_data(rounds_config: ExtantFile, params_config: ExtantFile
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     N = NucDetector(H)
     result: Dict[int, Path] = {}
-    for fov, img in enumerate(N.images_for_segmentation):
+    for fov, img in enumerate(N.mask_images):
         print(f"Computing nuclear mask centroids for FOV: {fov}")
         table = extract_labeled_centroids(img)
         print(f"Finished nuclear mask centroids for FOV: {fov}")
