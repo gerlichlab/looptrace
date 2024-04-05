@@ -37,10 +37,25 @@ CENTROID_COLUMNS_REMAPPING = {
 PixelValue = Union[np.uint8, np.uint16]
 
 
+# TODO: integrate numpydoc_decorator.
+# @doc(
+#     summary="Extract labeled (by index / integer) centroids from regions in the given image.",
+#     parameters=dict(img="The image in which to find regional centroids"),
+#     returns="Table of labels and centroid coordinates",
+#     raises=dict(ValueError="If the given image is neither 2- nor 3-D.")
+#     see_also=dict(regionprops_table="Function from scikit-image which computes the centroids"),
+# )
 def extract_labeled_centroids(img: npt.NDArray[PixelValue]) -> pd.DataFrame:
+    ndim = len(img.shape)
+    if ndim == 2:
+        colname_mapping = dict((k, v) for k, v in CENTROID_COLUMNS_REMAPPING.items() if v != Z_CENTER_COLNAME)
+    elif ndim == 3:
+        colname_mapping = CENTROID_COLUMNS_REMAPPING
+    else:
+        raise ValueError("Image from which to extract region centroids is neither 2- nor 3-D, but {ndim}-D!")
     props = regionprops_table(img, properties=("label", "centroid"))
     table = pd.DataFrame(props)
-    return table.rename(columns=CENTROID_COLUMNS_REMAPPING, errors="raise", inplace=False, axis="columns")
+    return table.rename(columns=colname_mapping, errors="raise", inplace=False)
 
 
 def update_roi_points(point_layer, roi_table, position, downscale):
