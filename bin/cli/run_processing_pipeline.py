@@ -11,9 +11,8 @@ from typing import *
 
 from gertils import ExtantFile, ExtantFolder
 import joblib
-import numpy as np
+import pandas as pd
 import pypiper
-import tqdm
 
 from looptrace import *
 from looptrace.Drifter import coarse_correction_workflow as run_coarse_drift_correction, fine_correction_workflow as run_fine_drift_correction
@@ -238,12 +237,11 @@ def prep_locus_specific_spots_visualisation(rounds_config: ExtantFile, params_co
     return per_fov_zarr
 
 
-def _prep_nuclear_masks_data__single_fov(fov: int, nuc_img: np.ndarray, output_folder: Path) -> Path:
+def _write_nuc_mask_table(*, fov: int, masks_table: pd.DataFrame, output_folder: Path) -> Path:
     fn = f"{get_position_name_short(fov)}.nuclear_masks.csv"
     fp = output_folder / fn
-    print(f"FOV {fov} -- computing nuclear mask centroids and writing data file for visualisation: {fp}")
-    table = extract_labeled_centroids(nuc_img)
-    table.to_csv(fp, index=None)
+    print(f"Writing data file for nuclei visualisation in FOV {fov}: {fp}")
+    masks_table.to_csv(fp)
     return fp
 
 
@@ -251,10 +249,13 @@ def prep_nuclear_masks_data(rounds_config: ExtantFile, params_config: ExtantFile
     """Write simple CSV data for visualisation of nuclear masks with napari plugin."""
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     N = NucDetector(H)
-    return dict(joblib.Parallel(n_jobs=-1, prefer='threads')(
-        joblib.delayed(lambda i, img: (i, _prep_nuclear_masks_data__single_fov(i, img, output_folder=Path(H.images_folder))))(i=i, img=img) 
-        for i, img in tqdm.tqdm(enumerate(N.images_for_segmentation))
-    ))
+    return {
+        i: _write_nuc_mask_table(fov=i, masks_table=t, output_folder=N.nuclear_segmentation_images_path) 
+        for i, t in joblib.Parallel(n_jobs=-1, prefer="threads")(
+            joblib.delayed(lambda i, img: (i, extract_labeled_centroids(img)))(i=i, img=img) 
+            for i, img in enumerate(N.images_for_segmentation)
+        )
+    }
 
 
 class LooptracePipeline(pypiper.Pipeline):

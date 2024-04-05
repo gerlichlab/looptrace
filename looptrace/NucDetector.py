@@ -240,7 +240,7 @@ class NucDetector:
             yield pos, imgs[i]
 
     @property
-    def _nuclear_segmentation_images_path(self) -> Path:
+    def nuclear_segmentation_images_path(self) -> Path:
         return self._get_img_save_path(self.SEGMENTATION_IMAGES_KEY)
 
     def _raise_missing_images_error(self, src: BaseException):
@@ -270,7 +270,7 @@ class NucDetector:
             for pos_name, subimg in tqdm.tqdm(name_img_pairs):
                 image_io.single_position_to_zarr(
                     subimg, 
-                    path=self._nuclear_segmentation_images_path, 
+                    path=self.nuclear_segmentation_images_path, 
                     name=self.SEGMENTATION_IMAGES_KEY, 
                     pos_name=pos_name, 
                     axes=axes, 
@@ -280,7 +280,7 @@ class NucDetector:
                     # compressor=numcodecs.Zlib(),
                     )
         else:
-            image_io.nuc_multipos_single_time_max_z_proj_zarr(name_img_pairs, root_path=self._nuclear_segmentation_images_path, dtype=np.uint16)
+            image_io.nuc_multipos_single_time_max_z_proj_zarr(name_img_pairs, root_path=self.nuclear_segmentation_images_path, dtype=np.uint16)
     
     def segment_nuclei(self) -> Path:
         '''

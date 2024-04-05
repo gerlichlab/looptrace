@@ -201,10 +201,6 @@ class ImageHandler:
         return get_minimum_regional_spot_separation(self.config)
 
     @property
-    def nuclear_mask_screenshots_folder(self) -> Path:
-        return Path(self.analysis_path) / "nuclear_mask_screenshots"
-
-    @property
     def nuclei_channel(self) -> int:
         return self.config["nuc_channel"]
 
