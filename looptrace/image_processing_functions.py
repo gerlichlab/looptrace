@@ -58,30 +58,6 @@ def extract_labeled_centroids(img: npt.NDArray[PixelValue]) -> pd.DataFrame:
     return table.rename(columns=colname_mapping, errors="raise", inplace=False)
 
 
-def update_roi_points(point_layer, roi_table, position, downscale):
-    '''Takes (possibly) updated points from napari and converts them into ROI table format for looptrace
-
-    Args:
-        point_layer (ndarray): The points returned by napari
-        roi_table (DataFrame): ROI table to update
-        position (str): Positional identifier
-        downscale (int): Downscale factor, if downscaling was used when viewing with napari
-
-    Returns:
-        DataFrame: Updated ROI table for looptrace
-    '''
-
-    rois = roi_table.copy()
-    new_rois = pd.DataFrame(point_layer.data*downscale, columns=['frame','zc','yc','xc'])
-    new_rois.index.name = 'roi_id_pos'
-    new_rois = new_rois.reset_index()
-    new_rois['position'] = position
-    new_rois['ch'] = rois.iloc[0]['ch']
-
-    rois = rois.drop(rois[rois['position']==position].index)
-    return pd.concat([rois, new_rois]).sort_values('position').reset_index(drop=True)
-
-
 def subtract_crosstalk(source, bleed, threshold=500):
     shift = drift_corr_coarse(source, bleed, downsample=1)
     bleed = ndi.shift(bleed, shift=shift, order=1)
@@ -90,68 +66,6 @@ def subtract_crosstalk(source, bleed, threshold=500):
     print(ratio)
     out = np.clip(source - (ratio * bleed), a_min=0, a_max=None)
     return out, bleed
-
-
-def pad_to_shape(arr, shape, mode='constant'):
-    '''
-    Pads an array with fill to a given shape (list or tuple).
-    Shape must be of length equal to array ndim.
-    Adds on both sides as far as possible, then at end if missing one.
-    Returns padded array.
-    '''
-    if 0 in arr.shape:
-        return np.zeros(shape)
-    p = np.subtract(shape,arr.shape)//2
-    try:
-        assert all(p>=0), 'Cannot pad to smaller than original size. Cropping instead.'
-    except AssertionError:
-        exp_shape=tuple([np.max((i,j)) for i,j in zip(arr.shape,shape)])
-        arr=pad_to_shape(arr, exp_shape, mode)
-        arr=crop_to_shape(arr,shape)
-        return arr
-    ps = tuple((n,n) for n in p)
-    arr=np.pad(arr,ps,mode)
-    if arr.shape == shape:
-        return arr
-    else:
-        p=np.subtract(shape,arr.shape)
-        ps = tuple((0,n) for n in p)
-        arr=np.pad(arr,ps,mode)
-        return arr
-    
-def crop_to_shape(arr, shape):
-    '''
-    Crops an array to a given shape (list or tuple) at center.
-    Shape must be same length as array ndim.
-    Crops on both sides as far as possible, crops rest at start of each ndim.
-    Returns cropped array.
-    '''
-           
-    new_s=np.subtract(arr.shape,shape)//2
-    assert all(new_s>=0), 'Cannot crop to larger than original size.'
-    s=tuple([slice(None,None) if s==0 else slice(s,-s) for s in new_s])
-    arr=arr[s]
-    if arr.shape == shape:
-        return arr
-    else:
-        new_s=np.subtract(arr.shape,shape)
-        s=tuple([slice(s,None) for s in new_s])
-        return arr[s]
-    
-def crop_at_pos(arr, tl_pos, size):
-    '''
-    Crops an nd array to given size from a position in the
-    corner closest to the origin.
-    Enforce int type.
-    '''
-    s=tuple([slice(int(pos),int(pos+si)) for pos,si in zip(tl_pos,size)])
-
-    return arr[s]
-
-def crop_to_center(arr, center, size):
-    #Crop array to size centered at center position.
-    s=tuple([slice(min(0,int(c-s//2)),max(int(c+s//2), arr_s)) for c, s, arr_s in zip(center,size,arr.shape)])
-    return arr[s]
 
 
 def detect_spots(input_img, spot_threshold: NumberLike, expand_px: int = 10):
