@@ -14,7 +14,7 @@ import org.scalatest.matchers.*
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
-import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.{ LocusGroup, RegionGrouping }
+import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.{ LocusGroup, SelectiveProximityPermission }
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 
 /**
@@ -47,8 +47,8 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
                 ImagingRoundsConfiguration.unsafeFromJsonFile(configFile)
             }
             exampleConfig.numberOfRounds shouldEqual 12
-            exampleConfig.regionGrouping shouldEqual RegionGrouping.Permissive(
-                PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(5.0)), 
+            exampleConfig.proximityFilterStrategy shouldEqual SelectiveProximityPermission(
+                PositiveReal(5.0), 
                 NonEmptyList.of(NonEmptySet.of(8, 9), NonEmptySet.of(10, 11)).map(_.map(Timepoint.unsafe))
             )
             exampleConfig.tracingExclusions shouldEqual Set(0, 8, 9, 10, 11).map(Timepoint.unsafe)
@@ -205,10 +205,8 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
         def mygen: Gen[(ImagingSequence, RawSemanticValue, RawThreshold, Option[NonEmptyList[LocusGroup]], Set[Timepoint], Either[String, Unit])] = for {
             (seq, locusGroupingOpt, exclusions) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt(10))
             (semantic, altExpectMessage) <- Gen.oneOf(
-                Gen.oneOf(
-                    List("permissive", "Permissive", "PERMISSIVE").map(_ -> RegionGrouping.Semantic.Permissive) ++ 
-                    List("prohibitive", "Prohibitive", "PROHIBITIVE").map(_ -> RegionGrouping.Semantic.Prohibitive)
-                ).map((original, s) => original -> s"Nontrivial grouping semantic ($s, from '$original'), but no groups!".asLeft),
+                Gen.oneOf("SelectiveProximityPermission", "SelectiveProximityProhibition")
+                    .map{ s => (s, s"Nontrivial grouping semantic ($s), but no groups!".asLeft) },
                 Gen.alphaNumStr
                     .suchThat{ s => ! Set("permissive", "prohibitive", "trivial").contains(s.toLowerCase) }
                     .map(s => s -> s"Illegal value for regional grouping semantic: $s".asLeft),
@@ -252,7 +250,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
         def mygen = for {
             (seq, optLocusGrouping, exclusions) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt.unsafe(maxTime / 2))
             regionalTimes = seq.regionRounds.map(_.time).toList.toSet
-            semantic <- Gen.oneOf(RegionGrouping.Semantic.Permissive, RegionGrouping.Semantic.Prohibitive).map(_.toString)
+            semantic <- Gen.oneOf("SelectiveProximityPermission", "SelectiveProximityProhibition")
             (regionGroups, findExpMessages) <- Gen.nonEmptyListOf{ Gen.nonEmptyListOf(arbitrary[Timepoint]).map(_.toNel.get) }
                 .map(_.toNel.get)
                 // Ensure that subsets fail uniqueness, disjointness, fail to cover regionals, or fail to be covered by regionals
@@ -397,7 +395,12 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
                     )
                 }
             }
-            semantic <- Gen.option(arbitrary[RegionGrouping.Semantic])
+            semantic <- Gen.oneOf(
+                "UniversalProximityPermission",
+                "UniversalProximityProhibition",
+                "SelectiveProximityPermission",
+                "SelectiveProximityProhibition",
+                )
             regionGroups <- genValidParitionForRegionGrouping(seq)
         } yield (seq, modLocusGrouping, semantic, regionGroups, exclusions, altMessagesTests)
         
@@ -406,12 +409,13 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
                 val baseData: Map[String, ujson.Value] = {
                     val records: NonEmptyList[ujson.Obj] = 
                         Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
-                    val (sem, extra) = semantic match {
-                        case None => "Trivial" -> List()
-                        case Some(s) => s.toString -> List("groups" -> proximityFilterStrategyToJson(regionGroups.map(_.toList)))
+                    val extra = semantic match {
+                        case ("UniversalProximityPermission" | "UniversalProximityProhibition") => List()
+                        case ("SelectiveProximityPermission" | "SelectiveProximityProhibition") => 
+                            List("groups" -> proximityFilterStrategyToJson(regionGroups.map(_.toList)))
                     }
                     val proximityFilterStrategyJsonData = ujson.Obj(
-                        "semantic" -> ujson.Str(sem), 
+                        "semantic" -> ujson.Str(semantic), 
                         (List("minimumPixelLikeSeparation" -> ujson.Num(threshold)) ++ extra)*,
                     )
                     Map("imagingRounds" -> ujson.Arr(records.toList*), "proximityFilterStrategy" -> proximityFilterStrategyJsonData)
@@ -450,21 +454,27 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
                 .suchThat(_._2.nonEmpty)
                 .map((seq, optGrouping, exclusions) => (seq, optGrouping.get, exclusions))
             badRegionKey <- arbitrary[Timepoint].suchThat{ t => !seq.regionRounds.map(_.time).toList.toSet.contains(t) }
-            optSemantic <- Gen.option(arbitrary[RegionGrouping.Semantic])
+            semantic <- Gen.oneOf(
+                "UniversalProximityPermission",
+                "UniversalProximityProhibition",
+                "SelectiveProximityPermission",
+                "SelectiveProximityProhibition",
+                )
             regionGroups <- genValidParitionForRegionGrouping(seq)
-        } yield (seq, locusGrouping, exclusions, optSemantic, regionGroups, badRegionKey)
+        } yield (seq, locusGrouping, exclusions, semantic, regionGroups, badRegionKey)
 
         forAll (mygen, arbitrary[NonnegativeReal]) { 
-            case ((seq, locusGrouping, exclusions, optSemantic, regionGroups, badRegionKey), threshold) =>
+            case ((seq, locusGrouping, exclusions, semantic, regionGroups, badRegionKey), threshold) =>
                 val baseData: Map[String, ujson.Value] = {
                     val records: NonEmptyList[ujson.Obj] = 
                         Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
-                    val (sem, extra) = optSemantic match {
-                        case None => "Trivial" -> List()
-                        case Some(s) => s.toString -> List("groups" -> proximityFilterStrategyToJson(regionGroups.map(_.toList)))
+                    val extra = semantic match {
+                        case ("UniversalProximityPermission" | "UniversalProximityProhibition") => List()
+                        case ("SelectiveProximityPermission" | "SelectiveProximityProhibition") => 
+                            List("groups" -> proximityFilterStrategyToJson(regionGroups.map(_.toList)))
                     }
                     val proximityFilterStrategyJsonData = ujson.Obj(
-                        "semantic" -> ujson.Str(sem), 
+                        "semantic" -> ujson.Str(semantic), 
                         (List("minimumPixelLikeSeparation" -> ujson.Num(threshold)) ++ extra)*,
                     )
                     Map("imagingRounds" -> ujson.Arr(records.toList*), "proximityFilterStrategy" -> proximityFilterStrategyJsonData)
@@ -503,22 +513,28 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
 
         def mygen = for {
             (seq, optLocusGrouping, _) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt.unsafe(maxTime / 2))
-            optSemantic <- Gen.option(arbitrary[RegionGrouping.Semantic])
+            semantic <- Gen.oneOf(
+                "UniversalProximityPermission",
+                "UniversalProximityProhibition",
+                "SelectiveProximityPermission",
+                "SelectiveProximityProhibition",
+                )
             regionGroups <- genValidParitionForRegionGrouping(seq)
             exclusions <- arbitrary[List[Timepoint]].suchThat(_.exists(t => !seq.allTimepoints.contains(t)))
-        } yield (seq, optLocusGrouping, optSemantic, regionGroups, exclusions.toSet)
+        } yield (seq, optLocusGrouping, semantic, regionGroups, exclusions.toSet)
 
         forAll (mygen, arbitrary[NonnegativeReal]) { 
-            case ((seq, optLocusGrouping, optSemantic, regionGroups, exclusions), threshold) => 
+            case ((seq, optLocusGrouping, semantic, regionGroups, exclusions), threshold) => 
                 val baseData: Map[String, ujson.Value] = {
                     val records: NonEmptyList[ujson.Obj] = 
                         Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
-                    val (sem, extra) = optSemantic match {
-                        case None => "Trivial" -> List()
-                        case Some(s) => s.toString -> List("groups" -> proximityFilterStrategyToJson(regionGroups.map(_.toList)))
+                    val extra = semantic match {
+                        case ("UniversalProximityPermission" | "UniversalProximityProhibition") => List()
+                        case ("SelectiveProximityPermission" | "SelectiveProximityProhibition") => 
+                            List("groups" -> proximityFilterStrategyToJson(regionGroups.map(_.toList)))
                     }
                     val proximityFilterStrategyJsonData = ujson.Obj(
-                        "semantic" -> ujson.Str(sem), 
+                        "semantic" -> ujson.Str(semantic), 
                         (List("minimumPixelLikeSeparation" -> ujson.Num(threshold)) ++ extra)*,
                     )
                     Map("imagingRounds" -> ujson.Arr(records.toList*), "proximityFilterStrategy" -> proximityFilterStrategyJsonData)
