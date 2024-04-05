@@ -240,6 +240,7 @@ def _write_nuc_mask_table(*, fov: int, masks_table: pd.DataFrame, output_folder:
     fn = f"{get_position_name_short(fov)}.nuclear_masks.csv"
     fp = output_folder / fn
     print(f"Writing data file for nuclei visualisation in FOV {fov}: {fp}")
+    fp.parent.mkdir(exist_ok=True)
     masks_table.to_csv(fp)
     return fp
 
