@@ -297,7 +297,7 @@ class LooptracePipeline(pypiper.Pipeline):
             ("pairwise_distances__locus_specific", compute_locus_pairwise_distances, take2),
             ("pairwise_distances__regional", compute_region_pairwise_distances, take2),
             ("locus_specific_spots_visualisation_data_prep", prep_locus_specific_spots_visualisation, take3),
-            ("nuclear_masks_visualisation_data_prep", prep_locus_specific_spots_visualisation, take3),
+            ("nuclear_masks_visualisation_data_prep", prep_nuclear_masks_data, take3),
         ]
 
     def stages(self) -> List[Callable]:
