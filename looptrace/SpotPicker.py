@@ -28,6 +28,7 @@ import tqdm
 
 from gertils import ExtantFolder, NonExtantPath
 import spotfishing
+from spotfishing_looptrace import DifferenceOfGaussiansSpecificationForLooptrace, ORIGINAL_LOOPTRACE_DOG_SPECIFICATION
 
 from looptrace import RoiImageSize, image_processing_functions as ip
 from looptrace.exceptions import MissingRoisTableException
@@ -48,9 +49,20 @@ logger = logging.getLogger()
 SkipReasonsMapping = Mapping[int, Mapping[int, Mapping[int, str]]]
 
 
-def detect_spots_dog(input_image, *, threshold: NumberLike, expand_px: Optional[int] = 10) -> spotfishing.DetectionResult:
+def detect_spots_dog(
+    input_image, 
+    *, 
+    threshold: NumberLike, 
+    expand_px: Optional[int] = 10,
+    transform_specification: DifferenceOfGaussiansSpecificationForLooptrace = ORIGINAL_LOOPTRACE_DOG_SPECIFICATION, 
+    ) -> spotfishing.DetectionResult:
     """Spot detection by difference of Gaussians filter"""
-    return spotfishing.detect_spots_dog(input_image, spot_threshold=threshold, expand_px=expand_px)
+    return spotfishing.detect_spots_dog(
+        input_image, 
+        spot_threshold=threshold, 
+        expand_px=expand_px, 
+        transform=transform_specification.transformation,
+        )
 
 
 def detect_spots_int(input_image, *, threshold: NumberLike, expand_px: Optional[int] = 1) -> spotfishing.DetectionResult:
