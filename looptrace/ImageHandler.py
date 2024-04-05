@@ -201,6 +201,11 @@ class ImageHandler:
         return get_minimum_regional_spot_separation(self.config)
 
     @property
+    def nuclear_masks_visualisation_data_path(self) -> Path:
+        # Where to save data relevant to visualising nuclear masks.
+        return Path(self.analysis_path) / "nuclear_masks_visualisation"
+
+    @property
     def nuclei_channel(self) -> int:
         return self.config["nuc_channel"]
 

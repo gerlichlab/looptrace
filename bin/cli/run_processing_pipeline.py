@@ -253,7 +253,7 @@ def prep_nuclear_masks_data(rounds_config: ExtantFile, params_config: ExtantFile
         print(f"Computing nuclear mask centroids for FOV: {fov}")
         table = extract_labeled_centroids(img)
         print(f"Finished nuclear mask centroids for FOV: {fov}")
-        result[fov] = _write_nuc_mask_table(fov=fov, masks_table=table, output_folder=N.nuclear_segmentation_images_path)
+        result[fov] = _write_nuc_mask_table(fov=fov, masks_table=table, output_folder=H.nuclear_masks_visualisation_data_path)
     return result
 
 
