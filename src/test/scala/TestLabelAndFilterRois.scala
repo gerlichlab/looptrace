@@ -103,20 +103,48 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         end DriftFileTexts
 
         // Infinitely large or small definition of proximity
-        val extremeArguments: List[(String, PositiveReal, String)] = for {
-            drift <- List(
+        val extremeArguments: List[(String, PositiveReal, String)] = {
+            val almostZero = PositiveReal(1e-323)
+            val first = (
                 DriftFileTexts.allZero, 
-                DriftFileTexts.nonZero, 
-                DriftFileTexts.zeroCoarse, 
-                DriftFileTexts.zeroFine,
+                almostZero, 
+                """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
+                |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
+                |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
+                |2,P0001.zarr,27,0,3,1878,314,0,11,1870,1886,47,347
+                |3,P0001.zarr,28,0,5.5,1380,1457,-1,14,1364,1396,1441,1473
+                |4,P0001.zarr,28,0,7,1378,1459.5,0,15,8,40,1343,1375
+                |6,P0001.zarr,29,0,10,589,1799,2,18,433,465,1283,1315
+                |7,P0001.zarr,29,0,12,588,1779,2,18,572,604,1763,1795
+                |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
+                |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
+                |11,P0001.zarr,30,0,10.1,549,1280.8,2,18,433,465,1283,1315
+                |12,P0001.zarr,30,0,10,548.5,1280.6,2,18,572,604,1763,1795
+                |13,P0001.zarr,30,0,9,995,1780,1,17,679,711,564,596
+                |14,P0001.zarr,30,0,8,993.2,1781,3,19,977,1009,1705,1737
+                |15,P0001.zarr,30,0,14.4,589.5,1779.3,2,18,572,604,1763,1795
+                |""",
                 )
-            (value, expected) <- List(
-                // When min separation is infinitely small, nothing is proximal and everything is kept.
-                PositiveReal(1e-323) -> spotsText, 
-                // When threshold is infinitely large, everything is proximal and nothing is kept.
-                PositiveReal(Double.MaxValue) -> headSpotsFile,
+            val second = (
+                DriftFileTexts.allZero, 
+                PositiveReal(Double.MaxValue),
+                headSpotsFile,
                 )
-        } yield (drift, value, expected)
+            val theRest = for {
+                drift <- List(
+                    DriftFileTexts.nonZero, 
+                    DriftFileTexts.zeroCoarse, 
+                    DriftFileTexts.zeroFine,
+                    )
+                (value, expected) <- List(
+                    // When min separation is vanishingly small, only coincident points are proximal; all else is kept.
+                    almostZero -> spotsText, 
+                    // When threshold is infinitely large, everything is proximal and nothing is kept.
+                    PositiveReal(Double.MaxValue) -> headSpotsFile,
+                    )
+            } yield (drift, value, expected)
+            first :: second :: theRest
+        }
         
         // Pairs of threshold and (filtered) output expectation under zero drift
         val zeroDriftArguments =
