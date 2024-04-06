@@ -29,7 +29,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 "proximityFilterStrategy = ImagingRoundsConfiguration.UniversalProximityPermission, " + 
                 "unfilteredOutputFile = UnfilteredOutputFile.fromPath(tmpdir / \"unfiltered.csv\"), " + 
                 "filteredOutputFile = FilteredOutputFile.fromPath(tmpdir / \"filtered.csv\"), " + 
-                "extantOutputHandler = ExtantOutputWriter.Overwrite " + 
+                "extantOutputHandler = ExtantOutputHandler.Overwrite " + 
                 ")"
             }
             // Add in driftFile to get compilation.
@@ -39,7 +39,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 "proximityFilterStrategy = ImagingRoundsConfiguration.UniversalProximityPermission, " + 
                 "unfilteredOutputFile = UnfilteredOutputFile.fromPath(tmpdir / \"unfiltered.csv\"), " + 
                 "filteredOutputFile = FilteredOutputFile.fromPath(tmpdir / \"filtered.csv\"), " + 
-                "extantOutputHandler = ExtantOutputWriter.Overwrite " + 
+                "extantOutputHandler = ExtantOutputHandler.Overwrite " + 
                 ")"
             }
         }

@@ -124,7 +124,7 @@ object ImagingRound:
     private def extractDefaultFalse(key: String)(data: Map[String, ujson.Value]): Either[String, Boolean] = 
         data.get(key) match {
             case None => false.asRight
-            case Some(v) => Try(v.bool).toEither.leftMap(e => s"Illegal value for '$key'! ${e.getMessage}")
+            case Some(v) => Try(v.bool).toEither.leftMap(e => s"Illegal value for '$key' (should be Boolean)! ${e.getMessage}")
         }
 
     /**

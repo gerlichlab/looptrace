@@ -83,11 +83,14 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
         
         def mygen = for {
             (seq, optLocusGrouping, exclusions) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt(10))
-            semantic <- Gen.oneOf("trivial", "TRIVIAL", "Trivial")
+            (semantic, expectedMessage) <- Gen.oneOf(
+                "UniversalProximityPermission" -> s"For universal proximity permission, both threshold and groups must be absent.", 
+                "UniversalProximityProhibition" -> "For universal proximity prohibition, threshold must be present and groups must be absent.",
+                )
             proximityFilterStrategy <- genValidParitionForRegionGrouping(seq)
-        } yield (seq, optLocusGrouping, semantic, proximityFilterStrategy, exclusions)
+        } yield (seq, optLocusGrouping, semantic, expectedMessage, proximityFilterStrategy, exclusions)
         
-        forAll (mygen, arbitrary[NonnegativeReal]) { case ((seq, optLocusGrouping, semantic, proximityFilterStrategy, exclusions), rawThreshold) => 
+        forAll (mygen, arbitrary[NonnegativeReal]) { case ((seq, optLocusGrouping, semantic, expectedMessage, proximityFilterStrategy, exclusions), rawThreshold) => 
             val baseData: Map[String, ujson.Value] = {
                 val records: NonEmptyList[ujson.Obj] = Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
                 Map(
@@ -103,7 +106,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
             ImagingRoundsConfiguration.fromJsonMap(data) match {
                 case Right(_) => fail(s"Expected parse failure on account presence of groups with trivial semantic, but it succeeded!")
                 case Left(messages) => 
-                    val numMatchMessages = messages.count(_ === "Trivial distance grouping semantic, but groups specified!").toInt
+                    val numMatchMessages = messages.count(_ === expectedMessage).toInt
                     if numMatchMessages === 1 then succeed else {
                         println(s"MESSAGES: ${messages.mkString_("; ")}")
                         println(s"DATA (below)\n${write(data, indent = 4)}")
@@ -144,7 +147,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
             ImagingRoundsConfiguration.fromJsonMap(data) match {
                 case Right(_) => fail(s"Expected parse failure on account presence of groups with trivial semantic, but it succeeded!")
                 case Left(messages) => 
-                    val expectMessage = "Missing semantic in regional grouping section!"
+                    val expectMessage = "Missing semantic for proximity filter config section!"
                     val numMatchMessages = messages.count(_ === expectMessage).toInt
                     if numMatchMessages === 1 then succeed else {
                         println(s"MESSAGES: ${messages.mkString_("; ")}")
@@ -162,7 +165,15 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
 
         def mygen: Gen[(ImagingSequence, BadSemanticValue, Option[NonEmptyList[NonEmptySet[Timepoint]]], Option[RawThreshold], Option[NonEmptyList[LocusGroup]], Set[Timepoint])] = for {
             (seq, locusGroupingOpt, exclusions) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt(10))
-            semantic <- Gen.alphaNumStr.suchThat{ s => ! Set("permissive", "prohibitive", "trivial").contains(s.toLowerCase) }
+            semantic <- Gen.alphaNumStr.suchThat{
+                s => ! Set(
+                    "UniversalProximityPermission",
+                    "UniversalProximityProhibition",
+                    "SelectiveProximityPermission",
+                    "SelectiveProximityProhibition",
+                    )
+                    .contains(s.toLowerCase) 
+                }
             optRegionGrouping <- Gen.option(genValidParitionForRegionGrouping(seq))
             optRawThreshold <- Gen.option(arbitrary[NonnegativeReal])
         } yield (seq, semantic, optRegionGrouping, optRawThreshold, locusGroupingOpt, exclusions)
@@ -185,7 +196,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
             ImagingRoundsConfiguration.fromJsonMap(data) match {
                 case Right(_) => fail(s"Expected parse failure based on semantic '$semantic', but it succeeded!")
                 case Left(messages) => 
-                    val expMsg = s"Illegal value for regional grouping semantic: $semantic"
+                    val expMsg = s"Illegal value for proximity filter semantic: $semantic"
                     val numMatchMessages = messages.count(_ === expMsg).toInt
                     if numMatchMessages === 1 then succeed
                     else {
@@ -200,22 +211,34 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
     test("Without groups present, region grouping semantic must be trivial.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         type RawSemanticValue = String // Give context-specific meaning to bare String.
-        type RawThreshold = NonnegativeReal
+        type RawThreshold = PositiveReal
 
-        def mygen: Gen[(ImagingSequence, RawSemanticValue, RawThreshold, Option[NonEmptyList[LocusGroup]], Set[Timepoint], Either[String, Unit])] = for {
+        def mygen: Gen[(ImagingSequence, RawSemanticValue, RawThreshold, Option[NonEmptyList[LocusGroup]], Set[Timepoint], String)] = for {
             (seq, locusGroupingOpt, exclusions) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt(10))
-            (semantic, altExpectMessage) <- Gen.oneOf(
-                Gen.oneOf("SelectiveProximityPermission", "SelectiveProximityProhibition")
-                    .map{ s => (s, s"Nontrivial grouping semantic ($s), but no groups!".asLeft) },
+            (semantic, expectedMessage) <- Gen.oneOf(
+                Gen.oneOf(
+                    "SelectiveProximityPermission" -> "selective proximity permission", 
+                    "SelectiveProximityProhibition" -> "selective proximity prohibition",
+                ).map{ (s, nameForErrText) => 
+                    val expErrMsg = s"For $nameForErrText, threshold and grouping must be present."
+                    (s, expErrMsg) 
+                },
                 Gen.alphaNumStr
-                    .suchThat{ s => ! Set("permissive", "prohibitive", "trivial").contains(s.toLowerCase) }
-                    .map(s => s -> s"Illegal value for regional grouping semantic: $s".asLeft),
-                Gen.oneOf("trivial", "Trivial", "TRIVIAL").map(_ -> ().asRight)
+                    .suchThat{ s =>  
+                        val knowns = Set(
+                            "UniversalProximityPermission",
+                            "UniversalProximityProhibition",
+                            "SelectiveProximityPermission", 
+                            "SelectiveProximityProhibition",
+                            )
+                        !knowns.contains(s.toLowerCase)
+                    }
+                    .map(s => s -> s"Illegal value for proximity filter semantic: $s"),
             )
-            optRawThreshold <- arbitrary[NonnegativeReal]
-        } yield (seq, semantic, optRawThreshold, locusGroupingOpt, exclusions, altExpectMessage)
+            threshold <- arbitrary[PositiveReal]
+        } yield (seq, semantic, threshold, locusGroupingOpt, exclusions, expectedMessage)
 
-        forAll (mygen, minSuccessful(1000)) { case (seq, semantic, rawThreshold, locusGroupingOpt, exclusions, altExpectMessage) => 
+        forAll (mygen, minSuccessful(1000)) { case (seq, semantic, rawThreshold, locusGroupingOpt, exclusions, expectedMessage) => 
             val baseData: Map[String, ujson.Value] = {
                 val records: NonEmptyList[ujson.Obj] = 
                     Random.shuffle(seq.allRounds.map(ImagingRound.roundToJsonObject).toList).toList.toNel.get
@@ -224,18 +247,15 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
             }
             val data: Map[String, ujson.Value] = addLocusGroupingAndExclusions(baseData, locusGroupingOpt, exclusions)
             
-            (ImagingRoundsConfiguration.fromJsonMap(data), altExpectMessage) match {
-                case (Right(_), Right(_)) => succeed
-                case (Left(messages), Right(_)) => fail(s"Expected parse success (semantic = $semantic), but got failure(s): ${messages.mkString_("; ")}")
-                case (Right(_), Left(_)) => fail(s"Expected parse failure based on semantic '$semantic', but it succeeded!")
-                case (Left(messages), Left(expectMessage)) => 
-                    val numMatchMessages = messages.count(_ === expectMessage).toInt
+            ImagingRoundsConfiguration.fromJsonMap(data) match {
+                case Right(_) => fail(s"Expected parse failure based on semantic '$semantic', but it succeeded!")
+                case Left(messages) => 
+                    val numMatchMessages = messages.count(_ === expectedMessage).toInt
                     if numMatchMessages === 1 then succeed
-                    else {
+                    else
                         println(s"MESSAGES: ${messages.mkString_("; ")}")
                         println(s"DATA (below)\n${write(data, indent = 4)}")
-                        fail(s"Expected exactly 1 matching message ($expectMessage) but got $numMatchMessages. Data and messages are above.")
-                    }
+                        fail(s"Expected exactly 1 matching message ($expectedMessage) but got $numMatchMessages. Data and messages are above.")
             }
         }
     }
@@ -322,7 +342,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
         }
     }
 
-    test("Locus grouping must either be absent or be identical in union over timepoints to timepoints from locus imaging rounds from imaging sequence.") {
+    test("Locus grouping must either be absent or be identical, in union over timepoints, to timepoints from locus imaging rounds from imaging sequence.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val maxTime = 100
         given arbTime: Arbitrary[Timepoint] = 
@@ -414,9 +434,12 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
                         case ("SelectiveProximityPermission" | "SelectiveProximityProhibition") => 
                             List("groups" -> proximityFilterStrategyToJson(regionGroups.map(_.toList)))
                     }
+                    val thresholdKV = 
+                        if semantic === "UniversalProximityPermission" then List.empty
+                        else List("minimumPixelLikeSeparation" -> ujson.Num(threshold))
                     val proximityFilterStrategyJsonData = ujson.Obj(
                         "semantic" -> ujson.Str(semantic), 
-                        (List("minimumPixelLikeSeparation" -> ujson.Num(threshold)) ++ extra)*,
+                        (thresholdKV ++ extra)*,
                     )
                     Map("imagingRounds" -> ujson.Arr(records.toList*), "proximityFilterStrategy" -> proximityFilterStrategyJsonData)
                 }
@@ -473,9 +496,12 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
                         case ("SelectiveProximityPermission" | "SelectiveProximityProhibition") => 
                             List("groups" -> proximityFilterStrategyToJson(regionGroups.map(_.toList)))
                     }
+                    val thresholdKV = 
+                        if semantic === "UniversalProximityPermission" then List.empty
+                        else List("minimumPixelLikeSeparation" -> ujson.Num(threshold))
                     val proximityFilterStrategyJsonData = ujson.Obj(
                         "semantic" -> ujson.Str(semantic), 
-                        (List("minimumPixelLikeSeparation" -> ujson.Num(threshold)) ++ extra)*,
+                        (thresholdKV ++ extra)*,
                     )
                     Map("imagingRounds" -> ujson.Arr(records.toList*), "proximityFilterStrategy" -> proximityFilterStrategyJsonData)
                 }
@@ -533,9 +559,12 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
                         case ("SelectiveProximityPermission" | "SelectiveProximityProhibition") => 
                             List("groups" -> proximityFilterStrategyToJson(regionGroups.map(_.toList)))
                     }
+                    val thresholdKV = 
+                        if semantic === "UniversalProximityPermission" then List.empty
+                        else List("minimumPixelLikeSeparation" -> ujson.Num(threshold))
                     val proximityFilterStrategyJsonData = ujson.Obj(
                         "semantic" -> ujson.Str(semantic), 
-                        (List("minimumPixelLikeSeparation" -> ujson.Num(threshold)) ++ extra)*,
+                        (thresholdKV ++ extra)*,
                     )
                     Map("imagingRounds" -> ujson.Arr(records.toList*), "proximityFilterStrategy" -> proximityFilterStrategyJsonData)
                 }
