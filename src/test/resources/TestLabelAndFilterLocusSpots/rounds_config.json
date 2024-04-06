@@ -1,6 +1,6 @@
 {
     "proximityFilterStrategy": {
-        "semantic": "Trivial",
+        "semantic": "UniversalProximityProhibition",
         "minimumPixelLikeSeparation": 5
     },
     "imagingRounds": [

@@ -1,6 +1,6 @@
 {
-    "regionGrouping": {
-        "semantic": "permissive",
+    "proximityFilterStrategy": {
+        "semantic": "SelectiveProximityPermission",
         "groups": [[8, 9], [10, 11]], 
         "minimumPixelLikeSeparation": 5
     },

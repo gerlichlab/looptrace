@@ -189,33 +189,36 @@ object ImagingRoundsConfiguration:
                                     .map(_.some)
                                     .toValidatedNel
                             }
-                        currentSection.get("semantic").toRight("Missing semantic for proximity filter config section!").flatMap(safeReadAs[String]) match {
-                            case Left(message) => message.invalidNel
-                            case Right("UniversalProximityPermission") => (thresholdNel, groupsNel).tupled match {
-                                case fail@Invalid(_) => fail
-                                case Valid((None, None)) => UniversalProximityPermission.validNel
-                                case Valid(_) => "For universal proximity permissiveness, both threshold and groups must be absent.".invalidNel
+                        currentSection.get("semantic") match {
+                            case None => "Missing semantic for proximity filter config section!".invalidNel
+                            case Some(s) => safeReadAs[String](s) match {
+                                case Left(message) => s"Illegal type of value for regional grouping semantic! Message: $message".invalidNel
+                                case Right("UniversalProximityPermission") => (thresholdNel, groupsNel).tupled match {
+                                    case fail@Invalid(_) => fail
+                                    case Valid((None, None)) => UniversalProximityPermission.validNel
+                                    case Valid(_) => "For universal proximity permission, both threshold and groups must be absent.".invalidNel
+                                }
+                                case Right("UniversalProximityProhibition") => (thresholdNel, groupsNel).tupled match {
+                                    case fail@Invalid(_) => fail
+                                    case Valid((Some(t), None)) => UniversalProximityProhibition(t).validNel
+                                    case Valid(_) => "For universal proximity prohibition, threshold must be present and groups must be absent.".invalidNel
+                                }
+                                case Right("SelectiveProximityPermission") => (thresholdNel, groupsNel).tupled match {
+                                    case fail@Invalid(_) => fail
+                                    case Valid((Some(t), Some(g))) => SelectiveProximityPermission(t, g).validNel
+                                    case Valid(_) => "For selective proximity permission, threshold and grouping must be present.".invalidNel
+                                }
+                                case Right("SelectiveProximityProhibition") => (thresholdNel, groupsNel).tupled match {
+                                    case fail@Invalid(_) => fail
+                                    case Valid((Some(t), Some(g))) => SelectiveProximityProhibition(t, g).validNel
+                                    case Valid(_) => "For selective proximity prohibition, threshold and grouping must be present.".invalidNel
+                                }
+                                case Right(semantic) => 
+                                    val errMsg = s"Illegal value for proximity filter semantic: $semantic"
+                                    Invalid{ (thresholdNel, groupsNel).tupled.fold(es => NonEmptyList(errMsg, es.toList), _ => NonEmptyList.one(errMsg)) }
                             }
-                            case Right("UniversalProximityProhibition") => (thresholdNel, groupsNel).tupled match {
-                                case fail@Invalid(_) => fail
-                                case Valid((Some(t), None)) => UniversalProximityProhibition(t).validNel
-                                case Valid(_) => "For universal proximity prohibition, threshold must be present and groups must be absent.".invalidNel
-                            }
-                            case Right("SelectiveProximityPermission") => (thresholdNel, groupsNel).tupled match {
-                                case fail@Invalid(_) => fail
-                                case Valid((Some(t), Some(g))) => SelectiveProximityPermission(t, g).validNel
-                                case Valid(_) => "For selective proximity permission, threshold and grouping must be present.".invalidNel
-                            }
-                            case Right("SelectiveProximityProhibition") => (thresholdNel, groupsNel).tupled match {
-                                case fail@Invalid(_) => fail
-                                case Valid((Some(t), Some(g))) => SelectiveProximityProhibition(t, g).validNel
-                                case Valid(_) => "For selective proximity prohibition, threshold and grouping must be present.".invalidNel
-                            }
-                            case Right(semantic) => 
-                                val errMsg = ""
-                                Invalid{ (thresholdNel, groupsNel).tupled.fold(es => NonEmptyList(errMsg, es.toList), _ => NonEmptyList.one(errMsg)) }
                         }
-                    }
+                }
             }
         }
         val tracingExclusionsNel: ValidatedNel[String, Set[Timepoint]] = 
