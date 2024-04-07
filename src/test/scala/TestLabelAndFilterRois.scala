@@ -751,7 +751,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("Regardless of grouping semantic, it's a partition: A probe grouping that is NONEMPTY but does NOT COVER regional barcodes set is an error.") {
+    test("Regardless of grouping semantic, it covers all regional barcodies.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
 
         // Generate a reasonable margin on side of each centroid coordinate for ROI bounding boxes.
@@ -792,58 +792,11 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                     val timesText = uncoveredTimepoints.map(_.get).toList.sorted.mkString(", ")
                     val expErrMsg = s"$numGroupless ROIs without timepoint declared in grouping. ${uncoveredTimepoints.size} undeclared timepoints: $timesText"
                     obsErrMsg shouldEqual expErrMsg
-                case Right(_) => fail("Expected error message about invalid partition (non-covering), but didn't get it.")
+                case Right(_) => fail("Expected error message about non-covering, but didn't get it.")
             }
         }
     }
 
-    test("Regardless of grouping semantic, it's a partition: A probe grouping that is NOT DISJOINT (timepoint repeated between groups) is an ERROR.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
-
-        // Generate a reasonable margin on side of each centroid coordinate for ROI bounding boxes.
-        given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-2048.0, 2048.0)
-        given arbMargin: Arbitrary[BoundingBox.Margin] = getArbForMargin(NonnegativeReal(1.0), NonnegativeReal(32.0))
-        
-        extension [X : Order](xs: Set[X])
-            def unsafeToNes: NonEmptySet[X] = xs.toList.toNel.get.toNes
-
-        def genSmallRoisAndGrouping: Gen[(List[RegionalBarcodeSpotRoi], NonEmptySet[Timepoint], ImagingRoundsConfiguration.NontrivialProximityFilter)] = for {
-            // First, generate ROIs timepoints, such that they're few in number (so quicker test).
-            rois <- {
-                given arbTime: Arbitrary[Timepoint] = Gen.oneOf(List(7, 8, 9).map(Timepoint.unsafe)).toArbitrary
-                Gen.choose(1, 10).flatMap(Gen.listOfN(_, arbitrary[RegionalBarcodeSpotRoi]))
-            }
-            times = rois.map(_.time).toSet
-            numGroups <- Gen.choose(1, times.size)
-            legitGroup <- Gen.oneOf(collections.partition(numGroups, times))
-            repeated <- Gen.nonEmptyListOf(Gen.oneOf(times)).map(_.toSet)
-            grouping = NonEmptyList(repeated, legitGroup).map(_.unsafeToNes)
-            threshold <- arbitrary[PositiveReal]
-            proxFilterStrategy <- Gen.oneOf(
-                ImagingRoundsConfiguration.SelectiveProximityPermission(threshold, grouping),
-                ImagingRoundsConfiguration.SelectiveProximityProhibition(threshold, grouping),
-                )
-        } yield (rois, repeated.unsafeToNes, proxFilterStrategy)
-        
-        // TODO: need to remove the pendingUntilFixed wrapper once this test is updated.
-        // Originally, it was supposed to be the call under test which handled the prohibition on grouping components being mutually disjoint.
-        // Now, this is instead handled at the level of the ImagingRoundsConfiguration.
-        // The method under test has been made package-private, but in reality it should probably be made object-private, 
-        // for exactly this region that the logic of restricting the structure of the regional imaging round grouping 
-        // is expected to have already been done. Such a change would, however, require a further overhaul of some of these tests.
-        // See: https://github.com/gerlichlab/looptrace/issues/266
-        pendingUntilFixed{
-            forAll (genSmallRoisAndGrouping) { (rois, repeatedTimepoints, proxFilterStrategy) =>
-                buildNeighboringRoisFinder(NonnegativeInt.indexed(rois), proxFilterStrategy) match {
-                    case Left(obsErrMsg) => 
-                        val repTimesText = repeatedTimepoints.toList.map(t => t.get -> 2).sortBy(_._1).mkString(", ")
-                        val expErrMsg = s"${repeatedTimepoints.size} repeated timepoint(s): $repTimesText"
-                        obsErrMsg shouldEqual expErrMsg
-                    case Right(_) => fail("Expected error message about invalid partition (non-disjoint), but didn't get it.")
-                }
-            }
-        }
-    }
 
     test("For UNIVERSAL PROHIBITION grouping, more proximal neighbors from different FOVs don't pair, while less proximal ones from the same FOV do pair. #150") {
         // The ROIs data for each test iteration

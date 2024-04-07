@@ -95,22 +95,19 @@ object ImagingRoundsConfiguration:
             if nonRegional.isEmpty then ().validNel 
             else s"${nonRegional.size} timepoint(s) as keys in locus grouping that aren't regional.".invalidNel
         }
-        val (proximityGroupingDisjointNel, proximityGroupingSubsetNel, proximityGroupingSupersetNel) = proximityFilterStrategy match {
+        val (proximityGroupingSubsetNel, proximityGroupingSupersetNel) = proximityFilterStrategy match {
             case (UniversalProximityPermission | UniversalProximityProhibition(_)) => 
                 // In the trivial case, we have no more validation work to do.
-                (().validNel, ().validNel, ().validNel)
+                (().validNel, ().validNel)
             case s: (SelectiveProximityPermission | SelectiveProximityProhibition) => 
                 // In the nontrivial case, check for set equivalance of timepoints b/w imaging sequence and grouping.
                 val uniqueGroupedTimes = s.grouping.reduce(_ ++ _).toList.toSet
                 val uniqueRegionalTimes = sequence.regionRounds.map(_.time).toList.toSet
-                val disjointNel = s.grouping.foldLeft(true -> Set.empty[Timepoint]){ 
-                    case ((p, acc), ts) => (p && (acc & ts.toSortedSet).isEmpty, acc ++ ts.toSortedSet)
-                }._1.either("Proximity filter strategy's subsets are not disjoint!", ()).toValidatedNel
                 val subsetNel = checkTimesSubset(uniqueRegionalTimes)(uniqueGroupedTimes, "proximity filter's grouping (rel. to regionals in imaging sequence)")
                 val supersetNel = checkTimesSubset(uniqueGroupedTimes)(uniqueRegionalTimes, "regionals in imaging sequence (rel. to proximity filter strategy)")
-                (disjointNel, subsetNel, supersetNel)
+                (subsetNel, supersetNel)
         }
-        (tracingSubsetNel, locusTimeSubsetNel, locusTimeSupersetNel, locusGroupTimesAreRegionTimesNel, proximityGroupingDisjointNel, proximityGroupingSubsetNel, proximityGroupingSupersetNel)
+        (tracingSubsetNel, locusTimeSubsetNel, locusTimeSupersetNel, locusGroupTimesAreRegionTimesNel, proximityGroupingSubsetNel, proximityGroupingSupersetNel)
             .tupled
             .map(_ => ImagingRoundsConfiguration(sequence, locusGrouping, proximityFilterStrategy, tracingExclusions))
             .toEither
