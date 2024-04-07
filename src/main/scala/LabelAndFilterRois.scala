@@ -318,6 +318,8 @@ object LabelAndFilterRois:
                 Alternative[List].separate(rois.map{ case pair@(roi, _) => groupIds.get(roi.time).toRight(pair).map(_ -> pair)}) match {
                     case (Nil, withGroupsAssigned) => 
                         // NB: "eligible" refers to eligibility to be deemed in violation of proximity rule, not "eligible" to be kept for further processing.
+                        // Spots from the SAME timepoint can never be "eligible" for exclusion on the basis of proximity; instead, they're ALWAYS 
+                        // retained and perhaps will have their ROIs merged.
                         val eligibleByTime = { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => a._2._1.time =!= b._2._1.time }
                         val eligibleByGroup = strat match {
                             // In the grouping, we declare which regional timepoints are "together" for the purpose of BEING REGARDED AS IN VIOLATION OF PROXIMITY.

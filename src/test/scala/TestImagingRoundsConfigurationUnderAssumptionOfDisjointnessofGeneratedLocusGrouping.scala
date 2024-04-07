@@ -287,21 +287,14 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
                     _ <- {
                         // No duplicates within subsets, so try to find overlap between them.
                         // In the process, determine the flattened set of timepoints in the grouping.
-                        val (isDisjoint, seen) = gs.toList.foldLeft(false -> Set.empty[Timepoint]){ case ((isDisjoint, acc), g) => 
-                            val ts = g.toList.toSet
-                            (isDisjoint || (ts & acc).nonEmpty, acc ++ ts)
-                        }
+                        val uniqueTimepoints = gs.flatten.toNes.toSortedSet
                         // Determine which error messages to search for.
                         List(
-                            isDisjoint.option{(
-                                "Overlapping subsets",
-                                (_: String) === "Proximity filter strategy's subsets are not disjoint!"
-                            )},
-                            (seen -- regionalTimes).nonEmpty.option{(
+                            (uniqueTimepoints -- regionalTimes).nonEmpty.option{(
                                 "Not in sequence",
                                 (_: String).startsWith(s"Unknown timepoint(s) (proximity filter's grouping (rel. to regionals in imaging sequence))")
                             )},
-                            (regionalTimes -- seen).nonEmpty.option{(
+                            (regionalTimes -- uniqueTimepoints).nonEmpty.option{(
                                 "Not in grouping", 
                                 (_: String).startsWith(s"Unknown timepoint(s) (regionals in imaging sequence (rel. to proximity filter strategy))")
                             )}
