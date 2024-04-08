@@ -1681,6 +1681,21 @@ files = [
 setuptools = "*"
 
 [[package]]
+name = "looptrace-napari"
+version = "0.3.dev0"
+description = "Napari plugin for viewing locus-specific spots, from looptrace, in napari"
+optional = false
+python-versions = ">=3.10"
+files = []
+develop = false
+
+[package.source]
+type = "git"
+url = "https://github.com/gerlichlab/looptrace-napari"
+reference = "2024-04-08"
+resolved_reference = "f2413e78036dc49c423c5ebfe846f94480c25abe"
+
+[[package]]
 name = "magicgui"
 version = "0.8.2"
 description = "build GUIs from python types"
@@ -4815,7 +4830,7 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 analysis = ["matplotlib", "numba", "seaborn"]
 deconvolution = ["flowdec", "tensorflow"]
 dev = ["czifile", "matplotlib", "numba", "seaborn"]
-interactive-visualisation = ["napari"]
+interactive-visualisation = ["looptrace-napari", "napari"]
 new-mac-napari = ["pyqt6"]
 nuclei = ["cellpose"]
 pipeline = ["cellpose", "piper"]
@@ -4825,4 +4840,4 @@ test = ["hypothesis", "pytest", "pytest-skip-slow"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "15ce2dea945c27b7bcbca07183b3e736b6dd34c8d5c4f948fa9f0c8f5aa8f58c"
+content-hash = "4d2f850838385c57996121b1747b6b77f2cfecbd49543985e0e90255cd782cc7"
