@@ -12,7 +12,7 @@ object Dependencies {
         "ch.qos.logback" % "logback-classic" % "1.4.14", 
         "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
     )
-    lazy val mouse = "org.typelevel" %% "mouse" % "1.2.2"
+    lazy val mouse = "org.typelevel" %% "mouse" % "1.2.3"
     // lazy val netcdf = {
     //     val version = "5.5.3"
     //     val orgName = "edu.ucar"
@@ -22,7 +22,7 @@ object Dependencies {
     //         orgName % "toolsUI" % "5.5.2"
     //     )
     // }
-    lazy val os = "com.lihaoyi" %% "os-lib" % "0.9.2"
+    lazy val os = "com.lihaoyi" %% "os-lib" % "0.9.3"
     lazy val scalaCsv = "com.github.tototoshi" %% "scala-csv" % "1.3.10"
     lazy val scopt = "com.github.scopt" %% "scopt" % "4.1.0"
     lazy val uJson = "com.lihaoyi" %% "ujson" % "3.1.4"
@@ -32,6 +32,6 @@ object Dependencies {
     lazy val scalacheck = "org.scalacheck" %% "scalacheck" % s"$scalacheckMajor.$scalacheckMinor.0"
     lazy val scalactic = "org.scalactic" %% "scalactic" % scalatestVersion
     lazy val scalatest = "org.scalatest" %% "scalatest" % scalatestVersion
-    lazy val scalatestScalacheck = "org.scalatestplus" %% s"scalacheck-$scalacheckMajor-$scalacheckMinor" % "3.2.17.0"
+    lazy val scalatestScalacheck = "org.scalatestplus" %% s"scalacheck-$scalacheckMajor-$scalacheckMinor" % "3.2.18.0"
 
 }
