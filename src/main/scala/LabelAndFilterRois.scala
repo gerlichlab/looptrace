@@ -48,11 +48,9 @@ object LabelAndFilterRois:
     /**
       * The command-line configuration/interface definition
       *
+      * @param configuration The configuration of the imaging rounds
       * @param spotsFile Path to the regional spots file in which to label records as too proximal or not
       * @param driftFile Path to the file with drift correction information for all ROIs, across all timepoints
-      * @param probeGroups Specification of which regional barcode probes 
-      * @param minSpotSeparation Number of units of separation required for points to not be considered proximal
-      * @param buildDistanceThreshold How to use the minSpotSeparation value
       * @param unfilteredOutputFile Path to which to write unfiltered (but proximity-labeled) output
       * @param filteredOutputFile Path to which to write proximity-filtered (unlabeled) output
       * @param extantOutputHandler How to handle if an output target already exists
@@ -61,8 +59,6 @@ object LabelAndFilterRois:
         configuration: ImagingRoundsConfiguration = null, // unconditionally required
         spotsFile: os.Path = null, // unconditionally required
         driftFile: os.Path = null, // unconditionally required
-        spotSeparationThresholdValue: NonnegativeReal = NonnegativeReal(0), // unconditionally required
-        buildDistanceThreshold: NonnegativeReal => DistanceThreshold = null, // unconditionally required
         unfilteredOutputFile: UnfilteredOutputFile = null, // unconditionally required
         filteredOutputFile: FilteredOutputFile = null, // unconditionally required
         extantOutputHandler: ExtantOutputHandler = null, // unconditionally required
@@ -304,16 +300,25 @@ object LabelAndFilterRois:
       *         otherwise, a {@code Left}-wrapped error message about what went wrong
       * @see 
       */
-    private[looptrace] def buildNeighboringRoisFinder(rois: List[RoiLinenumPair], proxFilterStrategy: ImagingRoundsConfiguration.NontrivialProximityFilter): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
+    private[looptrace] def buildNeighboringRoisFinder(rois: List[RoiLinenumPair], proxFilterStrategy: ImagingRoundsConfiguration.ProximityFilterStrategy): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
         given orderForRoiLinenumPair: Order[RoiLinenumPair] = Order.by(_._2)
         type GroupId = NonnegativeInt
         type IndexedRoi = (RegionalBarcodeSpotRoi, NonnegativeInt)
-        val minSep = PiecewiseDistance.ConjunctiveThreshold(proxFilterStrategy.minSpotSeparation.asNonnegative)
         val getPoint = (_: RoiLinenumPair)._1.centroid
         val groupedRoiLinenumPairs: Either[String, Map[RoiLinenumPair, NonEmptySet[RoiLinenumPair]]] = proxFilterStrategy match {
-            case _: ImagingRoundsConfiguration.UniversalProximityProhibition => 
-                buildNeighborsLookupKeyed(rois.map{ case pair@(r, _) => r.position -> pair }, (_, _) => true, getPoint, minSep, identity).asRight
+            case ImagingRoundsConfiguration.UniversalProximityPermission => Map.empty.asRight
+            case strat: ImagingRoundsConfiguration.UniversalProximityProhibition => 
+                val minSep = PiecewiseDistance.ConjunctiveThreshold(strat.minSpotSeparation.asNonnegative)
+                val considerRoiPair = { (a: IndexedRoi, b: IndexedRoi) => a._1.time =!= b._1.time }
+                buildNeighborsLookupKeyed(
+                    rois.map{ case pair@(r, _) => r.position -> pair }, 
+                    considerRoiPair, 
+                    getPoint, 
+                    minSep, 
+                    identity,
+                ).asRight
             case strat: (ImagingRoundsConfiguration.SelectiveProximityProhibition | ImagingRoundsConfiguration.SelectiveProximityPermission) => 
+                val minSep = PiecewiseDistance.ConjunctiveThreshold(strat.minSpotSeparation.asNonnegative)
                 val groupIds = NonnegativeInt.indexed(strat.grouping.toList).flatMap((g, i) => g.toList.map(_ -> i)).toMap
                 Alternative[List].separate(rois.map{ case pair@(roi, _) => groupIds.get(roi.time).toRight(pair).map(_ -> pair)}) match {
                     case (Nil, withGroupsAssigned) => 
@@ -328,7 +333,12 @@ object LabelAndFilterRois:
                             case _: ImagingRoundsConfiguration.SelectiveProximityPermission => { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => a._1 =!= b._1 }
                         }
                         val considerRoiPair = { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => eligibleByTime(a, b) && eligibleByGroup(a, b) }
-                        buildNeighborsLookupKeyed(withGroupsAssigned.map{ case (gi, pair@(roi, _)) => roi.position -> (gi -> pair) }, considerRoiPair, getPoint, minSep, _._2).asRight
+                        buildNeighborsLookupKeyed(
+                            withGroupsAssigned.map{ case (gi, pair@(roi, _)) => roi.position -> (gi -> pair) }, 
+                            considerRoiPair, 
+                            getPoint, 
+                            minSep, _._2,
+                        ).asRight
                     case (groupless, _) => 
                         val times = groupless.map(_._1.time).toSet
                         val timesText = times.toList.map(_.get).sorted.mkString(", ")

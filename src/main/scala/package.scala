@@ -176,6 +176,7 @@ package object looptrace {
 
     /** Tools for working with nonnegative real numbers */
     object NonnegativeReal:
+        def absdiff(x: Double, y: Double): NonnegativeReal = unsafe((x - y).abs)
         inline def apply(x: Double): NonnegativeReal = 
             inline if x >= 0 then (x: NonnegativeReal)
             else compiletime.error("Negative value where nonnegative is required!")

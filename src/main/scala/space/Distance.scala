@@ -3,7 +3,7 @@ package at.ac.oeaw.imba.gerlich.looptrace.space
 import scala.math.{ pow, sqrt }
 import cats.*
 import cats.syntax.all.*
-import at.ac.oeaw.imba.gerlich.looptrace.{ NonnegativeInt, NonnegativeReal }
+import at.ac.oeaw.imba.gerlich.looptrace.{ NonnegativeInt, NonnegativeReal, PositiveReal }
 import at.ac.oeaw.imba.gerlich.looptrace.{ all, any }
 
 /** Something that can compare two {@code A} values w.r.t. threshold value of type {@code T} */
@@ -72,19 +72,42 @@ object DistanceThreshold:
         defineProximityPointwise(threshold).contramap
 end DistanceThreshold
 
+/**
+  * Piecewise / by-component distance, as absolute differences
+  *
+  * @param x The x-component of the absolute difference between two points' coordinatess
+  * @param y The y-component of the absolute difference between two points' coordinates
+  * @param z The z-component of the absolute difference between two points' coordinates
+  */
+final class PiecewiseDistance private(x: NonnegativeReal, y: NonnegativeReal, z: NonnegativeReal):
+    def getX: NonnegativeReal = x
+    def getY: NonnegativeReal = y
+    def getZ: NonnegativeReal = z
+
 /** Helpers for working with distances in by-component / piecewise fashion */
 object PiecewiseDistance:
     
     /** Distance threshold in which predicate comparing values to this threshold operates conjunctively over components */
     final case class ConjunctiveThreshold(get: NonnegativeReal) extends DistanceThreshold
 
-    /** Are points closer than given threshold along any axis? */
-    def within(threshold: ConjunctiveThreshold)(a: Point3D, b: Point3D): Boolean = ((a, b) match {
-        case (
-            Point3D(XCoordinate(x1), YCoordinate(y1), ZCoordinate(z1)), 
-            Point3D(XCoordinate(x2), YCoordinate(y2), ZCoordinate(z2))
-        ) => List(x1 - x2, y1 - y2, z1 - z2)
-    }).forall(diff => diff.abs < threshold.get)
+    /**
+      * Compute the piecewise / component-wise distance between the given points.
+      *
+      * @param a One point
+      * @param b The other point
+      * @return A wrapper with access to the (absolute) difference between each component / dimension of the 
+      *     two given points' coordinates
+      */
+    def between(a: Point3D, b: Point3D): PiecewiseDistance = new PiecewiseDistance(
+        x = NonnegativeReal.absdiff(a.x.get, b.x.get), 
+        y = NonnegativeReal.absdiff(a.y.get, b.y.get), 
+        z = NonnegativeReal.absdiff(a.z.get, b.z.get),
+        )
+
+    /** Are points closer than given threshold along each axis? */
+    def within(threshold: ConjunctiveThreshold)(a: Point3D, b: Point3D): Boolean = 
+        val d = between(a, b)
+        d.getX < threshold.get && d.getY < threshold.get && d.getZ < threshold.get
 end PiecewiseDistance
 
 /** Semantic wrapper to denote that a nonnegative real number represents a Euclidean distance */

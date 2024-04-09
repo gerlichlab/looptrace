@@ -14,8 +14,14 @@ import org.scalatest.matchers.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.collections.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
-import at.ac.oeaw.imba.gerlich.looptrace.LabelAndFilterRois.*
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.safeReadAllWithOrderedHeaders
+import at.ac.oeaw.imba.gerlich.looptrace.LabelAndFilterRois.*
+import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.{
+    SelectiveProximityPermission, 
+    SelectiveProximityProhibition,
+    UniversalProximityPermission,
+    UniversalProximityProhibition, 
+}
 
 
 /** Tests for the filtration of the individual supports (single FISH probes) of chromatin fiber traces */
@@ -160,6 +166,8 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 |7,P0001.zarr,29,0,12,588,1779,2,18,572,604,1763,1795
                 |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
                 |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
+                |11,P0001.zarr,30,0,10.1,549,1280.8,2,18,433,465,1283,1315
+                |12,P0001.zarr,30,0,10,548.5,1280.6,2,18,572,604,1763,1795
                 |13,P0001.zarr,30,0,9,995,1780,1,17,679,711,564,596
                 |14,P0001.zarr,30,0,8,993.2,1781,3,19,977,1009,1705,1737
                 |15,P0001.zarr,30,0,14.4,589.5,1779.3,2,18,572,604,1763,1795
@@ -175,6 +183,10 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 |7,P0001.zarr,29,0,12,588,1779,2,18,572,604,1763,1795
                 |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
                 |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
+                |11,P0001.zarr,30,0,10.1,549,1280.8,2,18,433,465,1283,1315
+                |12,P0001.zarr,30,0,10,548.5,1280.6,2,18,572,604,1763,1795
+                |13,P0001.zarr,30,0,9,995,1780,1,17,679,711,564,596
+                |14,P0001.zarr,30,0,8,993.2,1781,3,19,977,1009,1705,1737
                 |15,P0001.zarr,30,0,14.4,589.5,1779.3,2,18,572,604,1763,1795
                 |""", 
                 PositiveReal(3.0) -> 
@@ -182,43 +194,40 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
                 |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
                 |2,P0001.zarr,27,0,3,1878,314,0,11,1870,1886,47,347
+                |3,P0001.zarr,28,0,5.5,1380,1457,-1,14,1364,1396,1441,1473
+                |4,P0001.zarr,28,0,7,1378,1459.5,0,15,8,40,1343,1375
                 |6,P0001.zarr,29,0,10,589,1799,2,18,433,465,1283,1315
                 |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
                 |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
+                |11,P0001.zarr,30,0,10.1,549,1280.8,2,18,433,465,1283,1315
+                |12,P0001.zarr,30,0,10,548.5,1280.6,2,18,572,604,1763,1795
+                |13,P0001.zarr,30,0,9,995,1780,1,17,679,711,564,596
+                |14,P0001.zarr,30,0,8,993.2,1781,3,19,977,1009,1705,1737
                 |""",
             ).map((t, exp) => (DriftFileTexts.allZero, t, exp))
         
         val fineDriftOnlyArguments = List(
             PositiveReal(0.25) -> spotsText,
-            PositiveReal(0.75) ->  
-            """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
-            |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
-            |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
-            |2,P0001.zarr,27,0,3,1878,314,0,11,1870,1886,47,347
-            |3,P0001.zarr,28,0,5.5,1380,1457,-1,14,1364,1396,1441,1473
-            |4,P0001.zarr,28,0,7,1378,1459.5,0,15,8,40,1343,1375
-            |5,P0001.zarr,28,0,10,1783,1084,2,18,1767,1799,1068,1100
-            |6,P0001.zarr,29,0,10,589,1799,2,18,433,465,1283,1315
-            |7,P0001.zarr,29,0,12,588,1779,2,18,572,604,1763,1795
-            |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
-            |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
-            |10,P0001.zarr,30,0,10,1783,1084,2,18,1767,1799,1068,1100
-            |13,P0001.zarr,30,0,9,995,1780,1,17,679,711,564,596
-            |14,P0001.zarr,30,0,8,993.2,1781,3,19,977,1009,1705,1737
-            |15,P0001.zarr,30,0,14.4,589.5,1779.3,2,18,572,604,1763,1795
-            |""",
+            PositiveReal(0.75) ->  spotsText,
             PositiveReal(6.0) -> 
             """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
             |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
             |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
             |2,P0001.zarr,27,0,3,1878,314,0,11,1870,1886,47,347
+            |3,P0001.zarr,28,0,5.5,1380,1457,-1,14,1364,1396,1441,1473
+            |4,P0001.zarr,28,0,7,1378,1459.5,0,15,8,40,1343,1375
             |6,P0001.zarr,29,0,10,589,1799,2,18,433,465,1283,1315
             |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
+            |11,P0001.zarr,30,0,10.1,549,1280.8,2,18,433,465,1283,1315
+            |12,P0001.zarr,30,0,10,548.5,1280.6,2,18,572,604,1763,1795
+            |13,P0001.zarr,30,0,9,995,1780,1,17,679,711,564,596
+            |14,P0001.zarr,30,0,8,993.2,1781,3,19,977,1009,1705,1737
             |""",
         ).map((t, exp) => (DriftFileTexts.zeroCoarse, t, exp))
 
         val coarseDriftOnlyArguments = List(
-            PositiveReal(1.0) -> 
+            PositiveReal(1.0) -> spotsText, 
+            PositiveReal(5.0) -> 
             """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
             |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
             |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
@@ -227,55 +236,44 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
             |4,P0001.zarr,28,0,7,1378,1459.5,0,15,8,40,1343,1375
             |5,P0001.zarr,28,0,10,1783,1084,2,18,1767,1799,1068,1100
             |6,P0001.zarr,29,0,10,589,1799,2,18,433,465,1283,1315
-            |7,P0001.zarr,29,0,12,588,1779,2,18,572,604,1763,1795
             |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
             |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
             |10,P0001.zarr,30,0,10,1783,1084,2,18,1767,1799,1068,1100
+            |11,P0001.zarr,30,0,10.1,549,1280.8,2,18,433,465,1283,1315
+            |12,P0001.zarr,30,0,10,548.5,1280.6,2,18,572,604,1763,1795
             |13,P0001.zarr,30,0,9,995,1780,1,17,679,711,564,596
             |14,P0001.zarr,30,0,8,993.2,1781,3,19,977,1009,1705,1737
-            |15,P0001.zarr,30,0,14.4,589.5,1779.3,2,18,572,604,1763,1795
-            |""", 
-            PositiveReal(5.0) -> 
-            """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
-            |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
-            |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
-            |2,P0001.zarr,27,0,3,1878,314,0,11,1870,1886,47,347
-            |5,P0001.zarr,28,0,10,1783,1084,2,18,1767,1799,1068,1100
-            |6,P0001.zarr,29,0,10,589,1799,2,18,433,465,1283,1315
-            |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
-            |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
-            |10,P0001.zarr,30,0,10,1783,1084,2,18,1767,1799,1068,1100
             |""", 
         ).map((t, exp) => (DriftFileTexts.zeroFine, t, exp))
 
         val bothDriftArguments = List(
-            PositiveReal(3.0) -> 
-            """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
-            |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
-            |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
-            |2,P0001.zarr,27,0,3,1878,314,0,11,1870,1886,47,347
-            |5,P0001.zarr,28,0,10,1783,1084,2,18,1767,1799,1068,1100
-            |6,P0001.zarr,29,0,10,589,1799,2,18,433,465,1283,1315
-            |7,P0001.zarr,29,0,12,588,1779,2,18,572,604,1763,1795
-            |8,P0001.zarr,29,0,11,595,1780,1,17,679,711,564,596
-            |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
-            |10,P0001.zarr,30,0,10,1783,1084,2,18,1767,1799,1068,1100
-            |15,P0001.zarr,30,0,14.4,589.5,1779.3,2,18,572,604,1763,1795
-            |""", 
+            PositiveReal(3.0) -> spotsText, 
             PositiveReal(17.0) -> 
             """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
             |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
             |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
             |2,P0001.zarr,27,0,3,1878,314,0,11,1870,1886,47,347
+            |3,P0001.zarr,28,0,5.5,1380,1457,-1,14,1364,1396,1441,1473
+            |4,P0001.zarr,28,0,7,1378,1459.5,0,15,8,40,1343,1375
             |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
+            |11,P0001.zarr,30,0,10.1,549,1280.8,2,18,433,465,1283,1315
+            |12,P0001.zarr,30,0,10,548.5,1280.6,2,18,572,604,1763,1795
+            |13,P0001.zarr,30,0,9,995,1780,1,17,679,711,564,596
+            |14,P0001.zarr,30,0,8,993.2,1781,3,19,977,1009,1705,1737
             |""", 
             PositiveReal(16.0) -> 
             """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
             |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
             |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
             |2,P0001.zarr,27,0,3,1878,314,0,11,1870,1886,47,347
+            |3,P0001.zarr,28,0,5.5,1380,1457,-1,14,1364,1396,1441,1473
+            |4,P0001.zarr,28,0,7,1378,1459.5,0,15,8,40,1343,1375
             |6,P0001.zarr,29,0,10,589,1799,2,18,433,465,1283,1315
             |9,P0001.zarr,29,0,11,993,1721,3,19,977,1009,1705,1737
+            |11,P0001.zarr,30,0,10.1,549,1280.8,2,18,433,465,1283,1315
+            |12,P0001.zarr,30,0,10,548.5,1280.6,2,18,572,604,1763,1795
+            |13,P0001.zarr,30,0,9,995,1780,1,17,679,711,564,596
+            |14,P0001.zarr,30,0,8,993.2,1781,3,19,977,1009,1705,1737
             |""", 
         ).map((t, exp) => (DriftFileTexts.nonZero, t, exp))
 
@@ -315,8 +313,15 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                         os.isFile(filteredFile) shouldBe true
                         os.isFile(unfilteredFile) shouldBe true
                         val obsLines = os.read.lines(filteredFile).toList
-                        obsLines.length shouldEqual expLines.length
-                        obsLines.zip(expLines).filter(_ =!= _) shouldEqual List()
+                        obsLines.zip(expLines).filter(_ =!= _) match {
+                            case Nil => succeed
+                            case _ => 
+                                println(s"Observed lines (below)")
+                                obsLines foreach println
+                                println("Expected lines (below)")
+                                expLines foreach println
+                                fail("Expected-observed mismatch!")
+                        }
                     }
                 }
             }
@@ -855,7 +860,11 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         /* Assert property for all partitions (on position) of 5 ROIs into a group of 2 and group of 3. */
         forAll (Table("positions", partitions.toList*)) { positionAssigments =>
             /* Build ROIs with position assigned as randomised, and with index within list. */
-            val roisWithIndex = NonnegativeInt.indexed(positionAssigments).map(_.leftMap{ pos => canonicalRoi.copy(position = pos) })
+            val roisWithIndex = NonnegativeInt.indexed(positionAssigments).map{ (p, i) => 
+                // Make each region distinct to prevent same-regionness from preventing filtration (#228).
+                // Make region distinct from index so that there can't be incidental convergence of roles.
+                canonicalRoi.copy(position = p, region = RegionId(Timepoint(NonnegativeInt.unsafe(i * 2)))) -> i
+            }
             /* Create the expected neighboring ROIs grouping, based on fact that all ROIs within each position group are coincident. */
             given orderForPair: Order[RoiLinenumPair] = Order.by(_._2)
             val expected = roisWithIndex.groupBy(_._1.position).values.map(_.map(_._2)).foldLeft(Map.empty[LineNumber, NonEmptySet[LineNumber]]){
@@ -956,24 +965,24 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("Spots from the same region never exclude each other, no matter the grouping strategy nor the proximity-defining distance.") {
+    test("For filtration strategy with nontrivial grouping of regions, spots from the same region never exclude each other, no matter the proximity-defining distance.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+
+        type GroupedFilterStrategy = SelectiveProximityPermission | SelectiveProximityProhibition
+
         /* Facilitate the derivation of Arbitrary[RegionalBarcodeSpotRoi] */
         given arbMargin: Arbitrary[BoundingBox.Margin] = getArbForMargin(NonnegativeReal(1.0), NonnegativeReal(32.0))
         given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-2048.0, 2048.0)
         
         /* Randomise the nontrivial proximity filter. */
-        def genNontrivialProximityFilter(grouping: NonEmptyList[NonEmptySet[Timepoint]]): Gen[ImagingRoundsConfiguration.NontrivialProximityFilter] = {
-            def createFilter(coinFlip: Double, threshold: PositiveReal): ImagingRoundsConfiguration.NontrivialProximityFilter = 
-                require(coinFlip >= 0 && coinFlip <= 1, s"Coin flip outside [0.0, 1.0]! $coinFlip")
-                if coinFlip < 0.5 
-                then ImagingRoundsConfiguration.SelectiveProximityPermission(threshold, grouping)
-                else ImagingRoundsConfiguration.SelectiveProximityProhibition(threshold, grouping)
-            Gen.zip(Gen.choose[Double](0, 1), Gen.posNum[Double].map(PositiveReal.unsafe)).map(createFilter.tupled)
-        }
+        def genNontrivialProximityFilter(grouping: NonEmptyList[NonEmptySet[Timepoint]]): Gen[GroupedFilterStrategy] = for {
+            threshold <- Gen.choose(1e10, Double.PositiveInfinity).map(PositiveReal.unsafe)
+            build <- Gen.oneOf(SelectiveProximityPermission.apply, SelectiveProximityProhibition.apply)
+        } yield build(threshold, grouping)
 
         given arbitraryRoisAndFilterStrategy(
             using Arbitrary[RegionalBarcodeSpotRoi]
-        ): Arbitrary[(NonEmptyList[RegionalBarcodeSpotRoi], ImagingRoundsConfiguration.NontrivialProximityFilter)] = 
+        ): Arbitrary[(NonEmptyList[RegionalBarcodeSpotRoi], GroupedFilterStrategy)] = 
             (for {
                 rois <- Gen.nonEmptyListOf(arbitrary[RegionalBarcodeSpotRoi])
                     .suchThat(_.length > 1)
@@ -985,12 +994,16 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                 filterStrategy <- genNontrivialProximityFilter(grouping)
             } yield (rois, filterStrategy)).toArbitrary
                 
-        forAll (arbitrary[(NonEmptyList[RegionalBarcodeSpotRoi], ImagingRoundsConfiguration.NontrivialProximityFilter)], minSuccessful(1000)) { 
-            case (initRois: NonEmptyList[RegionalBarcodeSpotRoi], filterStrategy: ImagingRoundsConfiguration.NontrivialProximityFilter) =>
+        forAll (arbitrary[(NonEmptyList[RegionalBarcodeSpotRoi], GroupedFilterStrategy)], minSuccessful(1000)) { 
+            case (initRois: NonEmptyList[RegionalBarcodeSpotRoi], filterStrategy: GroupedFilterStrategy) =>
                 /* First, make it so that each ROI shares the same region, and conduct pretests. */
+                val singlePosition = initRois.head.position
                 val singleRegion = initRois.head.region
-                val rois = NonnegativeInt.indexed(initRois.toList.map{ r => r.copy(region = singleRegion) })
+                val rois = NonnegativeInt.indexed(initRois.toList.map{ r => 
+                    r.copy(position = singlePosition, region = singleRegion)
+                })
                 rois.length > 1 shouldBe true
+                rois.forall(_._1.position === singlePosition) shouldBe true
                 rois.forall(_._1.region === singleRegion) shouldBe true
                 
                 /* Now, perform the function under test and check the result. */
@@ -998,6 +1011,51 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
                     case Left(err) => fail(s"Expected success, but failed with message: $err")
                     case Right(neighbors) => neighbors shouldEqual Map.empty
                 }
+        }
+    }
+
+    test("For filtration strategy with trivial grouping of regions, spots from the same region never exclude each other, no matter the proximity-defining distance.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+
+        type FilterWithoutGrouping = UniversalProximityPermission.type | UniversalProximityProhibition
+
+        /* Facilitate the derivation of Arbitrary[RegionalBarcodeSpotRoi] */
+        given arbMargin: Arbitrary[BoundingBox.Margin] = getArbForMargin(NonnegativeReal(1.0), NonnegativeReal(32.0))
+        given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-2048.0, 2048.0)
+        
+        def genRoisAndStrategy(using arbRoi: Arbitrary[Roi]): Gen[(NonEmptyList[RegionalBarcodeSpotRoi], FilterWithoutGrouping)] = for {
+            maybeThreshold <- Gen.option(Gen.choose(1e10, Double.PositiveInfinity).map(PositiveReal.unsafe))
+            initRois <- Gen.nonEmptyListOf(arbitrary[RegionalBarcodeSpotRoi])
+                .suchThat(_.length > 1)
+                .suchThat(rois => maybeThreshold.fold(true){ threshold => 
+                    rois.map(_.centroid).combinations(2).exists{
+                        case a :: b :: Nil => 
+                            PiecewiseDistance.within(PiecewiseDistance.ConjunctiveThreshold(threshold.asNonnegative))(a, b)
+                        case rois => throw new Exception(s"${rois.length} ROIs when taking pairs of 2!")
+                    }
+                })
+                .map(_.toNel.get) // safe b/c of the initial generator and filter
+            rois = initRois.map{ r => r.copy(position = initRois.head.position, region = initRois.head.region) }
+            filterStrategy: FilterWithoutGrouping = maybeThreshold match {
+                case None => UniversalProximityPermission
+                case Some(t) => UniversalProximityProhibition(t)
+            }
+        } yield (rois, filterStrategy)
+
+        forAll (genRoisAndStrategy, minSuccessful(1000)) { case (initRois, filterStrategy) =>
+            /* First, conduct pretests. */
+            val singlePosition = initRois.head.position
+            val singleRegion = initRois.head.region
+            val rois = NonnegativeInt.indexed(initRois.toList.map{ r => r.copy(region = singleRegion) })
+            rois.length > 1 shouldBe true
+            rois.forall(_._1.position === singlePosition) shouldBe true
+            rois.forall(_._1.region === singleRegion) shouldBe true
+            
+            /* Now, perform the function under test and check the result. */
+            buildNeighboringRoisFinder(rois, filterStrategy) match {
+                case Left(err) => fail(s"Expected success, but failed with message: $err")
+                case Right(neighbors) => neighbors shouldEqual Map.empty
+            }
         }
     }
 
