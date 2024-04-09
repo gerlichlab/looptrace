@@ -37,7 +37,11 @@ You should copy to this folder any checkpoint files of any stages upstream of th
 Even though `--start-point` should allow the restart to begin from where's desired, if that's forgotten the checkpoint files should save you.
 
 Generate an empty checkpoint file for each you'd like to skip. 
-Simply create (`touch`) each such file `looptrace_<stage>.checkpoint` in the desired pypiper output folder.
+Simply create (`touch`) each such file `looptrace_<stage>.checkpoint` in the desired pypiper output folder. 
+Copy any analysis files/folders previously created or created by steps upstream of where you'll restart that you want re-used for the restart. For some information about which steps produce and consume which outputs, refer to the [pipeline outputs doc](./pipeline-outputs.md).
+
+Be mindful of the fact that for restarts, generally you'll be reusing the same images folder, so remove anything from there that you want regenerated.
+
 Below are the sequential pipeline stage names.
 
 ### Pipeline stage names
