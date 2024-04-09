@@ -956,7 +956,52 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("ROIs from different channels can never exclude one another. #138") {
+    test("Spots from the same region never exclude each other, no matter the grouping strategy nor the proximity-defining distance.") {
+        /* Facilitate the derivation of Arbitrary[RegionalBarcodeSpotRoi] */
+        given arbMargin: Arbitrary[BoundingBox.Margin] = getArbForMargin(NonnegativeReal(1.0), NonnegativeReal(32.0))
+        given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-2048.0, 2048.0)
+        
+        /* Randomise the nontrivial proximity filter. */
+        def genNontrivialProximityFilter(grouping: NonEmptyList[NonEmptySet[Timepoint]]): Gen[ImagingRoundsConfiguration.NontrivialProximityFilter] = {
+            def createFilter(coinFlip: Double, threshold: PositiveReal): ImagingRoundsConfiguration.NontrivialProximityFilter = 
+                require(coinFlip >= 0 && coinFlip <= 1, s"Coin flip outside [0.0, 1.0]! $coinFlip")
+                if coinFlip < 0.5 
+                then ImagingRoundsConfiguration.SelectiveProximityPermission(threshold, grouping)
+                else ImagingRoundsConfiguration.SelectiveProximityProhibition(threshold, grouping)
+            Gen.zip(Gen.choose[Double](0, 1), Gen.posNum[Double].map(PositiveReal.unsafe)).map(createFilter.tupled)
+        }
+
+        given arbitraryRoisAndFilterStrategy(
+            using Arbitrary[RegionalBarcodeSpotRoi]
+        ): Arbitrary[(NonEmptyList[RegionalBarcodeSpotRoi], ImagingRoundsConfiguration.NontrivialProximityFilter)] = 
+            (for {
+                rois <- Gen.nonEmptyListOf(arbitrary[RegionalBarcodeSpotRoi])
+                    .suchThat(_.length > 1)
+                    .map(_.toNel.get) // safe b/c of the initial generator and filter
+                grouping <- Gen.choose(1, rois.length - 1).map{ splitPoint => 
+                    val (groupA, groupB) = rois.map(_.region.get).toList.splitAt(splitPoint)
+                    NonEmptyList.of(groupA.toNel.get.toNes, groupB.toNel.get.toNes)
+                }
+                filterStrategy <- genNontrivialProximityFilter(grouping)
+            } yield (rois, filterStrategy)).toArbitrary
+                
+        forAll (arbitrary[(NonEmptyList[RegionalBarcodeSpotRoi], ImagingRoundsConfiguration.NontrivialProximityFilter)], minSuccessful(1000)) { 
+            case (initRois: NonEmptyList[RegionalBarcodeSpotRoi], filterStrategy: ImagingRoundsConfiguration.NontrivialProximityFilter) =>
+                /* First, make it so that each ROI shares the same region, and conduct pretests. */
+                val singleRegion = initRois.head.region
+                val rois = NonnegativeInt.indexed(initRois.toList.map{ r => r.copy(region = singleRegion) })
+                rois.length > 1 shouldBe true
+                rois.forall(_._1.region === singleRegion) shouldBe true
+                
+                /* Now, perform the function under test and check the result. */
+                buildNeighboringRoisFinder(rois, filterStrategy) match {
+                    case Left(err) => fail(s"Expected success, but failed with message: $err")
+                    case Right(neighbors) => neighbors shouldEqual Map.empty
+                }
+        }
+    }
+
+    test("ROIs from different channels can never exclude each other. #138") {
         // TODO: implement with multi-channel adaptations for IF.
         // See: https://github.com/gerlichlab/looptrace/issues/138
         pending
