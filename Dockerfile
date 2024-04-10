@@ -8,7 +8,9 @@ RUN apt-get update -y && \
     apt-get install build-essential software-properties-common -y && \
     add-apt-repository ppa:ubuntu-toolchain-r/test -y && \
     apt-get update -y && \
-    apt-get install git wget vim -y
+    apt-get install git wget vim -y && \
+    # apparently needed to make TensorFlow 2.16 communicate with our GPUs through CUDA with 12.3.2
+    apt-get install cuda-toolkit-12-3 -y
 
 # Copy repo code, to be built later.
 RUN mkdir /looptrace
