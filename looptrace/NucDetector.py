@@ -473,9 +473,3 @@ def _nuc_segmentation_cellpose_3d(nuc_imgs: Union[List[np.ndarray], np.ndarray],
     model = models.CellposeModel(gpu=True, model_type="nuclei", net_avg=False)
     masks = model.eval(nuc_imgs, diameter=diameter, channels=[0, 0], z_axis=0, anisotropy=anisotropy, do_3D=True)[0]
     return masks
-
-
-def _relabel_nucs(nuc_image):
-    out = _mask_to_binary(nuc_image)
-    out = morph_label(out)
-    return out.astype(nuc_image.dtype)
