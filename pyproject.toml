@@ -22,7 +22,6 @@ classifiers = [
 # These are the main runtime dependencies.
 python = ">= 3.10, < 3.11"
 cellpose = { version = "v2.2.2", optional = true }
-czifile = { version = "^2019.7.2", optional = true }
 dask = "^2023.5.1"
 flowdec = { version = "^1.1.0", optional = true }
 gertils = { git = "https://github.com/gerlichlab/gertils.git", tag = "2024-03-13" }
@@ -53,7 +52,7 @@ zarr = "^2.4.12"
 [tool.poetry.extras]
 analysis = ["matplotlib", "numba", "seaborn"]
 deconvolution = ["flowdec", "tensorflow"]
-dev = ["czifile", "matplotlib", "numba", "seaborn"]
+dev = ["matplotlib", "numba", "seaborn"]
 interactive-visualisation = ["looptrace-napari", "napari"]
 new-mac-napari = ["pyqt6"] # needed for visual support on newer Macs (M1, M2)
 nuclei = ["cellpose"]

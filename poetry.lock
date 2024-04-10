@@ -546,22 +546,6 @@ docs = ["ipython", "matplotlib", "numpydoc", "sphinx"]
 tests = ["pytest", "pytest-cov", "pytest-xdist"]
 
 [[package]]
-name = "czifile"
-version = "2019.7.2"
-description = "Read Carl Zeiss(r) Image (CZI) files"
-optional = true
-python-versions = ">=2.7"
-files = [
-    {file = "czifile-2019.7.2-py2.py3-none-any.whl", hash = "sha256:561ba0312e5b9c95db784768d7c81803f62bc323eab42bd5812586ce6dc58db8"},
-    {file = "czifile-2019.7.2.tar.gz", hash = "sha256:04c0e6bed3b24d1bf42bc2cf899a5a08986641379305ce88600fd1c710486436"},
-]
-
-[package.dependencies]
-imagecodecs = {version = ">=2019.5.22", markers = "platform_system == \"Windows\""}
-numpy = ">=1.11.3"
-tifffile = ">=2019.7.2"
-
-[[package]]
 name = "dask"
 version = "2023.12.1"
 description = "Parallel PyData with Task Scheduling"
@@ -4829,7 +4813,7 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [extras]
 analysis = ["matplotlib", "numba", "seaborn"]
 deconvolution = ["flowdec", "tensorflow"]
-dev = ["czifile", "matplotlib", "numba", "seaborn"]
+dev = ["matplotlib", "numba", "seaborn"]
 interactive-visualisation = ["looptrace-napari", "napari"]
 new-mac-napari = ["pyqt6"]
 nuclei = ["cellpose"]
@@ -4840,4 +4824,4 @@ test = ["hypothesis", "pytest", "pytest-skip-slow"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "4d2f850838385c57996121b1747b6b77f2cfecbd49543985e0e90255cd782cc7"
+content-hash = "27a34ebb2e798e116729af47efb6070650e1bf55311a6f02a785573d7365fe6e"

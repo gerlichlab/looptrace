@@ -428,49 +428,6 @@ def match_file_lists_decon(t_list,o_list):
 
     return o_list_match
 
-def read_czi_image(images_folder):
-    '''
-    Reads czi files as arrays using czifile package. Returns only CZYX image.
-    '''
-    import czifile
-    with czifile.CziFile(images_folder) as czi:
-        image=czi.asarray()[0,0,:,0,:,:,:,0]
-    return image
-
-
-def read_czi_meta(images_folder, tags, save_meta=False):
-    '''
-    Function to read metadata and image data for CZI files.
-    Define the information to be extracted from the xml tags dict in config file.
-    Optionally a YAML file with the metadata can be saved in the same path as the image.
-    Return a dictionary with the extracted metadata.
-    '''
-    import czifile
-    import yaml
-    from xml import ElementTree
-
-    def parser(data, tags):
-        tree = ElementTree.iterparse(data, events=('start',))
-        _, root = next(tree)
-    
-        for _, node in tree:
-            if node.tag in tags:
-                yield node.tag, node.text
-            root.clear()
-    
-    with czifile.CziFile(images_folder) as czi:
-        meta=czi.metadata()
-    
-    with io.StringIO(meta) as f:
-        results = parser(f, tags)
-        metadict={} 
-        for tag, text in results:
-            metadict[tag]=text
-    if save_meta:
-        with open(images_folder[:-4]+'_meta.yaml', 'w') as myfile:
-            yaml.safe_dump(metadict, myfile)
-    return metadict
-
 
 class ImageParseException(Exception):
     """Error subtype for when at least one error occurs during image parse"""
