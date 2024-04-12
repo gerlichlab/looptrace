@@ -73,12 +73,6 @@ def partition_bead_rois(rounds_config: ExtantFile, params_config: ExtantFile, im
 
 
 def run_spot_proximity_filtration(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> None:
-    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
-    min_spot_sep = H.minimum_spot_separation
-    if min_spot_sep <= 0:
-        print(f"No spot filtration on proximity to be done, as minimum separation is nonpositive: {min_spot_sep}")
-        return
-    
     # Command construction, printing, and execution
     prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.LabelAndFilterRois"
     cmd_parts = [
