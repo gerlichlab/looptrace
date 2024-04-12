@@ -36,7 +36,7 @@ Once you have the [minimal requirements](#minimal-requirements), this will be th
 1. `tmux`: attach to an existing `tmux` session, or start a new one. See the [tmux section](#tmux) for more info.
 1. __Docker__: Start the relevant Docker container, using just `docker` rather than `nvidia-docker` if you _don't_ want to run deconvolution (setting `decon_iter` to $0$, see [the parameters configuration file](./parameters-configuration-file.md))
     ```shell
-    nvidia-docker run --rm -it -u root -v /groups/gerlich/experiments/.../00XXXX:/home/experiment looptrace:2023-12-12 bash
+    nvidia-docker run --rm -it -u root -v '/groups/gerlich/experiments/.../00XXXX':/home/experiment looptrace:2024-04-05b bash
     ```
 1. __Run pipeline__: Once in the Docker container, run the pipeline, replacing the file and folder names as needed / desired:
     ```shell
@@ -48,6 +48,8 @@ Once you have the [minimal requirements](#minimal-requirements), this will be th
     ```
 1. __Detach__: `Ctrl+b d` -- for more, see the [tmux section](#tmux).
 
+NB: Remember to place single quotes around the filepath (experiment folder) you're making available as a volume (`-v`) to the Docker container. 
+While often not necessary, this will protect you if your filepath contains spaces.
 
 ## `tmux`
 In this context, for running the pipeline, think of the _terminal multiplexer_ (`tmux`) as a way to start a long-running process and be assured that an interruption in Internet connectivity (e.g., computer sleep or network failure) won't also be an interruption in the long-running process. If your connection to the remote machine is interrupted, but you've started your long-running process in `tmux`, that process won't be interrupted.
