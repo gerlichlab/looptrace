@@ -193,8 +193,8 @@ class ImageHandler:
         return names
 
     @property
-    def locus_spot_images_root_path(self) -> Path:
-        return Path(self.analysis_path) / "locus_spot_images"
+    def locus_spots_visualisation_folder(self) -> Path:
+        return Path(self.analysis_path) / "locus_spots_visualisation"
 
     @property
     def minimum_spot_separation(self) -> Union[int, float]:

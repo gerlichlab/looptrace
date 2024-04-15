@@ -179,7 +179,7 @@ def qc_locus_spots_and_prep_points(rounds_config: ExtantFile, params_config: Ext
         "--maxSigmaZ",
         str(H.config[SIGMA_Z_MAX_NAME]),
         "--pointsDataOutputFolder", 
-        str(H.locus_spot_images_root_path),
+        str(H.locus_spots_visualisation_folder),
     ]    
     print(f"Running QC filtering of tracing supports: {' '.join(cmd_parts)}")
     subprocess.check_call(cmd_parts)

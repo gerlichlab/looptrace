@@ -113,7 +113,7 @@ class Tracer:
 
     def write_all_spot_images_to_one_per_fov_zarr(self, overwrite: bool = False) -> List[Path]:
         name_data_pairs = compute_spot_images_multiarray_per_fov(npz=self._images_wrapper)
-        return write_jvm_compatible_zarr_store(name_data_pairs, root_path=self.locus_spot_images_root_path, dtype=np.uint16, overwrite=overwrite)
+        return write_jvm_compatible_zarr_store(name_data_pairs, root_path=self.locus_spots_visualisation_folder, dtype=np.uint16, overwrite=overwrite)
 
     @property
     def images(self) -> Iterable[np.ndarray]:
@@ -131,9 +131,9 @@ class Tracer:
         return self.image_handler.images[self._input_name]
 
     @property
-    def locus_spot_images_root_path(self) -> Path:
+    def locus_spots_visualisation_folder(self) -> Path:
         """Where to write the locus-specific spot images visualisation data"""
-        return self.image_handler.locus_spot_images_root_path
+        return self.image_handler.locus_spots_visualisation_folder
 
     @property
     def nanometers_per_pixel_xy(self) -> NumberLike:
