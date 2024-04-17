@@ -11,10 +11,9 @@ from pathlib import Path
 from typing import *
 import numpy as np
 
-from gertils.exceptions import TensorflowNotFoundException
 try:
     from gertils.gpu import count_tensorflow_gpus
-except TensorflowNotFoundException:
+except ModuleNotFoundError:
     def count_tensorflow_gpus(): print("GPU utility module isn't available to count GPUs.")
 from looptrace.exceptions import GpusUnavailableException, MissingInputException
 from looptrace.point_spread_function import PointSpreadFunctionStrategy

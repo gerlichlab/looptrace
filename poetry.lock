@@ -912,18 +912,24 @@ files = [
 
 [[package]]
 name = "gertils"
-version = "0.2dev"
+version = "0.4.0"
 description = "General computing utilities for data processing and analysis in the Gerlich group at IMBA"
 optional = false
-python-versions = "^3.10.0"
+python-versions = ">=3.10.0,<3.12"
 files = []
 develop = false
+
+[package.dependencies]
+dask = "^2023.5.1"
+numpy = "^1.24.2"
+numpydoc_decorator = "^2.2.0"
+zarr = "^2.4.12"
 
 [package.source]
 type = "git"
 url = "https://github.com/gerlichlab/gertils.git"
-reference = "2024-03-13"
-resolved_reference = "7072163106f68019701900fd59d7d1863d60fbbb"
+reference = "9176ff8bafd3c2e49870412d41d79322c6928cb3"
+resolved_reference = "9176ff8bafd3c2e49870412d41d79322c6928cb3"
 
 [[package]]
 name = "google-pasta"
@@ -4824,4 +4830,4 @@ test = ["hypothesis", "pytest", "pytest-skip-slow"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "022cd63a935485bec204b180bdb61a19e8f6a5bc9e7f706b93eded14089eefe6"
+content-hash = "0745b4be5ab2a6edbf25dabf9407140df9d584644856771589732475c8a7d346"
