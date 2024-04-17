@@ -4,7 +4,6 @@ import sbt._
 object Dependencies {
     /* Versions */
     lazy val scalatestVersion = "3.2.18"
-    lazy val (scalacheckMajor, scalacheckMinor) = ("1", "17")
     
     /* Core libraries */
     lazy val catsCore = "org.typelevel" %% "cats-core" % "2.10.0"
@@ -29,9 +28,9 @@ object Dependencies {
     lazy val uPickle = "com.lihaoyi" %% "upickle" % "3.1.4"
 
     /* Test dependencies */
-    lazy val scalacheck = "org.scalacheck" %% "scalacheck" % s"$scalacheckMajor.$scalacheckMinor.0"
+    lazy val scalacheck = "org.scalacheck" %% "scalacheck" % "1.18.0"
     lazy val scalactic = "org.scalactic" %% "scalactic" % scalatestVersion
     lazy val scalatest = "org.scalatest" %% "scalatest" % scalatestVersion
-    lazy val scalatestScalacheck = "org.scalatestplus" %% s"scalacheck-$scalacheckMajor-$scalacheckMinor" % "3.2.18.0"
+    lazy val scalatestScalacheck = "org.scalatestplus" %% "scalacheck-1-17" % "3.2.18.0"
 
 }
