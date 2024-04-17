@@ -9,9 +9,9 @@ name: Continuous Integration
 
 on:
   pull_request:
-    branches: ['**']
+    branches: [main]
   push:
-    branches: ['**']
+    branches: [main]
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -21,7 +21,11 @@ jobs:
     name: Build and Test
     strategy:
       matrix:
-        os: [ubuntu-22.04, ubuntu-20.04]
+        os:
+          - ubuntu-latest
+          - ubuntu-20.04
+          - macos-latest
+          - windows-latest
         scala: [3.4.1]
         java:
           - temurin@11
@@ -30,6 +34,19 @@ jobs:
           - temurin@21
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Ignore line ending differences in git
+        if: contains(runner.os, 'windows')
+        shell: bash
+        run: git config --global core.autocrlf false
+
+      - name: Configure pagefile for Windows
+        if: contains(runner.os, 'windows')
+        uses: al-cheb/configure-pagefile-action@v1.4
+        with:
+          minimum-size: 2GB
+          maximum-size: 8GB
+          disk-root: 'C:'
+
       - name: Checkout current branch (full)
         uses: actions/checkout@v4
         with:
@@ -68,7 +85,9 @@ jobs:
           cache: sbt
 
       - name: Check that workflows are up to date
+        shell: bash
         run: sbt '++ ${{ matrix.scala }}' githubWorkflowCheck
 
       - name: Build project
+        shell: bash
         run: sbt '++ ${{ matrix.scala }}' test
