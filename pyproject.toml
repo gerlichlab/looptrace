@@ -24,7 +24,7 @@ python = ">= 3.10, < 3.11"
 cellpose = { version = "v2.2.2", optional = true }
 dask = "^2023.5.1"
 flowdec = { version = "^1.1.0", optional = true }
-gertils = { git = "https://github.com/gerlichlab/gertils.git", rev = "9176ff8bafd3c2e49870412d41d79322c6928cb3" }
+gertils = { git = "https://github.com/gerlichlab/gertils.git", tag = "v0.4.1" }
 hypothesis = { version = "^6.92.1", optional = true }
 joblib = "^1.3.1"
 looptrace-napari = { git = "https://github.com/gerlichlab/looptrace-napari", tag = "2024-04-08" }
@@ -44,7 +44,7 @@ pyyaml = "^6.0"
 scipy = "^1.10.1"
 scikit-image = "^0.20.0"
 seaborn = { version = "^0.12.0", optional = true }
-spotfishing = { git = "https://github.com/gerlichlab/spotfishing.git", rev = "bbbab105c4832d178036d1ce066977858751671c" }
+spotfishing = { git = "https://github.com/gerlichlab/spotfishing.git", rev = "b7e0b8dbe6f370bc35ff9e3763d7856e45dd8912" }
 tensorflow = { version = "2.16.1", optional = true }
 tqdm = "^4.65.0"
 zarr = "^2.4.12"

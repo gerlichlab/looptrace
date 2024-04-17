@@ -922,14 +922,14 @@ develop = false
 [package.dependencies]
 dask = "^2023.5.1"
 numpy = "^1.24.2"
-numpydoc_decorator = "^2.2.0"
+numpydoc_decorator = {git = "https://github.com/alimanfoo/numpydoc_decorator.git", rev = "a9cbb0a29544788bbfd83ed47082e3442d9e5364"}
 zarr = "^2.4.12"
 
 [package.source]
 type = "git"
 url = "https://github.com/gerlichlab/gertils.git"
-reference = "9176ff8bafd3c2e49870412d41d79322c6928cb3"
-resolved_reference = "9176ff8bafd3c2e49870412d41d79322c6928cb3"
+reference = "v0.4.1"
+resolved_reference = "b6bf13bf1c3bce12ee550ee373fe5afc869409fb"
 
 [[package]]
 name = "google-pasta"
@@ -4120,7 +4120,7 @@ develop = false
 
 [package.dependencies]
 numpy = "^1.24.2"
-numpydoc_decorator = {git = "https://github.com/alimanfoo/numpydoc_decorator.git", branch = "main"}
+numpydoc_decorator = {git = "https://github.com/alimanfoo/numpydoc_decorator.git", rev = "a9cbb0a29544788bbfd83ed47082e3442d9e5364"}
 pandas = "^1.5.3"
 scikit-image = "^0.20.0"
 scipy = "^1.10.1"
@@ -4128,8 +4128,8 @@ scipy = "^1.10.1"
 [package.source]
 type = "git"
 url = "https://github.com/gerlichlab/spotfishing.git"
-reference = "bbbab105c4832d178036d1ce066977858751671c"
-resolved_reference = "bbbab105c4832d178036d1ce066977858751671c"
+reference = "b7e0b8dbe6f370bc35ff9e3763d7856e45dd8912"
+resolved_reference = "b7e0b8dbe6f370bc35ff9e3763d7856e45dd8912"
 
 [[package]]
 name = "stack-data"
@@ -4830,4 +4830,4 @@ test = ["hypothesis", "pytest", "pytest-skip-slow"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "0745b4be5ab2a6edbf25dabf9407140df9d584644856771589732475c8a7d346"
+content-hash = "d9df079404d3f76033cf5b809659780e19d318dcfdb547ce359f8b2a38a96140"
