@@ -912,7 +912,7 @@ files = [
 
 [[package]]
 name = "gertils"
-version = "0.4.0"
+version = "0.4.2"
 description = "General computing utilities for data processing and analysis in the Gerlich group at IMBA"
 optional = false
 python-versions = ">=3.10.0,<3.12"
@@ -922,14 +922,14 @@ develop = false
 [package.dependencies]
 dask = "^2023.5.1"
 numpy = "^1.24.2"
-numpydoc_decorator = {git = "https://github.com/alimanfoo/numpydoc_decorator.git", rev = "a9cbb0a29544788bbfd83ed47082e3442d9e5364"}
+numpydoc_decorator = {git = "https://github.com/vreuter/numpydoc_decorator", tag = "v2.2.1"}
 zarr = "^2.4.12"
 
 [package.source]
 type = "git"
 url = "https://github.com/gerlichlab/gertils.git"
-reference = "v0.4.1"
-resolved_reference = "b6bf13bf1c3bce12ee550ee373fe5afc869409fb"
+reference = "v0.4.2"
+resolved_reference = "b27f2e561e697072962567e24c4a1f7bf8857fc9"
 
 [[package]]
 name = "google-pasta"
@@ -2324,8 +2324,8 @@ typing_extensions = "*"
 
 [package.source]
 type = "git"
-url = "https://github.com/alimanfoo/numpydoc_decorator.git"
-reference = "main"
+url = "https://github.com/vreuter/numpydoc_decorator"
+reference = "v2.2.1"
 resolved_reference = "a9cbb0a29544788bbfd83ed47082e3442d9e5364"
 
 [[package]]
@@ -4111,7 +4111,7 @@ test = ["pytest"]
 
 [[package]]
 name = "spotfishing"
-version = "0.1dev"
+version = "0.1.0"
 description = "Detecting spots in FISH images"
 optional = false
 python-versions = ">= 3.10.0, < 3.12"
@@ -4120,7 +4120,7 @@ develop = false
 
 [package.dependencies]
 numpy = "^1.24.2"
-numpydoc_decorator = {git = "https://github.com/alimanfoo/numpydoc_decorator.git", rev = "a9cbb0a29544788bbfd83ed47082e3442d9e5364"}
+numpydoc_decorator = {git = "https://github.com/vreuter/numpydoc_decorator", tag = "v2.2.1"}
 pandas = "^1.5.3"
 scikit-image = "^0.20.0"
 scipy = "^1.10.1"
@@ -4128,8 +4128,8 @@ scipy = "^1.10.1"
 [package.source]
 type = "git"
 url = "https://github.com/gerlichlab/spotfishing.git"
-reference = "b7e0b8dbe6f370bc35ff9e3763d7856e45dd8912"
-resolved_reference = "b7e0b8dbe6f370bc35ff9e3763d7856e45dd8912"
+reference = "v0.1.0"
+resolved_reference = "ae687682330acf53ebfafd45e703c4609b2d044d"
 
 [[package]]
 name = "stack-data"
@@ -4830,4 +4830,4 @@ test = ["hypothesis", "pytest", "pytest-skip-slow"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "d9df079404d3f76033cf5b809659780e19d318dcfdb547ce359f8b2a38a96140"
+content-hash = "249a561f5ad31d6a8d7a72b50472bb16594be9328db0d71ee0bfd066b8990ced"
