@@ -54,5 +54,5 @@ However, the dependence on drift correction is only indirect, so if nothing abou
 The only direct dependence should be on the coordinates from the enriched, filtered traces file.
 * `locus_specific_spots_visualisation_data_prep` uses the data from the `spot_images.npz` file to produce ZARR arrays which may then be dragged-and-dropped into `napari` (and likely some other programs) for visualisation. These arrays are stored in the `locus_spots_visualisation` subfolder of the analysis folder, along with a pair of CSV files for each field of view. 
 This pair of files is then typically also dragged-and-dropped into `napari` for visualisation. 
-For more about the use of these outputs, refer to the [spots visualisation doc](./visualising-spots.md).
+For more about the use of these outputs, refer to the [visualisation doc](./visualisation.md).
 * `nuclear_masks_visualisation_data_prep` produces data similar to the locus-specific spots visualisation step, aimed at facilitating visualistation of the nuclear regions used for spot filtration.
