@@ -1,6 +1,6 @@
 """Tools related to looptrace configuration"""
 
-from typing import *
+from typing import Mapping
 import yaml
 
 from gertils import ExtantFile
@@ -17,19 +17,26 @@ __all__ = [
 
 
 MINIMUM_SPOT_SEPARATION_KEY = "minimumPixelLikeSeparation"
+SEMANTIC_KEY = "semantic"
 
 
-def get_minimum_regional_spot_separation(conf_data) -> int:
+def get_minimum_regional_spot_separation(conf_data: Mapping[str, object]) -> int:
     """Get the minimum separation between regional spots as configured for a particular analysis / experiment."""
-    return get_region_grouping_config(conf_data)[MINIMUM_SPOT_SEPARATION_KEY]
+    section = get_region_grouping_config(conf_data)
+    try:
+        return section[MINIMUM_SPOT_SEPARATION_KEY]
+    except KeyError:
+        if section.get(SEMANTIC_KEY) == "UniversalProximityPermission":
+            return 0
+        raise
 
 
-def get_region_grouping_config(conf_data: Mapping[str, Any]) -> Mapping[str, Any]:
+def get_region_grouping_config(conf_data: Mapping[str, object]) -> Mapping[str, object]:
     """Get the regional spots imaging configuration data for a particular analysis / experiment."""
     return conf_data["proximityFilterStrategy"]
 
 
-def read_parameters_configuration_file(params_config: ExtantFile) -> Mapping[str, Any]:
+def read_parameters_configuration_file(params_config: ExtantFile) -> Mapping[str, object]:
     """Parse the main looptrace parameters configuration file from YAML."""
     print(f"Reading looptrace parameters configuration file: {params_config.path}")
     with open(params_config.path, "r") as fh:
