@@ -54,7 +54,7 @@ def find_config_file_errors(rounds_config: ExtantFile, params_config: ExtantFile
 
     print(f"Reading imaging config file: {rounds_config.path}")
     with open(rounds_config.path, "r") as fh:
-        imaging = json.load(fh)
+        rounds_config = json.load(fh)
     
     errors = []
     
@@ -116,7 +116,7 @@ def find_config_file_errors(rounds_config: ExtantFile, params_config: ExtantFile
     elif spot_detection_method == DetectionMethod.INTENSITY.value:
         errors.append(ConfigurationValueError(f"Prohibited (or unsupported) spot detection method: '{spot_detection_method}'"))
     try:
-        min_sep = get_minimum_regional_spot_separation(imaging)
+        min_sep = get_minimum_regional_spot_separation(rounds_config)
     except KeyError:
         errors.append(ConfigurationValueError(f"No minimum spot separation specified in imaging rounds configuration!"))
     else:
@@ -127,7 +127,7 @@ def find_config_file_errors(rounds_config: ExtantFile, params_config: ExtantFile
     if parameters.get("mask_fits", False):
         errors.append(ConfigurationValueError(MASK_FITS_ERROR_MESSAGE))
     try:
-        probe_trace_exclusions = imaging[TRACING_SUPPORT_EXCLUSIONS_KEY]
+        probe_trace_exclusions = rounds_config[TRACING_SUPPORT_EXCLUSIONS_KEY]
     except KeyError:
         errors.append(f"Config (from {rounds_config}) lacks probes to exclude from tracing support ('{TRACING_SUPPORT_EXCLUSIONS_KEY}')!")
     else:
