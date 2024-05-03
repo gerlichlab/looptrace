@@ -2284,11 +2284,11 @@ develop = false
 [package.dependencies]
 gertils = {git = "https://github.com/gerlichlab/gertils", rev = "v0.4.4"}
 napari = [
-    {version = ">=0.4.19", extras = ["all"], markers = "sys_platform != \"darwin\""},
     {version = ">=0.4.19", markers = "sys_platform == \"darwin\""},
+    {version = ">=0.4.19", extras = ["all"], markers = "sys_platform != \"darwin\""},
 ]
 numpy = "*"
-numpydoc-decorator = {git = "https://github.com/vreuter/numpydoc_decorator", rev = "v2.2.1"}
+numpydoc_decorator = {git = "https://github.com/vreuter/numpydoc_decorator", rev = "v2.2.1"}
 pandas = "*"
 pyqt6 = {version = ">=6.5.0", markers = "sys_platform == \"darwin\""}
 zarr = ">=2.4.12"
@@ -2301,8 +2301,8 @@ testsuite = ["pytest (>=7.1.0)", "pytest-cov (>=5.0.0)"]
 [package.source]
 type = "git"
 url = "https://github.com/gerlichlab/nuclei-vis-napari"
-reference = "v0.1.1"
-resolved_reference = "c52d987eec1fe6f94715db95585df0e16873b5ca"
+reference = "v0.1.2"
+resolved_reference = "d9d079ffac286c2a4c360fbd99010299ec0e9fed"
 
 [[package]]
 name = "numba"
@@ -5067,4 +5067,4 @@ test = ["hypothesis", "pytest", "pytest-skip-slow"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "78fe4fe51c76446182b9f312b77f28ce911c6b44a257de55b4aab5a4a7822ad2"
+content-hash = "ca45dea17391a19b7ef4acc6107fc9fdd28c1f322778af2bea0808b51e440756"
