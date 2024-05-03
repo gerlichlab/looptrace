@@ -8,13 +8,14 @@ import cats.syntax.all.*
 import mouse.boolean.*
 import upickle.default.*
 import scopt.{ OParser, Read }
+import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.ShiftingCount.asPositive
 
 /** Split pool of detected bead ROIs into those for drift correction shift, drift correction accuracy, and unused. */
-object PartitionIndexedDriftCorrectionRois:
+object PartitionIndexedDriftCorrectionRois extends StrictLogging:
     val ProgramName = "PartitionIndexedDriftCorrectionRois"
 
     val BeadRoisPrefix = "bead_rois_"
@@ -86,13 +87,13 @@ object PartitionIndexedDriftCorrectionRois:
 
         /* Actions */
         val inputFiles = discoverInputs(inputRoot)
-        println(s"Input file count: ${inputFiles.size}")
+        logger.info(s"Input file count: ${inputFiles.size}")
         val outfolder = outputFolder.getOrElse(inputRoot)
-        println(s"Will use output folder: $outfolder")
+        logger.info(s"Will use output folder: $outfolder")
         
         // Write a specific subtype of selected ROI, but not a mix and not the general (non-leaf) type.
         def writeRois[R <: SelectedRoi : [R] =>> NotGiven[R =:= SelectedRoi]](rois: Set[R], outpath: os.Path): Unit = {
-            println(s"Writing: $outpath")
+            logger.info(s"Writing: $outpath")
             val jsonObjs = rois.toList.map(SelectedRoi.toJsonSimple(ParserConfig.coordinateSequence))
             os.makeDir.all(outpath.parent)
             os.write.over(outpath, ujson.write(jsonObjs, indent = 4))
@@ -128,7 +129,7 @@ object PartitionIndexedDriftCorrectionRois:
                     // In this case, there's at least one FOV in which there are too few ROIs to meet even the absolute minimum.
                     given writer: JsonWriter[KeyedProblem] = readWriterForKeyedTooFewProblem
                     val warningsFile = outfolder / "roi_partition_warnings.severe.json"
-                    println(s"Writing severe warnings file: $warningsFile")
+                    logger.warn(s"Writing severe warnings file: $warningsFile")
                     val (problemsToWrite, problemsToPropagate) = tooFewErrors.map{ 
                         (pt, tooFew) => (pt -> tooFew.shiftingProblem, pt -> tooFew.accuracyProblem) 
                     }.unzip
@@ -152,14 +153,14 @@ object PartitionIndexedDriftCorrectionRois:
                     case _ => List()
                 }
             }.sortBy(_._1)(Order[PosTimePair].toOrdering)
-        if (bads.isEmpty && problems.isEmpty) then println("No warnings from bead ROIs partitioning, nice!")
+        if (bads.isEmpty && problems.isEmpty) then logger.info("No warnings from bead ROIs partitioning, nice!")
         else {
             val warningsFile = outfolder / "roi_partition_warnings.json"
-            println(s"Writing bead ROIs partition warnings file: $warningsFile")
+            logger.warn(s"Writing bead ROIs partition warnings file: $warningsFile")
             given writer: JsonWriter[KeyedProblem] = readWriterForKeyedTooFewProblem
             os.write(warningsFile, write(problems, indent = 2))
         }
-        println("Done!")
+        logger.info("Done!")
     }
 
     def createParser(header: RawRecord): ErrMsgsOr[RawRecord => ErrMsgsOr[DetectedRoi]] = {

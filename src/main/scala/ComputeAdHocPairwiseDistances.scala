@@ -4,6 +4,7 @@ import cats.*
 import cats.syntax.all.*
 import mouse.boolean.*
 import scopt.OParser
+import com.typesafe.scalalogging.StrictLogging
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 
@@ -17,7 +18,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.*
  * 
  * @author Vince Reuter
  */
-object ComputeAdHocPairwiseDistances:
+object ComputeAdHocPairwiseDistances extends StrictLogging:
     private val ProgramName = "ComputeAdHocPairwiseDistances"
 
     final case class CliConfig(
@@ -66,7 +67,7 @@ object ComputeAdHocPairwiseDistances:
         OParser.parse(parser, args, CliConfig()) match {
             case None => throw new Exception("Illegal use, check --help")
             case Some(opts) => 
-                println(s"Reading input file: ${opts.infile}")
+                logger.info(s"Reading input file: ${opts.infile}")
                 val (_, rows) = safeReadAllWithOrderedHeaders(opts.infile).fold(throw _, identity)
                 val parseId = (r: CsvRow) => r(opts.idKey)
                 val parsePoint = (r: CsvRow) => 
@@ -83,9 +84,9 @@ object ComputeAdHocPairwiseDistances:
                 }
                 given showForEucl: Show[EuclideanDistance] = Show.show(_.get.toString)
                 val outlines = outs.map((f1, f2, d) => List(f1.show, f2.show, d.show).mkString(","))
-                println(f"Writing output file: ${opts.outfile}")
+                logger.info(f"Writing output file: ${opts.outfile}")
                 os.write.over(opts.outfile, outlines.map(_ ++ "\n"))
-                println("Done!")
+                logger.info("Done!")
         }
     }
 end ComputeAdHocPairwiseDistances

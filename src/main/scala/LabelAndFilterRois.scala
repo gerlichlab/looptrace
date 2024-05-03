@@ -9,6 +9,7 @@ import mouse.boolean.*
 
 import scopt.OParser
 import com.github.tototoshi.csv.*
+import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
@@ -42,7 +43,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
  * 
  * @author Vince Reuter
  */
-object LabelAndFilterRois:
+object LabelAndFilterRois extends StrictLogging:
     val ProgramName = "LabelAndFilterRois"
 
     /**
@@ -214,12 +215,12 @@ object LabelAndFilterRois:
                 row + (neighborColumnName -> maybeNeighbors.fold(List())(_.toList).mkString(MultiValueFieldInternalSeparator))
             }
             val wroteIt = writeUnfiltered(header, records)
-            println(s"${if wroteIt then "Wrote" else "Did not write"} unfiltered output file: $filteredOutputFile")
+            logger.info(s"${if wroteIt then "Wrote" else "Did not write"} unfiltered output file: $filteredOutputFile")
             header
         }
         
         val wroteIt = writeFiltered(roisHeader, roiRecordsLabeled.filter(_._2.isEmpty).map(_._1))
-        println(s"${if wroteIt then "Wrote" else "Did not write"} filtered output file: $filteredOutputFile")
+        logger.info(s"${if wroteIt then "Wrote" else "Did not write"} filtered output file: $filteredOutputFile")
 
     }
 

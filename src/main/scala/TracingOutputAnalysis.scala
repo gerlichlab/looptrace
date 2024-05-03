@@ -5,6 +5,7 @@ import cats.data.{ ValidatedNel }
 import cats.syntax.all.*
 import mouse.boolean.*
 import upickle.default.*
+import com.typesafe.scalalogging.LazyLogging
 
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
@@ -20,7 +21,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
  * 
  * @author Vince Reuter
  */
-object TracingOutputAnalysis:
+object TracingOutputAnalysis extends LazyLogging:
     
     /** Pairing or regional and locus-specific FISH spot, a common key by which to group and/or filter records */
     type SpotTimePair = (RegionId, LocusId)
@@ -191,13 +192,13 @@ object TracingOutputAnalysis:
         import RegLocFilter.*
         import RegLocFilter.given
         import SpotTimePair.given
-        println(s"Reading pairs of interest: $pairsOfInterestFile")
+        logger.info(s"Reading pairs of interest: $pairsOfInterestFile")
         val useRegLoc = pairsOfInterestFile.ext match {
             case "csv" => RegLocFilter.fromCsvFileUnsafe(pairsOfInterestFile)
             case "json" => RegLocFilter.fromJsonFileUnsafe(pairsOfInterestFile)
             case ext => throw new IllegalArgumentException(s"Cannot parse pairs of interest file with extension '$ext': $pairsOfInterestFile")
         }
-        println(s"Reading traces file: $dataFile")
+        logger.info(s"Reading traces file: $dataFile")
         val counts: Map[SpotTimePair, Int] = countByRegionLocusPairUnsafe(dataFile)
         counts.view.filterKeys(useRegLoc).toMap
     }

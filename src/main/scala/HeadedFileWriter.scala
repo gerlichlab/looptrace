@@ -4,6 +4,7 @@ import java.io.{ BufferedWriter, File, FileWriter }
 import cats.*
 import cats.syntax.all.*
 import mouse.boolean.*
+import com.typesafe.scalalogging.LazyLogging
 
 /**
  * A type which writes values of a particular type to a delimited text file with a header
@@ -15,7 +16,7 @@ import mouse.boolean.*
  * @tparam R The type of value representing each record to write to text file
  * @author Vince Reuter
  */
-trait HeadedFileWriter[R]:
+trait HeadedFileWriter[R] extends LazyLogging:
     def header: List[String]
     
     def toTextFields(r: R): List[String]
@@ -40,9 +41,9 @@ trait HeadedFileWriter[R]:
         val outfile = ev.getFile(target)
         val fieldsToLine = ev.getLineMaker(target)
         val rows = header +: records.map(toTextFieldsCheckedUnsafe)
-        println(s"Writing records to file: $outfile")
+        logger.info(s"Writing records to file: $outfile")
         os.write(outfile, rows.map(fieldsToLine(_) ++ "\n"), createFolders = createFolders)
-        println("Done!")
+        logger.info("Done!")
         target
     }
 end HeadedFileWriter

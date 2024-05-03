@@ -5,6 +5,7 @@ import cats.data.*
 import cats.syntax.all.*
 import mouse.boolean.*
 import scopt.OParser
+import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
@@ -14,7 +15,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
  * 
  * @author Vince Reuter
  */
-object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram:
+object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram with StrictLogging:
     /* Constants */
     private val ProgramName = "ComputeLocusPairwiseDistances"
     private val MaxBadRecordsToShow = 3
@@ -46,7 +47,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram:
         )
         OParser.parse(parser, args, CliConfig()) match {
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
-            case Some(opts) => workflow(opts.tracesFile, opts.outputFolder).fold(msg => throw new Exception(msg), _ => println("Done!"))
+            case Some(opts) => workflow(opts.tracesFile, opts.outputFolder).fold(msg => throw new Exception(msg), _ => logger.info("Done!"))
         }
     }
 
@@ -56,14 +57,14 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram:
         val inputDelimiter = Delimiter.fromPathUnsafe(inputFile)
         
         /* Read input, then throw exception or write output. */
-        println(s"Reading input file: ${inputFile}")
+        logger.info(s"Reading input file: ${inputFile}")
         val observedOutputFile = Input.parseRecords(inputFile).bimap(_.toNel, inputRecordsToOutputRecords) match {
             case (Some(bads), _) => throw Input.BadRecordsException(bads)
             case (None, outputRecords) => 
                 val recs = outputRecords.toList.sortBy{ r => 
                     (r.position, r.region, r.trace, r.locus1, r.locus2)
                 }(summon[Order[(PositionIndex, RegionId, TraceId, LocusId, LocusId)]].toOrdering)
-                println(s"Writing output file: ${expectedOutputFile.filepath}")
+                logger.info(s"Writing output file: ${expectedOutputFile.filepath}")
                 OutputWriter.writeRecordsToFile(recs, expectedOutputFile)
         }
 

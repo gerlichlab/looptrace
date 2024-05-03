@@ -8,6 +8,7 @@ import cats.data.{ NonEmptyList as NEL, ValidatedNel }
 import cats.syntax.all.*
 import mouse.boolean.*
 import scopt.OParser
+import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ Point3D, XCoordinate, YCoordinate, ZCoordinate }
@@ -24,7 +25,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.HeadedFileWriter.DelimitedTextTarget.eq
   * @see [[https://github.com/gerlichlab/looptrace/issues/268 Issue 268]]
   * @see [[https://github.com/gerlichlab/looptrace/issues/259 Issue 259]]
   */
-object LabelAndFilterLocusSpots:
+object LabelAndFilterLocusSpots extends StrictLogging:
     val ProgramName = "LabelAndFilterLocusSpots"
     val QcPassColumn = "qcPass"
     
@@ -236,14 +237,14 @@ object LabelAndFilterLocusSpots:
         val pc: ParserConfig = parserConfigPathOrConf match {
             case c: ParserConfig => c
             case confFile: os.Path => 
-                println(s"Reading parser configuration file: $confFile")
+                logger.info(s"Reading parser configuration file: $confFile")
                 readJsonFile[ParserConfig](confFile)
         }
         
         val delimiter = Delimiter.fromPathUnsafe(tracesFile)
         
         os.read.lines(tracesFile).map(delimiter.split).toList match {
-            case (Nil | (_ :: Nil)) => println("Traces file has no records, skipping QC labeling and filtering")
+            case (Nil | (_ :: Nil)) => logger.info("Traces file has no records, skipping QC labeling and filtering")
             case header :: records => 
                 val maybeParse: ErrMsgsOr[Array[String] => ErrMsgsOr[(LocusSpotQC.SpotIdentifier, LocusSpotQC.InputRecord)]] = {
                     val maybeParseFov = buildFieldParse(pc.fovColumn, safeParseInt >>> PositionIndex.fromInt)(header)
@@ -406,7 +407,7 @@ object LabelAndFilterLocusSpots:
                 val unfilteredHeader = actualHeader ++ List(withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol, QcPassColumn)
                 // Here, still a records even if its timepoint is in exclusions, as it may be useful to know when such "spots" actually pass QC.
                 val unfilteredRows = unfiltered.map{ (outrec, original) => finaliseOriginal(original) ++ getQCFlagsText(outrec.qcResult) }
-                println(s"Writing unfiltered output: $unfilteredOutputFile")
+                logger.info(s"Writing unfiltered output: $unfilteredOutputFile")
                 writeTextFile(unfilteredOutputFile, unfilteredHeader :: unfilteredRows, delimiter)
                 
                 /* Filtered output */
@@ -430,7 +431,7 @@ object LabelAndFilterLocusSpots:
                         .filter{ (spotId, _) => keepKeys.contains(getGroupId(spotId)) }
                         .map((_, fields) => fields)
                 }
-                println(s"Writing filtered output: $filteredOutputFile")
+                logger.info(s"Writing filtered output: $filteredOutputFile")
                 writeTextFile(filteredOutputFile, filteredHeader :: recordsToWrite, delimiter)
             
                 /** Points CSVs for visualisation with `napari` */
@@ -461,7 +462,7 @@ object LabelAndFilterLocusSpots:
                 
                 writePointsForNapari(pointsOutfolder)(groupedFailQC)
                 writePointsForNapari(pointsOutfolder)(groupedPassQC)
-                println("Done!")
+                logger.info("Done!")
 
             case (bads, _) => throw new Exception(s"${bads.length} problem(s) with writing results: $bads")
         }

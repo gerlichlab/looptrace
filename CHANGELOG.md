@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+* Moved to using logging to replace `println` in JVM part of the project. See [issue 208](https://github.com/gerlichlab/looptrace/issues/208).
+
 ## [v0.3.1] - 2024-04-22
 This is a __bugfix release__ for `2024-04-12a`.
 

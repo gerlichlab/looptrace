@@ -8,19 +8,10 @@ object Dependencies {
     /* Core libraries */
     lazy val catsCore = "org.typelevel" %% "cats-core" % "2.10.0"
     lazy val logging = Seq(
-        "ch.qos.logback" % "logback-classic" % "1.4.14", 
+        "ch.qos.logback" % "logback-classic" % "1.5.6", 
         "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
     )
     lazy val mouse = "org.typelevel" %% "mouse" % "1.2.3"
-    // lazy val netcdf = {
-    //     val version = "5.5.3"
-    //     val orgName = "edu.ucar"
-    //     Seq(
-    //         orgName % "cdm-core" % version,
-    //         orgName % "cdm-zarr" % version,
-    //         orgName % "toolsUI" % "5.5.2"
-    //     )
-    // }
     lazy val os = "com.lihaoyi" %% "os-lib" % "0.9.3"
     lazy val scalaCsv = "com.github.tototoshi" %% "scala-csv" % "1.3.10"
     lazy val scopt = "com.github.scopt" %% "scopt" % "4.1.0"

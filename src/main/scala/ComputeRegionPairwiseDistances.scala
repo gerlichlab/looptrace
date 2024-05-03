@@ -5,6 +5,7 @@ import cats.data.*
 import cats.syntax.all.*
 import mouse.boolean.*
 import scopt.OParser
+import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
@@ -47,7 +48,7 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram:
         )
         OParser.parse(parser, args, CliConfig()) match {
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
-            case Some(opts) => workflow(opts.roisFile, opts.outputFolder).fold(msg => throw new Exception(msg), _ => println("Done!"))
+            case Some(opts) => workflow(opts.roisFile, opts.outputFolder).fold(msg => throw new Exception(msg), _ => logger.info("Done!"))
         }
     }
 
@@ -57,14 +58,14 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram:
         val inputDelimiter = Delimiter.fromPathUnsafe(inputFile)
         
         /* Read input, then throw exception or write output. */
-        println(s"Reading input file: ${inputFile}")
+        logger.info(s"Reading input file: ${inputFile}")
         val observedOutputFile = Input.parseRecords(inputFile).bimap(_.toNel, inputRecordsToOutputRecords) match {
             case (Some(bads), _) => throw Input.BadRecordsException(bads)
             case (None, outputRecords) => 
                 val recs = outputRecords.toList.sortBy{ r => 
                     (r.position, r.region1, r.region2, r.distance)
                 }(summon[Order[(PositionName, RegionId, RegionId, EuclideanDistance)]].toOrdering)
-                println(s"Writing output file: ${expectedOutputFile.filepath}")
+                logger.info(s"Writing output file: ${expectedOutputFile.filepath}")
                 OutputWriter.writeRecordsToFile(recs, expectedOutputFile)
         }
 

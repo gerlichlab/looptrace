@@ -1,7 +1,7 @@
 import Dependencies._
 
 ThisBuild / scalaVersion     := "3.4.1"
-ThisBuild / version          := "0.3.1"
+ThisBuild / version          := "0.3.2"
 ThisBuild / organization     := "at.ac.oeaw.imba.gerlich"
 ThisBuild / organizationName := "Gerlich Group, IMBA, OEAW"
 
@@ -10,9 +10,6 @@ ThisBuild / githubWorkflowOSes := Seq("ubuntu-latest", "ubuntu-20.04", "macos-la
 ThisBuild / githubWorkflowTargetBranches := Seq("main")
 ThisBuild / githubWorkflowPublishTargetBranches := Seq()
 ThisBuild / githubWorkflowJavaVersions := Seq("11", "17", "19", "21").map(JavaSpec.temurin)
-
-// TODO: reactivate if using netcdf-java or similar. #127
-//resolvers += "Unidata All" at "https://artifacts.unidata.ucar.edu/repository/unidata-all/"
 
 lazy val root = (project in file("."))
   .settings(
@@ -36,9 +33,7 @@ lazy val root = (project in file("."))
       scopt,
       uPickle,
       ) ++ 
-      // TODO: reactivate if using netcdf-java or similar. #127
-      //netcdf ++
-      //logging ++
+      logging ++
       Seq( // only for tests
         scalacheck, 
         scalactic, 

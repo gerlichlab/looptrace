@@ -7,6 +7,7 @@ import cats.data.{ NonEmptyList as NEL }
 import cats.syntax.all.*
 import mouse.boolean.*
 import scopt.OParser
+import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
 
@@ -14,7 +15,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
  * 
  * https://github.com/gerlichlab/looptrace/issues/137 
  */
-object CombineImagingFolders:
+object CombineImagingFolders extends StrictLogging:
     val ProgramName = "CombineImagingFolders"
 
     final case class CliConfig(
@@ -94,15 +95,15 @@ object CombineImagingFolders:
             case Right(pairs) => 
                 // TODO: handle case in which output folder doesn't yet exist.
                 checkSrcDstPairs(pairs)
-                println(s"Writing script: $script")
+                logger.info(s"Writing script: $script")
                 os.write(script, pairs.map((src, dst) => s"mv '$src' '$dst'\n"))
                 if (execute) {
-                    println(s"Executing ${pairs.length} moves")
+                    logger.info(s"Executing ${pairs.length} moves")
                     pairs.foreach(os.move(_, _))
                 } else {
-                    println("Skipping execution")
+                    logger.info("Skipping execution")
                 }
-                println("Done!")
+                logger.info("Done!")
         }
     }
 
