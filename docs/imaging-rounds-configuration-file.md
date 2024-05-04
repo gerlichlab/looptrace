@@ -1,22 +1,41 @@
 # `looptrace` imaging rounds configuration file
-The imaging rounds configuration file is where you tell `looptrace` about the rounds of imaging you did during a sequential FISH experiment.
+The imaging rounds configuration file is where, in ___JSON_ format__ you tell `looptrace` about the rounds of imaging you did during a sequential FISH experiment.
 It's from this file that a name becomes associated with each imaging round, rounds are conceptually distinguished from one another (e.g., blank vs. regional or local FISH), and the relationships between rounds are defined for analysis.
 
 ## Requirements and suggestions
-* `proximityFilterStrategy` is required and should be a mapping, with at minimum a `semantic` key. The value for the semantic may be "Trivial", "Permissive", or "Prohibitive", depending on how you want the groupings to be interpreted with respect to excluding proximal spots. 
-"Trivial" treats all regional spots as one big group and will exclude any that violate the proximity threshold; it's like "Prohibitive" but with no grouping.
-"Permissive" allows spots from timepoints grouped together to violate the proximity threshold; spots from timepoints not grouped together may not violate the proximity threshold.
-"Prohibitive" forbids spots from timepoints grouped together to violate the proximity threshold; spots from timepoints not grouped together may violate the proximity threshold.
-* If `semantic` is set to "Trivial", there can be no `groups`; otherwise, `groups` is required and must be an array-of-arrays.
-* `semantic` and `groups` must be nested within the `proximityFilterStrategy` mapping.
-* If specified, the value for `groups` must satisfy these properties:
-    * Each group must have no repeat value.
-    * The groups must be disjoint.
-    * The union of the groups must cover the set of regional round timepoints from the `imagingRounds`.
-    * The set of regional round timepoints from the `imagingRounds` must cover the union of groups.
-* `minimumPixelLikeSeparation` must be a key in the `proximityFilterStrategy` mapping and should be a nonnegative integer. 
-This represents the minimum separation (in pixels) in each dimension between the centroids of regional spots. 
-NB: For z, this is slices not pixels.
+
+### Proximity filtration section: `proximityFilterStrategy`
+This section specifies how to filter regional barcode spots for being too close together. 
+When doing filtration, note that the threshold for minimum separation distance must be violated in all three dimensions for spots to be considered proximal, or "neighboring". 
+This is because spots that are still well separated in at least one dimension are not really close together in how we normally conceive of distance. 
+Note, however, that because of how this threshold is used in the filtration, it's not a "distance" in the typical Euclidean sense in which we usually think.
+
+Note also that there's some unfortunate asymmetry between $z$ vs. $x$ and $y$ that's not analogously asymmetrically treated by the software. 
+More specifically, although image acquisition is generally conducted in much more _discrete_ fashion in $z$ than in $x$ and $y$ (generally far fewer planes/slices in $z$ being imaged, compared to the number of pixels which comprise the length and width of each slice), there's a _single_ threshold value, applied identically in every dimension. This means that in general, you'll want to choose a threshold for minimum separation that's relatively small; in particular, it would make little sense to have this value be any more than about half of the "depth" (number of slices) in $z$ that you've acquired.
+
+__Other things to note__:
+* _Field of view_ matters: For obvious reason, two spots could have identical coordinates but remain even after filtration, and this would be because they're from _different fields of view_. The coordinate system is specific to each field of view, therefore neighbors/proximity consideration is done only _within each FOV_.
+* _Imaging timepoint_ matters: Two spots from the same imaging timepoint, in the same FOV, never cancel each other for proximity; instead, this special case of proximal spots will be handled by attempting to merge the ROIs for the respective spots.
+
+__Guidance__
+* `proximityFilterStrategy` is required and should be a mapping, with at _minimum_ a `semantic` key.
+* Other key-value pairs are _conditionally_ required or prohibited, depending on the value given for `semantic`.
+* The value for the semantic must be one of the following:
+    * `"UniversalProximityPermission"`: This says that _no_ proximity-based filtration of regional spots should be done, essentially making the proximity filtration step of the pipeline a _no-op_. This behavior corresponds to what, in previous versions of the software, would have been achieved by setting the minimum spot sepearation distance (`min_spot_dist`) to 0. Because of the meaning of this value, _nothing additional_ is permitted in the section.
+    * "UniversalProximityProhibition": This says that _any_ spots which are closer than some threshold should mutually cancel one another. This _requires minimum separation distance_, to be provided as a positive number for the `minimumPixelLikeSeparation` key.
+    * `"SelectiveProximityPermission"`: This says that spots from imaging timepoints which are grouped together may violate the minimum separation threshold. Put differently, the _grouping grants permission_; that is, spots from timepoints which are grouped together are given permission to violate the minimum separation threshold. As such, this requires `groups` in addition to `minimumPixelLikeSeparation`. The value for `groups` must be a _list of lists_, with each element being the integer corresponding to a _regional_ barcode imaging round, in the [imaging rounds section](#imaging-rounds). This strategy is useful, for example, if you're imaging at different timepoints DNA regions that you expect to be in very close proximity (e.g., to to being very close in genomic distance).
+    * `"SelectiveProximityProhibition"`: This is as for the `"SelectiveProximityPermission"`, but says instead that spots from timepoints which are grouped together are the ones which should mutually exclude each others' spots if they're too close. This strategy is useful, for example, when you're multiplexing and need the regional barcodes to disambiguate loci being targeted with the same locus-specific barcode (i.e., when 2 separate barcodes function jointly as a uniue identifier of a locus).
+* If you're using a strategy for which `groups` is specified, the value for `groups` must satisfy these properties:
+    * _No repeats_: Each group must have no repeat value.
+    * _No overlaps_: The groups must be disjoint.
+    * _Covering_: The union of the groups must cover the set of regional round timepoints from the `imagingRounds`.
+    * _Covered_: The set of regional round timepoints from the `imagingRounds` must cover the union of groups.
+
+<a href="imaging-rounds"></a>
+### Imaging timepoints sequence: `imagingRounds`
+This section specifies the time sequence of imaging rounds, with details about each round like whether it was for a regional barcode, if it was a blank, or if it was a repeat.
+
+__Guidance__
 * `imagingRounds` must be present, and it enumerates the imaging rounds that comprise the experiment. 
 For every entry, `time` is required (as a nonnegative integer), and either `probe` or `name` is required.
 No `time` value can be repeated, and the timepoints should form the sequence (0, 1, 2, ..., *N*-1), where *N* is the number of imaging rounds in the experiment.
@@ -32,5 +51,10 @@ Each value in this array represents a single imaging round; each round is one of
     * Each value is a list of locus imaging timepoints associated with the regional timepoint to which it's keyed.
     * The values in the lists must be such that the union of the lists is the set of locus imaging timepoints from the `imagingRounds` sequence.
     * The values lists should have unique values, though as an ensemble they may not necessarily be disjoint.
+
+### Tracing exclusions section: `tracingExclusions`
+This sections specifies which imaging timepoints should be ignored for chromatin fiber tracing, interlocus distance measurements, and generally other downstream analysis.
+
+__Guidance__
 * Check that the list of `tracingExclusions` values is correct, most likely any pre-imaging timepoint names, "blank" timepoints, and all regional barcode timepoint names.
 * `tracingExclusions` should generally be specified, and its value should be a list of timepoints of imaging rounds to exclude from tracing, typically the blank / pre-imaging rounds, and regional barcode rounds. The list can't contain any timepoints not seen in the values of the `imagingRounds`.
