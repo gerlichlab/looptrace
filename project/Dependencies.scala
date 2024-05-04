@@ -8,7 +8,7 @@ object Dependencies {
     /* Core libraries */
     lazy val catsCore = "org.typelevel" %% "cats-core" % "2.10.0"
     lazy val logging = Seq(
-        "ch.qos.logback" % "logback-classic" % "1.5.6", 
+        "ch.qos.logback" % "logback-core" % "1.5.6", 
         "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
     )
     lazy val mouse = "org.typelevel" %% "mouse" % "1.2.3"
