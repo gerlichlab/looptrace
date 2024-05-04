@@ -31,6 +31,10 @@ __Guidance__
     * _Covering_: The union of the groups must cover the set of regional round timepoints from the `imagingRounds`.
     * _Covered_: The set of regional round timepoints from the `imagingRounds` must cover the union of groups.
 
+__Examples__
+
+To see some examples, please refer to [the folder for data for tests of this configuration file](../src/test/resources/TestImagingRoundsConfiguration/).
+
 <a href="imaging-rounds"></a>
 ### Imaging timepoints sequence: `imagingRounds`
 This section specifies the time sequence of imaging rounds, with details about each round like whether it was for a regional barcode, if it was a blank, or if it was a repeat.

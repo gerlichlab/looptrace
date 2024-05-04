@@ -16,7 +16,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
  * 
  * @author Vince Reuter
  */
-object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram:
+object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram with StrictLogging:
     /* Constants */
     private val ProgramName = "ComputeRegionPairwiseDistances"
     private val MaxBadRecordsToShow = 3
