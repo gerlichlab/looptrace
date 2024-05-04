@@ -313,7 +313,16 @@ class NucDetector:
             mask = rescale(expand_labels(mask.astype(np.uint16),self.config["nuc_dilation"]), scale=(self.ds_z, self.ds_xy, self.ds_xy), order=0)
             # TODO: need to adjust axes argument probably.
             # See: https://github.com/gerlichlab/looptrace/issues/245
-            image_io.single_position_to_zarr(mask, path=self.nuclear_masks_path, name=self.MASKS_KEY, pos_name=pos, axes=('z','y','x'), dtype=np.uint16, chunk_split=(1,1))
+            bit_depth: image_io.PixelArrayBitDepth = image_io.PixelArrayBitDepth.unsafe_for_array(mask)
+            image_io.single_position_to_zarr(
+                mask, 
+                path=self.nuclear_masks_path, 
+                name=self.MASKS_KEY, 
+                pos_name=pos, 
+                axes=('z','y','x'), 
+                dtype=bit_depth.value, 
+                chunk_split=(1,1),
+            )
 
     def segment_nuclei_cellpose(self) -> Path:
         '''
@@ -357,7 +366,17 @@ class NucDetector:
         print(f"{saving_prefix}: {self.nuclear_masks_path}")
         # TODO: need to adjust axes argument probably.
         # See: https://github.com/gerlichlab/looptrace/issues/245
-        image_io.images_to_ome_zarr(images=masks, path=self.nuclear_masks_path, name=self.MASKS_KEY, axes=ome_zarr_axes, dtype=np.uint16, chunk_split=(1, 1))
+        bit_depths: set[image_io.PixelArrayBitDepth] = {image_io.PixelArrayBitDepth.unsafe_for_array(m) for m in masks}
+        if len(bit_depths) > 1:
+            raise RuntimeError(f"Multiple ({len(bit_depths)}) determined for masks: {', '.join(d.name for d in bit_depths)}")
+        image_io.images_to_ome_zarr(
+            images=masks, 
+            path=self.nuclear_masks_path, 
+            name=self.MASKS_KEY, 
+            axes=ome_zarr_axes, 
+            dtype=next(iter(bit_depths)).value, 
+            chunk_split=(1, 1),
+        )
         
         if self.classify_mitotic:
             nuc_class = []

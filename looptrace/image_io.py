@@ -7,6 +7,7 @@ EMBL Heidelberg
 """
 
 import copy
+from enum import Enum
 import itertools
 from operator import itemgetter
 import os
@@ -20,6 +21,7 @@ import zipfile
 import dask.array as da
 import numcodecs
 import numpy as np
+import numpy.typing as npt
 import tqdm
 import zarr
 
@@ -276,7 +278,7 @@ def write_jvm_compatible_zarr_store(
 
 
 def images_to_ome_zarr(
-    images: np.ndarray or list, 
+    images: Union[np.ndarray, list], 
     path: Union[str, Path], 
     name: str, 
     dtype: Type, 
@@ -427,6 +429,36 @@ def match_file_lists_decon(t_list,o_list):
                     item.split('\\')[-1].split('_P0001_')[0][-5:] in t_list_match]
 
     return o_list_match
+
+
+class PixelArrayBitDepth(Enum):
+    MonoByte = np.uint8
+    DiByte = np.uint16
+
+    @classmethod
+    def for_array(cls, arr: npt.ArrayLike) -> Optional["PixelArrayBitDepth"]:
+        try:
+            return cls.for_array(arr)
+        except (AttributeError, TypeError, ValueError):
+            return None
+    
+    @classmethod
+    def unsafe_for_array(cls, arr: npt.ArrayLike) -> "PixelArrayBitDepth":
+        # First, check that the input is well typed.
+        dtype = arr.dtype
+        if dtype not in [int, np.uint8, np.uint16, np.uint32, np.uint64, np.uint128, np.uint256]:
+            raise TypeError(f"Non-interger-like datatype for alleged pixel array: {dtype}")
+        
+        max_pix = arr.max()
+        min_pix = arr.min()
+        if min_pix < 0:
+            raise ValueError(f"Negative min value in alleged pixel array: {min_pix}")
+        if max_pix < 256:
+            return cls.MonoByte
+        if max_pix < 65536:
+            return cls.DiByte
+
+        raise ValueError(f"Could not determine bit depth for pixel array with max value {max_pix}")
 
 
 class ImageParseException(Exception):
