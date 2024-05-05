@@ -3,7 +3,7 @@ This document makes reference to various folders for pipeline inputs and outputs
 If you're not yet roughly familiar with how to run the pipeline and how it works, please first read [this document](./running-the-pipeline.md). 
 
 Also referenced here are the names of various ___stages___ of the pipeline. 
-If you're not familiar with these, please refere to the [relevant section](./pipeline-execution-control-and-restart.md#pipeline-stage-names) of the document about [pipeline control flow](./pipeline-execution-control-and-restart.md).
+If you're not familiar with these, please refere to the [relevant section](./pipeline-execution-control-and-rerun.md#pipeline-stage-names) of the document about [pipeline control flow](./pipeline-execution-control-and-rerun.md).
 
 * `zarr_conversion`: writes to the images folder, a subfolder with ZARR versions of the input images, defined by the `zarr_conversions` section of the [parameters configuration file](./parameters-configuration-file.md).
 * `nuclei_detection`: produces the nuclear masks subfolder stored in the images folder

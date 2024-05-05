@@ -14,7 +14,7 @@ def test_pipline_control_flow_doc_is_current(tmp_path):
     # Pretests
     target = tmp_path / "doc.md"
     assert not target.exists()
-    current = PROJECT_ROOT / "docs" / "pipeline-execution-control-and-restart.md"
+    current = PROJECT_ROOT / "docs" / "pipeline-execution-control-and-rerun.md"
     assert current.is_file()
     
     # Create snapshot of target doc.

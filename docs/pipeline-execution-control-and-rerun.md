@@ -21,20 +21,21 @@ To __stop__ the pipeline...<br>
 * ...just _before_ a specific point, use `--stop-before <stage name>`.
 * ...just _after_ a specific point, use `--stop-after <stage name>`.
 
-## Restarting the pipeline...
-When experimenting with different parameter settings for one or more stages, it's common to want to restart the pipeline from a specific point.
+## Rerunning the pipeline...
+When experimenting with different parameter settings for one or more stages, it's common to want to rerun the pipeline from a specific point.
 Before rerunning the pipeline with the appropriate `--start-point` value, take care of the following:
 
-1. __Analysis folder__: It's wise to create a new analysis / output folder for a restart, particularly if it corresponds to updated parameter settings.
-1. __Parameters configuration file__: It's wise to create a new parameters config file for a restart if the restart includes updated parameter settings. 
+1. __Analysis folder__: It's wise to create a new analysis / output folder for a rerun, particularly if it corresponds to updated parameter settings.
+1. __Parameters configuration file__: It's wise to create a new parameters config file for a rerun if the rerun includes updated parameter settings. 
 Regardless of whether that's done, ensure that the `analysis_path` value corresponds to the output folder you'd like to use.
 1. __Imaging rounds configuration file__: If a new analysis for the same experimental data affects something about the imaging rounds configuration, 
 e.g. the minimum separation distance required between regional spots, you may want to create this config file anew, copying the old one and updating 
 the relevant parameter(s).
-1. __Pipeline (pypiper) folder__: You should create a new pypiper folder for a restart with new parameters.
+1. __Pipeline (pypiper) folder__: You should create a new pypiper folder _for a rerun with new parameters_. 
 This is critical since the semaphore / checkpoint files will influence pipeline control flow.
-You should copy to this folder any checkpoint files of any stages upstream of the one from which you want the restart to begin.
-Even though `--start-point` should allow the restart to begin from where's desired, if that's forgotten the checkpoint files should save you.
+You should copy to this folder any checkpoint files of any stages upstream of the one from which you want the rerun to begin.
+Even though `--start-point` should allow the rerun to begin from where's desired, if that's forgotten the checkpoint files should save you.
+For a _restart_--with the same parameters--of a stopped/halted/failed pipeline run, though, you should generally reuse the same pypiper folder as before. 
 
 Generate an empty checkpoint file for each you'd like to skip. 
 Simply create (`touch`) each such file `looptrace_<stage>.checkpoint` in the desired pypiper output folder.
