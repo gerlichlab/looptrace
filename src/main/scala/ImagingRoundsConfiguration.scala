@@ -67,9 +67,10 @@ object ImagingRoundsConfiguration:
       * @param locusGrouping How each locus is associated with a region
       * @param proximityFilterStrategy How to filter regional spots based on proximity
       * @param tracingExclusions Timepoints to exclude from tracing analysis
+      * @param checkLocusTimepointCovering Whether to validate that the union of the locusGrouping section values covers all locus imaging timepoints
       * @return Either a [[scala.util.Left]]-wrapped nonempty list of error messages, or a [[scala.util.Right]]-wrapped built instance
       */
-    def build(sequence: ImagingSequence, locusGrouping: Set[LocusGroup], proximityFilterStrategy: ProximityFilterStrategy, tracingExclusions: Set[Timepoint]): ErrMsgsOr[ImagingRoundsConfiguration] = {
+    def build(sequence: ImagingSequence, locusGrouping: Set[LocusGroup], proximityFilterStrategy: ProximityFilterStrategy, tracingExclusions: Set[Timepoint], checkLocusTimepointCovering: Boolean): ErrMsgsOr[ImagingRoundsConfiguration] = {
         val knownTimes = sequence.allTimepoints
         // Regardless of the subtype of proximityFilterStrategy, we need to check that any tracing exclusion timepoint is a known timepoint.
         val tracingSubsetNel = checkTimesSubset(knownTimes.toSortedSet)(tracingExclusions, "tracing exclusions")
@@ -83,10 +84,15 @@ object ImagingRoundsConfiguration:
                     case Nil => ().validNel
                     case ts => s"${ts.length} timepoint(s) in locus grouping and not found as locus imaging timepoints: ${ts.sorted.mkString(", ")}".invalidNel
                 }
-                val supersetNel = (locusTimesInSequence -- uniqueTimepointsInLocusGrouping).toList match {
-                    case Nil => ().validNel
-                    case ts => s"${ts.length} locus timepoint(s) in imaging sequence and not found in locus grouping: ${ts.sorted.mkString(", ")}".invalidNel
-                }
+                val supersetNel = 
+                    if checkLocusTimepointCovering
+                    then
+                        (locusTimesInSequence -- uniqueTimepointsInLocusGrouping).toList match {
+                            case Nil => ().validNel
+                            case ts => s"${ts.length} locus timepoint(s) in imaging sequence and not found in locus grouping: ${ts.sorted.mkString(", ")}".invalidNel
+                        }
+                    else
+                        ().validNel
                 (subsetNel, supersetNel)
             }
         }
@@ -226,9 +232,14 @@ object ImagingRoundsConfiguration:
                     .map(_.toSet)
                     .toValidatedNel
             }
-        (roundsNel, crudeLocusGroupingNel, proximityFilterStrategyNel, tracingExclusionsNel).tupled.toEither.flatMap{ 
-            case (sequence, crudeLocusGroups, proximityFilterStrategy, exclusions) =>
-                build(sequence, crudeLocusGroups, proximityFilterStrategy, exclusions)
+        val checkLocusTimepointCoveringNel: ValidatedNel[String, Boolean] = 
+            data.get("checkLocusTimepointCoveringNel") match {
+                case None | Some(ujson.Null) => Validated.Valid(true)
+                case Some(json) => safeReadAs[Boolean](json).toValidatedNel
+            }
+        (roundsNel, crudeLocusGroupingNel, proximityFilterStrategyNel, tracingExclusionsNel, checkLocusTimepointCoveringNel).tupled.toEither.flatMap{ 
+            case (sequence, crudeLocusGroups, proximityFilterStrategy, exclusions, checkLocusTimepointCovering) =>
+                build(sequence, crudeLocusGroups, proximityFilterStrategy, exclusions, checkLocusTimepointCovering)
         }
     }
 
@@ -242,8 +253,9 @@ object ImagingRoundsConfiguration:
         locusGrouping: Set[LocusGroup], 
         proximityFilterStrategy: ProximityFilterStrategy, 
         tracingExclusions: Set[Timepoint],
+        checkLocusTimepointCoveringNel: Boolean,
         ): ImagingRoundsConfiguration = 
-        build(sequence, locusGrouping, proximityFilterStrategy, tracingExclusions).fold(messages => throw new BuildError.FromPure(messages), identity)
+        build(sequence, locusGrouping, proximityFilterStrategy, tracingExclusions, checkLocusTimepointCoveringNel).fold(messages => throw new BuildError.FromPure(messages), identity)
 
     /**
       * Build a configuration instance from JSON data on disk.

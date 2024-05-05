@@ -1,5 +1,6 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
+import scala.util.{ Failure, Success, Try }
 import cats.data.{ NonEmptyList, NonEmptySet }
 import cats.syntax.all.*
 import org.scalatest.funsuite.AnyFunSuite
@@ -7,6 +8,7 @@ import org.scalatest.matchers.*
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.{
+    BuildError,
     LocusGroup, 
     SelectiveProximityPermission, 
     SelectiveProximityProhibition, 
@@ -69,6 +71,34 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
             seq.regionRounds.map(_.probe) shouldEqual NonEmptyList.of("Dp101", "Dp102", "Dp103", "Dp104").map(ProbeName.apply)
             val expLocusGrouping: Set[LocusGroup] = maybeExpectedLocusGrouping.fold(Set.empty)(_.toSortedSet)
             exampleConfig.locusGrouping shouldEqual expLocusGrouping
+        }
+    }
+
+    test("Locus grouping validation can be strict or lax. Issue #295") {
+        val countExpectedErrors = (_: NonEmptyList[String]).count(_.contains("locus timepoint(s) in imaging sequence and not found in locus grouping"))
+        
+        forAll (Table(
+            ("subfolder", "filename", "expectError"), 
+            ("LocusGroupingValidation", "example__imaging_rounds_configuration__selective_prohibition__no_check_locus_grouping_295.json", false), 
+            ("LocusGroupingValidation", "fail__imaging_rounds_config__missing_locus_validation_295.json", true),
+            ("LocusGroupingValidation", "fail__imaging_rounds_config__null_locus_validation_295.json", true),
+            ("LocusGroupingValidation", "fail__imaging_rounds_config__true_locus_validation_295.json", true),
+        )) { (subfolder, filename, expectError) => 
+            val configFile = getResourcePath(subfolder = subfolder, filename = filename)
+            if (expectError) {
+                ImagingRoundsConfiguration.fromJsonFile(configFile) match {
+                    case Left(errorMessages) => countExpectedErrors(errorMessages) shouldEqual 1
+                    case Right(_) => fail(s"Expected parse failure for $configFile but succeeded.")
+                }
+                val error = intercept[BuildError.FromJsonFile]{ ImagingRoundsConfiguration.unsafeFromJsonFile(configFile) }
+                countExpectedErrors(error.messages) shouldEqual 1
+            } else {
+                ImagingRoundsConfiguration.fromJsonFile(configFile).isRight shouldBe true
+                Try{ ImagingRoundsConfiguration.unsafeFromJsonFile(configFile)} match {
+                    case Success(_) => succeed
+                    case Failure(exception) => fail(s"Expected parse success for $configFile but failed: $exception")
+                }
+            }
         }
     }
 

@@ -6,11 +6,15 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Added
+* Hook (`"checkLocusTimepointCoveringNel"`) for specifying whether or not (`true` / `false`) to check that union of values in `locusGrouping` section of imaging rounds configuration file covers the set of locus spot imaging timepoints in the `imagingRounds` declaration of the same file. The default is `true` (to check for covering). See [Issue 295](https://github.com/gerlichlab/looptrace/issues/295).
+
 ### Changed
 * Modified and added details on Napari plugin use.
 * Updated documentation on how to specify regional spot proximity filtration strategy. See [Issue 310](https://github.com/gerlichlab/looptrace/issues/310).
 * Moved to using logging to replace `println` in JVM part of the project. See [Issue 208](https://github.com/gerlichlab/looptrace/issues/208).
 * Use just one byte, not two, to store nuclear masks when possible, to save I/O time and space. See [Issue 312](https://github.com/gerlichlab/looptrace/issues/312).
+* Updated name and content of pipeline control flow document to better describe "rerun with new parameters" vs. "restart after pipeline halt/fail". See [Issue 293](https://github.com/gerlichlab/looptrace/issues/293).
 
 ## [v0.3.1] - 2024-04-22
 This is a __bugfix release__ for `2024-04-12a`.
