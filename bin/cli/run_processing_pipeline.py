@@ -5,6 +5,7 @@ from enum import Enum
 import logging
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 from typing import *
@@ -254,6 +255,16 @@ def prep_nuclear_masks_data(rounds_config: ExtantFile, params_config: ExtantFile
     return result
 
 
+def move_nuclear_masks_visualisation_data(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> ExtantFolder:
+    """Set up the nuclei centers data, relative to the nuclei image and masks data, such that they can be viewed with the Napari plugin."""
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
+    src = H.nuclear_masks_visualisation_data_path
+    dst = H.images_folder / ("_" + src.name)
+    logger.info("Copying nuclear mask visualisation data: %s --> %s", src, dst)
+    result = shutil.copytree(src, dst)
+    return ExtantFolder(result)
+
+
 class LooptracePipeline(pypiper.Pipeline):
     """Main looptrace processing pipeline"""
 
@@ -271,6 +282,7 @@ class LooptracePipeline(pypiper.Pipeline):
             pypiper.Stage(name="nuclei_detection", func=run_nuclei_detection, f_kwargs=rounds_params_images),
             pypiper.Stage(name="nuclei_drift_correction", func=drift_correct_nuclei, f_kwargs=rounds_params_images),
             pypiper.Stage(name="nuclear_masks_visualisation_data_prep", func=prep_nuclear_masks_data, f_kwargs=rounds_params_images),
+            pypiper.Stage(name="move_nuclear_masks_visualisation_data", func=move_nuclear_masks_visualisation_data, f_kwargs={**rounds_params_images, "nofail": True}),
             pypiper.Stage(name="psf_extraction", func=run_psf_extraction, f_kwargs=rounds_params_images),
             pypiper.Stage(name=DECON_STAGE_NAME, func=run_deconvolution, f_kwargs=rounds_params_images), # Really just for denoising, no need for structural disambiguation
             pypiper.Stage(name="drift_correction__coarse", func=run_coarse_drift_correction, f_kwargs=rounds_params_images), 

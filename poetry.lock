@@ -640,6 +640,24 @@ files = [
 ]
 
 [[package]]
+name = "eido"
+version = "0.2.2"
+description = "A project metadata validator"
+optional = true
+python-versions = "*"
+files = [
+    {file = "eido-0.2.2-py3-none-any.whl", hash = "sha256:01af095ec4c3ea081a917dbcd3be1308f0043e167a4b6dc15a75c99b85159293"},
+    {file = "eido-0.2.2.tar.gz", hash = "sha256:3966c8e91296189d5827d6415843eb300d204c9da9b8a780807ebc5403be2800"},
+]
+
+[package.dependencies]
+jsonschema = ">=3.0.1"
+logmuse = ">=0.2.5"
+pandas = "*"
+peppy = ">=0.35.7"
+ubiquerg = ">=0.5.2"
+
+[[package]]
 name = "entrypoints"
 version = "0.4"
 description = "Discover and load entry points from installed packages."
@@ -2793,6 +2811,24 @@ toolz = "*"
 complete = ["blosc", "numpy (>=1.9.0)", "pandas (>=0.19.0)", "pyzmq"]
 
 [[package]]
+name = "peppy"
+version = "0.40.1"
+description = "A python-based project metadata manager for portable encapsulated projects"
+optional = true
+python-versions = "*"
+files = [
+    {file = "peppy-0.40.1-py3-none-any.whl", hash = "sha256:33cfa369e26cb785d3a7e6d6a6036fe7d1d29b53073f2d497cd269c6fa7945fb"},
+    {file = "peppy-0.40.1.tar.gz", hash = "sha256:22ed51ae042ec2e1fbfa213205967133319fa498a7f09aa438eccfebfae5e78f"},
+]
+
+[package.dependencies]
+numpy = "*"
+pandas = ">=0.24.2"
+pyyaml = "*"
+rich = ">=10.3.0"
+ubiquerg = ">=0.6.2"
+
+[[package]]
 name = "pexpect"
 version = "4.9.0"
 description = "Pexpect allows easy control of interactive console applications."
@@ -2931,28 +2967,57 @@ files = [
 
 [[package]]
 name = "piper"
-version = "0.12.3"
+version = "0.14.1"
 description = "A lightweight python toolkit for gluing together restartable, robust command line pipelines"
 optional = true
 python-versions = "*"
+files = []
+develop = false
+
+[package.dependencies]
+logmuse = ">=0.2.4"
+pandas = "*"
+pipestat = ">=0.9.0a1"
+psutil = "*"
+ubiquerg = ">=0.8.0"
+yacman = ">=0.9.3"
+
+[package.extras]
+all = ["matplotlib", "numpy", "pandas", "pipestat (>=0.1.0)", "pysam", "scipy", "seaborn", "yacman"]
+dev = ["coveralls", "hypothesis (==4.38.0)", "matplotlib", "mock (==2.0.0)", "numpy", "pandas", "pipestat (>=0.1.0)", "pysam", "pytest (>=4.6.9)", "pytest-cov (>=2.8.1)", "pytest-remotedata", "scipy", "seaborn", "veracitools", "yacman"]
+ngstk = ["numpy", "pandas", "pipestat (>=0.1.0)", "pysam", "yacman"]
+plot = ["matplotlib", "scipy", "seaborn"]
+
+[package.source]
+type = "git"
+url = "https://github.com/vreuter/pypiper"
+reference = "90fb7ad532b3f954fc649fd99ad33dc318a01f56"
+resolved_reference = "90fb7ad532b3f954fc649fd99ad33dc318a01f56"
+
+[[package]]
+name = "pipestat"
+version = "0.9.1"
+description = "A pipeline results reporter"
+optional = true
+python-versions = "*"
 files = [
-    {file = "piper-0.12.3-py3-none-any.whl", hash = "sha256:b7da6286fc883d129bd3456179946bbe8f2f9455b81032ffcc97410b8f4dd572"},
-    {file = "piper-0.12.3.tar.gz", hash = "sha256:0ec7d4c4fd9cd1142e87193483c4f92022adbe2cd0f4678f2a1ea8227cdcd9fd"},
+    {file = "pipestat-0.9.1-py3-none-any.whl", hash = "sha256:9d3dd33fef1562bb4f9bc25bef45a4e81d92e97939c38ccd8545b31a8788329f"},
+    {file = "pipestat-0.9.1.tar.gz", hash = "sha256:61c44726612bb06c34cf608dc2e45d8bb0e2b71b5249f1a2010addd32b4678dc"},
 ]
 
 [package.dependencies]
-attmap = ">=0.12.5"
-logmuse = ">=0.2.4"
+eido = "*"
+jinja2 = "*"
+jsonschema = "*"
+logmuse = ">=0.2.5"
 pandas = "*"
-psutil = "*"
-ubiquerg = ">=0.4.5"
-yacman = "*"
+pyyaml = "*"
+ubiquerg = ">=0.8.0"
+yacman = ">=0.9.3"
 
 [package.extras]
-all = ["matplotlib", "numpy", "pandas", "pysam", "scipy", "seaborn", "yacman"]
-dev = ["coveralls (>=1.1)", "hypothesis", "matplotlib", "mock (==2.0.0)", "numpy", "pandas", "pysam", "pytest (>=4.2.1)", "pytest-cov (==2.6.1)", "pytest-remotedata", "scipy", "seaborn", "veracitools", "yacman"]
-ngstk = ["numpy", "pandas", "pysam", "yacman"]
-plot = ["matplotlib", "scipy", "seaborn"]
+dbbackend = ["psycopg (>=3.1.13)", "pydantic (>=2.5.3,<3.0.0)", "sqlmodel (>=0.0.14)"]
+pipestatreader = ["fastapi", "uvicorn"]
 
 [[package]]
 name = "platformdirs"
@@ -5067,4 +5132,4 @@ test = ["hypothesis", "pytest", "pytest-skip-slow"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "ca45dea17391a19b7ef4acc6107fc9fdd28c1f322778af2bea0808b51e440756"
+content-hash = "44c27963a927f8cbee8663419e01ff007965ea3dc035a902498c60bd6cf1a137"
