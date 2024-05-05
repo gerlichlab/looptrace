@@ -15,6 +15,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 * Moved to using logging to replace `println` in JVM part of the project. See [Issue 208](https://github.com/gerlichlab/looptrace/issues/208).
 * Use just one byte, not two, to store nuclear masks when possible, to save I/O time and space. See [Issue 312](https://github.com/gerlichlab/looptrace/issues/312).
 * Updated name and content of pipeline control flow document to better describe "rerun with new parameters" vs. "restart after pipeline halt/fail". See [Issue 293](https://github.com/gerlichlab/looptrace/issues/293).
+* Write out nuclear mask visualisation data as soon as it's available, to permit inspection of detection/segmentation right away. See [Issue 302](https://github.com/gerlichlab/looptrace/issues/302).
 
 ## [v0.3.1] - 2024-04-22
 This is a __bugfix release__ for `2024-04-12a`.

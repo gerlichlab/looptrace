@@ -270,6 +270,7 @@ class LooptracePipeline(pypiper.Pipeline):
             pypiper.Stage(name="zarr_production", func=run_zarr_production, f_kwargs=rounds_params_images),
             pypiper.Stage(name="nuclei_detection", func=run_nuclei_detection, f_kwargs=rounds_params_images),
             pypiper.Stage(name="nuclei_drift_correction", func=drift_correct_nuclei, f_kwargs=rounds_params_images),
+            pypiper.Stage(name="nuclear_masks_visualisation_data_prep", func=prep_nuclear_masks_data, f_kwargs=rounds_params_images),
             pypiper.Stage(name="psf_extraction", func=run_psf_extraction, f_kwargs=rounds_params_images),
             pypiper.Stage(name=DECON_STAGE_NAME, func=run_deconvolution, f_kwargs=rounds_params_images), # Really just for denoising, no need for structural disambiguation
             pypiper.Stage(name="drift_correction__coarse", func=run_coarse_drift_correction, f_kwargs=rounds_params_images), 
@@ -294,8 +295,7 @@ class LooptracePipeline(pypiper.Pipeline):
             pypiper.Stage(name="pairwise_distances__locus_specific", func=compute_locus_pairwise_distances, f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config}),
             pypiper.Stage(name="pairwise_distances__regional", func=compute_region_pairwise_distances, f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config}),
             pypiper.Stage(name="locus_specific_spots_visualisation_data_prep", func=prep_locus_specific_spots_visualisation, f_kwargs=rounds_params_images),
-            # TODO: need to, ideally, pass nofail=True to this stage, and use the newer pypiper.
-            pypiper.Stage(name="nuclear_masks_visualisation_data_prep", func=prep_nuclear_masks_data, f_kwargs=rounds_params_images),
+
         ]
 
 
