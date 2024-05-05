@@ -263,48 +263,39 @@ class LooptracePipeline(pypiper.Pipeline):
         self.images_folder = images_folder
         super(LooptracePipeline, self).__init__(name=PIPE_NAME, outfolder=str(output_folder.path), **pl_mgr_kwargs)
 
-    @staticmethod
-    def name_fun_getargs_bundles() -> List[Tuple[str, callable, Callable[[Tuple[ExtantFile, ExtantFolder]], Union[Tuple[ExtantFile], Tuple[ExtantFile, ExtantFolder]]]]]:
-        take2 = lambda rounds_config, params_config, _: (rounds_config, params_config, )
-        take2_with_spot_type = lambda spot_type: (lambda rounds_config, params_config, _3: take2(rounds_config, params_config, _3) + (spot_type, ))
-        take3 = lambda rounds_config, params_config, images_folder: (rounds_config, params_config, images_folder)
+    def stages(self) -> list[pypiper.Stage]:
+        rounds_params_images = {"rounds_config": self.rounds_config, "params_config": self.params_config, "images_folder": self.images_folder}
         return [
-            ("pipeline_precheck", pretest, take2),
-            ("zarr_production", run_zarr_production, take3),
-            ("nuclei_detection", run_nuclei_detection, take3),
-            # TODO: compute table for visualisation in napari, of nuclear masks.
-            ("nuclei_drift_correction", drift_correct_nuclei, take3),
-            ("psf_extraction", run_psf_extraction, take3),
-            (DECON_STAGE_NAME, run_deconvolution, take3), # Really just for denoising, no need for structural disambiguation
-            ("drift_correction__coarse", run_coarse_drift_correction, take3), 
-            ("bead_roi_generation", gen_all_bead_rois, take3), # Find/define all the bead ROIs in each (FOV, frame) pair.
+            pypiper.Stage(name="pipeline_precheck", func=pretest, f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config}),
+            pypiper.Stage(name="zarr_production", func=run_zarr_production, f_kwargs=rounds_params_images),
+            pypiper.Stage(name="nuclei_detection", func=run_nuclei_detection, f_kwargs=rounds_params_images),
+            pypiper.Stage(name="nuclei_drift_correction", func=drift_correct_nuclei, f_kwargs=rounds_params_images),
+            pypiper.Stage(name="psf_extraction", func=run_psf_extraction, f_kwargs=rounds_params_images),
+            pypiper.Stage(name=DECON_STAGE_NAME, func=run_deconvolution, f_kwargs=rounds_params_images), # Really just for denoising, no need for structural disambiguation
+            pypiper.Stage(name="drift_correction__coarse", func=run_coarse_drift_correction, f_kwargs=rounds_params_images), 
+            pypiper.Stage(name="bead_roi_generation", func=gen_all_bead_rois, f_kwargs=rounds_params_images), # Find/define all the bead ROIs in each (FOV, frame) pair.
             # Count detected bead ROIs for each timepoint, mainly to see if anything went awry during some phase of the imaging, e.g. air bubble.
-            ("bead_roi_detection_analysis", run_all_bead_roi_detection_analysis, take3),
-            ("bead_roi_partition", partition_bead_rois, take3),
-            ("drift_correction__fine", run_fine_drift_correction, take3),
-            ("drift_correction_accuracy_analysis", run_drift_correction_analysis, take3), 
-            ("drift_correction_accuracy_visualisation", run_drift_correction_accuracy_visualisation, lambda _1, params_config, _3: (params_config, )), 
-            (SPOT_DETECTION_STAGE_NAME, run_spot_detection, take3), # generates *_rois.csv (regional spots)
-            ("spot_proximity_filtration", run_spot_proximity_filtration, take3),
-            ("spot_nucleus_filtration", run_spot_nucleus_filtration, take3), 
-            ("spot_counts_visualisation__regional", plot_spot_counts, take2_with_spot_type(SpotType.REGIONAL)), 
-            ("spot_bounding", run_spot_bounding, take3), # computes pad_x_min, etc.; writes *_dc_rois.csv (much bigger, since regional spots x frames)
-            ("spot_extraction", run_spot_extraction, take3),
-            ("spot_zipping", run_spot_zipping, lambda _1, params_config, images_folder: (params_config, images_folder)),
-            ("tracing", run_chromatin_tracing, take3),
-            ("spot_region_distances", run_frame_name_and_distance_application, take3), 
-            (TRACING_QC_STAGE_NAME, qc_locus_spots_and_prep_points, take3),
-            ("spot_counts_visualisation__locus_specific", plot_spot_counts, take2_with_spot_type(SpotType.LOCUS_SPECIFIC)), 
-            ("pairwise_distances__locus_specific", compute_locus_pairwise_distances, take2),
-            ("pairwise_distances__regional", compute_region_pairwise_distances, take2),
-            ("locus_specific_spots_visualisation_data_prep", prep_locus_specific_spots_visualisation, take3),
-            ("nuclear_masks_visualisation_data_prep", prep_nuclear_masks_data, take3),
-        ]
-
-    def stages(self) -> List[Callable]:
-        return [
-            pypiper.Stage(func=fxn, f_args=get_args_from_conf_and_imgs(self.rounds_config, self.params_config, self.images_folder), name=name) 
-            for name, fxn, get_args_from_conf_and_imgs in self.name_fun_getargs_bundles()
+            pypiper.Stage(name="bead_roi_detection_analysis", func=run_all_bead_roi_detection_analysis, f_kwargs=rounds_params_images),
+            pypiper.Stage(name="bead_roi_partition", func=partition_bead_rois, f_kwargs=rounds_params_images),
+            pypiper.Stage(name="drift_correction__fine", func=run_fine_drift_correction, f_kwargs=rounds_params_images),
+            pypiper.Stage(name="drift_correction_accuracy_analysis", func=run_drift_correction_analysis, f_kwargs=rounds_params_images), 
+            pypiper.Stage(name="drift_correction_accuracy_visualisation", func=run_drift_correction_accuracy_visualisation, f_kwargs={"params_config": self.params_config}), 
+            pypiper.Stage(name=SPOT_DETECTION_STAGE_NAME, func=run_spot_detection, f_kwargs=rounds_params_images), # generates *_rois.csv (regional spots)
+            pypiper.Stage(name="spot_proximity_filtration", func=run_spot_proximity_filtration, f_kwargs=rounds_params_images),
+            pypiper.Stage(name="spot_nucleus_filtration", func=run_spot_nucleus_filtration, f_kwargs=rounds_params_images), 
+            pypiper.Stage(name="spot_counts_visualisation__regional", func=plot_spot_counts, f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config, "spot_type": SpotType.REGIONAL}), 
+            pypiper.Stage(name="spot_bounding", func=run_spot_bounding, f_kwargs=rounds_params_images), # computes pad_x_min, etc.; writes *_dc_rois.csv (much bigger, since regional spots x frames)
+            pypiper.Stage(name="spot_extraction", func=run_spot_extraction, f_kwargs=rounds_params_images),
+            pypiper.Stage(name="spot_zipping", func=run_spot_zipping, f_kwargs={"params_config": self.params_config, "images_folder": self.images_folder}),
+            pypiper.Stage(name="tracing", func=run_chromatin_tracing, f_kwargs=rounds_params_images),
+            pypiper.Stage(name="spot_region_distances", func=run_frame_name_and_distance_application, f_kwargs=rounds_params_images), 
+            pypiper.Stage(name=TRACING_QC_STAGE_NAME, func=qc_locus_spots_and_prep_points, f_kwargs=rounds_params_images),
+            pypiper.Stage(name="spot_counts_visualisation__locus_specific", func=plot_spot_counts, f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config, "spot_type": SpotType.LOCUS_SPECIFIC}), 
+            pypiper.Stage(name="pairwise_distances__locus_specific", func=compute_locus_pairwise_distances, f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config}),
+            pypiper.Stage(name="pairwise_distances__regional", func=compute_region_pairwise_distances, f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config}),
+            pypiper.Stage(name="locus_specific_spots_visualisation_data_prep", func=prep_locus_specific_spots_visualisation, f_kwargs=rounds_params_images),
+            # TODO: need to, ideally, pass nofail=True to this stage, and use the newer pypiper.
+            pypiper.Stage(name="nuclear_masks_visualisation_data_prep", func=prep_nuclear_masks_data, f_kwargs=rounds_params_images),
         ]
 
 
