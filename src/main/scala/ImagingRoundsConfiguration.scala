@@ -8,6 +8,7 @@ import cats.data.Validated.{ Invalid, Valid }
 import cats.syntax.all.*
 import mouse.boolean.*
 import upickle.default.*
+import com.typesafe.scalalogging.LazyLogging
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.{ readJsonFile, safeReadAs }
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ DistanceThreshold, PiecewiseDistance }
 
@@ -24,7 +25,7 @@ final case class ImagingRoundsConfiguration private(
 end ImagingRoundsConfiguration
 
 /** Tools for working with declaration of imaging rounds and how to use them within an experiment */
-object ImagingRoundsConfiguration:
+object ImagingRoundsConfiguration extends LazyLogging:
     
     /** Something went wrong with attempt to instantiate a configuration */
     trait BuildErrorLike:
@@ -80,17 +81,22 @@ object ImagingRoundsConfiguration:
         val (locusTimeSubsetNel, locusTimeSupersetNel) = {
             if locusGrouping.isEmpty then (().validNel, ().validNel) else {
                 val locusTimesInSequence = sequence.locusRounds.map(_.time).toSet
+                // First, check that the union of values in the locus grouping is a subset of the locus-specific imaging rounds.
                 val subsetNel = (uniqueTimepointsInLocusGrouping -- locusTimesInSequence).toList match {
                     case Nil => ().validNel
                     case ts => s"${ts.length} timepoint(s) in locus grouping and not found as locus imaging timepoints: ${ts.sorted.mkString(", ")}".invalidNel
                 }
+                // Then, check that each locus-specific imaging round is in the locus grouping, as appropriate..
                 val supersetNel = 
                     if checkLocusTimepointCovering
                     then
-                        (locusTimesInSequence -- uniqueTimepointsInLocusGrouping).toList match {
-                            case Nil => ().validNel
-                            case ts => s"${ts.length} locus timepoint(s) in imaging sequence and not found in locus grouping: ${ts.sorted.mkString(", ")}".invalidNel
-                        }
+                        val missing = locusTimesInSequence -- uniqueTimepointsInLocusGrouping
+                        logger.debug(s"${missing.size} locus imaging timepoint(s) missing from the locus grouping: ${mkStringTimepoints(missing)}")
+                        val (correctlyMissing, wronglyMissing) = missing.partition(tracingExclusions.contains)
+                        logger.debug(s"${correctlyMissing.size} locus imaging timepoint(s) CORRECTLY missing from locus grouping: ${mkStringTimepoints(correctlyMissing)}")
+                        if wronglyMissing.isEmpty 
+                        then ().validNel
+                        else s"${wronglyMissing.size} locus timepoint(s) in imaging sequence and not found in locus grouping: ${mkStringTimepoints(wronglyMissing)}".invalidNel
                     else
                         ().validNel
                 (subsetNel, supersetNel)
@@ -118,6 +124,8 @@ object ImagingRoundsConfiguration:
             .map(_ => ImagingRoundsConfiguration(sequence, locusGrouping, proximityFilterStrategy, tracingExclusions))
             .toEither
     }
+
+    private def mkStringTimepoints = (_: Set[Timepoint]).toList.sorted.map(_.get).mkString(", ")
     
 
     /**

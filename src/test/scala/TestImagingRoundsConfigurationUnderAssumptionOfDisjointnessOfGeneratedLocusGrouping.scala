@@ -296,7 +296,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
         }
     }
 
-    test("Locus grouping must either be absent or be identical, in union over timepoints, to timepoints from locus imaging rounds from imaging sequence.") {
+    test("Locus grouping must either be absent or be identical--in union over timepoints--to timepoints from locus imaging rounds from imaging sequence.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val maxTime = 100
         given arbTime: Arbitrary[Timepoint] = 
@@ -348,10 +348,13 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
                             // We have at least 1 group and more than 1 locus timepoint in total, so we can 
                             // definitely generate at least 1 to remove and still have a structurally (nonempty-of-nonempty) grouping.
                             // First, remove a single locus timepoint in the imaging rounds sequence from the locus grouping.
-                            subtracted <- Gen.oneOf(locusTimes)
-                                .map{ t => groups.toList.foldRight(List.empty[LocusGroup]){
-                                    case (g, acc) => (g.locusTimepoints - t).toNes.fold(acc)(ts => g.copy(locusTimepoints = ts) :: acc)
-                                } }
+                            timeToSubtractFromGroups <- Gen.oneOf(locusTimes)
+                            subtracted = groups.toList.foldRight(List.empty[LocusGroup]){ case (g, acc) => 
+                                (g.locusTimepoints - timeToSubtractFromGroups).toNes match {
+                                    case None => acc
+                                    case Some(ts) => g.copy(locusTimepoints = ts) :: acc
+                                }
+                            }
                             // Then, add a new timepoint to each group.
                             // NB: here we seemingly don't check for possibility of introducing non-disjointness among the subgroups.
                             subtractedAndAdded <- subtracted.toList.traverse{ g => 
@@ -361,10 +364,12 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessofGeneratedLocu
                             }
                             // Since we've both removed and added timepoints to the grouping that originally partitioned 
                             // the locus timepoints from the imaging rounds sequence, we expect both kinds of error message.
-                            missingPointTests = NonEmptyList.of(
-                                ("Uncovered in sequence 2", (_: String).startsWith("1 locus timepoint(s) in imaging sequence and not found in locus grouping")), 
-                                ("Extra in grouping 3", (_: String).startsWith(s"${subtractedAndAdded.length} timepoint(s) in locus grouping and not found as locus imaging timepoints"))
-                            )
+                            missingPointTests = List(
+                                (!exclusions.contains(timeToSubtractFromGroups)).option{
+                                    ("Uncovered in sequence 2", (_: String).startsWith("1 locus timepoint(s) in imaging sequence and not found in locus grouping"))
+                                },
+                                ("Extra in grouping 3", (_: String).startsWith(s"${subtractedAndAdded.length} timepoint(s) in locus grouping and not found as locus imaging timepoints")).some
+                            ).flatten.toNel.get
                         } yield (subtractedAndAdded.toNel.get.some, missingPointTests.asLeft[Unit])
                     )
                 }

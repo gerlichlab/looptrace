@@ -85,15 +85,42 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
             ("LocusGroupingValidation", "fail__imaging_rounds_config__true_locus_validation_295.json", true),
         )) { (subfolder, filename, expectError) => 
             val configFile = getResourcePath(subfolder = subfolder, filename = filename)
+            val safeParseResult = ImagingRoundsConfiguration.fromJsonFile(configFile)
             if (expectError) {
-                ImagingRoundsConfiguration.fromJsonFile(configFile) match {
+                safeParseResult match {
                     case Left(errorMessages) => countExpectedErrors(errorMessages) shouldEqual 1
                     case Right(_) => fail(s"Expected parse failure for $configFile but succeeded.")
                 }
                 val error = intercept[BuildError.FromJsonFile]{ ImagingRoundsConfiguration.unsafeFromJsonFile(configFile) }
                 countExpectedErrors(error.messages) shouldEqual 1
             } else {
-                ImagingRoundsConfiguration.fromJsonFile(configFile).isRight shouldBe true
+                safeParseResult.isRight shouldBe true
+                Try{ ImagingRoundsConfiguration.unsafeFromJsonFile(configFile)} match {
+                    case Success(_) => succeed
+                    case Failure(exception) => fail(s"Expected parse success for $configFile but failed: $exception")
+                }
+            }
+        }
+    }
+
+    test("locusGrouping tolerates absence of locus imaging timepoints which are in the tracingExclusions. Issue #304") {
+        forAll (Table(
+            ("subfolder", "filename", "expectError"), 
+            ("LocusGroupingValidation", "example__rounds_config__with_times_correctly_omitted_from_locus_grouping__304.json", false), 
+            ("LocusGroupingValidation", "fail__rounds_config__with_times_incorrectly_omitted_from_locus_grouping__304.json", true), 
+        )) { (subfolder, filename, expectError) =>
+            val configFile = getResourcePath(subfolder = subfolder, filename = filename)
+            val safeParseResult = ImagingRoundsConfiguration.fromJsonFile(configFile)
+            if (expectError) {
+                safeParseResult match {
+                    case Left(errorMessages) => 
+                        println(s"ERRORS: ${errorMessages}")
+                        errorMessages.count(_ === "2 locus timepoint(s) in imaging sequence and not found in locus grouping: 3, 4") shouldEqual 1
+                    case Right(_) => fail(s"Expected parse failure for $configFile but succeeded.")
+                }
+                
+            } else {
+                safeParseResult.isRight shouldBe true
                 Try{ ImagingRoundsConfiguration.unsafeFromJsonFile(configFile)} match {
                     case Success(_) => succeed
                     case Failure(exception) => fail(s"Expected parse success for $configFile but failed: $exception")
