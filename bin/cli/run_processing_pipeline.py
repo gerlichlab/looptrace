@@ -279,6 +279,18 @@ def run_regional_spot_viewing_prep(rounds_config: ExtantFile, params_config: Ext
     )
 
 
+def validate_imaging_rounds_config(rounds_config: ExtantFile) -> int:
+    cmd_parts = [
+        "java", 
+        "-cp",
+        str(LOOPTRACE_JAR_PATH),
+        f"{LOOPTRACE_JAVA_PACKAGE}.ValidateImagingRounds",
+        str(rounds_config.path),
+    ]
+    print(f"Running imaging rounds validation: {' '.join(cmd_parts)}")
+    return subprocess.check_call(cmd_parts)
+
+
 class LooptracePipeline(pypiper.Pipeline):
     """Main looptrace processing pipeline"""
 
@@ -291,6 +303,7 @@ class LooptracePipeline(pypiper.Pipeline):
     def stages(self) -> list[pypiper.Stage]:
         rounds_params_images = {"rounds_config": self.rounds_config, "params_config": self.params_config, "images_folder": self.images_folder}
         return [
+            pypiper.Stage(name="imaging_rounds_validation", func=validate_imaging_rounds_config, f_kwargs={"rounds_config": self.rounds_config}),
             pypiper.Stage(name="pipeline_precheck", func=pretest, f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config}),
             pypiper.Stage(name="zarr_production", func=run_zarr_production, f_kwargs=rounds_params_images),
             pypiper.Stage(name="nuclei_detection", func=run_nuclei_detection, f_kwargs=rounds_params_images),
