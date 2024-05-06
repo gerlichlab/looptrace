@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v0.4.0] - 2024-05-06
 
 ### Added
 * Added hook (`"checkLocusTimepointCoveringNel"`) for specifying whether or not (`true` / `false`) to check that union of values in `locusGrouping` section of imaging rounds configuration file covers the set of locus spot imaging timepoints in the `imagingRounds` declaration of the same file. The default is `true` (to check for covering). See [Issue 295](https://github.com/gerlichlab/looptrace/issues/295).
