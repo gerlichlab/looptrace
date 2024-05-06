@@ -11,6 +11,15 @@ ThisBuild / githubWorkflowTargetBranches := Seq("main")
 ThisBuild / githubWorkflowPublishTargetBranches := Seq()
 ThisBuild / githubWorkflowJavaVersions := Seq("11", "17", "19", "21").map(JavaSpec.temurin)
 
+ThisBuild / assemblyMergeStrategy := {
+  // This works for the moment, but seems dangerous; what if we really needed what was in here?
+  // Conflict comes from logback-classic + logback-core, each having module-info.class.
+  case "module-info.class" => MergeStrategy.discard
+  case x =>
+    val oldStrategy = (ThisBuild / assemblyMergeStrategy).value
+    oldStrategy(x)
+}
+
 lazy val root = (project in file("."))
   .settings(
     name := "looptrace",
