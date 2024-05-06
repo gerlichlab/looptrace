@@ -114,7 +114,6 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
             if (expectError) {
                 safeParseResult match {
                     case Left(errorMessages) => 
-                        println(s"ERRORS: ${errorMessages}")
                         errorMessages.count(_ === "2 locus timepoint(s) in imaging sequence and not found in locus grouping: 3, 4") shouldEqual 1
                     case Right(_) => fail(s"Expected parse failure for $configFile but succeeded.")
                 }
