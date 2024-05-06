@@ -258,6 +258,10 @@ class ImageHandler:
         return Path(self.out_path(self.spot_input_name + "_rois" + ".csv"))
 
     @property
+    def regional_spots_visualisation_data_path(self) -> Path:
+        return Path(self.analysis_path) / "regional_spots_visualisation"
+
+    @property
     def reg_input_template(self) -> str:
         return self.config["reg_input_template"]
 

@@ -46,6 +46,8 @@ Below are the sequential pipeline stage names.
 * zarr_production
 * nuclei_detection
 * nuclei_drift_correction
+* nuclear_masks_visualisation_data_prep
+* move_nuclear_masks_visualisation_data
 * psf_extraction
 * deconvolution
 * drift_correction__coarse
@@ -58,6 +60,7 @@ Below are the sequential pipeline stage names.
 * spot_detection
 * spot_proximity_filtration
 * spot_nucleus_filtration
+* regional_spots_visualisation_data_prep
 * spot_counts_visualisation__regional
 * spot_bounding
 * spot_extraction
@@ -69,4 +72,3 @@ Below are the sequential pipeline stage names.
 * pairwise_distances__locus_specific
 * pairwise_distances__regional
 * locus_specific_spots_visualisation_data_prep
-* nuclear_masks_visualisation_data_prep
