@@ -42,6 +42,7 @@ Simply create (`touch`) each such file `looptrace_<stage>.checkpoint` in the des
 Below are the sequential pipeline stage names.
 
 ### Pipeline stage names
+* imaging_rounds_validation
 * pipeline_precheck
 * zarr_production
 * nuclei_detection
