@@ -284,7 +284,7 @@ def validate_imaging_rounds_config(rounds_config: ExtantFile) -> int:
         "java", 
         "-cp",
         str(LOOPTRACE_JAR_PATH),
-        f"{LOOPTRACE_JAVA_PACKAGE}.ValidateImagingRounds",
+        f"{LOOPTRACE_JAVA_PACKAGE}.ValidateImagingRoundsConfig",
         str(rounds_config.path),
     ]
     print(f"Running imaging rounds validation: {' '.join(cmd_parts)}")
