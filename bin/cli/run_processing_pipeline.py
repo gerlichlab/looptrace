@@ -312,7 +312,8 @@ class LooptracePipeline(pypiper.Pipeline):
             pypiper.Stage(
                 name="move_nuclear_masks_visualisation_data", 
                 func=move_nuclear_masks_visualisation_data, 
-                f_kwargs={**rounds_params_images, "nofail": True},
+                f_kwargs=rounds_params_images,
+                nofail=True,
             ),
             pypiper.Stage(name="psf_extraction", func=run_psf_extraction, f_kwargs=rounds_params_images),
             # Really just for denoising, no need for structural disambiguation
@@ -336,7 +337,8 @@ class LooptracePipeline(pypiper.Pipeline):
             pypiper.Stage(
                 name="regional_spots_visualisation_data_prep", 
                 func=run_regional_spot_viewing_prep, 
-                f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config, "nofail": True},
+                f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config},
+                nofail=True,
             ),
             pypiper.Stage(
                 name="spot_counts_visualisation__regional", 
