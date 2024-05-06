@@ -3,7 +3,7 @@
 ## Building with Docker
 1. Clone the repo: `git clone ... && cd looptrace`
 1. Checkout the appropriate commit: `git checkout ...`
-1. Start Nix shell: `nix-shell`
+1. Start Nix shell: `nix-shell`. Note that you may need to turn off various arguments (`--arg <name> false`), depending on the machine you're building on and the current state of the Nix shell definition file.
 1. Build the JAR: `sbt assembly`
 1. Create (and tag!) new image: `docker build -t looptrace:<new-tag> .`
 
