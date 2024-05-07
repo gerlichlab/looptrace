@@ -38,7 +38,7 @@ numba = { version = "^0.57.0", optional = true }
 numcodecs = "^0.11.0"
 numpy = ">= 1.24.2, < 1.25"
 pandas = "^1.5.3"
-piper = { git = "https://github.com/vreuter/pypiper", rev = "90fb7ad532b3f954fc649fd99ad33dc318a01f56", optional = true }
+piper = { git = "https://github.com/vreuter/pypiper", rev = "0edf2f2b9402ab1b028efddcae71a9db275aacd1", optional = true }
 pyqt6 = { version = "^6.5.0", optional = true }
 pytest = { version = "^7.3.1", optional = true }
 pytest-skip-slow = { version = "^0.0.5", optional = true }

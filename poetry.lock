@@ -2991,8 +2991,8 @@ plot = ["matplotlib", "scipy", "seaborn"]
 [package.source]
 type = "git"
 url = "https://github.com/vreuter/pypiper"
-reference = "90fb7ad532b3f954fc649fd99ad33dc318a01f56"
-resolved_reference = "90fb7ad532b3f954fc649fd99ad33dc318a01f56"
+reference = "0edf2f2b9402ab1b028efddcae71a9db275aacd1"
+resolved_reference = "0edf2f2b9402ab1b028efddcae71a9db275aacd1"
 
 [[package]]
 name = "pipestat"
@@ -5132,4 +5132,4 @@ test = ["hypothesis", "pytest", "pytest-skip-slow"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "44c27963a927f8cbee8663419e01ff007965ea3dc035a902498c60bd6cf1a137"
+content-hash = "85efc29cb90f9c61cc7c7ce4fa4f0a5f3fc5a1e4a3bf7b1876841c2080db4e04"
