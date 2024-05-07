@@ -8,6 +8,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 
 ### Changed
 * Depend on new version of Pypiper (0.14.2).
+* Remove `prefer='threads'` hint to `joblib` for choosing parallelisation backend during coarse drift correction. This aims to minimise the frequency with which this pipeline step will be killed due to insufficient resources.
 
 ## [v0.4.1] - 2024-05-24
 This is a ___bugfix_ release__.
@@ -32,7 +33,6 @@ This is a ___bugfix_ release__.
 * Write out nuclear mask visualisation data as soon as it's available, to permit inspection of detection/segmentation right away. See [Issue 302](https://github.com/gerlichlab/looptrace/issues/302).
 * Use a `git` dependency on a version of `pypiper` which will support `nofail` behavior for a pipeline phase/stage, linked to [Issue 313](https://github.com/gerlichlab/looptrace/issues/313).
 * Allow a locus imaging timepoint to be absent from `locusGrouping` section's values sets' union if that timepoint is also in the `tracingExclusions`. See [Issue 304](https://github.com/gerlichlab/looptrace/issues/304).
-* Remove `prefer='threads'` hint to `joblib` for choosing parallelisation backend during coarse drift correction. This aims to minimise the frequency with which this pipeline step will be killed due to insufficient resources.
 
 ### Known issues
 * The heatmaps of counts of usable bead ROIs will be wrong in some cases; specifically, if there are null values in place of empty strings in the table-like file for any (FOV, time) pair, the corresponding bead ROI will be _counted in the visualisation_ as unusable, even though they will be eligible for actual use.
