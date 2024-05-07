@@ -381,12 +381,15 @@ class SpotPicker:
     """Encapsulation of data and roles for detection of fluorescent spots in imaging data"""
     def __init__(self, image_handler):
         self.image_handler = image_handler
-        self.config = image_handler.config
     
     @property
     def analysis_filename_prefix(self) -> str:
         """Prefix to use for output files in experiment's analysis subfolder, set by config file value"""
         return self.image_handler.analysis_filename_prefix
+
+    @property
+    def config(self) -> dict[str, object]:
+        return self.image_handler.config
 
     @property
     def detection_function(self) -> Callable:
