@@ -70,20 +70,21 @@ def subtract_crosstalk(source, bleed, threshold=500):
 
 
 def drift_corr_coarse(t_img, o_img, downsample=1):
-    '''
-    Calculates coarse and fine 
-    drift between two svih5 images by phase cross correlation.
+    """
+    Calculate--by phase cross correlation--the coarse drift between given images.
 
     Parameters
     ----------
-    t_path : Path to template image in svih5 format.
-    o_path : Path to offset image in svih5 format.
+    t_img : ArrayLike
+        Template / reference image
+    o_img : ArrayLike
+        Offset / moving image
 
     Returns
     -------
     A list of zyx coarse drifts and fine drifts (compared to coarse)
 
-    '''        
+    """
     s = tuple(slice(None, None, downsample) for i in t_img.shape)
     coarse_drift = phase_xcor(np.array(t_img[s]), np.array(o_img[s])) * downsample
     return coarse_drift
