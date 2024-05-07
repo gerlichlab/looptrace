@@ -80,7 +80,7 @@ class RoiOrderingSpecification:
     individual spots, as fit parameters must match rows from the all-ROIs table.
     """
 
-    @dataclasses.dataclass
+    @dataclasses.dataclass(frozen=True, kw_only=True)
     class FilenameKey:
         position: str
         roi_id: int
@@ -109,7 +109,7 @@ class RoiOrderingSpecification:
         except ValueError:
             print(f"Failed to get key for file key: {file_key}")
             raise
-        return cls.FilenameKey(pos, int(roi), int(ref))
+        return cls.FilenameKey(position=pos, roi_id=int(roi), ref_frame=int(ref))
 
 
 def finalise_single_spot_props_table(spot_props: pd.DataFrame, position: str, frame: int, channel: int) -> pd.DataFrame:
