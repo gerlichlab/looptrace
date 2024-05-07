@@ -27,6 +27,7 @@ from scipy import ndimage as ndi
 import tqdm
 
 from gertils import ExtantFolder, NonExtantPath
+from gertils.types import TimepointFrom0
 import spotfishing
 from spotfishing_looptrace import DifferenceOfGaussiansSpecificationForLooptrace, ORIGINAL_LOOPTRACE_DOG_SPECIFICATION
 
@@ -562,11 +563,20 @@ class SpotPicker:
             raise MissingRoisTableException(key_rois_table) from e
         
         for idx, (_, roi) in tqdm.tqdm(enumerate(rois_table.iterrows()), total=len(rois_table)):
+            ref_frame: int = roi['frame']
+            if not isinstance(ref_frame, int):
+                raise TypeError(f"Non-integer ({type(ref_frame).__name__}) timepoint: {ref_frame}")
+            locus_times: list[int] = {
+                lt.get
+                for lt in self.image_handler.get_locus_timepoints_for_regional_timepoint(TimepointFrom0(ref_frame))
+            }
+            if not locus_times:
+                logging.debug("No locus timepoints for regional timepoint %d, skipping ROI", ref_frame)
+                continue
             pos = roi['position']
             pos_index = self.image_handler.image_lists[self.input_name].index(pos)
             dc_pos_name = self.image_handler.image_lists[self.config['reg_input_moving']][pos_index] # not unused; used for table query
             sel_dc = self.image_handler.tables[self.input_name + '_drift_correction_fine'].query('position == @dc_pos_name')
-            ref_frame = roi['frame']
             ch = roi['ch']
             ref_offset = sel_dc.query('frame == @ref_frame')
             # TODO: here we can update to iterate over channels for doing multi-channel extraction.
@@ -574,6 +584,11 @@ class SpotPicker:
             Z, Y, X = self.images[pos_index][0, ch].shape[-3:]
             for _, dc_frame in sel_dc.iterrows():
                 frame = dc_frame["frame"]
+                if not isinstance(frame, int):
+                    raise TypeError(f"Non-integer ({type(frame).__name__}) timepoint: {frame}")
+                if frame not in locus_times:
+                    logging.debug("Timepoint %d isn't among locus times for regional timepoint %d, skipping", frame, ref_frame)
+                    continue
                 # min/max ensure that the slicing of the image array to make the small image for tracing doesn't go out of bounds.
                 # Padding ensures homogeneity of size of spot images to be used for tracing.
                 (

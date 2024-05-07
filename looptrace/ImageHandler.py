@@ -16,12 +16,13 @@ from typing import *
 import numpy as np
 import pandas as pd
 import yaml
+from gertils import ExtantFile
+from gertils.types import TimepointFrom0
 
 from looptrace import ZARR_CONVERSIONS_KEY, RoiImageSize, read_table_pandas
 from looptrace.configuration import get_minimum_regional_spot_separation
 from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, FilePathLike, FolderPathLike, get_analysis_path, simplify_path
 from looptrace.image_io import ignore_path, NPZ_wrapper
-from gertils import ExtantFile
 
 __author__ = "Kai Sandvold Beckwith"
 __credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
@@ -191,6 +192,21 @@ class ImageHandler:
                 n = probe + ("" if rep is None else f"_repeat{rep}")
                 names.append(n)
         return names
+
+    @property
+    def locus_grouping(self) -> dict[TimepointFrom0, list[TimepointFrom0]]:
+        section_key = "locusGrouping"
+        try:
+            data = self.config[section_key]
+        except KeyError:
+            logging.warning("Did not find locus grouping section key ('%s') in config data", section_key)
+            return {}
+        return {TimepointFrom0(reg_time): [TimepointFrom0(t) for t in locus_times] for reg_time, locus_times in data.items()}
+
+    def get_locus_timepoints_for_regional_timepoint(self, regional_timepoint: TimepointFrom0) -> list[TimepointFrom0]:
+        if not isinstance(regional_timepoint, TimepointFrom0):
+            raise TypeError(f"Illegal type ({type(regional_timepoint).__name__}) for regional timepoint for which to lookup locus timepoints!")
+        return self.locus_grouping.get(regional_timepoint, [])
 
     @property
     def locus_spots_visualisation_folder(self) -> Path:
