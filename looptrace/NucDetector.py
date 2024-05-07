@@ -408,7 +408,7 @@ class NucDetector:
             nuclei_mode=True,
         )
         print("Computing coarse drifts...")
-        records = Parallel(n_jobs=-1, prefer='threads')(
+        records = Parallel(n_jobs=-1)(
             delayed(lambda p, t, ref_ds, mov_ds: (t, p) + tuple(phase_xcor(ref_ds, mov_ds) * downsampling))(*args) 
             for args in all_args
             )
