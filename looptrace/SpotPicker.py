@@ -389,20 +389,6 @@ class SpotPicker:
         return self.image_handler.analysis_filename_prefix
 
     @property
-    def path_to_detected_spot_images_folder(self) -> Path:
-        return Path(self.image_handler.analysis_path) / "detected_spot_images"
-
-    def path_to_detected_spot_image_file(self, position: int, time: int, channel: int) -> Path:
-        """Get the path to the detected spot image file for given FOV (position), timepoint (hybridisation round), and imaging channel."""
-        fn = get_name_for_detected_spot_image_file(
-            fn_prefix=self.analysis_filename_prefix, 
-            position=position, 
-            time=time, 
-            channel=channel,
-            )
-        return self.path_to_detected_spot_images_folder / fn
-
-    @property
     def detection_function(self) -> Callable:
         try:
             return {DetectionMethod.INTENSITY.value: detect_spots_int, DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC: detect_spots_dog}[self.detection_method_name]
@@ -470,6 +456,20 @@ class SpotPicker:
     @property
     def parallelise(self) -> bool:
         return self.config.get("parallelise_spot_detection", False)
+
+    @property
+    def path_to_detected_spot_images_folder(self) -> Path:
+        return Path(self.image_handler.analysis_path) / "detected_spot_images"
+
+    def path_to_detected_spot_image_file(self, position: int, time: int, channel: int) -> Path:
+        """Get the path to the detected spot image file for given FOV (position), timepoint (hybridisation round), and imaging channel."""
+        fn = get_name_for_detected_spot_image_file(
+            fn_prefix=self.analysis_filename_prefix, 
+            position=position, 
+            time=time, 
+            channel=channel,
+            )
+        return self.path_to_detected_spot_images_folder / fn
 
     @property
     def pos_list(self) -> List[str]:
