@@ -573,6 +573,7 @@ class SpotPicker:
             # https://github.com/gerlichlab/looptrace/issues/138
             Z, Y, X = self.images[pos_index][0, ch].shape[-3:]
             for _, dc_frame in sel_dc.iterrows():
+                frame = dc_frame["frame"]
                 # min/max ensure that the slicing of the image array to make the small image for tracing doesn't go out of bounds.
                 # Padding ensures homogeneity of size of spot images to be used for tracing.
                 (
@@ -589,7 +590,7 @@ class SpotPicker:
                     )
 
                 # roi.name is the index value.
-                all_rois.append([pos, pos_index, idx, roi.name, dc_frame['frame'], ref_frame, ch, 
+                all_rois.append([pos, pos_index, idx, roi.name, frame, ref_frame, ch, 
                                 z_min, z_max, y_min, y_max, x_min, x_max, 
                                 pad_z_min, pad_z_max, pad_y_min, pad_y_max, pad_x_min, pad_x_max,
                                 z_drift_coarse, y_drift_coarse, x_drift_coarse, 
