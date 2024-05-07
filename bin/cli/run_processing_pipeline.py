@@ -38,7 +38,6 @@ from extract_spots import workflow as run_spot_extraction
 from zip_spot_image_files_for_tracing import workflow as run_spot_zipping
 from tracing import workflow as run_chromatin_tracing
 
-logger = logging.getLogger(__name__)
 
 DECON_STAGE_NAME = "deconvolution"
 NO_TEE_LOGS_OPTNAME = "--do-not-tee-logs"
@@ -70,7 +69,7 @@ def partition_bead_rois(rounds_config: ExtantFile, params_config: ExtantFile, im
         "--outputFolder",
         str(H.bead_rois_path),
     ]
-    print(f"Running bead ROI partitioning: {' '.join(cmd_parts)}")
+    logging.info(f"Running bead ROI partitioning: {' '.join(cmd_parts)}")
     subprocess.check_call(cmd_parts)
 
 
@@ -97,7 +96,7 @@ def run_spot_proximity_filtration(rounds_config: ExtantFile, params_config: Exta
         "--handleExtantOutput",
         "OVERWRITE" # TODO: parameterise this, see: https://github.com/gerlichlab/looptrace/issues/142
     ]
-    print(f"Running spot filtering on proximity: {' '.join(cmd_parts)}")
+    logging.info(f"Running spot filtering on proximity: {' '.join(cmd_parts)}")
     subprocess.check_call(cmd_parts)
 
 
@@ -150,7 +149,7 @@ def plot_spot_counts(rounds_config: ExtantFile, params_config: ExtantFile, spot_
         "-o", 
         output_folder, 
         ] + extra_files + probe_name_extra
-    print(f"Running spot count plotting command: {' '.join(cmd_parts)}")
+    logging.info(f"Running spot count plotting command: {' '.join(cmd_parts)}")
     return subprocess.check_call(cmd_parts)
 
 
@@ -183,7 +182,7 @@ def qc_locus_spots_and_prep_points(rounds_config: ExtantFile, params_config: Ext
         "--pointsDataOutputFolder", 
         str(H.locus_spots_visualisation_folder),
     ]    
-    print(f"Running QC filtering of tracing supports: {' '.join(cmd_parts)}")
+    logging.info(f"Running QC filtering of tracing supports: {' '.join(cmd_parts)}")
     subprocess.check_call(cmd_parts)
 
 
@@ -200,7 +199,7 @@ def compute_locus_pairwise_distances(rounds_config: ExtantFile, params_config: E
         "-O", 
         H.analysis_path,
     ]
-    print(f"Running distance computation command: {' '.join(cmd_parts)}")
+    logging.info(f"Running distance computation command: {' '.join(cmd_parts)}")
     return subprocess.check_call(cmd_parts)
 
 
@@ -217,7 +216,7 @@ def compute_region_pairwise_distances(rounds_config: ExtantFile, params_config: 
         "-O", 
         H.analysis_path,
     ]
-    print(f"Running distance computation command: {' '.join(cmd_parts)}")
+    logging.info(f"Running distance computation command: {' '.join(cmd_parts)}")
     return subprocess.check_call(cmd_parts)
 
 
@@ -237,7 +236,7 @@ def prep_locus_specific_spots_visualisation(rounds_config: ExtantFile, params_co
 def _write_nuc_mask_table(*, fov: int, masks_table: pd.DataFrame, output_folder: Path) -> Path:
     fn = f"{get_position_name_short(fov)}.nuclear_masks.csv"
     fp = output_folder / fn
-    print(f"Writing data file for nuclei visualisation in FOV {fov}: {fp}")
+    logging.info(f"Writing data file for nuclei visualisation in FOV {fov}: {fp}")
     fp.parent.mkdir(exist_ok=True)
     masks_table.to_csv(fp)
     return fp
@@ -249,9 +248,9 @@ def prep_nuclear_masks_data(rounds_config: ExtantFile, params_config: ExtantFile
     N = NucDetector(H)
     result: Dict[int, Path] = {}
     for fov, img in enumerate(N.mask_images):
-        print(f"Computing nuclear mask centroids for FOV: {fov}")
+        logging.info(f"Computing nuclear mask centroids for FOV: {fov}")
         table = extract_labeled_centroids(img)
-        print(f"Finished nuclear mask centroids for FOV: {fov}")
+        logging.info(f"Finished nuclear mask centroids for FOV: {fov}")
         result[fov] = _write_nuc_mask_table(fov=fov, masks_table=table, output_folder=H.nuclear_masks_visualisation_data_path)
     return result
 
@@ -261,10 +260,19 @@ def move_nuclear_masks_visualisation_data(rounds_config: ExtantFile, params_conf
     # To avoid images read, don't pass images folder, since it's unneeded for this actual handler.
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config)
     src = H.nuclear_masks_visualisation_data_path
-    dst = images_folder / ("_" + src.name) # Here's where we actually use the images_folder for this step.
-    logger.info("Copying nuclear mask visualisation data: %s --> %s", src, dst)
-    result = shutil.copytree(src, dst)
-    return ExtantFolder(result)
+    dst = images_folder.path / ("_" + src.name) # Here's where we actually use the images_folder for this step.
+    logging.info("Copying nuclear mask visualisation data: %s --> %s", src, dst)
+    try:
+        shutil.copytree(src, dst)
+    except Exception as e:
+        logging.warning(f"Error during copy of {src} to {dst}")
+        old_size_by_name = {f.name: os.path.getsize(f) for f in src.iterdir()}
+        new_size_by_name = {f.name: os.path.getsize(f) for f in dst.iterdir()}
+        if old_size_by_name == new_size_by_name:
+            logging.warning(f"Contents of {dst} appear to match those of {src} -- all good!")
+        else:
+            raise
+    return ExtantFolder(dst)
 
 
 def run_regional_spot_viewing_prep(rounds_config: ExtantFile, params_config: ExtantFile) -> dict[str, list[Path]]:
@@ -287,7 +295,7 @@ def validate_imaging_rounds_config(rounds_config: ExtantFile) -> int:
         f"{LOOPTRACE_JAVA_PACKAGE}.ValidateImagingRoundsConfig",
         str(rounds_config.path),
     ]
-    print(f"Running imaging rounds validation: {' '.join(cmd_parts)}")
+    logging.info(f"Running imaging rounds validation: {' '.join(cmd_parts)}")
     return subprocess.check_call(cmd_parts)
 
 
@@ -396,14 +404,14 @@ def init(opts: argparse.Namespace) -> LooptracePipeline:
         }
     if opts.do_not_tee_logs:
         kwargs["multi"] = True
-    logger.info(f"Building {PIPE_NAME} pipeline, using images from {opts.images_folder.path}")
+    logging.info(f"Building {PIPE_NAME} pipeline, using images from {opts.images_folder.path}")
     return LooptracePipeline(**kwargs)
 
 
 def main(cmdl):
     opts = parse_cli(cmdl)
     pipeline = init(opts)
-    logger.info("Running pipeline")
+    logging.info("Running pipeline")
     pipeline.run(start_point=opts.start_point, stop_after=opts.stop_after)
     pipeline.wrapup()
 
