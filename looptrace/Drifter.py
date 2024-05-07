@@ -264,7 +264,7 @@ def coarse_correction_workflow(rounds_config: ExtantFile, params_config: ExtantF
         stop_after=pos_halt_point,
     )
     print("Computing coarse drifts...")
-    records = Parallel(n_jobs=-1, prefer='threads')(
+    records = Parallel(n_jobs=-1)(
         delayed(lambda p, t, ref_ds, mov_ds: (t, p) + tuple(phase_xcor(ref_ds, mov_ds) * D.downsampling))(*args) 
         for args in all_args
         )
