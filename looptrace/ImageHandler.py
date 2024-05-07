@@ -72,7 +72,7 @@ class ImageHandler:
             rounds = json.load(fh)
 
         # Update the overall config with what's parsed from the imaging rounds one.
-        if set(self.config) & set(rounds):
+        if set(self.config.keys()) & set(rounds.keys()):
             raise ValueError(
                 f"Overlap of keys from parameters config and imaging config: {', '.join(set(self.config) & set(rounds))}"
                 )
