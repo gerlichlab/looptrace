@@ -1,7 +1,7 @@
 import Dependencies._
 
 ThisBuild / scalaVersion     := "3.4.1"
-ThisBuild / version          := "0.4.1"
+ThisBuild / version          := "0.5-SNAPSHOT"
 ThisBuild / organization     := "at.ac.oeaw.imba.gerlich"
 ThisBuild / organizationName := "Gerlich Group, IMBA, OEAW"
 
