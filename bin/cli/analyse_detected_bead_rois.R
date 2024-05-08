@@ -154,13 +154,19 @@ for (col in names(type_by_column)) {
 ## ...finally, set the key to prep the merge.
 setKeyPF(roi_counts_filtered)
 
+count_column_suffixes <- c("_unfiltered", "_filtered")
 data_file <- {
     data_table_merged <- merge(
         roi_counts[, .(position, frame, count)], 
         roi_counts_filtered[, .(position, frame, count)], 
         by = c("position", "frame"), 
-        suffixes = c("_unfiltered", "_filtered")
+        suffixes = count_column_suffixes
         )
+    # Make sure that NA becomes 0 in the counts columns.
+    for (count_suffix in count_column_suffixes) {
+        count_colname <- sprintf("count%s", count_suffix)
+        set(data_table_merged, which(is.na(data_table_merged[[count_colname]])), count_colname, 0)
+    }
     writeDataFile(data_table_merged)
 }
 message("Wrote combined data: ", data_file)
