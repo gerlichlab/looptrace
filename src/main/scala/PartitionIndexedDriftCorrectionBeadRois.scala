@@ -12,11 +12,11 @@ import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
-import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.ShiftingCount.asPositive
+import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionBeadRois.ShiftingCount.asPositive
 
 /** Split pool of detected bead ROIs into those for drift correction shift, drift correction accuracy, and unused. */
-object PartitionIndexedDriftCorrectionRois extends StrictLogging:
-    val ProgramName = "PartitionIndexedDriftCorrectionRois"
+object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
+    val ProgramName = "PartitionIndexedDriftCorrectionBeadRois"
 
     val BeadRoisPrefix = "bead_rois_"
 
@@ -333,7 +333,7 @@ object PartitionIndexedDriftCorrectionRois extends StrictLogging:
     
     /** Tools for working with a fundamental grouping entity -- pair of FOV and imaging timepoint */
     object PosTimePair:
-        private[PartitionIndexedDriftCorrectionRois] val timeKey = "time"
+        private[PartitionIndexedDriftCorrectionBeadRois] val timeKey = "time"
         given jsonMappableForPosTimePair: JsonMappable[PosTimePair] with
             override def toJsonMap = (pos, time) => 
                 Map("position" -> ujson.Num(pos.get), timeKey -> ujson.Num(time.get))
@@ -521,4 +521,4 @@ object PartitionIndexedDriftCorrectionRois extends StrictLogging:
     private[looptrace] def orderSelectedRoisSimplified[R <: SelectedRoi]: Ordering[R] = 
         Order[(RoiIndex, Point3D)].contramap((roi: R) => roi.index -> roi.centroid).toOrdering
 
-end PartitionIndexedDriftCorrectionRois
+end PartitionIndexedDriftCorrectionBeadRois

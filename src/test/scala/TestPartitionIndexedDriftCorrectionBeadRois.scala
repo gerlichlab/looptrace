@@ -13,13 +13,13 @@ import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
 
-import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionRois.*
+import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionBeadRois.*
 import at.ac.oeaw.imba.gerlich.looptrace.PathHelpers.listPath
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.readJsonFile
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ CoordinateSequence, Point3D, XCoordinate, YCoordinate, ZCoordinate }
 
 /** Tests for the partitioning of regions of interest (ROIs) for drift correction */
-class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSuite, ScalacheckGenericExtras, should.Matchers, PartitionRoisSuite:
+class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalacheckSuite, ScalacheckGenericExtras, should.Matchers, PartitionRoisSuite:
     import SelectedRoi.*
     
     test("Partition.RepeatedRoisWithinPartError is accessible but cannot be directly built.") {
@@ -784,4 +784,4 @@ class TestPartitionIndexedDriftCorrectionRois extends AnyFunSuite, ScalacheckSui
         os.write(f, (header +: records).map(_.mkString(",") ++ "\n"))
     }
 
-end TestPartitionIndexedDriftCorrectionRois
+end TestPartitionIndexedDriftCorrectionBeadRois
