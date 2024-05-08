@@ -54,7 +54,7 @@ class SpotType(Enum):
 def partition_bead_rois(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder):
     """Run the bead ROIs partitioning program / pipeline step."""
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
-    prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.PartitionIndexedDriftCorrectionRois"
+    prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.PartitionIndexedDriftCorrectionBeadRois"
     cmd_parts = [
         "java", 
         "-cp",
