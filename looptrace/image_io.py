@@ -447,7 +447,7 @@ class PixelArrayBitDepth(Enum):
         # First, check that the input is well typed.
         dtype = arr.dtype
         if dtype not in [int, np.uint8, np.uint16, np.uint32, np.uint64]:
-            raise TypeError(f"Non-interger-like datatype for alleged pixel array: {dtype}")
+            raise TypeError(f"Datatype for alleged pixel array isn't unsigned-int-like: {dtype}")
         
         max_pix = arr.max()
         min_pix = arr.min()
