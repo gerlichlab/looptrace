@@ -51,7 +51,7 @@ def workflow(*, output_folder: Path, spots_files: list[Path]) -> dict[str, list[
         for position, subtable in spots_table.groupby("position"):
             position = position.rstrip(".zarr")
             target = output_folder / position / f"{position}__{fp.name}"
-            target.parent.mkdir(exist_ok=True)
+            target.parent.mkdir(exist_ok=True, parents=True)
             logging.info("Writing data for FOV %s: %s", position, target)
             subtable.reset_index(drop=True).to_csv(target)
             outputs.setdefault(position, []).append(target)

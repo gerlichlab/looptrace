@@ -57,12 +57,12 @@ class FunctionalForm:
 def run_frame_name_and_distance_application(
     rounds_config: ExtantFile, 
     params_config: ExtantFile, 
-    images_path: ExtantFolder,
+    images_folder: ExtantFolder,
     ) -> Tuple[pd.DataFrame, Path]:
     H = ImageHandler(
         rounds_config=rounds_config, 
         params_config=params_config, 
-        images_folder=images_path,
+        images_folder=images_folder,
         )
     T = Tracer(H)
     traces = apply_frame_names_and_spatial_information(traces_file=T.traces_path, frame_names=H.frame_names)
