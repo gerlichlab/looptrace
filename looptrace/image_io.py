@@ -446,7 +446,7 @@ class PixelArrayBitDepth(Enum):
     def unsafe_for_array(cls, arr: npt.ArrayLike) -> "PixelArrayBitDepth":
         # First, check that the input is well typed.
         dtype = arr.dtype
-        if dtype not in [int, np.uint8, np.uint16, np.uint32, np.uint64, np.uint128, np.uint256]:
+        if dtype not in [int, np.uint8, np.uint16, np.uint32, np.uint64]:
             raise TypeError(f"Non-interger-like datatype for alleged pixel array: {dtype}")
         
         max_pix = arr.max()
