@@ -76,7 +76,6 @@ class Tracer:
     def __init__(self, image_handler: ImageHandler, trace_beads: bool = False):
         self.image_handler = image_handler
         self.config = image_handler.config
-        self.drift_table = image_handler.tables[image_handler.spot_input_name + '_drift_correction_fine']
         self.pos_list = self.image_handler.image_lists[image_handler.spot_input_name]
         if trace_beads:
             self.roi_table = image_handler.tables[image_handler.spot_input_name + '_bead_rois']
@@ -110,6 +109,10 @@ class Tracer:
         # TODO: note -- the drifts part of this is currently (2023-12-01) irrelevant, as the 'drifts' component of the background spec is unused.
         pos_drifts = self.drift_table[self.drift_table.position.isin(self.pos_list)][["z_px_fine", "y_px_fine", "x_px_fine"]].to_numpy()
         return BackgroundSpecification(frame_index=bg_frame_idx, drifts=pos_drifts - pos_drifts[bg_frame_idx])
+
+    @property
+    def drift_table(self) -> pd.DataFrame:
+        return self.image_handler.spots_fine_drift_correction_table
 
     def write_all_spot_images_to_one_per_fov_zarr(self, overwrite: bool = False) -> List[Path]:
         name_data_pairs = compute_spot_images_multiarray_per_fov(npz=self._images_wrapper)
