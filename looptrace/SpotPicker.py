@@ -566,10 +566,7 @@ class SpotPicker:
             ref_frame: int = roi['frame']
             if not isinstance(ref_frame, int):
                 raise TypeError(f"Non-integer ({type(ref_frame).__name__}) timepoint: {ref_frame}")
-            locus_times: list[int] = {
-                lt.get
-                for lt in self.image_handler.get_locus_timepoints_for_regional_timepoint(TimepointFrom0(ref_frame))
-            }
+            locus_times: list[int] = {lt.get for lt in self.image_handler.get_locus_timepoints_for_regional_timepoint(TimepointFrom0(ref_frame))}
             if not locus_times:
                 logging.debug("No locus timepoints for regional timepoint %d, skipping ROI", ref_frame)
                 continue
@@ -586,8 +583,8 @@ class SpotPicker:
                 frame = dc_frame["frame"]
                 if not isinstance(frame, int):
                     raise TypeError(f"Non-integer ({type(frame).__name__}) timepoint: {frame}")
-                if frame not in locus_times:
-                    logging.debug("Timepoint %d isn't among locus times for regional timepoint %d, skipping", frame, ref_frame)
+                if not (frame in locus_times or frame == ref_frame):
+                    logging.debug("Timepoint %d isn't eligible for tracing in a spot from timepoint %d; skipping", frame, ref_frame)
                     continue
                 # min/max ensure that the slicing of the image array to make the small image for tracing doesn't go out of bounds.
                 # Padding ensures homogeneity of size of spot images to be used for tracing.
