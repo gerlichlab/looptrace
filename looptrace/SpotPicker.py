@@ -573,7 +573,7 @@ class SpotPicker:
             pos = roi['position']
             pos_index = self.image_handler.image_lists[self.input_name].index(pos)
             dc_pos_name = self.image_handler.image_lists[self.config['reg_input_moving']][pos_index] # not unused; used for table query
-            sel_dc = self.image_handler.tables[self.input_name + '_drift_correction_fine'].query('position == @dc_pos_name')
+            sel_dc = self.image_handler.spots_fine_drift_correction_table.query('position == @dc_pos_name')
             ch = roi['ch']
             ref_offset = sel_dc.query('frame == @ref_frame')
             # TODO: here we can update to iterate over channels for doing multi-channel extraction.

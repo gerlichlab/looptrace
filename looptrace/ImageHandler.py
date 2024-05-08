@@ -291,6 +291,10 @@ class ImageHandler:
         return RoiImageSize(z=z, y=y, x=x)
 
     @property
+    def spots_fine_drift_correction_table(self) -> pd.DataFrame:
+        return self.tables[self.spot_input_name + "_drift_correction_fine"]
+
+    @property
     def spot_image_extraction_skip_reasons_json_file(self) -> Path:
         return Path(self.out_path("_spot_image_extraction_skip_reasons.json"))
 
