@@ -28,7 +28,7 @@ let baseBuildInputs = with pkgs; [ poetry stdenv.cc.cc.lib zlib ] ++ [ pkgs.${jd
       (if analysis then [ "analysis" ] else []) ++ 
       (if interactive-visualisation then [ "interactive-visualisation" ] else []) ++
       (if new-mac-napari then [ "new-mac-napari" ] else []) ++
-      (if pyDev then ["dev"] else [])
+      (if pyDev then [ "dev" "test" ] else [])
     );
     poetryInstallExtras = (
       if poetryExtras == [] then ""
