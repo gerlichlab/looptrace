@@ -9,7 +9,6 @@ from pathlib import Path
 import sys
 from typing import Optional
 
-import numpy as np
 import pandas as pd
 from gertils import ExtantFolder
 
@@ -27,8 +26,8 @@ def parse_cmdl(cmdl: list[str]) -> argparse.ArgumentParser:
         description="Analyse bead discards by fail code/reason.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("-I", "--input-folder", type=ExtantFolder.from_string, help="Path to folder in which to find files")
-    parser.add_argument("-O", "--output-file", type=Path, help="Path to file to write as output")
+    parser.add_argument("-I", "--input-folder", required=True, type=ExtantFolder.from_string, help="Path to folder in which to find files")
+    parser.add_argument("-O", "--output-file", required=True, type=Path, help="Path to file to write as output")
     return parser.parse_args(cmdl)
 
 
