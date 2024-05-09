@@ -7,6 +7,7 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+from dataclasses import dataclass
 import json
 import logging
 import os
@@ -34,10 +35,66 @@ logger = logging.getLogger()
 PathFilter = Callable[[Union[os.DirEntry, Path]], bool]
 
 
+@dataclass(frozen=True, kw_only=True, order=True)
+class BeadRoisFilenameSpecification:
+    fov: int
+    frame: int
+    purpose: Optional[str]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.fov, int) or not isinstance(self.frame, int):
+            raise TypeError(f"For bead ROIs filename spec, FOV and frame must be int; got {type(self.fov).__name__} and {type(self.frame).__name__}")
+        if self.purpose is not None:
+            if not isinstance(self.purpose, str):
+                raise TypeError(f"For bead ROIs filename spec, purpose must be null or str, not {type(self.purpose).__name__}")
+            if "." in self.purpose:
+                raise ValueError(f"In bead ROIs filename specification, purpose can't contain a period; got: {self.purpose}")
+    
+    prefix = "bead_rois__"
+
+    @property
+    def _suffix(self) -> str:
+        return ".csv" if self.purpose is None else f".{self.purpose}.json"
+
+    @property
+    def get_filename(self) -> str:
+        base = self.prefix + str(self.fov) + "_" + str(self.frame)
+        return base + self._suffix
+    
+    @classmethod
+    def from_filename(cls, fn: str) -> Optional["BeadRoisFilenameSpecification"]:
+        fields = fn.split(".")
+        if len(fields) == 2:
+            if fields[1] != "csv":
+                return None
+            base = fields[0]
+            purpose = None
+        elif len(fields) == 3:
+            if fields[2] != "json":
+                return None
+            base = fields[0]
+            purpose = None
+        else:
+            return None
+        if not base.startswith(cls.prefix):
+            return None
+        data = base.lstrip(cls.prefix).split("_")
+        if len(data) != 2:
+            return None
+        try:
+            fov = int(data[0])
+            frame = int(data[1])
+        except:
+            return None
+        return cls(fov=fov, frame=frame, purpose=purpose)
+
+    @classmethod
+    def from_filepath(cls, fp: Path) -> Optional["BeadRoisFilenameSpecification"]:
+        return cls.from_filename(fp.name)
+
+
 def bead_rois_filename(pos_idx: int, frame: int, purpose: Optional[str]) -> str:
-    prefix = f"bead_rois__{pos_idx}_{frame}"
-    extension = ".csv" if purpose is None else f".{purpose}.json"
-    return prefix + extension
+    return BeadRoisFilenameSpecification(fov=pos_idx, frame=frame, purpose=purpose)
 
 
 def _read_bead_rois_file(fp: ExtantFile) -> np.ndarray[int]:

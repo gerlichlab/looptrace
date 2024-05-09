@@ -13,6 +13,7 @@ and generate regions of interest (ROIs) corresponding to them.
 __author__ = "Vince Reuter"
 
 import dataclasses
+from enum import Enum
 from joblib import Parallel, delayed
 from pathlib import Path
 from typing import *
@@ -29,6 +30,11 @@ from looptrace.ImageHandler import bead_rois_filename
 from looptrace.numeric_types import NumberLike
 
 PathLike = Union[str, Path]
+
+
+AREA_COLUMN_NAME = "area"
+FAIL_CODE_COLUMN_NAME = "fail_code"
+INTENSITY_COLUMN_NAME = "max_intensity"
 
 
 def extract_single_bead(
@@ -193,7 +199,7 @@ class BeadRoiParameters:
         # Add the fail_code field, based on reason(s) to exclude a detected bead from selection.
         img_maxima = self.compute_labeled_regions(img=img)
 
-        fail_codes = img_maxima["fail_code"]
+        fail_codes = img_maxima[FAIL_CODE_COLUMN_NAME]
 
         if unfiltered_filepath:
             print(f"Writing unfiltered bead ROIs: {unfiltered_filepath}")
@@ -237,7 +243,7 @@ class BeadRoiParameters:
         img_maxima = self._extract_regions(img)
         
         # Apply failure code labels based on the regional filtration criteria.
-        img_maxima["fail_code"] = self._compute_discard_reasons(regions=img_maxima)
+        img_maxima[FAIL_CODE_COLUMN_NAME] = self._compute_discard_reasons(regions=img_maxima)
 
         return img_maxima
 
@@ -246,23 +252,32 @@ class BeadRoiParameters:
         img_label, num_labels = self._segment_image(img)
         print("Number of unfiltered beads found: ", num_labels)
         # Extract the relevant data for each of the segmented regions.
-        return pd.DataFrame(regionprops_table(img_label, img, properties=("centroid", "max_intensity", "area")))
+        return pd.DataFrame(regionprops_table(img_label, img, properties=("centroid", INTENSITY_COLUMN_NAME, AREA_COLUMN_NAME)))
 
     def _compute_discard_reasons(self, regions: pd.DataFrame) -> pd.Series:
         # TODO: why divide-by-2 here?
         roi_px = self.roi_pixels // 2
         # TODO: record better the mapping from -0/-1/-2 to z/y/x.
         too_high = (lambda _: False) if self.max_intensity_for_detection is None \
-            else (lambda row: row ["max_intensity"] > self.max_intensity_for_detection)
+            else (lambda row: row [INTENSITY_COLUMN_NAME] > self.max_intensity_for_detection)
         invalidation_label_pairs = [
-            (lambda row: row["centroid-0"] <= roi_px, "z"), 
-            (lambda row: row["centroid-1"] <= roi_px, "y"), 
-            (lambda row: row["centroid-2"] <= roi_px, "x"), 
-            (lambda row: row["area"] > self.max_region_size, "s"), 
-            (lambda row: row["max_intensity"] < self.min_intensity_for_detection, "i"), 
-            (too_high, "I"), 
+            (lambda row: row["centroid-0"] <= roi_px, self.BeadFailReason.OutOfBoundsZ), 
+            (lambda row: row["centroid-1"] <= roi_px, self.BeadFailReason.OutOfBoundsY), 
+            (lambda row: row["centroid-2"] <= roi_px, self.BeadFailReason.OutOfBoundsX), 
+            (lambda row: row[AREA_COLUMN_NAME] > self.max_region_size, self.BeadFailReason.TooBig), 
+            (lambda row: row[INTENSITY_COLUMN_NAME] < self.min_intensity_for_detection, self.BeadFailReason.TooDim), 
+            (too_high, self.BeadFailReason.TooBright), 
             ]
-        return regions.apply(lambda row: "".join(code if fails(row) else "" for fails, code in invalidation_label_pairs), axis=1)
+        return regions.apply(lambda row: "".join(code.value if fails(row) else "" for fails, code in invalidation_label_pairs), axis=1)
 
     def _segment_image(self, img: np.ndarray) -> Tuple[np.ndarray, int]:
-        return ndi.label(img > self.min_intensity_for_segmentation)
+        return ndi.label(img > self.min_intensity_for_segmentation)    
+
+    class BeadFailReason(Enum):
+        """Why a fiducial bead ROI may be passed discarded, not to be used for drift correction"""
+        OutOfBoundsZ = "z"
+        OutOfBoundsY = "y"
+        OutOfBoundsX = "x"
+        TooBig = "s"
+        TooDim = "i"
+        TooBright = "I"
