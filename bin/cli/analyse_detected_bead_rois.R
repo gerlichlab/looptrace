@@ -53,8 +53,8 @@ parsePositionAndFrame <- function(fn) {
 countPassingQC <- function(f) {
     fn <- basename(f)
     p_and_f <- parsePositionAndFrame(fn)
-    cmd_count_filtered <- sprintf("cut -d%s -f%s %s", delimiter, opts$qc_code_column, f)
-    n_qc_pass <- sum(fread(cmd = cmd_count_filtered)[[1]] == "")
+    codes <- fread(f, sep = delimiter)[[opts$qc_code_column]]
+    n_qc_pass <- sum(codes == "") + sum(is.na(codes))
     list(position = p_and_f[["position"]], frame = p_and_f[["frame"]], filename = fn, count = n_qc_pass)
 }
 
@@ -66,14 +66,30 @@ writeDataFile <- function(counts_table) {
     data_output_file
 }
 
+buildUnfilteredHeatmap <- function(counts_table) {
+    ggplot(counts_table, aes(x = frame, y = position, fill = count_unfiltered))
+}
+
+buildFilteredHeatmap <- function(counts_table) {
+    ggplot(counts_table, aes(x = frame, y = position, fill = count_filtered))
+}
+
 # Create the heatmap for the given counts data (1 count per (FOV, time) pair).
 buildCountsHeatmap <- function(counts_table, counts_type_name) {
-    ggplot(counts_table, aes(x = frame, y = position, fill = count)) + 
+    if (counts_type_name == "unfiltered") {
+        p <- buildUnfilteredHeatmap(counts_table)
+    }
+    else if (counts_type_name == "filtered") {
+        p <- buildFilteredHeatmap(counts_table)
+    }
+    else { stop("Unrecognised counts filter type: ", counts_type_name) }
+    p <- p + 
         geom_tile() + 
         xlab("timepoint") + 
         scale_y_continuous(breaks = round(seq(0, max(counts_table$position), by = 2), 1)) + 
         ggtitle(sprintf("Counts, %s bead ROIs", counts_type_name)) + 
         theme_bw()
+    p
 }
 
 # Save a bead ROIs counts plot in the current output folder (by CLI), with a particular prefix for the name to indicate content and type.
@@ -155,26 +171,27 @@ for (col in names(type_by_column)) {
 setKeyPF(roi_counts_filtered)
 
 count_column_suffixes <- c("_unfiltered", "_filtered")
-data_file <- {
-    data_table_merged <- merge(
-        roi_counts[, .(position, frame, count)], 
-        roi_counts_filtered[, .(position, frame, count)], 
-        by = c("position", "frame"), 
-        suffixes = count_column_suffixes
-        )
-    # Make sure that NA becomes 0 in the counts columns.
-    for (count_suffix in count_column_suffixes) {
-        count_colname <- sprintf("count%s", count_suffix)
-        set(data_table_merged, which(is.na(data_table_merged[[count_colname]])), count_colname, 0)
-    }
-    writeDataFile(data_table_merged)
+
+data_table_merged <- merge(
+    roi_counts[, .(position, frame, count)], 
+    roi_counts_filtered[, .(position, frame, count)], 
+    by = c("position", "frame"), 
+    suffixes = count_column_suffixes
+)
+
+# Make sure that NA becomes 0 in the counts columns.
+for (count_suffix in count_column_suffixes) {
+    count_colname <- sprintf("count%s", count_suffix)
+    set(data_table_merged, which(is.na(data_table_merged[[count_colname]])), count_colname, 0)
 }
+
+data_file <- writeDataFile(data_table_merged)
 message("Wrote combined data: ", data_file)
 
 message("Building (frame, FOV) bead ROI count heatmaps")
-roi_counts_heatmap <- buildCountsHeatmap(roi_counts, "unfiltered")
+roi_counts_heatmap <- buildCountsHeatmap(data_table_merged, "unfiltered")
 saveCountsPlot(fig = roi_counts_heatmap, plot_type_name = "unfiltered.heatmap")
-roi_counts_heatmap <- buildCountsHeatmap(roi_counts_filtered, "filtered")
+roi_counts_heatmap <- buildCountsHeatmap(data_table_merged, "filtered")
 saveCountsPlot(fig = roi_counts_heatmap, plot_type_name = "filtered.heatmap")
 
 message("Done!")
