@@ -202,7 +202,7 @@ class BeadRoiParameters:
 
         print("Filtering bead ROIs")
         num_unfiltered = len(img_maxima)
-        img_maxima = img_maxima[fail_codes == ""]
+        img_maxima = img_maxima[(fail_codes == "") | fail_codes.isna()]
         num_filtered = len(img_maxima)
         print(f"Bead ROIs remaining: {num_filtered}/{num_unfiltered}")
 
