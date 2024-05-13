@@ -6,6 +6,10 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 
 ## Unreleased
 
+### Added
+* Added a tool--a simple [command-line program](./bin/cli/analyse_bead_discard_reasons.py)-- to analyse the reason(s) that each fiducial bead ROI is discarded (_if_ it's discarded).
+* Added a tool-- a simple [command-line program](./bin/cli/squeeze_list_of_field_of_view_zarr.py)--to make a folder of per-FOV ZARRs into a contiguous sequence at the start of the natural numbers, after having removed certain problematic FOVs' ZARRs.
+
 ### Changed
 * Depend on new version of Pypiper (0.14.2), which allows any pipeline stage to be marked as `nofail` (by passing `nofail=True` to its constructor), so that if something goes wrong while running that stage, it won't fail the whole pipeline (i.e., subsequent processing is allowed to continue).
 * Remove `prefer='threads'` hint to `joblib` for choosing parallelisation backend during coarse drift correction. This aims to minimise the frequency with which this pipeline step will be killed due to insufficient resources.
