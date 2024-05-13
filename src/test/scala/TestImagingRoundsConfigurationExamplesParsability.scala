@@ -128,6 +128,27 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
         }
     }
 
+    test("proximityFilterStrategy grouping cannot have any regional timepoint in any values list for groups.") {
+        forAll (Table(
+            ("subfolder", "filename", "expectedExtra"), 
+            ("RegionGroupingValidation", "fail__rounds_config_with_different_regional_timepoint_in_locus_grouping_values__permission.json", NonEmptyList.of(8, 10)), 
+            ("RegionGroupingValidation", "fail__rounds_config_with_different_regional_timepoint_in_locus_grouping_values__prohibition.json", NonEmptyList.of(8, 10)), 
+            ("RegionGroupingValidation", "fail__rounds_config_with_same_regional_timepoint_in_locus_grouping_values__permission.json", NonEmptyList.of(9, 11)), 
+            ("RegionGroupingValidation", "fail__rounds_config_with_same_regional_timepoint_in_locus_grouping_values__prohibition.json", NonEmptyList.of(9, 11)), 
+            ("RegionGroupingValidation", "fail__rounds_config_with_unmapped_regional_timepoint_in_locus_grouping_values__permission.json", NonEmptyList.one(9)), 
+            ("RegionGroupingValidation", "fail__rounds_config_with_unmapped_regional_timepoint_in_locus_grouping_values__prohibition.json", NonEmptyList.one(9)), 
+        )) { (subfolder, filename, expectedExtra) =>
+            val configFile = getResourcePath(subfolder = subfolder, filename = filename)
+            val safeParseResult = ImagingRoundsConfiguration.fromJsonFile(configFile)
+            safeParseResult match {
+                case Left(errorMessages) => 
+                    val expectedMessage = s"${expectedExtra.length} timepoint(s) in locus grouping and not found as locus imaging timepoints: ${expectedExtra.toList.sorted.mkString(", ")}"
+                    errorMessages.count(_ === expectedMessage) shouldEqual 1
+                case Right(_) => fail(s"Expected parse failure for $configFile but succeeded.")
+            }
+        }
+    }
+
     private def getResourcePath(subfolder: String, filename: String): os.Path = 
         os.Path(getClass.getResource(s"/TestImagingRoundsConfiguration/$subfolder/$filename").getPath)
 
