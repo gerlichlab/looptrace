@@ -546,7 +546,7 @@ class SpotPicker:
     
     def make_dc_rois_all_frames(self) -> str:
         #Precalculate all ROIs for extracting spot images, based on identified ROIs and precalculated drifts between time frames.
-        print('Generating list of all ROIs for tracing:')
+        print("Generating list of all ROIs for tracing...")
 
         all_rois = []
         
