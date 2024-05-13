@@ -346,7 +346,12 @@ def get_one_dim_drift_and_bound_and_pad(roi_min: NumberLike, roi_max: NumberLike
     int, NumberLike, NumberLike, NumberLike, NumberLike
         Coarse drift for current dimension, ROI min in dimension, ROI max in dimension, lower padding in dimension, upper padding in dimension
     """
-    coarse_drift = int(frame_drift) - int(ref_drift)
+    try:
+        coarse_drift = int(frame_drift) - int(ref_drift)
+    except TypeError:
+        logger.error(f"Debugging info -- type(frame_drift): {type(frame_drift).__name__}. Value: {frame_drift}")
+        logger.error(f"Debugging info -- type(ref_drift): {type(ref_drift).__name__}. Value: {ref_drift}")
+        raise
     target_min = roi_min - coarse_drift
     target_max = roi_max - coarse_drift
     if target_min < dim_limit and target_max > 0: # At least one bound within image
@@ -542,14 +547,12 @@ class SpotPicker:
         n_spots = output.shape[0]
         (logger.warning if n_spots == 0 else logger.info)(f"Writing initial spot ROIs with {n_spots} spot(s): {outfile}")
         output.to_csv(outfile)
-        return outfile
-    
+        return outfile        
+
     def make_dc_rois_all_frames(self) -> str:
         #Precalculate all ROIs for extracting spot images, based on identified ROIs and precalculated drifts between time frames.
         print("Generating list of all ROIs for tracing...")
 
-        all_rois = []
-        
         spotfile = self.image_handler.nuclei_filtered_spots_file_path if self.config.get('spot_in_nuc', False) \
             else self.image_handler.proximity_filtered_spots_file_path
         key_rois_table, _ = os.path.splitext(spotfile.name)
@@ -562,58 +565,22 @@ class SpotPicker:
         except KeyError as e:
             raise MissingRoisTableException(key_rois_table) from e
         
-        for idx, (_, roi) in tqdm.tqdm(enumerate(rois_table.iterrows()), total=len(rois_table)):
-            ref_frame: int = roi['frame']
-            if not isinstance(ref_frame, int):
-                raise TypeError(f"Non-integer ({type(ref_frame).__name__}) timepoint: {ref_frame}")
-            locus_times: list[int] = {lt.get for lt in self.image_handler.get_locus_timepoints_for_regional_timepoint(TimepointFrom0(ref_frame))}
-            if not locus_times:
-                logging.debug("No locus timepoints for regional timepoint %d, skipping ROI", ref_frame)
-                continue
-            pos = roi['position']
-            pos_index = self.image_handler.image_lists[self.input_name].index(pos)
-            dc_pos_name = self.image_handler.image_lists[self.config['reg_input_moving']][pos_index] # not unused; used for table query
-            sel_dc = self.image_handler.spots_fine_drift_correction_table.query('position == @dc_pos_name')
-            ch = roi['ch']
-            ref_offset = sel_dc.query('frame == @ref_frame')
-            # TODO: here we can update to iterate over channels for doing multi-channel extraction.
-            # https://github.com/gerlichlab/looptrace/issues/138
-            Z, Y, X = self.images[pos_index][0, ch].shape[-3:]
-            for _, dc_frame in sel_dc.iterrows():
-                frame = dc_frame["frame"]
-                if not isinstance(frame, int):
-                    raise TypeError(f"Non-integer ({type(frame).__name__}) timepoint: {frame}")
-                if not (frame in locus_times or frame == ref_frame):
-                    logging.debug("Timepoint %d isn't eligible for tracing in a spot from timepoint %d; skipping", frame, ref_frame)
-                    continue
-                # min/max ensure that the slicing of the image array to make the small image for tracing doesn't go out of bounds.
-                # Padding ensures homogeneity of size of spot images to be used for tracing.
-                (
-                    (z_drift_coarse, z_min, z_max, pad_z_min, pad_z_max), 
-                    (y_drift_coarse, y_min, y_max, pad_y_min, pad_y_max), 
-                    (x_drift_coarse, x_min, x_max, pad_x_min, pad_x_max)
-                ) = (get_one_dim_drift_and_bound_and_pad(
-                    roi_min=roi[f"{dim}_min"], 
-                    roi_max=roi[f"{dim}_max"], 
-                    dim_limit=lim, 
-                    frame_drift=dc_frame[f"{dim}_px_coarse"], 
-                    ref_drift=ref_offset[f"{dim}_px_coarse"]
-                    ) for dim, lim in (("z", Z), ("y", Y), ("x", X))
-                    )
+        get_pos_idx = lambda pos: self.image_handler.image_lists[self.input_name].index(pos)
+        get_locus_timepoints = self.image_handler.get_locus_timepoints_for_regional_timepoint
+        get_zyx = lambda pos_idx, ch: self.images[pos_idx][0, ch].shape[-3:]
+        def get_dc_table(pos_idx: int):
+            dc_pos_name = self.image_handler.image_lists[self.config['reg_input_moving']][pos_idx] # not unused; used for table query
+            return self.image_handler.spots_fine_drift_correction_table.query('position == @dc_pos_name')
 
-                # roi.name is the index value.
-                all_rois.append([pos, pos_index, idx, roi.name, frame, ref_frame, ch, 
-                                z_min, z_max, y_min, y_max, x_min, x_max, 
-                                pad_z_min, pad_z_max, pad_y_min, pad_y_max, pad_x_min, pad_x_max,
-                                z_drift_coarse, y_drift_coarse, x_drift_coarse, 
-                                dc_frame['z_px_fine'], dc_frame['y_px_fine'], dc_frame['x_px_fine']])
-
-        self.all_rois = pd.DataFrame(all_rois, columns=['position', 'pos_index', 'roi_number', 'roi_id', 'frame', 'ref_frame', 'ch', 
-                                "z_min", "z_max", "y_min", "y_max", "x_min", "x_max",
-                                'pad_z_min', 'pad_z_max', 'pad_y_min', 'pad_y_max', 'pad_x_min', 'pad_x_max', 
-                                'z_px_coarse', 'y_px_coarse', 'x_px_coarse',
-                                'z_px_fine', 'y_px_fine', 'x_px_fine'])
+        self.all_rois = build_locus_spot_data_extraction_table(
+            rois_table=rois_table,
+            get_pos_idx=get_pos_idx,
+            get_dc_table=get_dc_table,
+            get_locus_timepoints=get_locus_timepoints,
+            get_zyx=get_zyx,
+        )
         self.all_rois = self.all_rois.sort_values(RoiOrderingSpecification.row_order_columns()).reset_index(drop=True)
+        
         print(self.all_rois)
         outfile = self.image_handler.drift_corrected_all_timepoints_rois_file
         print(f"Writing all ROIs file: {outfile}")
@@ -738,6 +705,70 @@ class SpotPicker:
 
         self.image_handler.images['spot_images_fine'] = roi_array_fine
         np.savez_compressed(self.image_handler.image_save_path+os.sep+'spot_images_fine.npz', *roi_array_fine)
+
+
+def build_locus_spot_data_extraction_table(
+    rois_table: pd.DataFrame, 
+    *, 
+    get_pos_idx: Callable[[str], int], 
+    get_dc_table: Callable[[int], pd.DataFrame], 
+    get_locus_timepoints: Callable[[TimepointFrom0], list[TimepointFrom0]],
+    get_zyx: Callable[[int, int], tuple[int, int, int]], # Provide FOV index + channel, get (Z, Y, X).
+) -> pd.DataFrame:
+    all_rois = []
+
+    for idx, (_, roi) in tqdm.tqdm(enumerate(rois_table.iterrows()), total=len(rois_table)):
+        ref_frame: int = roi["frame"]
+        if not isinstance(ref_frame, int):
+            raise TypeError(f"Non-integer ({type(ref_frame).__name__}) timepoint: {ref_frame}")
+        locus_times: list[int] = {lt.get for lt in get_locus_timepoints(TimepointFrom0(ref_frame))}
+        if not locus_times:
+            logging.debug("No locus timepoints for regional timepoint %d, skipping ROI", ref_frame)
+            continue
+        pos = roi["position"]
+        pos_index = get_pos_idx(pos)
+        sel_dc = get_dc_table(pos_index)
+        ch = roi["ch"]
+        ref_offset = sel_dc.query('frame == @ref_frame')
+        # TODO: here we can update to iterate over channels for doing multi-channel extraction.
+        # https://github.com/gerlichlab/looptrace/issues/138
+        Z, Y, X = get_zyx(pos_index, ch)
+        for _, dc_frame in sel_dc.iterrows():
+            frame = dc_frame["frame"]
+            if not isinstance(frame, int):
+                raise TypeError(f"Non-integer ({type(frame).__name__}) timepoint: {frame}")
+            if not (frame in locus_times or frame == ref_frame):
+                logging.debug("Timepoint %d isn't eligible for tracing in a spot from timepoint %d; skipping", frame, ref_frame)
+                continue
+            # min/max ensure that the slicing of the image array to make the small image for tracing doesn't go out of bounds.
+            # Padding ensures homogeneity of size of spot images to be used for tracing.
+            (
+                (z_drift_coarse, z_min, z_max, pad_z_min, pad_z_max), 
+                (y_drift_coarse, y_min, y_max, pad_y_min, pad_y_max), 
+                (x_drift_coarse, x_min, x_max, pad_x_min, pad_x_max)
+            ) = (get_one_dim_drift_and_bound_and_pad(
+                roi_min=roi[f"{dim}_min"], 
+                roi_max=roi[f"{dim}_max"], 
+                dim_limit=lim, 
+                frame_drift=dc_frame[f"{dim}_px_coarse"], 
+                ref_drift=ref_offset[f"{dim}_px_coarse"]
+                ) for dim, lim in (("z", Z), ("y", Y), ("x", X))
+                )
+
+            # roi.name is the index value.
+            all_rois.append([pos, pos_index, idx, roi.name, frame, ref_frame, ch, 
+                            z_min, z_max, y_min, y_max, x_min, x_max, 
+                            pad_z_min, pad_z_max, pad_y_min, pad_y_max, pad_x_min, pad_x_max,
+                            z_drift_coarse, y_drift_coarse, x_drift_coarse, 
+                            dc_frame['z_px_fine'], dc_frame['y_px_fine'], dc_frame['x_px_fine']])
+
+    return pd.DataFrame(all_rois, columns=[
+        'position', 'pos_index', 'roi_number', 'roi_id', 'frame', 'ref_frame', 'ch', 
+        "z_min", "z_max", "y_min", "y_max", "x_min", "x_max",
+        'pad_z_min', 'pad_z_max', 'pad_y_min', 'pad_y_max', 'pad_x_min', 'pad_x_max', 
+        'z_px_coarse', 'y_px_coarse', 'x_px_coarse',
+        'z_px_fine', 'y_px_fine', 'x_px_fine'
+    ])
 
 
 def extract_single_roi_img_inmem(
