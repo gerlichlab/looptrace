@@ -84,7 +84,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
                 // First, check that the union of values in the locus grouping is a subset of the locus-specific imaging rounds.
                 val subsetNel = (uniqueTimepointsInLocusGrouping -- locusTimesInSequence).toList match {
                     case Nil => ().validNel
-                    case ts => s"${ts.length} timepoint(s) in locus grouping and not found as locus imaging timepoints: ${ts.sorted.mkString(", ")}".invalidNel
+                    case ts => s"${ts.length} timepoint(s) in locus grouping and not found as locus imaging timepoints: ${ts.sorted.map(_.get).mkString(", ")}".invalidNel
                 }
                 // Then, check that each locus-specific imaging round is in the locus grouping, as appropriate..
                 val supersetNel = 
