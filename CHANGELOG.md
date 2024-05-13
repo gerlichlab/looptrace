@@ -7,7 +7,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 ## Unreleased
 
 ### Changed
-* Depend on new version of Pypiper (0.14.2).
+* Depend on new version of Pypiper (0.14.2), which allows any pipeline stage to be marked as `nofail` (by passing `nofail=True` to its constructor), so that if something goes wrong while running that stage, it won't fail the whole pipeline (i.e., subsequent processing is allowed to continue).
 * Remove `prefer='threads'` hint to `joblib` for choosing parallelisation backend during coarse drift correction. This aims to minimise the frequency with which this pipeline step will be killed due to insufficient resources.
 
 ## [v0.4.1] - 2024-05-24
