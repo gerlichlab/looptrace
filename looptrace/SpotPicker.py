@@ -40,10 +40,11 @@ __author__ = "Kai Sandvold Beckwith"
 __credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 
 CROSSTALK_SUBTRACTION_KEY = "subtract_crosstalk"
+DETECTION_METHOD_KEY = "detection_method"
 DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC = "dog"
 NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION = ".nuclei_labeled"
 NUCLEI_LABELED_SPOTS_FILE_EXTENSION = NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION + ".csv"
-DETECTION_METHOD_KEY = "detection_method"
+SPOT_IMAGE_PIXEL_VALUE_TYPE = np.uint16
 
 logger = logging.getLogger()
 
@@ -92,8 +93,12 @@ class RoiOrderingSpecification:
             return cls(position=roi["position"], roi_id=roi["roi_id"], ref_frame=roi["ref_frame"])
 
         @property
-        def name_roi_file(self):
-            return "_".join([self.position, str(self.roi_id).zfill(5), str(self.ref_frame)]) + ".npy"
+        def file_name_base(self) -> str:
+            return "_".join([self.position, str(self.roi_id).zfill(5), str(self.ref_frame)])
+
+        @property
+        def name_roi_file(self) -> str:
+            return self.file_name_base + ".npy"
         
         @property
         def to_tuple(self) -> Tuple[str, int, int]:
@@ -566,7 +571,7 @@ class SpotPicker:
             raise MissingRoisTableException(key_rois_table) from e
         
         get_pos_idx = lambda pos: self.image_handler.image_lists[self.input_name].index(pos)
-        get_locus_timepoints = self.image_handler.get_locus_timepoints_for_regional_timepoint
+        get_locus_timepoints = None if not self.image_handler.locus_grouping else self.image_handler.get_locus_timepoints_for_regional_timepoint
         get_zyx = lambda pos_idx, ch: self.images[pos_idx][0, ch].shape[-3:]
         def get_dc_table(pos_idx: int):
             dc_pos_name = self.image_handler.image_lists[self.config['reg_input_moving']][pos_idx] # not unused; used for table query
@@ -620,7 +625,7 @@ class SpotPicker:
                         pad_mode=self.padding_method,
                         background_frame=self.image_handler.background_subtraction_frame, 
                         )
-                    roi_img = roi_img.astype(np.uint16)
+                    roi_img = roi_img.astype(SPOT_IMAGE_PIXEL_VALUE_TYPE)
                     fn_key = RoiOrderingSpecification.FilenameKey.from_roi(roi)
                     if error is not None:
                         skip_spot_image_reasons[fn_key.ref_frame][fn_key.roi_id][frame] = str(error)
@@ -674,7 +679,7 @@ class SpotPicker:
                                 roi["y_min"]:roi["y_max"],
                                 roi["x_min"]:roi["x_max"]].copy()
                 fn = pos+'_'+str(roi['frame'])+'_'+str(roi['roi_id_pos']).zfill(4)
-                arr_out = os.path.join(self.spot_images_path, fn + '.npy')
+                arr_out = os.path.join(self.spot_images_path, fn + ".npy")
                 np.save(arr_out, spot_stack)
         return self.spot_images_path
 
@@ -683,7 +688,7 @@ class SpotPicker:
         dz = float(roi['z_px_fine'])
         dy = float(roi['y_px_fine'])
         dx = float(roi['x_px_fine'])
-        roi_img = ndi.shift(roi_img, (dz, dy, dx)).astype(np.uint16)
+        roi_img = ndi.shift(roi_img, (dz, dy, dx)).astype(SPOT_IMAGE_PIXEL_VALUE_TYPE)
         return roi_img
 
     def gen_fine_dc_roi_imgs(self):
@@ -712,7 +717,7 @@ def build_locus_spot_data_extraction_table(
     *, 
     get_pos_idx: Callable[[str], int], 
     get_dc_table: Callable[[int], pd.DataFrame], 
-    get_locus_timepoints: Callable[[TimepointFrom0], list[TimepointFrom0]],
+    get_locus_timepoints: Optional[Callable[[TimepointFrom0], set[TimepointFrom0]]],
     get_zyx: Callable[[int, int], tuple[int, int, int]], # Provide FOV index + channel, get (Z, Y, X).
 ) -> pd.DataFrame:
     all_rois = []
@@ -721,10 +726,15 @@ def build_locus_spot_data_extraction_table(
         ref_frame: int = roi["frame"]
         if not isinstance(ref_frame, int):
             raise TypeError(f"Non-integer ({type(ref_frame).__name__}) timepoint: {ref_frame}")
-        locus_times: list[int] = {lt.get for lt in get_locus_timepoints(TimepointFrom0(ref_frame))}
-        if not locus_times:
-            logging.debug("No locus timepoints for regional timepoint %d, skipping ROI", ref_frame)
-            continue
+        use_timepoint: Callable[[int], bool]
+        if get_locus_timepoints is None:
+            use_timepoint = lambda _: True
+        else:
+            locus_times: set[int] = {lt.get for lt in get_locus_timepoints(TimepointFrom0(ref_frame))}
+            if not locus_times:
+                logging.debug("No locus timepoints for regional timepoint %d, skipping ROI", ref_frame)
+                continue
+            use_timepoint = lambda t: t in locus_times
         pos = roi["position"]
         pos_index = get_pos_idx(pos)
         sel_dc = get_dc_table(pos_index)
@@ -734,10 +744,10 @@ def build_locus_spot_data_extraction_table(
         # https://github.com/gerlichlab/looptrace/issues/138
         Z, Y, X = get_zyx(pos_index, ch)
         for _, dc_frame in sel_dc.iterrows():
-            frame = dc_frame["frame"]
+            frame: int = dc_frame["frame"]
             if not isinstance(frame, int):
                 raise TypeError(f"Non-integer ({type(frame).__name__}) timepoint: {frame}")
-            if not (frame in locus_times or frame == ref_frame):
+            if not (use_timepoint(frame) or frame == ref_frame):
                 logging.debug("Timepoint %d isn't eligible for tracing in a spot from timepoint %d; skipping", frame, ref_frame)
                 continue
             # min/max ensure that the slicing of the image array to make the small image for tracing doesn't go out of bounds.

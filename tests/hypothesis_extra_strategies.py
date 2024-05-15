@@ -1,9 +1,12 @@
 """Extra hypothesis strategies for generation of examples of custom types"""
 
-import more_itertools
 from collections.abc import Iterable
 from typing import Optional, TypeVar
+
+import more_itertools
 from hypothesis import strategies as st
+from hypothesis.strategies import SearchStrategy
+from gertils.types import TimepointFrom0
 
 from looptrace.configuration import SEMANTIC_KEY
 
@@ -11,15 +14,6 @@ _T = TypeVar('_T')
 
 MIN_SEP_KEY = "minimumPixelLikeSeparation"
 GROUPS_KEY = "groups"
-
-
-def gen_spot_separation_threshold(max_threhsold: Optional[int] = None):
-    if max_threhsold is not None:
-        if not isinstance(max_threhsold, int):
-            raise TypeError(f"Max spot separation threshold isn't an int, but {type(max_threhsold).__name__}")
-        if max_threhsold < 1:
-            raise ValueError(f"Max spot separation threshold is less than 1: {max_threhsold}")
-    return st.integers(min_value=1, max_value=max_threhsold)
 
 
 class ProximityFilterStrategyData:
@@ -33,14 +27,12 @@ class ProximityFilterStrategyData:
         return gen_spot_separation_threshold(max_threhsold=max_threshold).map(lambda x: {SEMANTIC_KEY: "UniveralProximityProhibition", MIN_SEP_KEY: x})
 
     @staticmethod
-    def _gen_selective(*, eligible_timepoints: Iterable[int], semantic: str, max_threshold: Optional[int] = None):
+    @st.composite
+    def _gen_selective(draw, *, eligible_timepoints: Iterable[int], semantic: str, max_threshold: Optional[int] = None):
         eligible_timepoints = list(eligible_timepoints)
-        @st.composite
-        def gen(draw):
-            min_sep = draw(gen_spot_separation_threshold(max_threhsold=max_threshold))
-            groups = gen_partition(eligible_timepoints)
-            return {SEMANTIC_KEY: semantic, MIN_SEP_KEY: min_sep, GROUPS_KEY: groups}
-        return gen
+        min_sep = draw(gen_spot_separation_threshold(max_threhsold=max_threshold))
+        groups = gen_partition(eligible_timepoints)
+        return {SEMANTIC_KEY: semantic, MIN_SEP_KEY: min_sep, GROUPS_KEY: groups}
 
 
     @classmethod
@@ -52,7 +44,35 @@ class ProximityFilterStrategyData:
         return cls._gen_selective(eligible_timepoints=eligible_timepoints, semantic="SelectiveProximityProhibition", max_threshold=max_threshold)
 
 
-def gen_partition(elements: list[_T], *, min_part_count: int = 1, max_part_count: Optional[int] = None):
+class gen_locus_grouping_data:
+    @classmethod    
+    def with_strategies_and_empty_flag(cls, *, gen_raw_reg_time: SearchStrategy, gen_raw_loc_time: SearchStrategy, max_size: int, allow_empty: bool):
+        return cls.with_strategies_and_min_group_size(
+            gen_raw_reg_time=gen_raw_reg_time, 
+            gen_raw_loc_time=gen_raw_loc_time, 
+            max_size=max_size, 
+            min_locus_times_per_reg_time=0 if allow_empty else 1,
+        )
+
+    @staticmethod
+    @st.composite
+    def with_max_size_only(draw, *, max_size: int, allow_empty: bool = False):
+        reg_times = draw(st.sets(st.integers(min_value=0), min_size=0 if allow_empty else 1, max_size=max_size))
+        gen_loc_time = st.integers(min_value=0).filter(lambda n: n not in reg_times)
+        locus_times = draw(st.sets(gen_loc_time, min_size=len(reg_times), max_size=len(reg_times)).map(list))
+        return dict(zip(reg_times, locus_times, strict=True))
+
+    @staticmethod
+    def with_strategies_and_min_group_size(*, gen_raw_reg_time: SearchStrategy, gen_raw_loc_time: SearchStrategy, max_size: int, min_locus_times_per_reg_time: int):
+        return st.dictionaries(
+            keys=gen_raw_reg_time.map(TimepointFrom0), 
+            values=st.sets(gen_raw_loc_time.map(TimepointFrom0), min_size=min_locus_times_per_reg_time).map(list),
+            max_size=max_size,
+        )
+
+
+@st.composite
+def gen_partition(draw, elements: list[_T], *, min_part_count: int = 1, max_part_count: Optional[int] = None):
     # First, validate the arguments both absolutely and in relation to one another.
     n: int = len(elements)
     if max_part_count is None:
@@ -64,13 +84,9 @@ def gen_partition(elements: list[_T], *, min_part_count: int = 1, max_part_count
     if min_part_count > max_part_count:
         raise ValueError(f"Min part count exceeds max part count: {min_part_count} > {max_part_count}")
     
-    @st.composite
-    def part(draw):
-        num_parts = draw(st.integers(min_value=min_part_count, max_value=max_part_count))
-        result = draw(st.sampled_from(more_itertools.set_partitions(elements, k=num_parts)))
-        return result
-
-    return part
+    num_parts = draw(st.integers(min_value=min_part_count, max_value=max_part_count))
+    result = draw(st.sampled_from(more_itertools.set_partitions(elements, k=num_parts)))
+    return result
 
 
 def gen_proximity_filter_strategy(*, eligible_timepoints: Iterable[int], max_threshold: Optional[int] = None):
@@ -80,3 +96,12 @@ def gen_proximity_filter_strategy(*, eligible_timepoints: Iterable[int], max_thr
         ProximityFilterStrategyData.selective_permission(eligible_timepoints=eligible_timepoints, max_threshold=max_threshold), 
         ProximityFilterStrategyData.selective_prohibition(eligible_timepoints=eligible_timepoints, max_threshold=max_threshold),
     )
+
+
+def gen_spot_separation_threshold(max_threhsold: Optional[int] = None):
+    if max_threhsold is not None:
+        if not isinstance(max_threhsold, int):
+            raise TypeError(f"Max spot separation threshold isn't an int, but {type(max_threhsold).__name__}")
+        if max_threhsold < 1:
+            raise ValueError(f"Max spot separation threshold is less than 1: {max_threhsold}")
+    return st.integers(min_value=1, max_value=max_threhsold)

@@ -13,7 +13,7 @@ from gertils.types import TimepointFrom0
 
 from looptrace.SpotPicker import build_locus_spot_data_extraction_table
 
-from tests.hypothesis_extra_strategies import gen_proximity_filter_strategy
+from tests.hypothesis_extra_strategies import gen_locus_grouping_data, gen_proximity_filter_strategy
 
 
 FOV_NAME = "P0001.zarr"
@@ -241,27 +241,15 @@ ROUNDS_CONFIG_BASE_DATA = {
 }
 
 
-ALL_ROUNDS = ROUNDS_CONFIG_BASE_DATA["imagingRounds"]
-
-NON_REGIONAL_ROUNDS, REGIONAL_ROUNDS = more_itools.partition(lambda r: r.get("isRegional", False) is True, ALL_ROUNDS)
-
+NON_REGIONAL_ROUNDS, REGIONAL_ROUNDS = more_itools.partition(
+    lambda r: r.get("isRegional", False) is True, 
+    ROUNDS_CONFIG_BASE_DATA["imagingRounds"],
+)
 REGIONAL_TIMES = tuple(r["time"] for r in REGIONAL_ROUNDS)
-
 NON_REGIONAL_TIMES = tuple(r["time"] for r in NON_REGIONAL_ROUNDS)
 
-gen_regional_time = st.sampled_from(REGIONAL_TIMES)
 
-gen_tracing_exclusions = st.sets(st.sampled_from(ALL_ROUNDS)).map(list)
-
-gen_prox_strat_data = gen_proximity_filter_strategy(eligible_timepoints=REGIONAL_TIMES)
-
-gen_locus_grouping_data = st.dictionaries(
-    keys=st.sampled_from(REGIONAL_TIMES).map(TimepointFrom0),
-    values=st.sets(st.sampled_from(NON_REGIONAL_TIMES).map(TimepointFrom0), min_size=1).map(list),
-)
-
-
-@hyp.given(locus_grouping=gen_locus_grouping_data)
+@hyp.given(locus_grouping=gen_locus_grouping_data(gen_raw_regional_time=st.sampled_from(REGIONAL_TIMES), gen_raw_loc_time=st.sampled_from(NON_REGIONAL_TIMES)))
 @hyp.settings(
     suppress_health_check=(hyp.HealthCheck.function_scoped_fixture, ), # We overwrite the files each time, so all good.
     phases=tuple(p for p in hyp.Phase if p != hyp.Phase.shrink), # Save test execution time.

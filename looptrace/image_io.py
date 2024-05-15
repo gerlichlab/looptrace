@@ -48,6 +48,7 @@ class NPZ_wrapper():
     def __init__(self, filepath: Union[str, Path]):
         self.npz = np.load(filepath, allow_pickle=True)
         self.files = self.npz.files
+        self.filepath = filepath
 
     def __iter__(self):
         return iter(self.npz[f] for f in self.files)

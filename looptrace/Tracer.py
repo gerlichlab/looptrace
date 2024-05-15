@@ -9,8 +9,8 @@ EMBL Heidelberg
 
 import dataclasses
 import itertools
+import logging
 from pathlib import Path
-import sys
 from typing import *
 
 from joblib import Parallel, delayed
@@ -18,17 +18,18 @@ import numpy as np
 import pandas as pd
 import scipy.ndimage as ndi
 from tqdm import tqdm
-import zarr
+
+from gertils import ExtantFile, ExtantFolder
+from gertils.types import TimepointFrom0
+from numpydoc_decorator import doc
 
 from looptrace import *
 from looptrace.ImageHandler import ImageHandler
-from looptrace.SpotPicker import RoiOrderingSpecification
+from looptrace.SpotPicker import SPOT_IMAGE_PIXEL_VALUE_TYPE, RoiOrderingSpecification
 from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
 from looptrace.image_io import NPZ_wrapper, write_jvm_compatible_zarr_store
 from looptrace.numeric_types import NumberLike
 from looptrace.tracing_qc_support import apply_frame_names_and_spatial_information
-
-from gertils import ExtantFile, ExtantFolder
 
 BOX_Z_COL = "spot_box_z"
 BOX_Y_COL = "spot_box_y"
@@ -36,6 +37,8 @@ BOX_X_COL = "spot_box_x"
 IMG_SIDE_LEN_COLS = [BOX_Z_COL, BOX_Y_COL, BOX_X_COL]
 ROI_FIT_COLUMNS = ["BG", "A", "z_px", "y_px", "x_px", "sigma_z", "sigma_xy"]
 MASK_FITS_ERROR_MESSAGE = "Masking fits for tracing currently isn't supported!"
+
+logger = logging.getLogger()
 
 
 @dataclasses.dataclass
@@ -115,8 +118,17 @@ class Tracer:
         return self.image_handler.spots_fine_drift_correction_table
 
     def write_all_spot_images_to_one_per_fov_zarr(self, overwrite: bool = False) -> List[Path]:
-        name_data_pairs = compute_spot_images_multiarray_per_fov(npz=self._images_wrapper)
-        return write_jvm_compatible_zarr_store(name_data_pairs, root_path=self.locus_spots_visualisation_folder, dtype=np.uint16, overwrite=overwrite)
+        name_data_pairs = compute_spot_images_multiarray_per_fov(
+            npz=self._images_wrapper,
+            # Add 1 to account for tracing the regional timepoint itself.
+            locus_grouping=self.image_handler.locus_grouping,
+        )
+        return write_jvm_compatible_zarr_store(
+            name_data_pairs, 
+            root_path=self.locus_spots_visualisation_folder, 
+            dtype=SPOT_IMAGE_PIXEL_VALUE_TYPE, 
+            overwrite=overwrite,
+        )
 
     @property
     def images(self) -> Iterable[np.ndarray]:
@@ -379,39 +391,84 @@ def apply_pixels_to_nanometers(traces: pd.DataFrame, z_nm_per_px: float, xy_nm_p
     return traces
 
 
-def compute_spot_images_multiarray_per_fov(npz: Union[str, Path, NPZ_wrapper]) -> List[Tuple[str, np.ndarray]]:
-    """
-    Compute a list of multiarrays, grouping and stacking by "position" (FOV).
+@doc(
+    summary="Compute a list of multiarrays, grouping and stacking by 'position' (FOV).",
+    extended_summary="""
+        The expectation is that the data underlying the NPZ input will be a list of 4D arrays, each corresponding to 
+        one of the retained (after filtering) regional barcode spots. The 4 dimensions: (time, z, y, x). 
+        The time dimension represents the extraction of the bounding box corresponding to the spot ROI, extracting 
+        pixel intensity data in each of the pertinent imaging timepoints.
 
-    The expectation is that the data underlying the NPZ input will be a list of 4D arrays, each corresponding to 
-    one of the retained (after filtering) regional barcode spots. The 4 dimensions: (time, z, y, x). 
-    The time dimension represents the extraction of the bounding box corresponding to the spot ROI, extracting 
-    pixel intensity data in each of the imaging timepoints for the entire experiment.
-
-    The expectation is that this data is flattened over the hypothetical FOV, regional barcode, and channel dimensions. 
-    That is, the underlying arrays may come from any field of view imaged during the experiment, any channel, and 
-    any of the regional barcode imaging timepoints. The names of the underlying arrays in the NPZ must encode 
-    this information (about FOV, regional barcode timepoint, and ROI ID).
-
-    Parameters
-    ----------
-    npz : str or pathlib.Path or looptrace.image_io.NPZ_wrapper
-        The collection of 4D arrays representing the extraction of data from each regional spot ROI across all 
-        timepoints in the experiment
-
-    Returns
-    -------
-    list of (str, np.ndarray)
-        A list of pairs in which first element is positional name, e.g. P0001.zarr, and second element is 
-        an array with structure (ROI, timepoint, z, y, x), such that each position/FOV must be viewed separately 
-        (or at least as a separate layer) in napari, and that in so doing, the slider bars for switching between 
-        2D images will be 3: ROI, timepoint, and z
-    """
+        The expectation is that this data is flattened over the hypothetical FOV, regional barcode, and channel dimensions. 
+        That is, the underlying arrays may come from any field of view imaged during the experiment, any channel, and 
+        any of the regional barcode imaging timepoints. The names of the underlying arrays in the NPZ must encode 
+        this information (about FOV, regional barcode timepoint, and ROI ID).
+    """,
+    parameters=dict(
+        npz="Path to the NPZ file containing pixel volume stacks (across timepoints) for each ROI (detected regional spot)",
+        locus_grouping="Mapping from regional timepoint to associated locus timepoints",
+    ),
+    raises=dict(ArrayDimensionalityError="If spot image volumes from the same regional barcode have different numbers of timepoints"),
+    returns="""
+        List of pairs, where first pair element is the name for the FOV, and the second element is the stacking of all ROI stacks for that FOV, 
+        each ROI stack consisting of a pixel volume for multiple timepoints
+    """,
+)
+def compute_spot_images_multiarray_per_fov(npz: str | Path | NPZ_wrapper, locus_grouping: Optional[dict[TimepointFrom0, set[TimepointFrom0]]]) -> List[Tuple[str, np.ndarray]]:
+    full_data_file: str | Path = npz.filepath if isinstance(npz, NPZ_wrapper) else npz
     npz, keyed = _prep_npz_to_zarr(npz)
-    return [
-        (pos, np.stack([npz[fn] for _, fn in pos_group])) 
-        for pos, pos_group in itertools.groupby(keyed, lambda k_: k_[0].position)
-        ]
+    
+    num_loc_times_by_reg_time: dict[TimepointFrom0, int] = {}
+    for rt, lts in (locus_grouping or {}).items():
+        n_lt = len(lts)
+        if n_lt == 0:
+            raise ValueError(f"Empty locus times collection for regional time {rt}")
+        num_loc_times_by_reg_time[rt] = n_lt
+
+    # Facilitate assurance of same number of timepoints for each regional spot, to create non-ragged array.
+    if len(num_loc_times_by_reg_time) == 0:
+        max_num_times = max(arr.shape[0] for arr in npz)
+    else:
+        max_num_times = max(num_loc_times_by_reg_time.values())
+    
+    result: list[tuple[str, np.ndarray]] = []
+    for pos, pos_group in itertools.groupby(keyed, lambda k_: k_[0].position):
+        current_stack: list[np.ndarray] = []
+        for filename_key, filename in pos_group:
+            pixel_array = npz[filename]
+            obs_num_times: int = pixel_array.shape[0]
+            reg_time: TimepointFrom0 = TimepointFrom0(filename_key.ref_frame)
+            
+            if locus_grouping:
+                # For nonempty locus grouping case, try to validate the time dimension.
+                exp_num_times = num_loc_times_by_reg_time.get(reg_time, 0)
+                if exp_num_times == 0:
+                    raise RuntimeError(f"No expected locus time count for regional time {reg_time}, despite iterating over spot image file {filename}")
+                if obs_num_times != exp_num_times:
+                    raise ArrayDimensionalityError(
+                        f"Expected {exp_num_times} timepoints for regional time {reg_time} but got {obs_num_times} from filename {filename} in archive {full_data_file}"
+                    )
+            
+            if obs_num_times < max_num_times:
+                num_to_fill = max_num_times - obs_num_times
+                logger.debug("Backfilling array of %d timepoints with %d empty timepoints", obs_num_times, num_to_fill)
+                pixel_array = backfill_array(pixel_array, num_places=num_to_fill)
+            if pixel_array.shape[0] != max_num_times:
+                raise ArrayDimensionalityError(
+                    f"Need {max_num_times} timepoints but have {pixel_array.shape[0]} for pixel array from file {filename} in archive {full_data_file}"
+                )
+            current_stack.append(pixel_array)
+        result.append(((pos, np.stack(current_stack))))
+    return result
+
+
+def backfill_array(array: np.ndarray, *, num_places: int, **kwargs) -> np.ndarray:
+    if not isinstance(num_places, int):
+        raise TypeError(f"Number of places to backfill must be int; got {type(num_places).__name__}")
+    if num_places < 0:
+        raise ValueError(f"Number of places to backfill must be nonnegative; got {num_places}")
+    pad_width = [(0, num_places)] + ([(0, 0)] * max(0, len(array.shape) - 1))
+    return np.pad(array, pad_width=pad_width **kwargs)
 
 
 def _prep_npz_to_zarr(npz: Union[str, Path, NPZ_wrapper]) -> Tuple[NPZ_wrapper, Iterable[Tuple[RoiOrderingSpecification.FilenameKey, str]]]:

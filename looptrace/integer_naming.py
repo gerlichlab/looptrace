@@ -18,7 +18,7 @@ __all__ = [
     ]
 
 
-class _IntegerNaming(Enum):
+class IntegerNaming(Enum):
     """
     Apply a strategy for converting nonnegative integers to fixed-length string name, as natural number.
     
@@ -52,7 +52,7 @@ class _IntegerNaming(Enum):
         return str(n + 1).zfill(self._text_size)
 
 
-_DEFAULT_NAMER = _IntegerNaming.TenThousand
+_DEFAULT_NAMER = IntegerNaming.TenThousand
 
 
 class NameableSemantic(Enum):
@@ -60,24 +60,24 @@ class NameableSemantic(Enum):
     Time = "T"
     Channel = "C"
 
-    def get_long_name(self, i: int, *, namer: _IntegerNaming = _IntegerNaming.TenThousand) -> str:
+    def get_long_name(self, i: int, *, namer: IntegerNaming = IntegerNaming.TenThousand) -> str:
         return self.name + namer.get_name(i)
 
-    def get_short_name(self, i: int, *, namer: _IntegerNaming = _IntegerNaming.TenThousand) -> str:
+    def get_short_name(self, i: int, *, namer: IntegerNaming = IntegerNaming.TenThousand) -> str:
         return self.value + namer.get_name(i)
 
 
-def get_channel_name_short(i: int, *, namer: _IntegerNaming = _IntegerNaming.OneHundred) -> str:
+def get_channel_name_short(i: int, *, namer: IntegerNaming = IntegerNaming.OneHundred) -> str:
     """Get the channel-like name for the given channel."""
     return NameableSemantic.Channel.get_short_name(i, namer=namer)
 
 
-def get_position_name_short(i: int, *, namer: _IntegerNaming = _DEFAULT_NAMER) -> str:
+def get_position_name_short(i: int, *, namer: IntegerNaming = _DEFAULT_NAMER) -> str:
     """Get the position-like (field of view) name for the given index."""
     return NameableSemantic.Point.get_short_name(i, namer=namer)
 
 
-def get_position_names_N(num_names: int, namer: _IntegerNaming = _DEFAULT_NAMER) -> List[str]:
+def get_position_names_N(num_names: int, namer: IntegerNaming = _DEFAULT_NAMER) -> List[str]:
     """Get the position-like (field of view) name for the first n indices."""
     _typecheck(num_names, ctx="Number of names")
     if num_names < 0:
@@ -85,7 +85,7 @@ def get_position_names_N(num_names: int, namer: _IntegerNaming = _DEFAULT_NAMER)
     return [get_position_name_short(i, namer=namer) for i in range(num_names)]
 
 
-def get_time_name_short(i: int, *, namer: _IntegerNaming = _DEFAULT_NAMER) -> str:
+def get_time_name_short(i: int, *, namer: IntegerNaming = _DEFAULT_NAMER) -> str:
     """Get the time-like name for the given time."""
     return NameableSemantic.Time.get_short_name(i, namer=namer)
 
