@@ -40,7 +40,7 @@ __author__ = "Kai Sandvold Beckwith"
 __credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 
 CROSSTALK_SUBTRACTION_KEY = "subtract_crosstalk"
-DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC = 'dog'
+DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC = "dog"
 NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION = ".nuclei_labeled"
 NUCLEI_LABELED_SPOTS_FILE_EXTENSION = NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION + ".csv"
 DETECTION_METHOD_KEY = "detection_method"
