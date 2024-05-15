@@ -1,7 +1,9 @@
 """Tests for determining the spot extraction table, i.e. how to get locus-specific spot data from regional spots"""
 
+from collections.abc import Callable
 from enum import Enum
 from operator import itemgetter
+from typing import Optional
 
 import hypothesis as hyp
 from hypothesis import strategies as st
@@ -249,12 +251,25 @@ REGIONAL_TIMES = tuple(r["time"] for r in REGIONAL_ROUNDS)
 NON_REGIONAL_TIMES = tuple(r["time"] for r in NON_REGIONAL_ROUNDS)
 
 
-@hyp.given(locus_grouping=gen_locus_grouping_data(gen_raw_regional_time=st.sampled_from(REGIONAL_TIMES), gen_raw_loc_time=st.sampled_from(NON_REGIONAL_TIMES)))
+@hyp.given(
+    locus_grouping=st.one_of(
+        gen_locus_grouping_data.with_strategies_and_empty_flag(
+            gen_raw_reg_time=st.sampled_from(REGIONAL_TIMES), 
+            gen_raw_loc_time=st.sampled_from(NON_REGIONAL_TIMES),
+            max_size=len(REGIONAL_TIMES),
+            allow_empty=True,
+        ),
+        st.just(None),
+    )
+)
 @hyp.settings(
     suppress_health_check=(hyp.HealthCheck.function_scoped_fixture, ), # We overwrite the files each time, so all good.
     phases=tuple(p for p in hyp.Phase if p != hyp.Phase.shrink), # Save test execution time.
 )
-def test_only_region_timepoints_and_their_locus_timepoints_have_records_in_spot_extraction_table(tmp_path, locus_grouping):
+def test_only_region_timepoints_and_their_locus_timepoints_have_records_in_spot_extraction_table(
+    tmp_path, 
+    locus_grouping,
+):
     
     # First, construct the drift correction table...
     drift_file = tmp_path / "drift.csv"
@@ -276,30 +291,47 @@ def test_only_region_timepoints_and_their_locus_timepoints_have_records_in_spot_
     assert rois_table["position"].nunique() == 1, f"Expected just 1 unique position in ROIs table, but got {rois_table.position.nunique()}"
     assert drift_table["position"].nunique() == 1, f"Expected just 1 unique position in drift table, but got {drift_table.position.nunique()}"
 
+    exp_region_times: set[int]
+    exp_reg_time_loc_time_pairs: list[(int, int)]
+    get_locus_timepoints: Optional[Callable[[TimepointFrom0], set[TimepointFrom0]]]
+    if not locus_grouping:
+        get_locus_timepoints = None
+        exp_region_times = set(REGIONAL_TIMES)
+        exp_reg_time_loc_time_pairs = [
+            (rt, lt) 
+            for rt in rois_table["frame"]
+            for lt in sorted(REGIONAL_TIMES + NON_REGIONAL_TIMES)
+        ]
+    else:
+        get_locus_timepoints = lambda t: locus_grouping.get(t, set())
+        exp_region_times: set[int] = set()
+        exp_reg_time_loc_time_pairs = []
+        # NB: Assume the above input ROI lines are well ordered (this is how real input should be).
+        for rt, loc_times in sorted(locus_grouping.items(), key=itemgetter(0)):
+            if not loc_times:
+                continue
+            exp_region_times.add(rt.get)
+            # The regional spot itself is collected w/ its locus spots.
+            loc_times = sorted([rt, *loc_times])
+            # One record is generated per locus timepoint, per regional spot.
+            curr_reg_time_spot_count = (rois_table["frame"] == rt.get).sum()
+            exp_reg_time_loc_time_pairs.extend([(rt.get, lt.get) for lt in loc_times] * curr_reg_time_spot_count)
+
     spot_extraction_table: pd.DataFrame = build_locus_spot_data_extraction_table(
         rois_table=rois_table,
         get_pos_idx=lambda _: 0,
         get_dc_table=lambda _: drift_table[drift_table["position"] == FOV_NAME], # There's only 1 FOV, so return the whole table, always.
-        get_locus_timepoints=lambda t: locus_grouping.get(t, []),
+        get_locus_timepoints=get_locus_timepoints,
         get_zyx=lambda _1, _2: (BoxSideLengths.Z.value, BoxSideLengths.Y.value, BoxSideLengths.X.value)
     )
 
-    # NB: Assume the above input ROI lines are well ordered (this is how real input should be).
-    exp_reg_time_loc_time_pairs: list[(TimepointFrom0, TimepointFrom0)] = []
-    for rt, loc_times in sorted(locus_grouping.items(), key=itemgetter(0)):
-        # The regional spot itself is collected w/ its locus spots.
-        loc_times = sorted([rt, *loc_times])
-        # One record is generated per locus timepoint, per regional spot.
-        curr_reg_time_spot_count = (rois_table["frame"] == rt.get).sum()
-        exp_reg_time_loc_time_pairs.extend([(rt, lt) for lt in loc_times] * curr_reg_time_spot_count)
+    print(f"Obs row count: {spot_extraction_table.shape[0]}")
 
-    obs_reg_time_loc_time_pairs: list[(TimepointFrom0, TimepointFrom0)] = \
-        [(TimepointFrom0(row["ref_frame"]), TimepointFrom0(row["frame"])) for _, row in spot_extraction_table.iterrows()]
+    obs_reg_time_loc_time_pairs: list[(int, int)] = \
+        [(row["ref_frame"], row["frame"]) for _, row in spot_extraction_table.iterrows()]
     
-    assert len(obs_reg_time_loc_time_pairs) == len(exp_reg_time_loc_time_pairs)
-
     obs_region_times = set(spot_extraction_table["ref_frame"].to_list())
-    exp_region_times = {rt.get for rt in locus_grouping.keys()}
     assert obs_region_times == exp_region_times, f"Expected and Observed region times differ: Expected = {exp_region_times}. Observed = {obs_region_times}"
 
+    assert len(obs_reg_time_loc_time_pairs) == len(exp_reg_time_loc_time_pairs)
     assert obs_reg_time_loc_time_pairs == exp_reg_time_loc_time_pairs

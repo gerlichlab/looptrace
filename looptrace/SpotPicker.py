@@ -720,6 +720,7 @@ def build_locus_spot_data_extraction_table(
     get_locus_timepoints: Optional[Callable[[TimepointFrom0], set[TimepointFrom0]]],
     get_zyx: Callable[[int, int], tuple[int, int, int]], # Provide FOV index + channel, get (Z, Y, X).
 ) -> pd.DataFrame:
+    
     all_rois = []
 
     for idx, (_, roi) in tqdm.tqdm(enumerate(rois_table.iterrows()), total=len(rois_table)):
