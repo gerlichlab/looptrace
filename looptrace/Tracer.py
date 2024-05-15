@@ -360,7 +360,7 @@ def fit_single_roi(
     if len(roi_img.shape) != fit_func_spec.dimensionality:
         raise ValueError(f"ROI image to trace isn't correct dimensionality ({fit_func_spec.dimensionality}); shape: {roi_img.shape}")
     if background:
-        # TODO: check that dimension of background image matches that of main ROI image.s
+        # TODO: check that dimension of background image matches that of main ROI image.
         roi_img = roi_img - background
     if not np.any(roi_img) or any(d < 3 for d in roi_img.shape): # Check if empty or too small for fitting.
         fit = [-1] * len(ROI_FIT_COLUMNS)
