@@ -251,19 +251,28 @@ class ImageHandler:
         return names
 
     @property
-    def locus_grouping(self) -> dict[TimepointFrom0, list[TimepointFrom0]]:
+    def locus_grouping(self) -> Optional[dict[TimepointFrom0, set[TimepointFrom0]]]:
         section_key = "locusGrouping"
+        result: dict[TimepointFrom0, set[TimepointFrom0]] = {}
         try:
             data = self.config[section_key]
         except KeyError:
             logging.warning("Did not find locus grouping section key ('%s') in config data", section_key)
-            return {}
-        return {TimepointFrom0(reg_time): [TimepointFrom0(t) for t in locus_times] for reg_time, locus_times in data.items()}
+        else:
+            for reg_time, locus_times in data.items():
+                curr: set[TimepointFrom0] = {TimepointFrom0(t) for t in locus_times}
+                if len(curr) != len(locus_times):
+                    raise ValueError(f"Repetition is present in locus times for regional time {reg_time}: {locus_times}")
+                result[TimepointFrom0(reg_time)] = curr
+        return result if result else None
 
-    def get_locus_timepoints_for_regional_timepoint(self, regional_timepoint: TimepointFrom0) -> list[TimepointFrom0]:
+    def get_locus_timepoints_for_regional_timepoint(self, regional_timepoint: TimepointFrom0) -> set[TimepointFrom0]:
         if not isinstance(regional_timepoint, TimepointFrom0):
             raise TypeError(f"Illegal type ({type(regional_timepoint).__name__}) for regional timepoint for which to lookup locus timepoints!")
-        return self.locus_grouping.get(regional_timepoint, [])
+        grouping = self.locus_grouping
+        if grouping is None:
+            raise NotImplementedError("No locus grouping present!")
+        return self.locus_grouping.get(regional_timepoint, set())
 
     @property
     def locus_spots_visualisation_folder(self) -> Path:
