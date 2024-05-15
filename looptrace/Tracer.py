@@ -441,9 +441,10 @@ def compute_spot_images_multiarray_per_fov(npz: str | Path | NPZ_wrapper, locus_
             
             if locus_grouping:
                 # For nonempty locus grouping case, try to validate the time dimension.
-                exp_num_times = num_loc_times_by_reg_time.get(reg_time, 0)
-                if exp_num_times == 0:
+                num_loc_times: int = num_loc_times_by_reg_time.get(reg_time, 0)
+                if num_loc_times == 0:
                     raise RuntimeError(f"No expected locus time count for regional time {reg_time}, despite iterating over spot image file {filename}")
+                exp_num_times: int = num_loc_times + 1 # Add 1 to account for the regional timepoint itself.
                 if obs_num_times != exp_num_times:
                     raise ArrayDimensionalityError(
                         f"Expected {exp_num_times} timepoints for regional time {reg_time} but got {obs_num_times} from filename {filename} in archive {full_data_file}"
