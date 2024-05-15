@@ -233,9 +233,6 @@ class ImageHandler:
     def drift_correction_reference_images(self) -> Sequence[np.ndarray]:
         return self.images[self.reg_input_template]
 
-    def get_dc_filepath(self, prefix: str, suffix: str) -> Path:
-        return Path(self.out_path(prefix + "_drift_correction" + suffix))
-
     @property
     def frame_names(self) -> List[str]:
         """The sequence of names corresponding to the imaging rounds used in the experiment"""
@@ -249,6 +246,17 @@ class ImageHandler:
                 n = probe + ("" if rep is None else f"_repeat{rep}")
                 names.append(n)
         return names
+
+    def get_dc_filepath(self, prefix: str, suffix: str) -> Path:
+        return Path(self.out_path(prefix + "_drift_correction" + suffix))
+
+    def get_locus_timepoints_for_regional_timepoint(self, regional_timepoint: TimepointFrom0) -> set[TimepointFrom0]:
+        if not isinstance(regional_timepoint, TimepointFrom0):
+            raise TypeError(f"Illegal type ({type(regional_timepoint).__name__}) for regional timepoint for which to lookup locus timepoints!")
+        grouping = self.locus_grouping
+        if grouping is None:
+            raise NotImplementedError("No locus grouping present!")
+        return self.locus_grouping.get(regional_timepoint, set())
 
     @property
     def locus_grouping(self) -> Optional[dict[TimepointFrom0, set[TimepointFrom0]]]:
@@ -265,14 +273,6 @@ class ImageHandler:
                     raise ValueError(f"Repetition is present in locus times for regional time {reg_time}: {locus_times}")
                 result[TimepointFrom0(reg_time)] = curr
         return result if result else None
-
-    def get_locus_timepoints_for_regional_timepoint(self, regional_timepoint: TimepointFrom0) -> set[TimepointFrom0]:
-        if not isinstance(regional_timepoint, TimepointFrom0):
-            raise TypeError(f"Illegal type ({type(regional_timepoint).__name__}) for regional timepoint for which to lookup locus timepoints!")
-        grouping = self.locus_grouping
-        if grouping is None:
-            raise NotImplementedError("No locus grouping present!")
-        return self.locus_grouping.get(regional_timepoint, set())
 
     @property
     def locus_spots_visualisation_folder(self) -> Path:
