@@ -13,7 +13,7 @@ import pytest
 import yaml
 from gertils import PathWrapperException
 
-from conftest import PIPE_NAME, prep_images_folder, prep_subfolder
+from tests.conftest import PIPE_NAME, prep_images_folder, prep_subfolder
 
 
 def scripts_folder():

@@ -1,6 +1,5 @@
 """Tests for deconvolution step of pipeline"""
 
-import json
 import hypothesis as hyp
 import pytest
 import yaml
@@ -10,7 +9,7 @@ from gertils import ExtantFile, ExtantFolder
 from looptrace.Deconvolver import Deconvolver, DECON_CHANNEL_KEY, DECON_ITER_KEY, NON_DECON_CHANNEL_KEY
 from looptrace.ImageHandler import ImageHandler
 from looptrace.exceptions import MissingInputException
-from conftest import prep_images_folder
+from tests.conftest import prep_images_folder
 
 __author__ = "Vince Reuter"
 
