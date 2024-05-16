@@ -24,7 +24,7 @@ from gertils.types import TimepointFrom0
 from numpydoc_decorator import doc
 
 from looptrace import *
-from looptrace.ImageHandler import ImageHandler
+from looptrace.ImageHandler import ImageHandler, LocusGroupingData
 from looptrace.SpotPicker import SPOT_IMAGE_PIXEL_VALUE_TYPE, RoiOrderingSpecification
 from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
 from looptrace.image_io import NPZ_wrapper, write_jvm_compatible_zarr_store
@@ -414,7 +414,7 @@ def apply_pixels_to_nanometers(traces: pd.DataFrame, z_nm_per_px: float, xy_nm_p
         each ROI stack consisting of a pixel volume for multiple timepoints
     """,
 )
-def compute_spot_images_multiarray_per_fov(npz: str | Path | NPZ_wrapper, locus_grouping: Optional[dict[TimepointFrom0, set[TimepointFrom0]]]) -> List[Tuple[str, np.ndarray]]:
+def compute_spot_images_multiarray_per_fov(npz: str | Path | NPZ_wrapper, locus_grouping: Optional[LocusGroupingData]) -> List[Tuple[str, np.ndarray]]:
     full_data_file: str | Path = npz.filepath if isinstance(npz, NPZ_wrapper) else npz
     npz, keyed = _prep_npz_to_zarr(npz)
     if len(npz) == 0:
