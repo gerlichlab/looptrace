@@ -37,10 +37,19 @@ def get_name_for_raw_zero_based_fov(fov: int) -> str:
 
 @st.composite
 def gen_legal_input(draw, *, max_num_fov: int = 3, max_num_regional_times: int = 4) -> tuple[Iterable[RoiOrderingSpecification.FilenameKey], dict[int, int]]:
+    # First, create a "pool" of regional timepoints to choose from in other generators.
     raw_reg_times_pool: set[int] = draw(st.sets(st.integers(min_value=0), min_size=1, max_size=max_num_regional_times))
+    
+    # Choose the size for each 3D spot image volume (needs to be constant).
     spot_image_dims = draw(gen_spot_box)
+    
+    # Choose how many regional spots to generate.
     num_spots = draw(st.integers(min_value=0, max_value=RATHER_SMALL_UPPER_BOUND_FOR_NUMBER_OF_DETECTED_SPOTS))
+    
+    # Get one or a few FOVs, as each regional spot image must be associated to a FOV.
     raw_fov_pool: set[int] = draw(st.sets(gen_raw_fov, min_size=1, max_size=max_num_fov))
+    
+    # Each spot comes from a particular FOV, and from a particular regional barcode. Draw these identifiers together.
     fov_rt_pairs: set[tuple[int, int]] = draw(st.sets(
         st.tuples(
             st.sampled_from(list(raw_fov_pool)), 
@@ -49,7 +58,11 @@ def gen_legal_input(draw, *, max_num_fov: int = 3, max_num_regional_times: int =
         min_size=num_spots, 
         max_size=num_spots,
     ))
+
+    # Randomise the trace IDs, creating a unique set of the appropriate size (each spot generates a trace ID).
     trace_ids: set[TraceIdFrom0] = draw(st.sets(gen_trace_id, min_size=num_spots, max_size=num_spots))
+    
+    # Create the Numpy array "filename" for each spot extraction 1 per eligible locus time, per regional spot.
     fn_keys = [
         RoiOrderingSpecification.FilenameKey(
             position=get_name_for_raw_zero_based_fov(fov),
@@ -58,12 +71,18 @@ def gen_legal_input(draw, *, max_num_fov: int = 3, max_num_regional_times: int =
         ) 
         for (fov, rt), tid in zip(fov_rt_pairs, trace_ids, strict=True)
     ]
+
+    # The regional timepoints actually used may not be the whole pool, so determine what we're really using.
     reg_times: set[TimepointFrom0] = {TimepointFrom0(k.ref_frame) for k in fn_keys}
+
+    # Generate a number of locus timepoints for each regional timepoint (i.e., how many 3D volumes to generate for a spot, as a function of the spot's regional timepoint).
     num_loc_times_by_reg_time: dict[TimepointFrom0, int] = draw(st.lists(
         st.integers(min_value=1, max_value=RATHER_SMALL_UPPER_BOUND_FOR_NUMBER_OF_LOCUS_TIMEPOINTS), 
         min_size=len(reg_times), 
         max_size=len(reg_times),
     ).map(lambda sizes: dict(zip(reg_times, sizes, strict=True))))
+
+    # Generate the stack of spot image volumes for each regional spot, with the appropriate number of timepoints based on the regional spot identity.
     data = [
         # Add 1 to the number of locus times, to account for regional time itself.
         (k, draw(hyp_npy.arrays(dtype=SPOT_IMAGE_PIXEL_VALUE_TYPE, shape=(nt + 1, *spot_image_dims)))) 
@@ -72,12 +91,16 @@ def gen_legal_input(draw, *, max_num_fov: int = 3, max_num_regional_times: int =
             for k in sorted(fn_keys, key=lambda k: (k.position, k.roi_id, k.ref_frame))
         ]
     ]
+
+    # Generate a dummy locus grouping.
     locus_grouping: dict[TimepointFrom0, set[TimepointFrom0]] = draw(gen_locus_grouping_data.with_strategies_and_empty_flag(
         gen_raw_reg_time=st.sampled_from(list(raw_reg_times_pool)),
         gen_raw_loc_time=st.integers(min_value=0).filter(lambda t: t not in raw_reg_times_pool),
         max_size=len(raw_reg_times_pool),
         allow_empty=True,
     ))
+
+    # Ensure that each regional timepoint for which data have been generated is present in the locus grouping, and with the appropriate number of locus timepoints.
     gen_locus_times = lambda n: st.sets(
         st.integers(min_value=0).map(TimepointFrom0), min_size=n, max_size=n,
     ).filter(lambda lts: not any(t in reg_times for t in lts))
@@ -89,7 +112,7 @@ def gen_legal_input(draw, *, max_num_fov: int = 3, max_num_regional_times: int =
 
 @hyp.given(fnkey_image_pairs_and_locus_grouping=gen_legal_input())
 @hyp.settings(
-    max_examples=1000,
+    max_examples=1000, # 10x the hypothesis default to ensure we really explore the search space
     phases=tuple(p for p in hyp.Phase if p != hyp.Phase.shrink),
     suppress_health_check=(hyp.HealthCheck.function_scoped_fixture, ),
 )
