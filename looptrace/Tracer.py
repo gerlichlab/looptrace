@@ -439,7 +439,7 @@ def compute_spot_images_multiarray_per_fov(npz: str | Path | NPZ_wrapper, locus_
                 obs_num_times: int = pixel_array.shape[0]
                 if obs_num_times != exp_num_times:
                     raise ArrayDimensionalityError(
-                        f"Expected {exp_num_times} timepoints for regional time {reg_time} but got {obs_num_times} from filename {filename} in archive {full_data_file}"
+                        f"Locus times count doesn't match expectation: {obs_num_times} != {exp_num_times}, for regional time {reg_time} from filename {filename} in archive {full_data_file}"
                     )
             current_stack.append(pixel_array)
         

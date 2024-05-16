@@ -14,6 +14,7 @@ import hypothesis.extra.numpy as hyp_npy
 import numpy as np
 import pytest
 
+from looptrace import ArrayDimensionalityError
 from looptrace.ImageHandler import LocusGroupingData
 from looptrace.SpotPicker import SPOT_IMAGE_PIXEL_VALUE_TYPE, RoiOrderingSpecification
 from looptrace.Tracer import compute_spot_images_multiarray_per_fov
@@ -42,8 +43,11 @@ def get_name_for_raw_zero_based_fov(fov: int) -> str:
     return get_position_name_short(fov) + ".zarr"
 
 
+BuildInput = tuple[Iterable[RoiOrderingSpecification.FilenameKey], LocusGroupingData]
+
+
 @st.composite
-def gen_legal_input(draw, *, max_num_fov: int = 3, max_num_regional_times: int = 4) -> tuple[Iterable[RoiOrderingSpecification.FilenameKey], LocusGroupingData]:
+def gen_legal_input(draw, *, max_num_fov: int = 3, max_num_regional_times: int = 4) -> BuildInput:
     # First, create a "pool" of regional timepoints to choose from in other generators.
     raw_reg_times_pool: set[int] = draw(st.sets(st.integers(min_value=0), min_size=1, max_size=max_num_regional_times))
     
@@ -200,51 +204,96 @@ def test_spot_images_finish_by_all_having_the_max_number_of_timepoints(tmp_path,
     if not locus_grouping:
         # In this case, there's no explicit grouping, so we just work with the data we're given. 
         # Then the expected number of locus timepoints per regional timepoint is simply what we observe.
-        for key, img in fnkey_image_pairs:
-            curr_num_time = img.shape[0]
-            rt = TimepointFrom0(key.ref_frame)
-            try:
-                prev_num_time = expected_num_locus_times_by_regional_time[rt]
-            except KeyError:
-                expected_num_locus_times_by_regional_time[rt] = curr_num_time
-            else:
-                if prev_num_time != curr_num_time:
-                    raise RuntimeError(f"Had {prev_num_time} as number of locus timepoints for regional time {rt}, but then got {curr_num_time}")
+        expected_num_locus_times_by_regional_time = get_locus_time_count_by_reg_time(fnkey_image_pairs)
     else:
         # Set the expected number of locus times per regional time by assuming correct relation between given grouping and the given data. 
         # This amounts to assuming that the data generating processes upstream of the system under test are correct, which is all well and good.
         # +1 to account for regional timepoint itself.
         expected_num_locus_times_by_regional_time = {rt: 1 + len(lts) for rt, lts in locus_grouping.items()}
 
+    # For each FOV, determine which regional timepoints have spot data for that FOV.
     regional_times_by_fov: dict[str, list[TimepointFrom0]] = {}
     for fn_key, _ in fnkey_image_pairs:
         regional_times_by_fov.setdefault(fn_key.position, []).append(TimepointFrom0(fn_key.ref_frame))
     
+    # Use the knowledge of regional times by FOV together with knowledge of number of locus times per regional time 
+    # to determine the (max) number of locus times per FOV.
     expected_num_locus_times_by_fov: Mapping[str, int] = {
         fov_name: max(expected_num_locus_times_by_regional_time[rt] for rt in reg_times) 
         for fov_name, reg_times in regional_times_by_fov.items()
     }
 
+    # Mock the input and make the call under test.
     npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
     result: list[tuple[str, np.ndarray]] = compute_spot_images_multiarray_per_fov(
         npz=npz_wrapper, 
         locus_grouping=locus_grouping,
     )
     
+    # Check that the time axis for each image stack for each FOV corresponds to that FOV's max number of locus times.
     observed_locus_times_by_fov: dict[str, int] = {fov_name: img.shape[1] for fov_name, img in result}
     assert observed_locus_times_by_fov == expected_num_locus_times_by_fov
 
 
-@pytest.mark.skip("not implemented")
-def test_unexpected_timepoint_count_for_spot_image_volume__causes_expected_error():
+@st.composite
+def gen_input_with_bad_timepoint_counts(draw) -> BuildInput:
+    # First make the initial (legal) input draw, and check that the data are nontrivial.
+    fnkey_image_pairs, locus_grouping = draw(gen_legal_input())
+    hyp.assume(locus_grouping is not None and len(fnkey_image_pairs) != 0)
+    
+    # Count up the locus times per regional time, and then create a new locus grouping in which at lease one 
+    # regional time for which data were generated has fewer locus times in the grouping than it actually has in the data.
+    real_locus_time_count_by_reg_time: dict[TimepointFrom0, int] = get_locus_time_count_by_reg_time(fnkey_image_pairs)
+    real_regional_times = set(real_locus_time_count_by_reg_time.keys())
+    new_locus_grouping: dict[TimepointFrom0, set[TimepointFrom0]] = {
+        rt: draw(
+            st.sets(st.integers(min_value=0).map(TimepointFrom0), min_size=1)
+                .filter(lambda ts: len(ts.intersection(real_regional_times)) == 0 and ts !=  lts)
+        )
+        for rt, lts in locus_grouping.items()
+    }
+    # Check that indeed at least one regional time with data has fewer locus times in the new grouping than in the data.
+    hyp.assume(any(len(locus_grouping[rt]) != len(new_locus_grouping[rt]) for rt in real_locus_time_count_by_reg_time.keys()))
+    
+    return fnkey_image_pairs, new_locus_grouping
+
+
+@hyp.given(fnkey_image_pairs_and_locus_grouping=gen_input_with_bad_timepoint_counts())
+@hyp.settings(
+    max_examples=DEFAULT_MIN_NUM_PASSING, 
+    phases=NO_SHRINK_PHASES,
+    suppress_health_check=(hyp.HealthCheck.function_scoped_fixture, ),
+)
+def test_unexpected_timepoint_count_for_spot_image_volume__causes_expected_error(tmp_path, fnkey_image_pairs_and_locus_grouping):
     """If there's a regional timepoint for which we don't have expected locus time count, it's an error."""
-    pass
+    fnkey_image_pairs, locus_grouping = fnkey_image_pairs_and_locus_grouping
+    npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
+    with pytest.raises(ArrayDimensionalityError) as error_context:
+        compute_spot_images_multiarray_per_fov(
+            npz=npz_wrapper, 
+            locus_grouping=locus_grouping,
+        )
+    assert str(error_context.value).startswith("Locus times count doesn't match expectation")
 
 
 @pytest.mark.skip("not implemented")
-def test_spot_images_of_different_volume_sizes__causes_expected_error():
-    """The bounding boxes are constructed to give uniform box/prism sizes; this must hold."""
+def test_regional_time_with_data_but_not_in_nonempty_locus_grouping__causes_expected_error():
     pass
+
+
+def get_locus_time_count_by_reg_time(fnkey_image_pairs: Iterable[tuple[RoiOrderingSpecification.FilenameKey, np.ndarray]]) -> dict[TimepointFrom0, int]:
+    result: dict[TimepointFrom0, int] = {}
+    for key, img in fnkey_image_pairs:
+        curr_num_time = img.shape[0]
+        rt = TimepointFrom0(key.ref_frame)
+        try:
+            prev_num_time = result[rt]
+        except KeyError:
+            result[rt] = curr_num_time
+        else:
+            if prev_num_time != curr_num_time:
+                raise RuntimeError(f"Had {prev_num_time} as number of locus timepoints for regional time {rt}, but then got {curr_num_time}")
+    return result
 
 
 def mock_npz_wrapper(*, temp_folder: Path, fnkey_image_pairs: Iterable[tuple[RoiOrderingSpecification.FilenameKey, np.ndarray]]):
