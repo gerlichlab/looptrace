@@ -463,13 +463,13 @@ def compute_spot_images_multiarray_per_fov(npz: str | Path | NPZ_wrapper, locus_
     return result
 
 
-def backfill_array(array: np.ndarray, *, num_places: int, **kwargs) -> np.ndarray:
+def backfill_array(array: np.ndarray, *, num_places: int) -> np.ndarray:
     if not isinstance(num_places, int):
         raise TypeError(f"Number of places to backfill must be int; got {type(num_places).__name__}")
     if num_places < 0:
         raise ValueError(f"Number of places to backfill must be nonnegative; got {num_places}")
     pad_width = [(0, num_places)] + ([(0, 0)] * max(0, len(array.shape) - 1))
-    return np.pad(array, pad_width=pad_width **kwargs)
+    return np.pad(array, pad_width=pad_width, mode="constant", constant_values=0)
 
 
 def _prep_npz_to_zarr(npz: Union[str, Path, NPZ_wrapper]) -> Tuple[NPZ_wrapper, Iterable[Tuple[RoiOrderingSpecification.FilenameKey, str]]]:
