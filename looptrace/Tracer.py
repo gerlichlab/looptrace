@@ -417,19 +417,18 @@ def apply_pixels_to_nanometers(traces: pd.DataFrame, z_nm_per_px: float, xy_nm_p
 def compute_spot_images_multiarray_per_fov(npz: str | Path | NPZ_wrapper, locus_grouping: Optional[dict[TimepointFrom0, set[TimepointFrom0]]]) -> List[Tuple[str, np.ndarray]]:
     full_data_file: str | Path = npz.filepath if isinstance(npz, NPZ_wrapper) else npz
     npz, keyed = _prep_npz_to_zarr(npz)
+    if len(npz) == 0:
+        logger.warning(f"Empty spot images file! {full_data_file}")
+        return []
     
-    num_loc_times_by_reg_time: dict[TimepointFrom0, int] = {}
-    for rt, lts in (locus_grouping or {}).items():
-        n_lt = len(lts)
-        if n_lt == 0:
-            raise ValueError(f"Empty locus times collection for regional time {rt}")
-        num_loc_times_by_reg_time[rt] = n_lt
+    num_loc_times_by_reg_time: dict[TimepointFrom0, int] = {rt: len(lts) for rt, lts in (locus_grouping or {}).items()}
 
     # Facilitate assurance of same number of timepoints for each regional spot, to create non-ragged array.
     if len(num_loc_times_by_reg_time) == 0:
         max_num_times = max(arr.shape[0] for arr in npz)
     else:
-        max_num_times = max(num_loc_times_by_reg_time.values())
+        # Add 1 to account for the regional timepoint itself.
+        max_num_times = 1 + max(num_loc_times_by_reg_time.values())
     
     result: list[tuple[str, np.ndarray]] = []
     for pos, pos_group in itertools.groupby(keyed, lambda k_: k_[0].position):
@@ -444,7 +443,8 @@ def compute_spot_images_multiarray_per_fov(npz: str | Path | NPZ_wrapper, locus_
                 num_loc_times: int = num_loc_times_by_reg_time.get(reg_time, 0)
                 if num_loc_times == 0:
                     raise RuntimeError(f"No expected locus time count for regional time {reg_time}, despite iterating over spot image file {filename}")
-                exp_num_times: int = num_loc_times + 1 # Add 1 to account for the regional timepoint itself.
+                # Add 1 to account for the regional timepoint itself.
+                exp_num_times: int = 1 + num_loc_times
                 if obs_num_times != exp_num_times:
                     raise ArrayDimensionalityError(
                         f"Expected {exp_num_times} timepoints for regional time {reg_time} but got {obs_num_times} from filename {filename} in archive {full_data_file}"
