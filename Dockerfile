@@ -16,7 +16,7 @@ RUN apt-get update -y && \
 RUN mkdir /looptrace
 WORKDIR /looptrace
 COPY . /looptrace
-RUN mv /looptrace/target/scala-3.4.1/looptrace-assembly-0.5-SNAPSHOT.jar /looptrace/looptrace
+RUN mv /looptrace/target/scala-3.4.1/looptrace-assembly-0.5.0.jar /looptrace/looptrace
 
 # Install new-ish R and necessary packages.
 RUN echo "Installing R..." && \
