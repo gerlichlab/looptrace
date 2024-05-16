@@ -423,21 +423,12 @@ def compute_spot_images_multiarray_per_fov(npz: str | Path | NPZ_wrapper, locus_
     
     num_loc_times_by_reg_time: dict[TimepointFrom0, int] = {rt: len(lts) for rt, lts in (locus_grouping or {}).items()}
 
-    # Facilitate assurance of same number of timepoints for each regional spot, to create non-ragged array.
-    if len(num_loc_times_by_reg_time) == 0:
-        max_num_times = max(arr.shape[0] for arr in npz)
-    else:
-        # Add 1 to account for the regional timepoint itself.
-        max_num_times = 1 + max(num_loc_times_by_reg_time.values())
-    
     result: list[tuple[str, np.ndarray]] = []
     for pos, pos_group in itertools.groupby(keyed, lambda k_: k_[0].position):
         current_stack: list[np.ndarray] = []
         for filename_key, filename in pos_group:
             pixel_array = npz[filename]
-            obs_num_times: int = pixel_array.shape[0]
             reg_time: TimepointFrom0 = TimepointFrom0(filename_key.ref_frame)
-            
             if locus_grouping:
                 # For nonempty locus grouping case, try to validate the time dimension.
                 num_loc_times: int = num_loc_times_by_reg_time.get(reg_time, 0)
@@ -445,21 +436,29 @@ def compute_spot_images_multiarray_per_fov(npz: str | Path | NPZ_wrapper, locus_
                     raise RuntimeError(f"No expected locus time count for regional time {reg_time}, despite iterating over spot image file {filename}")
                 # Add 1 to account for the regional timepoint itself.
                 exp_num_times: int = 1 + num_loc_times
+                obs_num_times: int = pixel_array.shape[0]
                 if obs_num_times != exp_num_times:
                     raise ArrayDimensionalityError(
                         f"Expected {exp_num_times} timepoints for regional time {reg_time} but got {obs_num_times} from filename {filename} in archive {full_data_file}"
                     )
-            
-            if obs_num_times < max_num_times:
-                num_to_fill = max_num_times - obs_num_times
-                logger.debug("Backfilling array of %d timepoints with %d empty timepoints", obs_num_times, num_to_fill)
-                pixel_array = backfill_array(pixel_array, num_places=num_to_fill)
-            if pixel_array.shape[0] != max_num_times:
-                raise ArrayDimensionalityError(
-                    f"Need {max_num_times} timepoints but have {pixel_array.shape[0]} for pixel array from file {filename} in archive {full_data_file}"
-                )
             current_stack.append(pixel_array)
-        result.append(((pos, np.stack(current_stack))))
+        
+        # Facilitate assurance of same number of timepoints for each regional spot, to create non-ragged array.
+        max_num_times: int = max(img.shape[0] for img in current_stack)
+        tempstack: list[np.ndarray] = []
+        for img in current_stack:
+            if img.shape[0] < max_num_times:
+                num_to_fill = max_num_times - img.shape[0]
+                logger.debug("Backfilling array of %d timepoints with %d empty timepoints", img.shape[0], num_to_fill)
+                img = backfill_array(img, num_places=num_to_fill)
+            if img.shape[0] != max_num_times:
+                raise ArrayDimensionalityError(
+                    f"Need {max_num_times} timepoints but have {img.shape[0]} for pixel array from file {filename} in archive {full_data_file}"
+                )
+            tempstack.append(img)
+        
+        result.append(((pos, np.stack(tempstack))))
+        
     return result
 
 
