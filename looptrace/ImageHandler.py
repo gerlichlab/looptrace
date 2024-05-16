@@ -32,6 +32,7 @@ __all__ = ["ImageHandler", "read_images"]
 
 logger = logging.getLogger()
 
+LocusGroupingData = dict[TimepointFrom0, set[TimepointFrom0]]
 PathFilter = Callable[[Union[os.DirEntry, Path]], bool]
 
 
@@ -259,7 +260,7 @@ class ImageHandler:
         return self.locus_grouping.get(regional_timepoint, set())
 
     @property
-    def locus_grouping(self) -> Optional[dict[TimepointFrom0, set[TimepointFrom0]]]:
+    def locus_grouping(self) -> Optional[LocusGroupingData]:
         section_key = "locusGrouping"
         result: dict[TimepointFrom0, set[TimepointFrom0]] = {}
         try:
