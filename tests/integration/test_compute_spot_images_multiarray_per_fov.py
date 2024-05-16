@@ -189,11 +189,6 @@ def test_regional_times_with_no_locus_times_are_ignored(tmp_path, fnkey_image_pa
     
     # Check that each regional spot's data was correctly stacked by field of view.
     assert obs_count_by_fov == exp_count_by_fov
-    
-
-@pytest.mark.skip("not implemented")
-def test_spot_images_finish_by_being_all_the_same_size():
-    pass
 
 
 @pytest.mark.skip("not implemented")
