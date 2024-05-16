@@ -260,7 +260,6 @@ def gen_input_with_bad_timepoint_counts(draw) -> BuildInput:
 
 @hyp.given(fnkey_image_pairs_and_locus_grouping=gen_input_with_bad_timepoint_counts())
 @hyp.settings(
-    max_examples=DEFAULT_MIN_NUM_PASSING, 
     phases=NO_SHRINK_PHASES,
     suppress_health_check=(hyp.HealthCheck.function_scoped_fixture, ),
 )
@@ -269,16 +268,38 @@ def test_unexpected_timepoint_count_for_spot_image_volume__causes_expected_error
     fnkey_image_pairs, locus_grouping = fnkey_image_pairs_and_locus_grouping
     npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
     with pytest.raises(ArrayDimensionalityError) as error_context:
-        compute_spot_images_multiarray_per_fov(
-            npz=npz_wrapper, 
-            locus_grouping=locus_grouping,
-        )
+        compute_spot_images_multiarray_per_fov(npz=npz_wrapper, locus_grouping=locus_grouping)
     assert str(error_context.value).startswith("Locus times count doesn't match expectation")
 
 
-@pytest.mark.skip("not implemented")
-def test_regional_time_with_data_but_not_in_nonempty_locus_grouping__causes_expected_error():
-    pass
+@st.composite
+def gen_input_with_missing_timepoint_counts(draw):
+    # First make the initial (legal) input draw, and check that the data are nontrivial.
+    fnkey_image_pairs, locus_grouping = draw(gen_legal_input())
+    real_regional_times: set[TimepointFrom0] = set(get_locus_time_count_by_reg_time(fnkey_image_pairs).keys())
+    hyp.assume(
+        len(set(locus_grouping.keys()).intersection(real_regional_times)) > 1 # need at least 2 in common so 1 can be dropped
+        and 
+        len(fnkey_image_pairs) != 0
+    )
+    new_locus_grouping = draw(
+        st.sets(st.sampled_from(list(real_regional_times)), min_size=1, max_size=len(real_regional_times) - 1)
+            .map(lambda rts: {t: locus_grouping[t] for t in rts})
+    )
+    return fnkey_image_pairs, new_locus_grouping
+
+
+@hyp.given(fnkey_image_pairs_and_locus_grouping=gen_input_with_missing_timepoint_counts())
+@hyp.settings(
+    phases=NO_SHRINK_PHASES,
+    suppress_health_check=(hyp.HealthCheck.function_scoped_fixture, ),
+)
+def test_regional_time_with_data_but_not_in_nonempty_locus_grouping__causes_expected_error(tmp_path, fnkey_image_pairs_and_locus_grouping):
+    fnkey_image_pairs, locus_grouping = fnkey_image_pairs_and_locus_grouping
+    npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
+    with pytest.raises(RuntimeError) as error_context:
+        compute_spot_images_multiarray_per_fov(npz=npz_wrapper, locus_grouping=locus_grouping)
+    assert str(error_context.value).startswith("No expected locus time count for regional time")
 
 
 def get_locus_time_count_by_reg_time(fnkey_image_pairs: Iterable[tuple[RoiOrderingSpecification.FilenameKey, np.ndarray]]) -> dict[TimepointFrom0, int]:
