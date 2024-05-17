@@ -610,15 +610,23 @@ class SpotPicker:
         List[str], SkipReasonsMapping
             Paths of the files written, and mapping from ref frame to mapping from ROI ID to mapping from frame to skip reason
         """
-        pos_index = self.image_handler.image_lists[self.input_name].index(pos_group_name)
+        get_num_frames: Callable[[int], int]
+        if not self.image_handler.locus_grouping:
+            total_num_times = len(pos_group_data.frame.unique())
+            get_num_frames = lambda _: total_num_times
+        else:
+            num_loc_times_by_reg_time_raw = {rt.get: len(lts) for rt, lts in self.image_handler.locus_grouping.items()}
+            get_num_frames = lambda reg_time_raw: num_loc_times_by_reg_time_raw[reg_time_raw]
+
         f_id = 0
-        n_frames = len(pos_group_data.frame.unique())
         array_files: set[str] = set()
         skip_spot_image_reasons = defaultdict(lambda: defaultdict(dict))
+        pos_index = self.image_handler.image_lists[self.input_name].index(pos_group_name)
         for frame, frame_group in tqdm.tqdm(pos_group_data.groupby('frame')):
             for ch, ch_group in frame_group.groupby('ch'):
                 image_stack = np.array(self.images[pos_index][int(frame), int(ch)])
                 for _, roi in ch_group.iterrows():
+                    fn_key = RoiOrderingSpecification.FilenameKey.from_roi(roi)
                     roi_img, error = extract_single_roi_img_inmem(
                         single_roi=roi, 
                         image_stack=image_stack, 
@@ -626,13 +634,13 @@ class SpotPicker:
                         background_frame=self.image_handler.background_subtraction_frame, 
                         )
                     roi_img = roi_img.astype(SPOT_IMAGE_PIXEL_VALUE_TYPE)
-                    fn_key = RoiOrderingSpecification.FilenameKey.from_roi(roi)
                     if error is not None:
                         skip_spot_image_reasons[fn_key.ref_frame][fn_key.roi_id][frame] = str(error)
                     fp = os.path.join(self.spot_images_path, fn_key.name_roi_file)
                     if fp in array_files:
                         arr = open_memmap(fp, mode='r+')
                     else:
+                        n_frames = get_num_frames(fn_key.ref_frame)
                         arr = open_memmap(fp, mode='w+', dtype = roi_img.dtype, shape=(n_frames,) + roi_img.shape)
                         array_files.add(fp)
                     try:
