@@ -621,8 +621,7 @@ class SpotPicker:
             # +1 to account for regional timepoint itself.
             get_num_frames = lambda reg_time_raw: 1 + num_loc_times_by_reg_time_raw[reg_time_raw]
 
-        f_id = 0
-        array_files: set[str] = set()
+        num_frames_processed: dict[str, int] = {}
         skip_spot_image_reasons = defaultdict(lambda: defaultdict(dict))
         pos_index = self.image_handler.image_lists[self.input_name].index(pos_group_name)
         for frame, frame_group in tqdm.tqdm(pos_group_data.groupby('frame')):
@@ -640,13 +639,17 @@ class SpotPicker:
                     if error is not None:
                         skip_spot_image_reasons[fn_key.ref_frame][fn_key.roi_id][frame] = str(error)
                     fp = os.path.join(self.spot_images_path, fn_key.name_roi_file)
-                    if fp in array_files:
-                        arr = open_memmap(fp, mode='r+')
-                    else:
+                    try:
+                        f_id = num_frames_processed[fp]
+                    except KeyError:
+                        # New data stack (from new regional spot)
+                        f_id = 0
                         n_frames = get_num_frames(fn_key.ref_frame)
                         print(f"Setting frame count for regional time {fn_key.ref_frame}: {n_frames}")
                         arr = open_memmap(fp, mode='w+', dtype = roi_img.dtype, shape=(n_frames,) + roi_img.shape)
-                        array_files.add(fp)
+                    else:
+                        # Some processing is done already for this data stack.
+                        arr = open_memmap(fp, mode='r+')
                     try:
                         arr[f_id] = roi_img
                     except (IndexError, ValueError):
@@ -658,7 +661,7 @@ class SpotPicker:
                         print(f"Current ROI: {roi}")
                         raise
                     arr.flush()
-            f_id += 1
+                    num_frames_processed[fp] = f_id + 1
         return skip_spot_image_reasons
 
     @property
