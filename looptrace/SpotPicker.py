@@ -593,7 +593,7 @@ class SpotPicker:
         self.image_handler.load_tables()
         return outfile
 
-    def write_single_fov_data(self, pos_group_name: str, pos_group_data: pd.DataFrame) -> Tuple[List[str], SkipReasonsMapping]:
+    def write_single_fov_data(self, pos_group_name: str, pos_group_data: pd.DataFrame) -> SkipReasonsMapping:
         """
         Write all timepoints' 3D image arrays (1 for each hybridisation round) for each (region, trace ID) pair in the FOV.
 
@@ -613,7 +613,7 @@ class SpotPicker:
         pos_index = self.image_handler.image_lists[self.input_name].index(pos_group_name)
         f_id = 0
         n_frames = len(pos_group_data.frame.unique())
-        array_files = OrderedDict() # Maintain insertion order.
+        array_files: set[str] = set()
         skip_spot_image_reasons = defaultdict(lambda: defaultdict(dict))
         for frame, frame_group in tqdm.tqdm(pos_group_data.groupby('frame')):
             for ch, ch_group in frame_group.groupby('ch'):
@@ -634,7 +634,7 @@ class SpotPicker:
                         arr = open_memmap(fp, mode='r+')
                     else:
                         arr = open_memmap(fp, mode='w+', dtype = roi_img.dtype, shape=(n_frames,) + roi_img.shape)
-                        array_files[fp] = None # Values don't matter, just for key order.
+                        array_files.add(fp)
                     try:
                         arr[f_id] = roi_img
                     except ValueError:
@@ -642,7 +642,7 @@ class SpotPicker:
                         raise
                     arr.flush()
             f_id += 1
-        return list(array_files.keys()), skip_spot_image_reasons
+        return skip_spot_image_reasons
 
 
     def gen_roi_imgs_inmem(self) -> str:
@@ -656,7 +656,7 @@ class SpotPicker:
 
         skip_spot_image_reasons = OrderedDict()
         for pos, pos_group in tqdm.tqdm(rois.groupby('position')):
-            _, skip_reasons = self.write_single_fov_data(pos_group_name=pos, pos_group_data=pos_group)
+            skip_reasons = self.write_single_fov_data(pos_group_name=pos, pos_group_data=pos_group)
             skip_spot_image_reasons[pos] = skip_reasons
         
         print(f"Writing spot image extraction skip reasons file: {self.extraction_skip_reasons_json_file}")
