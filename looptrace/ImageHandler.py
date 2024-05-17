@@ -272,6 +272,11 @@ class ImageHandler:
                 curr: set[TimepointFrom0] = {TimepointFrom0(t) for t in locus_times}
                 if len(curr) != len(locus_times):
                     raise ValueError(f"Repetition is present in locus times for regional time {reg_time}: {locus_times}")
+                try:
+                    reg_time = int(reg_time)
+                except (TypeError, ValueError) as e:
+                    logger.exception(f"Cannot convert alleged regional time {reg_time} (type {type(reg_time).__name__}): {e}")
+                    raise
                 result[TimepointFrom0(reg_time)] = curr
         return result if result else None
 
