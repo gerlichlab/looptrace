@@ -645,7 +645,6 @@ class SpotPicker:
                         # New data stack (from new regional spot)
                         f_id = 0
                         n_frames = get_num_frames(fn_key.ref_frame)
-                        print(f"Setting frame count for regional time {fn_key.ref_frame}: {n_frames}")
                         arr = open_memmap(fp, mode='w+', dtype = roi_img.dtype, shape=(n_frames,) + roi_img.shape)
                     else:
                         # Some processing is done already for this data stack.
