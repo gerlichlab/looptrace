@@ -644,12 +644,15 @@ class SpotPicker:
             f_id += 1
         return skip_spot_image_reasons
 
+    @property
+    def spot_image_volume_extraction_table(self) -> pd.DataFrame:
+        return self.image_handler.tables[self.input_name + '_dc_rois']
 
     def gen_roi_imgs_inmem(self) -> str:
         # Load full stacks into memory to extract spots.
         # Not the most elegant, but depending on the chunking of the original data it is often more performant than loading subsegments.
 
-        rois = self.image_handler.tables[self.input_name+'_dc_rois']
+        rois = self.spot_image_volume_extraction_table
 
         if not os.path.isdir(self.spot_images_path):
             os.mkdir(self.spot_images_path)
@@ -668,7 +671,7 @@ class SpotPicker:
     def gen_roi_imgs_inmem_coarsedc(self) -> str:
         # Use this simplified function if the images that the spots are gathered from are already coarsely drift corrected!
         print('Generating single spot image stacks from coarsely drift corrected images.')
-        rois = self.image_handler.tables[self.input_name+'_dc_rois']
+        rois = self.spot_image_volume_extraction_table
         for pos, group in tqdm.tqdm(rois.groupby('position')):
             pos_index = self.image_handler.image_lists[self.input_name].index(pos)
             full_image = np.array(self.images[pos_index])
