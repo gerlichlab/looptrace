@@ -616,7 +616,8 @@ class SpotPicker:
             get_num_frames = lambda _: total_num_times
         else:
             num_loc_times_by_reg_time_raw = {rt.get: len(lts) for rt, lts in self.image_handler.locus_grouping.items()}
-            get_num_frames = lambda reg_time_raw: num_loc_times_by_reg_time_raw[reg_time_raw]
+            # +1 to account for regional timepoint itself.
+            get_num_frames = lambda reg_time_raw: 1 + num_loc_times_by_reg_time_raw[reg_time_raw]
 
         f_id = 0
         array_files: set[str] = set()
