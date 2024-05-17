@@ -646,8 +646,8 @@ class SpotPicker:
                         array_files.add(fp)
                     try:
                         arr[f_id] = roi_img
-                    except ValueError:
-                        print(f"ERROR adding ROI spot image to stack! ROI: {roi}")
+                    except (IndexError, ValueError):
+                        print(f"ERROR adding ROI spot image to stack! Current file: {fp}. Current ROI: {roi}.")
                         raise
                     arr.flush()
             f_id += 1
