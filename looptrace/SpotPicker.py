@@ -612,10 +612,12 @@ class SpotPicker:
         """
         get_num_frames: Callable[[int], int]
         if not self.image_handler.locus_grouping:
+            print("No locus grouping is present, so all timepoints will be used.")
             total_num_times = len(pos_group_data.frame.unique())
             get_num_frames = lambda _: total_num_times
         else:
             num_loc_times_by_reg_time_raw = {rt.get: len(lts) for rt, lts in self.image_handler.locus_grouping.items()}
+            print(f"Locus time counts by regional time (before +1): {num_loc_times_by_reg_time_raw}")
             # +1 to account for regional timepoint itself.
             get_num_frames = lambda reg_time_raw: 1 + num_loc_times_by_reg_time_raw[reg_time_raw]
 
@@ -642,12 +644,18 @@ class SpotPicker:
                         arr = open_memmap(fp, mode='r+')
                     else:
                         n_frames = get_num_frames(fn_key.ref_frame)
+                        print(f"Setting frame count for regional time {fn_key.ref_frame}: {n_frames}")
                         arr = open_memmap(fp, mode='w+', dtype = roi_img.dtype, shape=(n_frames,) + roi_img.shape)
                         array_files.add(fp)
                     try:
                         arr[f_id] = roi_img
                     except (IndexError, ValueError):
-                        print(f"ERROR adding ROI spot image to stack! Current file: {fp}. Current ROI: {roi}.")
+                        print(f"\n\nERROR adding ROI spot image to stack! Context follows below.")
+                        print(f"Current filename key: {fn_key}")
+                        print(f"Current file: {fp}")
+                        print(f"Current regional time: {fn_key.ref_frame}")
+                        print(f"Current locus time: {frame}")
+                        print(f"Current ROI: {roi}")
                         raise
                     arr.flush()
             f_id += 1
