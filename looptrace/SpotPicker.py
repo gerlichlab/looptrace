@@ -33,7 +33,7 @@ from spotfishing_looptrace import DifferenceOfGaussiansSpecificationForLooptrace
 
 from looptrace import RoiImageSize, image_processing_functions as ip
 from looptrace.exceptions import MissingRoisTableException
-from looptrace.filepaths import get_spot_images_path
+from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER
 from looptrace.numeric_types import NumberLike
 
 __author__ = "Kai Sandvold Beckwith"
@@ -508,7 +508,7 @@ class SpotPicker:
 
     @property
     def spot_images_path(self):
-        return get_spot_images_path(self.image_handler.image_save_path)
+        return os.path.join(self.image_handler.image_save_path, SPOT_IMAGES_SUBFOLDER)
 
     @property
     def spot_images_zipfile(self):

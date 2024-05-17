@@ -9,7 +9,7 @@ from gertils import ExtantFile, ExtantFolder
 __author__ = "Vince Reuter"
 __credits__ = ["Vince Reuter"]
 
-__all__ = ["SPOT_IMAGES_SUBFOLDER", "FilePathLike", "FolderPathLike", "PathLike", "get_analysis_path", "get_spot_images_path", "simplify_path"]
+__all__ = ["SPOT_IMAGES_SUBFOLDER", "FilePathLike", "FolderPathLike", "PathLike", "get_analysis_path", "simplify_path"]
 
 
 FilePathLike = Union[str, Path, ExtantFile]
@@ -20,11 +20,6 @@ SPOT_IMAGES_SUBFOLDER = "spot_images_dir"
 
 def get_analysis_path(config: Mapping[str, Any]) -> str:
     return os.path.expanduser(os.path.expandvars(config["analysis_path"]))
-
-
-def get_spot_images_path(folder: Union[str, Path, ExtantFolder]):
-    """Provide the path to the fixed-name subfolder for the spot images, relative to the given folder."""
-    return os.path.join(folder, SPOT_IMAGES_SUBFOLDER)
 
 
 def simplify_path(p: Optional[PathLike]) -> Optional[Path]:
