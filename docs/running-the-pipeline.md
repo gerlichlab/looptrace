@@ -48,6 +48,8 @@ Once you have the [minimal requirements](#minimal-requirements), this will be th
     ```
 1. __Detach__: `Ctrl+b d` -- for more, see the [tmux section](#tmux).
 
+NB: __Make each path _absolute___. Relative paths may not behave well; try to always use absolute file/folder paths for each command-line argument.
+
 NB: Remember to place single quotes around the filepath (experiment folder) you're making available as a volume (`-v`) to the Docker container. 
 While often not necessary, this will protect you if your filepath contains spaces.
 
