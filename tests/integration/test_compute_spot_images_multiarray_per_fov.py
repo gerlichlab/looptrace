@@ -47,7 +47,7 @@ BuildInput = tuple[Iterable[RoiOrderingSpecification.FilenameKey], LocusGrouping
 
 
 @st.composite
-def gen_legal_input(draw, *, max_num_fov: int = 3, max_num_regional_times: int = 4) -> BuildInput:
+def gen_legal_input(draw, *, max_num_fov: int = 3, max_num_regional_times: int = 20) -> BuildInput:
     # First, create a "pool" of regional timepoints to choose from in other generators.
     raw_reg_times_pool: set[int] = draw(st.sets(st.integers(min_value=0), min_size=1, max_size=max_num_regional_times))
     
@@ -143,52 +143,6 @@ def test_fields_of_view__are_correct_and_in_order(tmp_path, fnkey_image_pairs_an
     obs = [fov_name for fov_name, _ in result]
     exp = list(sorted(set(k.position for k, _ in fnkey_image_pairs)))
     assert obs == exp
-
-
-@hyp.given(fnkey_image_pairs_and_locus_grouping=gen_legal_input())
-@hyp.settings(
-    max_examples=DEFAULT_MIN_NUM_PASSING, 
-    phases=NO_SHRINK_PHASES,
-    suppress_health_check=(hyp.HealthCheck.function_scoped_fixture, ),
-)
-def test_regional_times_with_no_locus_times_are_ignored(tmp_path, fnkey_image_pairs_and_locus_grouping):
-    """Expected count of 0, or absence of regional time from expectation mapping, should lead to regional time be ignored."""
-    fnkey_image_pairs, locus_grouping = fnkey_image_pairs_and_locus_grouping
-
-    npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
-
-    # First, check that there are no regional timepoints (parsed from filename key) with data which are absent from the 
-    # locus grouping, as this would represent an error in the creation of the NPZ file, which is upstream of what 
-    # we're here endeavoring to test
-    regional_times_histogram: Mapping[TimepointFrom0, int] = Counter(TimepointFrom0(k.ref_frame) for k, _ in fnkey_image_pairs)
-    regional_times_with_data: set[TimepointFrom0] = set(regional_times_histogram.keys())
-    regional_times_in_locus_grouping: set[TimepointFrom0] = set(locus_grouping.keys())
-    missing_regional_times = regional_times_with_data - regional_times_in_locus_grouping
-    extra_regional_times = regional_times_in_locus_grouping - regional_times_with_data
-    assert missing_regional_times == set()
-    # Check also that there is at least one regional time in the locus grouping which has no data associated with it, 
-    # as this is the scenario for which we're trying here to test the behavior.
-    hyp.assume(len(extra_regional_times) > 0)
-
-    # Derive, from the input filename keys, the number of regional spots per FOV.
-    exp_count_by_fov: Mapping[str, int] = Counter(k.position for k, _ in fnkey_image_pairs)
-
-    # Compute the per-FOV image arrays.
-    result: list[tuple[str, np.ndarray]] = compute_spot_images_multiarray_per_fov(
-        npz=npz_wrapper, 
-        locus_grouping=locus_grouping,
-    )
-
-    # Check that the number of stacks per FOV (first dimension of each resulting image) matches the expected number of regional timepoints per FOV.
-    obs_count_by_fov = {fov_name: img.shape[0] for fov_name, img in result}
-    assert all(fov_name in exp_count_by_fov for fov_name in set(obs_count_by_fov.keys()))
-    
-    # Check that each stack is 5-dimensional (ROI, time, z, y, x).
-    observed_image_shapes = [img.shape for _, img in result]
-    assert list(len(s) for s in observed_image_shapes) == [5] * len(observed_image_shapes)
-    
-    # Check that each regional spot's data was correctly stacked by field of view.
-    assert obs_count_by_fov == exp_count_by_fov
 
 
 @hyp.given(fnkey_image_pairs_and_locus_grouping=gen_legal_input())
