@@ -9,7 +9,6 @@ import hypothesis as hyp
 from hypothesis import strategies as st
 import more_itertools as more_itools
 import pandas as pd
-import pytest
 
 from gertils.types import TimepointFrom0
 
