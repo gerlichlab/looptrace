@@ -20,18 +20,17 @@ from looptrace.SpotPicker import SPOT_IMAGE_PIXEL_VALUE_TYPE, RoiOrderingSpecifi
 from looptrace.Tracer import compute_spot_images_multiarray_per_fov
 from looptrace.integer_naming import IntegerNaming, get_position_name_short
 
-from tests.hypothesis_extra_strategies import gen_locus_grouping_data
-
 
 DEFAULT_MIN_NUM_PASSING = 500 # 5x the hypothesis default to ensure we really explore the search space
+MIN_NUM_PASSING_FOR_SLOW_TEST_OF_ERROR_CASE = 10
 MAX_RAW_FOV = IntegerNaming.TenThousand.value - 2 # Normal N digits accommodate 10^N - 1, and -1 more for 0-based
 MAX_RAW_TRACE_ID = IntegerNaming.TenThousand.value - 2 # Normal N digits accommodate 10^N - 1, and -1 more for 0-based
 NO_SHRINK_PHASES = tuple(p for p in hyp.Phase if p != hyp.Phase.shrink)
 
 # Limit the data generation time and I/O time.
-RATHER_SMALL_UPPER_BOUND_FOR_NUMBER_OF_DETECTED_SPOTS = 10
-RATHER_SMALL_UPPER_BOUND_FOR_NUMBER_OF_LOCUS_TIMEPOINTS = 3
-RATHER_SMALL_UPPER_BOUND_FOR_NUMBER_OF_REGIONAL_TIMEPOINTS = 4
+RATHER_SMALL_UPPER_BOUND_FOR_NUMBER_OF_DETECTED_SPOTS = 8
+RATHER_SMALL_UPPER_BOUND_FOR_NUMBER_OF_LOCUS_TIMEPOINTS = 4
+RATHER_SMALL_UPPER_BOUND_FOR_NUMBER_OF_REGIONAL_TIMEPOINTS = 3
 
 gen_raw_fov = st.integers(min_value=0, max_value=MAX_RAW_FOV)
 
@@ -47,15 +46,25 @@ BuildInput = tuple[Iterable[RoiOrderingSpecification.FilenameKey], LocusGrouping
 
 
 @st.composite
-def gen_legal_input(draw, *, max_num_fov: int = 3, max_num_regional_times: int = 20) -> BuildInput:
+def gen_legal_input(
+    draw, 
+    *, 
+    max_num_fov: int = 3, 
+    max_num_regional_times: int = 4, 
+    min_num_locus_times_per_spot: int = 1, 
+    max_num_locus_times_per_spot: int = RATHER_SMALL_UPPER_BOUND_FOR_NUMBER_OF_LOCUS_TIMEPOINTS, 
+    allow_extras_in_locus_grouping: bool = True,
+    allow_empty_spots: bool = True, 
+    allow_empty_locus_grouping: bool = True,
+) -> BuildInput:
     # First, create a "pool" of regional timepoints to choose from in other generators.
-    raw_reg_times_pool: set[int] = draw(st.sets(st.integers(min_value=0), min_size=1, max_size=max_num_regional_times))
+    reg_times_pool: set[TimepointFrom0] = draw(st.sets(st.integers(min_value=0).map(TimepointFrom0), min_size=max_num_regional_times, max_size=max_num_regional_times))
     
     # Choose the size for each 3D spot image volume (needs to be constant).
     spot_image_dims = draw(gen_spot_box)
     
     # Choose how many regional spots to generate.
-    num_spots = draw(st.integers(min_value=0, max_value=RATHER_SMALL_UPPER_BOUND_FOR_NUMBER_OF_DETECTED_SPOTS))
+    num_spots = draw(st.integers(min_value=0 if allow_empty_spots else 1, max_value=RATHER_SMALL_UPPER_BOUND_FOR_NUMBER_OF_DETECTED_SPOTS))
     
     # Get one or a few FOVs, as each regional spot image must be associated to a FOV.
     raw_fov_pool: set[int] = draw(st.sets(gen_raw_fov, min_size=1, max_size=max_num_fov))
@@ -64,7 +73,7 @@ def gen_legal_input(draw, *, max_num_fov: int = 3, max_num_regional_times: int =
     fov_rt_pairs: set[tuple[int, int]] = draw(st.sets(
         st.tuples(
             st.sampled_from(list(raw_fov_pool)), 
-            st.sampled_from(list(raw_reg_times_pool))
+            st.sampled_from([rt.get for rt in reg_times_pool])
         ), 
         min_size=num_spots, 
         max_size=num_spots,
@@ -88,7 +97,7 @@ def gen_legal_input(draw, *, max_num_fov: int = 3, max_num_regional_times: int =
 
     # Generate a number of locus timepoints for each regional timepoint (i.e., how many 3D volumes to generate for a spot, as a function of the spot's regional timepoint).
     num_loc_times_by_reg_time: dict[TimepointFrom0, int] = draw(st.lists(
-        st.integers(min_value=1, max_value=RATHER_SMALL_UPPER_BOUND_FOR_NUMBER_OF_LOCUS_TIMEPOINTS), 
+        st.integers(min_value=min_num_locus_times_per_spot, max_value=max_num_locus_times_per_spot), 
         min_size=len(reg_times), 
         max_size=len(reg_times),
     ).map(lambda sizes: dict(zip(reg_times, sizes, strict=True))))
@@ -102,26 +111,38 @@ def gen_legal_input(draw, *, max_num_fov: int = 3, max_num_regional_times: int =
             for k in sorted(fn_keys, key=lambda k: (k.position, k.roi_id, k.ref_frame))
         ]
     ]
+    if not allow_empty_spots:
+        assert len(data) > 0, "Empty spots data despite setting allow_empty_spots=False! "
 
     # Generate a dummy locus grouping.
-    locus_grouping: dict[TimepointFrom0, set[TimepointFrom0]] = draw(gen_locus_grouping_data.with_strategies_and_empty_flag(
-        gen_raw_reg_time=st.sampled_from(list(raw_reg_times_pool)),
-        gen_raw_loc_time=st.integers(min_value=0).filter(lambda t: t not in raw_reg_times_pool),
-        max_size=len(raw_reg_times_pool),
-        allow_empty=True,
-    ))
+    unused_reg_times: set[TimepointFrom0] = reg_times_pool - reg_times
+    locus_grouping: dict[TimepointFrom0, set[TimepointFrom0]] = \
+        {} \
+        if not unused_reg_times or not allow_extras_in_locus_grouping \
+        else (
+            draw(st.dictionaries(
+                keys=st.sampled_from(list(unused_reg_times)),
+                values=st.sets(st.integers(min_value=0).map(TimepointFrom0).filter(lambda t: t not in reg_times_pool), max_size=5),
+                max_size=len(unused_reg_times),
+            ))
+        )
 
     # Ensure that each regional timepoint for which data have been generated is present in the locus grouping, and with the appropriate number of locus timepoints.
-    gen_locus_times: Callable[[int], SearchStrategy[set[TimepointFrom0]]] = lambda n: st.sets(
-        st.integers(min_value=0).map(TimepointFrom0), min_size=n, max_size=n,
-    ).filter(lambda lts: not any(t in reg_times for t in lts))
+    gen_locus_times: Callable[[int], SearchStrategy[set[TimepointFrom0]]] = \
+        lambda n: st.sets(
+            st.integers(min_value=0)
+                .map(TimepointFrom0)
+                .filter(lambda t: t not in reg_times_pool), min_size=n, max_size=n,
+        )
     necessary_locus_grouping: dict[TimepointFrom0, set[TimepointFrom0]] = {rt: draw(gen_locus_times(n)) for rt, n in num_loc_times_by_reg_time.items()}
     locus_grouping.update(necessary_locus_grouping)
-    
-    return data, locus_grouping
+    if not allow_empty_locus_grouping:
+        assert len(locus_grouping) > 0, "Empty locus grouping despite setting allow_empty_locus_grouping=False"
+    final_locus_grouping = draw(st.one_of(st.just(locus_grouping), st.sampled_from((None, {})))) if allow_empty_locus_grouping else locus_grouping
+    return data, final_locus_grouping
 
 
-@hyp.given(fnkey_image_pairs_and_locus_grouping=gen_legal_input())
+@hyp.given(fnkey_image_pairs_and_locus_grouping=gen_legal_input(allow_empty_spots=False))
 @hyp.settings(
     max_examples=DEFAULT_MIN_NUM_PASSING, 
     phases=NO_SHRINK_PHASES,
@@ -130,22 +151,13 @@ def gen_legal_input(draw, *, max_num_fov: int = 3, max_num_regional_times: int =
 def test_fields_of_view__are_correct_and_in_order(tmp_path, fnkey_image_pairs_and_locus_grouping):
     fnkey_image_pairs, locus_grouping = fnkey_image_pairs_and_locus_grouping
     npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
-
-    # For nicer debugging
-    print("LOCUS GROUPING (below)")
-    print(json.dumps({rt.get: [lt.get for lt in lts] for rt, lts in locus_grouping.items()}, indent=2))
-
-    result = compute_spot_images_multiarray_per_fov(
-        npz=npz_wrapper, 
-        locus_grouping=locus_grouping,
-    )
-    
+    result = compute_spot_images_multiarray_per_fov(npz=npz_wrapper, locus_grouping=locus_grouping)
     obs = [fov_name for fov_name, _ in result]
     exp = list(sorted(set(k.position for k, _ in fnkey_image_pairs)))
     assert obs == exp
 
 
-@hyp.given(fnkey_image_pairs_and_locus_grouping=gen_legal_input())
+@hyp.given(fnkey_image_pairs_and_locus_grouping=gen_legal_input(allow_empty_spots=False))
 @hyp.settings(
     max_examples=DEFAULT_MIN_NUM_PASSING, 
     phases=NO_SHRINK_PHASES,
@@ -192,20 +204,14 @@ def test_spot_images_finish_by_all_having_the_max_number_of_timepoints(tmp_path,
 @st.composite
 def gen_input_with_bad_timepoint_counts(draw) -> BuildInput:
     # First make the initial (legal) input draw, and check that the data are nontrivial.
-    fnkey_image_pairs, locus_grouping = draw(gen_legal_input())
-    hyp.assume(locus_grouping is not None and len(fnkey_image_pairs) != 0)
+    fnkey_image_pairs, locus_grouping = draw(gen_legal_input(allow_empty_spots=False, allow_empty_locus_grouping=False, min_num_locus_times_per_spot=2))
+    hyp.assume(locus_grouping is not None and len(locus_grouping) > 0 and len(fnkey_image_pairs) != 0)
     
     # Count up the locus times per regional time, and then create a new locus grouping in which at lease one 
     # regional time for which data were generated has fewer locus times in the grouping than it actually has in the data.
     real_locus_time_count_by_reg_time: dict[TimepointFrom0, int] = get_locus_time_count_by_reg_time(fnkey_image_pairs)
-    real_regional_times = set(real_locus_time_count_by_reg_time.keys())
-    new_locus_grouping: dict[TimepointFrom0, set[TimepointFrom0]] = {
-        rt: draw(
-            st.sets(st.integers(min_value=0).map(TimepointFrom0), min_size=1)
-                .filter(lambda ts: len(ts.intersection(real_regional_times)) == 0 and ts !=  lts)
-        )
-        for rt, lts in locus_grouping.items()
-    }
+    original_locus_times = list(set(t for lts in locus_grouping.values() for t in lts))
+    new_locus_grouping: dict[TimepointFrom0, set[TimepointFrom0]] = {rt: draw(st.sets(st.sampled_from(original_locus_times), min_size=1)) for rt in locus_grouping.keys()}
     # Check that indeed at least one regional time with data has fewer locus times in the new grouping than in the data.
     hyp.assume(any(len(locus_grouping[rt]) != len(new_locus_grouping[rt]) for rt in real_locus_time_count_by_reg_time.keys()))
     
@@ -214,8 +220,9 @@ def gen_input_with_bad_timepoint_counts(draw) -> BuildInput:
 
 @hyp.given(fnkey_image_pairs_and_locus_grouping=gen_input_with_bad_timepoint_counts())
 @hyp.settings(
+    max_examples=MIN_NUM_PASSING_FOR_SLOW_TEST_OF_ERROR_CASE,
     phases=NO_SHRINK_PHASES,
-    suppress_health_check=(hyp.HealthCheck.function_scoped_fixture, ),
+    suppress_health_check=(hyp.HealthCheck.function_scoped_fixture, hyp.HealthCheck.too_slow, ),
 )
 def test_unexpected_timepoint_count_for_spot_image_volume__causes_expected_error(tmp_path, fnkey_image_pairs_and_locus_grouping):
     """If there's a regional timepoint for which we don't have expected locus time count, it's an error."""
@@ -229,26 +236,20 @@ def test_unexpected_timepoint_count_for_spot_image_volume__causes_expected_error
 @st.composite
 def gen_input_with_missing_timepoint_counts(draw):
     # First make the initial (legal) input draw, and check that the data are nontrivial.
-    fnkey_image_pairs, locus_grouping = draw(gen_legal_input())
+    fnkey_image_pairs, locus_grouping = draw(gen_legal_input(allow_empty_spots=False, allow_empty_locus_grouping=False, allow_extras_in_locus_grouping=False))
     real_regional_times: set[TimepointFrom0] = set(get_locus_time_count_by_reg_time(fnkey_image_pairs).keys())
-    hyp.assume(
-        len(set(locus_grouping.keys()).intersection(real_regional_times)) > 1 # need at least 2 in common so 1 can be dropped
-        and 
-        len(fnkey_image_pairs) != 0
-    )
-    new_locus_grouping = draw(
-        st.sets(st.sampled_from(list(real_regional_times)), min_size=1, max_size=len(real_regional_times) - 1)
-            .map(lambda rts: {t: locus_grouping[t] for t in rts})
-    )
+    hyp.assume(len(set(locus_grouping.keys()).intersection(real_regional_times)) > 1) # need at least 2 in common so 1 can be dropped)
+    new_locus_grouping = draw(st.lists(st.sampled_from(tuple(locus_grouping.items())), min_size=1, max_size=len(real_regional_times) - 1).map(dict))
     return fnkey_image_pairs, new_locus_grouping
 
 
 @hyp.given(fnkey_image_pairs_and_locus_grouping=gen_input_with_missing_timepoint_counts())
 @hyp.settings(
+    max_examples=MIN_NUM_PASSING_FOR_SLOW_TEST_OF_ERROR_CASE,
     phases=NO_SHRINK_PHASES,
-    suppress_health_check=(hyp.HealthCheck.function_scoped_fixture, ),
+    suppress_health_check=(hyp.HealthCheck.function_scoped_fixture, hyp.HealthCheck.too_slow, ),
 )
-def test_regional_time_with_data_but_not_in_nonempty_locus_grouping__causes_expected_error(tmp_path, fnkey_image_pairs_and_locus_grouping):
+def test_regional_time_with_data_but_absent_from_nonempty_locus_grouping__causes_expected_error(tmp_path, fnkey_image_pairs_and_locus_grouping):
     fnkey_image_pairs, locus_grouping = fnkey_image_pairs_and_locus_grouping
     npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
     with pytest.raises(RuntimeError) as error_context:
