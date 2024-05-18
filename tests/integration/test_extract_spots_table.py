@@ -5,16 +5,13 @@ from enum import Enum
 from operator import itemgetter
 from typing import Optional
 
+from gertils.types import TimepointFrom0
 import hypothesis as hyp
 from hypothesis import strategies as st
 import more_itertools as more_itools
 import pandas as pd
 
-from gertils.types import TimepointFrom0
-
 from looptrace.SpotPicker import build_locus_spot_data_extraction_table
-
-from tests.hypothesis_extra_strategies import gen_locus_grouping_data, gen_proximity_filter_strategy
 
 
 FOV_NAME = "P0001.zarr"
@@ -252,11 +249,10 @@ NON_REGIONAL_TIMES = tuple(r["time"] for r in NON_REGIONAL_ROUNDS)
 
 @hyp.given(
     locus_grouping=st.one_of(
-        gen_locus_grouping_data.with_strategies_and_empty_flag(
-            gen_raw_reg_time=st.sampled_from(REGIONAL_TIMES), 
-            gen_raw_loc_time=st.sampled_from(NON_REGIONAL_TIMES),
+        st.dictionaries(
+            keys=st.sampled_from(REGIONAL_TIMES).map(TimepointFrom0), 
+            values=st.sets(st.sampled_from(NON_REGIONAL_TIMES).map(TimepointFrom0)),
             max_size=len(REGIONAL_TIMES),
-            allow_empty=True,
         ),
         st.just(None),
     )

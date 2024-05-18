@@ -44,41 +44,6 @@ class ProximityFilterStrategyData:
         return cls._gen_selective(eligible_timepoints=eligible_timepoints, semantic="SelectiveProximityProhibition", max_threshold=max_threshold)
 
 
-class gen_locus_grouping_data:
-    @classmethod    
-    def with_strategies_and_empty_flag(cls, *, gen_raw_reg_time: SearchStrategy, gen_raw_loc_time: SearchStrategy, max_size: int, allow_empty: bool):
-        cls._check_max_size(max_size)
-        return cls.with_strategies_and_min_group_size(
-            gen_raw_reg_time=gen_raw_reg_time, 
-            gen_raw_loc_time=gen_raw_loc_time, 
-            max_size=max_size, 
-            min_locus_times_per_reg_time=0 if allow_empty else 1,
-        )
-
-    @classmethod
-    @st.composite
-    def with_max_size_only(cls, draw, *, max_size: int, allow_empty: bool = False):
-        cls._check_max_size(max_size)
-        reg_times = draw(st.sets(st.integers(min_value=0), min_size=0 if allow_empty else 1, max_size=max_size))
-        gen_loc_time = st.integers(min_value=0).filter(lambda n: n not in reg_times)
-        locus_times = draw(st.sets(gen_loc_time, min_size=len(reg_times), max_size=len(reg_times)).map(list))
-        return dict(zip(reg_times, locus_times, strict=True))
-
-    @classmethod
-    def with_strategies_and_min_group_size(cls, *, gen_raw_reg_time: SearchStrategy, gen_raw_loc_time: SearchStrategy, max_size: int, min_locus_times_per_reg_time: int):
-        cls._check_max_size(max_size)
-        return st.dictionaries(
-            keys=gen_raw_reg_time.map(TimepointFrom0), 
-            values=st.sets(gen_raw_loc_time.map(TimepointFrom0), min_size=min_locus_times_per_reg_time).map(list),
-            max_size=max_size,
-        )
-    
-    @staticmethod
-    def _check_max_size(max_size) -> None:
-        if max_size < 0:
-            raise ValueError(f"Upper bound of locus grouping size can't be negative! {max_size}")
-
-
 @st.composite
 def gen_partition(draw, elements: list[_T], *, min_part_count: int = 1, max_part_count: Optional[int] = None):
     # First, validate the arguments both absolutely and in relation to one another.
