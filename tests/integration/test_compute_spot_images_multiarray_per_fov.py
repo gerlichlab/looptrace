@@ -22,6 +22,7 @@ from looptrace.integer_naming import IntegerNaming, get_position_name_short
 
 
 DEFAULT_MIN_NUM_PASSING = 500 # 5x the hypothesis default to ensure we really explore the search space
+HYPOTHESIS_HEALTH_CHECK_SUPPRESSIONS = (hyp.HealthCheck.function_scoped_fixture, hyp.HealthCheck.too_slow, )
 MIN_NUM_PASSING_FOR_SLOW_TEST_OF_ERROR_CASE = 10
 MAX_RAW_FOV = IntegerNaming.TenThousand.value - 2 # Normal N digits accommodate 10^N - 1, and -1 more for 0-based
 MAX_RAW_TRACE_ID = IntegerNaming.TenThousand.value - 2 # Normal N digits accommodate 10^N - 1, and -1 more for 0-based
@@ -146,7 +147,7 @@ def gen_legal_input(
 @hyp.settings(
     max_examples=DEFAULT_MIN_NUM_PASSING, 
     phases=NO_SHRINK_PHASES,
-    suppress_health_check=(hyp.HealthCheck.function_scoped_fixture, ),
+    suppress_health_check=HYPOTHESIS_HEALTH_CHECK_SUPPRESSIONS,
 )
 def test_fields_of_view__are_correct_and_in_order(tmp_path, fnkey_image_pairs_and_locus_grouping):
     fnkey_image_pairs, locus_grouping = fnkey_image_pairs_and_locus_grouping
@@ -161,7 +162,7 @@ def test_fields_of_view__are_correct_and_in_order(tmp_path, fnkey_image_pairs_an
 @hyp.settings(
     max_examples=DEFAULT_MIN_NUM_PASSING, 
     phases=NO_SHRINK_PHASES,
-    suppress_health_check=(hyp.HealthCheck.function_scoped_fixture, ),
+    suppress_health_check=HYPOTHESIS_HEALTH_CHECK_SUPPRESSIONS,
 )
 def test_spot_images_finish_by_all_having_the_max_number_of_timepoints(tmp_path, fnkey_image_pairs_and_locus_grouping):
     fnkey_image_pairs, locus_grouping = fnkey_image_pairs_and_locus_grouping
@@ -222,7 +223,7 @@ def gen_input_with_bad_timepoint_counts(draw) -> BuildInput:
 @hyp.settings(
     max_examples=MIN_NUM_PASSING_FOR_SLOW_TEST_OF_ERROR_CASE,
     phases=NO_SHRINK_PHASES,
-    suppress_health_check=(hyp.HealthCheck.function_scoped_fixture, hyp.HealthCheck.too_slow, ),
+    suppress_health_check=HYPOTHESIS_HEALTH_CHECK_SUPPRESSIONS,
 )
 def test_unexpected_timepoint_count_for_spot_image_volume__causes_expected_error(tmp_path, fnkey_image_pairs_and_locus_grouping):
     """If there's a regional timepoint for which we don't have expected locus time count, it's an error."""
@@ -247,7 +248,7 @@ def gen_input_with_missing_timepoint_counts(draw):
 @hyp.settings(
     max_examples=MIN_NUM_PASSING_FOR_SLOW_TEST_OF_ERROR_CASE,
     phases=NO_SHRINK_PHASES,
-    suppress_health_check=(hyp.HealthCheck.function_scoped_fixture, hyp.HealthCheck.too_slow, ),
+    suppress_health_check=HYPOTHESIS_HEALTH_CHECK_SUPPRESSIONS,
 )
 def test_regional_time_with_data_but_absent_from_nonempty_locus_grouping__causes_expected_error(tmp_path, fnkey_image_pairs_and_locus_grouping):
     fnkey_image_pairs, locus_grouping = fnkey_image_pairs_and_locus_grouping
