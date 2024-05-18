@@ -238,7 +238,7 @@ class ImageHandler:
     def frame_names(self) -> List[str]:
         """The sequence of names corresponding to the imaging rounds used in the experiment"""
         names = []
-        for round in self.config["imagingRounds"]:
+        for round in self.iter_rounds():
             try:
                 names.append(round["name"])
             except KeyError:
@@ -258,6 +258,9 @@ class ImageHandler:
         if grouping is None:
             raise NotImplementedError("No locus grouping present!")
         return self.locus_grouping.get(regional_timepoint, set())
+
+    def iter_rounds(self) -> Iterable[Mapping[str, object]]:
+        return sorted(self.config["imagingRounds"], key=lambda r: r["time"])
 
     @property
     def locus_grouping(self) -> Optional[LocusGroupingData]:
