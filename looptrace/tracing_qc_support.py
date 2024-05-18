@@ -1,7 +1,7 @@
 """Supporting functions for the quality control of chromatin fiber traces"""
 
+from collections.abc import Iterable
 from pathlib import Path
-from typing import *
 
 import numpy as np
 import pandas as pd
@@ -9,7 +9,7 @@ import pandas as pd
 from looptrace import read_table_pandas
 
 
-def apply_frame_names_and_spatial_information(traces_file: Path, frame_names: List[str]) -> pd.DataFrame:
+def apply_frame_names_and_spatial_information(traces_file: Path, frame_names: Iterable[str]) -> pd.DataFrame:
     traces = read_traces_and_apply_frame_names(traces_file=traces_file, frame_names=frame_names)
     if "ref_dist" not in traces.columns:
         traces["ref_dist"] = compute_ref_frame_spatial_information(traces)
@@ -27,13 +27,12 @@ def compute_ref_frame_spatial_information(df: pd.DataFrame) -> pd.DataFrame:
     return np.sqrt((df['z_ref'] - df['z'])**2 + (df['y_ref'] - df['y'])**2 + (df['x_ref'] - df['x'])**2)
 
 
-def read_traces_and_apply_frame_names(traces_file: Path, frame_names: List[str]) -> pd.DataFrame:
+def read_traces_and_apply_frame_names(traces_file: Path, frame_names: Iterable[str]) -> pd.DataFrame:
+    frame_names: list[str] = list(frame_names)
     print(f"{len(frame_names)} frame names: {', '.join(frame_names)}")
     print(f"Reading traces: {traces_file}")
     traces = read_table_pandas(traces_file)
     timepoints = traces["frame"]
-    if timepoints.nunique() != len(frame_names):
-        raise ValueError(f"Traces table has {timepoints.nunique()} unique timepoints, but there are {len(frame_names)} frame names given!")
     print(f"Applying frame names to traces...")
     traces["frame_name"] = timepoints.apply(lambda t: frame_names[t])
     return traces
