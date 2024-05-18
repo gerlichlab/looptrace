@@ -241,7 +241,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
                     .toValidatedNel
             }
         val checkLocusTimepointCoveringNel: ValidatedNel[String, Boolean] = 
-            data.get("checkLocusTimepointCoveringNel") match {
+            data.get("checkLocusTimepointCovering") match {
                 case None | Some(ujson.Null) => Validated.Valid(true)
                 case Some(json) => safeReadAs[Boolean](json).toValidatedNel
             }
