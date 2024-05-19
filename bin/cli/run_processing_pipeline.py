@@ -213,7 +213,7 @@ def compute_region_pairwise_distances(rounds_config: ExtantFile, params_config: 
         str(LOOPTRACE_JAR_PATH),
         f"{LOOPTRACE_JAVA_PACKAGE}.ComputeRegionPairwiseDistances",
         "--roisFile",
-        str(H.proximity_filtered_spots_file_path),
+        str(H.nuclei_filtered_spots_file_path if H.spot_in_nuc else H.proximity_filtered_spots_file_path),
         "-O", 
         H.analysis_path,
     ]
