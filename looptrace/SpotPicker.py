@@ -519,7 +519,7 @@ class SpotPicker:
 
     @property
     def spot_in_nuc(self) -> bool:
-        return self.config.get('spot_in_nuc', False)
+        return self.image_handler.spot_in_nuc
     
     @property
     def spot_threshold(self) -> List[int]:
@@ -558,7 +558,7 @@ class SpotPicker:
         #Precalculate all ROIs for extracting spot images, based on identified ROIs and precalculated drifts between time frames.
         print("Generating list of all ROIs for tracing...")
 
-        spotfile = self.image_handler.nuclei_filtered_spots_file_path if self.config.get('spot_in_nuc', False) \
+        spotfile = self.image_handler.nuclei_filtered_spots_file_path if self.spot_in_nuc \
             else self.image_handler.proximity_filtered_spots_file_path
         key_rois_table, _ = os.path.splitext(spotfile.name)
         key_rois_table = key_rois_table\
