@@ -9,11 +9,12 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 ### Added
 * Added a tool--a simple [command-line program](./bin/cli/analyse_bead_discard_reasons.py)-- to analyse the reason(s) that each fiducial bead ROI is discarded (_if_ it's discarded).
 * Added a tool-- a simple [command-line program](./bin/cli/squeeze_list_of_field_of_view_zarr.py)--to make a folder of per-FOV ZARRs into a contiguous sequence at the start of the natural numbers, after having removed certain problematic FOVs' ZARRs.
+* Added pipeline step, corresponding to a [command-line program](./bin/cli/locus_spot_visualisation_data_preparation.py) to set up visualisation (in Napari) of locus specific spots, atop pixel volume data.
 
 ### Changed
 * Depend on new version of Pypiper (0.14.2), which allows any pipeline stage to be marked as `nofail` (by passing `nofail=True` to its constructor), so that if something goes wrong while running that stage, it won't fail the whole pipeline (i.e., subsequent processing is allowed to continue).
 * Use the `locusGrouping` section of the imaging rounds config to only extract image volumes for tracing from timepoints in which it "makes sense". Specifically, for a given regional spot, only extract corresponding pixels from imaging timepoints of loci associated with that region. Because of this, the locus spot visualisation data also becomes one-ZARR-per-regional-timepoint, rather than one-ZARR-per-FOV. See [Issue 237](https://github.com/gerlichlab/looptrace/issues/237).
-* Changed config hook `"checkLocusTimepointCoveringNel"` to `"checkLocusTimepointCovering"`.
+* Changed config hook `"checkLocusTimepointCoveringNel"` to `"checkLocusTimepointCovering"`. See [Issue 295](https://github.com/gerlichlab/looptrace/issues/295) and [Issue 227](https://github.com/gerlichlab/looptrace/issues/237).
 
 ## [v0.4.1] - 2024-05-24
 This is a ___bugfix_ release__.
@@ -26,7 +27,6 @@ This is a ___bugfix_ release__.
 ### Added
 * Added hook (`"checkLocusTimepointCoveringNel"`) for specifying whether or not (`true` / `false`) to check that union of values in `locusGrouping` section of imaging rounds configuration file covers the set of locus spot imaging timepoints in the `imagingRounds` declaration of the same file. The default is `true` (to check for covering). See [Issue 295](https://github.com/gerlichlab/looptrace/issues/295).
 * Added pipeline step to set up visualisation (in Napari) of nuclei labels and masks, atop nuclei imaging data. See [Issue 313](https://github.com/gerlichlab/looptrace/issues/313).
-* Added pipeline step to set up visualisation (in Napari) of nuclei labels and masks, atop nuclei imaging data. See [Issue 313](https://github.com/gerlichlab/looptrace/issues/311).
 * Added pipeline precheck to validate the imaging rounds config. See [Issue 294](https://github.com/gerlichlab/looptrace/issues/294).
 * Remove `prefer='threads'` hint to `joblib` for choosing parallelisation backend during coarse drift correction. This aims to minimise the frequency with which this pipeline step will be killed due to insufficient resources.
 
