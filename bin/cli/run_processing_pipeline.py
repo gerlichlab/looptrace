@@ -37,6 +37,7 @@ from extract_spots_table import workflow as run_spot_bounding
 from extract_spots import workflow as run_spot_extraction
 from zip_spot_image_files_for_tracing import workflow as run_spot_zipping
 from tracing import workflow as run_chromatin_tracing
+from locus_spot_visualisation_data_preparation import workflow as get_locus_spot_data_file_src_dst_pairs
 
 
 DECON_STAGE_NAME = "deconvolution"
@@ -287,6 +288,13 @@ def run_regional_spot_viewing_prep(rounds_config: ExtantFile, params_config: Ext
     )
 
 
+def run_locus_spot_viewing_prep(rounds_config: ExtantFile, params_config: ExtantFile) -> None:
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config)
+    src_dst_pairs: list[tuple[Path, Path]] = get_locus_spot_data_file_src_dst_pairs(infolder=H.locus_spots_visualisation_folder)
+    for src, dst in src_dst_pairs:
+        shutil.move(src, dst)
+
+
 def validate_imaging_rounds_config(rounds_config: ExtantFile) -> int:
     cmd_parts = [
         "java", 
@@ -376,7 +384,7 @@ class LooptracePipeline(pypiper.Pipeline):
                 f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config},
             ),
             pypiper.Stage(name="locus_specific_spots_visualisation_data_prep", func=prep_locus_specific_spots_visualisation, f_kwargs=rounds_params_images),
-
+            pypiper.Stage(name="locus_spot_viewing_prep", func=run_locus_spot_viewing_prep, f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config}),
         ]
 
 
