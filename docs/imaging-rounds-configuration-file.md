@@ -31,10 +31,6 @@ __Guidance__
     * _Covering_: The union of the groups must cover the set of regional round timepoints from the `imagingRounds`.
     * _Covered_: The set of regional round timepoints from the `imagingRounds` must cover the union of groups.
 
-__Examples__
-
-To see some examples, please refer to [the folder for data for tests of this configuration file](../src/test/resources/TestImagingRoundsConfiguration/).
-
 <a href="imaging-rounds"></a>
 ### Imaging timepoints sequence: `imagingRounds`
 This section specifies the time sequence of imaging rounds, with details about each round like whether it was for a regional barcode, if it was a blank, or if it was a repeat.
@@ -55,10 +51,31 @@ Each value in this array represents a single imaging round; each round is one of
     * Each value is a list of locus imaging timepoints associated with the regional timepoint to which it's keyed.
     * The values in the lists must be such that the union of the lists is the set of locus imaging timepoints from the `imagingRounds` sequence.
     * The values lists should have unique values, though as an ensemble they may not necessarily be disjoint.
+* `checkLocusTimepointCovering` should generally be absent or set to `true` (the default). 
+If, however, your experimental design is such that you _don't_ want to trace all of the locus-specific timepoints, then you should set this to `false` so that a `locusGrouping` section which _doesn't_ cover all of the locus-specific timepoints in the `imagingRounds` section of that file won't be considered an error.
 
+### Relating regional and locus-specific timepoints: `locusGrouping`
+This section declares how the regional nad locus-specific timepoints from the [imaging rounds sequence](#imaging-rounds) relate to one another. More specifically, for each regional barcode timepoint, you declare a corresponding collection of locus-specific imaging timepoints. This, determines which image volumes are extracted for which regional spot, and therefore how traces are generated as well as how downstream analysis and visualisation works.
+
+This section _may be absent or empty_, in which case the every timepoint is fit/traced for every regional timepoint; call this "all-by-all", or "universal tracing", maybe, as a way to quickly conceptualise what omission of this section implies.
+
+If _present_, however, the data in this section _must_ comply with certain __rules__:
+* The data must be a _JSON object_ (key-value) mapping.
+* Each key must be a (quoted) regional barcode imaging timepoint (corresponding to an entry in the [imaging rounds section](#imaging-rounds)).
+* Each value must be a list (JSON array) of locus-specific timepoints, again corresponding to entries in the imaging rounds sequence. A locus imaging timepoint may be present in multiple lists, but it may not occur multiple times within the same list. The regional timepoint itself will also be traced, but it (nor anything else other than locus timepoints) may be present in any list.
+
+If this section is present and nonempty, _only the data present will be used_! Any regional or locus imaging timepoint which is not present will not be traced! Note, however, that any data _not_ present here _must_ be present in the [tracing exclusions section](#tracing-exclusions). Otherwise, if this section's nonempty and missing data isn't in the tracing exclusions, there will be an error.
+
+Proper handling of the interaction between this section and the `tracingExclusions` is done [here](https://github.com/gerlichlab/looptrace/blob/ceed0103b3c68a999b1d975f3ac993d4fec81772/src/test/scala/TestImagingRoundsConfigurationExamplesParsability.scala#L106), with some [example config files here](../src/test/resources/TestImagingRoundsConfiguration/LocusGroupingValidation/).
+
+<a href="tracing-exclusions"></a>
 ### Tracing exclusions section: `tracingExclusions`
 This sections specifies which imaging timepoints should be ignored for chromatin fiber tracing, interlocus distance measurements, and generally other downstream analysis.
 
 __Guidance__
 * Check that the list of `tracingExclusions` values is correct, most likely any pre-imaging timepoint names, "blank" timepoints, and all regional barcode timepoint names.
 * `tracingExclusions` should generally be specified, and its value should be a list of timepoints of imaging rounds to exclude from tracing, typically the blank / pre-imaging rounds, and regional barcode rounds. The list can't contain any timepoints not seen in the values of the `imagingRounds`.
+
+
+## Examples
+To see some examples, please refer to [the folder for data for tests of this configuration file](../src/test/resources/TestImagingRoundsConfiguration/).
