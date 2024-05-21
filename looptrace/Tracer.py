@@ -117,19 +117,6 @@ class Tracer:
     def drift_table(self) -> pd.DataFrame:
         return self.image_handler.spots_fine_drift_correction_table
 
-    def write_all_spot_images_to_one_per_fov_zarr(self, overwrite: bool = False) -> List[Path]:
-        name_data_pairs = compute_spot_images_multiarray_per_fov(
-            npz=self._images_wrapper,
-            # Add 1 to account for tracing the regional timepoint itself.
-            locus_grouping=self.image_handler.locus_grouping,
-        )
-        return write_jvm_compatible_zarr_store(
-            name_data_pairs, 
-            root_path=self.locus_spots_visualisation_folder, 
-            dtype=SPOT_IMAGE_PIXEL_VALUE_TYPE, 
-            overwrite=overwrite,
-        )
-
     @property
     def images(self) -> Iterable[np.ndarray]:
         """Iterate over the small, single spot images for tracing (1 per timepoint per ROI)."""
@@ -176,6 +163,19 @@ class Tracer:
         traces.to_csv(self.traces_path)
 
         return self.traces_path
+
+    def write_all_spot_images_to_one_per_fov_zarr(self, overwrite: bool = False) -> List[Path]:
+        name_data_pairs = compute_spot_images_multiarray_per_fov(
+            npz=self._images_wrapper,
+            # Add 1 to account for tracing the regional timepoint itself.
+            locus_grouping=self.image_handler.locus_grouping,
+        )
+        return write_jvm_compatible_zarr_store(
+            name_data_pairs, 
+            root_path=self.locus_spots_visualisation_folder, 
+            dtype=SPOT_IMAGE_PIXEL_VALUE_TYPE, 
+            overwrite=overwrite,
+        )
 
 
 # For parallelisation (multiprocessing) in the case of mask_fits being False.
