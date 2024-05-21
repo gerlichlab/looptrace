@@ -79,7 +79,14 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
         
         forAll (Table(
             ("subfolder", "filename", "expectError"), 
+            // This first example omits some locus imaging timepoints from the values of the locusGrouping section, 
+            // but it sets the flag for validation of locus timepoints covering (checkLocusTimepointCovering) to false.
+            // Critically, some omitted locus timepoints are NOT in the tracingExclusions, as that's a separate (automatic) 
+            // exception for a locus timepoint from the requirement to be present in at least one values list in the locusGrouping.
             ("LocusGroupingValidation", "example__imaging_rounds_configuration__selective_prohibition__no_check_locus_grouping_295.json", false), 
+            /* These subsequent examples have the same inclusion/exclusion properties w.r.t. locus imaging timepoints and 
+               the locusGrouping section, but the have the key for validation either missing or set to null or true, 
+               so the validation should be done as declared (or as default). */
             ("LocusGroupingValidation", "fail__imaging_rounds_config__missing_locus_validation_295.json", true),
             ("LocusGroupingValidation", "fail__imaging_rounds_config__null_locus_validation_295.json", true),
             ("LocusGroupingValidation", "fail__imaging_rounds_config__true_locus_validation_295.json", true),
@@ -106,6 +113,12 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
     test("locusGrouping tolerates absence of locus imaging timepoints which are in the tracingExclusions. Issue #304") {
         forAll (Table(
             ("subfolder", "filename", "expectError"), 
+            /* Critically, these examples DO NOT SET THE VALIDATION flag, so validation is done as the default behavior. 
+               This means that it's the behavior of the validation w.r.t. the tracingExclusions' relation to the relation 
+               between the locusGrouping and the locus timepoints and the imagingRounds which is under test.
+               So we expect failure when the locus timepoints omitted from the locusGrouping are not in the tracingExclusions, 
+               but we expect success when these omitted timepoints are exempted from validation by virtue of their inclusion 
+               in the tracingExclusions listing. */
             ("LocusGroupingValidation", "example__rounds_config__with_times_correctly_omitted_from_locus_grouping__304.json", false), 
             ("LocusGroupingValidation", "fail__rounds_config__with_times_incorrectly_omitted_from_locus_grouping__304.json", true), 
         )) { (subfolder, filename, expectError) =>
