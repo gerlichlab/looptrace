@@ -1,6 +1,5 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
-import scala.math.max
 import scala.util.Try
 import upickle.default.*
 import cats.*
@@ -518,6 +517,7 @@ object LabelAndFilterLocusSpots extends StrictLogging:
      */
     trait NapariSortable[A]:
         def getSortKey: A => NapariSortKey
+    
     object NapariSortable:
         given contravariantForNapariSortable: Contravariant[NapariSortable] with
             def contramap[A, B](s: NapariSortable[A])(f: B => A): NapariSortable[B] = 
@@ -533,7 +533,12 @@ object LabelAndFilterLocusSpots extends StrictLogging:
     
     /** Status of a point to display in napari, based on QC results and its position within the spot image frame */
     enum PointDisplayType:
-        case QCPass, QCFail, Invisible
+        /** Point that has fulfilled all QC criteria */
+        case QCPass
+        /** Point that has failed at least one QC criterion */
+        case QCFail
+        /** Case where centroid of the Gaussian fit is outside the bounds of the volume's bounding box */
+        case Invisible
 
     /** Helpers for working with the point display type classification */
     object PointDisplayType:
