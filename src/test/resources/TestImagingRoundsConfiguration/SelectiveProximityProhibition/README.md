@@ -1,0 +1,2 @@
+### `SelectiveProximityPermission` tests
+Files here are relevant for tests of parsability of the imaging rounds config file when the `proximityFilterStrategy` is the selectively prohibitive one: `SelectiveProximityProhibition`. This strategy forbids same-grouped regional timepoints' spots from violating the minimum separation criterion.
