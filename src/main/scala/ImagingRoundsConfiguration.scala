@@ -274,13 +274,24 @@ object ImagingRoundsConfiguration extends LazyLogging:
     def unsafeFromJsonFile(jsonFile: os.Path): ImagingRoundsConfiguration = 
         fromJsonFile(jsonFile).fold(messages => throw BuildError.FromJsonFile(messages, jsonFile), identity)
 
-    private[looptrace] final case class LocusGroup private[looptrace](regionalTimepoint: Timepoint, locusTimepoints: NonEmptySet[Timepoint])
+    /**
+     * A collection of locus imaging timepoints associated with a single regional imaging timepoint
+     * 
+     * @param regionalTimepoint The imaging timepoint at which all the DNA loci targeted at the given locus timepoints will all be lit up together
+     * @param locusTimepoints The imaging timepoints of DNA loci which will be illuminated together at the given regional timepoint
+     */
+    private[looptrace] final case class LocusGroup private[looptrace](regionalTimepoint: Timepoint, locusTimepoints: NonEmptySet[Timepoint]):
+        def sortedNel: NonEmptyList[Timepoint] = (regionalTimepoint :: locusTimepoints.toNonEmptyList).sorted
+    
+    /** Helpers for working with locus groups */
     object LocusGroup:
+        /** Locus groups are ordered by regional timepoint and then by locus timepoints. */
         given orderForLocusGroup: Order[LocusGroup] = Order.by{ case LocusGroup(regionalTimepoint, locusTimepoints) => regionalTimepoint -> locusTimepoints }
     end LocusGroup
 
     /** Helpers for working with timepoint groupings */
     object RegionalImageRoundGroup:
+        /** JSON codec for group of imaging timepoints */
         given rwForRegionalImageRoundGroup: ReadWriter[NonEmptySet[Timepoint]] = readwriter[ujson.Value].bimap(
             group => ujson.Arr(group.toList.map(name => ujson.Num(name.get))*), 
             json => json.arr
