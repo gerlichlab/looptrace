@@ -265,7 +265,7 @@ class ImageHandler:
     @property
     def locus_grouping(self) -> Optional[LocusGroupingData]:
         section_key = "locusGrouping"
-        result: dict[TimepointFrom0, set[TimepointFrom0]] = {}
+        result: LocusGroupingData = {}
         try:
             data = self.config[section_key]
         except KeyError:
