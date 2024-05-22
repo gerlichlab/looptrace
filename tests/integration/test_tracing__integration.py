@@ -20,3 +20,8 @@ def test_background_subtraction_uses_drift_correction():
 @pytest.mark.skip("not yet implemented")
 def test_mask_fits():
     pass
+
+
+@pytest.mark.skip("not yet implemented")
+def test_trace_id_corresponds_to_roi_id():
+    pass
