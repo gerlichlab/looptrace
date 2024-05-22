@@ -12,11 +12,11 @@ object Dependencies {
         "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
     )
     lazy val mouse = "org.typelevel" %% "mouse" % "1.2.3"
-    lazy val os = "com.lihaoyi" %% "os-lib" % "0.9.3"
+    lazy val os = "com.lihaoyi" %% "os-lib" % "0.10.1"
     lazy val scalaCsv = "com.github.tototoshi" %% "scala-csv" % "1.3.10"
     lazy val scopt = "com.github.scopt" %% "scopt" % "4.1.0"
-    lazy val uJson = "com.lihaoyi" %% "ujson" % "3.1.4"
-    lazy val uPickle = "com.lihaoyi" %% "upickle" % "3.1.4"
+    lazy val uJson = "com.lihaoyi" %% "ujson" % "3.3.1"
+    lazy val uPickle = "com.lihaoyi" %% "upickle" % "3.3.1"
 
     /* Test dependencies */
     lazy val scalacheck = "org.scalacheck" %% "scalacheck" % "1.18.0"
