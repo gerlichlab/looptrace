@@ -404,7 +404,7 @@ object LabelAndFilterLocusSpots extends StrictLogging:
                 val getQCFlagsText = (qc: LocusSpotQC.ResultRecord) => (qc.components :+ qc.allPass).map(p => if p then qcPassRepr else qcFailRepr)
                 val unfilteredOutputFile = analysisOutfolder / s"${basename}.unfiltered.${delimiter.ext}" // would need to update ImageHandler.traces_file_qc_unfiltered if changed
                 val unfilteredHeader = actualHeader ++ List(withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol, QcPassColumn)
-                // Here, still a records even if its timepoint is in exclusions, as it may be useful to know when such "spots" actually pass QC.
+                // Here, still write a record even if its timepoint is in exclusions, as it may be useful to know when such "spots" actually pass QC.
                 val unfilteredRows = unfiltered.map{ (outrec, original) => finaliseOriginal(original) ++ getQCFlagsText(outrec.qcResult) }
                 logger.info(s"Writing unfiltered output: $unfilteredOutputFile")
                 writeTextFile(unfilteredOutputFile, unfilteredHeader :: unfilteredRows, delimiter)
