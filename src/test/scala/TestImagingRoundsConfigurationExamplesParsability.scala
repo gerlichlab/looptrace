@@ -75,7 +75,7 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
     }
 
     test("Locus grouping validation can be strict or lax. Issue #295") {
-        val countExpectedErrors = (_: NonEmptyList[String]).count(_.contains("locus timepoint(s) in imaging sequence and not found in locus grouping"))
+        val countExpectedErrors = (_: NonEmptyList[String]).count(_.contains("locus timepoint(s) in imagingRounds and not found in locusGrouping (nor in tracingExclusions)"))
         
         forAll (Table(
             ("subfolder", "filename", "expectError"), 
@@ -127,7 +127,7 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
             if (expectError) {
                 safeParseResult match {
                     case Left(errorMessages) => 
-                        errorMessages.count(_ === "2 locus timepoint(s) in imaging sequence and not found in locus grouping: 3, 4") shouldEqual 1
+                        errorMessages.count(_ === "2 locus timepoint(s) in imagingRounds and not found in locusGrouping (nor in tracingExclusions): 3, 4") shouldEqual 1
                     case Right(_) => fail(s"Expected parse failure for $configFile but succeeded.")
                 }
                 
@@ -144,12 +144,12 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
     test("proximityFilterStrategy grouping cannot have any regional timepoint in any values list for groups.") {
         forAll (Table(
             ("subfolder", "filename", "expectedExtra"), 
-            ("RegionGroupingValidation", "fail__rounds_config_with_different_regional_timepoint_in_locus_grouping_values__permission.json", NonEmptyList.of(8, 10)), 
-            ("RegionGroupingValidation", "fail__rounds_config_with_different_regional_timepoint_in_locus_grouping_values__prohibition.json", NonEmptyList.of(8, 10)), 
-            ("RegionGroupingValidation", "fail__rounds_config_with_same_regional_timepoint_in_locus_grouping_values__permission.json", NonEmptyList.of(9, 11)), 
-            ("RegionGroupingValidation", "fail__rounds_config_with_same_regional_timepoint_in_locus_grouping_values__prohibition.json", NonEmptyList.of(9, 11)), 
-            ("RegionGroupingValidation", "fail__rounds_config_with_unmapped_regional_timepoint_in_locus_grouping_values__permission.json", NonEmptyList.one(9)), 
-            ("RegionGroupingValidation", "fail__rounds_config_with_unmapped_regional_timepoint_in_locus_grouping_values__prohibition.json", NonEmptyList.one(9)), 
+            ("LocusGroupingValidation", "fail__rounds_config_with_different_regional_timepoint_in_locus_grouping_values__permission.json", NonEmptyList.of(8, 10)), 
+            ("LocusGroupingValidation", "fail__rounds_config_with_different_regional_timepoint_in_locus_grouping_values__prohibition.json", NonEmptyList.of(8, 10)), 
+            ("LocusGroupingValidation", "fail__rounds_config_with_same_regional_timepoint_in_locus_grouping_values__permission.json", NonEmptyList.of(9, 11)), 
+            ("LocusGroupingValidation", "fail__rounds_config_with_same_regional_timepoint_in_locus_grouping_values__prohibition.json", NonEmptyList.of(9, 11)), 
+            ("LocusGroupingValidation", "fail__rounds_config_with_unmapped_regional_timepoint_in_locus_grouping_values__permission.json", NonEmptyList.one(9)), 
+            ("LocusGroupingValidation", "fail__rounds_config_with_unmapped_regional_timepoint_in_locus_grouping_values__prohibition.json", NonEmptyList.one(9)), 
         )) { (subfolder, filename, expectedExtra) =>
             val configFile = getResourcePath(subfolder = subfolder, filename = filename)
             val safeParseResult = ImagingRoundsConfiguration.fromJsonFile(configFile)

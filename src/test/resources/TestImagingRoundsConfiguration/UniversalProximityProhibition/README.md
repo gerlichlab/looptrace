@@ -1,0 +1,2 @@
+### `UniversalProximityProhibition` tests
+Files here are relevant for tests of parsability of the imaging rounds config file when the `proximityFilterStrategy` is the universally prohibitive one: `UniversalProximityProhibition`.

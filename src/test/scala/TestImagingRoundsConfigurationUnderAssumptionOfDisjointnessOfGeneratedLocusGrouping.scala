@@ -339,7 +339,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
                                 then ().asRight
                                 // ...otherwise, we have an invalid grouping.
                                 else {
-                                    val prefix = "1 locus timepoint(s) in imaging sequence and not found in locus grouping"
+                                    val prefix = "1 locus timepoint(s) in imagingRounds and not found in locusGrouping (nor in tracingExclusions)"
                                     NonEmptyList.one{ ("Uncovered in sequence 1", (_: String).startsWith(prefix)) }.asLeft[Unit]
                                 }
                             groups.some -> msgTest
@@ -366,7 +366,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
                             // the locus timepoints from the imaging rounds sequence, we expect both kinds of error message.
                             missingPointTests = List(
                                 (!exclusions.contains(timeToSubtractFromGroups)).option{
-                                    ("Uncovered in sequence 2", (_: String).startsWith("1 locus timepoint(s) in imaging sequence and not found in locus grouping"))
+                                    ("Uncovered in sequence 2", (_: String).startsWith("1 locus timepoint(s) in imagingRounds and not found in locusGrouping (nor in tracingExclusions)"))
                                 },
                                 ("Extra in grouping 3", (_: String).startsWith(s"${subtractedAndAdded.length} timepoint(s) in locus grouping and not found as locus imaging timepoints")).some
                             ).flatten.toNel.get

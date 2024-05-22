@@ -1,0 +1,2 @@
+### `UniversalProximityPermission` tests
+Files here are relevant for tests of parsability of the imaging rounds config file when the `proximityFilterStrategy` is the universally permissive one: `UniversalProximityPermission`. This strategy deactivates proximity-based filtration of regional spots.
