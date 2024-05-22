@@ -280,8 +280,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
      * @param regionalTimepoint The imaging timepoint at which all the DNA loci targeted at the given locus timepoints will all be lit up together
      * @param locusTimepoints The imaging timepoints of DNA loci which will be illuminated together at the given regional timepoint
      */
-    private[looptrace] final case class LocusGroup private[looptrace](regionalTimepoint: Timepoint, locusTimepoints: NonEmptySet[Timepoint]):
-        def sortedNel: NonEmptyList[Timepoint] = (regionalTimepoint :: locusTimepoints.toNonEmptyList).sorted
+    private[looptrace] final case class LocusGroup private[looptrace](regionalTimepoint: Timepoint, locusTimepoints: NonEmptySet[Timepoint])
     
     /** Helpers for working with locus groups */
     object LocusGroup:
