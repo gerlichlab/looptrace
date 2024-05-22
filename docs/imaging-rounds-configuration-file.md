@@ -70,10 +70,9 @@ Proper handling of the interaction between this section and the `tracingExclusio
 
 <a href="tracing-exclusions"></a>
 ### Tracing exclusions section: `tracingExclusions`
-This sections specifies which imaging timepoints should be ignored for chromatin fiber tracing, interlocus distance measurements, and generally other downstream analysis.
+This sections specifies which imaging timepoints should be ignored for chromatin fiber tracing, interlocus distance measurements, and generally other downstream analysis. Note that these timepoints will still have image volumes extracted and have a Gaussian fit done, but they won't be written to the "filtered" traces file (and therefore will not consumed by downstream analyses).
 
 __Guidance__
-* Check that the list of `tracingExclusions` values is correct, most likely any pre-imaging timepoint names, "blank" timepoints, and all regional barcode timepoint names.
 * `tracingExclusions` should generally be specified, and its value should be a list of timepoints of imaging rounds to exclude from tracing, typically the blank / pre-imaging rounds, and regional barcode rounds. The list can't contain any timepoints not seen in the values of the `imagingRounds`.
 
 
