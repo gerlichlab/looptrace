@@ -756,7 +756,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite,
         }
     }
 
-    test("Regardless of grouping semantic, it covers all regional barcodies.") {
+    test("Regardless of grouping semantic, it covers all regional barcodes.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
 
         // Generate a reasonable margin on side of each centroid coordinate for ROI bounding boxes.
