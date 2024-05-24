@@ -44,6 +44,7 @@ This is a ___bugfix_ release__.
 
 ### Known issues
 * The heatmaps of counts of usable bead ROIs will be wrong in some cases; specifically, if there are null values in place of empty strings in the table-like file for any (FOV, time) pair, the corresponding bead ROI will be _counted in the visualisation_ as unusable, even though they will be eligible for actual use.
+* The conversion of ND2 to ZARR will not work. Please use v0.4.1. Alternatively, you may run just the ZARR conversion on v0.3.1 or v0.4.1, and then return to this version for the rest of processing.
 
 ## [v0.3.1] - 2024-04-22
 This is a __bugfix release__ for `2024-04-12a`.
