@@ -8,7 +8,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 This is a ___bugfix_ release__.
 
 ### Changed
-* Upper-bound `zarr` dependency at v2.17.2, to avoid problems during conversion of ND2 to ZARR. See [Issue 321](https://github.com/gerlichlab/looptrace/issues/321).
+* Fix `zarr` dependency at v2.17.2, to avoid problems during conversion of ND2 to ZARR. See [Issue 321](https://github.com/gerlichlab/looptrace/issues/321).
 
 ## [v0.4.0] - 2024-05-06
 

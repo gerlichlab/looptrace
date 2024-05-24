@@ -5084,20 +5084,20 @@ ubiquerg = ">=0.7.0"
 
 [[package]]
 name = "zarr"
-version = "2.17.1"
+version = "2.17.2"
 description = "An implementation of chunked, compressed, N-dimensional arrays for Python"
 optional = false
 python-versions = ">=3.9"
 files = [
-    {file = "zarr-2.17.1-py3-none-any.whl", hash = "sha256:e25df2741a6e92645f3890f30f3136d5b57a0f8f831094b024bbcab5f2797bc7"},
-    {file = "zarr-2.17.1.tar.gz", hash = "sha256:564b3aa072122546fe69a0fa21736f466b20fad41754334b62619f088ce46261"},
+    {file = "zarr-2.17.2-py3-none-any.whl", hash = "sha256:70d7cc07c24280c380ef80644151d136b7503b0d83c9f214e8000ddc0f57f69b"},
+    {file = "zarr-2.17.2.tar.gz", hash = "sha256:2cbaa6cb4e342d45152d4a7a4b2013c337fcd3a8e7bc98253560180de60552ce"},
 ]
 
 [package.dependencies]
 asciitree = "*"
 fasteners = {version = "*", markers = "sys_platform != \"emscripten\""}
 numcodecs = ">=0.10.0"
-numpy = ">=1.21.1"
+numpy = ">=1.23"
 
 [package.extras]
 docs = ["numcodecs[msgpack]", "numpydoc", "pydata-sphinx-theme", "sphinx", "sphinx-automodapi", "sphinx-copybutton", "sphinx-design", "sphinx-issues"]
@@ -5132,4 +5132,4 @@ test = ["hypothesis", "pytest", "pytest-skip-slow"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "1cc9ddf5f3e29f717d6a5fe9e5521dbc2d78d8b71c6c9eb32d92a0057f48434c"
+content-hash = "33011a663998870806241c8b00622e30837bb6c9ee7e39a8dbf898c3dbe8facb"
