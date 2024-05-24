@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.4.1] - 2024-05-24
+This is a ___bugfix_ release__.
+
+### Changed
+* Upper-bound `zarr` dependency at v2.17.2, to avoid problems during conversion of ND2 to ZARR. See [Issue 321](https://github.com/gerlichlab/looptrace/issues/321).
+
 ## [v0.4.0] - 2024-05-06
 
 ### Added

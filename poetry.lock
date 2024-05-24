@@ -5132,4 +5132,4 @@ test = ["hypothesis", "pytest", "pytest-skip-slow"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "85efc29cb90f9c61cc7c7ce4fa4f0a5f3fc5a1e4a3bf7b1876841c2080db4e04"
+content-hash = "1cc9ddf5f3e29f717d6a5fe9e5521dbc2d78d8b71c6c9eb32d92a0057f48434c"
