@@ -123,9 +123,10 @@ def stack_nd2_to_dask(folder: str, position_id: int = None):
         t_stack = []
         for _, path in sorted(file_path_by_time_name.items(), key=itemgetter(0)):
             try:
-                with nd2.ND2File(path, validate_frames=False) as imgdat:
-                    arr = imgdat.to_dask()
+                arr = read_nd2(path)
             except OSError as e:
+                # Store the error, but try to create a dummy array to allow parse to continue, 
+                # that way we can accumulate the totality of the errors.
                 errors[path] = str(e)
                 try:
                     arr = da.zeros_like(pos_stack[0][0])
@@ -142,3 +143,8 @@ def stack_nd2_to_dask(folder: str, position_id: int = None):
     print(f"Loaded nd2 arrays of shape {out.shape}")
     
     return out, pos_names, metadata
+
+
+def read_nd2(path: Path) -> da.Array:
+    with nd2.ND2File(path, validate_frames=False) as imgdat:
+        return imgdat.to_dask()
