@@ -41,15 +41,9 @@ def workflow(n_pos: int, input_folders: Iterable[Path], output_folder: Path) -> 
             metadata = folder_metadata,
             voxel_size = folder_metadata['voxel_size'],
             )
-        num_timepoints = imgs.shape[0]
-        for t in tqdm.tqdm(range(num_timepoints)):
-            curr_time_layer = imgs[t]
-            if isinstance(curr_time_layer, da.Array):
-                # Handle transition from zarr 2.17.2 to 2.18.0, whereby our layers 
-                # are no longer automatically manifested to memory as numpy arrays.
-                # See: https://github.com/gerlichlab/looptrace/issues/321
-                curr_time_layer = curr_time_layer.compute()
-            z[t] = curr_time_layer
+        n_t = imgs.shape[0]
+        for t in tqdm.tqdm(range(n_t)):
+            z[t] = imgs[t]
 
 
 def one_to_one(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder):
