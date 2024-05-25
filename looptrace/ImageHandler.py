@@ -10,6 +10,7 @@ EMBL Heidelberg
 from dataclasses import dataclass
 import json
 import logging
+from operator import itemgetter
 import os
 from pathlib import Path
 from typing import *
@@ -238,7 +239,7 @@ class ImageHandler:
     def frame_names(self) -> List[str]:
         """The sequence of names corresponding to the imaging rounds used in the experiment"""
         names = []
-        for round in self.iter_rounds():
+        for round in self.iter_imaging_rounds():
             try:
                 names.append(round["name"])
             except KeyError:
@@ -259,8 +260,15 @@ class ImageHandler:
             raise NotImplementedError("No locus grouping present!")
         return self.locus_grouping.get(regional_timepoint, set())
 
-    def iter_rounds(self) -> Iterable[Mapping[str, object]]:
+    def iter_imaging_rounds(self) -> Iterable[Mapping[str, object]]:
         return sorted(self.config["imagingRounds"], key=lambda r: r["time"])
+
+    def list_all_regional_timepoints(self) -> list[TimepointFrom0]:
+        return [TimepointFrom0(r["time"]) for r in self.iter_imaging_rounds() if r.get("isRegional", False)]
+
+    def list_regional_imaging_timepoints_eligible_for_extraction(self) -> list[TimepointFrom0]:
+        lg = self.locus_grouping
+        return self.list_all_regional_timepoints() if lg is None else list(sorted(lg.keys()))
 
     @property
     def locus_grouping(self) -> Optional[LocusGroupingData]:
@@ -281,8 +289,8 @@ class ImageHandler:
                     logger.exception(f"Cannot convert alleged regional time {reg_time} (type {type(reg_time).__name__}): {e}")
                     raise
                 result[TimepointFrom0(reg_time)] = curr
-        return result if result else None
-
+        return dict(sorted(result.items(), key=itemgetter(0))) if result else None
+    
     @property
     def locus_spots_visualisation_folder(self) -> Path:
         return Path(self.analysis_path) / "locus_spots_visualisation"
