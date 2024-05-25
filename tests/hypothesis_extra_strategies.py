@@ -3,10 +3,8 @@
 from collections.abc import Iterable
 from typing import Optional, TypeVar
 
-import more_itertools
 from hypothesis import strategies as st
-from hypothesis.strategies import SearchStrategy
-from gertils.types import TimepointFrom0
+import more_itertools
 
 from looptrace.configuration import SEMANTIC_KEY
 
