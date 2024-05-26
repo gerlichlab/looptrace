@@ -1,9 +1,10 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
+import scala.collection.immutable.SortedSet
 import scala.language.adhocExtensions // to extend ujson.Value.InvalidData
 import scala.util.Try
 import cats.*
-import cats.data.{ NonEmptyList, NonEmptySet, Validated, ValidatedNel }
+import cats.data.{ NonEmptyList, NonEmptyMap, NonEmptySet, Validated, ValidatedNel }
 import cats.data.Validated.{ Invalid, Valid }
 import cats.syntax.all.*
 import mouse.boolean.*
@@ -11,6 +12,7 @@ import upickle.default.*
 import com.typesafe.scalalogging.LazyLogging
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.{ readJsonFile, safeReadAs }
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ DistanceThreshold, PiecewiseDistance }
+import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.LocusGroup
 
 /** Typical looptrace declaration/configuration of imaging rounds and how to use them */
 final case class ImagingRoundsConfiguration private(
@@ -20,8 +22,37 @@ final case class ImagingRoundsConfiguration private(
     // TODO: We could, by default, skip regional and blank imaging rounds (but do use repeats).
     tracingExclusions: Set[Timepoint], // Timepoints of imaging rounds to not use for tracing
     ):
+    
+    /** Simply take the rounds from the contained imagingRounds sequence. */
+    final def allRounds: NonEmptyList[ImagingRound] = sequence.allRounds
+    
+    /** The number of imaging rounds is the length of the imagingRounds sequence. */
     final def numberOfRounds: Int = sequence.length
-    def allRounds: NonEmptyList[ImagingRound] = sequence.allRounds
+    
+    /** Only compute this when necessary, but retain as val since memory footprint 
+     * will be small (not so many imaging rounds), for faster ordered iteration */
+    private lazy val regionTimeToLocusTimes: NonEmptyMap[Timepoint, SortedSet[Timepoint]] = (
+        locusGrouping.toList.toNel match {
+            case None => sequence.regionRounds.map{ rr => rr.time -> SortedSet(sequence.locusRounds.map(_.time)*) }
+            case Some(groups) => groups.map{ case LocusGroup(rt, lts) => rt -> lts.toSortedSet }
+        }
+    ).toNem
+    
+    /** Faciliate lookup of reindexed timepoint for visualisation. */
+    lazy val lookupReindexedTimepoint: Map[Timepoint, Map[Timepoint, Int]] = {
+        // First, group timepoints by regional timepoint.
+        val sets = locusGrouping.toList.toNel match {
+            case None => 
+                // When the locus grouping is absent/empty, then for each regional timepoint 
+                // we're interested in the full sequence of imaging timepoints from the experiment.
+                sequence.regionRounds.map{ rr => rr.time -> SortedSet(sequence.locusRounds.map(_.time)*) }
+            case Some(groups) => 
+                // If the locusGrouping is nonempty, then the timepoints associated with each 
+                // regional timepoint are its locus timepoints and the regional timepoint itself.
+                groups.map{ case LocusGroup(rt, lts) => rt -> (lts.toSortedSet + rt) }
+        }
+        sets.toList.map{ (rt, lts) => rt -> lts.toList.zipWithIndex.toMap }.toMap
+    }
 end ImagingRoundsConfiguration
 
 /** Tools for working with declaration of imaging rounds and how to use them within an experiment */
@@ -96,7 +127,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
                         logger.debug(s"${correctlyMissing.size} locus imaging timepoint(s) CORRECTLY missing from locus grouping: ${mkStringTimepoints(correctlyMissing)}")
                         if wronglyMissing.isEmpty 
                         then ().validNel
-                        else s"${wronglyMissing.size} locus timepoint(s) in imaging sequence and not found in locus grouping: ${mkStringTimepoints(wronglyMissing)}".invalidNel
+                        else s"${wronglyMissing.size} locus timepoint(s) in imagingRounds and not found in locusGrouping (nor in tracingExclusions): ${mkStringTimepoints(wronglyMissing)}".invalidNel
                     else
                         ().validNel
                 (subsetNel, supersetNel)
@@ -168,16 +199,24 @@ object ImagingRoundsConfiguration extends LazyLogging:
         val crudeLocusGroupingNel: ValidatedNel[String, Set[LocusGroup]] = 
             data.get("locusGrouping") match {
                 case None | Some(ujson.Null) => Set().validNel
-                case Some(fullJson) => safeReadAs[Map[Int, List[Int]]](fullJson)
-                    .flatMap(_.toList.traverse{ 
-                        (regionTimeRaw, lociTimesRaw) => for {
-                            regTime <- Timepoint.fromInt(regionTimeRaw).leftMap("Bad region time as key in locus group! " ++ _)
-                            maybeLociTimes <- lociTimesRaw.traverse(Timepoint.fromInt).leftMap("Bad locus time(s) in locus group! " ++ _)
-                            lociTimes <- maybeLociTimes.toNel.toRight(s"Empty locus times for region time $regionTimeRaw!").map(_.toNes)
-                        } yield LocusGroup(regTime, lociTimes)
-                    })
-                    .map(_.toSet)
-                    .toValidatedNel
+                case Some(fullJson) => safeReadAs[Map[Int, List[Int]]](fullJson) match {
+                    case Left(errMsg) => errMsg.invalidNel
+                    case Right(maybeGrouping) => maybeGrouping.toList.toNel match {
+                        case None => Set().validNel
+                        case Some(grouping) => grouping.traverse{ (regionTimeRaw, lociTimesRaw) => 
+                            (for {
+                                regTime <- Timepoint.fromInt(regionTimeRaw).leftMap("Bad region time as key in locus group! " ++ _)
+                                maybeLociTimes <- lociTimesRaw.traverse(Timepoint.fromInt).leftMap("Bad locus time(s) in locus group! " ++ _)
+                                lociTimes <- maybeLociTimes.toNel.toRight(s"Empty locus times for region time $regionTimeRaw!").map(_.toNes)
+                                _ <- (
+                                    if lociTimes.contains(regTime) 
+                                    then s"Regional time ${regTime.get} is contained in its own locus times group!".asLeft 
+                                    else ().asRight
+                                )
+                            } yield LocusGroup(regTime, lociTimes)).toValidatedNel
+                        }.map(_.toNes.toSortedSet)
+                    }
+                }
             }
         val proximityFilterStrategyNel: ValidatedNel[String, ProximityFilterStrategy] = {
             data.get("proximityFilterStrategy") match {
@@ -280,7 +319,8 @@ object ImagingRoundsConfiguration extends LazyLogging:
      * @param regionalTimepoint The imaging timepoint at which all the DNA loci targeted at the given locus timepoints will all be lit up together
      * @param locusTimepoints The imaging timepoints of DNA loci which will be illuminated together at the given regional timepoint
      */
-    private[looptrace] final case class LocusGroup private[looptrace](regionalTimepoint: Timepoint, locusTimepoints: NonEmptySet[Timepoint])
+    private[looptrace] final case class LocusGroup private[looptrace](regionalTimepoint: Timepoint, locusTimepoints: NonEmptySet[Timepoint]):
+        require(!locusTimepoints.contains(regionalTimepoint), s"Regional time (${regionalTimepoint.get}) must not be in locus times!")
     
     /** Helpers for working with locus groups */
     object LocusGroup:

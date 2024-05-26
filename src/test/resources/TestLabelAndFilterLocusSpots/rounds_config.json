@@ -4,19 +4,19 @@
         "minimumPixelLikeSeparation": 5
     },
     "imagingRounds": [
-        {"time": 0, "name": "pre_image", "isBlank": true},
+        {"time": 0, "probe": "pre_image"},
         {"time": 1, "probe": "Dp027"},
         {"time": 2, "probe": "Dp028"},
         {"time": 3, "probe": "Dp027", "repeat": 1},
         {"time": 4, "probe": "Dp105", "isRegional": true},
         {"time": 5, "probe": "Dp107", "isRegional": true},
-        {"time": 6, "name": "blank_1", "isBlank": true},
+        {"time": 6, "probe": "blank_1"},
         {"time": 7, "probe": "Dp019"},
         {"time": 8, "probe": "Dp020"},
         {"time": 9, "probe": "Dp021"}
     ],
     "locusGrouping": {
-        "4": [1, 2, 3],
-        "5": [7, 8, 9]
+        "4": [0, 1, 2, 3],
+        "5": [6, 7, 8, 9]
     }
 }

@@ -137,8 +137,10 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, GenericSuite, Scalacheck
     test("Probe exclusion is correct.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
 
-        // taken from the frame column of the traces input file
-        val expectedTimepoints = (0 to 9).toSet
+        // Taken from the frame column of the traces input file
+        // Regional time 5 has rows where it's the "locus time" also, but regional time 4 doesn't have this.
+        val expectedTimepoints = (0 to 9).toSet - 4
+        
         forAll (Gen.someOf(expectedTimepoints), Gen.oneOf(tracesInputFile, tracesInputFileWithoutIndex)) { (exclusions, infile) => 
             withCsvData(infile){ (rows: CsvRows) => 
                 rows.map(_(ParserConfig.default.timeColumn)).toSet shouldEqual expectedTimepoints.map(_.toString)
