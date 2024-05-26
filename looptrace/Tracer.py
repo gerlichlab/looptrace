@@ -447,6 +447,7 @@ def compute_spot_images_multiarray_per_fov(npz: str | Path | NPZ_wrapper, *, loc
         for filename_key, filename in sorted(pos_group, key=lambda fk_fn: (fk_fn[0].ref_frame, fk_fn[0].roi_id)):
             pixel_array = npz[filename]
             reg_time: TimepointFrom0 = TimepointFrom0(filename_key.ref_frame)
+            obs_num_times: int = pixel_array.shape[0]
             if locus_grouping:
                 # For nonempty locus grouping case, try to validate the time dimension.
                 num_loc_times: int = num_loc_times_by_reg_time.get(reg_time, 0)
@@ -454,11 +455,12 @@ def compute_spot_images_multiarray_per_fov(npz: str | Path | NPZ_wrapper, *, loc
                     raise RuntimeError(f"No expected locus time count for regional time {reg_time}, despite iterating over spot image file {filename}")
                 # Add 1 to account for the regional timepoint itself.
                 exp_num_times: int = 1 + num_loc_times
-                obs_num_times: int = pixel_array.shape[0]
-                if obs_num_times != exp_num_times:
-                    raise ArrayDimensionalityError(
-                        f"Locus times count doesn't match expectation: {obs_num_times} != {exp_num_times}, for regional time {reg_time} from filename {filename} in archive {full_data_file}"
-                    )
+            else:
+                exp_num_times: int = num_timepoints
+            if obs_num_times != exp_num_times:
+                raise ArrayDimensionalityError(
+                    f"Locus times count doesn't match expectation: {obs_num_times} != {exp_num_times}, for regional time {reg_time} from filename {filename} in archive {full_data_file}"
+                )
             current_stack.append(pixel_array)
         
         # For each regional spot, 1 of 2 things will be true:
