@@ -409,13 +409,21 @@ def apply_pixels_to_nanometers(traces: pd.DataFrame, z_nm_per_px: float, xy_nm_p
         locus_grouping="Mapping from regional timepoint to associated locus timepoints",
         num_timepoints="Number of imaging timepoints in the experiment",
     ),
-    raises=dict(ArrayDimensionalityError="If spot image volumes from the same regional barcode have different numbers of timepoints"),
+    raises=dict(
+        ArrayDimensionalityError="If spot image volumes from the same regional barcode have different numbers of timepoints",
+        TypeError="If locus_grouping and num_timepoints are provided, or if neither is provided",
+    ),
     returns="""
         List of pairs, where first pair element is the name for the FOV, and the second element is the stacking of all ROI stacks for that FOV, 
         each ROI stack consisting of a pixel volume for multiple timepoints
     """,
 )
-def compute_spot_images_multiarray_per_fov(npz: str | Path | NPZ_wrapper, *, locus_grouping: Optional[LocusGroupingData], num_timepoints: Optional[int]) -> list[tuple[str, np.ndarray]]:
+def compute_spot_images_multiarray_per_fov(
+    npz: str | Path | NPZ_wrapper, 
+    *, 
+    locus_grouping: Optional[LocusGroupingData] = None, 
+    num_timepoints: Optional[int] = None,
+) -> list[tuple[str, np.ndarray]]:
     full_data_file: str | Path = npz.filepath if isinstance(npz, NPZ_wrapper) else npz
     npz, keyed = _prep_npz_to_zarr(npz)
     if len(npz) == 0:
@@ -427,9 +435,9 @@ def compute_spot_images_multiarray_per_fov(npz: str | Path | NPZ_wrapper, *, loc
     # the renumbering of the timepoints won't be messed up.
     max_num_times: int
     if locus_grouping and num_timepoints is not None:
-        raise ValueError("Provided locus_grouping and num_timepoints for spot images arrays computation; provide just one of those!")
+        raise TypeError("Provided locus_grouping and num_timepoints for spot images arrays computation; provide just one of those!")
     elif not locus_grouping and num_timepoints is None:
-        raise ValueError("Provided neither locus_grouping nor num_timepoints for spot images arrays computation; provide exactly one of those!")
+        raise TypeError("Provided neither nonempty locus_grouping nor num_timepoints for spot images arrays computation; provide exactly one of those!")
     elif locus_grouping:
         # +1 to account for the regional timepoint itself
         max_num_times = 1 + max(len(ts) for ts in locus_grouping.values())

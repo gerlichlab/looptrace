@@ -1,9 +1,8 @@
 """Tests for the computation of spot image visualisation data"""
 
-from collections import Counter
 from collections.abc import Callable, Iterable, Mapping
-import json
 from pathlib import Path
+from typing import Optional
 from unittest import mock
 
 from gertils.types import TimepointFrom0, TraceIdFrom0
@@ -54,7 +53,6 @@ def gen_legal_input(
     max_num_regional_times: int = 4, 
     min_num_locus_times_per_spot: int = 1, 
     max_num_locus_times_per_spot: int = RATHER_SMALL_UPPER_BOUND_FOR_NUMBER_OF_LOCUS_TIMEPOINTS, 
-    allow_extras_in_locus_grouping: bool = True,
     allow_empty_spots: bool = True, 
     allow_empty_locus_grouping: bool = True,
 ) -> BuildInput:
@@ -96,12 +94,30 @@ def gen_legal_input(
     # The regional timepoints actually used may not be the whole pool, so determine what we're really using.
     reg_times: set[TimepointFrom0] = {TimepointFrom0(k.ref_frame) for k in fn_keys}
 
-    # Generate a number of locus timepoints for each regional timepoint (i.e., how many 3D volumes to generate for a spot, as a function of the spot's regional timepoint).
-    num_loc_times_by_reg_time: dict[TimepointFrom0, int] = draw(st.lists(
-        st.integers(min_value=min_num_locus_times_per_spot, max_value=max_num_locus_times_per_spot), 
-        min_size=len(reg_times), 
-        max_size=len(reg_times),
-    ).map(lambda sizes: dict(zip(reg_times, sizes, strict=True))))
+    # Generate either a null or a fixed number of timepoints for the experiment, which will then be used 
+    # to generate the primary dimension (time) of the spot image volume for each regional spot generated.
+    gen_fixed_num_times = st.integers(min_value=len(reg_times), max_value=len(reg_times) + len(reg_times) * min_num_locus_times_per_spot)
+    fixed_num_times: Optional[int] = (
+        draw(gen_fixed_num_times) if allow_empty_locus_grouping else 
+        draw(st.one_of(
+            gen_fixed_num_times, 
+            st.just(None),
+        ))
+    )
+
+    # Generate a number of locus timepoints for each regional timepoint (i.e., how many 3D volumes 
+    # to generate for a spot, as a function of the spot's regional timepoint).
+    num_loc_times_by_reg_time: dict[TimepointFrom0, int] = (
+        {rt: fixed_num_times for rt in reg_times} 
+        if fixed_num_times is not None 
+        else draw(
+            st.lists(
+                st.integers(min_value=min_num_locus_times_per_spot, max_value=max_num_locus_times_per_spot), 
+                min_size=len(reg_times), 
+                max_size=len(reg_times),
+            ).map(lambda sizes: dict(zip(reg_times, sizes, strict=True)))
+        )
+    )
 
     # Generate the stack of spot image volumes for each regional spot, with the appropriate number of timepoints based on the regional spot identity.
     data = [
@@ -115,32 +131,21 @@ def gen_legal_input(
     if not allow_empty_spots:
         assert len(data) > 0, "Empty spots data despite setting allow_empty_spots=False! "
 
-    # Generate a dummy locus grouping.
-    unused_reg_times: set[TimepointFrom0] = reg_times_pool - reg_times
-    locus_grouping: dict[TimepointFrom0, set[TimepointFrom0]] = \
-        {} \
-        if not unused_reg_times or not allow_extras_in_locus_grouping \
-        else (
-            draw(st.dictionaries(
-                keys=st.sampled_from(list(unused_reg_times)),
-                values=st.sets(st.integers(min_value=0).map(TimepointFrom0).filter(lambda t: t not in reg_times_pool), max_size=5),
-                max_size=len(unused_reg_times),
-            ))
-        )
-
     # Ensure that each regional timepoint for which data have been generated is present in the locus grouping, and with the appropriate number of locus timepoints.
-    gen_locus_times: Callable[[int], SearchStrategy[set[TimepointFrom0]]] = \
-        lambda n: st.sets(
+    def gen_locus_times(n: int) -> SearchStrategy[set[TimepointFrom0]]:
+        return st.sets(
             st.integers(min_value=0)
                 .map(TimepointFrom0)
                 .filter(lambda t: t not in reg_times_pool), min_size=n, max_size=n,
         )
-    necessary_locus_grouping: dict[TimepointFrom0, set[TimepointFrom0]] = {rt: draw(gen_locus_times(n)) for rt, n in num_loc_times_by_reg_time.items()}
-    locus_grouping.update(necessary_locus_grouping)
-    if not allow_empty_locus_grouping:
-        assert len(locus_grouping) > 0, "Empty locus grouping despite setting allow_empty_locus_grouping=False"
-    final_locus_grouping = draw(st.one_of(st.just(locus_grouping), st.sampled_from((None, {})))) if allow_empty_locus_grouping else locus_grouping
-    return data, final_locus_grouping
+    def gen_locus_grouping():
+        return st.just({rt: draw(gen_locus_times(n)) for rt, n in num_loc_times_by_reg_time.items()})
+    locus_grouping: Optional[LocusGroupingData] = draw(
+        st.one_of(gen_locus_grouping(), st.sampled_from(({}, None))) 
+        if allow_empty_locus_grouping and fixed_num_times is not None 
+        else gen_locus_grouping()
+    )
+    return data, locus_grouping
 
 
 @hyp.given(fnkey_image_pairs_and_locus_grouping=gen_legal_input(allow_empty_spots=False))
@@ -150,9 +155,11 @@ def gen_legal_input(
     suppress_health_check=HYPOTHESIS_HEALTH_CHECK_SUPPRESSIONS,
 )
 def test_fields_of_view__are_correct_and_in_order(tmp_path, fnkey_image_pairs_and_locus_grouping):
+    """The FOVs should be correctly parsed and sorted from the stack of extracted spot image volume files."""
     fnkey_image_pairs, locus_grouping = fnkey_image_pairs_and_locus_grouping
     npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
-    result = compute_spot_images_multiarray_per_fov(npz=npz_wrapper, locus_grouping=locus_grouping)
+    kwargs = {"locus_grouping": locus_grouping} if locus_grouping else {"num_timepoints": max(img.shape[0] for _, img in fnkey_image_pairs)}
+    result = compute_spot_images_multiarray_per_fov(npz=npz_wrapper, **kwargs)
     obs = [fov_name for fov_name, _ in result]
     exp = list(sorted(set(k.position for k, _ in fnkey_image_pairs)))
     assert obs == exp
@@ -165,19 +172,22 @@ def test_fields_of_view__are_correct_and_in_order(tmp_path, fnkey_image_pairs_an
     suppress_health_check=HYPOTHESIS_HEALTH_CHECK_SUPPRESSIONS,
 )
 def test_spot_images_finish_by_all_having_the_max_number_of_timepoints(tmp_path, fnkey_image_pairs_and_locus_grouping):
+    """Regardless of the locus grouping, each spot image volume should be padded out so that the time dimension is always the same."""
     fnkey_image_pairs, locus_grouping = fnkey_image_pairs_and_locus_grouping
 
     expected_num_locus_times_by_regional_time: Mapping[TimepointFrom0, int]
-    if not locus_grouping:
-        # In this case, there's no explicit grouping, so we just work with the data we're given. 
-        # Then the expected number of locus timepoints per regional timepoint is simply what we observe.
-        expected_num_locus_times_by_regional_time = get_locus_time_count_by_reg_time(fnkey_image_pairs)
-    else:
+    #expected_num_timepoints: int
+    if locus_grouping:
         # Set the expected number of locus times per regional time by assuming correct relation between given grouping and the given data. 
         # This amounts to assuming that the data generating processes upstream of the system under test are correct, which is all well and good.
         # +1 to account for regional timepoint itself.
+        #expected_num_timepoints = 1 + max(len(lts) for lts in locus_grouping.values())
         expected_num_locus_times_by_regional_time = {rt: 1 + len(lts) for rt, lts in locus_grouping.items()}
-
+    else:
+        # In this case, there's no explicit grouping, so we just work with the data we're given. 
+        # Then the expected number of locus timepoints per regional timepoint is simply what we observe.
+        expected_num_locus_times_by_regional_time = get_locus_time_count_by_reg_time(fnkey_image_pairs)
+        
     # For each FOV, determine which regional timepoints have spot data for that FOV.
     regional_times_by_fov: dict[str, list[TimepointFrom0]] = {}
     for fn_key, _ in fnkey_image_pairs:
@@ -192,10 +202,8 @@ def test_spot_images_finish_by_all_having_the_max_number_of_timepoints(tmp_path,
 
     # Mock the input and make the call under test.
     npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
-    result: list[tuple[str, np.ndarray]] = compute_spot_images_multiarray_per_fov(
-        npz=npz_wrapper, 
-        locus_grouping=locus_grouping,
-    )
+    kwargs = {"locus_grouping": locus_grouping} if locus_grouping else {"num_timepoints": max(img.shape[0] for _, img in fnkey_image_pairs)}
+    result: list[tuple[str, np.ndarray]] = compute_spot_images_multiarray_per_fov(npz=npz_wrapper, **kwargs)
     
     # Check that the time axis for each image stack for each FOV corresponds to that FOV's max number of locus times.
     observed_locus_times_by_fov: dict[str, int] = {fov_name: img.shape[1] for fov_name, img in result}
@@ -226,7 +234,7 @@ def gen_input_with_bad_timepoint_counts(draw) -> BuildInput:
     suppress_health_check=HYPOTHESIS_HEALTH_CHECK_SUPPRESSIONS,
 )
 def test_unexpected_timepoint_count_for_spot_image_volume__causes_expected_error(tmp_path, fnkey_image_pairs_and_locus_grouping):
-    """If there's a regional timepoint for which we don't have expected locus time count, it's an error."""
+    """If there's a regional timepoint for which the expected timepoint count (before padding) differs from observation (before padding), it's an error."""
     fnkey_image_pairs, locus_grouping = fnkey_image_pairs_and_locus_grouping
     npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
     with pytest.raises(ArrayDimensionalityError) as error_context:
@@ -237,7 +245,7 @@ def test_unexpected_timepoint_count_for_spot_image_volume__causes_expected_error
 @st.composite
 def gen_input_with_missing_timepoint_counts(draw):
     # First make the initial (legal) input draw, and check that the data are nontrivial.
-    fnkey_image_pairs, locus_grouping = draw(gen_legal_input(allow_empty_spots=False, allow_empty_locus_grouping=False, allow_extras_in_locus_grouping=False))
+    fnkey_image_pairs, locus_grouping = draw(gen_legal_input(allow_empty_spots=False, allow_empty_locus_grouping=False))
     real_regional_times: set[TimepointFrom0] = set(get_locus_time_count_by_reg_time(fnkey_image_pairs).keys())
     hyp.assume(len(set(locus_grouping.keys()).intersection(real_regional_times)) > 1) # need at least 2 in common so 1 can be dropped)
     new_locus_grouping = draw(st.lists(st.sampled_from(tuple(locus_grouping.items())), min_size=1, max_size=len(real_regional_times) - 1).map(dict))
@@ -251,6 +259,7 @@ def gen_input_with_missing_timepoint_counts(draw):
     suppress_health_check=HYPOTHESIS_HEALTH_CHECK_SUPPRESSIONS,
 )
 def test_regional_time_with_data_but_absent_from_nonempty_locus_grouping__causes_expected_error(tmp_path, fnkey_image_pairs_and_locus_grouping):
+    """If there's a regional timepoint for which we don't have expected locus time count, it's an error."""
     fnkey_image_pairs, locus_grouping = fnkey_image_pairs_and_locus_grouping
     npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
     with pytest.raises(RuntimeError) as error_context:
@@ -259,6 +268,7 @@ def test_regional_time_with_data_but_absent_from_nonempty_locus_grouping__causes
 
 
 def get_locus_time_count_by_reg_time(fnkey_image_pairs: Iterable[tuple[RoiOrderingSpecification.FilenameKey, np.ndarray]]) -> dict[TimepointFrom0, int]:
+    """Get the number of timepoints from each image volume array, keying by regional timepoint and ensuring consensus among spots for each regional timepoint."""
     result: dict[TimepointFrom0, int] = {}
     for key, img in fnkey_image_pairs:
         curr_num_time = img.shape[0]
