@@ -165,10 +165,10 @@ class Tracer:
         return self.traces_path
 
     def write_all_spot_images_to_one_per_fov_zarr(self, overwrite: bool = False) -> List[Path]:
-        name_data_pairs = compute_spot_images_multiarray_per_fov(
-            npz=self._images_wrapper,
-            # Add 1 to account for tracing the regional timepoint itself.
-            locus_grouping=self.image_handler.locus_grouping,
+        name_data_pairs = (
+            compute_spot_images_multiarray_per_fov(self._images_wrapper, locus_grouping=self.image_handler.locus_grouping) \
+                if self.image_handler.locus_grouping else \
+            compute_spot_images_multiarray_per_fov(self._images_wrapper, num_timepoints=sum(1 for _ in self.image_handler.iter_imaging_rounds()))
         )
         return write_jvm_compatible_zarr_store(
             name_data_pairs, 
@@ -407,6 +407,7 @@ def apply_pixels_to_nanometers(traces: pd.DataFrame, z_nm_per_px: float, xy_nm_p
     parameters=dict(
         npz="Path to the NPZ file containing pixel volume stacks (across timepoints) for each ROI (detected regional spot)",
         locus_grouping="Mapping from regional timepoint to associated locus timepoints",
+        num_timepoints="Number of imaging timepoints in the experiment",
     ),
     raises=dict(ArrayDimensionalityError="If spot image volumes from the same regional barcode have different numbers of timepoints"),
     returns="""
@@ -414,19 +415,36 @@ def apply_pixels_to_nanometers(traces: pd.DataFrame, z_nm_per_px: float, xy_nm_p
         each ROI stack consisting of a pixel volume for multiple timepoints
     """,
 )
-def compute_spot_images_multiarray_per_fov(npz: str | Path | NPZ_wrapper, locus_grouping: Optional[LocusGroupingData]) -> List[Tuple[str, np.ndarray]]:
+def compute_spot_images_multiarray_per_fov(npz: str | Path | NPZ_wrapper, *, locus_grouping: Optional[LocusGroupingData], num_timepoints: Optional[int]) -> list[tuple[str, np.ndarray]]:
     full_data_file: str | Path = npz.filepath if isinstance(npz, NPZ_wrapper) else npz
     npz, keyed = _prep_npz_to_zarr(npz)
     if len(npz) == 0:
         logger.warning(f"Empty spot images file! {full_data_file}")
         return []
     
+    # Facilitate assurance of same number of timepoints for each regional spot, to create non-ragged array.
+    # Compute the max independent of FOV so that if some regional barcode has no spots at all in a particular FOV, 
+    # the renumbering of the timepoints won't be messed up.
+    max_num_times: int
+    if locus_grouping and num_timepoints is not None:
+        raise ValueError("Provided locus_grouping and num_timepoints for spot images arrays computation; provide just one of those!")
+    elif not locus_grouping and num_timepoints is None:
+        raise ValueError("Provided neither locus_grouping nor num_timepoints for spot images arrays computation; provide exactly one of those!")
+    elif locus_grouping:
+        # +1 to account for the regional timepoint itself
+        max_num_times = 1 + max(len(ts) for ts in locus_grouping.values())
+    elif num_timepoints is not None:
+        max_num_times = num_timepoints
+    else:
+        raise RuntimeError("Should never happen! Did not successfully check all cases of locus_grouping and num_timepoints for spot images arrays construction!")
+
     num_loc_times_by_reg_time: dict[TimepointFrom0, int] = {rt: len(lts) for rt, lts in (locus_grouping or {}).items()}
 
     result: list[tuple[str, np.ndarray]] = []
+
     for pos, pos_group in itertools.groupby(keyed, lambda k_: k_[0].position):
         current_stack: list[np.ndarray] = []
-        for filename_key, filename in pos_group:
+        for filename_key, filename in sorted(pos_group, key=lambda fk_fn: (fk_fn[0].ref_frame, fk_fn[0].roi_id)):
             pixel_array = npz[filename]
             reg_time: TimepointFrom0 = TimepointFrom0(filename_key.ref_frame)
             if locus_grouping:
@@ -443,8 +461,10 @@ def compute_spot_images_multiarray_per_fov(npz: str | Path | NPZ_wrapper, locus_
                     )
             current_stack.append(pixel_array)
         
-        # Facilitate assurance of same number of timepoints for each regional spot, to create non-ragged array.
-        max_num_times: int = max(img.shape[0] for img in current_stack)
+        # For each regional spot, 1 of 2 things will be true:
+        # This is assured by the logic of the spot extraction table construction, and the fact that a dummy volume is obtained if a real one's not possible.
+        # 1. An image volume will be present from every timepoint in the imaging sequence.
+        # 2. An image volume will be present only from those timepoints to which the regional timepoint was mapped (and the regional timepoint itself).
         tempstack: list[np.ndarray] = []
         for img in current_stack:
             if img.shape[0] < max_num_times:
