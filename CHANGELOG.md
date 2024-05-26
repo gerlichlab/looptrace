@@ -4,19 +4,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v0.5.0] - 2024-05-19
+## Unreleased
 
 ### Added
 * Added a tool--a simple [command-line program](./bin/cli/analyse_bead_discard_reasons.py)-- to analyse the reason(s) that each fiducial bead ROI is discarded (_if_ it's discarded).
 * Added a tool-- a simple [command-line program](./bin/cli/squeeze_list_of_field_of_view_zarr.py)--to make a folder of per-FOV ZARRs into a contiguous sequence at the start of the natural numbers, after having removed certain problematic FOVs' ZARRs.
 * Added pipeline step, corresponding to a [command-line program](./bin/cli/locus_spot_visualisation_data_preparation.py) to set up visualisation (in Napari) of locus specific spots, atop pixel volume data.
 * Added `spot_in_nuc` property to image handler objects.
+* Added some explanations of the different static test cases, to document the underlying logic / contracts being tested as upheld or not.
+* Added some documentation about the `locusGrouping` section of the imaging rounds configuration file.
+* Added direct (in-memory, not through JSON) PBT for enforcement of required exclusion of regional timepoint from its locus times collection.
 
 ### Changed
 * Depend on new version of Pypiper (0.14.2), which allows any pipeline stage to be marked as `nofail` (by passing `nofail=True` to its constructor), so that if something goes wrong while running that stage, it won't fail the whole pipeline (i.e., subsequent processing is allowed to continue).
 * Use the `locusGrouping` section of the imaging rounds config to only extract image volumes for tracing from timepoints in which it "makes sense". Specifically, for a given regional spot, only extract corresponding pixels from imaging timepoints of loci associated with that region. Because of this, the locus spot visualisation data also becomes one-ZARR-per-regional-timepoint, rather than one-ZARR-per-FOV. See [Issue 237](https://github.com/gerlichlab/looptrace/issues/237).
 * Changed config hook `"checkLocusTimepointCoveringNel"` to `"checkLocusTimepointCovering"`. See [Issue 295](https://github.com/gerlichlab/looptrace/issues/295) and [Issue 227](https://github.com/gerlichlab/looptrace/issues/237).
 * Pool of spots for regional pairwise distance computations now depends on `spot_in_nuc` config value (default `False`, but often `True`).
+* Timepoints are redefined/reindexed on a per-regional-timepoint basis, so that the time dimension of data for visualisation with the Napari plugin is appropriately shrunk, to complement how the `locusGrouping` section of the imaging rounds configuration file is now used to more intelligently extract data for tracing.
 
 ## [v0.4.1] - 2024-05-24
 This is a ___bugfix_ release__.

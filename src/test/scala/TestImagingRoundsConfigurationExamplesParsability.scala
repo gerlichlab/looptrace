@@ -15,6 +15,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.{
     UniversalProximityPermission, 
     UniversalProximityProhibition, 
 }
+import scala.collection.SortedSet
 
 /** Tests of examples of imaging rounds config files */
 class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with ScalaCheckPropertyChecks with should.Matchers:
@@ -144,19 +145,47 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
     test("proximityFilterStrategy grouping cannot have any regional timepoint in any values list for groups.") {
         forAll (Table(
             ("subfolder", "filename", "expectedExtra"), 
-            ("LocusGroupingValidation", "fail__rounds_config_with_different_regional_timepoint_in_locus_grouping_values__permission.json", NonEmptyList.of(8, 10)), 
-            ("LocusGroupingValidation", "fail__rounds_config_with_different_regional_timepoint_in_locus_grouping_values__prohibition.json", NonEmptyList.of(8, 10)), 
-            ("LocusGroupingValidation", "fail__rounds_config_with_same_regional_timepoint_in_locus_grouping_values__permission.json", NonEmptyList.of(9, 11)), 
-            ("LocusGroupingValidation", "fail__rounds_config_with_same_regional_timepoint_in_locus_grouping_values__prohibition.json", NonEmptyList.of(9, 11)), 
-            ("LocusGroupingValidation", "fail__rounds_config_with_unmapped_regional_timepoint_in_locus_grouping_values__permission.json", NonEmptyList.one(9)), 
-            ("LocusGroupingValidation", "fail__rounds_config_with_unmapped_regional_timepoint_in_locus_grouping_values__prohibition.json", NonEmptyList.one(9)), 
-        )) { (subfolder, filename, expectedExtra) =>
+            (
+                "LocusGroupingValidation", 
+                "fail__rounds_config_with_different_regional_timepoint_in_locus_grouping_values__permission.json", 
+                NonEmptySet.one("2 timepoint(s) in locus grouping and not found as locus imaging timepoints: 8, 10"),
+            ), 
+            (
+                "LocusGroupingValidation", 
+                "fail__rounds_config_with_different_regional_timepoint_in_locus_grouping_values__prohibition.json", 
+                NonEmptySet.one("2 timepoint(s) in locus grouping and not found as locus imaging timepoints: 8, 10"),
+            ), 
+            (
+                "LocusGroupingValidation", 
+                "fail__rounds_config_with_same_regional_timepoint_in_locus_grouping_values__permission.json", 
+                NonEmptySet.of(
+                    "Regional time 9 is contained in its own locus times group!",
+                    "Regional time 11 is contained in its own locus times group!",
+                ),
+            ), 
+            (
+                "LocusGroupingValidation", 
+                "fail__rounds_config_with_same_regional_timepoint_in_locus_grouping_values__prohibition.json", 
+                NonEmptySet.of(
+                    s"Regional time 9 is contained in its own locus times group!",
+                    s"Regional time 11 is contained in its own locus times group!",
+                ),
+            ), 
+            (
+                "LocusGroupingValidation", 
+                "fail__rounds_config_with_unmapped_regional_timepoint_in_locus_grouping_values__permission.json", 
+                NonEmptySet.one("1 timepoint(s) in locus grouping and not found as locus imaging timepoints: 9"),
+            ), 
+            (
+                "LocusGroupingValidation", 
+                "fail__rounds_config_with_unmapped_regional_timepoint_in_locus_grouping_values__prohibition.json", 
+                NonEmptySet.one("1 timepoint(s) in locus grouping and not found as locus imaging timepoints: 9"),
+            ), 
+        )) { (subfolder, filename, expectedMessages) =>
             val configFile = getResourcePath(subfolder = subfolder, filename = filename)
             val safeParseResult = ImagingRoundsConfiguration.fromJsonFile(configFile)
             safeParseResult match {
-                case Left(errorMessages) => 
-                    val expectedMessage = s"${expectedExtra.length} timepoint(s) in locus grouping and not found as locus imaging timepoints: ${expectedExtra.toList.sorted.mkString(", ")}"
-                    errorMessages.count(_ === expectedMessage) shouldEqual 1
+                case Left(errorMessages) => expectedMessages.filterNot(errorMessages.contains_).isEmpty shouldBe true
                 case Right(_) => fail(s"Expected parse failure for $configFile but succeeded.")
             }
         }

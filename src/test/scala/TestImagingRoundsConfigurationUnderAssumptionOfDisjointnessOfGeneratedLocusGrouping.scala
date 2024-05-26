@@ -309,6 +309,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
             /* Collect all regional and local timepoint for set-theoretic comparisons. */
             regionalTimes = seq.regionRounds.map(_.time).toList.toSet
             locusTimes = seq.locusRounds.map(_.time).toSet
+            isExtantTimepoint = seq.allTimepoints.contains(_: Timepoint)
             /* Determine the final locus grouping, and method call expectation (Right-wrapped () for success, Left-wrapped NEL of tests o/w). */
             (modLocusGrouping, altMessagesTests) <- {
                 optLocusGrouping match {
@@ -317,7 +318,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
                         {
                             // Here, we generate dummy "locus" timepoints and assign to one of the real regional times.
                             val gen = for {
-                                ts <- Gen.nonEmptyListOf(arbitrary[Timepoint].suchThat(t => !locusTimes.contains(t)))
+                                ts <- Gen.nonEmptyListOf(arbitrary[Timepoint].suchThat{ t => !isExtantTimepoint(t) })
                                 r <- Gen.oneOf(regionalTimes)
                             } yield NonEmptyList.one(LocusGroup(r, ts.toNel.get.toNes))
                             gen.map{ g => 
@@ -359,7 +360,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
                             // NB: here we seemingly don't check for possibility of introducing non-disjointness among the subgroups.
                             subtractedAndAdded <- subtracted.toList.traverse{ g => 
                                 arbitrary[Timepoint]
-                                    .suchThat(t => !locusTimes.contains(t))
+                                    .suchThat{ t => !isExtantTimepoint(t) }
                                     .map(t => g.copy(locusTimepoints = g.locusTimepoints.add(t)))
                             }
                             // Since we've both removed and added timepoints to the grouping that originally partitioned 
@@ -435,7 +436,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
             (seq, locusGrouping, exclusions) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt.unsafe(maxTime / 2))
                 .suchThat(_._2.nonEmpty)
                 .map((seq, optGrouping, exclusions) => (seq, optGrouping.get, exclusions))
-            badRegionKey <- arbitrary[Timepoint].suchThat{ t => !seq.regionRounds.map(_.time).toList.toSet.contains(t) }
+            badRegionKey <- arbitrary[Timepoint].suchThat{ t => !seq.allTimepoints.contains(t) }
             semantic <- Gen.oneOf(
                 "UniversalProximityPermission",
                 "UniversalProximityProhibition",

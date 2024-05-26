@@ -55,7 +55,8 @@ object LocusSpotQC:
         final def passesQC: Boolean = qcResult.allPass
         final def canBeDisplayed: Boolean = qcResult.canBeDisplayed
         final def traceId: TraceId = identifier.traceId
-        final def time: Timepoint = identifier.locusId.get
+        final def regionTime: Timepoint = identifier.regionId.get
+        final def locusTime: Timepoint = identifier.locusId.get
         final def failureReasons: List[FailureReason] = qcResult.toFailureReasons
         
     /** Helpers for working with QC data bundles for locus-specific spots */

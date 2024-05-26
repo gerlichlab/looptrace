@@ -355,7 +355,7 @@ object LabelAndFilterLocusSpots extends StrictLogging:
                         }) match {
                             /* Throw an exception if any error occurred, otherwise write 2 results files. */
                             case (Nil, recordsWithQC) => 
-                                writeResults(
+                                writeResults(imagingRoundsConfiguration)(
                                     recordsWithQC, 
                                     imagingRoundsConfiguration.tracingExclusions, 
                                     minTraceLength, 
@@ -372,7 +372,7 @@ object LabelAndFilterLocusSpots extends StrictLogging:
     }
 
     /** Write filtered and unfiltered results files, filtered having just QC pass flag column uniformly 1, unfiltered having causal components. */
-    def writeResults(
+    def writeResults(roundsConfig: ImagingRoundsConfiguration)(
         records: Iterable[(LocusSpotQC.OutputRecord, Array[String])], 
         exclusions: Set[Timepoint], 
         minTraceLength: NonnegativeInt,
@@ -419,6 +419,7 @@ object LabelAndFilterLocusSpots extends StrictLogging:
                 }
                 
                 val recordsToWrite = {
+                     // Among the records with a timepoint NOT in tracingExclusions, determine which ones are in a group of sufficiently large size.
                     val keepKeys = filteredRows
                         .map(_._1)
                         .groupBy(getGroupId)
@@ -426,6 +427,7 @@ object LabelAndFilterLocusSpots extends StrictLogging:
                         .toMap
                         .filter(_._2 >= minTraceLength)
                         .keySet
+                    // Do the filtration for sufficiently large group size, and finalise the array-like of text fields to write.
                     filteredRows
                         .filter{ (spotId, _) => keepKeys.contains(getGroupId(spotId)) }
                         .map((_, fields) => fields)
@@ -459,32 +461,40 @@ object LabelAndFilterLocusSpots extends StrictLogging:
                         List((pos, failed).asLeft, (pos, passed).asRight)
                     })
                 
-                writePointsForNapari(pointsOutfolder)(groupedFailQC)
-                writePointsForNapari(pointsOutfolder)(groupedPassQC)
+                writePointsForNapari(pointsOutfolder)(groupedFailQC, roundsConfig)
+                writePointsForNapari(pointsOutfolder)(groupedPassQC, roundsConfig)
                 logger.info("Done!")
 
             case (bads, _) => throw new Exception(s"${bads.length} problem(s) with writing results: $bads")
         }
     }
 
-    private def writePointsForNapari(folder: os.Path)(groupedByPos: List[(PositionIndex, List[TraceRecordPair])]) = {
+    private def writePointsForNapari(folder: os.Path)(groupedByPos: List[(PositionIndex, List[TraceRecordPair])], roundsConfig: ImagingRoundsConfiguration) = {
         import NapariSortKey.given
         import NapariSortKey.*
-        val getOutfile = (pos: PositionIndex, qcType: PointDisplayType) => 
+        val getOutfileAndHeader = (pos: PositionIndex, qcType: PointDisplayType) => {
             val numText = "%04d".format(pos.get + 1)
-            folder /  s"P${numText}.${qcType.toString.toLowerCase}.csv"
+            val fp = folder /  s"P${numText}.${qcType.toString.toLowerCase}.csv"
+            val baseHeader = List("regionTime", "traceId", "locusTime", "timeIndex", "z", "y", "x")
+            val header = qcType match {
+                case PointDisplayType.QCPass => baseHeader
+                case PointDisplayType.QCFail => baseHeader :+ "failCode"
+                case PointDisplayType.Invisible => throw new RuntimeException("Tried to create output file for invisible point type!")
+            }
+            fp -> header
+        }
         
         groupedByPos
             .flatMap{ (pos, traceRecordPairs) => traceRecordPairs.toNel.map(pos -> _) }
             .map{ (pos, traceRecordPairs) => 
                 val (qcType, addFailCodes): (PointDisplayType, (List[String], List[LocusSpotQC.FailureReason]) => List[String]) = {
-                    if (traceRecordPairs.head._2.passesQC) {
+                    if (traceRecordPairs.head._2.passesQC) { // These are QC PASS records.
                         val updateFields = (fields: List[String], codes: List[LocusSpotQC.FailureReason]) => 
                             if codes.nonEmpty 
                             then throw new IllegalArgumentException(s"Nonempty fail codes for allegedly QC-passed record (FOV $pos)! $fields")
                             else fields
                         (PointDisplayType.QCPass, updateFields)
-                    } else {
+                    } else { // These are QC FAIL records.
                         val updateFields = (fields: List[String], codes: List[LocusSpotQC.FailureReason]) => 
                             if codes.isEmpty 
                             then throw new IllegalArgumentException(s"Empty fail codes for allegedly QC-failed record (FOV $pos)! $fields")
@@ -492,13 +502,23 @@ object LabelAndFilterLocusSpots extends StrictLogging:
                         (PointDisplayType.QCFail, updateFields)
                     }
                 }
-                val outfile = getOutfile(pos, qcType)
+                val (outfile, header) = getOutfileAndHeader(pos, qcType)
                 val outrecs = traceRecordPairs.map{ (t, r) => 
-                    val p = r.centerInPixels
-                    val base = List(t.show, r.time.show, p.z.get.show, p.y.get.show, p.x.get.show)
+                    val p = r.centerInPixels                    
+                    val timeIndex = (
+                        for {
+                            locTimes <- roundsConfig.lookupReindexedTimepoint
+                                .get(r.regionTime)
+                                .toRight(s"Missing region time ${r.regionTime} in locusGrouping!")
+                            ti <- locTimes
+                                .get(r.locusTime)
+                                .toRight(s"Missing locus time ${r.locusTime} in locus times for region time ${r.regionTime}!")
+                        } yield ti
+                    ).fold(msg => throw new Exception(msg), identity)
+                    val base = List(r.regionTime.show, t.show, r.locusTime.show, timeIndex.show, p.z.get.show, p.y.get.show, p.x.get.show)
                     addFailCodes(base, r.failureReasons)
                 }
-                os.write(outfile, outrecs.toList.map(_.mkString(",") ++ "\n"))
+                os.write(outfile, (header :: outrecs).map(_.mkString(",") ++ "\n").toList)
                 (pos, outfile)
             }
     }
