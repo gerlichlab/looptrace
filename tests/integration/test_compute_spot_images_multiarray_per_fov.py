@@ -175,40 +175,33 @@ def test_spot_images_finish_by_all_having_the_max_number_of_timepoints(tmp_path,
     """Regardless of the locus grouping, each spot image volume should be padded out so that the time dimension is always the same."""
     fnkey_image_pairs, locus_grouping = fnkey_image_pairs_and_locus_grouping
 
-    expected_num_locus_times_by_regional_time: Mapping[TimepointFrom0, int]
-    #expected_num_timepoints: int
+    expected_num_timepoints: int
     if locus_grouping:
         # Set the expected number of locus times per regional time by assuming correct relation between given grouping and the given data. 
         # This amounts to assuming that the data generating processes upstream of the system under test are correct, which is all well and good.
         # +1 to account for regional timepoint itself.
-        #expected_num_timepoints = 1 + max(len(lts) for lts in locus_grouping.values())
-        expected_num_locus_times_by_regional_time = {rt: 1 + len(lts) for rt, lts in locus_grouping.items()}
+        expected_num_timepoints = 1 + max(len(lts) for lts in locus_grouping.values())
     else:
         # In this case, there's no explicit grouping, so we just work with the data we're given. 
         # Then the expected number of locus timepoints per regional timepoint is simply what we observe.
-        expected_num_locus_times_by_regional_time = get_locus_time_count_by_reg_time(fnkey_image_pairs)
+        expected_num_timepoints = max(img.shape[0] for _, img in fnkey_image_pairs)
         
     # For each FOV, determine which regional timepoints have spot data for that FOV.
     regional_times_by_fov: dict[str, list[TimepointFrom0]] = {}
     for fn_key, _ in fnkey_image_pairs:
         regional_times_by_fov.setdefault(fn_key.position, []).append(TimepointFrom0(fn_key.ref_frame))
-    
-    # Use the knowledge of regional times by FOV together with knowledge of number of locus times per regional time 
-    # to determine the (max) number of locus times per FOV.
-    expected_num_locus_times_by_fov: Mapping[str, int] = {
-        fov_name: max(expected_num_locus_times_by_regional_time[rt] for rt in reg_times) 
-        for fov_name, reg_times in regional_times_by_fov.items()
-    }
 
     # Mock the input and make the call under test.
     npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
     kwargs = {"locus_grouping": locus_grouping} if locus_grouping else {"num_timepoints": max(img.shape[0] for _, img in fnkey_image_pairs)}
     result: list[tuple[str, np.ndarray]] = compute_spot_images_multiarray_per_fov(npz=npz_wrapper, **kwargs)
     
-    # Check that the time axis for each image stack for each FOV corresponds to that FOV's max number of locus times.
-    observed_locus_times_by_fov: dict[str, int] = {fov_name: img.shape[1] for fov_name, img in result}
-    assert observed_locus_times_by_fov == expected_num_locus_times_by_fov
-
+    # Check that 
+    try:
+        next(iter(result))
+    except StopIteration:
+        pytest.fail("Empty result!")
+    assert [expected_num_timepoints] * len(result) == [img.shape[1] for _, img in result]
 
 @st.composite
 def gen_input_with_bad_timepoint_counts(draw) -> BuildInput:
