@@ -459,6 +459,7 @@ def compute_spot_images_multiarray_per_fov(
     result: list[tuple[str, np.ndarray]] = []
 
     for pos, pos_group in itertools.groupby(keyed, lambda k_: k_[0].position):
+        logger.info("Computing spot image arrays stack for position '%s'...", pos)
         current_stack: list[np.ndarray] = []
         for filename_key, filename in sorted(pos_group, key=lambda fk_fn: (fk_fn[0].ref_frame, fk_fn[0].roi_id)):
             pixel_array = npz[filename]
