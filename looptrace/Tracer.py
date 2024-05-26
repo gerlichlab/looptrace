@@ -76,18 +76,12 @@ def run_frame_name_and_distance_application(
 
 
 class Tracer:
+    """Fitting 3D Gaussians to pixel values in 3D subvolumes"""
     def __init__(self, image_handler: ImageHandler, trace_beads: bool = False):
         self.image_handler = image_handler
         self.config = image_handler.config
         self.pos_list = self.image_handler.image_lists[image_handler.spot_input_name]
-        if trace_beads:
-            self.roi_table = image_handler.tables[image_handler.spot_input_name + '_bead_rois']
-            finalise_suffix = lambda p: Path(str(p).replace(".csv", "_beads.csv"))
-        else:
-            self.roi_table = image_handler.tables[image_handler.spot_input_name + '_rois']
-            finalise_suffix = lambda p: p
-        self.all_rois = image_handler.tables[image_handler.spot_input_name + '_dc_rois']
-
+        self._trace_beads = trace_beads
         fit_func_specs = {
             'LS': FunctionalForm(function=fitSymmetricGaussian3D, dimensionality=3), 
             'MLE': FunctionalForm(function=fitSymmetricGaussian3DMLE, dimensionality=3)
@@ -97,12 +91,26 @@ class Tracer:
             self.fit_func_spec = fit_func_specs[fit_func_value]
         except KeyError as e:
             raise Exception(f"Unknown fitting function ('{fit_func_value}'); choose from: {', '.join(fit_func_specs.keys())}") from e
-        
+    
+    @property
+    def all_rois(self) -> pd.DataFrame:
         # will be concatenated horizontally with fits; idempotent if already effectively unindexed
-        self.all_rois = self.all_rois.reset_index(drop=True)
-        
-        self.traces_path = finalise_suffix(image_handler.traces_path)
-        self.traces_path_enriched = finalise_suffix(image_handler.traces_path_enriched)
+        return self.image_handler.tables[self.image_handler.spot_input_name + "_dc_rois"].reset_index(drop=True)
+
+    def finalise_suffix(self, p: Path) -> Path:
+        return Path(str(p).replace(".csv", "_beads.csv")) if self._trace_beads else p
+
+    @property
+    def roi_table(self) -> pd.DataFrame:
+        return self.image_handler.tables[self.image_handler.spot_input_name + ("_bead_rois" if self._trace_beads else "_rois")]
+
+    @property
+    def traces_path(self) -> Path:
+        return self.finalise_suffix(self.image_handler.traces_path)
+    
+    @property
+    def traces_path_enriched(self) -> Path:
+        return self.finalise_suffix(self.image_handler.traces_path_enriched)
 
     @property
     def background_specification(self) -> BackgroundSpecification:
