@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [v0.5.0] - 2024-05-27
 
 ### Added
 * Added a tool--a simple [command-line program](./bin/cli/analyse_bead_discard_reasons.py)-- to analyse the reason(s) that each fiducial bead ROI is discarded (_if_ it's discarded).
@@ -21,6 +21,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 * Changed config hook `"checkLocusTimepointCoveringNel"` to `"checkLocusTimepointCovering"`. See [Issue 295](https://github.com/gerlichlab/looptrace/issues/295) and [Issue 227](https://github.com/gerlichlab/looptrace/issues/237).
 * Pool of spots for regional pairwise distance computations now depends on `spot_in_nuc` config value (default `False`, but often `True`).
 * Timepoints are redefined/reindexed on a per-regional-timepoint basis, so that the time dimension of data for visualisation with the Napari plugin is appropriately shrunk, to complement how the `locusGrouping` section of the imaging rounds configuration file is now used to more intelligently extract data for tracing.
+* Made several members of `looptrace.Tracer` into `property` values rather than direct attributes, so that data aren't computed/stored as much when not needed. See [Issue 303](https://github.com/gerlichlab/looptrace/issues/303).
 
 ## [v0.4.1] - 2024-05-24
 This is a ___bugfix_ release__.
