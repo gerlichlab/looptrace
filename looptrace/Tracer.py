@@ -38,8 +38,6 @@ IMG_SIDE_LEN_COLS = [BOX_Z_COL, BOX_Y_COL, BOX_X_COL]
 ROI_FIT_COLUMNS = ["BG", "A", "z_px", "y_px", "x_px", "sigma_z", "sigma_xy"]
 MASK_FITS_ERROR_MESSAGE = "Masking fits for tracing currently isn't supported!"
 
-logger = logging.getLogger()
-
 
 @dataclasses.dataclass
 class BackgroundSpecification:
@@ -435,7 +433,7 @@ def compute_spot_images_multiarray_per_fov(
     full_data_file: str | Path = npz.filepath if isinstance(npz, NPZ_wrapper) else npz
     npz, keyed = _prep_npz_to_zarr(npz)
     if len(npz) == 0:
-        logger.warning(f"Empty spot images file! {full_data_file}")
+        logging.warning(f"Empty spot images file! {full_data_file}")
         return []
     
     # Facilitate assurance of same number of timepoints for each regional spot, to create non-ragged array.
@@ -459,7 +457,7 @@ def compute_spot_images_multiarray_per_fov(
     result: list[tuple[str, np.ndarray]] = []
 
     for pos, pos_group in itertools.groupby(keyed, lambda k_: k_[0].position):
-        logger.info("Computing spot image arrays stack for position '%s'...", pos)
+        logging.info("Computing spot image arrays stack for position '%s'...", pos)
         current_stack: list[np.ndarray] = []
         for filename_key, filename in sorted(pos_group, key=lambda fk_fn: (fk_fn[0].ref_frame, fk_fn[0].roi_id)):
             pixel_array = npz[filename]
@@ -488,7 +486,7 @@ def compute_spot_images_multiarray_per_fov(
         for img in current_stack:
             if img.shape[0] < max_num_times:
                 num_to_fill = max_num_times - img.shape[0]
-                logger.debug("Backfilling array of %d timepoints with %d empty timepoints", img.shape[0], num_to_fill)
+                logging.debug("Backfilling array of %d timepoints with %d empty timepoints", img.shape[0], num_to_fill)
                 img = backfill_array(img, num_places=num_to_fill)
             if img.shape[0] != max_num_times:
                 raise ArrayDimensionalityError(
