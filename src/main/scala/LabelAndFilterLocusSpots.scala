@@ -443,6 +443,7 @@ object LabelAndFilterLocusSpots extends StrictLogging:
                         .toList
                         .sortBy(_._1)(using Order[PositionIndex].toOrdering)
                         .map{ (pos, posGroup) => 
+                            // Within each field of view, order by trace ID, and reset to start counting 0, 1, 2, ...
                             val processedGroup = posGroup.groupBy(_._1.traceId)
                                 .toList
                                 .sortBy(_._1)(Order[TraceId].toOrdering)
@@ -475,7 +476,7 @@ object LabelAndFilterLocusSpots extends StrictLogging:
         val getOutfileAndHeader = (pos: PositionIndex, qcType: PointDisplayType) => {
             val numText = "%04d".format(pos.get + 1)
             val fp = folder /  s"P${numText}.${qcType.toString.toLowerCase}.csv"
-            val baseHeader = List("regionTime", "traceId", "locusTime", "timeIndex", "z", "y", "x")
+            val baseHeader = List("regionTime", "traceId", "locusTime", "traceIndex", "timeIndex", "z", "y", "x")
             val header = qcType match {
                 case PointDisplayType.QCPass => baseHeader
                 case PointDisplayType.QCFail => baseHeader :+ "failCode"
@@ -515,7 +516,7 @@ object LabelAndFilterLocusSpots extends StrictLogging:
                                 .toRight(s"Missing locus time ${r.locusTime} in locus times for region time ${r.regionTime}!")
                         } yield ti
                     ).fold(msg => throw new Exception(msg), identity)
-                    val base = List(r.regionTime.show, t.show, r.locusTime.show, timeIndex.show, p.z.get.show, p.y.get.show, p.x.get.show)
+                    val base = List(r.regionTime.show, r.traceId.show, r.locusTime.show, t.show, timeIndex.show, p.z.get.show, p.y.get.show, p.x.get.show)
                     addFailCodes(base, r.failureReasons)
                 }
                 os.write(outfile, (header :: outrecs).map(_.mkString(",") ++ "\n").toList)
