@@ -158,6 +158,9 @@ object LocusSpotQC:
         /**
          * Whether this data instance's ratio of signal-to-noise is sufficiently high to pass quality control
          * 
+         * Expressing this as A > r * BG rather than A/BG > r tends to much better handle the case of 
+         * negative background, which we can get when doing subtraction.
+         * 
          * @param minSNR The minimum ratio of signal-to-noise needed to "pass" quality control
          * @return Whether the `signal` is greater than the product of `minSNR` and `background`
          */
