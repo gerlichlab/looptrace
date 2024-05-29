@@ -645,20 +645,19 @@ class SpotPicker:
                     roi_img = roi_img.astype(SPOT_IMAGE_PIXEL_VALUE_TYPE)
                     if error is not None:
                         skip_spot_image_reasons[fn_key.ref_frame][fn_key.roi_id][frame] = str(error)
-                    is_bg: bool = frame == self.image_handler.background_subtraction_frame:
-                    array_file_dir = self.spot_background_path if is_bg else self.spot_images_path
+                    if frame == self.image_handler.background_subtraction_frame:
+                        n_frames = 1
+                        array_file_dir = self.spot_background_path
+                    else:
+                        n_frames = get_num_frames(fn_key.ref_frame)
+                        array_file_dir = self.spot_images_path
                     fp = os.path.join(array_file_dir, fn_key.name_roi_file)
                     try:
                         f_id = num_frames_processed[fp]
                     except KeyError:
                         # New data stack (from new regional spot)
                         f_id = 0
-                        if is_bg:
-                            array_shape = roi_img.shape
-                        else:
-                            n_frames = get_num_frames(fn_key.ref_frame)
-                            array_shape = (n_frames, ) + roi_img.shape
-                        arr = open_memmap(fp, mode='w+', dtype=roi_img.dtype, shape=array_shape)
+                        arr = open_memmap(fp, mode='w+', dtype=roi_img.dtype, shape=(n_frames, ) + roi_img.shape)
                     else:
                         # Some processing is done already for this data stack.
                         arr = open_memmap(fp, mode='r+')
