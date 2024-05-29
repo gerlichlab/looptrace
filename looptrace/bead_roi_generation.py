@@ -25,8 +25,10 @@ from skimage.measure import regionprops_table
 import tqdm
 
 from gertils import ExtantFolder
+
 from looptrace import ArrayDimensionalityError
 from looptrace.ImageHandler import bead_rois_filename
+from looptrace.filepaths import simplify_path
 from looptrace.numeric_types import NumberLike
 
 PathLike = Union[str, Path]
@@ -111,15 +113,16 @@ def generate_all_bead_rois_from_getter(
     get_3d_stack: Callable[[int, int],  np.ndarray], 
     iter_position: Iterable[int], 
     iter_frame: Iterable[int], 
-    output_folder: Union[Path, ExtantFolder], 
+    output_folder: Union[str, Path, ExtantFolder], 
     params: "BeadRoiParameters", 
     **joblib_kwargs,
     ) -> List[Tuple[Path, pd.DataFrame]]:
     
-    output_folder = output_folder.path if isinstance(output_folder, ExtantFolder) else output_folder
+    output_folder: Path = simplify_path(output_folder)
 
     def get_outfile(pos_idx: int, frame_idx: int) -> Path:
-        return output_folder / bead_rois_filename(pos_idx=pos_idx, frame=frame_idx, purpose=None)
+        fn: str = bead_rois_filename(pos_idx=pos_idx, frame=frame_idx, purpose=None)
+        return output_folder / fn
     
     def proc1(img: np.ndarray, outfile: Path) -> Tuple[Path, pd.DataFrame]:
         rois = params.compute_labeled_regions(img=img)
