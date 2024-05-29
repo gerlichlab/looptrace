@@ -6,7 +6,7 @@ object Dependencies {
     lazy val scalatestVersion = "3.2.18"
     
     /* Core libraries */
-    lazy val catsCore = "org.typelevel" %% "cats-core" % "2.10.0"
+    lazy val catsCore = "org.typelevel" %% "cats-core" % "2.12.0"
     lazy val logging = Seq(
         "ch.qos.logback" % "logback-classic" % "1.5.6", 
         "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
