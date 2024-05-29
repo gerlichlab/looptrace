@@ -332,7 +332,6 @@ def fit_single_roi(
         fit_func_spec: FunctionalForm, 
         roi_img: np.ndarray, 
         mask: Optional[np.ndarray] = None, 
-        background: Optional[np.ndarray] = None,
         ) -> np.ndarray:
     """
     Fit a single roi with 3D gaussian (MLE or LS as defined in config).
@@ -349,9 +348,6 @@ def fit_single_roi(
     mask : np.ndarray, optional
         Array of values which, after transformation, multiplies the ROI image, allegedly to perhaps 
         provide better tracing performance; if provided, the dimensions should match that of ROI image.
-    background : np.ndarray, optional
-        Data of values to subtract from main image, representing background fluorescence signal, optional; 
-        if not provided, no background subtraction will be performed
 
     Returns
     -------
@@ -365,9 +361,6 @@ def fit_single_roi(
         raise Exception(f"ROI image for tracing isn't 3D: {roi_img.shape}") from e
     if len(roi_img.shape) != fit_func_spec.dimensionality:
         raise ValueError(f"ROI image to trace isn't correct dimensionality ({fit_func_spec.dimensionality}); shape: {roi_img.shape}")
-    if background:
-        # TODO: check that dimension of background image matches that of main ROI image.
-        roi_img = roi_img - background
     if not np.any(roi_img) or any(d < 3 for d in roi_img.shape): # Check if empty or too small for fitting.
         fit = [-1] * len(ROI_FIT_COLUMNS)
     else:
