@@ -30,7 +30,7 @@ from gertils.types import TimepointFrom0
 import spotfishing
 from spotfishing_looptrace import DifferenceOfGaussiansSpecificationForLooptrace, ORIGINAL_LOOPTRACE_DOG_SPECIFICATION
 
-from looptrace import RoiImageSize, image_processing_functions as ip
+from looptrace import ArrayDimensionalityError, RoiImageSize, image_processing_functions as ip
 from looptrace.exceptions import MissingRoisTableException
 from looptrace.filepaths import SPOT_BACKGROUND_SUBFOLDER, SPOT_IMAGES_SUBFOLDER, simplify_path
 from looptrace.numeric_types import NumberLike
@@ -640,23 +640,25 @@ class SpotPicker:
                         pad_mode=self.padding_method,
                         background_frame=self.image_handler.background_subtraction_frame, 
                         )
+                    if len(roi_img.shape) != 3:
+                        raise ArrayDimensionalityError(f"Got not 3, but {len(roi_img.shape)} dimension(s) for ROI image: {roi_img.shape}. fn_key: {fn_key}")
                     roi_img = roi_img.astype(SPOT_IMAGE_PIXEL_VALUE_TYPE)
                     if error is not None:
                         skip_spot_image_reasons[fn_key.ref_frame][fn_key.roi_id][frame] = str(error)
-                    if frame == self.image_handler.background_subtraction_frame:
-                        array_shape = roi_img.shape
-                        array_file_dir = self.spot_background_path
-                    else:
-                        array_shape = (n_frames,) + roi_img.shape
-                        array_file_dir = self.spot_images_path
+                    is_bg: bool = frame == self.image_handler.background_subtraction_frame:
+                    array_file_dir = self.spot_background_path if is_bg else self.spot_images_path
                     fp = os.path.join(array_file_dir, fn_key.name_roi_file)
                     try:
                         f_id = num_frames_processed[fp]
                     except KeyError:
                         # New data stack (from new regional spot)
                         f_id = 0
-                        n_frames = get_num_frames(fn_key.ref_frame)
-                        arr = open_memmap(fp, mode='w+', dtype = roi_img.dtype, shape=array_shape)
+                        if is_bg:
+                            array_shape = roi_img.shape
+                        else:
+                            n_frames = get_num_frames(fn_key.ref_frame)
+                            array_shape = (n_frames, ) + roi_img.shape
+                        arr = open_memmap(fp, mode='w+', dtype=roi_img.dtype, shape=array_shape)
                     else:
                         # Some processing is done already for this data stack.
                         arr = open_memmap(fp, mode='r+')
