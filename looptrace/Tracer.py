@@ -25,7 +25,7 @@ from numpydoc_decorator import doc
 
 from looptrace import *
 from looptrace.ImageHandler import ImageHandler, LocusGroupingData
-from looptrace.SpotPicker import SPOT_IMAGE_PIXEL_VALUE_TYPE, RoiOrderingSpecification
+from looptrace.SpotPicker import SPOT_IMAGE_PIXEL_VALUE_TYPE, RoiOrderingSpecification, get_spot_images_zipfile
 from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
 from looptrace.image_io import NPZ_wrapper, write_jvm_compatible_zarr_store
 from looptrace.numeric_types import NumberLike
@@ -37,12 +37,6 @@ BOX_X_COL = "spot_box_x"
 IMG_SIDE_LEN_COLS = [BOX_Z_COL, BOX_Y_COL, BOX_X_COL]
 ROI_FIT_COLUMNS = ["BG", "A", "z_px", "y_px", "x_px", "sigma_z", "sigma_xy"]
 MASK_FITS_ERROR_MESSAGE = "Masking fits for tracing currently isn't supported!"
-
-
-@dataclasses.dataclass
-class BackgroundSpecification:
-    frame_index: int
-    drifts: Iterable[np.ndarray]
 
 
 @dataclasses.dataclass
@@ -111,24 +105,27 @@ class Tracer:
         return self.finalise_suffix(self.image_handler.traces_path_enriched)
 
     @property
-    def background_specification(self) -> BackgroundSpecification:
-        bg_frame_idx = self.image_handler.background_subtraction_frame
-        if bg_frame_idx is None:
-            return None
-        # TODO: note -- the drifts part of this is currently (2023-12-01) irrelevant, as the 'drifts' component of the background spec is unused.
-        pos_drifts = self.drift_table[self.drift_table.position.isin(self.pos_list)][["z_px_fine", "y_px_fine", "x_px_fine"]].to_numpy()
-        return BackgroundSpecification(frame_index=bg_frame_idx, drifts=pos_drifts - pos_drifts[bg_frame_idx])
-
-    @property
     def drift_table(self) -> pd.DataFrame:
         return self.image_handler.spots_fine_drift_correction_table
 
     @property
     def images(self) -> Iterable[np.ndarray]:
         """Iterate over the small, single spot images for tracing (1 per timepoint per ROI)."""
-        _, keyed_filenames = _prep_npz_to_zarr(self._images_wrapper)
-        for _, fn in keyed_filenames:
+        for fn in self._iter_filenames():
             yield self._images_wrapper[fn]
+
+    @property
+    def _background_wrapper(self) -> Optional[NPZ_wrapper]:
+        bg_time: Optional[int] = self.image_handler.background_subtraction_frame
+        if bg_time is None:
+            return None
+        try:
+            return self.image_handler.images[self._input_name]
+        except KeyError as e:
+            sure_message = f"Background subtraction frame ({bg_time}) is non-null, but no spot image background was found."
+            zip_path = get_spot_images_zipfile(self.image_handler.image_save_path, is_background=True)
+            best_guess = f"Has {zip_path} been generated?"
+            raise RuntimeError(f"{sure_message} {best_guess}") from e
 
     @property
     def _input_name(self) -> str:
@@ -137,6 +134,11 @@ class Tracer:
     @property
     def _images_wrapper(self) -> NPZ_wrapper:
         return self.image_handler.images[self._input_name]
+
+    def _iter_filenames(self) -> Iterable[str]:
+        _, keyed_filenames = _prep_npz_to_zarr(self._images_wrapper)
+        for _, fn in keyed_filenames:
+            yield fn
 
     @property
     def locus_spots_visualisation_folder(self) -> Path:
@@ -157,11 +159,12 @@ class Tracer:
             fit_func_spec=self.fit_func_spec,
             # TODO: fix this brittle / fragile / incredibly error-prone thing; #84
             # TODO: in essence, we need a better mapping between these images and the ordering of the index of the ROIs table.
-            images=self.images, 
-            mask_ref_frames=self.roi_table['frame'].to_list() if self.image_handler.config.get('mask_fits', False) else None, 
-            background_specification=self.background_specification, 
-            cores=self.config.get("tracing_cores")
-            )
+            filenames=self._iter_filenames(),
+            image_data=self._images_wrapper, 
+            background_data=self._background_wrapper, 
+            mask_ref_frames=self.roi_table["frame"].to_list() if self.image_handler.config.get("mask_fits", False) else None, 
+            cores=self.config.get("tracing_cores"),
+        )
         
         traces = finalise_traces(rois=self.all_rois, fits=spot_fits, z_nm=self.nanometers_per_pixel_z, xy_nm=self.nanometers_per_pixel_xy)
         
@@ -170,39 +173,41 @@ class Tracer:
 
         return self.traces_path
 
-    def write_all_spot_images_to_one_per_fov_zarr(self, overwrite: bool = False) -> List[Path]:
-        name_data_pairs = (
+    def write_all_spot_images_to_one_per_fov_zarr(self, overwrite: bool = False) -> list[Path]:
+        name_data_pairs: list[tuple[str, np.ndarray]] = (
             compute_spot_images_multiarray_per_fov(self._images_wrapper, locus_grouping=self.image_handler.locus_grouping) \
                 if self.image_handler.locus_grouping else \
             compute_spot_images_multiarray_per_fov(self._images_wrapper, num_timepoints=sum(1 for _ in self.image_handler.iter_imaging_rounds()))
         )
+        assert (
+            isinstance(name_data_pairs, list), 
+            f"Result of computation of per-FOV spot images arrays isn't list, but {type(name_data_pairs).__name__}"
+        )
+        if len(name_data_pairs) == 0:
+            return []
+        _, a0 = name_data_pairs[0]
         return write_jvm_compatible_zarr_store(
             name_data_pairs, 
             root_path=self.locus_spots_visualisation_folder, 
-            dtype=SPOT_IMAGE_PIXEL_VALUE_TYPE, 
+            dtype=a0.dtype, 
             overwrite=overwrite,
         )
 
 
 # For parallelisation (multiprocessing) in the case of mask_fits being False.
 def _iter_fit_args(
-        fit_func_spec: FunctionalForm, 
-        images: Iterable[np.ndarray], 
-        bg_spec: Optional[BackgroundSpecification]
-        ) -> Iterable[Tuple[FunctionalForm, np.ndarray]]:
-    if bg_spec is None:
-        # Iterating here over regional spots (single_roi_timecourse)
-        for single_roi_timecourse in images:
-            # Iterating here over individal timepoints / hybridisation rounds for each regional 
-            for spot_img in single_roi_timecourse:
-                yield fit_func_spec, spot_img
-    else:
-        # Iterating here over regional spots (single_roi_timecourse)
-        for single_roi_timecourse in images:
-            bg_img = single_roi_timecourse[bg_spec.frame_index].astype(np.int16)
-            # Iterating here over individal timepoints / hybridisation rounds for each regiona
-            for spot_img in single_roi_timecourse:
-                yield fit_func_spec, spot_img.astype(np.int16) - bg_img
+    filenames: Iterable[str],
+    image_data: NPZ_wrapper,
+    background_data: Optional[NPZ_wrapper],
+) -> Iterable[Tuple[FunctionalForm, np.ndarray]]:
+    get_data: Callable[[str], np.ndarray] = (
+        (lambda fn: image_data[fn]) 
+        if background_data is None else 
+        # Here we need np.int16 rather than np.uint16 to properly handle negatives.
+        (lambda fn: image_data[fn].astype(np.int32) - background_data[fn].astype(np.int32))
+    )
+    for fn in filenames:
+        yield get_data(fn)
 
 
 def finalise_traces(rois: pd.DataFrame, fits: pd.DataFrame, z_nm: NumberLike, xy_nm: NumberLike) -> pd.DataFrame:
@@ -268,11 +273,13 @@ def pair_rois_with_fits(rois: pd.DataFrame, fits: pd.DataFrame) -> pd.DataFrame:
 
 def find_trace_fits(
     fit_func_spec: FunctionalForm, 
-    images: Iterable[np.ndarray], 
+    filenames: Iterable[str],
+    image_data: NPZ_wrapper, 
+    *,
+    background_data: Optional[NPZ_wrapper], 
     mask_ref_frames: Optional[List[int]], 
-    background_specification: Optional[BackgroundSpecification], 
-    cores: Optional[int] = None
-    ) -> pd.DataFrame:
+    cores: Optional[int] = None,
+) -> pd.DataFrame:
     """
     Fit distributions to each of the regional spots, but over all hybridisation rounds.
 
@@ -280,13 +287,14 @@ def find_trace_fits(
     ----------
     fit_func_spec : FunctionalForm
         Pair of function to fit to each spot, and dimensionality of the data for that fit (e.g. 3)
-    images : Iterable of np.ndarray
-        The collection of 4D arrays from the spot_images.npz (1 for each FOV + ROI combo)
+    filenames : Iterable of str
+        Names of the single-spot time stacks as keys in a NPZ
+    image_data : NPZ_wrapper
+        Single-spot time stacks in NPZ
+    background_data : NPZ_wrapper, optional
+        Wrapper around NPZ stack of per-spot background data to subtract, optional
     mask_ref_frames : list of int, optional
         Frames to use for masking when fitting, indexed by FOV
-    background_specification : BackgroundSpecification, optional
-        Bundle of index of hybridisation round (e.g. 0) to define as background, and associated 
-        positional drifts
     cores : int, optional
         How many CPUs to use
     
@@ -299,26 +307,26 @@ def find_trace_fits(
     # NB: For these iterations, each is expected to be a 4D array (first dimension being hybridisation round, and (z, y, x) for each).
     if mask_ref_frames:
         raise NotImplementedError(MASK_FITS_ERROR_MESSAGE)
-        if background_specification is None:
+        if background_data is None:
             def finalise_spot_img(img, _):
                 return img
         else:
             def finalise_spot_img(img, fov_imgs):
-                return img.astype(np.int16) - fov_imgs[background_specification.frame_index].astype(np.int16)
+                return img.astype(np.int16) - fov_imgs[background_data.frame_index].astype(np.int16)
         fits = []
         for p, single_roi_timecourse in tqdm(enumerate(images), total=len(images)):
             ref_img = single_roi_timecourse[mask_ref_frames[p]]
             #print(ref_img.shape)
             for t, spot_img in enumerate(single_roi_timecourse):
-                #if background_specification is not None:
-                    #shift = ndi.shift(single_roi_timecourse[background_specification.frame_index], shift=background_specification.drifts[t])
+                #if background_data is not None:
+                    #shift = ndi.shift(single_roi_timecourse[background_data.frame_index], shift=background_data.drifts[t])
                     #spot_img = np.clip(spot_img.astype(np.int16) - shift, a_min = 0, a_max = None)
                 spot_img = finalise_spot_img(spot_img, single_roi_timecourse)
                 fits.append(fit_single_roi(fit_func_spec=fit_func_spec, roi_img=spot_img, mask=ref_img))
     else:
         fits = Parallel(n_jobs=cores or -1)(
-            delayed(fit_single_roi)(fit_func_spec=ff_spec, roi_img=spot_img) 
-            for ff_spec, spot_img in _iter_fit_args(fit_func_spec=fit_func_spec, images=images, bg_spec=background_specification)
+            delayed(fit_single_roi)(fit_func_spec=fit_func_spec, roi_img=spot_img) 
+            for spot_img in _iter_fit_args(filenames=filenames, image_data=image_data, background_data=background_data)
             )
     
     full_cols = ROI_FIT_COLUMNS + IMG_SIDE_LEN_COLS
@@ -405,6 +413,7 @@ def apply_pixels_to_nanometers(traces: pd.DataFrame, z_nm_per_px: float, xy_nm_p
     """,
     parameters=dict(
         npz="Path to the NPZ file containing pixel volume stacks (across timepoints) for each ROI (detected regional spot)",
+        bg_npz="Optionally, NPZ-stored data with the background to subtract from each image array",
         locus_grouping="Mapping from regional timepoint to associated locus timepoints",
         num_timepoints="Number of imaging timepoints in the experiment",
     ),
@@ -420,6 +429,7 @@ def apply_pixels_to_nanometers(traces: pd.DataFrame, z_nm_per_px: float, xy_nm_p
 def compute_spot_images_multiarray_per_fov(
     npz: str | Path | NPZ_wrapper, 
     *, 
+    bg_npz: Optional[str | Path | NPZ_wrapper] = None,
     locus_grouping: Optional[LocusGroupingData] = None, 
     num_timepoints: Optional[int] = None,
 ) -> list[tuple[str, np.ndarray]]:
@@ -429,6 +439,20 @@ def compute_spot_images_multiarray_per_fov(
         logging.warning(f"Empty spot images file! {full_data_file}")
         return []
     
+    get_pixel_array: Callable[[str], np.ndarray]
+    if bg_npz is None:
+        logging.warning("No background to subtract for preparation of locus spots visualisation data!")
+        get_pixel_array = lambda fn: npz[fn]
+    else:
+        logging.info("Will subtract background during preparation of locus spots visualisation data.")
+        # If background is present, prepare it in the same way as the image arrays.
+        # We don't care about the keyed filenames; we'll let the iteration proceed from the main images NPZ.
+        bg_npz, _ = _prep_npz_to_zarr(bg_npz)
+        # The background array will be a single 3D image volume (null time dimension), 
+        # but numpy will properly broadcast this such that this volume is subtracted 
+        # from the spot image volume for every timepoint.
+        get_pixel_array = lambda fn: npz[fn].astype(np.int32) - bg_npz[fn].astype(np.int32)
+
     # Facilitate assurance of same number of timepoints for each regional spot, to create non-ragged array.
     # Compute the max independent of FOV so that if some regional barcode has no spots at all in a particular FOV, 
     # the renumbering of the timepoints won't be messed up.
@@ -453,7 +477,7 @@ def compute_spot_images_multiarray_per_fov(
         logging.info("Computing spot image arrays stack for position '%s'...", pos)
         current_stack: list[np.ndarray] = []
         for filename_key, filename in sorted(pos_group, key=lambda fk_fn: (fk_fn[0].ref_frame, fk_fn[0].roi_id)):
-            pixel_array = npz[filename]
+            pixel_array = get_pixel_array(filename)
             reg_time: TimepointFrom0 = TimepointFrom0(filename_key.ref_frame)
             obs_num_times: int = pixel_array.shape[0]
             if locus_grouping:
