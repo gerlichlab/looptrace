@@ -766,8 +766,8 @@ def build_locus_spot_data_extraction_table(
         # TODO: here we can update to iterate over channels for doing multi-channel extraction.
         # https://github.com/gerlichlab/looptrace/issues/138
         Z, Y, X = get_zyx(pos_index, ch)
-        for _, dc_frame in sel_dc.iterrows():
-            frame: int = dc_frame["frame"]
+        for _, dc_row in sel_dc.iterrows():
+            frame: int = dc_row["frame"]
             if not isinstance(frame, int):
                 raise TypeError(f"Non-integer ({type(frame).__name__}) timepoint: {frame}")
             if not (use_timepoint(frame) or frame == ref_frame):
@@ -783,7 +783,7 @@ def build_locus_spot_data_extraction_table(
                 roi_min=roi[f"{dim}_min"], 
                 roi_max=roi[f"{dim}_max"], 
                 dim_limit=lim, 
-                frame_drift=dc_frame[f"{dim}_px_coarse"], 
+                frame_drift=dc_row[f"{dim}_px_coarse"], 
                 ref_drift=ref_offset[f"{dim}_px_coarse"]
                 ) for dim, lim in (("z", Z), ("y", Y), ("x", X))
                 )
@@ -793,7 +793,7 @@ def build_locus_spot_data_extraction_table(
                             z_min, z_max, y_min, y_max, x_min, x_max, 
                             pad_z_min, pad_z_max, pad_y_min, pad_y_max, pad_x_min, pad_x_max,
                             z_drift_coarse, y_drift_coarse, x_drift_coarse, 
-                            dc_frame['z_px_fine'], dc_frame['y_px_fine'], dc_frame['x_px_fine']])
+                            dc_row['z_px_fine'], dc_row['y_px_fine'], dc_row['x_px_fine']])
 
     return pd.DataFrame(all_rois, columns=[
         'position', 'pos_index', 'roi_number', 'roi_id', 'frame', 'ref_frame', 'ch', 
