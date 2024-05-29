@@ -364,7 +364,16 @@ class LooptracePipeline(pypiper.Pipeline):
             # computes pad_x_min, etc.; writes *_dc_rois.csv (much bigger, since regional spots x frames)
             pypiper.Stage(name="spot_bounding", func=run_spot_bounding, f_kwargs=rounds_params_images),
             pypiper.Stage(name="spot_extraction", func=run_spot_extraction, f_kwargs=rounds_params_images),
-            pypiper.Stage(name="spot_zipping", func=run_spot_zipping, f_kwargs={"params_config": self.params_config, "images_folder": self.images_folder}),
+            pypiper.Stage(
+                name="spot_zipping", 
+                func=run_spot_zipping, 
+                f_kwargs={"params_config": self.params_config, "images_folder": self.images_folder, "is_background": False},
+            ),
+            pypiper.Stage(
+                name="spot_background_zipping", 
+                func=run_spot_zipping, 
+                f_kwargs={"params_config": self.params_config, "images_folder": self.images_folder, "is_background": True},
+            ),
             pypiper.Stage(name="tracing", func=run_chromatin_tracing, f_kwargs=rounds_params_images),
             pypiper.Stage(name="spot_region_distances", func=run_frame_name_and_distance_application, f_kwargs=rounds_params_images), 
             pypiper.Stage(name=TRACING_QC_STAGE_NAME, func=qc_locus_spots_and_prep_points, f_kwargs=rounds_params_images),

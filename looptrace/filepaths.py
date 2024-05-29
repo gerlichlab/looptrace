@@ -9,13 +9,14 @@ from gertils import ExtantFile, ExtantFolder
 __author__ = "Vince Reuter"
 __credits__ = ["Vince Reuter"]
 
-__all__ = ["SPOT_IMAGES_SUBFOLDER", "FilePathLike", "FolderPathLike", "PathLike", "get_analysis_path", "simplify_path"]
+__all__ = ["SPOT_BACKGROUND_SUBFOLDER", "SPOT_IMAGES_SUBFOLDER", "FilePathLike", "FolderPathLike", "PathLike", "get_analysis_path", "simplify_path"]
 
 
 FilePathLike = Union[str, Path, ExtantFile]
 FolderPathLike = Union[str, Path, ExtantFolder]
 PathLike = Union[FilePathLike, FolderPathLike]
 SPOT_IMAGES_SUBFOLDER = "spot_images_dir"
+SPOT_BACKGROUND_SUBFOLDER = "spot_background_dir"
 
 
 def get_analysis_path(config: Mapping[str, Any]) -> str:

@@ -23,7 +23,6 @@ from joblib import Parallel, delayed
 import numpy as np
 from numpy.lib.format import open_memmap
 import pandas as pd
-from scipy import ndimage as ndi
 import tqdm
 
 from gertils import ExtantFolder, NonExtantPath
@@ -33,7 +32,7 @@ from spotfishing_looptrace import DifferenceOfGaussiansSpecificationForLooptrace
 
 from looptrace import RoiImageSize, image_processing_functions as ip
 from looptrace.exceptions import MissingRoisTableException
-from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER
+from looptrace.filepaths import SPOT_BACKGROUND_SUBFOLDER, SPOT_IMAGES_SUBFOLDER, simplify_path
 from looptrace.numeric_types import NumberLike
 
 __author__ = "Kai Sandvold Beckwith"
@@ -261,11 +260,11 @@ def detect_spots_multiple(
     return pd.concat(subframes).reset_index(drop=True)
 
 
-def get_spot_images_zipfile(folder: Union[Path, ExtantFolder, NonExtantPath]) -> Path:
+def get_spot_images_zipfile(folder: Union[str, Path, ExtantFolder, NonExtantPath], *, is_background: bool) -> Path:
     """Return fixed-name path to zipfile for spot images, relative to the given folder."""
-    if isinstance(folder, (ExtantFolder, NonExtantPath)):
-        folder = folder.path
-    return folder / "spot_images.npz"
+    folder = folder.path if isinstance(folder, NonExtantPath) else simplify_path(folder)
+    fn_base = "spot_background" if is_background else "spot_images"
+    return folder / f"{fn_base}.npz"
 
 
 class DetectionMethod(Enum):
@@ -495,6 +494,14 @@ class SpotPicker:
         return self.image_handler.roi_image_size if self.detection_method_name == DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC else None
 
     @property
+    def spot_background_path(self) -> str:
+        return os.path.join(self.image_handler.image_save_path, SPOT_BACKGROUND_SUBFOLDER)
+
+    @property
+    def spot_background_zipfile(self) -> str:
+        return get_spot_images_zipfile(self.image_handler.image_save_path, is_background=True)
+
+    @property
     def spot_channel(self) -> List[int]:
         """The imaging channel in which spot detection is to be done"""
         spot_ch = self.config["spot_ch"]
@@ -507,15 +514,12 @@ class SpotPicker:
         return spot_frame if isinstance(spot_frame, list) else [spot_frame]
 
     @property
-    def spot_images_path(self):
+    def spot_images_path(self) -> str:
         return os.path.join(self.image_handler.image_save_path, SPOT_IMAGES_SUBFOLDER)
 
     @property
     def spot_images_zipfile(self):
-        # TODO: what to do if this path is nested under self.spot_images_path, and will be deleted upon zip?
-        # See: https://github.com/gerlichlab/looptrace/issues/19
-        # See: https://github.com/gerlichlab/looptrace/issues/20
-        return get_spot_images_zipfile(self.image_handler.image_save_path)
+        return get_spot_images_zipfile(self.image_handler.image_save_path, is_background=False)
 
     @property
     def spot_in_nuc(self) -> bool:
@@ -583,6 +587,7 @@ class SpotPicker:
             get_dc_table=get_dc_table,
             get_locus_timepoints=get_locus_timepoints,
             get_zyx=get_zyx,
+            background_frame=self.image_handler.background_subtraction_frame,
         )
         self.all_rois = self.all_rois.sort_values(RoiOrderingSpecification.row_order_columns()).reset_index(drop=True)
         
@@ -607,8 +612,8 @@ class SpotPicker:
         
         Returns
         -------
-        List[str], SkipReasonsMapping
-            Paths of the files written, and mapping from ref frame to mapping from ROI ID to mapping from frame to skip reason
+        SkipReasonsMapping
+            Mapping from ref frame to mapping from ROI ID to mapping from frame to skip reason
         """
         get_num_frames: Callable[[int], int]
         if not self.image_handler.locus_grouping:
@@ -638,7 +643,10 @@ class SpotPicker:
                     roi_img = roi_img.astype(SPOT_IMAGE_PIXEL_VALUE_TYPE)
                     if error is not None:
                         skip_spot_image_reasons[fn_key.ref_frame][fn_key.roi_id][frame] = str(error)
-                    fp = os.path.join(self.spot_images_path, fn_key.name_roi_file)
+                    fp = os.path.join(
+                        self.spot_background_path if frame == self.image_handler.background_subtraction_frame else self.spot_images_path, 
+                        fn_key.name_roi_file,
+                    )
                     try:
                         f_id = num_frames_processed[fp]
                     except KeyError:
@@ -675,6 +683,8 @@ class SpotPicker:
 
         if not os.path.isdir(self.spot_images_path):
             os.mkdir(self.spot_images_path)
+        if self.image_handler.background_subtraction_frame is not None and not os.path.isdir(self.spot_background_path):
+            os.mkdir(self.spot_background_path)
 
         skip_spot_image_reasons = OrderedDict()
         for pos, pos_group in tqdm.tqdm(rois.groupby('position')):
@@ -705,34 +715,6 @@ class SpotPicker:
                 np.save(arr_out, spot_stack)
         return self.spot_images_path
 
-    def fine_dc_single_roi_img(self, roi_img, roi):
-        #Shift a single image according to precalculated drifts.
-        dz = float(roi['z_px_fine'])
-        dy = float(roi['y_px_fine'])
-        dx = float(roi['x_px_fine'])
-        roi_img = ndi.shift(roi_img, (dz, dy, dx)).astype(SPOT_IMAGE_PIXEL_VALUE_TYPE)
-        return roi_img
-
-    def gen_fine_dc_roi_imgs(self):
-        #Apply fine scale drift correction to spot images, used mainly for visualizing fits (these images are not used for fitting)
-        print('Making fine drift-corrected spot images.')
-
-        imgs = self.image_handler.images['spot_images']
-        
-        rois = self.all_rois
-
-        i = 0
-        roi_array_fine = []
-        for j, frame_stack in tqdm.tqdm(enumerate(imgs)):
-            roi_stack_fine = []
-            for roi_stack in frame_stack:
-                roi_stack_fine.append(self.fine_dc_single_roi_img(roi_stack, rois.iloc[i]))
-                i += 1
-            roi_array_fine.append(np.stack(roi_stack_fine))
-
-        self.image_handler.images['spot_images_fine'] = roi_array_fine
-        np.savez_compressed(self.image_handler.image_save_path+os.sep+'spot_images_fine.npz', *roi_array_fine)
-
 
 def build_locus_spot_data_extraction_table(
     rois_table: pd.DataFrame, 
@@ -741,6 +723,7 @@ def build_locus_spot_data_extraction_table(
     get_dc_table: Callable[[int], pd.DataFrame], 
     get_locus_timepoints: Optional[Callable[[TimepointFrom0], set[TimepointFrom0]]],
     get_zyx: Callable[[int, int], tuple[int, int, int]], # Provide FOV index + channel, get (Z, Y, X).
+    background_frame: Optional[int] = None,
 ) -> pd.DataFrame:
     
     all_rois = []
@@ -749,6 +732,7 @@ def build_locus_spot_data_extraction_table(
         ref_frame: int = roi["frame"]
         if not isinstance(ref_frame, int):
             raise TypeError(f"Non-integer ({type(ref_frame).__name__}) timepoint: {ref_frame}")
+        
         is_locus_time: Callable[[int], bool]
         if get_locus_timepoints is None:
             is_locus_time = lambda _: True
@@ -758,6 +742,15 @@ def build_locus_spot_data_extraction_table(
                 logging.debug("No locus timepoints for regional timepoint %d, skipping ROI", ref_frame)
                 continue
             is_locus_time = lambda t: t in locus_times
+        
+        is_background_time: Callable[[int], bool]
+        if background_frame is None:
+            is_background_time = lambda _: False
+        elif not isinstance(background_frame, int):
+            raise TypeError(f"background_frame is not int, but {type(background_frame).__name__}")
+        else:
+            is_background_time = lambda t: t == background_frame
+        
         pos = roi["position"]
         pos_index = get_pos_idx(pos)
         sel_dc = get_dc_table(pos_index)
@@ -770,7 +763,7 @@ def build_locus_spot_data_extraction_table(
             frame: int = dc_row["frame"]
             if not isinstance(frame, int):
                 raise TypeError(f"Non-integer ({type(frame).__name__}) timepoint: {frame}")
-            if not (is_locus_time(frame) or frame == ref_frame):
+            if not (is_locus_time(frame) or frame == ref_frame or is_background_time(frame)):
                 logging.debug("Timepoint %d isn't eligible for tracing in a spot from timepoint %d; skipping", frame, ref_frame)
                 continue
             # min/max ensure that the slicing of the image array to make the small image for tracing doesn't go out of bounds.
