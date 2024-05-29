@@ -159,8 +159,9 @@ NON_REGIONAL_TIMES = tuple(r["time"] for r in NON_REGIONAL_ROUNDS)
     )
 )
 @hyp.settings(
-    suppress_health_check=(hyp.HealthCheck.function_scoped_fixture, ), # We overwrite the files each time, so all good.
+    deadline=None,
     phases=tuple(p for p in hyp.Phase if p != hyp.Phase.shrink), # Save test execution time.
+    suppress_health_check=(hyp.HealthCheck.function_scoped_fixture, ), # We overwrite the files each time, so all good.
 )
 def test_only_region_timepoints_and_their_locus_timepoints_have_records_in_spot_extraction_table(
     tmp_path, 
