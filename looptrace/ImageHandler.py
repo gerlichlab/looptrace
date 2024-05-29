@@ -111,7 +111,7 @@ class BeadRoisFilenameSpecification:
 
 
 def bead_rois_filename(pos_idx: int, frame: int, purpose: Optional[str]) -> str:
-    return BeadRoisFilenameSpecification(fov=pos_idx, frame=frame, purpose=purpose)
+    return BeadRoisFilenameSpecification(fov=pos_idx, frame=frame, purpose=purpose).get_filename
 
 
 def _read_bead_rois_file(fp: ExtantFile) -> np.ndarray[int]:
