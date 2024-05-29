@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import *
 
 import numpy as np
+from numpydoc_decorator import doc
 import pandas as pd
 import yaml
 from gertils import ExtantFile
@@ -37,6 +38,18 @@ LocusGroupingData = dict[TimepointFrom0, set[TimepointFrom0]]
 PathFilter = Callable[[Union[os.DirEntry, Path]], bool]
 
 
+@doc(
+    summary="Store the parameters which uniquely specify the name of a file for fiducial bead ROIs.",
+    parameters=dict(
+        fov="0-based index of position / field of view",
+        frame="0-based index of timepoint in imaging sequence",
+        purpose="What the ROIs will be used for; set to null if these are generic ROIs",
+    ),
+    raises=dict(
+        TypeError="If fov or frame is non-int, or if purpose is non-str",
+        ValueError="If fov or frame is negative, or if purpose contains a period"
+    ),
+)
 @dataclass(frozen=True, kw_only=True, order=True)
 class BeadRoisFilenameSpecification:
     fov: int
@@ -46,6 +59,8 @@ class BeadRoisFilenameSpecification:
     def __post_init__(self) -> None:
         if not isinstance(self.fov, int) or not isinstance(self.frame, int):
             raise TypeError(f"For bead ROIs filename spec, FOV and frame must be int; got {type(self.fov).__name__} and {type(self.frame).__name__}")
+        if self.fov < 0 or self.frame < 0:
+            raise ValueError(f"fov and frame must be nonnegative; got {self.fov} and {self.frame}")
         if self.purpose is not None:
             if not isinstance(self.purpose, str):
                 raise TypeError(f"For bead ROIs filename spec, purpose must be null or str, not {type(self.purpose).__name__}")
