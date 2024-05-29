@@ -749,15 +749,15 @@ def build_locus_spot_data_extraction_table(
         ref_frame: int = roi["frame"]
         if not isinstance(ref_frame, int):
             raise TypeError(f"Non-integer ({type(ref_frame).__name__}) timepoint: {ref_frame}")
-        use_timepoint: Callable[[int], bool]
+        is_locus_time: Callable[[int], bool]
         if get_locus_timepoints is None:
-            use_timepoint = lambda _: True
+            is_locus_time = lambda _: True
         else:
             locus_times: set[int] = {lt.get for lt in get_locus_timepoints(TimepointFrom0(ref_frame))}
             if not locus_times:
                 logging.debug("No locus timepoints for regional timepoint %d, skipping ROI", ref_frame)
                 continue
-            use_timepoint = lambda t: t in locus_times
+            is_locus_time = lambda t: t in locus_times
         pos = roi["position"]
         pos_index = get_pos_idx(pos)
         sel_dc = get_dc_table(pos_index)
@@ -770,7 +770,7 @@ def build_locus_spot_data_extraction_table(
             frame: int = dc_row["frame"]
             if not isinstance(frame, int):
                 raise TypeError(f"Non-integer ({type(frame).__name__}) timepoint: {frame}")
-            if not (use_timepoint(frame) or frame == ref_frame):
+            if not (is_locus_time(frame) or frame == ref_frame):
                 logging.debug("Timepoint %d isn't eligible for tracing in a spot from timepoint %d; skipping", frame, ref_frame)
                 continue
             # min/max ensure that the slicing of the image array to make the small image for tracing doesn't go out of bounds.
