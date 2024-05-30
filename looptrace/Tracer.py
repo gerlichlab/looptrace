@@ -171,9 +171,17 @@ class Tracer:
 
     def write_all_spot_images_to_one_per_fov_zarr(self, overwrite: bool = False) -> list[Path]:
         name_data_pairs: list[tuple[str, np.ndarray]] = (
-            compute_spot_images_multiarray_per_fov(self._images_wrapper, locus_grouping=self.image_handler.locus_grouping) \
-                if self.image_handler.locus_grouping else \
-            compute_spot_images_multiarray_per_fov(self._images_wrapper, num_timepoints=sum(1 for _ in self.image_handler.iter_imaging_rounds()))
+            compute_spot_images_multiarray_per_fov(
+                self._images_wrapper, 
+                bg_npz=self._background_wrapper,
+                locus_grouping=self.image_handler.locus_grouping,
+            )
+            if self.image_handler.locus_grouping else 
+            compute_spot_images_multiarray_per_fov(
+                self._images_wrapper, 
+                bg_npz=self._background_wrapper,
+                num_timepoints=sum(1 for _ in self.image_handler.iter_imaging_rounds()),
+            )
         )
         assert (
             isinstance(name_data_pairs, list), 
@@ -453,7 +461,7 @@ def apply_pixels_to_nanometers(traces: pd.DataFrame, z_nm_per_px: float, xy_nm_p
 def compute_spot_images_multiarray_per_fov(
     npz: str | Path | NPZ_wrapper, 
     *, 
-    bg_npz: Optional[str | Path | NPZ_wrapper] = None,
+    bg_npz: Optional[str | Path | NPZ_wrapper],
     locus_grouping: Optional[LocusGroupingData] = None, 
     num_timepoints: Optional[int] = None,
 ) -> list[tuple[str, np.ndarray]]:

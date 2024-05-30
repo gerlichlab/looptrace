@@ -159,7 +159,7 @@ def test_fields_of_view__are_correct_and_in_order(tmp_path, fnkey_image_pairs_an
     fnkey_image_pairs, locus_grouping = fnkey_image_pairs_and_locus_grouping
     npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
     kwargs = {"locus_grouping": locus_grouping} if locus_grouping else {"num_timepoints": max(img.shape[0] for _, img in fnkey_image_pairs)}
-    result = compute_spot_images_multiarray_per_fov(npz=npz_wrapper, **kwargs)
+    result = compute_spot_images_multiarray_per_fov(npz=npz_wrapper, bg_npz=None, **kwargs)
     obs = [fov_name for fov_name, _ in result]
     exp = list(sorted(set(k.position for k, _ in fnkey_image_pairs)))
     assert obs == exp
@@ -194,7 +194,7 @@ def test_spot_images_finish_by_all_having_the_max_number_of_timepoints(tmp_path,
     # Mock the input and make the call under test.
     npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
     kwargs = {"locus_grouping": locus_grouping} if locus_grouping else {"num_timepoints": max(img.shape[0] for _, img in fnkey_image_pairs)}
-    result: list[tuple[str, np.ndarray]] = compute_spot_images_multiarray_per_fov(npz=npz_wrapper, **kwargs)
+    result: list[tuple[str, np.ndarray]] = compute_spot_images_multiarray_per_fov(npz=npz_wrapper, bg_npz=None, **kwargs)
     
     # Check that 
     try:
@@ -231,7 +231,7 @@ def test_unexpected_timepoint_count_for_spot_image_volume__causes_expected_error
     fnkey_image_pairs, locus_grouping = fnkey_image_pairs_and_locus_grouping
     npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
     with pytest.raises(ArrayDimensionalityError) as error_context:
-        compute_spot_images_multiarray_per_fov(npz=npz_wrapper, locus_grouping=locus_grouping)
+        compute_spot_images_multiarray_per_fov(npz=npz_wrapper, bg_npz=None, locus_grouping=locus_grouping)
     assert str(error_context.value).startswith("Locus times count doesn't match expectation")
 
 
@@ -256,7 +256,7 @@ def test_regional_time_with_data_but_absent_from_nonempty_locus_grouping__causes
     fnkey_image_pairs, locus_grouping = fnkey_image_pairs_and_locus_grouping
     npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
     with pytest.raises(RuntimeError) as error_context:
-        compute_spot_images_multiarray_per_fov(npz=npz_wrapper, locus_grouping=locus_grouping)
+        compute_spot_images_multiarray_per_fov(npz=npz_wrapper, bg_npz=None, locus_grouping=locus_grouping)
     assert str(error_context.value).startswith("No expected locus time count for regional time")
 
 
