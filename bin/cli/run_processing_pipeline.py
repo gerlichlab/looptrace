@@ -187,8 +187,8 @@ def qc_locus_spots_and_prep_points(rounds_config: ExtantFile, params_config: Ext
     subprocess.check_call(cmd_parts)
 
 
-def annotate_traces(rounds_config: ExtantFile, params_config: ExtantFile) -> Path:
-    H = ImageHandler(rounds_config=rounds_config, params_config=params_config)
+def annotate_traces(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> Path:
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     T = Tracer(H)
     return T.trace_all_rois()
 
@@ -381,11 +381,7 @@ class LooptracePipeline(pypiper.Pipeline):
                 f_kwargs={"params_config": self.params_config, "images_folder": self.images_folder, "is_background": True},
             ),
             pypiper.Stage(name="tracing", func=run_chromatin_tracing, f_kwargs=rounds_params_images),
-            pypiper.Stage(
-                name="trace_annotation", 
-                func=annotate_traces, 
-                f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config},
-            ),
+            pypiper.Stage(name="trace_annotation", func=annotate_traces, f_kwargs=rounds_params_images),
             pypiper.Stage(name="spot_region_distances", func=run_frame_name_and_distance_application, f_kwargs=rounds_params_images), 
             pypiper.Stage(name=TRACING_QC_STAGE_NAME, func=qc_locus_spots_and_prep_points, f_kwargs=rounds_params_images),
             pypiper.Stage(
