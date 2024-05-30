@@ -97,12 +97,6 @@ class Tracer:
         return Path(str(p).replace(".csv", "_beads.csv")) if self._trace_beads else p
 
     @property
-    def images(self) -> Iterable[np.ndarray]:
-        """Iterate over the small, single spot images for tracing (1 per timepoint per ROI)."""
-        for fn in self._iter_filenames():
-            yield self._images_wrapper[fn]
-
-    @property
     def locus_spots_visualisation_folder(self) -> Path:
         """Where to write the locus-specific spot images visualisation data"""
         return self.image_handler.locus_spots_visualisation_folder
