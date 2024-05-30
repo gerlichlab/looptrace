@@ -1738,8 +1738,8 @@ testsuite = ["pytest (>=7.1.0)", "pytest-cov (>=5.0.0)"]
 [package.source]
 type = "git"
 url = "https://github.com/gerlichlab/looptrace-loci-vis"
-reference = "v0.1.0"
-resolved_reference = "770a01dd435dab35d4c3ab8a4d319ff4d9bc7562"
+reference = "v0.2.0"
+resolved_reference = "71f4b2bd365fa4639026d9f1e4e825f4d2674bb4"
 
 [[package]]
 name = "looptrace-regionals-vis"
@@ -5174,4 +5174,4 @@ test = ["hypothesis", "more-itertools", "pytest", "pytest-skip-slow"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.10, < 3.11"
-content-hash = "67bf6fb9b453087f1d7c840e471d331465c7ef65e4ce88def43baf06af558ffb"
+content-hash = "3aa2b2484179a9b06fd8ad126e904afadc7e0bac8e171b5b0ddb4c01855c4bd4"
