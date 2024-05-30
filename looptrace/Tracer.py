@@ -207,7 +207,10 @@ def _iter_fit_args(
         (lambda fn: image_data[fn].astype(np.int32) - background_data[fn].astype(np.int32))
     )
     for fn in filenames:
-        yield get_data(fn)
+        time_stack_of_volumes: np.ndarray = get_data(fn)
+        n_times = time_stack_of_volumes.shape[0]
+        for t in range(n_times):
+            yield time_stack_of_volumes[t]
 
 
 def finalise_traces(rois: pd.DataFrame, fits: pd.DataFrame, z_nm: NumberLike, xy_nm: NumberLike) -> pd.DataFrame:
