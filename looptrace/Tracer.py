@@ -415,7 +415,7 @@ def apply_fine_scale_drift_correction(traces: pd.DataFrame) -> pd.DataFrame:
         traces['y_px_dc'] = traces['y_px'] + traces['y_px_fine']
         traces['x_px_dc'] = traces['x_px'] + traces['x_px_fine']
     except KeyError as e:
-        logging.exception(f"Error ({e}) during application of drift correction. Available columns in traces table: {', '.join(traces.columns)}")
+        logging.exception(f"Error ({e}) during application of drift correction. Available columns in traces table: {', '.join(map(str, traces.columns))}")
         raise
     return traces
 
