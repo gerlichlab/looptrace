@@ -165,10 +165,20 @@ class Tracer:
             mask_ref_frames=self.roi_table["frame"].to_list() if self.image_handler.config.get("mask_fits", False) else None, 
             cores=self.config.get("tracing_cores"),
         )
+
+        if self._background_wrapper is None:
+            logging.info("No background subtraction; will pair fits with full ROIs table")
+            rois_table = self.all_rois
+        else:
+            logging.info("Subsetting ROIs table to exclude background timepoint records before pairing ROIs with fits...")
+            bg_time = self.image_handler.background_subtraction_frame
+            assert isinstance(bg_time, int) and bg_time >= 0, f"Background subtraction timepoint isn't nonnegative int: {bg_time}"
+            rois_table = self.all_rois[self.all_rois.frame != bg_time]
         
-        traces = finalise_traces(rois=self.all_rois, fits=spot_fits, z_nm=self.nanometers_per_pixel_z, xy_nm=self.nanometers_per_pixel_xy)
+        logging.info("Finalising traces table...")
+        traces = finalise_traces(rois=rois_table, fits=spot_fits, z_nm=self.nanometers_per_pixel_z, xy_nm=self.nanometers_per_pixel_xy)
         
-        print(f"Writing traces: {self.traces_path}")
+        logging.info("Writing traces: %s", self.traces_path)
         traces.to_csv(self.traces_path)
 
         return self.traces_path
