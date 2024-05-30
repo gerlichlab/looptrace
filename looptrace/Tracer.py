@@ -196,7 +196,7 @@ class Tracer:
         if bg_time is None:
             return None
         try:
-            return self.image_handler.images[self._input_name]
+            return self.image_handler.images["spot_background"]
         except KeyError as e:
             sure_message = f"Background subtraction frame ({bg_time}) is non-null, but no spot image background was found."
             zip_path = get_spot_images_zipfile(self.image_handler.image_save_path, is_background=True)
@@ -204,12 +204,8 @@ class Tracer:
             raise RuntimeError(f"{sure_message} {best_guess}") from e
 
     @property
-    def _input_name(self) -> str:
-        return self.config['trace_input_name']
-
-    @property
     def _images_wrapper(self) -> NPZ_wrapper:
-        return self.image_handler.images[self._input_name]
+        return self.image_handler.images["spot_images"]
 
     def _iter_filenames(self) -> Iterable[str]:
         _, keyed_filenames = _prep_npz_to_zarr(self._images_wrapper)
