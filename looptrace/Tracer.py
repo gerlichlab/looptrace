@@ -113,7 +113,12 @@ class Tracer:
     def roi_table(self) -> pd.DataFrame:
         return self.image_handler.tables[self.image_handler.spot_input_name + ("_bead_rois" if self._trace_beads else "_rois")]
 
-    def trace_all_rois(self) -> str:
+    @property
+    def spot_fits_file(self) -> Path:
+        """Path to the file of the raw fits, before pairing back to ROIs with pair_rois_with_fits"""
+        return self.finalise_suffix(self.image_handler.spot_fits_file)
+
+    def trace_all_rois(self) -> Path:
         """Fits 3D gaussian to previously detected ROIs across positions and timeframes"""
         spot_fits = find_trace_fits(
             fit_func_spec=self.fit_func_spec,
@@ -125,7 +130,23 @@ class Tracer:
             mask_ref_frames=self.roi_table["frame"].to_list() if self.image_handler.config.get("mask_fits", False) else None, 
             cores=self.config.get("tracing_cores"),
         )
+        
+        logging.info("Writing spot fits: %s", self.spot_fits_file)
+        spot_fits.to_csv(self.spot_fits_file)
+        return self.spot_fits_file
 
+    @property
+    def traces_path(self) -> Path:
+        return self.finalise_suffix(self.image_handler.traces_path)
+    
+    @property
+    def traces_path_enriched(self) -> Path:
+        return self.finalise_suffix(self.image_handler.traces_path_enriched)
+
+    def write_traces_file(self) -> str:
+        logging.info("Reading spot fits file: %s", self.spot_fits_file)
+        spot_fits = pd.read_csv(self.spot_fits_file, index_col=0)
+        
         if self._background_wrapper is None:
             logging.info("No background subtraction; will pair fits with full ROIs table")
             rois_table = self.all_rois
@@ -149,14 +170,6 @@ class Tracer:
         traces.to_csv(self.traces_path)
 
         return self.traces_path
-
-    @property
-    def traces_path(self) -> Path:
-        return self.finalise_suffix(self.image_handler.traces_path)
-    
-    @property
-    def traces_path_enriched(self) -> Path:
-        return self.finalise_suffix(self.image_handler.traces_path_enriched)
 
     def write_all_spot_images_to_one_per_fov_zarr(self, overwrite: bool = False) -> list[Path]:
         name_data_pairs: list[tuple[str, np.ndarray]] = (
