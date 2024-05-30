@@ -15,7 +15,7 @@ from gertils import ExtantFile, ExtantFolder, PathWrapperException
 
 from looptrace import image_io
 from looptrace.configuration import read_parameters_configuration_file
-from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, SPOT_IMAGES_SUBFOLDER
+from looptrace.filepaths import SPOT_BACKGROUND_SUBFOLDER, SPOT_IMAGES_SUBFOLDER
 from looptrace.SpotPicker import get_spot_images_zipfile
 
 __author__ = "Kai Sandvold Beckwith"
@@ -33,7 +33,8 @@ def workflow(
     if keep_folder is None:
         conf_data = read_parameters_configuration_file(params_config)
         keep_folder = conf_data.get("keep_spot_images_folder", False)
-    folder_to_zip: ExtantFolder = ExtantFolder(images_folder.path / SPOT_IMAGES_SUBFOLDER)
+    src_path_leaf = SPOT_BACKGROUND_SUBFOLDER if is_background else SPOT_IMAGES_SUBFOLDER
+    folder_to_zip: ExtantFolder = ExtantFolder(images_folder.path / src_path_leaf)
     file_to_zip_to: Path = get_spot_images_zipfile(images_folder, is_background=is_background)
     print(f"Zipping contents: {folder_to_zip} ---> {file_to_zip_to}")
     image_io.zip_folder(folder=str(folder_to_zip.path), out_file=str(file_to_zip_to), remove_folder=not keep_folder)
