@@ -190,7 +190,7 @@ def qc_locus_spots_and_prep_points(rounds_config: ExtantFile, params_config: Ext
 def annotate_traces(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> Path:
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     T = Tracer(H)
-    return T.trace_all_rois()
+    return T.write_traces_file()
 
 
 def compute_locus_pairwise_distances(rounds_config: ExtantFile, params_config: ExtantFile) -> None:
