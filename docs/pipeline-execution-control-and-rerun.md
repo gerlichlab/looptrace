@@ -68,6 +68,7 @@ Below are the sequential pipeline stage names.
 * spot_zipping
 * spot_background_zipping
 * tracing
+* trace_annotation
 * spot_region_distances
 * tracing_QC
 * spot_counts_visualisation__locus_specific

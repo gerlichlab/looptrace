@@ -397,6 +397,11 @@ class ImageHandler:
         return self.tables[self.spot_input_name + "_drift_correction_fine"]
 
     @property
+    def spot_fits_file(self) -> Path:
+        """Path to the file of the raw fits, before pairing back to ROIs with pair_rois_with_fits"""
+        return Path(self.out_path("spot_fits.csv"))
+
+    @property
     def spot_image_extraction_skip_reasons_json_file(self) -> Path:
         return Path(self.out_path("_spot_image_extraction_skip_reasons.json"))
 
