@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v0.5.0] - 2024-05-28
+## [v0.5.0] - 2024-05-31
 
 ### Added
 * Added a tool--a simple [command-line program](./bin/cli/analyse_bead_discard_reasons.py)-- to analyse the reason(s) that each fiducial bead ROI is discarded (_if_ it's discarded).
@@ -14,6 +14,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 * Added some explanations of the different static test cases, to document the underlying logic / contracts being tested as upheld or not.
 * Added some documentation about the `locusGrouping` section of the imaging rounds configuration file.
 * Added direct (in-memory, not through JSON) PBT for enforcement of required exclusion of regional timepoint from its locus times collection.
+* Storage of background subtracted from true pixel values for each ROI, see [Issue 322](https://github.com/gerlichlab/looptrace/issues/322).
 
 ### Changed
 * Depend on new version of Pypiper (0.14.2), which allows any pipeline stage to be marked as `nofail` (by passing `nofail=True` to its constructor), so that if something goes wrong while running that stage, it won't fail the whole pipeline (i.e., subsequent processing is allowed to continue).
@@ -23,6 +24,8 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 * Timepoints are redefined/reindexed on a per-regional-timepoint basis, so that the time dimension of data for visualisation with the Napari plugin is appropriately shrunk, to complement how the `locusGrouping` section of the imaging rounds configuration file is now used to more intelligently extract data for tracing.
 * Made several members of `looptrace.Tracer` into `property` values rather than direct attributes, so that data aren't computed/stored as much when not needed. See [Issue 303](https://github.com/gerlichlab/looptrace/issues/303).
 * Now including the true trace ID in the locus spots visualisation points files (e.g. `P0001.qcpass.csv`, to check if something seems amiss). Previously only the reindexed (after sorting in ascending order) trace ID was included.
+* Data for visualisation with the locus spots plugin is now after having subtracted background, as applicable. See [Issue 324](https://github.com/gerlichlab/looptrace/issues/324).
+* Proper handling of potentially high pixel values when mapping from unsigned integer to signed integer type during background subtraction for tracing locus spots. See [Issue 325](https://github.com/gerlichlab/looptrace/issues/325).
 
 ## [v0.4.1] - 2024-05-24
 This is a ___bugfix_ release__.
