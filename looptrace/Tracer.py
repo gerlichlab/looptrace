@@ -72,7 +72,6 @@ class Tracer:
     def __init__(self, image_handler: ImageHandler, trace_beads: bool = False):
         self.image_handler = image_handler
         self.config = image_handler.config
-        self.pos_list = self.image_handler.image_lists[image_handler.spot_input_name]
         self._trace_beads = trace_beads
         fit_func_specs = {
             'LS': FunctionalForm(function=fitSymmetricGaussian3D, dimensionality=3), 
