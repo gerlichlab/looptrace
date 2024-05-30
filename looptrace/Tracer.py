@@ -169,14 +169,21 @@ class Tracer:
         if self._background_wrapper is None:
             logging.info("No background subtraction; will pair fits with full ROIs table")
             rois_table = self.all_rois
+            ignore_index = False
         else:
             logging.info("Subsetting ROIs table to exclude background timepoint records before pairing ROIs with fits...")
             bg_time = self.image_handler.background_subtraction_frame
             assert isinstance(bg_time, int) and bg_time >= 0, f"Background subtraction timepoint isn't nonnegative int: {bg_time}"
             rois_table = self.all_rois[self.all_rois.frame != bg_time]
+            ignore_index = True
         
         logging.info("Finalising traces table...")
-        traces = finalise_traces(rois=rois_table, fits=spot_fits, z_nm=self.nanometers_per_pixel_z, xy_nm=self.nanometers_per_pixel_xy)
+        traces = finalise_traces(
+            rois=rois_table, 
+            fits=spot_fits, 
+            z_nm=self.nanometers_per_pixel_z, 
+            xy_nm=self.nanometers_per_pixel_xy, ignore_index=ignore_index,
+        )
         
         logging.info("Writing traces: %s", self.traces_path)
         traces.to_csv(self.traces_path)
@@ -223,7 +230,7 @@ def _iter_fit_args(
             yield time_stack_of_volumes[t]
 
 
-def finalise_traces(rois: pd.DataFrame, fits: pd.DataFrame, z_nm: NumberLike, xy_nm: NumberLike) -> pd.DataFrame:
+def finalise_traces(*, rois: pd.DataFrame, fits: pd.DataFrame, z_nm: NumberLike, xy_nm: NumberLike, ignore_index: bool = False) -> pd.DataFrame:
     """
     Pair ROIs (single spots) table with row-by-row fits, apply drift correction, convert to nanometers, sort, and name columns.
 
@@ -237,6 +244,8 @@ def finalise_traces(rois: pd.DataFrame, fits: pd.DataFrame, z_nm: NumberLike, xy
         Number of nanometers per pixel in the z-direction
     xy_nm : NumberLike
         Number of nanometers per pixel in the x- and y-directions
+    ignore_index : bool
+        Whether to ignore potential mismatch between indices of the tables
 
     Returns
     -------
@@ -244,7 +253,7 @@ def finalise_traces(rois: pd.DataFrame, fits: pd.DataFrame, z_nm: NumberLike, xy
         The result of joining (horizontally) the frames, applying drift correction, sorting, and applying units
     """
     # First, combine the original ROI data with the newly obtained Gaussian fits data.
-    traces = pair_rois_with_fits(rois=rois, fits=fits)
+    traces = pair_rois_with_fits(rois=rois, fits=fits, ignore_index=ignore_index)
     #Then, apply fine scale drift to fits, and map pixels to physcial units.
     traces = apply_fine_scale_drift_correction(traces)
     traces = apply_pixels_to_nanometers(traces, z_nm_per_px=z_nm, xy_nm_per_px=xy_nm)
@@ -254,7 +263,7 @@ def finalise_traces(rois: pd.DataFrame, fits: pd.DataFrame, z_nm: NumberLike, xy
     return traces
 
 
-def pair_rois_with_fits(rois: pd.DataFrame, fits: pd.DataFrame) -> pd.DataFrame:
+def pair_rois_with_fits(rois: pd.DataFrame, fits: pd.DataFrame, ignore_index: bool = False) -> pd.DataFrame:
     """
     Merge (horizontally) the data from the individual spots / ROIs (1 per frame per regional spot) and the Gaussian fits.
 
@@ -264,6 +273,8 @@ def pair_rois_with_fits(rois: pd.DataFrame, fits: pd.DataFrame) -> pd.DataFrame:
         Individual spot data (1 per frame per regional spot)
     fits : pd.DataFrame
         Parameters for function fit to each individual spot
+    ignore_index : bool
+        Whether to ignore potential mismatch between indices of the tables
     
     Returns
     -------
@@ -277,10 +288,10 @@ def pair_rois_with_fits(rois: pd.DataFrame, fits: pd.DataFrame) -> pd.DataFrame:
     """
     if rois.shape[0] != fits.shape[0]:
         raise ValueError(f"ROIs table has {rois.shape[0]} rows, but fits table has {fits.shape[0]}; these should match.")
-    if any(rois.index != fits.index):
+    if not ignore_index and any(rois.index != fits.index):
         raise ValueError("Indexes of spots table and fits table don't match!")
     # TODO: fix this brittle / fragile / incredibly error-prone thing; #84
-    traces = pd.concat([rois, fits], axis=1)
+    traces = pd.concat([rois, fits], axis=1, ignore_index=ignore_index)
     return traces
 
 
