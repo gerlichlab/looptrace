@@ -339,7 +339,7 @@ def find_trace_fits(
     else:
         fits = Parallel(n_jobs=cores or -1)(
             delayed(fit_single_roi)(fit_func_spec=fit_func_spec, roi_img=spot_img) 
-            for spot_img in tqdm.tqdm(_iter_fit_args(filenames=filenames, image_data=image_data, background_data=background_data))
+            for spot_img in tqdm(_iter_fit_args(filenames=filenames, image_data=image_data, background_data=background_data))
         )
     
     full_cols = ROI_FIT_COLUMNS + IMG_SIDE_LEN_COLS
