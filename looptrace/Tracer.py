@@ -89,56 +89,18 @@ class Tracer:
         # will be concatenated horizontally with fits; idempotent if already effectively unindexed
         return self.image_handler.tables[self.image_handler.spot_input_name + "_dc_rois"].reset_index(drop=True)
 
-    def finalise_suffix(self, p: Path) -> Path:
-        return Path(str(p).replace(".csv", "_beads.csv")) if self._trace_beads else p
-
-    @property
-    def roi_table(self) -> pd.DataFrame:
-        return self.image_handler.tables[self.image_handler.spot_input_name + ("_bead_rois" if self._trace_beads else "_rois")]
-
-    @property
-    def traces_path(self) -> Path:
-        return self.finalise_suffix(self.image_handler.traces_path)
-    
-    @property
-    def traces_path_enriched(self) -> Path:
-        return self.finalise_suffix(self.image_handler.traces_path_enriched)
-
     @property
     def drift_table(self) -> pd.DataFrame:
         return self.image_handler.spots_fine_drift_correction_table
+
+    def finalise_suffix(self, p: Path) -> Path:
+        return Path(str(p).replace(".csv", "_beads.csv")) if self._trace_beads else p
 
     @property
     def images(self) -> Iterable[np.ndarray]:
         """Iterate over the small, single spot images for tracing (1 per timepoint per ROI)."""
         for fn in self._iter_filenames():
             yield self._images_wrapper[fn]
-
-    @property
-    def _background_wrapper(self) -> Optional[NPZ_wrapper]:
-        bg_time: Optional[int] = self.image_handler.background_subtraction_frame
-        if bg_time is None:
-            return None
-        try:
-            return self.image_handler.images[self._input_name]
-        except KeyError as e:
-            sure_message = f"Background subtraction frame ({bg_time}) is non-null, but no spot image background was found."
-            zip_path = get_spot_images_zipfile(self.image_handler.image_save_path, is_background=True)
-            best_guess = f"Has {zip_path} been generated?"
-            raise RuntimeError(f"{sure_message} {best_guess}") from e
-
-    @property
-    def _input_name(self) -> str:
-        return self.config['trace_input_name']
-
-    @property
-    def _images_wrapper(self) -> NPZ_wrapper:
-        return self.image_handler.images[self._input_name]
-
-    def _iter_filenames(self) -> Iterable[str]:
-        _, keyed_filenames = _prep_npz_to_zarr(self._images_wrapper)
-        for _, fn in keyed_filenames:
-            yield fn
 
     @property
     def locus_spots_visualisation_folder(self) -> Path:
@@ -152,6 +114,10 @@ class Tracer:
     @property
     def nanometers_per_pixel_z(self) -> NumberLike:
         return self.config["z_nm"]
+
+    @property
+    def roi_table(self) -> pd.DataFrame:
+        return self.image_handler.tables[self.image_handler.spot_input_name + ("_bead_rois" if self._trace_beads else "_rois")]
 
     def trace_all_rois(self) -> str:
         """Fits 3D gaussian to previously detected ROIs across positions and timeframes"""
@@ -190,6 +156,14 @@ class Tracer:
 
         return self.traces_path
 
+    @property
+    def traces_path(self) -> Path:
+        return self.finalise_suffix(self.image_handler.traces_path)
+    
+    @property
+    def traces_path_enriched(self) -> Path:
+        return self.finalise_suffix(self.image_handler.traces_path_enriched)
+
     def write_all_spot_images_to_one_per_fov_zarr(self, overwrite: bool = False) -> list[Path]:
         name_data_pairs: list[tuple[str, np.ndarray]] = (
             compute_spot_images_multiarray_per_fov(self._images_wrapper, locus_grouping=self.image_handler.locus_grouping) \
@@ -209,6 +183,31 @@ class Tracer:
             dtype=a0.dtype, 
             overwrite=overwrite,
         )
+    @property
+    def _background_wrapper(self) -> Optional[NPZ_wrapper]:
+        bg_time: Optional[int] = self.image_handler.background_subtraction_frame
+        if bg_time is None:
+            return None
+        try:
+            return self.image_handler.images[self._input_name]
+        except KeyError as e:
+            sure_message = f"Background subtraction frame ({bg_time}) is non-null, but no spot image background was found."
+            zip_path = get_spot_images_zipfile(self.image_handler.image_save_path, is_background=True)
+            best_guess = f"Has {zip_path} been generated?"
+            raise RuntimeError(f"{sure_message} {best_guess}") from e
+
+    @property
+    def _input_name(self) -> str:
+        return self.config['trace_input_name']
+
+    @property
+    def _images_wrapper(self) -> NPZ_wrapper:
+        return self.image_handler.images[self._input_name]
+
+    def _iter_filenames(self) -> Iterable[str]:
+        _, keyed_filenames = _prep_npz_to_zarr(self._images_wrapper)
+        for _, fn in keyed_filenames:
+            yield fn
 
 
 # For parallelisation (multiprocessing) in the case of mask_fits being False.
