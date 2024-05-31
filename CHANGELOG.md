@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.5.1] - 2024-05-31
+
+### Changed
+* The processing pipeline now will permit overwrite of existing outputs of the tracing QC, rather than crashing.
+* Bumped `os-lib` dependency to 0.10.2.
+
 ## [v0.5.0] - 2024-05-31
 
 ### Added

@@ -48,6 +48,7 @@ object LabelAndFilterLocusSpots extends StrictLogging:
         minTraceLength: NonnegativeInt = NonnegativeInt(0),
         parserConfig: Option[os.Path] = None, 
         analysisOutputFolder: Option[os.Path] = None, 
+        overwrite: Boolean = false,
     )
 
     /** The definition of how to build the parser for the data (traces) file */
@@ -195,6 +196,9 @@ object LabelAndFilterLocusSpots extends StrictLogging:
                 .action((d, c) => c.copy(analysisOutputFolder = d.some))
                 .validate(d => os.isDir(d).either(s"Alleged output folder isn't a directory: $d", ()))
                 .text("Path to the folder in which to place the filtered and unfiltered CSV files with output records"),
+            opt[Unit]("overwrite")
+                .action((_, c) => c.copy(overwrite = true))
+                .text("Allow overwrite of existing output, otherwise crash")
         )
 
         OParser.parse(parser, args, CliConfig()) match {
@@ -215,6 +219,7 @@ object LabelAndFilterLocusSpots extends StrictLogging:
                     minTraceLength = opts.minTraceLength, 
                     analysisOutfolder = analysisOutfolder, 
                     pointsOutfolder = opts.pointsDataOutputFolder,
+                    overwrite = opts.overwrite,
                     )
         }
     }
@@ -231,6 +236,7 @@ object LabelAndFilterLocusSpots extends StrictLogging:
         minTraceLength: NonnegativeInt, 
         analysisOutfolder: os.Path, 
         pointsOutfolder: os.Path,
+        overwrite: Boolean = false,
         ): Unit = {
         
         val pc: ParserConfig = parserConfigPathOrConf match {
@@ -364,6 +370,7 @@ object LabelAndFilterLocusSpots extends StrictLogging:
                                     pointsOutfolder,
                                     tracesFile.baseName, 
                                     delimiter, 
+                                    overwrite = overwrite,
                                     )
                             case (badRecords, _) => throw new Exception(s"${badRecords.length} problem(s) reading records: $badRecords")
                         }
@@ -381,6 +388,7 @@ object LabelAndFilterLocusSpots extends StrictLogging:
         pointsOutfolder: os.Path,
         basename: String, 
         delimiter: Delimiter,
+        overwrite: Boolean = false,
         ): Unit = {
         if (!os.isDir(analysisOutfolder)) { os.makeDir.all(analysisOutfolder) }
         if (!os.isDir(pointsOutfolder)) { os.makeDir.all(pointsOutfolder) }
@@ -407,7 +415,7 @@ object LabelAndFilterLocusSpots extends StrictLogging:
                 // Here, still write a record even if its timepoint is in exclusions, as it may be useful to know when such "spots" actually pass QC.
                 val unfilteredRows = unfiltered.map{ (outrec, original) => finaliseOriginal(original) ++ getQCFlagsText(outrec.qcResult) }
                 logger.info(s"Writing unfiltered output: $unfilteredOutputFile")
-                writeTextFile(unfilteredOutputFile, unfilteredHeader :: unfilteredRows, delimiter)
+                writeTextFile(unfilteredOutputFile, unfilteredHeader :: unfilteredRows, delimiter, overwrite = overwrite)
                 
                 /* Filtered output */
                 val filteredOutputFile = analysisOutfolder / s"${basename}.filtered.${delimiter.ext}" // would need to update ImageHandler.traces_file_qc_filtered if changed
@@ -433,7 +441,7 @@ object LabelAndFilterLocusSpots extends StrictLogging:
                         .map((_, fields) => fields)
                 }
                 logger.info(s"Writing filtered output: $filteredOutputFile")
-                writeTextFile(filteredOutputFile, filteredHeader :: recordsToWrite, delimiter)
+                writeTextFile(filteredOutputFile, filteredHeader :: recordsToWrite, delimiter, overwrite = overwrite)
             
                 /** Points CSVs for visualisation with `napari` */
                 val groupedAndTagged: List[(PositionIndex, List[(List[(LocusSpotQC.OutputRecord, PointDisplayType)], NonnegativeInt)])] = 
@@ -525,8 +533,10 @@ object LabelAndFilterLocusSpots extends StrictLogging:
     }
 
     /** Wrapper around {@code os.write} to handle writing an iterable of lines. */
-    private def writeTextFile(target: os.Path, data: Iterable[Array[String]], delimiter: Delimiter) = 
-        os.write(target, data.map(delimiter.join(_: Array[String]) ++ "\n"))
+    private def writeTextFile(target: os.Path, data: Iterable[Array[String]], delimiter: Delimiter, overwrite: Boolean = false) = {
+        val lines = data.map(delimiter.join(_: Array[String]) ++ "\n")
+        if overwrite then os.write.over(target, lines) else os.write(target, lines)
+    }
 
     /** From a spot identifier, obtain the elements needed to group it by logical tracing unit. */
     def getGroupId(identifier: LocusSpotQC.SpotIdentifier): (PositionIndex, RegionId, TraceId) = (identifier.position, identifier.regionId, identifier.traceId)
