@@ -183,10 +183,7 @@ class Tracer:
                 num_timepoints=sum(1 for _ in self.image_handler.iter_imaging_rounds()),
             )
         )
-        assert (
-            isinstance(name_data_pairs, list), 
-            f"Result of computation of per-FOV spot images arrays isn't list, but {type(name_data_pairs).__name__}"
-        )
+        assert isinstance(name_data_pairs, list), f"Result of computation of per-FOV spot images arrays isn't list, but {type(name_data_pairs).__name__}"
         if len(name_data_pairs) == 0:
             return []
         _, a0 = name_data_pairs[0]
