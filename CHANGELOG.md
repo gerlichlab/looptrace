@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.5.2] - 2024-06-16
+This is strictly a bugfix release.
+
+### Fixed
+* `str.lstrip` is replaced by `str.removeprefix` where appropriate. See [Issue 330](https://github.com/gerlichlab/looptrace/issues/330).
+
 ## [v0.5.1] - 2024-05-31
 
 ### Changed

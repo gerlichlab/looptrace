@@ -24,7 +24,7 @@ __all__ = [
 
 
 # This is put into place by the docker build, as declared in the Dockerfile.
-LOOPTRACE_JAR_PATH = importlib.resources.files(__name__).joinpath("looptrace-assembly-0.5.1.jar")
+LOOPTRACE_JAR_PATH = importlib.resources.files(__name__).joinpath("looptrace-assembly-0.5.2.jar")
 LOOPTRACE_JAVA_PACKAGE = "at.ac.oeaw.imba.gerlich.looptrace"
 
 MAX_DISTANCE_SPOT_FROM_REGION_NAME = "max_dist"
