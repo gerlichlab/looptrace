@@ -95,7 +95,7 @@ class BeadRoisFilenameSpecification:
             return None
         if not base.startswith(cls.prefix):
             return None
-        data = base.lstrip(cls.prefix).split("_")
+        data = base.removeprefix(cls.prefix).split("_")
         if len(data) != 2:
             return None
         try:

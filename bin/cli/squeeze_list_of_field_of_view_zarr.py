@@ -31,7 +31,7 @@ def workflow(*, data_folder: Path, script_file: Path) -> None:
         if not (f.is_dir() and f.name.startswith(NameableSemantic.Point.value) and f.suffix == ZARR_EXTENSION):
             logging.debug("Not considering path: %s", f)
         try:
-            raw_fov = int(f.stem.lstrip(NameableSemantic.Point.value))
+            raw_fov = int(f.stem.removeprefix(NameableSemantic.Point.value))
         except (TypeError, ValueError) as e:
             logging.debug("Cannot parse FOV from file %s: %s", f, e)
             continue
