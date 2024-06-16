@@ -35,7 +35,7 @@ def get_fov(s: str) -> Optional[FieldOfViewFrom1]:
     if not s.startswith(prefix):
         return None
     try:
-        raw_val = int(s.lstrip(prefix))
+        raw_val = int(s.removeprefix(prefix))
     except (TypeError, ValueError):
         return None
     return FieldOfViewFrom1(raw_val)
