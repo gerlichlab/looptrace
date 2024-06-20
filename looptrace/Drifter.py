@@ -241,7 +241,14 @@ class MultiprocessingPoolSpecification:
     n_workers: int    
 
 
-def coarse_correction_workflow(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder):
+def coarse_correction_workflow(
+    rounds_config: ExtantFile, 
+    params_config: ExtantFile, 
+    images_folder: ExtantFolder,
+    n_jobs: Optional[int] = None,
+    joblib_backend: Optional[str] = "threading",
+
+):
     """The workflow for the initial (and sometimes only), coarse, drift correction."""
     D = Drifter(image_handler=ImageHandler(rounds_config, params_config, images_folder))
     try:
@@ -264,7 +271,8 @@ def coarse_correction_workflow(rounds_config: ExtantFile, params_config: ExtantF
         stop_after=pos_halt_point,
     )
     print("Computing coarse drifts...")
-    records = Parallel(n_jobs=-1)(
+    n_jobs = max(1, os.cpu_count() // 2) if n_jobs is None else n_jobs
+    records = Parallel(n_jobs=n_jobs, backend=joblib_backend)(
         delayed(lambda p, t, ref_ds, mov_ds: (t, p) + tuple(phase_xcor(ref_ds, mov_ds) * D.downsampling))(*args) 
         for args in all_args
         )

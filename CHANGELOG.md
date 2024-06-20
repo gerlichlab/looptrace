@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.5.3] - 2024-06-20
+
+### Added
+* `coarse_dc_backend` and `coarse_dc_cpu_count` are now avaible as keys in the parameters configuration file, to control which backend that `joblib`'s parallel processing will use, and how many CPUs will be used, respectively.
+
+### Changed
+* By default, coarse drift correction will now use the `'threading'` backend for `joblib` and only half of the available CPUs, attempting to alleviate resource pressure. 
+See [Issue 332](https://github.com/gerlichlab/looptrace/issues/330).
+
 ## [v0.5.2] - 2024-06-16
 This is strictly a bugfix release.
 

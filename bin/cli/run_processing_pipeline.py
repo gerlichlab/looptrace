@@ -9,13 +9,14 @@ import shutil
 import subprocess
 import sys
 from typing import *
+import yaml
 
 from gertils import ExtantFile, ExtantFolder
 import pandas as pd
 import pypiper
 
 from looptrace import *
-from looptrace.Drifter import coarse_correction_workflow as run_coarse_drift_correction, fine_correction_workflow as run_fine_drift_correction
+from looptrace.Drifter import coarse_correction_workflow, fine_correction_workflow as run_fine_drift_correction
 from looptrace.ImageHandler import ImageHandler
 from looptrace.NucDetector import NucDetector
 from looptrace.Tracer import Tracer, run_frame_name_and_distance_application
@@ -312,6 +313,25 @@ def validate_imaging_rounds_config(rounds_config: ExtantFile) -> int:
     ]
     logging.info(f"Running imaging rounds validation: {' '.join(cmd_parts)}")
     return subprocess.check_call(cmd_parts)
+
+
+def run_coarse_drift_correction(
+    rounds_config: ExtantFile, 
+    params_config: ExtantFile, 
+    images_folder: ExtantFolder,
+) -> Path:
+    logging.info("Checking for coarse drift correction parameters in config file: %s", params_config.path)
+    with params_config.path.open(mode="r") as fh:
+        conf = yaml.safe_load(fh)
+    extra_kwargs: dict[str, object] = {}
+    for config_key, param_name in [("coarse_dc_backend", "joblib_backend"), ("coarse_dc_cpu_count", "n_jobs")]:
+        config_val = conf.get(config_key)
+        if config_val is not None:
+            logging.debug("%s found; will set %s to %s", config_key, param_name, str(config_val))
+            extra_kwargs[param_name] = config_val
+        else:
+            logging.debug("Not in config, ignoring: %s", config_key)
+    return coarse_correction_workflow(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder, **extra_kwargs)
 
 
 class LooptracePipeline(pypiper.Pipeline):
