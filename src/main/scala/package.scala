@@ -11,7 +11,7 @@ import com.github.tototoshi.csv.*
 
 /** Chromatin fiber tracing with FISH probes */
 package object looptrace {
-    val VersionName = "0.5.2"
+    val VersionName = "0.5.3"
 
     type CsvRow = Map[String, String]
     type ErrorMessages = NonEmptyList[String]
