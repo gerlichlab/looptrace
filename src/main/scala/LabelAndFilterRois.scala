@@ -208,7 +208,7 @@ object LabelAndFilterRois extends StrictLogging:
         }
 
         /* Write the unfiltered output and print out the header */
-        val unfilteredHeader = {
+        val _: Unit = {
             val neighborColumnName = "neighbors"
             val header = roisHeader :+ neighborColumnName
             val records = roiRecordsLabeled.map{ case (row, maybeNeighbors) => 
@@ -216,11 +216,13 @@ object LabelAndFilterRois extends StrictLogging:
             }
             val wroteIt = writeUnfiltered(header, records)
             logger.info(s"${if wroteIt then "Wrote" else "Did not write"} unfiltered output file: $filteredOutputFile")
-            header
+            ()
         }
         
-        val wroteIt = writeFiltered(roisHeader, roiRecordsLabeled.filter(_._2.isEmpty).map(_._1))
-        logger.info(s"${if wroteIt then "Wrote" else "Did not write"} filtered output file: $filteredOutputFile")
+        val _: Unit = {
+            val wroteIt = writeFiltered(roisHeader, roiRecordsLabeled.filter(_._2.isEmpty).map(_._1))
+            logger.info(s"${if wroteIt then "Wrote" else "Did not write"} filtered output file: $filteredOutputFile")
+        }
 
     }
 
