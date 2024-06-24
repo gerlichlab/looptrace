@@ -254,7 +254,7 @@ object LabelAndFilterRois extends StrictLogging:
       * 
       * An item is not considered its own neigbor, and this is omitting from the result any item with no proximal neighbors.
       *
-      * @tparam B 
+      * @tparam B THe initial value type, associated with a key `K`
       * @tparam A The type items of interest, for which to compute sets of proximal neighbors
       * @tparam K The type of value on which to group the items
       * @param kvPairs The pairs of keying value and actual item
@@ -301,7 +301,6 @@ object LabelAndFilterRois extends StrictLogging:
       * @param proxFilterStrategy Strategy with which to consider points as proximal ("neighbors") or not
       * @return A mapping from item to set of proximal (closer than given distance threshold) neighbors, omitting each item with no neighbors; 
       *         otherwise, a {@code Left}-wrapped error message about what went wrong
-      * @see 
       */
     private[looptrace] def buildNeighboringRoisFinder(rois: List[RoiLinenumPair], proxFilterStrategy: ImagingRoundsConfiguration.ProximityFilterStrategy): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
         given orderForRoiLinenumPair: Order[RoiLinenumPair] = Order.by(_._2)
@@ -312,9 +311,11 @@ object LabelAndFilterRois extends StrictLogging:
             case ImagingRoundsConfiguration.UniversalProximityPermission => Map.empty.asRight
             case strat: ImagingRoundsConfiguration.UniversalProximityProhibition => 
                 val minSep = PiecewiseDistance.ConjunctiveThreshold(strat.minSpotSeparation.asNonnegative)
+                // Records from the same timepoint must never exclude one another, so don't consider them as neighbors by proximity.
                 val considerRoiPair = { (a: IndexedRoi, b: IndexedRoi) => a._1.time =!= b._1.time }
                 buildNeighborsLookupKeyed(
-                    rois.map{ case pair@(r, _) => r.position -> pair }, 
+                    // Key each record by its field of view.
+                    rois.map{ case pair@(r, _) => r.position -> pair },
                     considerRoiPair, 
                     getPoint, 
                     minSep, 
