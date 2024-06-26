@@ -203,6 +203,7 @@ object LabelAndFilterRois extends StrictLogging:
                 }
         }
 
+        // For each record (ROI, line), find the line number of any proximal (according to a distance threshold) ROI.
         val roiRecordsLabeled = rowRoiPairs.map{ 
             case ((row, _), linenum) => row -> lookupNeighbors(linenum).map(_.toNonEmptyList.sorted)
         }
