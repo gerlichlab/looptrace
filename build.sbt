@@ -36,14 +36,19 @@ lazy val root = (project in file("."))
     ),
     libraryDependencies ++= Seq(
       catsCore,
+      iron,     // indirect, but needs to be on classpath
+      ironCats, // indirect, but needs to be on classpath
       mouse,
       os, 
       scalaCsv,
       scopt,
       uPickle,
       ) ++ 
+      gerlibs ++
       logging ++
       Seq( // only for tests
+        gerlibTesting,
+        ironScalacheck,
         scalacheck, 
         scalactic, 
         scalatest, 

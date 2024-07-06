@@ -11,6 +11,12 @@ import scopt.OParser
 import com.github.tototoshi.csv.*
 import com.typesafe.scalalogging.StrictLogging
 
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt.given
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.PositiveReal.*
+
+import io.github.iltotore.iron.autoCastIron // TODO: replace this by upstreaming the implications of Positive --> Nonnegative
+
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
@@ -304,6 +310,7 @@ object LabelAndFilterRois extends StrictLogging:
       *         otherwise, a {@code Left}-wrapped error message about what went wrong
       */
     private[looptrace] def buildNeighboringRoisFinder(rois: List[RoiLinenumPair], proxFilterStrategy: ImagingRoundsConfiguration.ProximityFilterStrategy): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
+        import scala.language.implicitConversions
         given orderForRoiLinenumPair: Order[RoiLinenumPair] = Order.by(_._2)
         type GroupId = NonnegativeInt
         type IndexedRoi = (RegionalBarcodeSpotRoi, NonnegativeInt)

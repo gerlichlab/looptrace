@@ -2,16 +2,21 @@ package at.ac.oeaw.imba.gerlich.looptrace
 
 import scala.language.adhocExtensions // for extending ujson.Value.InvalidData
 import scala.util.Try
+import cats.*
 import cats.data.*
 import cats.syntax.all.*
 import mouse.boolean.*
 import upickle.default.*
 
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
 
 /** A round of imaging during an experiment */
 sealed trait ImagingRound:
+    /** A name for the round of imaging during the experiment, often the identifier of the probe */
     def name: String
+    /** The timepoint in the (sequential) imaging experiment */
     def time: Timepoint
 end ImagingRound
 
@@ -20,6 +25,7 @@ object ImagingRound:
     import BlankImagingRound.*
     import LocusImagingRound.*
     import RegionalImagingRound.*
+    import PositiveInt.given // for derivation of instance of Show
 
     /**
      * Wrapper around [[ujson.Value.InvalidData]] for the case in which one or more errors occur during decoding.
@@ -31,7 +37,7 @@ object ImagingRound:
      */
     final class DecodingError(val whatWasBeingDecoded: String, val json: ujson.Value, val messages: NonEmptyList[String]) 
         extends ujson.Value.InvalidData(json, s"Error(s) decoding ($whatWasBeingDecoded): ${messages.mkString_(", ")}")
-    
+
     /**
      * A JSON read/write implementation for imaging rounds, allowing subtype determination to be done by keys and values present.
      * 
@@ -194,6 +200,8 @@ final case class LocusImagingRound(name: String, time: Timepoint, probe: ProbeNa
 
 /** Helpers and alternate constructors for working with imaging rounds of specific genomic loci */
 object LocusImagingRound:
+    import PositiveInt.given // for derivation of instance of Show
+
     def apply(time: Timepoint, probe: ProbeName): LocusImagingRound = apply(None, time, probe, None)
     def apply(time: Timepoint, probe: ProbeName, repeat: PositiveInt): LocusImagingRound = apply(None, time, probe, repeat.some)
     def apply(maybeName: Option[String], time: Timepoint, probe: ProbeName, maybeRepeat: Option[PositiveInt]): LocusImagingRound = 

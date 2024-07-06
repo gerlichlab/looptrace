@@ -4,10 +4,17 @@ import scala.util.Try
 import upickle.default.*
 import cats.*
 import cats.data.*
+import cats.derived.*
 import cats.syntax.all.*
 import mouse.boolean.*
 import scopt.Read
 import com.github.tototoshi.csv.*
+
+import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow
+import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow.given
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt.given
+import at.ac.oeaw.imba.gerlich.looptrace.Channel.simpleShowForChannel
 
 /** Chromatin fiber tracing with FISH probes */
 package object looptrace {
@@ -112,141 +119,81 @@ package object looptrace {
         }
     end ScoptCliReaders
 
-    /** Refinement type for nonnegative integers */
-    opaque type NonnegativeInt <: Int = Int
-    
-    /** Helpers for working with nonnegative integers */
-    object NonnegativeInt:
-        inline def apply(z: Int): NonnegativeInt = 
-            inline if z < 0 then compiletime.error("Negative integer where nonnegative is required!")
-            else (z: NonnegativeInt)
-        def add(n1: NonnegativeInt, n2: NonnegativeInt): NonnegativeInt = unsafe(n1 + n2)
-        def either(z: Int): Either[String, NonnegativeInt] = maybe(z).toRight(s"Cannot refine as nonnegative: $z")
-        def indexed[A](xs: List[A]): List[(A, NonnegativeInt)] = {
-            // guaranteed nonnegative by construction here
-            xs.zipWithIndex.map{ case (x, i) => x -> unsafe(i) }
-        }
-        def maybe(z: Int): Option[NonnegativeInt] = (z >= 0).option{ (z: NonnegativeInt) }
-        def seqTo(n: NonnegativeInt): IndexedSeq[NonnegativeInt] = (0 to n).map(unsafe)
-        def unsafe(z: Int): NonnegativeInt = either(z).fold(msg => throw new NumberFormatException(msg), identity)
-        given nonnegativeIntOrder(using intOrd: Order[Int]): Order[NonnegativeInt] = intOrd.contramap(identity)
-        given showForNonnegativeInt: Show[NonnegativeInt] = Show.fromToString[NonnegativeInt]
-    end NonnegativeInt
-
-    /** Refinement type for nonnegative integers */
-    opaque type PositiveInt <: Int = Int
-    
-    /** Helpers for working with nonnegative integers */
-    object PositiveInt:
-        inline def apply(z: Int): PositiveInt = 
-            inline if z <= 0 then compiletime.error("Non-positive integer where positive is required!")
-            else (z: PositiveInt)
-        /** Enable a guaranteed-safe case of a positive integer to a nonnegative integer. */
-        extension (n: PositiveInt)
-            def asNonnegative: NonnegativeInt = NonnegativeInt.unsafe(n)
-        def either(z: Int): Either[String, PositiveInt] = maybe(z).toRight(s"Cannot refine as positive: $z")
-        def lengthOfNonempty(xs: NonEmptyList[?]): PositiveInt = unsafe(xs.length)
-        def lengthOfNonempty[A : Order](xs: NonEmptySet[A]): PositiveInt = unsafe(xs.length)
-        def maybe(z: Int): Option[PositiveInt] = (z > 0).option{ (z: PositiveInt) }
-        def unsafe(z: Int): PositiveInt = either(z).fold(msg => throw new NumberFormatException(msg), identity)
-        given posIntOrder(using intOrd: Order[Int]): Order[PositiveInt] = intOrd.contramap(identity)
-        given posIntShow(using intShow: Show[Int]): Show[PositiveInt] = intShow.contramap(identity)
-        given posIntRW(using intRW: ReadWriter[Int]): ReadWriter[PositiveInt] = intRW.bimap(identity, _.int)
-    end PositiveInt
-
-    /** Refinement for positive real values */
-    opaque type PositiveReal <: Double = Double
-
-    /** Helpers for working with positive real numbers */
-    object PositiveReal:
-        inline def apply(x: Double): PositiveReal = 
-            inline if x > 0 then (x: PositiveReal)
-            else compiletime.error("Non-positive value where positive is required!")
-        /** Enable a guaranteed-safe case of a positive real number to a nonnegative real number. */
-        extension (x: PositiveReal)
-            def asNonnegative: NonnegativeReal = NonnegativeReal.unsafe(x)
-        def either(x: Double): Either[String, PositiveReal] = maybe(x).toRight(s"Cannot refine as positive: $x")
-        def maybe(x: Double): Option[PositiveReal] = (x > 0).option{ (x: PositiveReal) }
-        def unsafe(x: Double): PositiveReal = either(x).fold(msg => throw new NumberFormatException(msg), identity)
-        given posRealOrd(using numOrd: Order[Double]): Order[PositiveReal] = numOrd.contramap(identity)
-    end PositiveReal
-
-    /** Represent the nonnegative subset of real numbers. */
-    opaque type NonnegativeReal <: Double = Double
-
-    /** Tools for working with nonnegative real numbers */
-    object NonnegativeReal:
-        def absdiff(x: Double, y: Double): NonnegativeReal = unsafe((x - y).abs)
-        inline def apply(x: Double): NonnegativeReal = 
-            inline if x >= 0 then (x: NonnegativeReal)
-            else compiletime.error("Negative value where nonnegative is required!")
-        def either(x: Double): Either[String, NonnegativeReal] = maybe(x).toRight(s"Cannot refine as nonnegative: $x")
-        def maybe(x: Double): Option[NonnegativeReal] = (x >= 0).option{ (x: NonnegativeReal) }
-        def unsafe(x: Double): NonnegativeReal = either(x).fold(msg => throw new NumberFormatException(msg), identity)
-        given nnRealOrd(using numOrd: Order[Double]): Order[NonnegativeReal] = numOrd.contramap(identity)
-    end NonnegativeReal
+    object PositiveIntExtras:
+        def lengthOfNonempty(xs: NonEmptyList[?]): PositiveInt = PositiveInt.unsafe(xs.length)
+        def lengthOfNonempty[A : Order](xs: NonEmptySet[A]): PositiveInt = PositiveInt.unsafe(xs.length)
+    end PositiveIntExtras
     
     /** Type wrapper around the index of an imaging channel */
-    final case class Channel(get: NonnegativeInt) extends AnyVal
+    final case class Channel(get: NonnegativeInt) derives Order
     
     /** Helpers for working with the representation of an imaging channel */
     object Channel:
-        /** Order channels by the wrapped value. */
-        given orderForChannel: Order[Channel] = Order.by(_.get)
+        given simpleShowForChannel(using ev: SimpleShow[NonnegativeInt]): SimpleShow[Channel] = ev.contramap(_.get)
         def fromInt = NonnegativeInt.either.fmap(_.map(Channel.apply))
         def unsafe = NonnegativeInt.unsafe `andThen` Channel.apply
     end Channel
 
-    final case class LocusId(get: Timepoint):
+    final case class LocusId(get: Timepoint) derives Order:
         def index = get.get
+    
     object LocusId:
-        given orderForLocusId: Order[LocusId] = Order.by(_.get)
-        given showForLocusId: Show[LocusId] = Show.show(_.index.show)
+        given showForLocusId(using ev: Show[Timepoint]): Show[LocusId] = ev.contramap(_.get)
+        given SimpleShow[LocusId] = SimpleShow.fromShow
         def fromInt = NonnegativeInt.either.fmap(_.map(fromNonnegative))
         def fromNonnegative = LocusId.apply `compose` Timepoint.apply
         def unsafe = fromNonnegative `compose` NonnegativeInt.unsafe
     end LocusId
 
-    final case class PositionIndex(get: NonnegativeInt) extends AnyVal
+    final case class PositionIndex(get: NonnegativeInt) derives Order
+    
     object PositionIndex:
-        given orderForPositionIndex: Order[PositionIndex] = Order.by(_.get)
-        given showForPositionIndex: Show[PositionIndex] = Show.show(_.get.show)
+        given showForPositionIndex(using ev: Show[NonnegativeInt]): Show[PositionIndex] = 
+            ev.contramap(_.get)
+        given SimpleShow[PositionIndex] = SimpleShow.fromShow
         def fromInt = NonnegativeInt.either.fmap(_.map(PositionIndex.apply))
         def unsafe = NonnegativeInt.unsafe `andThen` PositionIndex.apply
     end PositionIndex
 
-    final case class PositionName(get: String) extends AnyVal
+    final case class PositionName(get: String) derives Order
+    
     object PositionName:
-        given orderForPositionName: Order[PositionName] = Order.by(_.get)
         given showForPositionName: Show[PositionName] = Show.show(_.get)
+        given SimpleShow[PositionName] = SimpleShow.fromShow
     end PositionName
 
     final case class ProbeName(get: String)
+    
     object ProbeName:
         given showForProbeName: Show[ProbeName] = Show.show(_.get)
+        given SimpleShow[ProbeName] = SimpleShow.fromShow
 
-    final case class RegionId(get: Timepoint):
+    final case class RegionId(get: Timepoint) derives Order:
         def index = get.get
+
     object RegionId:
-        given orderForRegionId: Order[RegionId] = Order.by(_.get)
-        given showForRegionId: Show[RegionId] = Show.show(_.index.show)
+        import Timepoint.given
+        given simpleShowForRegionId(using ev: SimpleShow[Timepoint]): SimpleShow[RegionId] = 
+            ev.contramap(_.get)
         def fromInt = NonnegativeInt.either.fmap(_.map(fromNonnegative))
         def fromNonnegative = RegionId.apply `compose` Timepoint.apply
         def unsafe = fromNonnegative `compose` NonnegativeInt.unsafe
     end RegionId
 
-    final case class RoiIndex(get: NonnegativeInt) extends AnyVal
+    final case class RoiIndex(get: NonnegativeInt) derives Order
+    
     object RoiIndex:
-        given orderForRoiIndex: Order[RoiIndex] = Order.by(_.get)
-        given showForRoiIndex: Show[RoiIndex] = Show.show(_.get.show)
+        given simpleShowForRoiIndex(using ev: SimpleShow[NonnegativeInt]): SimpleShow[RoiIndex] = 
+            ev.contramap(_.get)
         def fromInt = NonnegativeInt.either.fmap(_.map(RoiIndex.apply))
         def unsafe = NonnegativeInt.unsafe.andThen(RoiIndex.apply)
     end RoiIndex
 
-    final case class TraceId(get: NonnegativeInt) extends AnyVal
+    final case class TraceId(get: NonnegativeInt) derives Order
+    
     object TraceId:
-        given orderForTraceId: Order[TraceId] = Order.by(_.get)
-        given showForTraceId: Show[TraceId] = Show.show(_.get.toString)
+        given simpleShowForTraceId(using ev: SimpleShow[NonnegativeInt]): SimpleShow[TraceId] = 
+            ev.contramap(_.get)
         def fromInt = NonnegativeInt.either.fmap(_.map(TraceId.apply))
         def fromRoiIndex(i: RoiIndex): TraceId = new TraceId(i.get)
         def unsafe = NonnegativeInt.unsafe.andThen(TraceId.apply)

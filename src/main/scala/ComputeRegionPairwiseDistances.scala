@@ -7,6 +7,13 @@ import mouse.boolean.*
 import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
 
+import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow.*
+import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow.given
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt.given
+
+import at.ac.oeaw.imba.gerlich.looptrace.RegionId.given
+import at.ac.oeaw.imba.gerlich.looptrace.TraceId.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
@@ -183,7 +190,7 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram with Stric
         override def header: List[String] = List("position", "region1", "region2", "distance", "inputIndex1", "inputIndex2")
         override def toTextFields(r: OutputRecord): List[String] = r match {
             case OutputRecord(pos, region1, region2, distance, idx1, idx2) => 
-                List(pos.show, region1.show, region2.show, distance.get.toString, idx1.show, idx2.show)
+                List(pos.show_, region1.show_, region2.show_, distance.get.toString, idx1.show_, idx2.show_)
         }
     end OutputWriter
 end ComputeRegionPairwiseDistances

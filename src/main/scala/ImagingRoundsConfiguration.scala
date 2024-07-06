@@ -10,9 +10,12 @@ import cats.syntax.all.*
 import mouse.boolean.*
 import upickle.default.*
 import com.typesafe.scalalogging.LazyLogging
+
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+
+import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.LocusGroup
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.{ readJsonFile, safeReadAs }
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ DistanceThreshold, PiecewiseDistance }
-import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.LocusGroup
 
 /** Typical looptrace declaration/configuration of imaging rounds and how to use them */
 final case class ImagingRoundsConfiguration private(
@@ -21,7 +24,8 @@ final case class ImagingRoundsConfiguration private(
     proximityFilterStrategy: ImagingRoundsConfiguration.ProximityFilterStrategy,
     // TODO: We could, by default, skip regional and blank imaging rounds (but do use repeats).
     tracingExclusions: Set[Timepoint], // Timepoints of imaging rounds to not use for tracing
-    ):
+):
+    import ImagingRoundsConfiguration.given
     
     /** Simply take the rounds from the contained imagingRounds sequence. */
     final def allRounds: NonEmptyList[ImagingRound] = sequence.allRounds
@@ -57,6 +61,7 @@ end ImagingRoundsConfiguration
 
 /** Tools for working with declaration of imaging rounds and how to use them within an experiment */
 object ImagingRoundsConfiguration extends LazyLogging:
+    private given Ordering[Timepoint] = summon[Order[Timepoint]].toOrdering
     
     /** Something went wrong with attempt to instantiate a configuration */
     trait BuildErrorLike:
@@ -80,6 +85,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
 
     /** Check that one set of timepoints is a subset of another */
     def checkTimesSubset(knownTimes: Set[Timepoint])(times: Set[Timepoint], context: String): ValidatedNel[String, Unit] = 
+        import NonnegativeInt.given // for derivation of Show[Timepoint]
         (times -- knownTimes).toList match {
             case Nil => ().validNel
             case unknown => s"Unknown timepoint(s) ($context): ${unknown.sorted.map(_.show).mkString(", ")}".invalidNel

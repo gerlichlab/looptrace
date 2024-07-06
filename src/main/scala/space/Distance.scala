@@ -2,8 +2,12 @@ package at.ac.oeaw.imba.gerlich.looptrace.space
 
 import scala.math.{ pow, sqrt }
 import cats.*
+import cats.data.Validated
+import cats.derived.*
 import cats.syntax.all.*
-import at.ac.oeaw.imba.gerlich.looptrace.{ NonnegativeInt, NonnegativeReal, PositiveReal }
+
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+
 import at.ac.oeaw.imba.gerlich.looptrace.{ all, any }
 
 /** Something that can compare two {@code A} values w.r.t. threshold value of type {@code T} */
@@ -97,12 +101,18 @@ object PiecewiseDistance:
       * @param b The other point
       * @return A wrapper with access to the (absolute) difference between each component / dimension of the 
       *     two given points' coordinates
+      * @throws [[java.lang.ArithmeticException]] if taking any absolute difference fails to refine as nonnegative
       */
-    def between(a: Point3D, b: Point3D): PiecewiseDistance = new PiecewiseDistance(
-        x = NonnegativeReal.absdiff(a.x.get, b.x.get), 
-        y = NonnegativeReal.absdiff(a.y.get, b.y.get), 
-        z = NonnegativeReal.absdiff(a.z.get, b.z.get),
-        )
+    def between(a: Point3D, b: Point3D): PiecewiseDistance = 
+        val xNel = NonnegativeReal.either((a.x.get - b.x.get).abs).toValidatedNel
+        val yNel = NonnegativeReal.either((a.y.get - b.y.get).abs).toValidatedNel
+        val zNel = NonnegativeReal.either((a.z.get - b.z.get).abs).toValidatedNel
+        (xNel, yNel, zNel).tupled match {
+            case Validated.Valid((delX, delY, delZ)) => PiecewiseDistance(x = delX, y = delY, z = delZ)
+            case Validated.Invalid(es) => throw new ArithmeticException{
+                s"Computing distance between point $a and point $b yielded ${es.length} error(s): ${es.mkString_("; ")}"
+            }
+        }
 
     /** Are points closer than given threshold along each axis? */
     def within(threshold: ConjunctiveThreshold)(a: Point3D, b: Point3D): Boolean = 
@@ -111,7 +121,7 @@ object PiecewiseDistance:
 end PiecewiseDistance
 
 /** Semantic wrapper to denote that a nonnegative real number represents a Euclidean distance */
-final case class EuclideanDistance private(get: NonnegativeReal) extends AnyVal:
+final case class EuclideanDistance private(get: NonnegativeReal):
     final def lessThan(t: EuclideanDistance.Threshold): Boolean = get < t.get
     final def lt = lessThan
     final def greaterThan = !lessThan(_: EuclideanDistance.Threshold)
@@ -126,7 +136,10 @@ end EuclideanDistance
 
 /** Helpers for working with Euclidean distances */
 object EuclideanDistance:
-    given orderForEuclDist: Order[EuclideanDistance] = Order.by(_.get)
+    import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeReal.given // for Order
+
+    /** Order distance by the wrapped value. */
+    given Order[EuclideanDistance] = Order.by(_.get)
 
     /** When something goes wrong with a distance computation or comparison */
     final case class OverflowException(message: String) extends Exception(message)

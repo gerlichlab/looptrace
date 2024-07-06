@@ -3,6 +3,9 @@ package at.ac.oeaw.imba.gerlich.looptrace
 import scala.util.NotGiven
 import cats.*
 import cats.syntax.all.*
+
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ Coordinate, XCoordinate, YCoordinate, ZCoordinate }
 
 /** Bundle the 3 intervals that define a rectangular prism in 3D. */

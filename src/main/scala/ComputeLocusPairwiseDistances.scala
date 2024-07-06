@@ -7,6 +7,13 @@ import mouse.boolean.*
 import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
 
+import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow.*
+import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow.given
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt.given
+
+import at.ac.oeaw.imba.gerlich.looptrace.RegionId.given
+import at.ac.oeaw.imba.gerlich.looptrace.TraceId.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
 
@@ -198,7 +205,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram with Strict
         override def header: List[String] = List("position", "traceId", "region", "locus1", "locus2", "distance", "inputIndex1", "inputIndex2")
         override def toTextFields(r: OutputRecord): List[String] = r match {
             case OutputRecord(pos, trace, region, locus1, locus2, distance, idx1, idx2) => 
-                List(pos.show, trace.show, region.show, locus1.show, locus2.show, distance.get.toString, idx1.show, idx2.show)
+                List(pos.show_, trace.show_, region.show_, locus1.show_, locus2.show_, distance.get.toString, idx1.show_, idx2.show_)
         }
     end OutputWriter
 end ComputeLocusPairwiseDistances

@@ -10,6 +10,10 @@ import upickle.default.*
 import scopt.{ OParser, Read }
 import com.typesafe.scalalogging.StrictLogging
 
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt.given
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.PositiveInt.* // for .asNonnegative
+
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionBeadRois.ShiftingCount.asPositive
@@ -358,8 +362,10 @@ object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
 
         final case class Problem private(numRequested: PositiveInt, numRealized: NonnegativeInt, purpose: Purpose):
             /* Validation of reasonableness of arguments given that this is an alleged error / problem value being created */
-            if (numRealized > numRequested) throw new IllegalArgumentException(s"Realized more ROIs than requested: $numRealized > $numRequested")
-            if (numRealized === numRequested.asNonnegative) throw new IllegalArgumentException(s"Alleged too few ROIs, but $numRealized = $numRequested")
+            if (numRealized > numRequested) 
+                throw new IllegalArgumentException(s"Realized more ROIs than requested: $numRealized > $numRequested")
+            if (numRealized === numRequested.asNonnegative)
+                throw new IllegalArgumentException(s"Alleged too few ROIs, but $numRealized = $numRequested")
 
         object Problem:
             given jsonMappableForProblem: JsonMappable[Problem] = JsonMappable.instance{ 
@@ -396,13 +402,18 @@ object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
                 partition.numAccuracy === NonnegativeInt(0), 
                 s"Accuracy ROIs count should be 0 when there are too few shifting ROIs; got ${partition.numAccuracy}"
                 )
-            import ShiftingCount.asNonnegative
-            override def problems: NonEmptyList[Problem] = NonEmptyList.of(
-                Problem.shifting(requestedShifting, realizedShifting.asNonnegative), 
-                Problem.accuracy(requestedAccuracy, realizedAccuracy),
+            
+            override def problems: NonEmptyList[Problem] = 
+                import ShiftingCount.asNonnegative
+                NonEmptyList.of(
+                    Problem.shifting(requestedShifting, realizedShifting.asNonnegative), 
+                    Problem.accuracy(requestedAccuracy, realizedAccuracy),
                 )
+            
             def realizedShifting = partition.numShifting
+            
             def realizedAccuracy = partition.numAccuracy
+        end TooFewAccuracyRescued
 
         final case class TooFewAccuracyHealthy(
             partition: Partition, 

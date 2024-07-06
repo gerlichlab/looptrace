@@ -7,6 +7,9 @@ import cats.syntax.all.*
 import mouse.boolean.*
 import scopt.OParser
 
+import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow.*
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt.given
+
 /**
  * Summarise an imaging round configuration with command-line printing.
  * 
@@ -22,6 +25,8 @@ object SummariseImagingRoundsConfiguration:
         import ScoptCliReaders.given
         import parserBuilder.*
         
+        given Ordering[Timepoint] = Order[Timepoint].toOrdering
+
         val parser = OParser.sequence(
             programName(ProgramName), 
             head(ProgramName, VersionName), 
@@ -38,9 +43,9 @@ object SummariseImagingRoundsConfiguration:
                 println(s"Reading config file: ${opts.configFile}")
                 val config = ImagingRoundsConfiguration.unsafeFromJsonFile(opts.configFile)
                 val exclusions = config.tracingExclusions.map(_.get)
-                println(s"${exclusions.size} exclusion(s) from tracing: ${exclusions.toList.sorted.map(_.show).mkString(", ")}")
+                println(s"${exclusions.size} exclusion(s) from tracing: ${exclusions.toList.sorted.map(_.show_).mkString(", ")}")
                 println(s"${config.numberOfRounds} round(s) in total (listed below)")
-                config.allRounds.map(r => s"${r.time.show}: ${r.name.show}").toList.foreach(println)
+                config.allRounds.map(r => s"${r.time.show_}: ${r.name}").toList.foreach(println)
                 val (groupingName, maybeGroups) = config.proximityFilterStrategy match {
                     case _: ImagingRoundsConfiguration.UniversalProximityPermission.type => "Permissive" -> None
                     case _: ImagingRoundsConfiguration.UniversalProximityProhibition => "Prohibitive" -> None

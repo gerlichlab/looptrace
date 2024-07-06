@@ -5,9 +5,13 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should
+import org.scalatest.prop.Configuration.PropertyCheckConfiguration
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 /** Tests for region ID wrapper type */
-class TestRegionId extends AnyFunSuite, LooptraceSuite, RefinementWrapperSuite, ScalacheckSuite, should.Matchers:
+class TestRegionId extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite, RefinementWrapperSuite, should.Matchers:
+    override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
+    
     test("RegionId.fromInt works; region ID must be nonnegative.") {
         forAll { (z: Int) => RegionId.fromInt(z) match {
             case Left(msg) if z < 0 => msg shouldEqual s"Cannot refine as nonnegative: $z"
