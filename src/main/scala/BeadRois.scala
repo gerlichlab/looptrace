@@ -2,6 +2,9 @@ package at.ac.oeaw.imba.gerlich.looptrace
 
 import scala.util.NotGiven
 import upickle.default.*
+
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ Coordinate, CoordinateSequence, Point3D }
 
 /** A type wrapper around a string with which to represent the reason(s) why a bead ROI is unusable */

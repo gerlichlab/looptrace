@@ -2,14 +2,19 @@ package at.ac.oeaw.imba.gerlich.looptrace
 
 import scala.math.{ abs, min, pow, sqrt }
 import cats.syntax.all.*
+
 import org.scalacheck.{ Arbitrary, Gen, Shrink }
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
+import org.scalatest.prop.Configuration.PropertyCheckConfiguration
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 
 /** Tests for distance thresholds */
-class TestDistanceThresholds extends AnyFunSuite, DistanceSuite, LooptraceSuite, ScalacheckSuite, should.Matchers:
+class TestDistanceThresholds extends AnyFunSuite, ScalaCheckPropertyChecks, DistanceSuite, LooptraceSuite, should.Matchers:
+    override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
 
     /** Compare points in 3D space for proximity. */
     type PointProximity = ProximityComparable[Point3D]

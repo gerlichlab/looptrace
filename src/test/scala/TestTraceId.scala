@@ -4,9 +4,13 @@ import cats.syntax.eq.*
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should
+import org.scalatest.prop.Configuration.PropertyCheckConfiguration
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 /** Tests for trace ID wrapper type */
-class TestTraceId extends AnyFunSuite, RefinementWrapperSuite, ScalacheckSuite, should.Matchers:
+class TestTraceId extends AnyFunSuite, GenericSuite, ScalaCheckPropertyChecks, RefinementWrapperSuite, should.Matchers:
+    override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
+
     test("TraceId.fromInt works; trace ID must be nonnegative.") {
         forAll { (z: Int) => TraceId.fromInt(z) match {
             case Left(msg) if z < 0 => msg shouldEqual s"Cannot refine as nonnegative: $z"

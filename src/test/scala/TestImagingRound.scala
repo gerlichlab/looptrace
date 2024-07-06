@@ -3,17 +3,21 @@ package at.ac.oeaw.imba.gerlich.looptrace
 import cats.syntax.all.*
 import mouse.boolean.*
 import upickle.default.*
+
 import org.scalacheck.{ Arbitrary, Gen, Shrink }
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
+import org.scalatest.prop.Configuration.PropertyCheckConfiguration
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 /**
   * Tests for the abstraction of an imaging round
   * 
   * @author Vince Reuter
   */
-class TestImagingRound extends AnyFunSuite, ImagingRoundHelpers, LooptraceSuite, ScalacheckSuite, should.Matchers:
+class TestImagingRound extends AnyFunSuite, ScalaCheckPropertyChecks, ImagingRoundHelpers, LooptraceSuite, should.Matchers:
+    override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
 
     test("ImagingRound itself cannot be instantiated.") {
         assertTypeError{ "new ImagingRound{ def name = \"absolutelynot\"; def timepoint = Timepoint(NonnegativeInt(0)) }" }

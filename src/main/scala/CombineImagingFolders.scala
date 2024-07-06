@@ -9,6 +9,8 @@ import mouse.boolean.*
 import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
 
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
 
 /** Combine imaging subfolders to create a single timecourse.
@@ -158,13 +160,20 @@ object CombineImagingFolders extends StrictLogging:
                     case (_, result) :: Nil => result
                     case subs@((n1, first) :: rest) => rest.foldLeft(n1 -> first.toVector){
                         case ((accCount, timePathPairs), (n, sub)) => 
-                            val newCount = NonnegativeInt.add(accCount, n)
-                            val newPairs = timePathPairs ++ sub.map(_.leftMap(t => Timepoint(NonnegativeInt.add(t.get, accCount))))
+                            val newCount = accCount `add` n
+                            val newPairs = timePathPairs ++ sub.map(_.leftMap(t => Timepoint(t.get `add` accCount)))
                             newCount -> newPairs
                     }._2.toList
                 }
             }
     }
+
+    // Add a pair of nonnegative numbers, ensuring that the result stays as a nonnegative.
+    extension (n: NonnegativeInt)
+        infix def add(m: NonnegativeInt): NonnegativeInt = NonnegativeInt.either(n + m) match {
+            case Left(msg) => throw new ArithmeticException(s"Uh-Oh! $n + $m = ${n + m}; $msg")
+            case Right(result) => result
+        }
 
     /** 
      * Ensure subfolder contents are nonempty, and that the timepoints are continuous starting from 0.
@@ -174,7 +183,7 @@ object CombineImagingFolders extends StrictLogging:
      */
     def ensureNonemptyAndContinuous(subfolderContents: List[(Timepoint, os.Path)]): Either[String, NonnegativeInt] = 
         validateContinuityFromZero(subfolderContents.map(_._1))
-            .map(maxTime => NonnegativeInt.add(maxTime.get, NonnegativeInt(1)))
+            .map{ maxTime => maxTime.get `add` NonnegativeInt(1) }
 
     /** Select files to use, and map to {@code Right}-wrapped collection of pairs of time and path, or {@code Left}-wrapped errors. */
     def prepareSubfolder(keepFile: os.Path => Boolean)(folder: os.Path, filenameFieldSep: String): Either[NEL[UnparseablePathException], List[(Timepoint, os.Path)]] = {
@@ -190,7 +199,7 @@ object CombineImagingFolders extends StrictLogging:
     def validateContinuityFromZero(ts: Seq[Timepoint]): Either[String, Timepoint] = {
         val raws = SortedSet(ts.map(_.get)*)
         Try { raws.max }.toEither.leftMap(_ => "Empty set of timepoints!").flatMap{ maxTime => 
-            val missing = NonnegativeInt.seqTo(maxTime).filterNot(raws.contains)
+            val missing = (0 to maxTime).map(NonnegativeInt.unsafe)
             missing.isEmpty.either(s"${missing.length} missing timepoints: $missing", Timepoint(maxTime))
         }
     }

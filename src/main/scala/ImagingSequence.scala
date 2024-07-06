@@ -8,6 +8,8 @@ import cats.syntax.all.*
 import mouse.boolean.*
 import upickle.default.*
 
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+
 /** A sequence of FISH and blank imaging rounds, constituting a microscopy experiment */
 final case class ImagingSequence private(
     blankRounds: List[BlankImagingRound], 
@@ -31,7 +33,7 @@ final case class ImagingSequence private(
     final def length: Int = allTimepoints.length
     final def size: Int = length
     final def numberOfRounds: Int = length
-    final def numberOfRegionRounds: PositiveInt = PositiveInt.lengthOfNonempty(regionRounds)
+    final def numberOfRegionRounds: PositiveInt = PositiveIntExtras.lengthOfNonempty(regionRounds)
 end ImagingSequence
 
 /** Smart constructors and tools for working with sequences of imaging rounds */

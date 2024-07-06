@@ -4,9 +4,13 @@ import org.scalacheck.{ Arbitrary, Gen, Shrink }
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
+import org.scalatest.prop.Configuration.PropertyCheckConfiguration
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 /** Tests for the combining of imaging folders (e.g. subsequences of imaging timepoints) */
-class TestCombineImagingFolders extends AnyFunSuite, LooptraceSuite, ScalacheckSuite, should.Matchers:
+class TestCombineImagingFolders extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite, should.Matchers:
+    override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
+
     test("Don't regress in file name generation: #289") {
         val oldTime = Timepoint(NonnegativeInt(42))
         val oldTimeText = Timepoint.printForFilename(oldTime)

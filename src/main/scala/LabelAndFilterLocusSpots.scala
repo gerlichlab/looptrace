@@ -9,6 +9,14 @@ import mouse.boolean.*
 import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
 
+import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow.*
+import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow.given
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt.given
+
+import at.ac.oeaw.imba.gerlich.looptrace.RegionId.given
+import at.ac.oeaw.imba.gerlich.looptrace.TraceId.given
+
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ Point3D, XCoordinate, YCoordinate, ZCoordinate }
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
@@ -524,7 +532,7 @@ object LabelAndFilterLocusSpots extends StrictLogging:
                                 .toRight(s"Missing locus time ${r.locusTime} in locus times for region time ${r.regionTime}!")
                         } yield ti
                     ).fold(msg => throw new Exception(msg), identity)
-                    val base = List(r.regionTime.show, r.traceId.show, r.locusTime.show, t.show, timeIndex.show, p.z.get.show, p.y.get.show, p.x.get.show)
+                    val base = List(r.regionTime.show_, r.traceId.show_, r.locusTime.show_, t.show_, timeIndex.show, p.z.get.show, p.y.get.show, p.x.get.show)
                     addFailCodes(base, r.failureReasons)
                 }
                 os.write(outfile, (header :: outrecs).map(_.mkString(",") ++ "\n").toList)

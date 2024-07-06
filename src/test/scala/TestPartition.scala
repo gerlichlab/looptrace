@@ -15,7 +15,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.collections.*
  * 
  * @author Vince Reuter
  */
-class TestPartition extends AnyFunSuite, MathSuite, ScalaCheckPropertyChecks, should.Matchers:
+class TestPartition extends AnyFunSuite, ScalaCheckPropertyChecks, MathSuite, should.Matchers:
     implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 1000)
     
     val simpleTypeArbitraries = Table("arb", Arbitrary[String], Arbitrary[Int], Arbitrary[Double])

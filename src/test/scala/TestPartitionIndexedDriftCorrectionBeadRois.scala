@@ -12,6 +12,8 @@ import org.scalacheck.{ Arbitrary, Gen, Shrink }
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
+import org.scalatest.prop.Configuration.PropertyCheckConfiguration
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionBeadRois.*
 import at.ac.oeaw.imba.gerlich.looptrace.PathHelpers.listPath
@@ -19,8 +21,10 @@ import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.readJsonFile
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ CoordinateSequence, Point3D, XCoordinate, YCoordinate, ZCoordinate }
 
 /** Tests for the partitioning of regions of interest (ROIs) for drift correction */
-class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalacheckSuite, ScalacheckGenericExtras, should.Matchers, PartitionRoisSuite:
+class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaCheckPropertyChecks, ScalacheckGenericExtras, should.Matchers, PartitionRoisSuite:
     import SelectedRoi.*
+
+    override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
     
     test("Partition.RepeatedRoisWithinPartError is accessible but cannot be directly built.") {
         /* Make the lines shorter by aliasing these constructors. */

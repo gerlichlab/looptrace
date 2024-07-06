@@ -2,19 +2,23 @@ package at.ac.oeaw.imba.gerlich.looptrace
 
 import scala.util.Try
 import cats.*
+import cats.derived.*
 import cats.syntax.all.*
 import mouse.boolean.*
+
+import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+import NonnegativeInt.given
 
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
 
 /** Wrapper around nonnegative integer to represent timepoint index in sequential FISH experiment */
-final case class Timepoint(get: NonnegativeInt) extends AnyVal
+final case class Timepoint(get: NonnegativeInt) derives Order
 
 /** Helpers for working with {@code Timepoint} values */
 object Timepoint:
-    given orderForTimepoint: Order[Timepoint] = Order.by(_.get)
-    given orderingForTimepoint(using ord: Order[Timepoint]): Ordering[Timepoint] = ord.toOrdering
-    given showForTimepoint: Show[Timepoint] = Show.show(_.get.show)
+    given showForTimepoint(using ev: Show[NonnegativeInt]): Show[Timepoint] = ev.contramap(_.get)
+    given SimpleShow[Timepoint] = SimpleShow.fromShow
     
     /** The text prefix before the encoding of the numeric timepoint value in a filename */
     private val PrefixInFilename = "Time"

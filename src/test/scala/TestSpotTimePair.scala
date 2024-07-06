@@ -9,12 +9,17 @@ import org.scalacheck.{ Arbitrary, Gen, Shrink }
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
+import org.scalatest.prop.Configuration.PropertyCheckConfiguration
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+
 import at.ac.oeaw.imba.gerlich.looptrace.TracingOutputAnalysis.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.readJsonFile
 
 /** Tests for pair of regional and locus-specific spot image timepoints. */
-class TestSpotTimePair extends AnyFunSuite, LooptraceSuite, ScalacheckSuite, ScalacheckGenericExtras, should.Matchers:
+class TestSpotTimePair extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite, ScalacheckGenericExtras, should.Matchers:
     import SpotTimePair.given
+    
+    override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
     
     /* Typeclass instances to share among tests */
     given showForRegional: Show[RegionId] = Show.show(_.index.toString)

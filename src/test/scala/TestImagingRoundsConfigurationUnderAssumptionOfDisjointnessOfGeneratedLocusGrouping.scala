@@ -22,7 +22,8 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.*
   * 
   * @author Vince Reuter
   */
-class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocusGrouping extends AnyFunSuite, LooptraceSuite, ScalaCheckPropertyChecks, should.Matchers:
+class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocusGrouping 
+    extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite, ScalaCheckPropertyChecks, should.Matchers:
     implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
 
     test("Missing region grouping gives the expected error.") {

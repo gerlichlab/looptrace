@@ -9,6 +9,8 @@ import org.scalacheck.{ Arbitrary, Gen, Shrink }
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
+import org.scalatest.prop.Configuration.PropertyCheckConfiguration
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import at.ac.oeaw.imba.gerlich.looptrace.ComputeRegionPairwiseDistances.*
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.safeReadAllWithOrderedHeaders
@@ -20,7 +22,8 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.*
  *
  * @author Vince Reuter
  */
-class TestComputeRegionPairwiseDistances extends AnyFunSuite, LooptraceSuite, MathSuite, ScalacheckSuite, should.Matchers:
+class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite, MathSuite, should.Matchers:
+    override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
     
     val AllReqdColumns = List(
         Input.FieldOfViewColumn, 

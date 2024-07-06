@@ -7,6 +7,8 @@ import cats.syntax.all.*
 import mouse.boolean.*
 import com.github.tototoshi.csv.*
 
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+
 /** Helpers for working with CSV files and data */
 object CsvHelpers:
 

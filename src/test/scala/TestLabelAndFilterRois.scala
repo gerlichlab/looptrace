@@ -11,6 +11,8 @@ import org.scalacheck.{ Arbitrary, Gen, Shrink }
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
+import org.scalatest.prop.Configuration.PropertyCheckConfiguration
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import at.ac.oeaw.imba.gerlich.looptrace.collections.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
@@ -23,9 +25,9 @@ import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.{
     UniversalProximityProhibition, 
 }
 
-
 /** Tests for the filtration of the individual supports (single FISH probes) of chromatin fiber traces */
-class TestLabelAndFilterRois extends AnyFunSuite, DistanceSuite, LooptraceSuite, ScalacheckSuite, should.Matchers:
+class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, DistanceSuite, LooptraceSuite, should.Matchers:
+    override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
 
     test("Drift file is required (so that distance/proximity comparisons can use drift-corrected coordinates.)") {
         withTempDirectory{ (tmpdir: os.Path) => 

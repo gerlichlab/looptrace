@@ -6,13 +6,16 @@ import org.scalactic.Equality
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
 import org.scalatest.funsuite.AnyFunSuite
+import org.scalatest.prop.Configuration.PropertyCheckConfiguration
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import at.ac.oeaw.imba.gerlich.looptrace.LabelAndFilterLocusSpots.{ ParserConfig, QcPassColumn, workflow }
 import at.ac.oeaw.imba.gerlich.looptrace.LocusSpotQC.*
 import at.ac.oeaw.imba.gerlich.looptrace.PathHelpers.*
 
 /** Tests for the filtration of the individual supports (single FISH probes) of chromatin fiber traces */
-class TestLabelAndFilterLocusSpots extends AnyFunSuite, GenericSuite, ScalacheckSuite, should.Matchers:
+class TestLabelAndFilterLocusSpots extends AnyFunSuite, ScalaCheckPropertyChecks, GenericSuite, should.Matchers:
+    override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
     
     test("Collision between any of the column name values in a parser config is prohibited.") { pending }
     
