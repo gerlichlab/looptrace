@@ -38,7 +38,7 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram with Stric
     /** Program driver */
     def main(args: Array[String]): Unit = {
         import cliParseBuilder.*
-        import ScoptCliReaders.given
+        import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders.given
 
         val parser = OParser.sequence(
             programName(ProgramName),

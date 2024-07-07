@@ -5,6 +5,8 @@ import cats.syntax.all.*
 import org.scalacheck.{ Arbitrary, Gen }
 import org.scalacheck.Arbitrary.arbitrary
 
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 
 /** Base trait for tests in looptrace */

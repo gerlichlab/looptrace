@@ -12,6 +12,8 @@ import org.scalatest.matchers.*
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+
 import at.ac.oeaw.imba.gerlich.looptrace.TracingOutputAnalysis.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.readJsonFile
 

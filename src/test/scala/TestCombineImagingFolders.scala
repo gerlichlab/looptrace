@@ -7,6 +7,8 @@ import org.scalatest.matchers.*
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+
 /** Tests for the combining of imaging folders (e.g. subsequences of imaging timepoints) */
 class TestCombineImagingFolders extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite, should.Matchers:
     override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)

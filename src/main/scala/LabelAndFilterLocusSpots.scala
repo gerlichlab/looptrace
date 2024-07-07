@@ -149,7 +149,7 @@ object LabelAndFilterLocusSpots extends StrictLogging:
     val parserBuilder = OParser.builder[CliConfig]
 
     def main(args: Array[String]): Unit = {
-        import ScoptCliReaders.given
+        import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders.given
         import parserBuilder.*
 
         val parser = OParser.sequence(

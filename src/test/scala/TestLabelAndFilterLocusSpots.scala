@@ -9,6 +9,8 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+
 import at.ac.oeaw.imba.gerlich.looptrace.LabelAndFilterLocusSpots.{ ParserConfig, QcPassColumn, workflow }
 import at.ac.oeaw.imba.gerlich.looptrace.LocusSpotQC.*
 import at.ac.oeaw.imba.gerlich.looptrace.PathHelpers.*

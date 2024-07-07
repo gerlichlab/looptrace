@@ -11,6 +11,8 @@ import org.scalatest.matchers.*
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+
 /**
   * Tests for the abstraction of an imaging round
   * 

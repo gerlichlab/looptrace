@@ -21,7 +21,7 @@ object ValidateImagingRoundsConfig extends StrictLogging:
     
     def main(args: Array[String]): Unit = {
         import parserBuilder.*
-        import ScoptCliReaders.given
+        import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders.given
         
         val parser = OParser.sequence(
             programName(ProgramName),
