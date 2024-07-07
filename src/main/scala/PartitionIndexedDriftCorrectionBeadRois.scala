@@ -43,7 +43,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
 
     def main(args: Array[String]): Unit = {
         import parserBuilder.*
-        import ScoptCliReaders.given
+        import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders.given
         given readForShiftingCount(using intRead: Read[Int]): Read[ShiftingCount] = 
             intRead.map(ShiftingCount.unsafe)
 

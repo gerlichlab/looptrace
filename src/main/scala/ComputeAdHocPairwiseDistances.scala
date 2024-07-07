@@ -33,7 +33,7 @@ object ComputeAdHocPairwiseDistances extends StrictLogging:
 
     def main(args: Array[String]): Unit = {
         import cliParseBuilder.*
-        import ScoptCliReaders.given
+        import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders.given
         
         val parser = OParser.sequence(
             programName(ProgramName),

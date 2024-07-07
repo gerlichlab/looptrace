@@ -101,24 +101,6 @@ package object looptrace {
     /** Try to parse the given string as an integer. */
     def safeParseInt(s: String): Either[String, Int] = Try{ s.toInt }.toEither.leftMap(_.getMessage)
 
-    /** Allow custom types as CLI parameters. */
-    object ScoptCliReaders:
-        given pathRead(using fileRead: Read[java.io.File]): Read[os.Path] = fileRead.map(os.Path.apply)
-        given nonNegIntRead(using intRead: Read[Int]): Read[NonnegativeInt] = intRead.map(NonnegativeInt.unsafe)
-        given nonNegRealRead(using numRead: Read[Double]): Read[NonnegativeReal] = numRead.map(NonnegativeReal.unsafe)
-        given posIntRead(using intRead: Read[Int]): Read[PositiveInt] = intRead.map(PositiveInt.unsafe)
-        given posRealRead(using numRead: Read[Double]): Read[PositiveReal] = numRead.map(PositiveReal.unsafe)
-        /** Parse content of JSON file path to imaging rounds configuration instance. */
-        given readForImagingRoundsConfiguration: scopt.Read[ImagingRoundsConfiguration] = scopt.Read.reads{ file => 
-            ImagingRoundsConfiguration.fromJsonFile(os.Path(file)) match {
-                case Left(messages) => throw new IllegalArgumentException(
-                    s"Cannot read file ($file) as imaging round configuration! Error(s): ${messages.mkString_("; ")}"
-                    )
-                case Right(conf) => conf
-            }
-        }
-    end ScoptCliReaders
-
     object PositiveIntExtras:
         def lengthOfNonempty(xs: NonEmptyList[?]): PositiveInt = PositiveInt.unsafe(xs.length)
         def lengthOfNonempty[A : Order](xs: NonEmptySet[A]): PositiveInt = PositiveInt.unsafe(xs.length)
@@ -148,9 +130,6 @@ package object looptrace {
     final case class PositionIndex(get: NonnegativeInt) derives Order
     
     object PositionIndex:
-        given showForPositionIndex(using ev: Show[NonnegativeInt]): Show[PositionIndex] = 
-            ev.contramap(_.get)
-        given SimpleShow[PositionIndex] = SimpleShow.fromShow
         def fromInt = NonnegativeInt.either.fmap(_.map(PositionIndex.apply))
         def unsafe = NonnegativeInt.unsafe `andThen` PositionIndex.apply
     end PositionIndex

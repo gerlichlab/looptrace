@@ -8,6 +8,8 @@ import org.scalatest.matchers.should
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+
 /** Tests for region ID wrapper type */
 class TestRegionId extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite, RefinementWrapperSuite, should.Matchers:
     override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)

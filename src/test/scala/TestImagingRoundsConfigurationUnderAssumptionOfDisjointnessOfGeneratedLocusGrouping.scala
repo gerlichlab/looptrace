@@ -14,6 +14,8 @@ import org.scalatest.matchers.*
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.{ LocusGroup, SelectiveProximityPermission }
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 
@@ -23,7 +25,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.*
   * @author Vince Reuter
   */
 class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocusGrouping 
-    extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite, ScalaCheckPropertyChecks, should.Matchers:
+    extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite, should.Matchers:
     implicit override val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
 
     test("Missing region grouping gives the expected error.") {

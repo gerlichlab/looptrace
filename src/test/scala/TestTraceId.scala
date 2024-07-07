@@ -7,6 +7,8 @@ import org.scalatest.matchers.should
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+
 /** Tests for trace ID wrapper type */
 class TestTraceId extends AnyFunSuite, GenericSuite, ScalaCheckPropertyChecks, RefinementWrapperSuite, should.Matchers:
     override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)

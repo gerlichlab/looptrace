@@ -1,11 +1,14 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
+import scala.collection.SortedSet
 import scala.util.{ Failure, Success, Try }
 import cats.data.{ NonEmptyList, NonEmptySet }
 import cats.syntax.all.*
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.{
     BuildError,
@@ -15,7 +18,6 @@ import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.{
     UniversalProximityPermission, 
     UniversalProximityProhibition, 
 }
-import scala.collection.SortedSet
 
 /** Tests of examples of imaging rounds config files */
 class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with ScalaCheckPropertyChecks with should.Matchers:

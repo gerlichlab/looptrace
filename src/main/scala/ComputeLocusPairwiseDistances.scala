@@ -12,6 +12,8 @@ import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt.given
 
+import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
+
 import at.ac.oeaw.imba.gerlich.looptrace.RegionId.given
 import at.ac.oeaw.imba.gerlich.looptrace.TraceId.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
@@ -37,7 +39,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram with Strict
     /** Program driver */
     def main(args: Array[String]): Unit = {
         import cliParseBuilder.*
-        import ScoptCliReaders.given
+        import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders.given
 
         val parser = OParser.sequence(
             programName(ProgramName),
