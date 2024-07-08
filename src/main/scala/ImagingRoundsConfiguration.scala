@@ -11,6 +11,7 @@ import mouse.boolean.*
 import upickle.default.*
 import com.typesafe.scalalogging.LazyLogging
 
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.LocusGroup
@@ -23,7 +24,7 @@ final case class ImagingRoundsConfiguration private(
     locusGrouping: Set[ImagingRoundsConfiguration.LocusGroup], // should be empty iff there are no locus rounds in the sequence
     proximityFilterStrategy: ImagingRoundsConfiguration.ProximityFilterStrategy,
     // TODO: We could, by default, skip regional and blank imaging rounds (but do use repeats).
-    tracingExclusions: Set[Timepoint], // Timepoints of imaging rounds to not use for tracing
+    tracingExclusions: Set[ImagingTimepoint], // Timepoints of imaging rounds to not use for tracing
 ):
     import ImagingRoundsConfiguration.given
     
@@ -35,7 +36,7 @@ final case class ImagingRoundsConfiguration private(
     
     /** Only compute this when necessary, but retain as val since memory footprint 
      * will be small (not so many imaging rounds), for faster ordered iteration */
-    private lazy val regionTimeToLocusTimes: NonEmptyMap[Timepoint, SortedSet[Timepoint]] = (
+    private lazy val regionTimeToLocusTimes: NonEmptyMap[ImagingTimepoint, SortedSet[ImagingTimepoint]] = (
         locusGrouping.toList.toNel match {
             case None => sequence.regionRounds.map{ rr => rr.time -> SortedSet(sequence.locusRounds.map(_.time)*) }
             case Some(groups) => groups.map{ case LocusGroup(rt, lts) => rt -> lts.toSortedSet }
@@ -43,7 +44,7 @@ final case class ImagingRoundsConfiguration private(
     ).toNem
     
     /** Faciliate lookup of reindexed timepoint for visualisation. */
-    lazy val lookupReindexedTimepoint: Map[Timepoint, Map[Timepoint, Int]] = {
+    lazy val lookupReindexedImagingTimepoint: Map[ImagingTimepoint, Map[ImagingTimepoint, Int]] = {
         // First, group timepoints by regional timepoint.
         val sets = locusGrouping.toList.toNel match {
             case None => 
@@ -61,7 +62,7 @@ end ImagingRoundsConfiguration
 
 /** Tools for working with declaration of imaging rounds and how to use them within an experiment */
 object ImagingRoundsConfiguration extends LazyLogging:
-    private given Ordering[Timepoint] = summon[Order[Timepoint]].toOrdering
+    private given Ordering[ImagingTimepoint] = summon[Order[ImagingTimepoint]].toOrdering
     
     /** Something went wrong with attempt to instantiate a configuration */
     trait BuildErrorLike:
@@ -84,8 +85,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
     end BuildError
 
     /** Check that one set of timepoints is a subset of another */
-    def checkTimesSubset(knownTimes: Set[Timepoint])(times: Set[Timepoint], context: String): ValidatedNel[String, Unit] = 
-        import NonnegativeInt.given // for derivation of Show[Timepoint]
+    def checkTimesSubset(knownTimes: Set[ImagingTimepoint])(times: Set[ImagingTimepoint], context: String): ValidatedNel[String, Unit] = 
         (times -- knownTimes).toList match {
             case Nil => ().validNel
             case unknown => s"Unknown timepoint(s) ($context): ${unknown.sorted.map(_.show).mkString(", ")}".invalidNel
@@ -108,13 +108,19 @@ object ImagingRoundsConfiguration extends LazyLogging:
       * @param checkLocusTimepointCovering Whether to validate that the union of the locusGrouping section values covers all locus imaging timepoints
       * @return Either a [[scala.util.Left]]-wrapped nonempty list of error messages, or a [[scala.util.Right]]-wrapped built instance
       */
-    def build(sequence: ImagingSequence, locusGrouping: Set[LocusGroup], proximityFilterStrategy: ProximityFilterStrategy, tracingExclusions: Set[Timepoint], checkLocusTimepointCovering: Boolean): ErrMsgsOr[ImagingRoundsConfiguration] = {
+    def build(
+        sequence: ImagingSequence, 
+        locusGrouping: Set[LocusGroup], 
+        proximityFilterStrategy: ProximityFilterStrategy, 
+        tracingExclusions: Set[ImagingTimepoint], 
+        checkLocusTimepointCovering: Boolean,
+    ): ErrMsgsOr[ImagingRoundsConfiguration] = {
         val knownTimes = sequence.allTimepoints
         // Regardless of the subtype of proximityFilterStrategy, we need to check that any tracing exclusion timepoint is a known timepoint.
         val tracingSubsetNel = checkTimesSubset(knownTimes.toSortedSet)(tracingExclusions, "tracing exclusions")
         // TODO: consider checking that every regional timepoint in the sequence is represented in the locusGrouping.
         // See: https://github.com/gerlichlab/looptrace/issues/270
-        val uniqueTimepointsInLocusGrouping = locusGrouping.map(_.locusTimepoints).foldLeft(Set.empty[Timepoint])(_ ++ _.toSortedSet)
+        val uniqueTimepointsInLocusGrouping = locusGrouping.map(_.locusTimepoints).foldLeft(Set.empty[ImagingTimepoint])(_ ++ _.toSortedSet)
         val (locusTimeSubsetNel, locusTimeSupersetNel) = {
             if locusGrouping.isEmpty then (().validNel, ().validNel) else {
                 val locusTimesInSequence = sequence.locusRounds.map(_.time).toSet
@@ -162,7 +168,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
             .toEither
     }
 
-    private def mkStringTimepoints = (_: Set[Timepoint]).toList.sorted.map(_.get).mkString(", ")
+    private def mkStringTimepoints = (_: Set[ImagingTimepoint]).toList.sorted.map(_.get).mkString(", ")
     
 
     /**
@@ -211,8 +217,8 @@ object ImagingRoundsConfiguration extends LazyLogging:
                         case None => Set().validNel
                         case Some(grouping) => grouping.traverse{ (regionTimeRaw, lociTimesRaw) => 
                             (for {
-                                regTime <- Timepoint.fromInt(regionTimeRaw).leftMap("Bad region time as key in locus group! " ++ _)
-                                maybeLociTimes <- lociTimesRaw.traverse(Timepoint.fromInt).leftMap("Bad locus time(s) in locus group! " ++ _)
+                                regTime <- ImagingTimepoint.fromInt(regionTimeRaw).leftMap("Bad region time as key in locus group! " ++ _)
+                                maybeLociTimes <- lociTimesRaw.traverse(ImagingTimepoint.fromInt).leftMap("Bad locus time(s) in locus group! " ++ _)
                                 lociTimes <- maybeLociTimes.toNel.toRight(s"Empty locus times for region time $regionTimeRaw!").map(_.toNes)
                                 _ <- (
                                     if lociTimes.contains(regTime) 
@@ -235,11 +241,11 @@ object ImagingRoundsConfiguration extends LazyLogging:
                                 case None => None.validNel
                                 case Some(json) => safeReadAs[Double](json).flatMap(PositiveReal.either).map(_.some).toValidatedNel
                             }
-                        val groupsNel: ValidatedNel[String, Option[NonEmptyList[NonEmptySet[Timepoint]]]] = 
+                        val groupsNel: ValidatedNel[String, Option[NonEmptyList[NonEmptySet[ImagingTimepoint]]]] = 
                             currentSection.get("groups") match {
                                 case None => None.validNel
                                 case Some(subdata) => safeReadAs[List[List[Int]]](subdata)
-                                    .flatMap(_.traverse(_.traverse(Timepoint.fromInt))) // Lift all ints to timepoints.
+                                    .flatMap(_.traverse(_.traverse(ImagingTimepoint.fromInt))) // Lift all ints to timepoints.
                                     .flatMap(liftToNel(_, "regional grouping".some)) // Entire collection must be nonempty.
                                     .flatMap(_.traverse(liftToNes(_, "regional group".some))) // Each group must be nonempty.
                                     .map(_.some)
@@ -277,11 +283,11 @@ object ImagingRoundsConfiguration extends LazyLogging:
                 }
             }
         }
-        val tracingExclusionsNel: ValidatedNel[String, Set[Timepoint]] = 
+        val tracingExclusionsNel: ValidatedNel[String, Set[ImagingTimepoint]] = 
             data.get("tracingExclusions") match {
                 case None | Some(ujson.Null) => Validated.Valid(Set())
                 case Some(json) => safeReadAs[List[Int]](json)
-                    .flatMap(_.traverse(Timepoint.fromInt))
+                    .flatMap(_.traverse(ImagingTimepoint.fromInt))
                     .map(_.toSet)
                     .toValidatedNel
             }
@@ -305,7 +311,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
         sequence: ImagingSequence, 
         locusGrouping: Set[LocusGroup], 
         proximityFilterStrategy: ProximityFilterStrategy, 
-        tracingExclusions: Set[Timepoint],
+        tracingExclusions: Set[ImagingTimepoint],
         checkLocusTimepointCoveringNel: Boolean,
         ): ImagingRoundsConfiguration = 
         build(sequence, locusGrouping, proximityFilterStrategy, tracingExclusions, checkLocusTimepointCoveringNel).fold(messages => throw new BuildError.FromPure(messages), identity)
@@ -325,7 +331,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
      * @param regionalTimepoint The imaging timepoint at which all the DNA loci targeted at the given locus timepoints will all be lit up together
      * @param locusTimepoints The imaging timepoints of DNA loci which will be illuminated together at the given regional timepoint
      */
-    private[looptrace] final case class LocusGroup private[looptrace](regionalTimepoint: Timepoint, locusTimepoints: NonEmptySet[Timepoint]):
+    private[looptrace] final case class LocusGroup private[looptrace](regionalTimepoint: ImagingTimepoint, locusTimepoints: NonEmptySet[ImagingTimepoint]):
         require(!locusTimepoints.contains(regionalTimepoint), s"Regional time (${regionalTimepoint.get}) must not be in locus times!")
     
     /** Helpers for working with locus groups */
@@ -337,13 +343,13 @@ object ImagingRoundsConfiguration extends LazyLogging:
     /** Helpers for working with timepoint groupings */
     object RegionalImageRoundGroup:
         /** JSON codec for group of imaging timepoints */
-        given rwForRegionalImageRoundGroup: ReadWriter[NonEmptySet[Timepoint]] = readwriter[ujson.Value].bimap(
+        given rwForRegionalImageRoundGroup: ReadWriter[NonEmptySet[ImagingTimepoint]] = readwriter[ujson.Value].bimap(
             group => ujson.Arr(group.toList.map(name => ujson.Num(name.get))*), 
             json => json.arr
                 .toList
                 .toNel
                 .toRight("Empty collection can't parse as group of regional imaging rounds!")
-                .flatMap(_.traverse(_.safeInt.flatMap(Timepoint.fromInt)))
+                .flatMap(_.traverse(_.safeInt.flatMap(ImagingTimepoint.fromInt)))
                 .flatMap(ts => liftToNes(ts.toList))
                 .fold(
                     repeats => throw new ujson.Value.InvalidData(json, s"Repeat values for group of regional imaging rounds: $repeats"), 
@@ -361,7 +367,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
     
     /** An exclusion strategy for spots too close that defines which ones are to be considered too close */
     sealed trait SelectiveProximityFilter:
-        def grouping: NonEmptyList[NonEmptySet[Timepoint]]
+        def grouping: NonEmptyList[NonEmptySet[ImagingTimepoint]]
     
     /** "No-op" case for spot filtration--all spots are allowed to occur close together. */
     case object UniversalProximityPermission extends ProximityFilterStrategy
@@ -372,13 +378,13 @@ object ImagingRoundsConfiguration extends LazyLogging:
     /** Allow spots from timepoints grouped together to violate given separation threshold. */
     final case class SelectiveProximityPermission(
         minSpotSeparation: PositiveReal,
-        grouping: NonEmptyList[NonEmptySet[Timepoint]],
+        grouping: NonEmptyList[NonEmptySet[ImagingTimepoint]],
         ) extends NontrivialProximityFilter with SelectiveProximityFilter
     
     /** Forbid spots from timepoints grouped together to violate given separation threshold. */
     final case class SelectiveProximityProhibition(
         minSpotSeparation: PositiveReal, 
-        grouping: NonEmptyList[NonEmptySet[Timepoint]],
+        grouping: NonEmptyList[NonEmptySet[ImagingTimepoint]],
         ) extends NontrivialProximityFilter with SelectiveProximityFilter
 
     /** Check list of items for nonemptiness. */

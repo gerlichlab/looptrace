@@ -1,7 +1,7 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
-import upickle.default.*
 import cats.syntax.all.*
+import upickle.default.*
 
 import org.scalacheck.{ Arbitrary, Gen, Shrink }
 import org.scalacheck.Arbitrary.arbitrary
@@ -9,6 +9,8 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 
 /**
   * Tests for config file definition and parsing of imaging rounds and a sequence of them for an experiment.
@@ -64,7 +66,7 @@ class TestImagingSequence extends AnyFunSuite, ScalaCheckPropertyChecks, Imaging
         given rw: ReadWriter[ImagingRound] = ImagingRound.rwForImagingRound
         def genRounds = Gen.choose(1, 100)
             /* Force satisfaction of the requirement that the timepoints form sequence [0, ..., N-1]. */
-            .map(k => (0 until k).map(Timepoint.unsafe).toList)
+            .map(k => (0 until k).map(ImagingTimepoint.unsafe).toList)
             .flatMap(_.traverse{ t => genRound(using genNameForJson.toArbitrary, Gen.const(t).toArbitrary) })
             .suchThat(namesAreUnique)
         forAll (genRounds) { rounds => 
@@ -84,7 +86,7 @@ class TestImagingSequence extends AnyFunSuite, ScalaCheckPropertyChecks, Imaging
         // }
     }
 
-    private def genRound(using arbName: Arbitrary[String], arbTime: Arbitrary[Timepoint]): Gen[ImagingRound] = Gen.oneOf(
+    private def genRound(using arbName: Arbitrary[String], arbTime: Arbitrary[ImagingTimepoint]): Gen[ImagingRound] = Gen.oneOf(
         arbitrary[BlankImagingRound], 
         arbitrary[RegionalImagingRound], 
         arbitrary[LocusImagingRound],

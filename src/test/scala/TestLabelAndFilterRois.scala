@@ -14,6 +14,7 @@ import org.scalatest.matchers.*
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.collections.*
@@ -359,7 +360,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         
         // NB: the frame value for the groping comes from the spotsLines variable.
         def genFilterStrategy = {
-            val singleGroup = NonEmptyList.one(NonEmptySet.one(Timepoint(NonnegativeInt(27))))
+            val singleGroup = NonEmptyList.one(NonEmptySet.one(ImagingTimepoint(NonnegativeInt(27))))
             arbitrary[PositiveReal].flatMap{ threshold => Gen.oneOf(
                 ImagingRoundsConfiguration.UniversalProximityPermission, 
                 ImagingRoundsConfiguration.UniversalProximityProhibition(threshold), 
@@ -511,7 +512,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         val time2 = 4
         val time3 = 5
         val time4 = 6
-        val timepoints = List(time1, time2, time3, time4).map(Timepoint.unsafe)
+        val timepoints = List(time1, time2, time3, time4).map(ImagingTimepoint.unsafe)
         val rawPosName = "P0001.zarr"
         val driftFileText = s""",frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
             |0,${time1},${rawPosName},-2.0,8.0,-24.0,0.3048142040458287,0.2167426082715708,0.46295638298323727
@@ -520,10 +521,10 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
             |3,${time4},${rawPosName},-2.0,2.0,-12.0,-0.6267951175716121,0.24476613641147094,0.5547602737043816
             |""".stripMargin
         
-        def genRegionalRound(t: Timepoint)(using arbProbe: Arbitrary[ProbeName]): Gen[RegionalImagingRound] = 
+        def genRegionalRound(t: ImagingTimepoint)(using arbProbe: Arbitrary[ProbeName]): Gen[RegionalImagingRound] = 
             arbitrary[ProbeName].map(RegionalImagingRound(t, _))
 
-        def genLocalRound(t: Timepoint)(using arbProbe: Arbitrary[ProbeName]): Gen[LocusImagingRound] = 
+        def genLocalRound(t: ImagingTimepoint)(using arbProbe: Arbitrary[ProbeName]): Gen[LocusImagingRound] = 
             arbitrary[ProbeName].map(LocusImagingRound(t, _))
 
         given writerForRound: Writer[ImagingRound] = ImagingRound.rwForImagingRound
@@ -536,7 +537,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
                 NonEmptyList.of(NonEmptySet.of(time1, time2, time4), NonEmptySet.one(time3)), 
                 NonEmptyList.one(NonEmptySet.of(time1, time2, time3, time4)),
                 )
-                .map(_.map(_.map(Timepoint.unsafe)))
+                .map(_.map(_.map(ImagingTimepoint.unsafe)))
             )
             
             val genThreshold = Gen.choose(1.0, 10000.0).map(PositiveReal.unsafe)
@@ -554,7 +555,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
 
         /* Control the generation of ROIs to match the drift file text. */
         given arbPos: Arbitrary[PositionName] = Gen.const(PositionName(rawPosName)).toArbitrary
-        given arbTimepoint: Arbitrary[Timepoint] = Gen.oneOf(timepoints).toArbitrary
+        given arbTimepoint: Arbitrary[ImagingTimepoint] = Gen.oneOf(timepoints).toArbitrary
         
         /* Generate reasonable ROIs (controlling centroid and bounding box). */
         given arbMargin: Arbitrary[BoundingBox.Margin] = getArbForMargin(NonnegativeReal(1.0), NonnegativeReal(32.0))
@@ -588,7 +589,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
 
     test("PERMISSIVE semantic behaves as expected. #222") {
         given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-1, 1) // Limit to [-1, 1] in all dimensions.
-        given ordReg: Ordering[Timepoint] = Order[Timepoint].toOrdering
+        given ordReg: Ordering[ImagingTimepoint] = Order[ImagingTimepoint].toOrdering
 
         val regions = (0 to 3).map(RegionId.unsafe)
         val channel = Channel(NonnegativeInt(0))
@@ -748,7 +749,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
                 val grouping = rawGrouping.toNel match {
                     case None => ImagingRoundsConfiguration.UniversalProximityProhibition(threshold)
                     case Some(grouping) => 
-                        ImagingRoundsConfiguration.SelectiveProximityProhibition(threshold, grouping.map(_.map(Timepoint.unsafe)))
+                        ImagingRoundsConfiguration.SelectiveProximityProhibition(threshold, grouping.map(_.map(ImagingTimepoint.unsafe)))
                 }
                 buildNeighboringRoisFinder(NonnegativeInt.indexed(rois), grouping) match {
                     case Left(err) => fail(s"Expected success but got error: $err")
@@ -767,11 +768,11 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-2048.0, 2048.0)
         given arbMargin: Arbitrary[BoundingBox.Margin] = getArbForMargin(NonnegativeReal(1.0), NonnegativeReal(32.0))
         
-        def genSmallRoisAndGrouping: Gen[(List[RegionalBarcodeSpotRoi], NonEmptyList[Timepoint], ImagingRoundsConfiguration.NontrivialProximityFilter)] = for {
+        def genSmallRoisAndGrouping: Gen[(List[RegionalBarcodeSpotRoi], NonEmptyList[ImagingTimepoint], ImagingRoundsConfiguration.NontrivialProximityFilter)] = for {
             // First, generate ROIs timepoints, such that they're few in number (so quicker test), and
             // the number of unique timepoints is at least 2 (at least 1 to be uncovered by the grouping).
             rois <- {
-                given arbTime: Arbitrary[Timepoint] = Gen.oneOf(List(7, 8, 9).map(Timepoint.unsafe)).toArbitrary
+                given arbTime: Arbitrary[ImagingTimepoint] = Gen.oneOf(List(7, 8, 9).map(ImagingTimepoint.unsafe)).toArbitrary
                 Gen.choose(2, 10).flatMap(Gen.listOfN(_, arbitrary[RegionalBarcodeSpotRoi]))
             }.suchThat(_.map(_.time).toSet.size > 1)
             times = rois.map(_.time).toSet
@@ -779,7 +780,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
             rawFullGrouping <- Gen.oneOf(collections.partition(numGroups, times))
             (skipped, grouping) <- rawFullGrouping
                 .traverse(_.toList.traverse(x => arbitrary[Boolean].map(_.either(x, x))))
-                .map(_.foldLeft(List.empty[Timepoint] -> List.empty[NonEmptySet[Timepoint]]){ 
+                .map(_.foldLeft(List.empty[ImagingTimepoint] -> List.empty[NonEmptySet[ImagingTimepoint]]){ 
                     // Collect the timepoints to skip, and build up the probe/timepoint grouping.
                     case ((drops, acc), subMaybes) => 
                         val (newSkips, newKeeps) = Alternative[List].separate(subMaybes)
@@ -867,7 +868,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
             val roisWithIndex = NonnegativeInt.indexed(positionAssigments).map{ (p, i) => 
                 // Make each region distinct to prevent same-regionness from preventing filtration (#228).
                 // Make region distinct from index so that there can't be incidental convergence of roles.
-                canonicalRoi.copy(position = p, region = RegionId(Timepoint(NonnegativeInt.unsafe(i * 2)))) -> i
+                canonicalRoi.copy(position = p, region = RegionId(ImagingTimepoint(NonnegativeInt.unsafe(i * 2)))) -> i
             }
             /* Create the expected neighboring ROIs grouping, based on fact that all ROIs within each position group are coincident. */
             given orderForPair: Order[RoiLinenumPair] = Order.by(_._2)
@@ -979,7 +980,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-2048.0, 2048.0)
         
         /* Randomise the nontrivial proximity filter. */
-        def genNontrivialProximityFilter(grouping: NonEmptyList[NonEmptySet[Timepoint]]): Gen[GroupedFilterStrategy] = for {
+        def genNontrivialProximityFilter(grouping: NonEmptyList[NonEmptySet[ImagingTimepoint]]): Gen[GroupedFilterStrategy] = for {
             threshold <- Gen.choose(1e10, Double.PositiveInfinity).map(PositiveReal.unsafe)
             build <- Gen.oneOf(SelectiveProximityPermission.apply, SelectiveProximityProhibition.apply)
         } yield build(threshold, grouping)
@@ -1082,7 +1083,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
             RegionalBarcodeSpotRoi(
                 RoiIndex(NonnegativeInt(0)), 
                 PositionName("P0001.zarr"), 
-                RegionId(Timepoint(NonnegativeInt(0))), 
+                RegionId(ImagingTimepoint(NonnegativeInt(0))), 
                 Channel(NonnegativeInt(0)), 
                 point, 
                 box,
@@ -1091,7 +1092,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
     }
 
     def genSpotCoveringGrouping(genThreshold: Gen[PositiveReal])(spots: Iterable[RegionalBarcodeSpotRoi]) = {
-        given ordTime: Ordering[Timepoint] = Order[Timepoint].toOrdering
+        given ordTime: Ordering[ImagingTimepoint] = Order[ImagingTimepoint].toOrdering
         val timepoints = spots.map(_.region.get).toSet
         for {
             maybeSplit <- Gen.option(Gen.choose(1, timepoints.size - 1))
@@ -1112,7 +1113,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
     /** Use the given drift component generators to create a full drift record for each generated spot record. */
     private def genSpotsAndDrifts(genCoarse: Gen[CoarseDrift], genFine: Gen[FineDrift])(
         using arbMargin: Arbitrary[BoundingBox.Margin], arbPoint: Arbitrary[Point3D]
-        ): Gen[(NonEmptyList[RegionalBarcodeSpotRoi], List[(PositionName, Timepoint, CoarseDrift, FineDrift)])] = {
+        ): Gen[(NonEmptyList[RegionalBarcodeSpotRoi], List[(PositionName, ImagingTimepoint, CoarseDrift, FineDrift)])] = {
         // Order shouldn't matter, but that invariant's tested elsewhere.
         given ordPosTime: Ordering[DriftKey] = Order[DriftKey].toOrdering
         for {
@@ -1126,7 +1127,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
 
     private def genSpotsAndDriftsWithDrop(genCoarse: Gen[CoarseDrift], genFine: Gen[FineDrift])(
         using arbMargin: Arbitrary[BoundingBox.Margin], arbPoint: Arbitrary[Point3D]
-        ): Gen[(NonEmptyList[RegionalBarcodeSpotRoi], List[(PositionName, Timepoint, CoarseDrift, FineDrift)], Int)] = {
+        ): Gen[(NonEmptyList[RegionalBarcodeSpotRoi], List[(PositionName, ImagingTimepoint, CoarseDrift, FineDrift)], Int)] = {
         // Order shouldn't matter, but that invariant's tested elsewhere.
         given ordPosTime: Ordering[DriftKey] = Order[DriftKey].toOrdering
         genSpotsAndDrifts(genCoarse, genFine).flatMap{ (spots, driftRows) => 
@@ -1158,7 +1159,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
 
     private def getArbForPoint3D(lo: Double, hi: Double): Arbitrary[Point3D] = arbitraryForPoint3D(using Gen.choose(lo, hi).toArbitrary)
 
-    private def getDriftFileLines(driftRows: List[(PositionName, Timepoint, CoarseDrift, FineDrift)]): List[String] = 
+    private def getDriftFileLines(driftRows: List[(PositionName, ImagingTimepoint, CoarseDrift, FineDrift)]): List[String] = 
         headDriftFile :: driftRows.zipWithIndex.map{ case ((pos, time, coarse, fine), i) => 
             s"$i,${time.get},${pos.get},${coarse.z.get},${coarse.y.get},${coarse.x.get},${fine.z.get},${fine.y.get},${fine.x.get}"
         }

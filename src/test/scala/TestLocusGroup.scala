@@ -8,6 +8,7 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.*
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.LocusGroup
@@ -17,18 +18,18 @@ import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.LocusGroup
   */
 class TestLocusGroup extends AnyFunSuite with ScalaCheckPropertyChecks with should.Matchers:
     test("LocusGroup's locus times collection must be nonempty at the type level.") {
-        assertTypeError{ "LocusGroup(Timepoint(NonnegativeInt(2)), Set(Timepoint(NonnegativeInt(1))))" }
-        LocusGroup(Timepoint(NonnegativeInt(2)), NonEmptySet.one(Timepoint(NonnegativeInt(1)))).locusTimepoints 
+        assertTypeError{ "LocusGroup(ImagingTimepoint(NonnegativeInt(2)), Set(ImagingTimepoint(NonnegativeInt(1))))" }
+        LocusGroup(ImagingTimepoint(NonnegativeInt(2)), NonEmptySet.one(ImagingTimepoint(NonnegativeInt(1)))).locusTimepoints 
         `shouldEqual` 
-        NonEmptySet.one(Timepoint(NonnegativeInt(1)))
-        val nonemptyLocusTimes = NonEmptySet.one(Timepoint(NonnegativeInt(1)))
+        NonEmptySet.one(ImagingTimepoint(NonnegativeInt(1)))
+        val nonemptyLocusTimes = NonEmptySet.one(ImagingTimepoint(NonnegativeInt(1)))
     }
 
     test("LocusGroup cannot have regional time in the locus times.") {
         forAll (arbitrary[Boolean], Gen.choose(0, 9), Gen.nonEmptyListOf(Gen.choose(10, 99))) {
             (includeRegional, regional, loci) => 
                 val rt = Timepoint.unsafe(regional)
-                val initLoci = loci.map(Timepoint.unsafe)
+                val initLoci = loci.map(ImagingTimepoint.unsafe)
                     .toNel
                     .getOrElse{ throw new Exception("Generated empty list of locus times!") }
                     .toNes

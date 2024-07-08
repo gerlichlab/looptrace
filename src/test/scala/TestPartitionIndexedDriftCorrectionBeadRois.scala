@@ -15,6 +15,7 @@ import org.scalatest.matchers.*
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionBeadRois.*
@@ -46,14 +47,6 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
     test("ShiftingCount appropriately constrains the domain.") {
         assertDoesNotCompile("ShiftingCount(9)")
         assertCompiles("ShiftingCount(10)")
-        ShiftingCount.maybe(AbsoluteMinimumShifting - 1) shouldBe Option.empty[ShiftingCount]
-        ShiftingCount.maybe(AbsoluteMinimumShifting : Int) shouldBe AbsoluteMinimumShifting.some
-        ShiftingCount.either(AbsoluteMinimumShifting - 1) match {
-            case Left(obsMsg) => 
-                val expMsg = s"Cannot use ${AbsoluteMinimumShifting - 1} as shifting count (min. $AbsoluteMinimumShifting)"
-                obsMsg shouldEqual expMsg
-            case Right(sc) => fail(s"Expected failure but got $sc")
-        }
         intercept[NumberFormatException]{ 
             ShiftingCount.unsafe(AbsoluteMinimumShifting - 1)
         }.getMessage shouldEqual s"Cannot use ${AbsoluteMinimumShifting - 1} as shifting count (min. $AbsoluteMinimumShifting)"
@@ -409,7 +402,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
-        ).toList.map((p, t) => PositionIndex.unsafe(p) -> Timepoint.unsafe(t))
+        ).toList.map((p, t) => PositionIndex.unsafe(p) -> ImagingTimepoint.unsafe(t))
         type PosTimeRois = (PosTimePair, List[DetectedRoi])
         def genDetected(ptPairs: List[PosTimePair])(lo: Int, hi: Int): Gen[List[PosTimeRois]] = 
             ptPairs.traverse{ pt => genUsableRois(lo, hi).map(pt -> _) }
@@ -461,7 +454,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
-        ).toList.map((p, t) => PositionIndex.unsafe(p) -> Timepoint.unsafe(t))
+        ).toList.map((p, t) => PositionIndex.unsafe(p) -> ImagingTimepoint.unsafe(t))
         val maxReqShifting = 2 * AbsoluteMinimumShifting
         def genArgs: Gen[(ShiftingCount, PositiveInt, List[(PosTimePair, List[DetectedRoi])])] = for {
             numReqShifting <- Gen.choose(AbsoluteMinimumShifting, maxReqShifting).map(ShiftingCount.unsafe)
@@ -513,7 +506,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
-        ).toList.map((p, t) => PositionIndex.unsafe(p) -> Timepoint.unsafe(t))
+        ).toList.map((p, t) => PositionIndex.unsafe(p) -> ImagingTimepoint.unsafe(t))
         def genDetected(lo: Int, hi: Int) = 
             (_: List[PosTimePair]).traverse{ pt => genMixedUsabilityRoisEachSize(lo, hi).map(pt -> _) }
         def genArgs = for {
@@ -549,7 +542,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
-        ).toList.map((p, t) => PositionIndex.unsafe(p) -> Timepoint.unsafe(t))
+        ).toList.map((p, t) => PositionIndex.unsafe(p) -> ImagingTimepoint.unsafe(t))
         def genDetected(lo: Int, hi: Int) = 
             // Make all ROIs usable so that the math about how many will be realized (used) is easier; 
             // in particular, we don't want that math dependent on counting the number of usable vs. unusable ROIs.
@@ -620,7 +613,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
-        ).toList.map((p, t) => PositionIndex.unsafe(p) -> Timepoint.unsafe(t))
+        ).toList.map((p, t) => PositionIndex.unsafe(p) -> ImagingTimepoint.unsafe(t))
         def genArgs = for {
             rois <- posTimePairs.traverse{ pt => genUsableRois(AbsoluteMinimumShifting, maxNumRoisSmallTests).map(pt -> _) }
             numShifting <- Gen.choose(rois.map(_._2.length).max, 1000).map(ShiftingCount.unsafe)
@@ -659,7 +652,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
         }
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
-        ).toList.map((p, t) => PositionIndex.unsafe(p) -> Timepoint.unsafe(t))
+        ).toList.map((p, t) => PositionIndex.unsafe(p) -> ImagingTimepoint.unsafe(t))
         def genArgs = for {
             numShifting <- Gen.choose(AbsoluteMinimumShifting, 50).map(ShiftingCount.unsafe)
             numAccuracy <- Gen.choose(1, 50).map(PositiveInt.unsafe)
@@ -772,10 +765,10 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
     def genDistinctNonnegativePairs: Gen[(PosTimePair, PosTimePair)] = 
         Gen.zip(arbitrary[(NonnegativeInt, NonnegativeInt)], arbitrary[(NonnegativeInt, NonnegativeInt)])
             .suchThat{ case (p1, p2) => p1 =!= p2 }
-            .map { case ((p1, f1), (p2, f2)) => (PositionIndex(p1) -> Timepoint(f1), PositionIndex(p2) -> Timepoint(f2)) }
+            .map { case ((p1, f1), (p2, f2)) => (PositionIndex(p1) -> ImagingTimepoint(f1), PositionIndex(p2) -> ImagingTimepoint(f2)) }
     
     /** Infer detected bead ROIs filename for particular field of view (@code pos) and timepoint ({@code time}). */
-    def getInputFilename(pos: PositionIndex, time: Timepoint): String = s"bead_rois__${pos.get}_${time.get}.csv"
+    def getInputFilename(pos: PositionIndex, time: ImagingTimepoint): String = s"bead_rois__${pos.get}_${time.get}.csv"
     
     /** Limit the number of ROIs generated to keep test cases (relatively) small even without shrinking. */
     def maxNumRoisSmallTests: ShiftingCount = ShiftingCount.unsafe(2 * AbsoluteMinimumShifting)

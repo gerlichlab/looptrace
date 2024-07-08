@@ -7,6 +7,7 @@ import mouse.boolean.*
 import upickle.default.*
 import com.typesafe.scalalogging.LazyLogging
 
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
@@ -35,7 +36,7 @@ object TracingOutputAnalysis extends LazyLogging:
 
         /** JSON codec for pair of regional spot timepoint and locus spot timepoint */
         given rwForSpotTimePair: ReadWriter[SpotTimePair] = readwriter[ujson.Value].bimap(
-            { case (RegionId(Timepoint(r)), LocusId(Timepoint(l))) => 
+            { case (RegionId(ImagingTimepoint(r)), LocusId(ImagingTimepoint(l))) => 
                 ujson.Obj(regionalKey -> ujson.Num(r), localKey -> ujson.Num(l))
             },
             json => {
@@ -65,8 +66,8 @@ object TracingOutputAnalysis extends LazyLogging:
         os.write(outfile, lines)
     }
 
-    private def unsafeGetThroughTimepoint[A](key: String, build: Timepoint => A) = (row: CsvRow) => 
-        safeGetFromRow(key, safeParseInt >>> Timepoint.fromInt)(row)
+    private def unsafeGetThroughTimepoint[A](key: String, build: ImagingTimepoint => A) = (row: CsvRow) => 
+        safeGetFromRow(key, safeParseInt >>> ImagingTimepoint.fromInt)(row)
             .fold(errs => throw new Exception(s"Problem(s) parsing $key from row ($row): $errs"), build)
     
     private def unsafeGetRegion = unsafeGetThroughTimepoint("ref_frame", RegionId.apply)

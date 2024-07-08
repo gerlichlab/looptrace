@@ -12,6 +12,7 @@ import org.scalatest.matchers.*
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.TracingOutputAnalysis.*
@@ -298,8 +299,8 @@ class TestSpotTimePair extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceS
 
     /* Helpers for constructing inputs */
     extension (n: NonnegativeInt)
-        def toLocal = LocusId(Timepoint(n))
-        def toRegional = RegionId(Timepoint(n))
+        def toLocal = LocusId(ImagingTimepoint(n))
+        def toRegional = RegionId(ImagingTimepoint(n))
     extension (nn: (NonnegativeInt, NonnegativeInt))
         def toSpotTimePair: SpotTimePair = nn.bimap(_.toRegional, _.toLocal)
 

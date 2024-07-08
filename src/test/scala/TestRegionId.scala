@@ -8,6 +8,7 @@ import org.scalatest.matchers.should
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
 /** Tests for region ID wrapper type */
@@ -17,9 +18,9 @@ class TestRegionId extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite
     test("RegionId.fromInt works; region ID must be nonnegative.") {
         forAll { (z: Int) => RegionId.fromInt(z) match {
             case Left(msg) if z < 0 => msg shouldEqual s"Cannot refine as nonnegative: $z"
-            case Right(rid@RegionId(Timepoint(t))) if z >= 0 => 
+            case Right(rid@RegionId(ImagingTimepoint(t))) if z >= 0 => 
                 t shouldEqual z
-                rid.get shouldEqual Timepoint.unsafe(z)
+                rid.get shouldEqual ImagingTimepoint.unsafe(z)
             case result => fail(s"Unexpected result parsing region ID from int ($z): $result")
         } }
     }
@@ -27,7 +28,7 @@ class TestRegionId extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite
     test("RegionId.fromNonnegative works; region ID must be nonnegative.") {
         forAll { (z: NonnegativeInt) => 
             val rid = RegionId.fromNonnegative(z)
-            rid.get shouldEqual Timepoint(z)
+            rid.get shouldEqual ImagingTimepoint(z)
             rid.index shouldEqual z
         }
     }

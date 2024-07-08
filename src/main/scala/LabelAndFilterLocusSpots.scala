@@ -9,18 +9,18 @@ import mouse.boolean.*
 import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
 
-import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow.*
-import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow.given
+import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow.* // for .show_ syntax
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
-import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt.given
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 
-import at.ac.oeaw.imba.gerlich.looptrace.RegionId.given
-import at.ac.oeaw.imba.gerlich.looptrace.TraceId.given
-
+import at.ac.oeaw.imba.gerlich.looptrace.HeadedFileWriter.DelimitedTextTarget.eqForDelimitedTextTarget
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
+import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ Point3D, XCoordinate, YCoordinate, ZCoordinate }
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
-import at.ac.oeaw.imba.gerlich.looptrace.HeadedFileWriter.DelimitedTextTarget.eqForDelimitedTextTarget
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.ImagingTimepointExtras.*
 
 /**
   * Label points underlying traces with various QC pass-or-fail values.
@@ -263,7 +263,7 @@ object LabelAndFilterLocusSpots extends StrictLogging:
                     val maybeParseFov = buildFieldParse(pc.fovColumn, safeParseInt >>> PositionIndex.fromInt)(header)
                     val maybeParseRegion = buildFieldParse(pc.regionColumn, safeParseInt >>> RegionId.fromInt)(header)
                     val maybeParseTraceId = buildFieldParse(pc.traceIdColumn, safeParseInt >>> TraceId.fromInt)(header)
-                    val maybeParseTime = buildFieldParse(pc.timeColumn, safeParseInt >>> Timepoint.fromInt)(header)
+                    val maybeParseTime = buildFieldParse(pc.timeColumn, safeParseInt >>> ImagingTimepoint.fromInt)(header)
                     val maybeParseZ = buildFieldParse(pc.zPointColumn.get, safeParseDouble >> ZCoordinate.apply)(header)
                     val maybeParseY = buildFieldParse(pc.yPointColumn.get, safeParseDouble >> YCoordinate.apply)(header)
                     val maybeParseX = buildFieldParse(pc.xPointColumn.get, safeParseDouble >> XCoordinate.apply)(header)
@@ -389,7 +389,7 @@ object LabelAndFilterLocusSpots extends StrictLogging:
     /** Write filtered and unfiltered results files, filtered having just QC pass flag column uniformly 1, unfiltered having causal components. */
     def writeResults(roundsConfig: ImagingRoundsConfiguration)(
         records: Iterable[(LocusSpotQC.OutputRecord, Array[String])], 
-        exclusions: Set[Timepoint], 
+        exclusions: Set[ImagingTimepoint], 
         minTraceLength: NonnegativeInt,
         header: Array[String], 
         analysisOutfolder: os.Path, 
@@ -524,7 +524,7 @@ object LabelAndFilterLocusSpots extends StrictLogging:
                     val p = r.centerInPixels                    
                     val timeIndex = (
                         for {
-                            locTimes <- roundsConfig.lookupReindexedTimepoint
+                            locTimes <- roundsConfig.lookupReindexedImagingTimepoint
                                 .get(r.regionTime)
                                 .toRight(s"Missing region time ${r.regionTime} in locusGrouping!")
                             ti <- locTimes
@@ -590,7 +590,7 @@ object LabelAndFilterLocusSpots extends StrictLogging:
         }
     end PointDisplayType
 
-    private[LabelAndFilterLocusSpots] final case class NapariSortKey(position: PositionIndex, traceId: TraceId, time: Timepoint)
+    private[LabelAndFilterLocusSpots] final case class NapariSortKey(position: PositionIndex, traceId: TraceId, time: ImagingTimepoint)
     object NapariSortKey:
         given orderForNapariSortKey: Order[NapariSortKey] = Order.by{ k => (k.position, k.traceId, k.time) }
         extension [A](as: List[A])(using ev: NapariSortable[A])

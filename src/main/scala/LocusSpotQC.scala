@@ -9,9 +9,9 @@ import cats.syntax.all.*
 import mouse.boolean.*
 import upickle.default.*
 
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
-import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeReal.given
-import at.ac.oeaw.imba.gerlich.gerlib.numeric.PositiveReal.given
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
@@ -59,8 +59,8 @@ object LocusSpotQC:
         final def passesQC: Boolean = qcResult.allPass
         final def canBeDisplayed: Boolean = qcResult.canBeDisplayed
         final def traceId: TraceId = identifier.traceId
-        final def regionTime: Timepoint = identifier.regionId.get
-        final def locusTime: Timepoint = identifier.locusId.get
+        final def regionTime: ImagingTimepoint = identifier.regionId.get
+        final def locusTime: ImagingTimepoint = identifier.locusId.get
         final def failureReasons: List[FailureReason] = qcResult.toFailureReasons
         
     /** Helpers for working with QC data bundles for locus-specific spots */

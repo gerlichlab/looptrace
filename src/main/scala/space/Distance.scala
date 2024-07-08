@@ -136,7 +136,7 @@ end EuclideanDistance
 
 /** Helpers for working with Euclidean distances */
 object EuclideanDistance:
-    import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeReal.given // for Order
+    import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeReal.given // for Order
 
     /** Order distance by the wrapped value. */
     given Order[EuclideanDistance] = Order.by(_.get)

@@ -8,12 +8,10 @@ import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow.*
-import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
-import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt.given
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
 
-import at.ac.oeaw.imba.gerlich.looptrace.RegionId.given
-import at.ac.oeaw.imba.gerlich.looptrace.TraceId.given
+import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
