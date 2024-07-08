@@ -11,7 +11,7 @@ import scopt.OParser
 import com.github.tototoshi.csv.*
 import com.typesafe.scalalogging.StrictLogging
 
-import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.PositiveReal.*
@@ -20,6 +20,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.ImagingChannelExtras.*
 
 /**
  * Measure data across all timepoints in the regions identified during spot detection.
@@ -364,7 +365,7 @@ object LabelAndFilterRois extends StrictLogging:
         val indexNel = safeGetFromRow("", safeParseInt >>> RoiIndex.fromInt)(row)
         val posNel = safeGetFromRow("position", PositionName.apply(_).asRight)(row)
         val regionNel = safeGetFromRow("frame", safeParseInt >>> RegionId.fromInt)(row)
-        val channelNel = safeGetFromRow("ch", safeParseInt >>> Channel.fromInt)(row)
+        val channelNel = safeGetFromRow("ch", safeParseInt >>> ImagingChannel.fromInt)(row)
         val centroidNel = {
             val zNel = safeGetFromRow("zc", safeParseDouble >> ZCoordinate.apply)(row)
             val yNel = safeGetFromRow("yc", safeParseDouble >> YCoordinate.apply)(row)

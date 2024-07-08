@@ -4,7 +4,6 @@ package object instances:
     object all extends AllInstances
 
     private trait AllInstances extends 
-        ChannelInstances, 
         LocusIdInstances,
         PositionIndexInstances, 
         PositionNameInstances, 
