@@ -11,7 +11,7 @@ import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow.* // for .show_ syntax
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
-
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 
