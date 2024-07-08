@@ -10,5 +10,4 @@ package object instances:
         ProbeNameInstances, 
         RegionIdInstances, 
         RoiIdInstances, 
-        ImagingTimepointInstances, 
         TraceIdInstances
