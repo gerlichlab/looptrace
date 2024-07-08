@@ -12,7 +12,7 @@ import com.github.tototoshi.csv.*
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
-import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt.given // Order, Show
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given // Order, Show
 
 /** Chromatin fiber tracing with FISH probes */
 package object looptrace {
@@ -104,15 +104,6 @@ package object looptrace {
         def lengthOfNonempty[A : Order](xs: NonEmptySet[A]): PositiveInt = PositiveInt.unsafe(xs.length)
     end PositiveIntExtras
     
-    /** Type wrapper around the index of an imaging channel */
-    final case class Channel(get: NonnegativeInt) derives Order
-    
-    /** Helpers for working with the representation of an imaging channel */
-    object Channel:
-        def fromInt = NonnegativeInt.either.fmap(_.map(Channel.apply))
-        def unsafe = NonnegativeInt.unsafe `andThen` Channel.apply
-    end Channel
-
     final case class LocusId(get: ImagingTimepoint) derives Order:
         def index = get.get
     
