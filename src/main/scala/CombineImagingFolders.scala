@@ -12,8 +12,7 @@ import com.typesafe.scalalogging.StrictLogging
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
-import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
-import at.ac.oeaw.imba.gerlich.looptrace.syntax.ImagingTimepointExtras.*
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** Combine imaging subfolders to create a single timecourse.
  * 

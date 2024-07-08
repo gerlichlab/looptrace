@@ -9,12 +9,9 @@ import mouse.boolean.*
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
-import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt.given // Order
-
-import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
 
 /** Helpers for working with [[at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint]] values */
-object ImagingTimepointExtras:
+trait SyntaxForImagingTimepoint:
     /** The text prefix before the encoding of the numeric timepoint value in a filename */
     private val PrefixInFilename = "Time"
     
@@ -41,4 +38,3 @@ object ImagingTimepointExtras:
 
         /** Assume given integer is nonnegative and lift it into the type for timepoints. */
         def unsafe = IT.fromInt(_: Int).fold(msg => throw new NumberFormatException(msg), identity)
-end ImagingTimepointExtras

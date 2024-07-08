@@ -14,7 +14,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
 
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
-import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 
 /**

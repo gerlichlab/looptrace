@@ -15,7 +15,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
-import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /**
  * Tools for working with the quality control filtration and visualisation of locus-specific spots

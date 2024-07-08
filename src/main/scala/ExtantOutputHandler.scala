@@ -5,6 +5,8 @@ import java.nio.file.FileAlreadyExistsException
 import cats.syntax.all.*
 import scopt.Read
 
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
+
 /** How a program should handle trying to write output when the target already exists. */
 enum ExtantOutputHandler:
     case Overwrite, Skip, Fail

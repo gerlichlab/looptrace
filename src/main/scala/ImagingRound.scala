@@ -11,8 +11,7 @@ import upickle.default.*
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
-import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
-import at.ac.oeaw.imba.gerlich.looptrace.syntax.ImagingTimepointExtras.*
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** A round of imaging during an experiment */
 sealed trait ImagingRound:

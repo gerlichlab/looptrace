@@ -19,8 +19,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.PositiveReal.*
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
-import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
-import at.ac.oeaw.imba.gerlich.looptrace.syntax.ImagingChannelExtras.*
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /**
  * Measure data across all timepoints in the regions identified during spot detection.

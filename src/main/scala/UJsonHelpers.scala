@@ -6,7 +6,9 @@ import cats.syntax.all.*
 import mouse.boolean.*
 import upickle.core.Visitor
 import upickle.default.*
+
 import at.ac.oeaw.imba.gerlich.looptrace.collections.*
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /**
  * Helpers for working with the excellent uJson project 
