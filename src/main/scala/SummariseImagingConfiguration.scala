@@ -7,7 +7,7 @@ import cats.syntax.all.*
 import mouse.boolean.*
 import scopt.OParser
 
-import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow.* // for syntax
+import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.* // for syntax
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.imagingTimepoint.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
