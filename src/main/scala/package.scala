@@ -41,41 +41,17 @@ package object looptrace {
         }
     }
 
-    extension [A, F[_, _] : Bifunctor](faa: F[A, A])
-        def mapBoth[B](f: A => B): F[B, B] = faa.bimap(f, f)
-
-    /** When an iterable is all booleans, simplify the all-true check ({@code ps.forall(identity) === ps.all}) */
-    extension (ps: Iterable[Boolean])
-        def all: Boolean = ps.forall(identity)
-        def any: Boolean = ps.exists(identity)
-
-    /** Add a {@code .parent} accessor on a path. */
-    extension (p: os.Path)
-        def parent: os.Path = p / os.up
-
     def tryToInt(x: Double): Either[String, Int] = {
         val z = x.toInt
         (x == z).either(s"Cannot convert to integer: $x", z) // == rather than === here to allow Double/Int comparison
     }
-    
-    extension (v: ujson.Value)
-        def int: Int = tryToInt(v.num).fold(msg => throw new ujson.Value.InvalidData(v, msg), identity)
-
-    extension (v: ujson.Value)
-        def safeInt = Try{ v.int }.toEither
 
     extension [A](arr: Array[A])
-        def lookup(a: A): Option[Int] = arr.indexOf(a) match {
+        private def lookup(a: A): Option[Int] = arr.indexOf(a) match {
             case -1 => None
             case i => i.some
         }
-
-    extension [I, O](f: I => Unit)
-        def returning(o: O): I => O = f `andThen` Function.const(o)
-
-    extension [A](t: Try[A])
-        def toValidatedNel: ValidatedNel[Throwable, A] = t.toEither.toValidatedNel
-
+    
     /** Find a field in a header and use the index to build a row record parser for that field. */
     def buildFieldParse[A](name: String, parse: String => Either[String, A])(header: Array[String]): ValidatedNel[String, Array[String] => ValidatedNel[String, A]] = {
         header.lookup(name).toRight(f"Missing field in header: $name").map{ i => {

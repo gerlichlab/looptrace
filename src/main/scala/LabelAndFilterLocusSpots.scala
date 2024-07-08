@@ -19,8 +19,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.HeadedFileWriter.DelimitedTextTarget.eq
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ Point3D, XCoordinate, YCoordinate, ZCoordinate }
-import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
-import at.ac.oeaw.imba.gerlich.looptrace.syntax.ImagingTimepointExtras.*
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /**
   * Label points underlying traces with various QC pass-or-fail values.
@@ -38,7 +37,6 @@ object LabelAndFilterLocusSpots extends StrictLogging:
     
     private type CenterInPixels = Point3D
     private type TraceRecordPair = (NonnegativeInt, LocusSpotQC.OutputRecord)
-
 
     /** Deinition of the command-line interface */
     case class CliConfig(

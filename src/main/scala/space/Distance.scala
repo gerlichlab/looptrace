@@ -8,7 +8,7 @@ import cats.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
-import at.ac.oeaw.imba.gerlich.looptrace.{ all, any }
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** Something that can compare two {@code A} values w.r.t. threshold value of type {@code T} */
 trait ProximityComparable[A]:

@@ -17,7 +17,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.PositiveInt.* // for .asNonnegativ
 
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
-import at.ac.oeaw.imba.gerlich.looptrace.syntax.ImagingTimepointExtras.*
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** Split pool of detected bead ROIs into those for drift correction shift, drift correction accuracy, and unused. */
 object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
@@ -169,7 +169,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
     }
 
     def createParser(header: RawRecord): ErrMsgsOr[RawRecord => ErrMsgsOr[DetectedRoi]] = {
-        import at.ac.oeaw.imba.gerlich.looptrace.syntax.* // for >>> and >>, generally
+        import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.* // for >>> and >>, generally
         val maybeParseIndex = buildFieldParse(ParserConfig.indexCol.get, safeParseInt >>> RoiIndex.fromInt)(header)
         val maybeParseX = buildFieldParse(ParserConfig.xCol.get, safeParseDouble.andThen(_.map(XCoordinate.apply)))(header)
         val maybeParseY = buildFieldParse(ParserConfig.yCol.get, safeParseDouble.andThen(_.map(YCoordinate.apply)))(header)
