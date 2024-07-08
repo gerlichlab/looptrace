@@ -9,11 +9,13 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.LabelAndFilterLocusSpots.{ ParserConfig, QcPassColumn, workflow }
 import at.ac.oeaw.imba.gerlich.looptrace.LocusSpotQC.*
 import at.ac.oeaw.imba.gerlich.looptrace.PathHelpers.*
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** Tests for the filtration of the individual supports (single FISH probes) of chromatin fiber traces */
 class TestLabelAndFilterLocusSpots extends AnyFunSuite, ScalaCheckPropertyChecks, GenericSuite, should.Matchers:
@@ -154,7 +156,7 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, ScalaCheckPropertyChecks
                 val seq = defaultRoundsConfig.sequence
                 val loc = defaultRoundsConfig.locusGrouping
                 val proxFilt = defaultRoundsConfig.proximityFilterStrategy
-                ImagingRoundsConfiguration.unsafe(seq, loc, proxFilt, exclusions.map(Timepoint.unsafe).toSet, true)
+                ImagingRoundsConfiguration.unsafe(seq, loc, proxFilt, exclusions.map(ImagingTimepoint.unsafe).toSet, true)
             }
             withTempDirectory{ (tempdir: os.Path) => 
                 // Perform the pretest and get the expected result paths.

@@ -19,6 +19,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.{
     UniversalProximityPermission, 
     UniversalProximityProhibition, 
 }
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** Tests of examples of imaging rounds config files */
 class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with ScalaCheckPropertyChecks with should.Matchers:

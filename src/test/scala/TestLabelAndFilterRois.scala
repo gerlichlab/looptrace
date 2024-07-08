@@ -14,11 +14,14 @@ import org.scalatest.matchers.*
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
-import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.collections.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.safeReadAllWithOrderedHeaders
 import at.ac.oeaw.imba.gerlich.looptrace.LabelAndFilterRois.*
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.{
@@ -592,7 +595,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         given ordReg: Ordering[ImagingTimepoint] = Order[ImagingTimepoint].toOrdering
 
         val regions = (0 to 3).map(RegionId.unsafe)
-        val channel = Channel(NonnegativeInt(0))
+        val channel = ImagingChannel(NonnegativeInt(0))
         val margin = BoundingBox.Margin(NonnegativeReal(0.5))
 
         def genRois(lo: Int, hi: Int) = {
@@ -734,7 +737,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         forAll (inputTable) { (threshold, pointTimePairs, rawGrouping, rawExpectation) => 
             def genRois: Gen[List[RegionalBarcodeSpotRoi]] = for {
                 posName <- arbitrary[PositionName]
-                ch <- arbitrary[Channel]
+                ch <- arbitrary[ImagingChannel]
                 rois <- NonnegativeInt.indexed(pointTimePairs).traverse{ case ((pt, time), i) => 
                     arbitrary[(BoundingBox.Margin, BoundingBox.Margin, BoundingBox.Margin)].map{ (offX, offY, offZ) => 
                         val intvX = buildInterval(pt.x, offX)(XCoordinate.apply)
@@ -777,7 +780,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
             }.suchThat(_.map(_.time).toSet.size > 1)
             times = rois.map(_.time).toSet
             numGroups <- Gen.choose(1, times.size)
-            rawFullGrouping <- Gen.oneOf(collections.partition(numGroups, times))
+            rawFullGrouping <- Gen.oneOf(partition(numGroups, times))
             (skipped, grouping) <- rawFullGrouping
                 .traverse(_.toList.traverse(x => arbitrary[Boolean].map(_.either(x, x))))
                 .map(_.foldLeft(List.empty[ImagingTimepoint] -> List.empty[NonEmptySet[ImagingTimepoint]]){ 
@@ -1084,7 +1087,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
                 RoiIndex(NonnegativeInt(0)), 
                 PositionName("P0001.zarr"), 
                 RegionId(ImagingTimepoint(NonnegativeInt(0))), 
-                Channel(NonnegativeInt(0)), 
+                ImagingChannel(NonnegativeInt(0)), 
                 point, 
                 box,
                 )

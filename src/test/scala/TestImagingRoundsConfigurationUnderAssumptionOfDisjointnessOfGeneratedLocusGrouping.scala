@@ -1,6 +1,7 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
 import scala.util.Random
+import cats.Order
 import cats.data.{ NonEmptyList, NonEmptySet }
 import cats.syntax.all.*
 import mouse.boolean.*
@@ -19,6 +20,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.{ LocusGroup, SelectiveProximityPermission }
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /**
   * Tests for [[at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration]]
@@ -539,6 +541,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
                         println(s"DATA (below)\n${write(data, indent = 4)}")
                         fail("Parse succeeded when failure was expected!")
                     case Left(messages) => 
+                        given Ordering[ImagingTimepoint] = summon[Order[ImagingTimepoint]].toOrdering
                         val unknown = exclusions -- seq.allTimepoints.toList
                         val expectMessage = s"Unknown timepoint(s) (tracing exclusions): ${unknown.toList.sorted.map(_.show).mkString(", ")}"
                         val numMatchMessages = messages.count(_ === expectMessage).toInt

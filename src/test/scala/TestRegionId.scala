@@ -11,6 +11,8 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
+
 /** Tests for region ID wrapper type */
 class TestRegionId extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite, RefinementWrapperSuite, should.Matchers:
     override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)

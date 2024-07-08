@@ -13,7 +13,7 @@ import com.typesafe.scalalogging.StrictLogging
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
-import at.ac.oeaw.imba.gerlich.gerlib.numeric.PositiveInt.* // for .asNonnegative
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
@@ -330,7 +330,8 @@ object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
         extension (n: ShiftingCount)
             def asNonnegative: NonnegativeInt = NonnegativeInt.unsafe(n)
             def asPositive: PositiveInt = PositiveInt.unsafe(n)
-        def unsafe(z: Int): ShiftingCount = either(z).fold(msg => throw new NumberFormatException(msg), identity)
+        def unsafe(z: Int): ShiftingCount = 
+            PositiveInt.either(z).fold(msg => throw new NumberFormatException(msg), identity)
     end ShiftingCount
     
     /** Tools for working with a fundamental grouping entity -- pair of FOV and imaging timepoint */
