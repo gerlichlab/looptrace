@@ -17,6 +17,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.TracingOutputAnalysis.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.readJsonFile
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** Tests for pair of regional and locus-specific spot image timepoints. */
 class TestSpotTimePair extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite, ScalacheckGenericExtras, should.Matchers:

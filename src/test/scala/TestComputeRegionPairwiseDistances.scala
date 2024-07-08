@@ -12,12 +12,18 @@ import org.scalatest.matchers.*
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow
+import at.ac.oeaw.imba.gerlich.gerlib.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.ComputeRegionPairwiseDistances.*
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.safeReadAllWithOrderedHeaders
 import at.ac.oeaw.imba.gerlich.looptrace.collections.*
+import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /**
  * Tests for the simple pairwise distances computation program, for regional barcode spots
@@ -75,7 +81,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                 val infile = tempdir / "input.csv"
                 val toTextFields: (Input.GoodRecord, Int) => List[String] = 
                     if includeIndexCol 
-                    then { (r, i) => i.show :: recordToTextFields(r) }
+                    then { (r, i) => i.show_ :: recordToTextFields(r) }
                     else { (r, _) => recordToTextFields(r) }
                 os.write(infile, records.toList.zipWithIndex.map(toTextFields.tupled `andThen` textFieldsToLine))
                 intercept[IllegalHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") } match {
@@ -112,7 +118,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
         forAll { (expectedHeader: ExpectedHeader, records: NonEmptyList[Input.GoodRecord], includeIndexCol: Boolean) =>
             val (expHead, textRows) = 
                 if includeIndexCol 
-                then ("" :: expectedHeader, records.toList.zipWithIndex.map{ (r, i) => i.show :: recordToTextFields(r) })
+                then ("" :: expectedHeader, records.toList.zipWithIndex.map{ (r, i) => i.show_ :: recordToTextFields(r) })
                 else (expectedHeader, records.toList.map(recordToTextFields))
             withTempDirectory{ (tempdir: os.Path) => 
                 val infile = {
@@ -147,11 +153,11 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
         def genAdditions: Gen[Mutate] = 
             Gen.resize(5, Gen.nonEmptyListOf(Gen.choose(-3e-3, 3e3).map(_.toString))).map(additions => (_: List[String]) ++ additions)
         def genImproperlyTyped: Gen[Mutate] = {
-            def genMutate[A : Show](col: String, alt: Gen[A]): Gen[Mutate] = {
+            def genMutate[A : SimpleShow](col: String, alt: Gen[A]): Gen[Mutate] = {
                 val idx = AllReqdColumns.zipWithIndex.find(_._1 === col).map(_._2).getOrElse{
                     throw new Exception(s"Cannot find index for alleged input column: $col")
                 }
-                alt.map(a => { (_: List[String]).updated(idx, a.show) })
+                alt.map(a => { (_: List[String]).updated(idx, a.show_) })
             }
             // NB: Skipping bad position and region b/c so long as they're String-ly typed, there's no way to generate a bad value.
             Gen.oneOf(Input.XCoordinateColumn, Input.YCoordinateColumn, Input.ZCoordinateColumn).flatMap(genMutate(_, Gen.alphaStr))
@@ -173,7 +179,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                 os.isFile(infile) shouldBe false
                 val (head, textRows) = 
                     if includeIndexCol 
-                    then ("" :: AllReqdColumns, textRecords.zipWithIndex.map((r, i) => i.show :: r))
+                    then ("" :: AllReqdColumns, textRecords.zipWithIndex.map((r, i) => i.show_ :: r))
                     else (AllReqdColumns, textRecords)
                 os.write(infile, (head :: textRows.toList) map textFieldsToLine)
                 os.isFile(infile) shouldBe true
@@ -189,7 +195,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                 val infile = tempdir / "input_with_suffix.some.random.extensions.csv"
                 val (head, textRows) = 
                     if includeIndexCol
-                    then ("" :: AllReqdColumns, records.zipWithIndex.map((r, i) => i.show :: recordToTextFields(r)))
+                    then ("" :: AllReqdColumns, records.zipWithIndex.map((r, i) => i.show_ :: recordToTextFields(r)))
                     else (AllReqdColumns, records.map(recordToTextFields))
                 os.write(infile, (head :: textRows.toList).map(textFieldsToLine))
                 val outfolder = tempdir / "output"
@@ -275,9 +281,10 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
     private def textFieldsToLine = Delimiter.CommaSeparator.join(_: List[String]) ++ "\n"
 
     /** Convert each ADT value to a simple sequence of text fields, for writing to format like CSV. */
-    private def recordToTextFields = (r: Input.GoodRecord) => {
-        val (x, y, z) = (r.point.x, r.point.y, r.point.z)
-        List(r.position.show, r.region.show, x.get.show, y.get.show, z.get.show)
-    }
+    private def recordToTextFields = 
+        given SimpleShow[Double] = SimpleShow.fromToString
+        (r: Input.GoodRecord) => 
+            val (x, y, z) = (r.point.x, r.point.y, r.point.z)
+            List(r.position.show_, r.region.show_, x.get.show_, y.get.show_, z.get.show_)
 end TestComputeRegionPairwiseDistances
 

@@ -8,6 +8,7 @@ import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 
 /** Tests for trace ID wrapper type */
 class TestTraceId extends AnyFunSuite, GenericSuite, ScalaCheckPropertyChecks, RefinementWrapperSuite, should.Matchers:

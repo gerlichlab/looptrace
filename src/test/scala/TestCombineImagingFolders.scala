@@ -10,6 +10,8 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
+
 /** Tests for the combining of imaging folders (e.g. subsequences of imaging timepoints) */
 class TestCombineImagingFolders extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite, should.Matchers:
     override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)

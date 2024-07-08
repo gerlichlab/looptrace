@@ -5,13 +5,15 @@ import cats.syntax.all.*
 import org.scalacheck.{ Arbitrary, Gen }
 import org.scalacheck.Arbitrary.arbitrary
 
-import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+import at.ac.oeaw.imba.gerlich.gerlib.testing.ImagingInstances
 
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** Base trait for tests in looptrace */
-trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
+trait LooptraceSuite extends GenericSuite, ImagingInstances, ScalacheckGenericExtras:
 
     /************************/
     /* Givens ("implicits") */
@@ -27,8 +29,6 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
     given arbitraryForExtantOutputHandler: Arbitrary[ExtantOutputHandler] = 
         Arbitrary{ Gen.oneOf(ExtantOutputHandler.values.toIndexedSeq) }
 
-    given arbitraryForChannel(using arbInt: Arbitrary[NonnegativeInt]): Arbitrary[Channel] = arbInt.map(Channel.apply)
-
     given arbitraryForLocusId(using arbTime: Arbitrary[ImagingTimepoint]): Arbitrary[LocusId] = arbTime.map(LocusId.apply)
 
     given arbitraryForPositionIndex(using idx: Arbitrary[NonnegativeInt]): Arbitrary[PositionIndex] = idx.map(PositionIndex.apply)
@@ -43,8 +43,6 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
     given arbitraryForRoiIndex(using idx: Arbitrary[Int]): Arbitrary[RoiIndex] = 
         Arbitrary{ Gen.choose(0, Int.MaxValue).map(RoiIndex.unsafe) }
     
-    given arbitraryForImagingTimepoint(using idx: Arbitrary[NonnegativeInt]): Arbitrary[ImagingTimepoint] = idx.map(ImagingTimepoint.apply)
-
     given arbitraryForXCoordinate(using num: Arbitrary[Double]): Arbitrary[XCoordinate] = num.fmap(XCoordinate.apply)
     
     given arbitraryForYCoordinate(using num: Arbitrary[Double]): Arbitrary[YCoordinate] = num.fmap(YCoordinate.apply)
@@ -78,7 +76,7 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
         arbRoiIdx: Arbitrary[RoiIndex], 
         arbPosName: Arbitrary[PositionName], 
         arbRegion: Arbitrary[RegionId], 
-        arbCh: Arbitrary[Channel], 
+        arbCh: Arbitrary[ImagingChannel], 
         arbPt: Arbitrary[Point3D],
         arbMargin: Arbitrary[BoundingBox.Margin],
         ): Arbitrary[RegionalBarcodeSpotRoi] = {
@@ -86,7 +84,7 @@ trait LooptraceSuite extends GenericSuite, ScalacheckGenericExtras:
             idx <- arbitrary[RoiIndex]
             pos <- arbitrary[PositionName]
             reg <- arbitrary[RegionId]
-            ch <- arbitrary[Channel]
+            ch <- arbitrary[ImagingChannel]
             pt <- arbitrary[Point3D]
             box <- arbitrary[(BoundingBox.Margin, BoundingBox.Margin, BoundingBox.Margin)].map(buildRectangularBox(pt).tupled)
         } yield RegionalBarcodeSpotRoi(index = idx, position = pos, region = reg, channel = ch, centroid = pt, boundingBox = box)

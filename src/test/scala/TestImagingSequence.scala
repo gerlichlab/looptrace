@@ -11,6 +11,7 @@ import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /**
   * Tests for config file definition and parsing of imaging rounds and a sequence of them for an experiment.

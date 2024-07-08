@@ -12,13 +12,19 @@ import org.scalatest.matchers.*
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
+import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.* // for .show_ syntax
 
 import at.ac.oeaw.imba.gerlich.looptrace.ComputeLocusPairwiseDistances.*
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.safeReadAllWithOrderedHeaders
 import at.ac.oeaw.imba.gerlich.looptrace.collections.*
+import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /**
  * Tests for the simple pairwise distances computation program, for locus-specific spots
@@ -342,8 +348,9 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
     private def rowToLine = Delimiter.CommaSeparator.join(_: List[String]) ++ "\n"
 
     /** Convert each ADT value to a simple sequence of text fields, for writing to format like CSV. */
-    private def recordToTextFields = (r: Input.GoodRecord) => {
-        val (x, y, z) = (r.point.x, r.point.y, r.point.z)
-        List(r.position.show, r.trace.show, r.region.show, r.locus.show, x.get.show, y.get.show, z.get.show)
-    }
+    private def recordToTextFields = 
+        given SimpleShow[Double] = SimpleShow.fromToString
+        (r: Input.GoodRecord) => 
+            val (x, y, z) = (r.point.x, r.point.y, r.point.z)
+            List(r.position.show_, r.trace.show_, r.region.show_, r.locus.show_, x.get.show_, y.get.show_, z.get.show_)
 end TestComputeLocusPairwiseDistances

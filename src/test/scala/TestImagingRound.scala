@@ -13,6 +13,8 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
 /**
   * Tests for the abstraction of an imaging round
