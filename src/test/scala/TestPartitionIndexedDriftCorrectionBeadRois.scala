@@ -18,6 +18,7 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.testing.NumericInstances
 
 import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionBeadRois.*
 import at.ac.oeaw.imba.gerlich.looptrace.PathHelpers.listPath
@@ -26,7 +27,14 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.{ CoordinateSequence, Point3D, XC
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** Tests for the partitioning of regions of interest (ROIs) for drift correction */
-class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaCheckPropertyChecks, ScalacheckGenericExtras, should.Matchers, PartitionRoisSuite:
+class TestPartitionIndexedDriftCorrectionBeadRois extends 
+    AnyFunSuite, 
+    NumericInstances, 
+    ScalaCheckPropertyChecks, 
+    ScalacheckGenericExtras, 
+    should.Matchers, 
+    PartitionRoisSuite:
+    
     import SelectedRoi.*
 
     override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
@@ -49,10 +57,10 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
     test("ShiftingCount appropriately constrains the domain.") {
         assertDoesNotCompile("ShiftingCount(9)")
         assertCompiles("ShiftingCount(10)")
-        intercept[NumberFormatException]{ 
-            ShiftingCount.unsafe(AbsoluteMinimumShifting - 1)
-        }.getMessage shouldEqual s"Cannot use ${AbsoluteMinimumShifting - 1} as shifting count (min. $AbsoluteMinimumShifting)"
-        ShiftingCount.unsafe(AbsoluteMinimumShifting : Int) shouldBe ShiftingCount(10)
+        intercept[IllegalArgumentException]{ 
+            ShiftingCount.unsafe(ShiftingCount.AbsoluteMinimumShifting - 1)
+        }.getMessage shouldEqual s"Insufficient value (< ${ShiftingCount.AbsoluteMinimumShifting}) for shifting count!"
+        ShiftingCount.unsafe(ShiftingCount.AbsoluteMinimumShifting : Int) shouldBe ShiftingCount(10)
     }
 
     test("RoisSplit.TooFewShifting requires ShiftingCount, NonnegativeInt, and PositiveInt.") {
@@ -87,7 +95,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
             for {
                 // NB: relying on randomness of Point3D and zero-probability of collision there to mitigate risk that repeats 
                 //     are generated in the baseX collections, which would throw off the counting of expected repeats.
-                baseShifting <- Gen.choose(AbsoluteMinimumShifting, maxNumRois).flatMap(Gen.listOfN(_, arbitrary[RoiForShifting]))
+                baseShifting <- Gen.choose(ShiftingCount.AbsoluteMinimumShifting, maxNumRois).flatMap(Gen.listOfN(_, arbitrary[RoiForShifting]))
                 baseAccuracy <- Gen.resize(maxNumRois - baseShifting.length, Gen.listOf(arbitrary[RoiForAccuracy]))
                 (shifting, accuracy) <- (genRoisAndReps(baseShifting), genRoisAndReps(baseAccuracy))
                     .tupled
@@ -99,7 +107,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
                     }
             } yield (shifting, accuracy)
         }
-        def genNumShift = Gen.choose(AbsoluteMinimumShifting, Int.MaxValue).map(ShiftingCount.unsafe)
+        def genNumShift = Gen.choose(ShiftingCount.AbsoluteMinimumShifting, Int.MaxValue).map(ShiftingCount.unsafe)
 
         forAll (genWithRepeats, genNumShift, arbitrary[PositiveInt]) { 
             case (((shiftingRois, expShiftingReps), (accuracyRois, expAccuracyReps)), numShifting, numAccuracy) => 
@@ -319,10 +327,10 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
         type InputsAndValidate = (ShiftingCount, PositiveInt, List[DetectedRoi], RoisSplit.Result => Any)
         
         def genFewerThanAbsoluteMinimum: Gen[InputsAndValidate] = for {
-            numShifting <- Gen.choose[Int](AbsoluteMinimumShifting, maxNumRoisSmallTests).map(ShiftingCount.unsafe)
-            numAccuracy <- arbitrary[PositiveInt]
+            numShifting <- Gen.choose[Int](ShiftingCount.AbsoluteMinimumShifting, maxNumRoisSmallTests).map(ShiftingCount.unsafe)
+            numAccuracy <- Gen.choose(PositiveInt(1), maxNumRoisSmallTests.asPositive)
             (usable, unusable) <- (for {
-                goods <- genUsableRois(0, AbsoluteMinimumShifting - 1)
+                goods <- genUsableRois(0, ShiftingCount.AbsoluteMinimumShifting - 1)
                 bads <- genUnusableRois(0, maxNumRoisSmallTests - goods.length)
             } yield (goods, bads)).suchThat{ (goods, bads) => // Ensure uniqueness among ROIs.
                 (goods.toSet ++ bads.toSet).size === goods.size + bads.size 
@@ -340,10 +348,10 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
         
         def genAtLeastMinButLessThanShiftingRequest: Gen[InputsAndValidate] = for {
             numShifting <- // 1 more than absolute min, so that minimum can be hit while not hitting request.
-                Gen.choose[Int](AbsoluteMinimumShifting + 1, maxNumRoisSmallTests).map(ShiftingCount.unsafe)
-            numAccuracy <- arbitrary[PositiveInt]
-            maxUsable = scala.math.max(AbsoluteMinimumShifting, numShifting - 1)
-            usable <- genUsableRois(AbsoluteMinimumShifting, maxUsable).map(_.map(_.setUsable))
+                Gen.choose[Int](ShiftingCount.AbsoluteMinimumShifting + 1, maxNumRoisSmallTests).map(ShiftingCount.unsafe)
+            numAccuracy <- Gen.choose(PositiveInt(1), maxNumRoisSmallTests.asPositive)
+            maxUsable = scala.math.max(ShiftingCount.AbsoluteMinimumShifting, numShifting - 1)
+            usable <- genUsableRois(ShiftingCount.AbsoluteMinimumShifting, maxUsable).map(_.map(_.setUsable))
             unusable <- genUnusableRois(0, maxNumRoisSmallTests - usable.length)
             rois = Random.shuffle(usable ::: unusable).toList
             validate = (_: RoisSplit.Result) match {
@@ -357,8 +365,8 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
         } yield (numShifting, numAccuracy, rois, validate)
         
         def genAtLeastShiftingButNotAccuracy: Gen[InputsAndValidate] = for {
-            numShifting <- Gen.choose[Int](AbsoluteMinimumShifting, maxNumRoisSmallTests).map(ShiftingCount.unsafe)
-            numAccuracy <- arbitrary[PositiveInt]
+            numShifting <- Gen.choose[Int](ShiftingCount.AbsoluteMinimumShifting, maxNumRoisSmallTests).map(ShiftingCount.unsafe)
+            numAccuracy <- Gen.choose(PositiveInt(1), maxNumRoisSmallTests.asPositive)
             maxUsable = scala.math.min(maxNumRoisSmallTests, numShifting + numAccuracy - 1)
             usable <- genUsableRois(numShifting, maxUsable)
             unusable <- genUnusableRois(0, maxNumRoisSmallTests - usable.length)
@@ -373,7 +381,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
         } yield (numShifting, numAccuracy, rois, validate)
         
         def genEnoughForBoth: Gen[InputsAndValidate] = for {
-            numShifting <- Gen.choose(AbsoluteMinimumShifting, maxNumRoisSmallTests - 1).map(ShiftingCount.unsafe)
+            numShifting <- Gen.choose(ShiftingCount.AbsoluteMinimumShifting, maxNumRoisSmallTests - 1).map(ShiftingCount.unsafe)
             numAccuracy <- Gen.choose(1, maxNumRoisSmallTests - numShifting).map(PositiveInt.unsafe)
             usable <- genUsableRois(numShifting + numAccuracy, maxNumRoisSmallTests)
             unusable <- genUnusableRois(0, maxNumRoisSmallTests - usable.length)
@@ -408,15 +416,15 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
         type PosTimeRois = (PosTimePair, List[DetectedRoi])
         def genDetected(ptPairs: List[PosTimePair])(lo: Int, hi: Int): Gen[List[PosTimeRois]] = 
             ptPairs.traverse{ pt => genUsableRois(lo, hi).map(pt -> _) }
-        val maxReqShifting = 2 * AbsoluteMinimumShifting
+        val maxReqShifting = 2 * ShiftingCount.AbsoluteMinimumShifting
         def genArgs: Gen[(List[PosTimeRois], ShiftingCount, List[PosTimeRois])] = for {
             nTooFewShift <- Gen.choose(1, posTimePairs.length)
             (tooFewPosTimePairs, enoughPosTimePairs) = posTimePairs.splitAt(nTooFewShift)
-            tooFew <- genDetected(tooFewPosTimePairs)(AbsoluteMinimumShifting + 1, maxReqShifting - 1)
+            tooFew <- genDetected(tooFewPosTimePairs)(ShiftingCount.AbsoluteMinimumShifting + 1, maxReqShifting - 1)
             numReqShifting <- Gen.choose(tooFew.map(_._2.length).max + 1, maxReqShifting).map(ShiftingCount.unsafe)
             enough <- genDetected(enoughPosTimePairs)(maxReqShifting, 2 * maxReqShifting)
         } yield (tooFew, numReqShifting, enough)
-        forAll (genArgs, arbitrary[PositiveInt]) { 
+        forAll (genArgs, arbitrary[PositiveInt].suchThat(_ < PositiveInt(1e15.toInt))) { // some huge value, but not so big to cause overflow
             case ((tooFew, reqShifting, enough), reqAccuracy) =>
                 tooFew.map(_._2.length).max < reqShifting shouldBe true
                 withTempDirectory{ (tempdir: os.Path) => 
@@ -457,12 +465,12 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => PositionIndex.unsafe(p) -> ImagingTimepoint.unsafe(t))
-        val maxReqShifting = 2 * AbsoluteMinimumShifting
+        val maxReqShifting = 2 * ShiftingCount.AbsoluteMinimumShifting
         def genArgs: Gen[(ShiftingCount, PositiveInt, List[(PosTimePair, List[DetectedRoi])])] = for {
-            numReqShifting <- Gen.choose(AbsoluteMinimumShifting, maxReqShifting).map(ShiftingCount.unsafe)
+            numReqShifting <- Gen.choose(ShiftingCount.AbsoluteMinimumShifting, maxReqShifting).map(ShiftingCount.unsafe)
             numReqAccuracy <- Gen.choose(1, 100).map(PositiveInt.unsafe)
             numReq = numReqShifting + numReqAccuracy
-            rois <- posTimePairs.traverse{ pt => genMixedUsabilityRois(AbsoluteMinimumShifting, 2 * numReq).map(pt -> _) }
+            rois <- posTimePairs.traverse{ pt => genMixedUsabilityRois(ShiftingCount.AbsoluteMinimumShifting, 2 * numReq).map(pt -> _) }
         } yield (numReqShifting, numReqAccuracy, rois)
         forAll (genArgs) { (reqShifting, reqAccuracy, ptRoisPairs) => 
             withTempDirectory{ (tempdir: os.Path) => 
@@ -513,11 +521,11 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
             (_: List[PosTimePair]).traverse{ pt => genMixedUsabilityRoisEachSize(lo, hi).map(pt -> _) }
         def genArgs = for {
             numTooFew <- Gen.choose(1, posTimePairs.length)
-            numReqShifting <- Gen.choose(AbsoluteMinimumShifting, 50).map(ShiftingCount.unsafe)
+            numReqShifting <- Gen.choose(ShiftingCount.AbsoluteMinimumShifting, 50).map(ShiftingCount.unsafe)
             numReqAccuracy <- Gen.choose(1, 50).map(PositiveInt.unsafe)
             (posTimePairsForTooFew, posTimePairsForEnough) = Random.shuffle(posTimePairs).splitAt(numTooFew)
-            tooFew <- genDetected(1, AbsoluteMinimumShifting - 1)(posTimePairsForTooFew)
-            enough <- genDetected(AbsoluteMinimumShifting, 2 * (numReqShifting + numReqAccuracy))(posTimePairsForEnough)
+            tooFew <- genDetected(1, ShiftingCount.AbsoluteMinimumShifting - 1)(posTimePairsForTooFew)
+            enough <- genDetected(ShiftingCount.AbsoluteMinimumShifting, 2 * (numReqShifting + numReqAccuracy))(posTimePairsForEnough)
         } yield (numReqShifting, numReqAccuracy, tooFew, enough)
         forAll (genArgs) { (numReqShifting, numReqAccuracy, tooFew, enough) => 
             withTempDirectory{ (tempdir: os.Path) => 
@@ -553,12 +561,12 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
             numTooFewReqShifting <- Gen.oneOf(Gen.const(0), Gen.choose(1, posTimePairs.length))
             numTooFewReqAccuracy <- Gen.oneOf(Gen.const(0), Gen.choose(posTimePairs.length - numTooFewReqShifting, posTimePairs.length))
             // Add one here to the lower bound to leave open--ALWAYS--the possibility of generating too few shifting.
-            numReqShifting <- Gen.choose[Int](AbsoluteMinimumShifting + 1, maxNumRoisSmallTests).map(ShiftingCount.unsafe)
+            numReqShifting <- Gen.choose[Int](ShiftingCount.AbsoluteMinimumShifting + 1, maxNumRoisSmallTests).map(ShiftingCount.unsafe)
             numReqAccuracy <- Gen.choose(1, maxNumRoisSmallTests).map(PositiveInt.unsafe)
             numReq = numReqShifting + numReqAccuracy
             (posTimePairsTooFewShifting, rest) = Random.shuffle(posTimePairs).splitAt(numTooFewReqShifting)
             (posTimePairsTooFewAccuracy, posTimePairsEnough) = rest.splitAt(numTooFewReqAccuracy)
-            tooFewShifting <- genDetected(AbsoluteMinimumShifting, numReqShifting - 1)(posTimePairsTooFewShifting)
+            tooFewShifting <- genDetected(ShiftingCount.AbsoluteMinimumShifting, numReqShifting - 1)(posTimePairsTooFewShifting)
             tooFewAccuracy <- genDetected(numReqShifting, numReq - 1)(posTimePairsTooFewAccuracy)
             enough <- genDetected(numReq, 2 * numReq)(posTimePairsEnough)
         } yield (numReqShifting, numReqAccuracy, tooFewShifting, tooFewAccuracy, enough)
@@ -617,7 +625,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => PositionIndex.unsafe(p) -> ImagingTimepoint.unsafe(t))
         def genArgs = for {
-            rois <- posTimePairs.traverse{ pt => genUsableRois(AbsoluteMinimumShifting, maxNumRoisSmallTests).map(pt -> _) }
+            rois <- posTimePairs.traverse{ pt => genUsableRois(ShiftingCount.AbsoluteMinimumShifting, maxNumRoisSmallTests).map(pt -> _) }
             numShifting <- Gen.choose(rois.map(_._2.length).max, 1000).map(ShiftingCount.unsafe)
             numAccuracy <- Gen.choose(1, 1000).map(PositiveInt.unsafe)
         } yield (numShifting, numAccuracy, rois)
@@ -648,7 +656,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
                 Gen.zip(arbitrary[XCoordinate], arbitrary[YCoordinate], arbitrary[ZCoordinate]).map(Point3D.apply.tupled).toArbitrary
             }
             for {
-                usable <- genUsableRois(AbsoluteMinimumShifting, 50)
+                usable <- genUsableRois(ShiftingCount.AbsoluteMinimumShifting, 50)
                 unusable <- genUnusableRois(1, 50)
             } yield Random.shuffle(usable ::: unusable).toList
         }
@@ -656,7 +664,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => PositionIndex.unsafe(p) -> ImagingTimepoint.unsafe(t))
         def genArgs = for {
-            numShifting <- Gen.choose(AbsoluteMinimumShifting, 50).map(ShiftingCount.unsafe)
+            numShifting <- Gen.choose(ShiftingCount.AbsoluteMinimumShifting, 50).map(ShiftingCount.unsafe)
             numAccuracy <- Gen.choose(1, 50).map(PositiveInt.unsafe)
             rois <- posTimePairs.traverse{ pt => genSinglePosTimeRois.map(pt -> _) }
         } yield (numShifting, numAccuracy, rois)
@@ -773,7 +781,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends AnyFunSuite, ScalaChec
     def getInputFilename(pos: PositionIndex, time: ImagingTimepoint): String = s"bead_rois__${pos.get}_${time.get}.csv"
     
     /** Limit the number of ROIs generated to keep test cases (relatively) small even without shrinking. */
-    def maxNumRoisSmallTests: ShiftingCount = ShiftingCount.unsafe(2 * AbsoluteMinimumShifting)
+    def maxNumRoisSmallTests: ShiftingCount = ShiftingCount.unsafe(2 * ShiftingCount.AbsoluteMinimumShifting)
 
     /** Write the ROIs to file, with minimal data required to parse the fields consumed by the partition program under test here. */
     def writeMinimalInputRoisCsv(rois: List[DetectedRoi], f: os.Path): Unit = {

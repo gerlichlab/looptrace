@@ -319,11 +319,11 @@ object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
     /** Refinement type for nonnegative integers */
     opaque type ShiftingCount <: Int = Int
     
-    /** The absolute minimum number of bead ROIs required for drift correction */
-    val AbsoluteMinimumShifting = ShiftingCount(10)
-
     /** Helpers for working with nonnegative integers */
     object ShiftingCount:
+        /** The absolute minimum number of bead ROIs required for drift correction */
+        val AbsoluteMinimumShifting = ShiftingCount(10)
+
         inline def apply(z: Int): ShiftingCount = 
             inline if z < 10 then compiletime.error("Insufficient value (< 10) for shifting count!")
             else (z: ShiftingCount)
@@ -331,7 +331,9 @@ object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
             def asNonnegative: NonnegativeInt = NonnegativeInt.unsafe(n)
             def asPositive: PositiveInt = PositiveInt.unsafe(n)
         def unsafe(z: Int): ShiftingCount = 
-            PositiveInt.either(z).fold(msg => throw new NumberFormatException(msg), identity)
+            if (z < AbsoluteMinimumShifting) 
+                throw new IllegalArgumentException("Insufficient value (< 10) for shifting count!")
+            else (z: ShiftingCount) 
     end ShiftingCount
     
     /** Tools for working with a fundamental grouping entity -- pair of FOV and imaging timepoint */
@@ -433,8 +435,11 @@ object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
             require(
                 (shifting.toSortedSet.map(roi => roi.index -> roi.centroid) & accuracy.map(roi => roi.index -> roi.centroid)).isEmpty, 
                 s"ROIs for shifting overlap with ones for accuracy: ${(shifting.toSortedSet.map(roi => roi.index -> roi.centroid) & accuracy.map(roi => roi.index -> roi.centroid))}"
-                )
-            require(shifting.length >= AbsoluteMinimumShifting, s"Not enough shifting ROIs: ${shifting.length} < $AbsoluteMinimumShifting")
+            )
+            require(
+                shifting.length >= ShiftingCount.AbsoluteMinimumShifting, 
+                s"Not enough shifting ROIs: ${shifting.length} < ${ShiftingCount.AbsoluteMinimumShifting}"
+            )
             final def partition = this
             final lazy val numShifting: ShiftingCount = ShiftingCount.unsafe(shifting.length)
             final lazy val numAccuracy = NonnegativeInt.unsafe(accuracy.size)
@@ -445,7 +450,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
             def build(reqShifting: ShiftingCount, shifting: List[RoiForShifting], reqAccuracy: PositiveInt, accuracy: List[RoiForAccuracy]): Result = {
                 given orderingForSelectedRoi: Ordering[RoiForShifting] = orderSelectedRoisSimplified[RoiForShifting]
                 (shifting.toNel, NonnegativeInt.unsafe(shifting.length)) match {
-                    case (Some(shiftNel), numShifting) if numShifting >= AbsoluteMinimumShifting => 
+                    case (Some(shiftNel), numShifting) if numShifting >= ShiftingCount.AbsoluteMinimumShifting => 
                         val shiftingCounts = shiftNel.toList.groupBy(identity).view.mapValues(_.length).toMap
                         val accuracyCounts = accuracy.toList.groupBy(identity).view.mapValues(_.length).toMap
                         val shiftingRepeats = shiftingCounts.filter(_._2 > 1)

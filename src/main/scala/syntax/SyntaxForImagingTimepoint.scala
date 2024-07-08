@@ -37,4 +37,4 @@ trait SyntaxForImagingTimepoint:
         def printForFilename(t: ImagingTimepoint): String = PrefixInFilename ++ "%05d".format(t.get)
 
         /** Assume given integer is nonnegative and lift it into the type for timepoints. */
-        def unsafe = IT.fromInt(_: Int).fold(msg => throw new NumberFormatException(msg), identity)
+        def unsafe: Int => ImagingTimepoint = NonnegativeInt.unsafe `andThen` ImagingTimepoint.apply
