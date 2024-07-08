@@ -12,6 +12,7 @@ import org.scalatest.matchers.*
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.ComputeLocusPairwiseDistances.*
@@ -216,9 +217,9 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
         def buildPoint(x: Double, y: Double, z: Double) = Point3D(XCoordinate(x), YCoordinate(y), ZCoordinate(z))
         val pos = PositionIndex(NonnegativeInt(0))
         val tid = TraceId(NonnegativeInt(1))
-        val reg = RegionId(Timepoint(NonnegativeInt(40)))
+        val reg = RegionId(ImagingTimepoint(NonnegativeInt(40)))
         val inputRecords = NonnegativeInt.indexed(List((2.0, 1.0, -1.0), (1.0, 5.0, 0.0), (3.0, 0.0, 2.0))).map{
-            (pt, i) => Input.GoodRecord(pos, tid, reg, LocusId(Timepoint(i)), buildPoint.tupled(pt))
+            (pt, i) => Input.GoodRecord(pos, tid, reg, LocusId(ImagingTimepoint(i)), buildPoint.tupled(pt))
         }
         val getExpEuclDist = (i: Int, j: Int) => EuclideanDistance.between(inputRecords(i).point, inputRecords(j).point)
         val expected: Iterable[OutputRecord] = List(0 -> 1, 0 -> 2, 1 -> 2).map{ (i, j) => 
@@ -310,7 +311,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
         given arbPos: Arbitrary[PositionIndex] = Gen.oneOf(0, 1).map(PositionIndex.unsafe).toArbitrary
         given arbTrace: Arbitrary[TraceId] = Gen.oneOf(2, 3).map(NonnegativeInt.unsafe `andThen` TraceId.apply).toArbitrary
         given arbRegion: Arbitrary[RegionId] = Gen.oneOf(40, 41).map(RegionId.unsafe).toArbitrary
-        given arbTime: Arbitrary[Timepoint] = Gen.const(Timepoint(NonnegativeInt(10))).toArbitrary
+        given arbTime: Arbitrary[ImagingTimepoint] = Gen.const(ImagingTimepoint(NonnegativeInt(10))).toArbitrary
         
         forAll (Gen.choose(10, 100).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord]))) {
             (records: List[Input.GoodRecord]) => inputRecordsToOutputRecords(NonnegativeInt.indexed(records)).toList shouldEqual List()

@@ -11,11 +11,10 @@ import scopt.OParser
 import com.github.tototoshi.csv.*
 import com.typesafe.scalalogging.StrictLogging
 
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
-import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt.given
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.PositiveReal.*
-
-import io.github.iltotore.iron.autoCastIron // TODO: replace this by upstreaming the implications of Positive --> Nonnegative
 
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
@@ -185,7 +184,7 @@ object LabelAndFilterRois extends StrictLogging:
             val repeats = recordNumbersByKey.filter(_._2.size > 1)
             if (repeats.nonEmpty) { 
                 val simpleReps = repeats.toList.map{ 
-                    case ((PositionName(p), Timepoint(t)), lineNums) => (p, t) -> lineNums.toList.sorted
+                    case ((PositionName(p), ImagingTimepoint(t)), lineNums) => (p, t) -> lineNums.toList.sorted
                 }.sortBy(_._1)
                 throw new Exception(s"${simpleReps.length} repeated (pos, time) pairs: ${simpleReps}")
             }
@@ -236,7 +235,7 @@ object LabelAndFilterRois extends StrictLogging:
     /****************************************************************************************************************
      * Main types and business logic
      ****************************************************************************************************************/
-    final case class DriftRecord(position: PositionName, time: Timepoint, coarse: CoarseDrift, fine: FineDrift):
+    final case class DriftRecord(position: PositionName, time: ImagingTimepoint, coarse: CoarseDrift, fine: FineDrift):
         def total = 
             // For justification of additivity, see: https://github.com/gerlichlab/looptrace/issues/194
             TotalDrift(
@@ -400,7 +399,7 @@ object LabelAndFilterRois extends StrictLogging:
      */
     private def rowToDriftRecord(row: CsvRow): ErrMsgsOr[DriftRecord] = {
         val posNel = safeGetFromRow("position", PositionName.apply(_).asRight)(row)
-        val timeNel = safeGetFromRow("frame", safeParseInt >>> Timepoint.fromInt)(row)
+        val timeNel = safeGetFromRow("frame", safeParseInt >>> ImagingTimepoint.fromInt)(row)
         val coarseDriftNel = {
             val zNel = safeGetFromRow("z_px_coarse", safeParseIntLike >> ZDir.apply)(row)
             val yNel = safeGetFromRow("y_px_coarse", safeParseIntLike >> YDir.apply)(row)
@@ -457,7 +456,7 @@ object LabelAndFilterRois extends StrictLogging:
     final case class TotalDrift(z: ZDir[Double], y: YDir[Double], x: XDir[Double]) extends Drift[Double]
 
     /* Type aliases */
-    type DriftKey = (PositionName, Timepoint)
+    type DriftKey = (PositionName, ImagingTimepoint)
     type LineNumber = NonnegativeInt
     type PosInt = PositiveInt
     type Roi = RegionalBarcodeSpotRoi

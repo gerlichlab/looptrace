@@ -10,13 +10,14 @@ import upickle.default.*
 import scopt.{ OParser, Read }
 import com.typesafe.scalalogging.StrictLogging
 
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
-import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt.given
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.PositiveInt.* // for .asNonnegative
 
-import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
-import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionBeadRois.ShiftingCount.asPositive
+import at.ac.oeaw.imba.gerlich.looptrace.space.*
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.ImagingTimepointExtras.*
 
 /** Split pool of detected bead ROIs into those for drift correction shift, drift correction accuracy, and unused. */
 object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
@@ -26,7 +27,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
 
     /* Type aliases */
     type RawRecord = Array[String]
-    type PosTimePair = (PositionIndex, Timepoint)
+    type PosTimePair = (PositionIndex, ImagingTimepoint)
     type KeyedProblem = (PosTimePair, RoisSplit.Problem)
     type InitFile = (PosTimePair, os.Path)
     type IndexedRoi = DetectedRoi | SelectedRoi
@@ -200,7 +201,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
             if (filename.startsWith(BeadRoisPrefix)) {
                 filename.split("\\.").head.stripPrefix(BeadRoisPrefix).split("_").toList match {
                     case "" :: rawPosIdx :: rawTime :: Nil => 
-                        (tryReadThruNN(PositionIndex.apply)(rawPosIdx), tryReadThruNN(Timepoint.apply)(rawTime)).tupled.map(_ -> filepath)
+                        (tryReadThruNN(PositionIndex.apply)(rawPosIdx), tryReadThruNN(ImagingTimepoint.apply)(rawTime)).tupled.map(_ -> filepath)
                     case _ => None
                 }
             } else { None }
@@ -296,7 +297,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
                 .fold(reps => throw RepeatedKeysException(reps), identity), 
             json => 
                 val pNel = Try{ PositionIndex.unsafe(json("position").int) }.toValidatedNel
-                val fNel = Try{ Timepoint.unsafe(json(PosTimePair.timeKey).int) }.toValidatedNel
+                val fNel = Try{ ImagingTimepoint.unsafe(json(PosTimePair.timeKey).int) }.toValidatedNel
                 val reqdNel = Try{ PositiveInt.unsafe(json("requested").int) }.toValidatedNel
                 val realNel = Try{ NonnegativeInt.unsafe(json("realized").int) }.toValidatedNel
                 val purposeNel = Try{ read[Purpose](json("purpose")) }.toValidatedNel
@@ -329,9 +330,6 @@ object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
         extension (n: ShiftingCount)
             def asNonnegative: NonnegativeInt = NonnegativeInt.unsafe(n)
             def asPositive: PositiveInt = PositiveInt.unsafe(n)
-        def either(z: Int): Either[String, ShiftingCount] = 
-            maybe(z).toRight(s"Cannot use $z as shifting count (min. $AbsoluteMinimumShifting)")
-        def maybe(z: Int): Option[ShiftingCount] = (z >= AbsoluteMinimumShifting).option{ (z: ShiftingCount) }
         def unsafe(z: Int): ShiftingCount = either(z).fold(msg => throw new NumberFormatException(msg), identity)
     end ShiftingCount
     
@@ -368,6 +366,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
                 throw new IllegalArgumentException(s"Alleged too few ROIs, but $numRealized = $numRequested")
 
         object Problem:
+            import ShiftingCount.asPositive
             given jsonMappableForProblem: JsonMappable[Problem] = JsonMappable.instance{ 
                 problem => Map(
                     "requested" -> ujson.Num(problem.numRequested), 
@@ -509,14 +508,14 @@ object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
     end ParserConfig
 
     /** Encode FOV, timepoint, and intended purpose of ROI in filename. */
-    def getOutputFilename(pos: PositionIndex, time: Timepoint, purpose: Purpose): Filename =
+    def getOutputFilename(pos: PositionIndex, time: ImagingTimepoint, purpose: Purpose): Filename =
         Filename(s"${BeadRoisPrefix}_${pos.get}_${time.get}.${purpose.lowercase}.json")
 
     /** Name ROIs subfolder according to how the selected ROIs are to be used. */
     def getOutputSubfolder(root: os.Path) = root / (_: Purpose).lowercase
 
     /** Name ROIs subfolder according to how the selected ROIs are to be used, and encode the purpose in the filename also. */
-    def getOutputFilepath(root: os.Path)(pos: PositionIndex, time: Timepoint, purpose: Purpose): os.Path = 
+    def getOutputFilepath(root: os.Path)(pos: PositionIndex, time: ImagingTimepoint, purpose: Purpose): os.Path = 
         getOutputSubfolder(root)(purpose) / getOutputFilename(pos, time, purpose).get
 
     /** Infer delimiter and get header + data lines. */

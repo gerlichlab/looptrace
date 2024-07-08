@@ -10,11 +10,9 @@ import mouse.boolean.*
 import scopt.Read
 import com.github.tototoshi.csv.*
 
-import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow
-import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow.given
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
-import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt.given
-import at.ac.oeaw.imba.gerlich.looptrace.Channel.simpleShowForChannel
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt.given // Order, Show
 
 /** Chromatin fiber tracing with FISH probes */
 package object looptrace {
@@ -111,19 +109,16 @@ package object looptrace {
     
     /** Helpers for working with the representation of an imaging channel */
     object Channel:
-        given simpleShowForChannel(using ev: SimpleShow[NonnegativeInt]): SimpleShow[Channel] = ev.contramap(_.get)
         def fromInt = NonnegativeInt.either.fmap(_.map(Channel.apply))
         def unsafe = NonnegativeInt.unsafe `andThen` Channel.apply
     end Channel
 
-    final case class LocusId(get: Timepoint) derives Order:
+    final case class LocusId(get: ImagingTimepoint) derives Order:
         def index = get.get
     
     object LocusId:
-        given showForLocusId(using ev: Show[Timepoint]): Show[LocusId] = ev.contramap(_.get)
-        given SimpleShow[LocusId] = SimpleShow.fromShow
         def fromInt = NonnegativeInt.either.fmap(_.map(fromNonnegative))
-        def fromNonnegative = LocusId.apply `compose` Timepoint.apply
+        def fromNonnegative = LocusId.apply `compose` ImagingTimepoint.apply
         def unsafe = fromNonnegative `compose` NonnegativeInt.unsafe
     end LocusId
 
@@ -135,35 +130,21 @@ package object looptrace {
     end PositionIndex
 
     final case class PositionName(get: String) derives Order
-    
-    object PositionName:
-        given showForPositionName: Show[PositionName] = Show.show(_.get)
-        given SimpleShow[PositionName] = SimpleShow.fromShow
-    end PositionName
 
     final case class ProbeName(get: String)
-    
-    object ProbeName:
-        given showForProbeName: Show[ProbeName] = Show.show(_.get)
-        given SimpleShow[ProbeName] = SimpleShow.fromShow
 
-    final case class RegionId(get: Timepoint) derives Order:
+    final case class RegionId(get: ImagingTimepoint) derives Order:
         def index = get.get
 
     object RegionId:
-        import Timepoint.given
-        given simpleShowForRegionId(using ev: SimpleShow[Timepoint]): SimpleShow[RegionId] = 
-            ev.contramap(_.get)
         def fromInt = NonnegativeInt.either.fmap(_.map(fromNonnegative))
-        def fromNonnegative = RegionId.apply `compose` Timepoint.apply
+        def fromNonnegative = RegionId.apply `compose` ImagingTimepoint.apply
         def unsafe = fromNonnegative `compose` NonnegativeInt.unsafe
     end RegionId
 
     final case class RoiIndex(get: NonnegativeInt) derives Order
     
     object RoiIndex:
-        given simpleShowForRoiIndex(using ev: SimpleShow[NonnegativeInt]): SimpleShow[RoiIndex] = 
-            ev.contramap(_.get)
         def fromInt = NonnegativeInt.either.fmap(_.map(RoiIndex.apply))
         def unsafe = NonnegativeInt.unsafe.andThen(RoiIndex.apply)
     end RoiIndex
@@ -171,8 +152,6 @@ package object looptrace {
     final case class TraceId(get: NonnegativeInt) derives Order
     
     object TraceId:
-        given simpleShowForTraceId(using ev: SimpleShow[NonnegativeInt]): SimpleShow[TraceId] = 
-            ev.contramap(_.get)
         def fromInt = NonnegativeInt.either.fmap(_.map(TraceId.apply))
         def fromRoiIndex(i: RoiIndex): TraceId = new TraceId(i.get)
         def unsafe = NonnegativeInt.unsafe.andThen(TraceId.apply)
@@ -186,8 +165,8 @@ package object looptrace {
       * @param writeV How to write each {@code V} element as JSON
       * @return A JSON array of object corresponding to each element of the map
       */
-    def posTimeMapToJson[V](vKey: String, ptToV: Map[(PositionIndex, Timepoint), V])(using writeV: (V) => ujson.Value): ujson.Value = {
-        val proc1 = (pt: (PositionIndex, Timepoint), v: V) => ujson.Obj(
+    def posTimeMapToJson[V](vKey: String, ptToV: Map[(PositionIndex, ImagingTimepoint), V])(using writeV: (V) => ujson.Value): ujson.Value = {
+        val proc1 = (pt: (PositionIndex, ImagingTimepoint), v: V) => ujson.Obj(
             "position" -> pt._1.get,
             "timepoint" -> pt._2.get,
             vKey -> writeV(v)

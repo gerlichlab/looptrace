@@ -7,6 +7,7 @@ import org.scalatest.matchers.*
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
 /** Tests for the combining of imaging folders (e.g. subsequences of imaging timepoints) */
@@ -14,18 +15,18 @@ class TestCombineImagingFolders extends AnyFunSuite, ScalaCheckPropertyChecks, L
     override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
 
     test("Don't regress in file name generation: #289") {
-        val oldTime = Timepoint(NonnegativeInt(42))
-        val oldTimeText = Timepoint.printForFilename(oldTime)
+        val oldTime = ImagingTimepoint(NonnegativeInt(42))
+        val oldTimeText = ImagingTimepoint.printForFilename(oldTime)
         val oldName = s"20240313_155456_993__${oldTimeText}_Point0012_ChannelFar Red,Red_Seq0558.nd2"
         val infile = os.pwd / oldName
         val targetFolder = os.pwd
         val filenameSep = "_"
-        forAll { (newTime: Timepoint) => 
+        forAll { (newTime: ImagingTimepoint) => 
             CombineImagingFolders.makeSrcDstPair(targetFolder, filenameSep)(newTime, infile) match {
                 case Left(error) => fail(s"${error.getMessage}")
                 case Right((oldPath, newPath)) => 
                     oldPath shouldEqual infile
-                    val newTimeText = Timepoint.printForFilename(newTime)
+                    val newTimeText = ImagingTimepoint.printForFilename(newTime)
                     val newName = oldName.replace(oldTimeText, newTimeText)
                     val expPath = targetFolder / newName
                     newPath shouldEqual expPath

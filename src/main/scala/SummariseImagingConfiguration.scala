@@ -7,8 +7,10 @@ import cats.syntax.all.*
 import mouse.boolean.*
 import scopt.OParser
 
-import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow.*
-import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt.given
+import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow.* // for syntax
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.imagingTimepoint.given
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
 
 /**
  * Summarise an imaging round configuration with command-line printing.
@@ -25,7 +27,7 @@ object SummariseImagingRoundsConfiguration:
         import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders.given
         import parserBuilder.*
         
-        given Ordering[Timepoint] = Order[Timepoint].toOrdering
+        given Ordering[ImagingTimepoint] = Order[ImagingTimepoint].toOrdering
 
         val parser = OParser.sequence(
             programName(ProgramName), 

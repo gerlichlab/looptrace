@@ -8,16 +8,18 @@ import cats.syntax.all.*
 import mouse.boolean.*
 import upickle.default.*
 
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.ImagingTimepointExtras.*
 
 /** A round of imaging during an experiment */
 sealed trait ImagingRound:
     /** A name for the round of imaging during the experiment, often the identifier of the probe */
     def name: String
     /** The timepoint in the (sequential) imaging experiment */
-    def time: Timepoint
+    def time: ImagingTimepoint
 end ImagingRound
 
 /** Helpers and JSON tools for working with the abstraction of imaging rounds */
@@ -59,7 +61,8 @@ object ImagingRound:
     )
 
     /** Try to parse a single imaging round instance from a raw JSON data mapping */
-    def parseFromJsonMap(data: Map[String, ujson.Value]): ErrMsgsOr[ImagingRound] = {
+    def parseFromJsonMap(data: Map[String, ujson.Value]): ErrMsgsOr[ImagingRound] = 
+        import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.positiveInt.given
         val keys = data.keySet
         val timeNel = (data.get("time").toRight("Missing timepoint!") >>= parseTimeValue).toValidatedNel
         val isRegionalNel = extractDefaultFalse("isRegional")(data).toValidatedNel
@@ -92,7 +95,6 @@ object ImagingRound:
                         else LocusImagingRound(name, time, probe, repOpt)
                 }.toEither
         }
-    }
 
     private[looptrace] def roundToJsonObject(imagingRound: ImagingRound): ujson.Obj = imagingRound match {
         case round: LocusImagingRound => locusRoundToJson(round)
@@ -110,10 +112,9 @@ object ImagingRound:
         case _ => None
     }
 
-    private def parseTimeValue(v: ujson.Value): Either[String, Timepoint] = 
+    private def parseTimeValue(v: ujson.Value): Either[String, ImagingTimepoint] = 
         Try(v.int).toEither.leftMap(e => s"Non-integral value for time! ${e.getMessage}") 
-            >>= NonnegativeInt.either 
-            >> Timepoint.apply
+            >>= ImagingTimepoint.fromInt
 
     private def parseRepeatValue(v: ujson.Value): Either[String, PositiveInt] = 
         Try(v.int).toEither.leftMap(e => s"Non-integral value for repeat! ${e.getMessage}") 
@@ -169,7 +170,7 @@ end ImagingRound
  * @param name The name for the imaging round within an experiment
  * @param time The timepoint (0-based, inclusive) of this imaging round within an experiment
  */
-final case class BlankImagingRound(name: String, time: Timepoint) extends ImagingRound
+final case class BlankImagingRound(name: String, time: ImagingTimepoint) extends ImagingRound
 
 object BlankImagingRound:
     private[looptrace] def blankRoundToJson(round: BlankImagingRound) = ujson.Obj(
@@ -195,20 +196,22 @@ end FishProbed
   * @param probe Name for the probe used for hybridisation
   * @param repeat  Number (1-based, inclusive) of repeat of a particular probe that this round represents within the experiment
   */
-final case class LocusImagingRound(name: String, time: Timepoint, probe: ProbeName, repeat: Option[PositiveInt]) extends ImagingRound, FishProbed:
+final case class LocusImagingRound(name: String, time: ImagingTimepoint, probe: ProbeName, repeat: Option[PositiveInt]) extends ImagingRound, FishProbed:
     final def isRepeat = repeat.nonEmpty
 
 /** Helpers and alternate constructors for working with imaging rounds of specific genomic loci */
 object LocusImagingRound:
-    import PositiveInt.given // for derivation of instance of Show
-
-    def apply(time: Timepoint, probe: ProbeName): LocusImagingRound = apply(None, time, probe, None)
-    def apply(time: Timepoint, probe: ProbeName, repeat: PositiveInt): LocusImagingRound = apply(None, time, probe, repeat.some)
-    def apply(maybeName: Option[String], time: Timepoint, probe: ProbeName, maybeRepeat: Option[PositiveInt]): LocusImagingRound = 
+    import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.positiveInt.given
+    
+    def apply(time: ImagingTimepoint, probe: ProbeName): LocusImagingRound = apply(None, time, probe, None)
+    
+    def apply(time: ImagingTimepoint, probe: ProbeName, repeat: PositiveInt): LocusImagingRound = apply(None, time, probe, repeat.some)
+    
+    def apply(maybeName: Option[String], time: ImagingTimepoint, probe: ProbeName, maybeRepeat: Option[PositiveInt]): LocusImagingRound = 
         val name = maybeName.getOrElse(probe.get ++ maybeRepeat.fold("")(rep => s"_repeat${rep.show}"))
         new LocusImagingRound(name, time, probe, maybeRepeat)
 
-    private[looptrace] def locusRoundToJson(round: LocusImagingRound): ujson.Obj = {
+    private[looptrace] def locusRoundToJson(round: LocusImagingRound): ujson.Obj = 
         val baseData = NonEmptyList.of(
             "name" -> ujson.Str(round.name), 
             "probe" -> ujson.Str(round.probe.get),
@@ -216,7 +219,6 @@ object LocusImagingRound:
             )
         val fullData = baseData ++ round.repeat.fold(List()){ n => List("repeat" -> ujson.Num(n)) }
         ujson.Obj(fullData.head, fullData.tail*)
-    }
 end LocusImagingRound
 
 /**
@@ -226,14 +228,14 @@ end LocusImagingRound
   * @param time The timepoint (0-based, inclusive) of this imaging round within an experiment
   * @param probe Name for the probe used for hybridisation
   */
-final case class RegionalImagingRound(name: String, time: Timepoint, probe: ProbeName) extends ImagingRound, FishProbed:
+final case class RegionalImagingRound(name: String, time: ImagingTimepoint, probe: ProbeName) extends ImagingRound, FishProbed:
     override final def repeat: Option[PositiveInt] = None
 end RegionalImagingRound
 
 /** Helpers and alternate constructors for working with imaging rounds of genomic regions */
 object RegionalImagingRound:
-    def apply(time: Timepoint, probe: ProbeName): RegionalImagingRound = apply(None, time, probe)
-    def apply(maybeName: Option[String], time: Timepoint, probe: ProbeName): RegionalImagingRound = 
+    def apply(time: ImagingTimepoint, probe: ProbeName): RegionalImagingRound = apply(None, time, probe)
+    def apply(maybeName: Option[String], time: ImagingTimepoint, probe: ProbeName): RegionalImagingRound = 
         new RegionalImagingRound(maybeName.getOrElse(probe.get), time, probe)
 
     private[looptrace] def regionalRoundToJson(round: RegionalImagingRound) = ujson.Obj(

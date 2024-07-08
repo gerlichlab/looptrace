@@ -8,6 +8,7 @@ import cats.syntax.all.*
 import mouse.boolean.*
 import upickle.default.*
 
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
 /** A sequence of FISH and blank imaging rounds, constituting a microscopy experiment */
@@ -28,7 +29,7 @@ final case class ImagingSequence private(
         }
     }
     def allRounds: NonEmptyList[ImagingRound] = (regionRounds ++ locusRounds ++ blankRounds).sortBy(_.time)
-    final lazy val allTimepoints: NonEmptySet[Timepoint] = 
+    final lazy val allTimepoints: NonEmptySet[ImagingTimepoint] = 
         (blankRounds ::: locusRounds).foldRight(regionRounds.map(_.time).toNes){ (r, acc) => acc.add(r.time) }
     final def length: Int = allTimepoints.length
     final def size: Int = length

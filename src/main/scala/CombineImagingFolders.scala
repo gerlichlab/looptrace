@@ -9,9 +9,11 @@ import mouse.boolean.*
 import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
 
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.*
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.ImagingTimepointExtras.*
 
 /** Combine imaging subfolders to create a single timecourse.
  * 
@@ -124,20 +126,20 @@ object CombineImagingFolders extends StrictLogging:
         if (errors.nonEmpty) throw new Exception(s"${errors.length} error(s) validating move pairs: $errors")
     }
 
-    def makeSrcDstPair(targetFolder: os.Path, sep: String)(newTime: Timepoint, oldPath: os.Path): Either[UnusableTimepointUpdateException, (os.Path, os.Path)] = {
+    def makeSrcDstPair(targetFolder: os.Path, sep: String)(newTime: ImagingTimepoint, oldPath: os.Path): Either[UnusableTimepointUpdateException, (os.Path, os.Path)] = {
         val oldFields = oldPath.last.split(sep)
-        Timepoint.parseValueIndexPairFromPath(oldPath, filenameFieldSep = sep).bimap(
+        ImagingTimepoint.parseValueIndexPairFromPath(oldPath, filenameFieldSep = sep).bimap(
             UnusableTimepointUpdateException(oldPath, newTime, _),  
             (oldTime, i) => 
                 val (preFields, postFields) = oldFields.splitAt(i)
-                val newFields: Array[String] = preFields ++ Array(Timepoint.printForFilename(newTime)) ++ postFields.tail
+                val newFields: Array[String] = preFields ++ Array(ImagingTimepoint.printForFilename(newTime)) ++ postFields.tail
                 val fn = newFields `mkString` sep
                 oldPath -> (targetFolder / fn)
             )
     }
     
     def prepareUpdatedTimepoints(inputFolders: NEL[os.Path], extToUse: Extension, filenameFieldSep: String, targetFolder: os.Path): 
-        Either[NEL[UnparseablePathException] | NEL[UnusableSubfolderException], List[(Timepoint, os.Path)]] = {
+        Either[NEL[UnparseablePathException] | NEL[UnusableSubfolderException], List[(ImagingTimepoint, os.Path)]] = {
         val keepFile = (_: os.Path).ext === extToUse
         Alternative[List]
             .separate(inputFolders.toList.map{ p => prepareSubfolder(keepFile)(p, filenameFieldSep).map(p -> _) })
@@ -161,7 +163,7 @@ object CombineImagingFolders extends StrictLogging:
                     case subs@((n1, first) :: rest) => rest.foldLeft(n1 -> first.toVector){
                         case ((accCount, timePathPairs), (n, sub)) => 
                             val newCount = accCount `add` n
-                            val newPairs = timePathPairs ++ sub.map(_.leftMap(t => Timepoint(t.get `add` accCount)))
+                            val newPairs = timePathPairs ++ sub.map(_.leftMap(t => ImagingTimepoint(t.get `add` accCount)))
                             newCount -> newPairs
                     }._2.toList
                 }
@@ -181,30 +183,30 @@ object CombineImagingFolders extends StrictLogging:
      * @param subfolderContents Collection of pairs of timepoint and path from which it was parsed, all from the same subfolder
      * @return Either an error message or the number of unique timepoints
      */
-    def ensureNonemptyAndContinuous(subfolderContents: List[(Timepoint, os.Path)]): Either[String, NonnegativeInt] = 
+    def ensureNonemptyAndContinuous(subfolderContents: List[(ImagingTimepoint, os.Path)]): Either[String, NonnegativeInt] = 
         validateContinuityFromZero(subfolderContents.map(_._1))
             .map{ maxTime => maxTime.get `add` NonnegativeInt(1) }
 
     /** Select files to use, and map to {@code Right}-wrapped collection of pairs of time and path, or {@code Left}-wrapped errors. */
-    def prepareSubfolder(keepFile: os.Path => Boolean)(folder: os.Path, filenameFieldSep: String): Either[NEL[UnparseablePathException], List[(Timepoint, os.Path)]] = {
+    def prepareSubfolder(keepFile: os.Path => Boolean)(folder: os.Path, filenameFieldSep: String): Either[NEL[UnparseablePathException], List[(ImagingTimepoint, os.Path)]] = {
         val (bads, goods) = 
             Alternative[List].separate(os.list(folder).toList
                 .filter(f => os.isFile(f) && keepFile(f))
-                .map{ p => Timepoint.parseValueIndexPairFromPath(p, filenameFieldSep).bimap(UnparseablePathException(p, _), _._1 -> p) }
+                .map{ p => ImagingTimepoint.parseValueIndexPairFromPath(p, filenameFieldSep).bimap(UnparseablePathException(p, _), _._1 -> p) }
             )
         bads.toNel.toLeft(goods)
     }
 
     /** Check that the sequence of timepoints is continuous and starts from 0. */
-    def validateContinuityFromZero(ts: Seq[Timepoint]): Either[String, Timepoint] = {
+    def validateContinuityFromZero(ts: Seq[ImagingTimepoint]): Either[String, ImagingTimepoint] = {
         val raws = SortedSet(ts.map(_.get)*)
         Try { raws.max }.toEither.leftMap(_ => "Empty set of timepoints!").flatMap{ maxTime => 
             val missing = (0 to maxTime).map(NonnegativeInt.unsafe)
-            missing.isEmpty.either(s"${missing.length} missing timepoints: $missing", Timepoint(maxTime))
+            missing.isEmpty.either(s"${missing.length} missing timepoints: $missing", ImagingTimepoint(maxTime))
         }
     }
 
-    type Extension = String
+    private type Extension = String
 
     final case class UnparseablePathException(path: os.Path, message: String) 
         extends Exception(s"$path: $message")
@@ -212,6 +214,6 @@ object CombineImagingFolders extends StrictLogging:
     final case class UnusableSubfolderException(path: os.Path, message: String) 
         extends Exception(s"$path: $message")
 
-    final case class UnusableTimepointUpdateException(path: os.Path, time: Timepoint, message: String) 
+    final case class UnusableTimepointUpdateException(path: os.Path, time: ImagingTimepoint, message: String) 
         extends Exception(s"($path, $time): $message")
 end CombineImagingFolders
