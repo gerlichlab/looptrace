@@ -117,8 +117,8 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         end DriftFileTexts
 
         // Infinitely large or small definition of proximity
-        val extremeArguments: List[(String, PositiveReal, String)] = {
-            val almostZero = PositiveReal(1e-323)
+        val extremeArguments: List[(String, NonnegativeReal, String)] = {
+            val almostZero = NonnegativeReal(1e-323)
             val first = (
                 DriftFileTexts.allZero, 
                 almostZero, 
@@ -141,7 +141,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
                 )
             val second = (
                 DriftFileTexts.allZero, 
-                PositiveReal(Double.MaxValue),
+                NonnegativeReal(Double.MaxValue),
                 headSpotsFile,
                 )
             val theRest = for {
@@ -154,7 +154,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
                     // When min separation is vanishingly small, only coincident points are proximal; all else is kept.
                     almostZero -> spotsText, 
                     // When threshold is infinitely large, everything is proximal and nothing is kept.
-                    PositiveReal(Double.MaxValue) -> headSpotsFile,
+                    NonnegativeReal(Double.MaxValue) -> headSpotsFile,
                     )
             } yield (drift, value, expected)
             first :: second :: theRest
@@ -163,7 +163,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         // Pairs of threshold and (filtered) output expectation under zero drift
         val zeroDriftArguments =
             List(
-                PositiveReal(1.0) -> 
+                NonnegativeReal(1.0) -> 
                 """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
                 |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
                 |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
@@ -180,7 +180,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
                 |14,P0001.zarr,30,0,8,993.2,1781,3,19,977,1009,1705,1737
                 |15,P0001.zarr,30,0,14.4,589.5,1779.3,2,18,572,604,1763,1795
                 |""",
-                PositiveReal(2.0) -> 
+                NonnegativeReal(2.0) -> 
                 """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
                 |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
                 |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
@@ -197,7 +197,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
                 |14,P0001.zarr,30,0,8,993.2,1781,3,19,977,1009,1705,1737
                 |15,P0001.zarr,30,0,14.4,589.5,1779.3,2,18,572,604,1763,1795
                 |""", 
-                PositiveReal(3.0) -> 
+                NonnegativeReal(3.0) -> 
                 """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
                 |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
                 |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
@@ -215,9 +215,9 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
             ).map((t, exp) => (DriftFileTexts.allZero, t, exp))
         
         val fineDriftOnlyArguments = List(
-            PositiveReal(0.25) -> spotsText,
-            PositiveReal(0.75) ->  spotsText,
-            PositiveReal(6.0) -> 
+            NonnegativeReal(0.25) -> spotsText,
+            NonnegativeReal(0.75) ->  spotsText,
+            NonnegativeReal(6.0) -> 
             """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
             |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
             |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
@@ -234,8 +234,8 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         ).map((t, exp) => (DriftFileTexts.zeroCoarse, t, exp))
 
         val coarseDriftOnlyArguments = List(
-            PositiveReal(1.0) -> spotsText, 
-            PositiveReal(5.0) -> 
+            NonnegativeReal(1.0) -> spotsText, 
+            NonnegativeReal(5.0) -> 
             """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
             |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
             |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
@@ -255,8 +255,8 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         ).map((t, exp) => (DriftFileTexts.zeroFine, t, exp))
 
         val bothDriftArguments = List(
-            PositiveReal(3.0) -> spotsText, 
-            PositiveReal(17.0) -> 
+            NonnegativeReal(3.0) -> spotsText, 
+            NonnegativeReal(17.0) -> 
             """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
             |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
             |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
@@ -269,7 +269,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
             |13,P0001.zarr,30,0,9,995,1780,1,17,679,711,564,596
             |14,P0001.zarr,30,0,8,993.2,1781,3,19,977,1009,1705,1737
             |""", 
-            PositiveReal(16.0) -> 
+            NonnegativeReal(16.0) -> 
             """,position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max
             |0,P0001.zarr,27,0,18,104,1052,10,26,88,120,1036,1068
             |1,P0001.zarr,27,0,18,1739,264,10,26,1723,1755,248,280
@@ -364,7 +364,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         // NB: the frame value for the groping comes from the spotsLines variable.
         def genFilterStrategy = {
             val singleGroup = NonEmptyList.one(NonEmptySet.one(ImagingTimepoint(NonnegativeInt(27))))
-            arbitrary[PositiveReal].flatMap{ threshold => Gen.oneOf(
+            arbitrary[NonnegativeReal].flatMap{ threshold => Gen.oneOf(
                 ImagingRoundsConfiguration.UniversalProximityPermission, 
                 ImagingRoundsConfiguration.UniversalProximityProhibition(threshold), 
                 ImagingRoundsConfiguration.SelectiveProximityPermission(threshold, singleGroup), 
@@ -421,7 +421,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
                 // Generate at least 2 spots rows so that there's at least the chance to have the region timepoints in different groups.
                 (spots, drifts) <- genSpotsAndDrifts(genCoarseDrift, genFineDrift).suchThat(_._1.length > 1)
                 proxFilterStrategy <- {
-                    val genThreshold = Gen.choose(1.0, 10.0).map(PositiveReal.unsafe)
+                    val genThreshold = Gen.choose(1.0, 10.0).map(NonnegativeReal.unsafe)
                     Gen.oneOf(
                         Gen.const(ImagingRoundsConfiguration.UniversalProximityPermission), 
                         genThreshold.map(ImagingRoundsConfiguration.UniversalProximityProhibition.apply), 
@@ -482,11 +482,11 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
             for {
                 // Generate at least 2 spots rows so that there's at least the chance to have the region timepoints in different groups.
                 (spots, driftRows, numDropped) <- genSpotsAndDriftsWithDrop(genCoarseDrift, genFineDrift).suchThat(_._1.length > 1)
-                proxFilterStrategy <- genSpotCoveringGrouping(arbitrary[PositiveReal])(spots.toList)
+                proxFilterStrategy <- genSpotCoveringGrouping(arbitrary[NonnegativeReal])(spots.toList)
             } yield (spots, driftRows, numDropped, proxFilterStrategy)
         }
 
-        forAll (genSpotsDriftsDropsAndFilterStrategy, arbitrary[PositiveReal], arbitrary[ExtantOutputHandler]) { 
+        forAll (genSpotsDriftsDropsAndFilterStrategy, arbitrary[NonnegativeReal], arbitrary[ExtantOutputHandler]) { 
             case ((spots, driftRows, numDropped, proxFilterStrategy), threshold, handleOutput) => 
                 withTempDirectory{ (tmpdir: os.Path) => 
                     val spotsFile = tmpdir / "spots.csv"
@@ -543,7 +543,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
                 .map(_.map(_.map(ImagingTimepoint.unsafe)))
             )
             
-            val genThreshold = Gen.choose(1.0, 10000.0).map(PositiveReal.unsafe)
+            val genThreshold = Gen.choose(1.0, 10000.0).map(NonnegativeReal.unsafe)
             Gen.oneOf(
                 Gen.zip(genThreshold, genGroups).flatMap{ (t, g) => 
                     Gen.oneOf(
@@ -619,7 +619,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
                     val (g1, g2) = obsReg.toList.splitAt(k)
                     NonEmptyList.of(g1, g2).map(_.toSet.toNonEmptySetUnsafe)
                 }
-            threshold <- Gen.choose(1e-323, 1.0).map(PositiveReal.unsafe)
+            threshold <- Gen.choose(1e-323, 1.0).map(NonnegativeReal.unsafe)
         } yield (rois, ImagingRoundsConfiguration.SelectiveProximityPermission(threshold, groups))
 
         forAll (genRoisAndStrategy(10, 50), minSuccessful(1000)) { (rois, proxFilterStrategy) =>
@@ -670,25 +670,25 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         val inputTable = Table(
             ("threshold", "pointTimePairs", "grouping", "expected"), 
             (
-                PositiveReal(1.5),
+                NonnegativeReal(1.5),
                 List(pt1 -> 2, pt2 -> 3, pt3 -> 3, pt4 -> 1, pt5 -> 1), 
                 List(NonEmptySet.of(2, 3), NonEmptySet.one(1)), // all proximal points in same group
                 Map(0 -> NonEmptySet.one(1), 1 -> NonEmptySet.one(0)),
             ),
             (
-                PositiveReal(1.5),
+                NonnegativeReal(1.5),
                 List(pt1 -> 2, pt2 -> 3, pt3 -> 3, pt4 -> 1, pt5 -> 1), 
                 List(NonEmptySet.one(2), NonEmptySet.of(1, 3)), // proximal points no longer grouped together
                 Map.empty[Int, NonEmptySet[Int]],
             ),
             (
-                PositiveReal(1.5),
+                NonnegativeReal(1.5),
                 List(pt1 -> 2, pt2 -> 3, pt3 -> 3, pt4 -> 1, pt5 -> 1), // proximal points no longer grouped together
                 List(NonEmptySet.one(3), NonEmptySet.of(1, 2)), 
                 Map.empty[Int, NonEmptySet[Int]],
             ),
             (
-                PositiveReal(Double.PositiveInfinity), 
+                NonnegativeReal(Double.PositiveInfinity), 
                 List(pt1 -> 1, pt2 -> 2, pt3 -> 3, pt4 -> 4, pt5 -> 5), 
                 List(NonEmptySet.of(1, 2, 3, 4), NonEmptySet.one(5)),
                 Map(
@@ -699,7 +699,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
                 ),
             ),
             (
-                PositiveReal(Double.PositiveInfinity), 
+                NonnegativeReal(Double.PositiveInfinity), 
                 List(pt1 -> 1, pt2 -> 2, pt3 -> 3, pt4 -> 4, pt5 -> 5), 
                 List(NonEmptySet.of(3, 4), NonEmptySet.of(1, 2, 5)),
                 Map(
@@ -711,7 +711,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
                 ),
             ),
             (
-                PositiveReal(2.5), 
+                NonnegativeReal(2.5), 
                 List(pt1 -> 11, pt2 -> 22, pt3 -> 33, pt4 -> 44, pt5 -> 55), 
                 List(),
                 Map(
@@ -722,13 +722,13 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
                 ),
             ),
             (
-                PositiveReal(2.5), 
+                NonnegativeReal(2.5), 
                 List(pt1 -> 11, pt2 -> 22, pt3 -> 33, pt4 -> 44, pt5 -> 55), 
                 List(NonEmptySet.of(22, 44), NonEmptySet.one(11), NonEmptySet.of(33, 55)),
                 Map(),
             ),
             (
-                PositiveReal(2.5), 
+                NonnegativeReal(2.5), 
                 List(pt1 -> 11, pt2 -> 22, pt3 -> 33, pt4 -> 44, pt5 -> 55), 
                 List(NonEmptySet.of(22, 55), NonEmptySet.one(11), NonEmptySet.of(33, 44)),
                 Map(2 -> NonEmptySet.one(3), 3 -> NonEmptySet.one(2)),
@@ -791,7 +791,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
                 })
                 .suchThat{ (skips, group) => skips.nonEmpty && group.nonEmpty } // At least 1 time is skipped, and grouping is nontrivial.
                 .map(_.bimap(_.toNel.get, _.toNel.get))                         // safe b/c of .suchThat(...) filter
-            threshold <- arbitrary[PositiveReal]
+            threshold <- arbitrary[NonnegativeReal]
             proxFilterStrategy <- Gen.oneOf(
                 ImagingRoundsConfiguration.SelectiveProximityPermission(threshold, grouping),
                 ImagingRoundsConfiguration.SelectiveProximityProhibition(threshold, grouping),
@@ -842,7 +842,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
                 workflow(
                     spotsFile = spotsFile, 
                     driftFile = driftFile, 
-                    proximityFilterStrategy = ImagingRoundsConfiguration.UniversalProximityProhibition(PositiveReal(Double.PositiveInfinity)),
+                    proximityFilterStrategy = ImagingRoundsConfiguration.UniversalProximityProhibition(NonnegativeReal(Double.PositiveInfinity)),
                     unfilteredOutputFile = unfiltFile, 
                     filteredOutputFile = filtFile, 
                     extantOutputHandler = handleOutput,
@@ -882,7 +882,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
                     result |+| subResult
             }
             /* Only bother with 10 successes since threshold really should be irrelevant, and we're testing also over a table. */
-            forAll (arbitrary[PositiveReal], minSuccessful(10)) { threshold => 
+            forAll (arbitrary[NonnegativeReal], minSuccessful(10)) { threshold => 
                 buildNeighboringRoisFinder(roisWithIndex, ImagingRoundsConfiguration.UniversalProximityProhibition(threshold)) match {
                     case Left(errMsg) => fail(s"Expected test success but got failure/error message: $errMsg")
                     case Right(observed) => observed shouldEqual expected
@@ -899,7 +899,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         } yield regions.map(r => canonicalRoi.copy(region = RegionId.unsafe(r))).toList.toNel.get
         
         forAll (genRois) { rois => 
-            val proxFilterStrategy = ImagingRoundsConfiguration.SelectiveProximityProhibition(PositiveReal(1e-323), rois.map{ roi => NonEmptySet.one(roi.time) })
+            val proxFilterStrategy = ImagingRoundsConfiguration.SelectiveProximityProhibition(NonnegativeReal(1e-323), rois.map{ roi => NonEmptySet.one(roi.time) })
             buildNeighboringRoisFinder(NonnegativeInt.indexed(rois.toList), proxFilterStrategy) match {
                 case Right(neigbors) => neigbors shouldEqual Map()
                 case Left(errMsg) => fail(s"Expected success, but got error message: $errMsg")
@@ -912,7 +912,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         def genRoiDistanceAndRegionalImageRoundGroup: Gen[(RegionalBarcodeSpotRoi, ImagingRoundsConfiguration.NontrivialProximityFilter)] = {
             given arbMargin: Arbitrary[BoundingBox.Margin] = getArbForMargin(NonnegativeReal(1.0), NonnegativeReal(32.0))
             given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-2048.0, 2048.0)
-            val genThreshold = arbitrary[PositiveReal]
+            val genThreshold = arbitrary[NonnegativeReal]
             for {
                 roi <- arbitrary[RegionalBarcodeSpotRoi]
                 proxFilterStrategy <- {
@@ -961,14 +961,14 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         given arbitraryDoubleTemp: Arbitrary[Double] = genReasonableCoordinate.toArbitrary
         forAll (arbitrary[List[Point3D]], Gen.resize(5, Gen.alphaNumStr)) { (pts, key) => 
             val keyedPoints = pts.map(key -> _)
-            val threshold = PiecewiseDistance.ConjunctiveThreshold(PositiveReal(1e-323).asNonnegative)
+            val threshold = PiecewiseDistance.ConjunctiveThreshold(NonnegativeReal(1e-323))
             buildNeighborsLookupKeyed(keyedPoints, (_, _) => true, identity[Point3D], threshold, identity) shouldEqual Map()
         }
     }
 
     test("Total uniqueness of keys guarantees no neighbors.") {
-        forAll { (minDist: PositiveReal, points: List[Point3D]) => 
-            val threshold = PiecewiseDistance.ConjunctiveThreshold(minDist.asNonnegative)
+        forAll { (minDist: NonnegativeReal, points: List[Point3D]) => 
+            val threshold = PiecewiseDistance.ConjunctiveThreshold(minDist)
             buildNeighborsLookupKeyed(points.zipWithIndex.map(_.swap), (_, _) => true, identity[Point3D], threshold, identity) shouldEqual Map()
         }
     }
@@ -984,7 +984,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         
         /* Randomise the nontrivial proximity filter. */
         def genNontrivialProximityFilter(grouping: NonEmptyList[NonEmptySet[ImagingTimepoint]]): Gen[GroupedFilterStrategy] = for {
-            threshold <- Gen.choose(1e10, Double.PositiveInfinity).map(PositiveReal.unsafe)
+            threshold <- Gen.choose(1e10, Double.PositiveInfinity).map(NonnegativeReal.unsafe)
             build <- Gen.oneOf(SelectiveProximityPermission.apply, SelectiveProximityProhibition.apply)
         } yield build(threshold, grouping)
 
@@ -1032,13 +1032,13 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         given arbPoint: Arbitrary[Point3D] = getArbForPoint3D(-2048.0, 2048.0)
         
         def genRoisAndStrategy(using arbRoi: Arbitrary[Roi]): Gen[(NonEmptyList[RegionalBarcodeSpotRoi], FilterWithoutGrouping)] = for {
-            maybeThreshold <- Gen.option(Gen.choose(1e10, Double.PositiveInfinity).map(PositiveReal.unsafe))
+            maybeThreshold <- Gen.option(Gen.choose(1e10, Double.PositiveInfinity).map(NonnegativeReal.unsafe))
             initRois <- Gen.nonEmptyListOf(arbitrary[RegionalBarcodeSpotRoi])
                 .suchThat(_.length > 1)
                 .suchThat(rois => maybeThreshold.fold(true){ threshold => 
                     rois.map(_.centroid).combinations(2).exists{
                         case a :: b :: Nil => 
-                            PiecewiseDistance.within(PiecewiseDistance.ConjunctiveThreshold(threshold.asNonnegative))(a, b)
+                            PiecewiseDistance.within(PiecewiseDistance.ConjunctiveThreshold(threshold))(a, b)
                         case rois => throw new Exception(s"${rois.length} ROIs when taking pairs of 2!")
                     }
                 })
@@ -1094,7 +1094,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         }
     }
 
-    def genSpotCoveringGrouping(genThreshold: Gen[PositiveReal])(spots: Iterable[RegionalBarcodeSpotRoi]) = {
+    def genSpotCoveringGrouping(genThreshold: Gen[NonnegativeReal])(spots: Iterable[RegionalBarcodeSpotRoi]) = {
         given ordTime: Ordering[ImagingTimepoint] = Order[ImagingTimepoint].toOrdering
         val timepoints = spots.map(_.region.get).toSet
         for {
@@ -1146,9 +1146,9 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         c: C, margin: BoundingBox.Margin)(lift: Double => C): BoundingBox.Interval[C] = 
         BoundingBox.Interval[C].apply.tupled((c.get - margin.get, c.get + margin.get).mapBoth(lift))
 
-    private def genThresholdAndRoisToFacilitateCollisions: Gen[(PositiveReal, List[Roi])] = {
+    private def genThresholdAndRoisToFacilitateCollisions: Gen[(NonnegativeReal, List[Roi])] = {
         for {
-            threshold <- Gen.choose(1e-323, 10.0).map(PositiveReal.unsafe)
+            threshold <- Gen.choose(1e-323, 10.0).map(NonnegativeReal.unsafe)
             numRois <- Gen.choose(5, 10)
             centroids <- {
                 given tmpArb: Arbitrary[Double] = Arbitrary(genNonNegReal(NonnegativeReal(5)))

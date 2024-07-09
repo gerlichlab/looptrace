@@ -25,7 +25,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with ScalaCheckPropertyChecks with should.Matchers:
 
     test("proximityFilterStrategy is correct for strategies other than SelectiveProximityPermission") {
-        val expMinSep = PositiveReal(5.0)
+        val expMinSep = NonnegativeReal(5.0)
         val expGrouping = NonEmptyList.of(NonEmptySet.of(8, 9), NonEmptySet.of(10, 11)).map(_.map(ImagingTimepoint.unsafe))
         forAll (Table(
             ("subfolder", "configFileName", "expectation"),
@@ -63,7 +63,7 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
             }
             exampleConfig.numberOfRounds shouldEqual 12
             exampleConfig.proximityFilterStrategy shouldEqual SelectiveProximityPermission(
-                PositiveReal(5.0), 
+                NonnegativeReal(5.0), 
                 NonEmptyList.of(NonEmptySet.of(8, 9), NonEmptySet.of(10, 11)).map(_.map(ImagingTimepoint.unsafe))
             )
             exampleConfig.tracingExclusions shouldEqual Set(0, 8, 9, 10, 11).map(ImagingTimepoint.unsafe)

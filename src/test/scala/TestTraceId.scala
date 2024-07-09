@@ -16,7 +16,7 @@ class TestTraceId extends AnyFunSuite, GenericSuite, ScalaCheckPropertyChecks, R
 
     test("TraceId.fromInt works; trace ID must be nonnegative.") {
         forAll { (z: Int) => TraceId.fromInt(z) match {
-            case Left(msg) if z < 0 => msg shouldEqual s"Cannot refine as nonnegative: $z"
+            case Left(msg) if z < 0 => msg shouldEqual ironNonnegativityFailureMessage
             case Right(tid) if z >= 0 => tid.get shouldEqual z
             case result => fail(s"Unexpected result parsing trace ID from int ($z): $result")
         } }

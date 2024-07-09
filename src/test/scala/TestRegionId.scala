@@ -19,7 +19,7 @@ class TestRegionId extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite
     
     test("RegionId.fromInt works; region ID must be nonnegative.") {
         forAll { (z: Int) => RegionId.fromInt(z) match {
-            case Left(msg) if z < 0 => msg shouldEqual s"Cannot refine as nonnegative: $z"
+            case Left(msg) if z < 0 => msg shouldEqual ironNonnegativityFailureMessage
             case Right(rid@RegionId(ImagingTimepoint(t))) if z >= 0 => 
                 t shouldEqual z
                 rid.get shouldEqual ImagingTimepoint.unsafe(z)
