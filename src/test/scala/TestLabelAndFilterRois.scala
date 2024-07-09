@@ -1166,7 +1166,9 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
     private def getArbForMargin(lo: NonnegativeReal, hi: NonnegativeReal): Arbitrary[BoundingBox.Margin] = 
         Gen.choose[Double](lo, hi).map(NonnegativeReal.unsafe `andThen` BoundingBox.Margin.apply).toArbitrary
 
-    private def getArbForPoint3D(lo: Double, hi: Double): Arbitrary[Point3D] = arbitraryForPoint3D(using Gen.choose(lo, hi).toArbitrary)
+    private def getArbForPoint3D(lo: Double, hi: Double): Arbitrary[Point3D] = 
+        given Arbitrary[Double] = Gen.choose(lo, hi).toArbitrary // Use the same Arbitrary for x, y, z.
+        summon[Arbitrary[Point3D]]
 
     private def getDriftFileLines(driftRows: List[(PositionName, ImagingTimepoint, CoarseDrift, FineDrift)]): List[String] = 
         headDriftFile :: driftRows.zipWithIndex.map{ case ((pos, time, coarse, fine), i) => 
