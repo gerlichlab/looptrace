@@ -15,8 +15,9 @@ class TestPositionIndex extends AnyFunSuite, ScalaCheckPropertyChecks, Refinemen
     
     test("Unsafe wrapper works; position index must be nonnegative.") {
         forAll { (z: Int) => 
-            if z < 0 
-            then assertThrows[NumberFormatException]{ PositionIndex.unsafe(z) }
+            if z < 0 then 
+                val error = intercept[IllegalArgumentException]{ PositionIndex.unsafe(z) }
+                error.getMessage `contains` ironNonnegativityFailureMessage shouldBe true
             else PositionIndex.unsafe(z).get shouldEqual z
         }
     }

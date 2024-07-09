@@ -9,6 +9,8 @@ import org.scalacheck.{ Arbitrary, Gen }
 /** Helpers for tests for a simple wrapper type (often extending {@code AnyVal}) */
 trait RefinementWrapperSuite extends GenericSuite:
 
+    def ironNonnegativityFailureMessage = "!(Should be strictly negative)"
+
     /** Generate either two expected-equivalent or expected-nonequivalent values, and expected equivalence test result. */
     def genEquivalenceInputAndExpectation[A : Arbitrary : Eq, B](lift: A => B): Gen[(B, B, Boolean)] = {
         def genEqv = arbitrary[A].map{ a => (lift(a), lift(a), true) }
