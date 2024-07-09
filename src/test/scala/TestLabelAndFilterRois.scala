@@ -59,7 +59,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         }
     }
 
-    test("With UNIVERSAL PROHIBITIVE grouping, spot distance comparison is accurate, uses drift correction--coarse, fine, or both--can switch distance measure (#146), and is invariant under order of drifts.") {
+    test("With UNIVERSAL PROHIBITION grouping, spot distance comparison is accurate, uses drift correction--coarse, fine, or both--can switch distance measure (#146), and is invariant under order of drifts.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         
         // Generate permutations of lines to test invariance under input order.
@@ -653,7 +653,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
     }
 
     // This tests for both the ability to specify nothing for the grouping, and for the correctness of the definition of the partitioning (trivial) when no grouping is specified.
-    test("For PROHIBITIVE (universal or selective) spot grouping, neighbor discovery is correct. #147") {
+    test("For PROHIBITION (universal or selective) spot grouping, neighbor discovery is correct. #147") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
 
         // Generate a reasonable margin on side of each centroid coordinate for ROI bounding boxes.
@@ -891,7 +891,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         }
     }
 
-    test("All-singleton PROHIBITIVE probe groupings guarantees no neighbors.") {
+    test("All-singleton PROHIBITION probe groupings guarantees no neighbors.") {
         def noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         def genRois: Gen[NonEmptyList[Roi]] = for {
             n <- Gen.choose(1, 10)
