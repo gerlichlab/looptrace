@@ -1,5 +1,6 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
+import cats.Order
 import cats.syntax.all.*
 import upickle.default.*
 
@@ -36,13 +37,27 @@ class TestImagingSequence extends AnyFunSuite, ScalaCheckPropertyChecks, Imaging
     test("Sequence of timepoints other than 0, 1, ..., N-1 gives expected error.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         given arbName: Arbitrary[String] = genNameForJson.toArbitrary
-        forAll (Gen.nonEmptyListOf(genRound).suchThat(namesAreUnique)) { (rounds: List[ImagingRound]) => 
-            ImagingSequence.fromRounds(rounds) match {
-                case Left(messages) => 
-                    val expPrefix = "Ordered timepoints for imaging rounds don't form contiguous sequence"
-                    messages.toList.count(_.startsWith(expPrefix)) shouldEqual 1
-                case Right(_) => fail("Expected ImagingSequence parse error(s) but got success!")
-            }
+        def genRoundsSeq: Gen[List[ImagingRound]] = 
+            given Ordering[ImagingTimepoint] = summon[Order[ImagingTimepoint]].toOrdering // to check sorted list
+            Gen.nonEmptyListOf(genRound)
+                .suchThat(namesAreUnique)
+                .suchThat(rs => rs.map(_.time).sorted =!= (0 until rs.length).toList.map(ImagingTimepoint.unsafe))
+        forAll (genRoundsSeq, minSuccessful(1000)) { 
+            (rounds: List[ImagingRound]) => 
+                ImagingSequence.fromRounds(rounds) match {
+                    case Left(messages) => 
+                        val expPrefix = "Ordered timepoints for imaging rounds don't form contiguous sequence"
+                        val obsCount = messages.toList.count(_.startsWith(expPrefix))
+                        if 1 === obsCount
+                        then succeed
+                        else
+                            val errMsg = s"Expected exactly 1 message prefixed by '$expPrefix', but got $obsCount"
+                            println(errMsg)
+                            println("Here are the messages (below):")
+                            messages.toList.foreach(println)
+                            fail(errMsg)
+                    case Right(_) => fail("Expected ImagingSequence parse error(s) but got success!")
+                }
         }
     }
     
@@ -72,6 +87,7 @@ class TestImagingSequence extends AnyFunSuite, ScalaCheckPropertyChecks, Imaging
             .suchThat(namesAreUnique)
         forAll (genRounds) { rounds => 
             val exp = ImagingSequence.fromRounds(rounds)
+            // Write the rounds to JSON, and then read/parse them back, checking that the result matches the original.
             val obs = ImagingSequence.fromRounds(read[List[ImagingRound]](write(rounds)))
             obs shouldEqual exp
         }
@@ -82,16 +98,13 @@ class TestImagingSequence extends AnyFunSuite, ScalaCheckPropertyChecks, Imaging
         given arbName: Arbitrary[String] = genNameForJson.toArbitrary
         given rw: ReadWriter[ImagingRound] = ImagingRound.rwForImagingRound
         pending
-        // forAll (Gen.nonEmptyListOf(genRound).suchThat(namesAreUnique)) { (rounds: List[ImagingRound]) => 
-        //     pending
-        // }
     }
 
     private def genRound(using arbName: Arbitrary[String], arbTime: Arbitrary[ImagingTimepoint]): Gen[ImagingRound] = Gen.oneOf(
         arbitrary[BlankImagingRound], 
         arbitrary[RegionalImagingRound], 
         arbitrary[LocusImagingRound],
-        )
+    )
 
     private def namesAreUnique(rounds: List[ImagingRound]): Boolean = rounds.map(_.name).toSet.size === rounds.length
 end TestImagingSequence
