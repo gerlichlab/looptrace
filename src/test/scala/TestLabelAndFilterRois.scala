@@ -486,7 +486,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
             } yield (spots, driftRows, numDropped, proxFilterStrategy)
         }
 
-        forAll (genSpotsDriftsDropsAndFilterStrategy, arbitrary[NonnegativeReal], arbitrary[ExtantOutputHandler]) { 
+        forAll (genSpotsDriftsDropsAndFilterStrategy, arbitrary[NonnegativeReal], arbitrary[ExtantOutputHandler], minSuccessful(500)) { 
             case ((spots, driftRows, numDropped, proxFilterStrategy), threshold, handleOutput) => 
                 withTempDirectory{ (tmpdir: os.Path) => 
                     val spotsFile = tmpdir / "spots.csv"
@@ -1098,7 +1098,12 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         given ordTime: Ordering[ImagingTimepoint] = Order[ImagingTimepoint].toOrdering
         val timepoints = spots.map(_.region.get).toSet
         for {
-            maybeSplit <- Gen.option(Gen.choose(1, timepoints.size - 1))
+            maybeSplit <- PositiveInt.option(timepoints.size - 1) match {
+                // We have optionality if and only if the given spots collection has more than 1 element. 
+                // Otherwise, there's no way to split it and we always generate a null split point.
+                case None => Gen.const{ Option.empty[Int] }
+                case Some(upper) => Gen.option(Gen.choose(PositiveInt(1), upper))
+            }
             groups = maybeSplit match {
                 case None => NonEmptyList.one(timepoints.toNonEmptySetUnsafe)
                 case Some(k) => 
@@ -1130,7 +1135,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
 
     private def genSpotsAndDriftsWithDrop(genCoarse: Gen[CoarseDrift], genFine: Gen[FineDrift])(
         using arbMargin: Arbitrary[BoundingBox.Margin], arbPoint: Arbitrary[Point3D]
-        ): Gen[(NonEmptyList[RegionalBarcodeSpotRoi], List[(PositionName, ImagingTimepoint, CoarseDrift, FineDrift)], Int)] = {
+    ): Gen[(NonEmptyList[RegionalBarcodeSpotRoi], List[(PositionName, ImagingTimepoint, CoarseDrift, FineDrift)], Int)] = {
         // Order shouldn't matter, but that invariant's tested elsewhere.
         given ordPosTime: Ordering[DriftKey] = Order[DriftKey].toOrdering
         genSpotsAndDrifts(genCoarse, genFine).flatMap{ (spots, driftRows) => 
