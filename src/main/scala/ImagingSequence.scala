@@ -59,28 +59,34 @@ object ImagingSequence:
       * @return Either a [[scala.util.Left]]-wrapped [[cats.data.NonEmptyList]] of error messages, 
       *     or a [[scala.util.Right]]-wrapped [[ImagingSequence]] instance
       */
-    def fromRounds(maybeRounds: List[ImagingRound]): ErrMsgsOr[ImagingSequence] = maybeRounds.toNel
-        .toRight(NonEmptyList.one("Can't build an imaging sequence from empty collection of rounds!"))
-        .flatMap{ rounds => 
-            val ordByTime = rounds.sortBy(_.time)
-            val times = ordByTime.map(_.time.get.toInt).toList
-            val timesNel = 
-                if times === (0 until ordByTime.length).toList then ().validNel 
-                else s"Ordered timepoints for imaging rounds don't form contiguous sequence from 0 up to length (${times.length}): ${times.mkString(", ")}".invalidNel
-            val namesNel = (rounds.groupBy(_.name).view.mapValues(_.size).filter(_._2 > 1).toList match {
-                case Nil => ().asRight
-                case namesHisto => s"Repeated name(s) in imaging round sequence! ${namesHisto}".asLeft
-            }).toValidatedNel
-            val roundsPartitionNel: ValidatedNel[String, (List[BlankImagingRound], List[LocusImagingRound], NonEmptyList[RegionalImagingRound])] = 
-                rounds.toList.foldRight((List.empty[BlankImagingRound], List.empty[LocusImagingRound], List.empty[RegionalImagingRound])){ 
-                    case (r: BlankImagingRound, (blanks, locals, regionals)) => (r :: blanks, locals, regionals)
-                    case (r: LocusImagingRound, (blanks, locals, regionals)) => (blanks, r :: locals, regionals)
-                    case (r: RegionalImagingRound, (blanks, locals, regionals)) => (blanks, locals, r :: regionals)
-                } match {
-                    case (blanks, loci, h :: t) => (blanks, loci, NonEmptyList(h, t)).validNel
-                    case (_, _, Nil) => "No REGIONAL rounds found!".invalidNel
-                }
-            (timesNel, namesNel, roundsPartitionNel).mapN((_, _, partedRounds) => ImagingSequence.apply.tupled(partedRounds)).toEither
-        }
+    def fromRounds(maybeRounds: List[ImagingRound]): ErrMsgsOr[ImagingSequence] = 
+        import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.* // for .unsafe on ImagingTimepoint
+        maybeRounds.toNel
+            .toRight(NonEmptyList.one("Can't build an imaging sequence from empty collection of rounds!"))
+            .flatMap{ rounds => 
+                val ordByTime = rounds.sortBy(_.time)
+                val times = ordByTime.map(_.time).toList
+                // NB: This also checks, implicitly, that no timepoint has been repeated in the sequence. 
+                //      This would not be the case if checking for set equality, which would deduplicate repeats.
+                val timesNel = (times === (0 until ordByTime.length).toList.map(ImagingTimepoint.unsafe)).either(
+                    s"Ordered timepoints for imaging rounds don't form contiguous sequence from 0 up to length (${times.length}): ${times.mkString(", ")}",
+                    ()
+                ).toValidatedNel
+                val namesNel = (rounds.groupBy(_.name).view.mapValues(_.size).filter(_._2 > 1).toList match {
+                    case Nil => ().asRight
+                    case namesHisto => s"Repeated name(s) in imaging round sequence! ${namesHisto}".asLeft
+                }).toValidatedNel
+                val roundsPartitionNel: ValidatedNel[String, (List[BlankImagingRound], List[LocusImagingRound], NonEmptyList[RegionalImagingRound])] = 
+                    val (blanks, locusSpecifics, regionals) = 
+                        rounds.toList.foldRight((List.empty[BlankImagingRound], List.empty[LocusImagingRound], List.empty[RegionalImagingRound])){ 
+                            case (r: BlankImagingRound, (blanks, locals, regionals)) => (r :: blanks, locals, regionals)
+                            case (r: LocusImagingRound, (blanks, locals, regionals)) => (blanks, r :: locals, regionals)
+                            case (r: RegionalImagingRound, (blanks, locals, regionals)) => (blanks, locals, r :: regionals)
+                        }
+                    regionals.toNel.toRight("No REGIONAL rounds found!").map(rs => (blanks, locusSpecifics, rs)).toValidatedNel
+                (timesNel, namesNel, roundsPartitionNel)
+                    .mapN{ (_, _, partedRounds) => ImagingSequence.apply.tupled(partedRounds) }
+                    .toEither
+            }
 
 end ImagingSequence
