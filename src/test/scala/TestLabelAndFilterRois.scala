@@ -21,6 +21,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.collections.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
+import at.ac.oeaw.imba.gerlich.looptrace.space.Point3D.given // for cats.Order
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.safeReadAllWithOrderedHeaders
 import at.ac.oeaw.imba.gerlich.looptrace.LabelAndFilterRois.*
