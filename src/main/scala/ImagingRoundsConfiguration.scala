@@ -237,10 +237,10 @@ object ImagingRoundsConfiguration extends LazyLogging:
                 case Some(fullJson) => safeReadAs[Map[String, ujson.Value]](fullJson) match {
                     case Left(message) => message.invalidNel
                     case Right(currentSection) => 
-                        val thresholdNel: ValidatedNel[String, Option[PositiveReal]] = 
+                        val thresholdNel: ValidatedNel[String, Option[NonnegativeReal]] = 
                             currentSection.get("minimumPixelLikeSeparation") match {
                                 case None => None.validNel
-                                case Some(json) => safeReadAs[Double](json).flatMap(PositiveReal.either).map(_.some).toValidatedNel
+                                case Some(json) => safeReadAs[Double](json).flatMap(NonnegativeReal.either).map(_.some).toValidatedNel
                             }
                         val groupsNel: ValidatedNel[String, Option[NonEmptyList[NonEmptySet[ImagingTimepoint]]]] = 
                             currentSection.get("groups") match {
@@ -254,29 +254,25 @@ object ImagingRoundsConfiguration extends LazyLogging:
                             }
                         currentSection.get("semantic") match {
                             case None => "Missing semantic for proximity filter config section!".invalidNel
-                            case Some(s) => safeReadAs[String](s) match {
-                                case Left(message) => s"Illegal type of value for regional grouping semantic! Message: $message".invalidNel
-                                case Right("UniversalProximityPermission") => (thresholdNel, groupsNel).tupled match {
-                                    case fail@Invalid(_) => fail
-                                    case Valid((None, None)) => UniversalProximityPermission.validNel
-                                    case Valid(_) => "For universal proximity permission, both threshold and groups must be absent.".invalidNel
-                                }
-                                case Right("UniversalProximityProhibition") => (thresholdNel, groupsNel).tupled match {
-                                    case fail@Invalid(_) => fail
-                                    case Valid((Some(t), None)) => UniversalProximityProhibition(t).validNel
-                                    case Valid(_) => "For universal proximity prohibition, threshold must be present and groups must be absent.".invalidNel
-                                }
-                                case Right("SelectiveProximityPermission") => (thresholdNel, groupsNel).tupled match {
-                                    case fail@Invalid(_) => fail
-                                    case Valid((Some(t), Some(g))) => SelectiveProximityPermission(t, g).validNel
-                                    case Valid(_) => "For selective proximity permission, threshold and grouping must be present.".invalidNel
-                                }
-                                case Right("SelectiveProximityProhibition") => (thresholdNel, groupsNel).tupled match {
-                                    case fail@Invalid(_) => fail
-                                    case Valid((Some(t), Some(g))) => SelectiveProximityProhibition(t, g).validNel
-                                    case Valid(_) => "For selective proximity prohibition, threshold and grouping must be present.".invalidNel
-                                }
-                                case Right(semantic) => 
+                            case Some(s) => (safeReadAs[String](s), (thresholdNel, groupsNel).tupled) match {
+                                /* First, the 2 obvious fail cases */
+                                case (Left(message), _) => s"Illegal type of value for regional grouping semantic! Message: $message".invalidNel
+                                case (_, fail@Invalid(_)) => fail
+                                /* Then, the good cases */
+                                case (Right("UniversalProximityPermission"), Valid((None, None))) => UniversalProximityPermission.validNel
+                                case (Right("UniversalProximityPermission"), Valid(_)) => 
+                                    "For universal proximity permission, both threshold and groups must be absent.".invalidNel
+                                case (Right("UniversalProximityProhibition"), Valid((Some(t), None))) => UniversalProximityProhibition(t).validNel
+                                case (Right("UniversalProximityProhibition"), Valid(_)) => 
+                                    "For universal proximity prohibition, threshold must be present and groups must be absent.".invalidNel
+                                case (Right("SelectiveProximityPermission"), Valid((Some(t), Some(g)))) => SelectiveProximityPermission(t, g).validNel
+                                case (Right("SelectiveProximityPermission"), Valid(_)) => 
+                                    "For selective proximity permission, threshold and grouping must be present.".invalidNel
+                                case (Right("SelectiveProximityProhibition"), Valid((Some(t), Some(g)))) => SelectiveProximityProhibition(t, g).validNel
+                                case (Right("SelectiveProximityProhibition"), Valid(_)) => 
+                                    "For selective proximity prohibition, threshold and grouping must be present.".invalidNel
+                                /* Finally, the illegal semantic case */
+                                case (Right(semantic), _) => 
                                     val errMsg = s"Illegal value for proximity filter semantic: $semantic"
                                     Invalid{ (thresholdNel, groupsNel).tupled.fold(es => NonEmptyList(errMsg, es.toList), _ => NonEmptyList.one(errMsg)) }
                             }
@@ -364,7 +360,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
     
     /** A non-no-op case for exclusion of spots that are too close */
     sealed trait NontrivialProximityFilter extends ProximityFilterStrategy:
-        def minSpotSeparation: PositiveReal
+        def minSpotSeparation: NonnegativeReal
     
     /** An exclusion strategy for spots too close that defines which ones are to be considered too close */
     sealed trait SelectiveProximityFilter:
@@ -374,17 +370,17 @@ object ImagingRoundsConfiguration extends LazyLogging:
     case object UniversalProximityPermission extends ProximityFilterStrategy
     
     /** Any spot may be deemed "too close" to any other spot. */
-    final case class UniversalProximityProhibition(minSpotSeparation: PositiveReal) extends NontrivialProximityFilter
+    final case class UniversalProximityProhibition(minSpotSeparation: NonnegativeReal) extends NontrivialProximityFilter
     
     /** Allow spots from timepoints grouped together to violate given separation threshold. */
     final case class SelectiveProximityPermission(
-        minSpotSeparation: PositiveReal,
+        minSpotSeparation: NonnegativeReal,
         grouping: NonEmptyList[NonEmptySet[ImagingTimepoint]],
         ) extends NontrivialProximityFilter with SelectiveProximityFilter
     
     /** Forbid spots from timepoints grouped together to violate given separation threshold. */
     final case class SelectiveProximityProhibition(
-        minSpotSeparation: PositiveReal, 
+        minSpotSeparation: NonnegativeReal, 
         grouping: NonEmptyList[NonEmptySet[ImagingTimepoint]],
         ) extends NontrivialProximityFilter with SelectiveProximityFilter
 
