@@ -431,6 +431,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
             def realizedAccuracy = partition.numAccuracy
         
         final case class Partition private(shifting: NonEmptySet[RoiForShifting], accuracy: Set[RoiForAccuracy]) extends HasPartition:
+            import Point3D.given // for cats.Order
             given ev: Ordering[(RoiIndex, Point3D)] = Order[(RoiIndex, Point3D)].toOrdering
             require(
                 (shifting.toSortedSet.map(roi => roi.index -> roi.centroid) & accuracy.map(roi => roi.index -> roi.centroid)).isEmpty, 
@@ -535,6 +536,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
     }
 
     private[looptrace] def orderSelectedRoisSimplified[R <: SelectedRoi]: Ordering[R] = 
+        import Point3D.given // for cats.Order
         Order[(RoiIndex, Point3D)].contramap((roi: R) => roi.index -> roi.centroid).toOrdering
 
 end PartitionIndexedDriftCorrectionBeadRois
