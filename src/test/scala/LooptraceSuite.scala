@@ -7,13 +7,13 @@ import org.scalacheck.Arbitrary.arbitrary
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
-import at.ac.oeaw.imba.gerlich.gerlib.testing.ImagingInstances
+import at.ac.oeaw.imba.gerlich.gerlib.testing.{ GeometricInstances, ImagingInstances }
 
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** Base trait for tests in looptrace */
-trait LooptraceSuite extends GenericSuite, ImagingInstances, ScalacheckGenericExtras:
+trait LooptraceSuite extends GenericSuite, GeometricInstances, ImagingInstances, ScalacheckGenericExtras:
 
     /************************/
     /* Givens ("implicits") */
@@ -42,16 +42,6 @@ trait LooptraceSuite extends GenericSuite, ImagingInstances, ScalacheckGenericEx
 
     given arbitraryForRoiIndex(using idx: Arbitrary[Int]): Arbitrary[RoiIndex] = 
         Arbitrary{ Gen.choose(0, Int.MaxValue).map(RoiIndex.unsafe) }
-    
-    given arbitraryForXCoordinate(using num: Arbitrary[Double]): Arbitrary[XCoordinate] = num.fmap(XCoordinate.apply)
-    
-    given arbitraryForYCoordinate(using num: Arbitrary[Double]): Arbitrary[YCoordinate] = num.fmap(YCoordinate.apply)
-    
-    given arbitraryForZCoordinate(using num: Arbitrary[Double]): Arbitrary[ZCoordinate] = num.fmap(ZCoordinate.apply)
-    
-    given arbitraryForPoint3D(using arbX: Arbitrary[Double]): Arbitrary[Point3D] = Arbitrary{
-        Gen.zip(arbitrary[XCoordinate], arbitrary[YCoordinate], arbitrary[ZCoordinate]).map(Point3D.apply.tupled)
-    }
     
     given arbitraryForBlankImagingRound(using arbName: Arbitrary[String], arbTime: Arbitrary[ImagingTimepoint]): Arbitrary[BlankImagingRound] = 
         (arbName, arbTime).mapN(BlankImagingRound.apply)
