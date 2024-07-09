@@ -317,7 +317,7 @@ object LabelAndFilterRois extends StrictLogging:
         val groupedRoiLinenumPairs: Either[String, Map[RoiLinenumPair, NonEmptySet[RoiLinenumPair]]] = proxFilterStrategy match {
             case ImagingRoundsConfiguration.UniversalProximityPermission => Map.empty.asRight
             case strat: ImagingRoundsConfiguration.UniversalProximityProhibition => 
-                val minSep = PiecewiseDistance.ConjunctiveThreshold(strat.minSpotSeparation.asNonnegative)
+                val minSep = PiecewiseDistance.ConjunctiveThreshold(strat.minSpotSeparation)
                 // Records from the same timepoint must never exclude one another, so don't consider them as neighbors by proximity.
                 val considerRoiPair = { (a: IndexedRoi, b: IndexedRoi) => a._1.time =!= b._1.time }
                 buildNeighborsLookupKeyed(
@@ -329,7 +329,7 @@ object LabelAndFilterRois extends StrictLogging:
                     identity,
                 ).asRight
             case strat: (ImagingRoundsConfiguration.SelectiveProximityProhibition | ImagingRoundsConfiguration.SelectiveProximityPermission) => 
-                val minSep = PiecewiseDistance.ConjunctiveThreshold(strat.minSpotSeparation.asNonnegative)
+                val minSep = PiecewiseDistance.ConjunctiveThreshold(strat.minSpotSeparation)
                 val groupIds = NonnegativeInt.indexed(strat.grouping.toList).flatMap((g, i) => g.toList.map(_ -> i)).toMap
                 Alternative[List].separate(rois.map{ case pair@(roi, _) => groupIds.get(roi.time).toRight(pair).map(_ -> pair)}) match {
                     case (Nil, withGroupsAssigned) => 
