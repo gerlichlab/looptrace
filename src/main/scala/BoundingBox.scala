@@ -37,6 +37,7 @@ object BoundingBox:
       * @param hi The upper bound of the interval
       */
     final case class Interval[C <: Coordinate : [C] =>> NotGiven[C =:= Coordinate]](lo: C, hi: C):
+        import Coordinate.given
         require(lo < hi, s"Lower bound not less than upper bound: ($lo, $hi)")
     end Interval
 end BoundingBox
