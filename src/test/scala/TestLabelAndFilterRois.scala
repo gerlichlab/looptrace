@@ -882,7 +882,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
                     result |+| subResult
             }
             /* Only bother with 10 successes since threshold really should be irrelevant, and we're testing also over a table. */
-            forAll (arbitrary[NonnegativeReal], minSuccessful(10)) { threshold => 
+            forAll (arbitrary[PositiveReal].map(_.asNonnegative), minSuccessful(10)) { threshold => 
                 buildNeighboringRoisFinder(roisWithIndex, ImagingRoundsConfiguration.UniversalProximityProhibition(threshold)) match {
                     case Left(errMsg) => fail(s"Expected test success but got failure/error message: $errMsg")
                     case Right(observed) => observed shouldEqual expected
