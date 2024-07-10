@@ -12,6 +12,7 @@ import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
@@ -56,7 +57,7 @@ class TestImagingRound extends AnyFunSuite, ScalaCheckPropertyChecks, ImagingRou
     test("Blank round is parsed from name + time + blank flag.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         forAll (genNameForJson, arbitrary[ImagingTimepoint]) { (name, time) => 
-            val data = s"""{\"name\": \"$name\", \"time\": ${time.show}, \"isBlank\": true}"""
+            val data = s"""{\"name\": \"$name\", \"time\": ${time.show_}, \"isBlank\": true}"""
             given reader: Reader[ImagingRound] = ImagingRound.rwForImagingRound
             read[ImagingRound](data) shouldEqual BlankImagingRound(name, time)
         }
@@ -142,7 +143,7 @@ class TestImagingRound extends AnyFunSuite, ScalaCheckPropertyChecks, ImagingRou
                 optRepeat.map{ n => "repeat" -> ujson.Num(n) },
                 ).flatten
             val jsonText = write((baseData ::: extraData).toMap)
-            val expect = optName.getOrElse{ probe.get ++ optRepeat.fold("")(n => s"_repeat${n.show}") }
+            val expect = optName.getOrElse{ probe.get ++ optRepeat.fold("")(n => s"_repeat${n.show_}") }
             read[ImagingRound](jsonText) match {
                 case round: LocusImagingRound => round.name shouldEqual expect
                 case round => fail(s"Expected a locus imaging round but got $round")

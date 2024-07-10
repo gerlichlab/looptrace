@@ -16,7 +16,9 @@ import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.{ LocusGroup, SelectiveProximityPermission }
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
@@ -289,7 +291,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
                 ImagingRoundsConfiguration.fromJsonMap(data) match {
                     case Right(_) => 
                         println(s"GROUPING: $regionGroups")
-                        println(s"REGIONAL TIMES: ${seq.regionRounds.map(_.time).mkString_(", ")}")
+                        println(s"REGIONAL TIMES: ${seq.regionRounds.map(_.time.show_).mkString_(", ")}")
                         fail("Expected parse failure for non-partition of imaging sequence's regional rounds, but got success. Data are above.")
                     case Left(messages) => 
                         val unmetChecks = findExpMessages.filterNot{ (testName, check) => messages.count(check) === 1 }.map(_._1)
@@ -543,7 +545,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
                     case Left(messages) => 
                         given Ordering[ImagingTimepoint] = summon[Order[ImagingTimepoint]].toOrdering
                         val unknown = exclusions -- seq.allTimepoints.toList
-                        val expectMessage = s"Unknown timepoint(s) (tracing exclusions): ${unknown.toList.sorted.map(_.show).mkString(", ")}"
+                        val expectMessage = s"Unknown timepoint(s) (tracing exclusions): ${unknown.toList.sorted.map(_.show_).mkString(", ")}"
                         val numMatchMessages = messages.count(_ === expectMessage).toInt
                         if numMatchMessages === 1 then succeed
                         else {
@@ -567,7 +569,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
         baseData ++ List(
             optLocusGrouping.map{ gs => 
                 val data: NonEmptyList[(String, ujson.Value)] = gs.map{ g => 
-                    g.regionalTimepoint.show -> ujson.Arr(g.locusTimepoints.toList.map(t => ujson.Num(t.get))*)
+                    g.regionalTimepoint.show_ -> ujson.Arr(g.locusTimepoints.toList.map(t => ujson.Num(t.get))*)
                 }
                 "locusGrouping" -> ujson.Obj(data.head, data.tail*)
             }: Option[(String, ujson.Value)],

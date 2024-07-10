@@ -12,7 +12,9 @@ import upickle.default.*
 import com.typesafe.scalalogging.LazyLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.imagingTimepoint.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.LocusGroup
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.{ readJsonFile, safeReadAs }
@@ -89,7 +91,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
     def checkTimesSubset(knownTimes: Set[ImagingTimepoint])(times: Set[ImagingTimepoint], context: String): ValidatedNel[String, Unit] = 
         (times -- knownTimes).toList match {
             case Nil => ().validNel
-            case unknown => s"Unknown timepoint(s) ($context): ${unknown.sorted.map(_.show).mkString(", ")}".invalidNel
+            case unknown => s"Unknown timepoint(s) ($context): ${unknown.sorted.map(_.show_).mkString(", ")}".invalidNel
         }
 
     /**
