@@ -407,19 +407,23 @@ class SpotPicker:
         return self.image_handler.spot_input_name
 
     def iter_frames_and_channels(self) -> Iterable[Tuple[Tuple[int, int], int]]:
-        for i, frame in enumerate(self.spot_frame):
+        for i, frame in self._iter_frames():
             for channel in self.spot_channel:
                 yield (i, frame), channel
 
     def iter_frame_threshold_pairs(self) -> Iterable[SingleFrameDetectionSpec]:
         """Iterate over the frames in which to detect spots, and the corresponding threshold for each (typically uniform across all frames)."""
-        for i, frame in enumerate(self.spot_frame):
+        for i, frame in self._iter_frames():
             yield SingleFrameDetectionSpec(frame=frame, threshold=self.spot_threshold[i])
 
     def iter_pos_img_pairs(self) -> Iterable[Tuple[str, np.ndarray]]:
-        """Iterate over pairs of position (FOV) name, and corresponding 5-tensor (t, c, z, y, x ) of images."""
+        """Iterate over pairs of position (FOV) name, and corresponding 5-tensor (t, c, z, y, x) of images."""
         for i, pos in enumerate(self.pos_list):
             yield pos, self.images[i]
+
+    def _iter_frames(self) -> Iterable[tuple[int, int]]:
+        for i, t in enumerate(self._spot_frame):
+            yield i, t.get
 
     @property
     def padding_method(self) -> str:
@@ -467,10 +471,9 @@ class SpotPicker:
         return spot_ch if isinstance(spot_ch, list) else [spot_ch]
 
     @property
-    def spot_frame(self) -> List[int]:
+    def _spot_frame(self) -> list[TimepointFrom0]:
         """The imaging timepoints in which spot detection is to be done, generally those in which regional barcodes were imaged"""
-        spot_frame = self.config["spot_frame"]
-        return spot_frame if isinstance(spot_frame, list) else [spot_frame]
+        return self.image_handler.list_all_regional_timepoints
 
     @property
     def spot_images_path(self) -> str:
@@ -485,9 +488,13 @@ class SpotPicker:
         return self.image_handler.spot_in_nuc
     
     @property
-    def spot_threshold(self) -> List[int]:
-        spot_threshold = self.config.get('spot_threshold', 1000)
-        return spot_threshold if isinstance(spot_threshold, list) else [spot_threshold] * len(self.spot_frame)
+    def spot_threshold(self) -> list[int]:
+        threshold: object = self.config.get('spot_threshold', 1000)
+        if isinstance(threshold, list):
+            return threshold
+        elif isinstance(threshold, int):
+            return [threshold] * len(self._spot_frame)
+        raise TypeError(f"Spot detection threshold is neither int nor list, but {type(threshold).__name__}")
 
     def rois_from_spots(self, outfile: Optional[Union[str, Path]] = None) -> Union[str, Path]:
         """Detect regions of interest (ROIs) from regional barcode FISH spots.

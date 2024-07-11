@@ -47,11 +47,6 @@ num_bead_rois_for_drift_correction_accuracy: 50
 
 spot_input_name: seq_images_zarr_decon
 spot_ch: 0
-spot_frame:
-    - 7
-    - 8
-    - 9
-    - 10
 detection_method: dog
 spot_threshold: 10
 spot_downsample: 2
