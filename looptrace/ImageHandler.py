@@ -122,13 +122,13 @@ def _read_bead_rois_file(fp: ExtantFile) -> np.ndarray[int]:
 
 class ImageHandler:
     def __init__(
-            self, 
-            rounds_config: FilePathLike, 
-            params_config: FilePathLike, 
-            images_folder: Optional[FolderPathLike] = None, 
-            image_save_path: Optional[FolderPathLike] = None, 
-            strict_load_tables: bool = True,
-            ):
+        self, 
+        rounds_config: FilePathLike, 
+        params_config: FilePathLike, 
+        images_folder: Optional[FolderPathLike] = None, 
+        image_save_path: Optional[FolderPathLike] = None, 
+        strict_load_tables: bool = True,
+    ):
         '''
         Initialize ImageHandler class with config read in from YAML file.
         See config file for details on parameters.
