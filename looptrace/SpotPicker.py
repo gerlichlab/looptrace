@@ -280,52 +280,11 @@ class DetectionMethod(Enum):
             raise ValueError(f"Unknown detection method: {name}")
 
 
-@dataclasses.dataclass
-class FieldOfViewRepresentation:
-    # TODO: refine index as nonnegative
-    name: str
-    index: int # This specifies the 0-based index of the position name in a list of position names.
-
-
-@dataclasses.dataclass
+@dataclasses.dataclass(kw_only=True, frozen=True)
 class SingleFrameDetectionSpec:
     # TODO: refine these values as nonnegative.
     frame: int # specifies the index of the hybridisation round/timepoint
     threshold: int # specifies a threshold value for intensity-based detection or detection with difference of Gaussians
-
-
-@dataclasses.dataclass
-class DetectionSpec3D:
-    """Three values that, together, should constitute an index that retrieves a '3D' image (z-stack of 2D images)"""
-    position: "FieldOfViewRepresentation" # specifies the field of view (FOV / "position")
-    frame: "SingleFrameDetectionSpec" # specifies the hybridisation round / timepoint
-    channel: int # specifies the imaging channel in which signal was captured
-
-
-def generate_detection_specifications(positions: Iterable["FieldOfViewRepresentation"], single_frame_specs: Iterable["SingleFrameDetectionSpec"], channels: Iterable[int]) -> Iterable["DetectionSpec3D"]:
-    """
-    Build individual specifications for spot detection, with each specification bundling field of view, hybridisation round, and imaging channel.
-
-    Parameters
-    ----------
-    positions : Iterable of str
-        Collection of the names of the fields of view
-    single_frame_specs : Iterable of SingleFrameDetectionSpec
-        Collection of the hybridisation round and corresponding detection threshold
-    channels : Iterable of int
-        Collection of the imaging channels to process for each hybridisation timepoint/round
-
-    Returns
-    -------
-    Iterable of DetectionSpec3D
-        Collection of the specifications for where and how to detect spots
-    """
-    for position_definition in tqdm.tqdm(positions):
-        print("Position: ", position_definition)
-        for frame_spec in tqdm.tqdm(single_frame_specs):
-            print("Frame spec: ", frame_spec)
-            for ch in tqdm.tqdm(channels):
-                yield DetectionSpec3D(position=position_definition, frame=frame_spec, channel=ch)
 
 
 def get_one_dim_drift_and_bound_and_pad(roi_min: NumberLike, roi_max: NumberLike, dim_limit: int, frame_drift: NumberLike, ref_drift: NumberLike) -> Tuple[int, NumberLike, NumberLike, NumberLike, NumberLike]:
