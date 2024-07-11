@@ -5,6 +5,8 @@ import mouse.boolean.*
 import com.typesafe.scalalogging.StrictLogging
 import scopt.*
 
+import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
+
 /**
   * Validate the imaging rounds configuraiton file.
   * 
@@ -26,7 +28,7 @@ object ValidateImagingRoundsConfig extends StrictLogging:
         val parser = OParser.sequence(
             programName(ProgramName),
             // TODO: better naming and versioning
-            head(ProgramName, VersionName),
+            head(ProgramName, BuildInfo.version),
             arg[os.Path]("<file>")
                 .action((f, c) => c.copy(configFile = f))
                 .validate(f => os.isFile(f).either(s"Alleged config to validate isn't an extant file: $f", ()))

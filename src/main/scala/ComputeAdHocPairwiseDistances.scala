@@ -5,7 +5,9 @@ import cats.syntax.all.*
 import mouse.boolean.*
 import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
+
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
+import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 
 /**
@@ -37,7 +39,7 @@ object ComputeAdHocPairwiseDistances extends StrictLogging:
         
         val parser = OParser.sequence(
             programName(ProgramName),
-            head(ProgramName, VersionName),
+            head(ProgramName, BuildInfo.version),
             opt[os.Path]('I', "infile")
                 .required()
                 .action((f, c) => c.copy(infile = f))

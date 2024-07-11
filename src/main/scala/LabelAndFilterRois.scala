@@ -18,6 +18,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
+import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
@@ -78,7 +79,7 @@ object LabelAndFilterRois extends StrictLogging:
 
         val parser = OParser.sequence(
             programName(ProgramName), 
-            head(ProgramName, VersionName), 
+            head(ProgramName, BuildInfo.version), 
             opt[ImagingRoundsConfiguration]("configuration")
                 .required()
                 .action((progConf, cliConf) => cliConf.copy(configuration = progConf))
