@@ -12,6 +12,7 @@ import com.typesafe.scalalogging.StrictLogging
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
+import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** Combine imaging subfolders to create a single timecourse.
@@ -37,7 +38,7 @@ object CombineImagingFolders extends StrictLogging:
 
         val parser = OParser.sequence(
             programName(ProgramName), 
-            head(ProgramName, VersionName), 
+            head(ProgramName, BuildInfo.version), 
             opt[Seq[os.Path]]("folders")
                 .required()
                 .action((fs, c) => c.copy(folders = fs))

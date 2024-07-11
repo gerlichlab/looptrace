@@ -16,8 +16,6 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given // 
 
 /** Chromatin fiber tracing with FISH probes */
 package object looptrace {
-    val VersionName = "0.6.0"
-
     type CsvRow = Map[String, String]
     type ErrorMessages = NonEmptyList[String]
     type ErrMsgsOr[A] = Either[ErrorMessages, A]

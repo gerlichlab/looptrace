@@ -12,6 +12,8 @@ import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.imagingTimepoint.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
 
+import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
+
 /**
  * Summarise an imaging round configuration with command-line printing.
  * 
@@ -31,7 +33,7 @@ object SummariseImagingRoundsConfiguration:
 
         val parser = OParser.sequence(
             programName(ProgramName), 
-            head(ProgramName, VersionName), 
+            head(ProgramName, BuildInfo.version), 
             opt[os.Path]('C', "config")
                 .required()
                 .action((f, c) => c.copy(configFile = f))

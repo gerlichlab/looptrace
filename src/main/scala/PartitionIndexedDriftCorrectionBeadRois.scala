@@ -16,6 +16,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
+import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
@@ -50,7 +51,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
 
         val parser = OParser.sequence(
             programName(ProgramName), 
-            head(ProgramName, VersionName), 
+            head(ProgramName, BuildInfo.version), 
             opt[os.Path]("beadRoisRoot")
                 .required()
                 .action((p, c) => c.copy(beadRoisRoot = p))

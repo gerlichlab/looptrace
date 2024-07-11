@@ -13,6 +13,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
+import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
@@ -42,7 +43,7 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram with Stric
         val parser = OParser.sequence(
             programName(ProgramName),
             // TODO: better naming and versioning
-            head(ProgramName, VersionName),
+            head(ProgramName, BuildInfo.version),
             opt[os.Path]('I', "roisFile")
                 .required()
                 .action((f, c) => c.copy(roisFile = f))
