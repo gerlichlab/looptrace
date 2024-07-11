@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.7.0] - 2024-07-11
+
+### Changed
+* Regional imaging timepoints from the `ImageHandler` will now be sorted numerically, rather than by the order in which they're declared in the imaging rounds configuration file. 
+Essentially, this means that it will be allowed to declare rounds out of order (intentionally or by mistake), but the correct time sequence of rounds should still result.
+* Make it illegal to provide the (regional) spot detection imaging timepoints in the parameters config file. 
+They should be defined in and read from only the imaging rounds configuration file. See [Issue 338](https://github.com/gerlichlab/looptrace/issues/338).
+* Removed the spot detection gridsearch CLI program
+
 ## [v0.6.0] - 2024-07-10
 
 ### Changed
