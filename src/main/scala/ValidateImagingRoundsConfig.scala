@@ -8,7 +8,7 @@ import scopt.*
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 
 /**
-  * Validate the imaging rounds configuraiton file.
+  * Validate the imaging rounds configuration file.
   * 
   * @author Vince Reuter
   */
