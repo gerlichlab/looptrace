@@ -269,7 +269,7 @@ class NucDetector:
         if self.do_in_3d:
             for pos_name, subimg in tqdm.tqdm(name_img_pairs):
                 image_io.single_position_to_zarr(
-                    subimg, 
+                    images=subimg, 
                     path=self.nuclear_segmentation_images_path, 
                     name=self.SEGMENTATION_IMAGES_KEY, 
                     pos_name=pos_name, 
@@ -315,7 +315,7 @@ class NucDetector:
             # See: https://github.com/gerlichlab/looptrace/issues/245
             bit_depth: image_io.PixelArrayBitDepth = image_io.PixelArrayBitDepth.unsafe_for_array(mask)
             image_io.single_position_to_zarr(
-                mask, 
+                images=mask, 
                 path=self.nuclear_masks_path, 
                 name=self.MASKS_KEY, 
                 pos_name=pos, 

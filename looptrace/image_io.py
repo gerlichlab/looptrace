@@ -149,6 +149,7 @@ def parse_times_from_text(s: str) -> List[str]:
 
 
 def single_position_to_zarr(
+    *, 
     images: np.ndarray or list, 
     path: Union[str, Path],
     name: str, 
@@ -279,6 +280,7 @@ def write_jvm_compatible_zarr_store(
 
 
 def images_to_ome_zarr(
+    *, 
     images: Union[np.ndarray, list], 
     path: Union[str, Path], 
     name: str, 
@@ -299,10 +301,30 @@ def images_to_ome_zarr(
     if 'p' in axes:
         for i, pos_img in enumerate(images):
             pos_name = get_position_name_short(i)
-            single_position_to_zarr(pos_img, path, name, pos_name, dtype, axes[1:], chunk_axes, chunk_split, metadata)
+            single_position_to_zarr(
+                images=pos_img, 
+                path=path, 
+                name=name, 
+                pos_name=pos_name, 
+                dtype=dtype, 
+                axes=axes[1:], 
+                chunk_axes=chunk_axes, 
+                chunk_split=chunk_split, 
+                metadata=metadata,
+                )
     else:
         # TODO: fix the fact that here pos_name is undefined.
-        single_position_to_zarr(images, path, name, pos_name, dtype, axes, chunk_axes, chunk_split, metadata)
+        single_position_to_zarr(
+            images=images, 
+            path=path, 
+            name=name, 
+            pos_name=pos_name, 
+            dtype=dtype, 
+            axes=axes, 
+            chunk_axes=chunk_axes, 
+            chunk_split=chunk_split, 
+            metadata=metadata,
+            )
 
 
     print('OME ZARR images generated.')
