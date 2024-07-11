@@ -146,7 +146,7 @@ def finalise_single_spot_props_table(spot_props: pd.DataFrame, position: str, fr
     return spot_props[new_cols + old_cols]
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(kw_only=True, frozen=True)
 class SpotDetectionParameters:
     """Bundle the parameters which are relevant for spot detection."""
     detection_function: callable
