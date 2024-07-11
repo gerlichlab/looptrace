@@ -1,4 +1,4 @@
-<!--- DO NOT EDIT THIS GENERATED DOCUMENT DIRECTLY; instead, edit generate_excution_control_document.py --->
+<!--- DO NOT EDIT THIS GENERATED DOCUMENT DIRECTLY; instead, edit generate_execution_control_document.py --->
 # Controlling pipeline execution
 
 ## Overview

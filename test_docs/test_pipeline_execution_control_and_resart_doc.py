@@ -18,7 +18,7 @@ def test_pipline_control_flow_doc_is_current(tmp_path):
     assert current.is_file()
     
     # Create snapshot of target doc.
-    builder_program = PROJECT_ROOT / "bin" / "cli" / "generate_excution_control_document.py"
+    builder_program = PROJECT_ROOT / "bin" / "cli" / "generate_execution_control_document.py"
     cmd = ["python", str(builder_program), "-O", str(target)]
     print(f"Running command: {' '.join(cmd)}")
     subprocess.check_call(cmd)

@@ -21,4 +21,4 @@ Python tests are written with [pytest](https://docs.pytest.org/en/7.4.x/contents
 These can be run through normal `pytest` syntax when in the project's development Nix shell.
 
 ## Updating documentation
-If anything about pipeline stages is changed (e.g., a stage name is changed, stages are re-ordered, or a stage is added or removed), please run the [generate_excution_control_document.py](../bin/cli/generate_excution_control_document.py) to regenerate the [restart and execution guide](./pipeline-execution-control-and-rerun.md).
+If anything about pipeline stages is changed (e.g., a stage name is changed, stages are re-ordered, or a stage is added or removed), please run the [generate_execution_control_document.py](../bin/cli/generate_execution_control_document.py) to regenerate the [restart and execution guide](./pipeline-execution-control-and-rerun.md).
