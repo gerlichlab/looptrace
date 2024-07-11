@@ -270,7 +270,7 @@ class ImageHandler:
     def get_locus_timepoints_for_regional_timepoint(self, regional_timepoint: TimepointFrom0) -> set[TimepointFrom0]:
         if not isinstance(regional_timepoint, TimepointFrom0):
             raise TypeError(f"Illegal type ({type(regional_timepoint).__name__}) for regional timepoint for which to lookup locus timepoints!")
-        grouping = self.locus_grouping
+        grouping: Optional[LocusGroupingData] = self.locus_grouping
         if grouping is None:
             raise NotImplementedError("No locus grouping present!")
         return self.locus_grouping.get(regional_timepoint, set())
