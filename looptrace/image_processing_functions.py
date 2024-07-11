@@ -203,37 +203,6 @@ def nuc_segmentation_watershed(nuc_img, bg_thresh = 800, fg_thresh = 5000):
     return seg
 
 
-def extract_cell_features(nuc_img, int_imgs: list, nuc_bg_int=800, nuc_fg_int=5000, scale=True):
-    from sklearn import preprocessing
-
-    nuc_masks = nuc_segmentation_watershed(nuc_img, bg_thresh = nuc_bg_int, fg_thresh = nuc_fg_int)
-    expanded = expand_labels(nuc_masks, distance=5)
-    props = [regionprops_table(expanded, int_img, properties=('mean_intensity',))['mean_intensity'] for int_img in int_imgs]
-    res = np.vstack(props).T
-    if scale:
-        scaler = preprocessing.StandardScaler()
-        scaler_model = scaler.fit(res)
-        features = scaler_model.transform(res)
-    else:
-        features = res
-        scaler_model = None
-    return features, scaler_model
-
-
-def full_frame_dc_to_single_nuc_dc(old_dc_path, new_dc_position_list, new_dc_path):
-    new_drifts = []
-    drifts = pd.read_csv(old_dc_path)
-    for i, p in enumerate(new_dc_position_list):
-        pos_name = p.split('_')[0]
-        pos_drifts = drifts.query('position == @pos_name')
-        for j, d in pos_drifts.iterrows():
-            new_drifts.append(d.values.tolist()+[p])
-    new_drifts = pd.DataFrame(new_drifts, columns = ['old_index','frame','z_px_coarse','y_px_coarse','x_px_coarse','z_px_fine',
-    'y_px_fine','x_px_fine','orig_position', 'position'])
-    new_drifts['z_px_coarse', 'y_px_coarse', 'x_px_coarse'] = 0
-    new_drifts.to_csv(new_dc_path)
-
-
 def _index_as_roi_id(props_table: pd.DataFrame) -> pd.DataFrame:
     return props_table.rename(columns={'index': 'roi_id'})
 
