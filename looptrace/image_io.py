@@ -86,7 +86,7 @@ def multi_ome_zarr_to_dask(folder: str, remove_unused_dims: bool = True):
     folder : str
         Input folder path
     remove_unused_dims : bool, default True
-        Whether to collapse each  unit-length dimensions
+        Whether to collapse each trivial (length-1) dimension, e.g. (1, 1, 1, 2044, 2048) -> (2044, 2048)
     
     Returns
     -------
