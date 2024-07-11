@@ -38,4 +38,3 @@ Judge in accordance with how many beads you anticipate having per image.
     * For `sigma_z_max`, 400 is often a good setting.
     * For `max_dist`, 800 is often a good setting.
 * If you want the Numpy arrays representing the spot images for tracing (the `*.npy` files) to be kept even after zipping, set `keep_spot_images_folder` to `True`.
-* Check that the list of `spot_frame` values corresponds to the timepoints (0-based) use for regional barcode imaging in the [imaging rounds config file](./imaging-rounds-configuration-file).

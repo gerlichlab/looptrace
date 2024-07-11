@@ -108,6 +108,12 @@ def find_config_file_errors(rounds_config: ExtantFile, params_config: ExtantFile
         errors.append(ConfigurationValueError(f"Invalid drift correction method ({dc_method}); choose from: {', '.join(Drifter.Methods.values())}"))
     
     # Spot detection
+    try:
+        parameters["spot_frame"]
+    except KeyError:
+        pass # The key SHOULD be missing, all good.
+    else:
+        errors.append(ConfigurationValueError("From version 0.7, spot_frame is prohibited; use the imaging rounds configuration file."))
     if parameters.get(CROSSTALK_SUBTRACTION_KEY, False):
         errors.append(ConfigurationValueError(f"Crosstalk subtraction ('{CROSSTALK_SUBTRACTION_KEY}') isn't currently supported."))
     spot_detection_method = parameters.get(SPOT_DETECTION_METHOD_KEY)
