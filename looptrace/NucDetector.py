@@ -365,7 +365,7 @@ class NucDetector:
         saving_prefix = "Overwriting existing nuclear segmentations" if self.nuclear_masks_path.exists() else "Saving nuclear segmentations"
         print(f"{saving_prefix}: {self.nuclear_masks_path}")
         # TODO: need to adjust axes argument probably.
-        # See: https://github.com/gerlichlab/looptrace/issues/245
+        # See: https://github.com/gerlichlab/looptrace/issues/247
         bit_depths: set[image_io.PixelArrayBitDepth] = {image_io.PixelArrayBitDepth.unsafe_for_array(m) for m in masks}
         if len(bit_depths) > 1:
             raise RuntimeError(f"Multiple ({len(bit_depths)}) determined for masks: {', '.join(d.name for d in bit_depths)}")
@@ -387,7 +387,7 @@ class NucDetector:
             print("Saving classifications...")
             self.image_handler.images[self.CLASSES_KEY] = nuc_class
             # TODO: need to adjust axes argument probably.
-            # See: https://github.com/gerlichlab/looptrace/issues/245
+            # See: https://github.com/gerlichlab/looptrace/issues/247
             image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name=self.CLASSES_KEY, axes=ome_zarr_axes, dtype=np.uint16, chunk_split=(1, 1))
 
         return self.nuclear_masks_path
