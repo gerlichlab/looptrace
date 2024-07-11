@@ -279,7 +279,7 @@ class ImageHandler:
         return sorted(self.config["imagingRounds"], key=lambda r: r["time"])
 
     def list_all_regional_timepoints(self) -> list[TimepointFrom0]:
-        return [TimepointFrom0(r["time"]) for r in self.iter_imaging_rounds() if r.get("isRegional", False)]
+        return list(sorted(TimepointFrom0(r["time"]) for r in self.iter_imaging_rounds() if r.get("isRegional", False)))
 
     def list_regional_imaging_timepoints_eligible_for_extraction(self) -> list[TimepointFrom0]:
         lg = self.locus_grouping
