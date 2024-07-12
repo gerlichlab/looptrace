@@ -373,7 +373,7 @@ class NucDetector:
         image_io.images_to_ome_zarr(
             images=masks, 
             path=self.nuclear_masks_path, 
-            name=self.MASKS_KEY, 
+            data_name=self.MASKS_KEY, 
             axes=zarr_axes, 
             dtype=bit_depth.value, 
             chunk_split=(1, 1),
@@ -393,7 +393,7 @@ class NucDetector:
             image_io.images_to_ome_zarr(
                 images=nuc_class, 
                 path=self.nuc_classes_path, 
-                name=self.CLASSES_KEY, 
+                data_name=self.CLASSES_KEY, 
                 axes=zarr_axes, 
                 dtype=np.uint16, 
                 chunk_split=(1, 1),

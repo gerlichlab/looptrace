@@ -283,7 +283,7 @@ def images_to_ome_zarr(
     *, 
     images: Iterable[npt.ArrayLike], 
     path: Union[str, Path], 
-    name: str, 
+    data_name: str, 
     dtype: Type, 
     axes = ("t", "c", "z", "y", "x"), 
     chunk_axes = ("y", "x"), 
@@ -308,7 +308,7 @@ def images_to_ome_zarr(
         single_position_to_zarr(
             images=pos_img, 
             path=path, 
-            name=name, 
+            name=data_name, 
             pos_name=pos_name, 
             dtype=dtype, 
             axes=axes, 
