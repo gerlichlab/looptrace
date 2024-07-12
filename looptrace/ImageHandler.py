@@ -471,7 +471,7 @@ class ImageHandler:
     
     def read_images(self, is_eligible: PathFilter = lambda p: p.name != SPOT_IMAGES_SUBFOLDER and not ignore_path(p)):
         '''
-        Function to load existing images from the input folder, and them into a dictionary (self.images{}),
+        Function to load existing images from the input folder, and then into a dictionary (self.images{}),
         with folder name or image name (without extensions) as keys, images as values.
         Standardized to either folders with OME-ZARR, single NPY files or NPZ collections.
         More can be added as needed.
