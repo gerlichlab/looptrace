@@ -9,6 +9,7 @@ EMBL Heidelberg
 
 from enum import Enum
 from operator import itemgetter
+import logging
 from pathlib import Path
 from typing import *
 
@@ -314,6 +315,7 @@ class NucDetector:
             # TODO: need to adjust axes argument probably.
             # See: https://github.com/gerlichlab/looptrace/issues/245
             bit_depth: image_io.PixelArrayBitDepth = image_io.PixelArrayBitDepth.unsafe_for_array(mask)
+            logging.info(f"Saving nuclear masks with bit depth: {bit_depth}")
             image_io.single_position_to_zarr(
                 images=mask, 
                 path=self.nuclear_masks_path, 
@@ -336,14 +338,14 @@ class NucDetector:
                 assert len(img_zyx.shape) == 3, f"Bad shape for alleged 3D image: {img_zyx.shape}"
                 return img_zyx[::self.ds_z, ::self.ds_xy, ::self.ds_xy]
             get_masks = lambda imgs: _nuc_segmentation_cellpose_3d(imgs, diameter=diameter, anisotropy=self.config["nuc_anisotropy"])
-            ome_zarr_axes = ("p", "z", "y", "x")
+            zarr_axes = ("z", "y", "x")
         else:
             scale_for_rescaling = (self.ds_xy, self.ds_xy)
             def scale_down_img(img_zyx: np.ndarray) -> np.ndarray:
                 assert len(img_zyx.shape) == 2, f"Bad shape for alleged 3D image: {img_zyx.shape}"
                 return img_zyx[::self.ds_xy, ::self.ds_xy]
             get_masks = lambda imgs: _nuc_segmentation_cellpose_2d(imgs, diameter=diameter)
-            ome_zarr_axes = ("p", "y", "x")
+            zarr_axes = ("y", "x")
         
         nuc_min_size = self.min_size / np.prod(scale_for_rescaling)
         
@@ -364,21 +366,16 @@ class NucDetector:
         self.image_handler.images[self.MASKS_KEY] = masks
         saving_prefix = "Overwriting existing nuclear segmentations" if self.nuclear_masks_path.exists() else "Saving nuclear segmentations"
         print(f"{saving_prefix}: {self.nuclear_masks_path}")
+        bit_depth: image_io.PixelArrayBitDepth = image_io.PixelArrayBitDepth.get_unique_bit_depth(masks)
+        logging.info(f"Saving nuclear masks with bit depth: {bit_depth}")
         # TODO: need to adjust axes argument probably.
         # See: https://github.com/gerlichlab/looptrace/issues/247
-        bit_depths: set[image_io.PixelArrayBitDepth] = {image_io.PixelArrayBitDepth.unsafe_for_array(m) for m in masks}
-        if len(bit_depths) > 1:
-            raise RuntimeError(f"Multiple ({len(bit_depths)}) bit depths determined for masks: {', '.join(d.name for d in bit_depths)}")
-        try:
-            unique_bit_depth: image_io.PixelArrayBitDepth = next(iter(bit_depths))
-        except StopIteration as e:
-            raise Exception("No bit depth determined with which to save nuclear masks; are there no masks or nuclear images?") from e
         image_io.images_to_ome_zarr(
             images=masks, 
             path=self.nuclear_masks_path, 
             name=self.MASKS_KEY, 
-            axes=ome_zarr_axes, 
-            dtype=unique_bit_depth.value, 
+            axes=zarr_axes, 
+            dtype=bit_depth.value, 
             chunk_split=(1, 1),
         )
         
@@ -388,11 +385,19 @@ class NucDetector:
                 class_1 = ((mask > 0) & (mask < mitotic_idx[i])).astype(int)
                 class_2 = (mask >= mitotic_idx[i]).astype(int)
                 nuc_class.append(class_1 + 2*class_2)
-            print("Saving classifications...")
+            bit_depth: image_io.PixelArrayBitDepth = image_io.PixelArrayBitDepth.get_unique_bit_depth(nuc_class)
+            logging.info(f"Saving classifications with bit depth: {bit_depth}")
             self.image_handler.images[self.CLASSES_KEY] = nuc_class
             # TODO: need to adjust axes argument probably.
             # See: https://github.com/gerlichlab/looptrace/issues/247
-            image_io.images_to_ome_zarr(images=nuc_class, path=self.nuc_classes_path, name=self.CLASSES_KEY, axes=ome_zarr_axes, dtype=np.uint16, chunk_split=(1, 1))
+            image_io.images_to_ome_zarr(
+                images=nuc_class, 
+                path=self.nuc_classes_path, 
+                name=self.CLASSES_KEY, 
+                axes=zarr_axes, 
+                dtype=np.uint16, 
+                chunk_split=(1, 1),
+            )
 
         return self.nuclear_masks_path
 

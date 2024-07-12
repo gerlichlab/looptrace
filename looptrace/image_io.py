@@ -281,41 +281,32 @@ def write_jvm_compatible_zarr_store(
 
 def images_to_ome_zarr(
     *, 
-    images: Union[np.ndarray, list], 
+    images: Iterable[npt.ArrayLike], 
     path: Union[str, Path], 
     name: str, 
     dtype: Type, 
-    axes = ('p','t','c','z','y','x'), 
-    chunk_axes = ('y', 'x'), 
-    chunk_split = (2,2),  
+    axes = ("t", "c", "z", "y", "x"), 
+    chunk_axes = ("y", "x"), 
+    chunk_split = (2, 2),  
     metadata: dict = None,
-    ):
-    '''
+):
+    """
     Saves an array to ome-zarr format (metadata still needs work to match spec)
-    '''
-    # TODO: type/shape/structure of images should correspond to conditional here, about axes.
-
+    """
+    if not isinstance(axes, tuple) or not all(isinstance(a, str) for a in axes):
+        raise TypeError("axes argument must be tuple[str])")
+    if "p" in axes:
+        raise ValueError(
+            "Position/FOV axis 'p' was supplied, but images_to_ome_zarr assumes each image is for a field of view."
+        )
+    
     if not os.path.isdir(path):
         os.makedirs(path)
 
-    if 'p' in axes:
-        for i, pos_img in enumerate(images):
-            pos_name = get_position_name_short(i)
-            single_position_to_zarr(
-                images=pos_img, 
-                path=path, 
-                name=name, 
-                pos_name=pos_name, 
-                dtype=dtype, 
-                axes=axes[1:], 
-                chunk_axes=chunk_axes, 
-                chunk_split=chunk_split, 
-                metadata=metadata,
-                )
-    else:
-        # TODO: fix the fact that here pos_name is undefined.
+    for i, pos_img in enumerate(images):
+        pos_name = get_position_name_short(i)
         single_position_to_zarr(
-            images=images, 
+            images=pos_img, 
             path=path, 
             name=name, 
             pos_name=pos_name, 
@@ -326,8 +317,8 @@ def images_to_ome_zarr(
             metadata=metadata,
             )
 
-
     print('OME ZARR images generated.')
+
 
 def create_zarr_store(  path: Union[str, Path],
                         name: str, 
@@ -482,6 +473,16 @@ class PixelArrayBitDepth(Enum):
             return cls.DiByte
 
         raise ValueError(f"Could not determine bit depth for pixel array with max value {max_pix}")
+    
+    @classmethod
+    def get_unique_bit_depth(cls, arrays: Iterable[npt.ArrayLike]) -> "PixelArrayBitDepth":
+        depths: set["PixelArrayBitDepth"] = {cls.unsafe_for_array(arr) for arr in arrays}
+        if len(depths) > 1:
+            raise RuntimeError(f"Multiple ({len(depths)}) bit depths determined for masks: {', '.join(d.name for d in depths)}")
+        try:
+            return next(iter(depths))
+        except StopIteration as e:
+            raise ValueError("No bit depth determined; was collection of arrays empty?") from e
 
 
 class ImageParseException(Exception):
