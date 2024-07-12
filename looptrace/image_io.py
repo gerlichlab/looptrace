@@ -190,17 +190,18 @@ def single_position_to_zarr(
     except AttributeError:
         pass
     for ax in default_axes:
+        sz: int
+        ck: int
         if ax in axes:
             # TODO: fix the signature or implementation of this, as well as call sites, since 
-            #       if images argument is a list, it won't have a .shape attribute to access.
-            size[ax] = images.shape[axes.index(ax)]
-            if ax in chunk_axes:
-                chunk_dict[ax] = size[ax]//chunk_split[chunk_axes.index(ax)]
-            else:
-                chunk_dict[ax] = 1
+            #       if images argument is a list, it won't have a .shape attribute to access.\
+            sz = images.shape[axes.index(ax)]
+            ck = sz // chunk_split[chunk_axes.index(ax)] if ax in chunk_axes else 1
         else:
-            size[ax] = 1
-            chunk_dict[ax] = 1
+            sz = 1
+            ck = 1
+        size[ax] = sz
+        chunk_dict[ax] = ck
     
     print(f"Shape metadata: {size}")
     print(f"Shape metadata: {chunk_dict}")
