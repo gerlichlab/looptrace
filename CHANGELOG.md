@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.8.0] - 2024-07-12
+
+### Fixed
+* Nuclear mask ZARR arrays will now have names matched to their original field of view name, not simply contiguous initial subsequence of natural numbers. See [Issue 344](https://github.com/gerlichlab/looptrace/issues/344).
+
+### Changed
+* The signature of `image_io.images_to_ome_zarr` changes to permit only a collection of per-field-of-view arrays, and the function no longer accepts a data type argument but rather infers the data type from the given data, raising an error if the same type isn't inferred for every array in the given collection.
+
 ## [v0.7.0] - 2024-07-11
 
 ### Changed
