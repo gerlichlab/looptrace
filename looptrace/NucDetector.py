@@ -350,52 +350,67 @@ class NucDetector:
         nuc_min_size = self.min_size / np.prod(scale_for_rescaling)
         
         print("Extracting nuclei images...")
-        nuc_imgs = [np.array(scale_down_img(img)) for img in tqdm.tqdm(self.images_for_segmentation)]
+        name_img_pairs: list[tuple[str, np.ndarray]] = [
+            (fov_name, np.array(scale_down_img(img))) 
+            for fov_name, img in tqdm.tqdm(self._iterate_over_pairs_of_position_and_segmentation_image())
+        ]
 
         print(f"Running nuclear segmentation using CellPose and diameter {diameter}.")
         # Remove under-segmented nuclei and clean up after getting initial masks.
-        masks = [remove_small_objects(arr, min_size=nuc_min_size) for arr in get_masks(nuc_imgs)]
-        masks = [relabel_sequential(arr)[0] for arr in masks]
+        masks = [remove_small_objects(arr, min_size=nuc_min_size) for arr in get_masks([img for _, img in name_img_pairs])]
+        assert len(masks) == len(name_img_pairs), f"{len(name_img_pairs)} pair(s) of name and image, but {len(masks)} mask(s)"
+        name_img_mask_trios: list[tuple[str, np.ndarray, np.ndarray]] = [
+            (name, img, relabel_sequential(arr)[0]) 
+            for (name, img), arr in zip(name_img_pairs, masks)
+        ]
 
+        name_mask_pairs: list[tuple[str, np.ndarray]] = []
         if self.classify_mitotic:
             print(f"Detecting mitotic cells on top of CellPose nuclei...")
-            masks, mitotic_idx = zip(*[_mitotic_cell_extra_seg(np.array(img), mask) for img, mask in zip(nuc_imgs, masks)])
+            name_mitoindex_pairs: list[tuple[str, int]] = []
+            for name, img, mask in name_img_mask_trios:
+                curr_mask, curr_idx = _mitotic_cell_extra_seg(np.array(img), mask)
+                name_mask_pairs.append((name, curr_mask))
+                name_mitoindex_pairs.append((name, curr_idx))
+        else:
+            name_mask_pairs = [(name, mask) for name, _, mask in name_img_mask_trios]
 
-        masks = [rescale(expand_labels(mask.astype(np.uint16), 3), scale=scale_for_rescaling, order=0) for mask in masks]
+        name_mask_pairs = [
+            (name, rescale(expand_labels(mask.astype(np.uint16), 3), scale=scale_for_rescaling, order=0)) 
+            for name, mask in name_mask_pairs
+        ]
 
-        self.image_handler.images[self.MASKS_KEY] = masks
+        self.image_handler.images[self.MASKS_KEY] = [m for _, m in name_mask_pairs]
         saving_prefix = "Overwriting existing nuclear segmentations" if self.nuclear_masks_path.exists() else "Saving nuclear segmentations"
         print(f"{saving_prefix}: {self.nuclear_masks_path}")
-        bit_depth: image_io.PixelArrayBitDepth = image_io.PixelArrayBitDepth.get_unique_bit_depth(masks)
-        logging.info(f"Saving nuclear masks with bit depth: {bit_depth}")
         # TODO: need to adjust axes argument probably.
         # See: https://github.com/gerlichlab/looptrace/issues/247
         image_io.images_to_ome_zarr(
-            images=masks, 
+            name_image_pairs=name_mask_pairs, 
             path=self.nuclear_masks_path, 
             data_name=self.MASKS_KEY, 
             axes=zarr_axes, 
-            dtype=bit_depth.value, 
             chunk_split=(1, 1),
         )
         
         if self.classify_mitotic:
-            nuc_class = []
-            for i, mask in enumerate(masks):
-                class_1 = ((mask > 0) & (mask < mitotic_idx[i])).astype(int)
-                class_2 = (mask >= mitotic_idx[i]).astype(int)
-                nuc_class.append(class_1 + 2*class_2)
-            bit_depth: image_io.PixelArrayBitDepth = image_io.PixelArrayBitDepth.get_unique_bit_depth(nuc_class)
-            logging.info(f"Saving classifications with bit depth: {bit_depth}")
-            self.image_handler.images[self.CLASSES_KEY] = nuc_class
+            name_class_pairs: list[tuple[str, np.ndarray]] = []
+            for (name_mask, mask), (name_mito, mitoidx) in zip(name_mask_pairs, name_mitoindex_pairs):
+                if name_mask != name_mito:
+                    raise RuntimeError(
+                        f"Nuclear mask name doesn't match mitotic index name. {name_mask} != {name_mito} . Maintenance of parallel named lists failed!"
+                    )
+                class_1 = ((mask > 0) & (mask < mitoidx)).astype(int)
+                class_2 = (mask >= mitoidx).astype(int)
+                name_class_pairs.append((name_mask, class_1 + 2*class_2))
+            self.image_handler.images[self.CLASSES_KEY] = [c for _, c in name_class_pairs]
             # TODO: need to adjust axes argument probably.
             # See: https://github.com/gerlichlab/looptrace/issues/247
             image_io.images_to_ome_zarr(
-                images=nuc_class, 
+                name_image_pairs=name_class_pairs, 
                 path=self.nuc_classes_path, 
                 data_name=self.CLASSES_KEY, 
                 axes=zarr_axes, 
-                dtype=np.uint16, 
                 chunk_split=(1, 1),
             )
 

@@ -9,6 +9,7 @@ EMBL Heidelberg
 import copy
 from enum import Enum
 import itertools
+import logging
 from operator import itemgetter
 import os
 from pathlib import Path
@@ -282,10 +283,9 @@ def write_jvm_compatible_zarr_store(
 
 def images_to_ome_zarr(
     *, 
-    images: Iterable[npt.ArrayLike], 
+    name_image_pairs: Iterable[npt.ArrayLike], 
     path: Union[str, Path], 
     data_name: str, 
-    dtype: Type, 
     axes = ("t", "c", "z", "y", "x"), 
     chunk_axes = ("y", "x"), 
     chunk_split = (2, 2),  
@@ -304,14 +304,16 @@ def images_to_ome_zarr(
     if not os.path.isdir(path):
         os.makedirs(path)
 
-    for i, pos_img in enumerate(images):
-        pos_name = get_position_name_short(i)
+    bit_depth: PixelArrayBitDepth = PixelArrayBitDepth.get_unique_bit_depth((img for _, img in name_image_pairs))
+    logging.info(f"Will save OME ZARR with bit depth: {bit_depth}")
+
+    for pos_name, pos_img in name_image_pairs:
         single_position_to_zarr(
             images=pos_img, 
             path=path, 
             name=data_name, 
             pos_name=pos_name, 
-            dtype=dtype, 
+            dtype=bit_depth.value, 
             axes=axes, 
             chunk_axes=chunk_axes, 
             chunk_split=chunk_split, 
