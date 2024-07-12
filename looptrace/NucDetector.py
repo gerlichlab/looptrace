@@ -369,12 +369,16 @@ class NucDetector:
         bit_depths: set[image_io.PixelArrayBitDepth] = {image_io.PixelArrayBitDepth.unsafe_for_array(m) for m in masks}
         if len(bit_depths) > 1:
             raise RuntimeError(f"Multiple ({len(bit_depths)}) bit depths determined for masks: {', '.join(d.name for d in bit_depths)}")
+        try:
+            unique_bit_depth: image_io.PixelArrayBitDepth = next(iter(bit_depths))
+        except StopIteration as e:
+            raise Exception("No bit depth determined with which to save nuclear masks; are there no masks or nuclear images?") from e
         image_io.images_to_ome_zarr(
             images=masks, 
             path=self.nuclear_masks_path, 
             name=self.MASKS_KEY, 
             axes=ome_zarr_axes, 
-            dtype=next(iter(bit_depths)).value, 
+            dtype=unique_bit_depth.value, 
             chunk_split=(1, 1),
         )
         
