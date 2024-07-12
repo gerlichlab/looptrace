@@ -427,20 +427,6 @@ class NucDetector:
         return outfile
 
 
-def _mask_to_binary(mask):
-    '''Converts masks from nuclear segmentation to masks with 
-    single pixel background between separate, neighbouring features.
-
-    Args:
-        masks ([np array]): Detected nuclear masks (label image)
-
-    Returns:
-        [np array]: Masks with single pixel seperation beteween neighboring features.
-    '''
-    masks_no_bound = np.where(find_boundaries(mask) > 0, 0, mask)
-    return masks_no_bound
-
-
 def _mitotic_cell_extra_seg(nuc_image, nuc_mask):
     '''Performs additional mitotic cell segmentation on top of an interphase segmentation (e.g. from CellPose).
     Assumes mitotic cells are brighter, unsegmented objects in the image.
