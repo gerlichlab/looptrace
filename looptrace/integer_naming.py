@@ -11,10 +11,8 @@ __author__ = "Vince Reuter"
 __credits__ = ["Vince Reuter"]
 
 __all__ = [
-    "get_channel_name_short", 
     "get_position_name_short", 
     "get_position_names_N", 
-    "get_time_name_short",
     ]
 
 
@@ -24,7 +22,6 @@ class IntegerNaming(Enum):
     
     These strategies map [0, n) into [1, N] in text reprentation, with each name the same length.
     """
-    OneHundred = 100
     TenThousand = 10000
 
     @property
@@ -67,11 +64,6 @@ class NameableSemantic(Enum):
         return self.value + namer.get_name(i)
 
 
-def get_channel_name_short(i: int, *, namer: IntegerNaming = IntegerNaming.OneHundred) -> str:
-    """Get the channel-like name for the given channel."""
-    return NameableSemantic.Channel.get_short_name(i, namer=namer)
-
-
 def get_position_name_short(i: int, *, namer: IntegerNaming = _DEFAULT_NAMER) -> str:
     """Get the position-like (field of view) name for the given index."""
     return NameableSemantic.Point.get_short_name(i, namer=namer)
@@ -83,11 +75,6 @@ def get_position_names_N(num_names: int, namer: IntegerNaming = _DEFAULT_NAMER) 
     if num_names < 0:
         raise ValueError(f"Number of names is negative: {num_names}")
     return [get_position_name_short(i, namer=namer) for i in range(num_names)]
-
-
-def get_time_name_short(i: int, *, namer: IntegerNaming = _DEFAULT_NAMER) -> str:
-    """Get the time-like name for the given time."""
-    return NameableSemantic.Time.get_short_name(i, namer=namer)
 
 
 def _typecheck(i: int, ctx: str) -> bool:
