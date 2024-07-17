@@ -26,8 +26,6 @@ import numpy.typing as npt
 import tqdm
 import zarr
 
-from looptrace.integer_naming import get_position_name_short
-
 
 POSITION_EXTRACTION_REGEX = r"(Point\d+)"
 TIME_EXTRACTION_REGEX = r"(Time\d+)"

@@ -13,7 +13,7 @@ import numpy.typing as npt
 import pandas as pd
 
 import scipy.ndimage as ndi
-from skimage.segmentation import clear_border, expand_labels
+from skimage.segmentation import clear_border
 from skimage.filters import gaussian, threshold_otsu
 from skimage.measure import regionprops_table
 
