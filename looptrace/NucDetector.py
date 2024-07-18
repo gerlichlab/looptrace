@@ -232,13 +232,11 @@ class NucDetector:
     def _input_name(self) -> str:
         return self.config["nuc_input_name"]
 
-    def _iterate_over_pairs_of_position_and_segmentation_image(self) -> Iterable[Tuple[str, np.ndarray]]:
-        try:
-            imgs = self.images_for_segmentation
-        except KeyError as e:
-            raise Exception("Tried to iterate over images for segmentation, but they're not yet generated!") from e
-        for i, pos in enumerate(self.pos_list):
-            yield pos, imgs[i]
+    def iterate_over_pairs_of_position_and_mask_image(self) -> Iterable[Tuple[str, np.ndarray]]:
+        return zip(self.pos_list, self.mask_images, strict=True)
+
+    def iterate_over_pairs_of_position_and_segmentation_image(self) -> Iterable[Tuple[str, np.ndarray]]:
+        return zip(self.pos_list, self.images_for_segmentation, strict=True)
 
     @property
     def nuclear_segmentation_images_path(self) -> Path:
@@ -301,7 +299,7 @@ class NucDetector:
             raise Exception(f"Unknown segmentation method: {self.segmentation_method}")
     
     def segment_nuclei_threshold(self) -> Path:
-        for pos, img in self._iterate_over_pairs_of_position_and_segmentation_image():
+        for pos, img in self.iterate_over_pairs_of_position_and_segmentation_image():
             # TODO: need to make this accord with the structure of saved images in segment_nuclei_cellpose.
             # TODO: need to handle whether nuclei images can have more than 1 timepoint (nontrivial time dimension).
             # See: https://github.com/gerlichlab/looptrace/issues/243
@@ -352,7 +350,7 @@ class NucDetector:
         print("Extracting nuclei images...")
         name_img_pairs: list[tuple[str, np.ndarray]] = [
             (fov_name, np.array(scale_down_img(img))) 
-            for fov_name, img in tqdm.tqdm(self._iterate_over_pairs_of_position_and_segmentation_image())
+            for fov_name, img in tqdm.tqdm(self.iterate_over_pairs_of_position_and_segmentation_image())
         ]
 
         print(f"Running nuclear segmentation using CellPose and diameter {diameter}.")

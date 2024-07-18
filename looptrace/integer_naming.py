@@ -101,7 +101,7 @@ def get_position_names_N(num_names: int, namer: IndexToNaturalNumberText = _DEFA
     return [get_position_name_short(i, namer=namer) for i in range(num_names)]
 
 
-def parse_semantic_and_value(s: str, namer: IndexToNaturalNumberText) -> Result[tuple["NameableSemantic", int], str]:
+def parse_semantic_and_value(s: str, *, namer: IndexToNaturalNumberText) -> Result[tuple["NameableSemantic", int], str]:
     return NameableSemantic.parse_from_prefix(s)\
         .to_result("Cannot parse semantic from prefix")\
         .bind(lambda sem: namer.read_as_index(s.removeprefix(sem.value)).map(lambda z: (sem, z)))
