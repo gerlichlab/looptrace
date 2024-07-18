@@ -203,7 +203,7 @@ class NucDetector:
         return self._get_img_save_path(self.MASKS_KEY)
     
     @property
-    def pos_list(self) -> List[str]:
+    def pos_list(self) -> list[str]:
         """List of names for the fields of view (FOVs) in which nuclei images were taken"""
         try:
             image_lists = self.image_handler.image_lists
