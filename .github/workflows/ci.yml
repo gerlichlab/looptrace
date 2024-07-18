@@ -21,7 +21,7 @@ jobs:
     name: Build and Test
     strategy:
       matrix:
-        os: [ubuntu-latest, ubuntu-20.04]
+        os: [ubuntu-latest, ubuntu-20.04, macos-latest]
         scala: [3.4.2]
         java:
           - temurin@11
@@ -66,6 +66,17 @@ jobs:
           distribution: temurin
           java-version: 21
           cache: sbt
+
+      - if: contains(runner.os, 'macos')
+        run: brew install sbt
+
+      - name: Check formatting with scalafmt
+        if: runner.os == 'ubuntu-latest' && runner.java-version == '11'
+        run: sbt '++ ${{ matrix.scala }}' scalafmtCheckAll
+
+      - name: Lint with scalafix
+        if: runner.os == 'ubuntu-latest' && runner.java-version == '11'
+        run: sbt '++ ${{ matrix.scala }}' 'scalafixAll --check'
 
       - name: Check that workflows are up to date
         run: sbt '++ ${{ matrix.scala }}' githubWorkflowCheck
