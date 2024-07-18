@@ -17,14 +17,14 @@ from looptrace import ArrayDimensionalityError
 from looptrace.ImageHandler import LocusGroupingData
 from looptrace.SpotPicker import SPOT_IMAGE_PIXEL_VALUE_TYPE, RoiOrderingSpecification
 from looptrace.Tracer import compute_spot_images_multiarray_per_fov
-from looptrace.integer_naming import IntegerNaming, get_position_name_short
+from looptrace.integer_naming import IndexToNaturalNumberText, get_position_name_short
 
 
 DEFAULT_MIN_NUM_PASSING = 500 # 5x the hypothesis default to ensure we really explore the search space
 HYPOTHESIS_HEALTH_CHECK_SUPPRESSIONS = (hyp.HealthCheck.function_scoped_fixture, hyp.HealthCheck.too_slow, )
 MIN_NUM_PASSING_FOR_SLOW_TEST_OF_ERROR_CASE = 10
-MAX_RAW_FOV = IntegerNaming.TenThousand.value - 2 # Normal N digits accommodate 10^N - 1, and -1 more for 0-based
-MAX_RAW_TRACE_ID = IntegerNaming.TenThousand.value - 2 # Normal N digits accommodate 10^N - 1, and -1 more for 0-based
+MAX_RAW_FOV = IndexToNaturalNumberText.TenThousand.value - 2 # Normal N digits accommodate 10^N - 1, and -1 more for 0-based
+MAX_RAW_TRACE_ID = IndexToNaturalNumberText.TenThousand.value - 2 # Normal N digits accommodate 10^N - 1, and -1 more for 0-based
 NO_SHRINK_PHASES = tuple(p for p in hyp.Phase if p != hyp.Phase.shrink)
 
 # Limit the data generation time and I/O time.

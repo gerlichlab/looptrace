@@ -13,16 +13,17 @@ repository = "https://github.com/gerlichlab/looptrace"
 classifiers = [
     "Development Status :: 1 - Planning",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Topic :: Bioinformatics",
     "Typing :: Typed",
 ]
 
 [tool.poetry.dependencies]
 # These are the main runtime dependencies.
-python = ">= 3.10, < 3.11"
+python = ">= 3.11, < 3.12"
 cellpose = { version = "v2.2.2", optional = true }
 dask = "^2023.5.1"
+expression = "^5.0.2"
 flowdec = { version = "^1.1.0", optional = true }
 gertils = { git = "https://github.com/gerlichlab/gertils", tag = "v0.4.4" }
 hypothesis = { version = "^6.92.1", extras = ["numpy"], optional = true }
