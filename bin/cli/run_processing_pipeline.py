@@ -11,6 +11,7 @@ import sys
 from typing import *
 import yaml
 
+from expression import Result
 from gertils import ExtantFile, ExtantFolder
 import pandas as pd
 import pypiper
@@ -22,7 +23,7 @@ from looptrace.NucDetector import NucDetector
 from looptrace.Tracer import Tracer, run_frame_name_and_distance_application
 from looptrace.conversion_to_zarr import one_to_one as run_zarr_production
 from looptrace.image_processing_functions import extract_labeled_centroids
-from looptrace.integer_naming import get_position_name_short
+from looptrace.integer_naming import parse_semantic_and_value, IndexToNaturalNumberText, NameableSemantic
 
 from pipeline_precheck import workflow as pretest
 from nuc_label import workflow as run_nuclei_detection
@@ -242,25 +243,27 @@ def prep_locus_specific_spots_visualisation(rounds_config: ExtantFile, params_co
     return per_fov_zarr
 
 
-def _write_nuc_mask_table(*, fov: int, masks_table: pd.DataFrame, output_folder: Path) -> Path:
-    fn = f"{get_position_name_short(fov)}.nuclear_masks.csv"
-    fp = output_folder / fn
-    logging.info(f"Writing data file for nuclei visualisation in FOV {fov}: {fp}")
-    fp.parent.mkdir(exist_ok=True)
-    masks_table.to_csv(fp)
-    return fp
-
-
-def prep_nuclear_masks_data(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> Dict[int, Path]:
+def prep_nuclear_masks_data(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> Dict[str, Path]:
     """Write simple CSV data for visualisation of nuclear masks with napari plugin."""
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     N = NucDetector(H)
     result: Dict[int, Path] = {}
-    for fov, img in enumerate(N.mask_images):
-        logging.info(f"Computing nuclear mask centroids for FOV: {fov}")
+    for pos, img in N.iterate_over_pairs_of_position_and_mask_image():
+        logging.info(f"Computing nuclear mask centroids for position: {pos}")
         table = extract_labeled_centroids(img)
-        logging.info(f"Finished nuclear mask centroids for FOV: {fov}")
-        result[fov] = _write_nuc_mask_table(fov=fov, masks_table=table, output_folder=H.nuclear_masks_visualisation_data_path)
+        logging.info(f"Finished nuclear mask centroids for position: {pos}")
+        cleaned_pos_name: str = pos.removesuffix(".zarr")
+        match parse_semantic_and_value(cleaned_pos_name, namer=IndexToNaturalNumberText.TenThousand):
+            case Result.Ok((NameableSemantic.Point, _)):
+                fp: Path = H.nuclear_masks_visualisation_data_path / f"{cleaned_pos_name}.nuclear_masks.csv"
+                logging.info(f"Writing data file for nuclei visualisation to file: {fp}")
+                fp.parent.mkdir(exist_ok=True)
+                table.to_csv(fp)
+                result[pos] = fp
+            case Result.Ok((sem, _)):
+                raise Exception(f"Parsed not point/position, but {sem} from position name {cleaned_pos_name}")
+            case Result.Error(msg):
+                raise Exception(f"Failed to parse semantic and value from text ({cleaned_pos_name}): {msg}")
     return result
 
 
