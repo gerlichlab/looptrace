@@ -181,7 +181,7 @@ class NucDetector:
     def mask_images(self) -> Sequence[np.ndarray]:
         try:
             all_imgs = self.image_handler.images
-        except ArithmeticError as e:
+        except AttributeError as e:
             self._raise_missing_images_error(e)
         try:
             return all_imgs[self.MASKS_KEY]
