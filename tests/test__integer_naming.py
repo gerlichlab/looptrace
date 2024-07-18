@@ -1,8 +1,10 @@
 """Tests for naming integers according to value and semantics"""
 
+from math import log10
+from expression import Result
 from hypothesis import given, strategies as st
 import pytest
-from looptrace.integer_naming import *
+from looptrace.integer_naming import IndexToNaturalNumberText, get_position_names_N, get_position_name_short
 
 __author__ = "Vince Reuter"
 
@@ -34,16 +36,16 @@ def test_get_position_name_short_over_domain__is_accurate(pos, exp):
 
 @pytest.mark.parametrize(
     ["fun", "arg", "expected_structure"], [
-        (get_position_name_short, -1, ValueError("-1 is out-of-bounds [0, 9998] for for namer 'TenThousand'")), 
+        (get_position_name_short, -1, ValueError("-1 is out-of-bounds [0, 9999) for for namer 'TenThousand'")), 
         (get_position_names_N, -1, ValueError("Number of names is negative: -1")),
         (get_position_name_short, 0, (lambda obs: obs, "P0001")), 
         (get_position_names_N, 0, (lambda obs: obs, [])), 
         (get_position_name_short, 9998, (lambda obs: obs, "P9999")), 
         (get_position_names_N, 9998, (len, 9998)), 
-        (get_position_name_short, 9999, ValueError("9999 is out-of-bounds [0, 9998] for for namer 'TenThousand'")), 
+        (get_position_name_short, 9999, ValueError("9999 is out-of-bounds [0, 9999) for for namer 'TenThousand'")), 
         (get_position_names_N, 9999, (len, 9999)), 
-        (get_position_name_short, 10000, ValueError("10000 is out-of-bounds [0, 9998] for for namer 'TenThousand'")), 
-        (get_position_names_N, 10000, ValueError("9999 is out-of-bounds [0, 9998] for for namer 'TenThousand'")), 
+        (get_position_name_short, 10000, ValueError("10000 is out-of-bounds [0, 9999) for for namer 'TenThousand'")), 
+        (get_position_names_N, 10000, ValueError("9999 is out-of-bounds [0, 9999) for for namer 'TenThousand'")), 
     ])
 def test_behavior_near_domain_boundaries(fun, arg, expected_structure):
     if isinstance(expected_structure, BaseException):
@@ -81,3 +83,30 @@ def test_get_position_name__is_expected_error_when_input_is_not_int(func_and_pre
         func(alleged_number)
     exp_msg = f"{exp_msg_prefix} ({alleged_number}) (type={type(alleged_number).__name__}) is not integer-like!"
     assert str(err_ctx.value) == exp_msg
+
+
+def get_legit_gen(namer: IndexToNaturalNumberText):
+    # -1 to account for nonrepresentability of final value in domain, 
+    # and -1 to account for the move from 0- to 1-based.
+    return st.integers(min_value=0, max_value=namer.value - 2)
+
+
+@st.composite
+def gen_value_namer_pair(draw):
+    namer = draw(st.from_type(IndexToNaturalNumberText))
+    value = draw(get_legit_gen(namer))
+    return value, namer
+
+
+@given(value_namer_pair=gen_value_namer_pair())
+def test_integers_roundtrip_through_string(value_namer_pair):
+    value, namer = value_namer_pair
+    expected = Result.Ok(value + 1)
+    observed = namer.read_as_index(namer.get_name(value))
+    assert observed == expected
+
+
+@given(value_namer_pair=gen_value_namer_pair())
+def test_number_of_characters_is_log10_of_namer_value(value_namer_pair):
+    value, namer = value_namer_pair
+    assert int(log10(namer.value)) == len(namer.get_name(value))

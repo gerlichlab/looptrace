@@ -1,7 +1,7 @@
 {
   pkgs ? import (builtins.fetchGit {
     url = "https://github.com/NixOS/nixpkgs/";
-    ref = "refs/tags/23.11";
+    ref = "refs/tags/24.05";
   }) {}, 
   pipeline ? false,
   test ? true,
@@ -16,7 +16,7 @@
   jdk ? "jdk21_headless",
 }:
 let baseBuildInputs = with pkgs; [ poetry stdenv.cc.cc.lib zlib ] ++ [ pkgs.${jdk} ];
-    py310 = pkgs.python310.withPackages (ps: with ps; [ numpy pandas ]);
+    py311 = pkgs.python311.withPackages (ps: with ps; [ numpy pandas ]);
     myR = pkgs.rWrapper.override{ 
       packages = with pkgs.rPackages; [ argparse data_table ggplot2 stringi ] ++ 
         (if rDev then [ pkgs.rPackages.languageserver ] else [ ]);
@@ -41,7 +41,7 @@ pkgs.mkShell {
   buildInputs = [ myR ] ++ 
     (if absolutelyOnlyR then [ ] else baseBuildInputs ++ 
         (if pipeline then [
-          py310
+          py311
           pkgs.zlib
           pkgs.stdenv.cc.cc.lib
         ] else [ ]) ++ 
@@ -51,7 +51,7 @@ pkgs.mkShell {
     # https://stackoverflow.com/questions/74438817/poetry-failed-to-unlock-the-collection
     # https://github.com/python-poetry/poetry/issues/1917
     export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
-    poetry env use "${py310}/bin/python"
+    poetry env use "${py311}/bin/python"
     export LD_LIBRARY_PATH="${pkgs.zlib}/lib:${pkgs.stdenv.cc.cc.lib}/lib"
     installcmd="poetry install -vv --sync${poetryInstallExtras}"
     echo "Running installation command: $installcmd"
