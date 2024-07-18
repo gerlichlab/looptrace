@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.9.0] - 2024-07-18
+
+## Changed
+* _Minimum Python version is now 3.11_!
+* The `_nuclear_masks_visualisation/*.nuclear_masks.csv` files are now renamed as `_nuclear_masks_visualisation/*.nuclei_centroids.csv`, to better reflect the data content of these files and how they're used for the visualisation of the nuclear masks.
+* _Removed from API_: `looptrace.integer_naming.get_channel_name_short` and `looptrace.integer_naming.get_time_name_short`
+* _Removed_ the program to "squeeze" FOVs' numbering into a contiguous subsequence at the beginning of the natural numbers. 
+The thinking is that the original naming/numbering of the FOVs should be preserved.
+* Sorting ND2 and ZARR stacks by name of position / field of view.
+
+## Fixed
+* Preserve field-of-view-based naming of nuclear mask centroid files, even when a field of view has been removed. See [Issue 285](https://github.com/gerlichlab/looptrace/issues/285) and [Issue 344](https://github.com/gerlichlab/looptrace/issues/344).
+* Catch correct error types at a couple places where a more generic / builtin exception was being caught, rather than the narrower domain-specific one which would've been thrown.
+
 ## [v0.8.0] - 2024-07-12
 
 ### Fixed
@@ -11,6 +25,10 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 
 ### Changed
 * The signature of `image_io.images_to_ome_zarr` changes to permit only a collection of per-field-of-view arrays, and the function no longer accepts a data type argument but rather infers the data type from the given data, raising an error if the same type isn't inferred for every array in the given collection.
+
+### Known Issues
+* The field of view numbering will may still be off in the `_nuclear_masks_visualisation/*.nuclear_masks.csv` files, if a field of view was removed from the processing, e.g. on account of bad data. 
+This _may_ not cause any problems _per se_ for the visualisation, but know that it _could_, and that the numbers won't correspond to those of the initial nuclei imaging files w.r.t. position / field of view.
 
 ## [v0.7.0] - 2024-07-11
 
