@@ -152,13 +152,7 @@ def test_bad_image_dimensionality__generates_expected_error__enforcing_single_ti
     for method, do_3d, z_slice 
     in itertools.product(["cellpose", "threshold"], [False, True], [-1, 0, 1])
 ])
-@hyp.given(num_pos=hyp.strategies.integers(min_value=1, max_value=3))
-@hyp.settings(suppress_health_check=(hyp.HealthCheck.function_scoped_fixture, ), deadline=None)
-# NB: for this test we suppress the health check about function-scoped fixture because we clear the 
-#     images folder at the end, which should make new data examples independent.
-#     We also set deadline=None since the first run will likely take longer, as folders are made.
-#     Note that hypothesis will not correctly remove the files, so in case of failure, a "flaky" 
-#     error from hypothesis is likely to happen.
+@pytest.mark.parametrize("num_pos", [1, 2, 3])
 def test_nuc_detector__generates_image_of_proper_dimension(
     dummy_rounds_config, 
     complete_config_data, 
