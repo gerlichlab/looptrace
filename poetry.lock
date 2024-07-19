@@ -5138,4 +5138,4 @@ test = ["hypothesis", "more-itertools", "pytest", "pytest-skip-slow"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.11, < 3.12"
-content-hash = "71644b7daea67f8212dc943669690051666a5e022984929bdcf59775e6764056"
+content-hash = "e698ca995414ae453e195b0af9a31ed88bf0657b38845e6f3086aef43eb9af7a"
