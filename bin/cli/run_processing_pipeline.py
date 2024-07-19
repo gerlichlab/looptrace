@@ -245,6 +245,9 @@ def prep_locus_specific_spots_visualisation(rounds_config: ExtantFile, params_co
 
 def prep_nuclear_masks_data(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> Dict[str, Path]:
     """Write simple CSV data for visualisation of nuclear masks with napari plugin."""
+    def raise_error(msg: str):
+        raise Exception(msg)
+    
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     N = NucDetector(H)
     result: Dict[int, Path] = {}
@@ -253,17 +256,20 @@ def prep_nuclear_masks_data(rounds_config: ExtantFile, params_config: ExtantFile
         table = extract_labeled_centroids(img)
         logging.info(f"Finished nuclear mask centroids for position: {pos}")
         cleaned_pos_name: str = pos.removesuffix(".zarr")
-        match parse_semantic_and_value(cleaned_pos_name, namer=IndexToNaturalNumberText.TenThousand):
-            case Result.Ok((NameableSemantic.Point, _)):
-                fp: Path = H.nuclear_masks_visualisation_data_path / f"{cleaned_pos_name}.nuclear_masks.csv"
-                logging.info(f"Writing data file for nuclei visualisation to file: {fp}")
-                fp.parent.mkdir(exist_ok=True)
-                table.to_csv(fp)
-                result[pos] = fp
-            case Result.Ok((sem, _)):
-                raise Exception(f"Parsed not point/position, but {sem} from position name {cleaned_pos_name}")
-            case Result.Error(msg):
-                raise Exception(f"Failed to parse semantic and value from text ({cleaned_pos_name}): {msg}")
+        fp: Path = \
+            parse_semantic_and_value(cleaned_pos_name, namer=IndexToNaturalNumberText.TenThousand)\
+                .map_error(lambda msg: f"Failed to parse semantic and value from text ({cleaned_pos_name}): {msg}")\
+                .bind(
+                    lambda sem_val: 
+                        Result.Ok(H.nuclear_masks_visualisation_data_path / f"{cleaned_pos_name}.nuclear_masks.csv") 
+                        if sem_val[0] == NameableSemantic.Point else 
+                        Result.Error(f"Parsed not point/position, but {sem_val[0]} from position name {cleaned_pos_name}")
+                )\
+                .default_with(raise_error)
+        logging.info(f"Writing data file for nuclei visualisation to file: {fp}")
+        fp.parent.mkdir(exist_ok=True)
+        table.to_csv(fp)
+        result[pos] = fp
     return result
 
 
