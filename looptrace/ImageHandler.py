@@ -513,9 +513,13 @@ def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[
                 parse = multi_ome_zarr_to_dask
             arrays, pos_names = parse(images_folder)
             # Now parsed, sort the parallel collections by the position names, then store them.
-            arrays, pos_names = zip(*sorted(zip(arrays, pos_names), key=itemgetter(1)))
-            images[image_name] = arrays
-            image_lists[image_name] = pos_names
+            try:
+                arrays, pos_names = zip(*sorted(zip(arrays, pos_names), key=itemgetter(1)))
+            except ValueError:
+                logging.warning(f"Empty images folder ({images_folder}) perhaps? Contents: {', '.join(os.listdir(images_folder))}")
+            else:
+                images[image_name] = arrays
+                image_lists[image_name] = pos_names
         elif image_name.endswith('.npz'):
             images[os.path.splitext(image_name)[0]] = NPZ_wrapper(images_folder)
         elif image_name.endswith('.npy'):
