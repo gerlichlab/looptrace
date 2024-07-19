@@ -179,7 +179,9 @@ def test_nuc_detector__generates_image_of_proper_dimension(
     gen_img = lambda: runif(size=(2, 3, 4, 6))
     inputs = [(get_position_name_short(i), gen_img()) for i in range(num_pos)]
     images_folder = tmp_path / "images"
-    write_jvm_compatible_zarr_store(inputs, root_path=images_folder, dtype=np.uint16)
+    nuc_subfolder = images_folder / "nuc_images_zarr"
+    nuc_subfolder.mkdir(parents=True, exist_ok=True)
+    write_jvm_compatible_zarr_store(inputs, root_path=nuc_subfolder, dtype=np.uint16)
     input_names, input_images = zip(*inputs)
     N.image_handler.images[input_key] = input_images
     N.image_handler.image_lists[input_key] = input_names
