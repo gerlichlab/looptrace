@@ -173,7 +173,7 @@ def single_position_to_zarr(
         '''
         z[idx] = img
     
-    store = zarr.DirectoryStore(os.path.join(path, pos_name + ".zarr"))
+    store = zarr.DirectoryStore(os.path.join(path, pos_name if pos_name.endswith(".zarr") else pos_name + ".zarr"))
     root = zarr.group(store=store, overwrite=True)
 
     size = {}
