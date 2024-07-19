@@ -4,11 +4,12 @@ ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 
 RUN apt-get update -y && \
-    apt-get dist-upgrade -y && \
     apt-get install build-essential software-properties-common -y && \
+    # Need to link apt_get.so: https://askubuntu.com/questions/1043484/modulenotfounderror-no-module-named-apt-pkg-trying-to-install-moka
+    ln -s /usr/lib/python3/dist-packages/apt_pkg.cpython-310-x86_64-linux-gnu.so /usr/lib/python3/dist-packages/apt_pkg.so && \
     add-apt-repository ppa:ubuntu-toolchain-r/test -y && \
     apt-get update -y && \
-    apt-get install git wget vim -y && \
+    apt-get install git wget vim -y
 
 # Copy repo code, to be built later.
 RUN mkdir /looptrace
