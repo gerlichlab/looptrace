@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.3.2-runtime-ubuntu20.04
+FROM tensorflow/tensorflow:2.16.2-gpu
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG C.UTF-8  
 ENV LC_ALL C.UTF-8
@@ -9,8 +9,6 @@ RUN apt-get update -y && \
     add-apt-repository ppa:ubuntu-toolchain-r/test -y && \
     apt-get update -y && \
     apt-get install git wget vim -y && \
-    # apparently needed to make TensorFlow 2.16 communicate with our GPUs through CUDA with 12.3.2
-    apt-get install cuda-toolkit-12-3 -y
 
 # Copy repo code, to be built later.
 RUN mkdir /looptrace
@@ -29,20 +27,9 @@ RUN echo "Installing R..." && \
 RUN apt-get update -y && \
     apt-get install openjdk-21-jre-headless -y
 
-# Install miniconda.
-## The installation home should be /opt/conda; if not, we need -p /path/to/install/home
-RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-py310_23.5.2-0-Linux-x86_64.sh -O ~/miniconda.sh && \
-    /bin/bash ~/miniconda.sh -b -p /opt/conda
-
-# For the CUDA-based container, we only need to add the Python env (because we install TensorFlow there).
-ENV PATH=/opt/conda/bin:${PATH}
-
 # Build the looptrace package, with extra dependencies for pipeline.
 # This group of extras should be declared in the pyproject.toml.
 RUN pip install .[deconvolution,pipeline]
-
-# Point to the CUDA libraries for integration with TensorFlow
-ENV LD_LIBRARY_PATH=/opt/conda/lib/python3.10/site-packages/nvidia/cudnn/lib:/usr/local/cuda-12.3/targets/x86_64-linux/lib
 
 # Establish the current experiment data mount point, for convenient config file match and path operations.
 ENV CURR_EXP_HOME=/home/experiment
