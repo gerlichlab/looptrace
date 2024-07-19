@@ -20,6 +20,7 @@ from looptrace import ArrayDimensionalityError, ConfigurationValueError, Missing
 from looptrace.ImageHandler import ImageHandler
 from looptrace.NucDetector import NucDetector, SegmentationMethod
 from looptrace.image_io import write_jvm_compatible_zarr_store
+from looptrace.integer_naming import get_position_name_short
 
 __author__ = "Vince Reuter"
 
@@ -156,6 +157,8 @@ def test_bad_image_dimensionality__generates_expected_error__enforcing_single_ti
 # NB: for this test we suppress the health check about function-scoped fixture because we clear the 
 #     images folder at the end, which should make new data examples independent.
 #     We also set deadline=None since the first run will likely take longer, as folders are made.
+#     Note that hypothesis will not correctly remove the files, so in case of failure, a "flaky" 
+#     error from hypothesis is likely to happen.
 def test_nuc_detector__generates_image_of_proper_dimension(
     dummy_rounds_config, 
     complete_config_data, 
@@ -180,7 +183,7 @@ def test_nuc_detector__generates_image_of_proper_dimension(
     N.image_handler.images = {}
     N.image_handler.image_lists = {}
     gen_img = lambda: runif(size=(2, 3, 4, 6))
-    inputs = [(f"P000{i}", gen_img()) for i in range(num_pos)]
+    inputs = [(get_position_name_short(i), gen_img()) for i in range(num_pos)]
     images_folder = tmp_path / "images"
     write_jvm_compatible_zarr_store(inputs, root_path=images_folder, dtype=np.uint16)
     input_names, input_images = zip(*inputs)
