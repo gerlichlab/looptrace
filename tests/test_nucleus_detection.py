@@ -202,7 +202,7 @@ def test_nuc_detector__generates_image_of_proper_dimension(
     N.image_handler.read_images()
     assert N.has_images_for_segmentation
     get_single_channel = lambda img: img[conf_data["nuc_channel"]]
-    all_imgs_obs = N.images_for_segmentation
+    all_imgs_obs = list(N.images_for_segmentation)
     if conf_data[NucDetector.KEY_3D] or N.segmentation_method == SegmentationMethod.THRESHOLD:
         assert N.do_in_3d is True
         get_exp = get_single_channel
@@ -210,9 +210,21 @@ def test_nuc_detector__generates_image_of_proper_dimension(
         assert N.do_in_3d is False
         get_single_z = lambda img: da.max(img, axis=0) if conf_data["nuc_slice"] == -1 else img[conf_data["nuc_slice"]]
         get_exp = lambda img: get_single_z(get_single_channel(img))
-    all_imgs_exp = map(get_exp, input_images)
+    
+    # Based on the current parameterisation, get the proper pixels and then cast to 
+    # the expected data type.
+    all_imgs_exp = list(map(lambda img: get_exp(img).astype(np.uint16), input_images))
+    
+    assert len(all_imgs_obs) == len(all_imgs_exp)
     assert [img.shape for img in all_imgs_obs] == [img.shape for img in all_imgs_exp]
-    assert all((obs == exp).all() for obs, exp in zip(all_imgs_obs, all_imgs_exp))
+    try:
+        assert all(da.equal(obs, exp).all() for obs, exp in zip(all_imgs_obs, all_imgs_exp))
+    except AssertionError:
+        print("EXP")
+        print(all_imgs_exp)
+        print("OBS")
+        print(all_imgs_obs)
+        raise
     shutil.rmtree(images_folder)
 
 
