@@ -5,6 +5,7 @@ import mouse.boolean.*
 import com.typesafe.scalalogging.StrictLogging
 import scopt.*
 
+import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 
 /**
@@ -12,7 +13,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
   * 
   * @author Vince Reuter
   */
-object ValidateImagingRoundsConfig extends StrictLogging:
+object ValidateImagingRoundsConfig extends ScoptCliReaders, StrictLogging:
     val ProgramName = "ValidateImagingRoundsConfig"
     
     final case class CliConfig(
@@ -23,7 +24,6 @@ object ValidateImagingRoundsConfig extends StrictLogging:
     
     def main(args: Array[String]): Unit = {
         import parserBuilder.*
-        import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders.given
         
         val parser = OParser.sequence(
             programName(ProgramName),

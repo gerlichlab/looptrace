@@ -18,6 +18,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
+import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
@@ -49,7 +50,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
  * 
  * @author Vince Reuter
  */
-object LabelAndFilterRois extends StrictLogging:
+object LabelAndFilterRois extends ScoptCliReaders, StrictLogging:
     val ProgramName = "LabelAndFilterRois"
 
     /**
@@ -74,7 +75,6 @@ object LabelAndFilterRois extends StrictLogging:
     val parserBuilder = OParser.builder[CliConfig]
 
     def main(args: Array[String]): Unit = {
-        import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders.given
         import parserBuilder.*
 
         val parser = OParser.sequence(

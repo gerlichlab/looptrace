@@ -16,12 +16,13 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
+import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** Split pool of detected bead ROIs into those for drift correction shift, drift correction accuracy, and unused. */
-object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
+object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLogging:
     val ProgramName = "PartitionIndexedDriftCorrectionBeadRois"
 
     val BeadRoisPrefix = "bead_rois_"
@@ -45,7 +46,6 @@ object PartitionIndexedDriftCorrectionBeadRois extends StrictLogging:
 
     def main(args: Array[String]): Unit = {
         import parserBuilder.*
-        import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders.given
         given readForShiftingCount(using intRead: Read[Int]): Read[ShiftingCount] = 
             intRead.map(ShiftingCount.unsafe)
 

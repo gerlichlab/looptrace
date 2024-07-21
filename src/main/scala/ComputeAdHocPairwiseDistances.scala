@@ -7,6 +7,7 @@ import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
+import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 
@@ -20,7 +21,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.*
  * 
  * @author Vince Reuter
  */
-object ComputeAdHocPairwiseDistances extends StrictLogging:
+object ComputeAdHocPairwiseDistances extends ScoptCliReaders with StrictLogging:
     private val ProgramName = "ComputeAdHocPairwiseDistances"
 
     final case class CliConfig(
@@ -35,7 +36,6 @@ object ComputeAdHocPairwiseDistances extends StrictLogging:
 
     def main(args: Array[String]): Unit = {
         import cliParseBuilder.*
-        import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders.given
         
         val parser = OParser.sequence(
             programName(ProgramName),
