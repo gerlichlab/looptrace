@@ -12,6 +12,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.* // for .show_ syntax
 
+import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
@@ -22,7 +23,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
  * 
  * @author Vince Reuter
  */
-object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram with StrictLogging:
+object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliReaders, StrictLogging:
     /* Constants */
     private val ProgramName = "ComputeLocusPairwiseDistances"
     private val MaxBadRecordsToShow = 3
@@ -37,7 +38,6 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram with Strict
     /** Program driver */
     def main(args: Array[String]): Unit = {
         import cliParseBuilder.*
-        import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders.given
 
         val parser = OParser.sequence(
             programName(ProgramName),

@@ -17,6 +17,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 
 import at.ac.oeaw.imba.gerlich.looptrace.HeadedFileWriter.DelimitedTextTarget.eqForDelimitedTextTarget
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
+import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ Point3D, XCoordinate, YCoordinate, ZCoordinate }
@@ -32,7 +33,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
   * @see [[https://github.com/gerlichlab/looptrace/issues/268 Issue 268]]
   * @see [[https://github.com/gerlichlab/looptrace/issues/259 Issue 259]]
   */
-object LabelAndFilterLocusSpots extends StrictLogging:
+object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
     val ProgramName = "LabelAndFilterLocusSpots"
     val QcPassColumn = "qcPass"
     
@@ -148,7 +149,6 @@ object LabelAndFilterLocusSpots extends StrictLogging:
     val parserBuilder = OParser.builder[CliConfig]
 
     def main(args: Array[String]): Unit = {
-        import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders.given
         import parserBuilder.*
 
         val parser = OParser.sequence(

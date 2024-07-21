@@ -12,6 +12,7 @@ import com.typesafe.scalalogging.StrictLogging
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
+import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
@@ -19,7 +20,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
  * 
  * https://github.com/gerlichlab/looptrace/issues/137 
  */
-object CombineImagingFolders extends StrictLogging:
+object CombineImagingFolders extends ScoptCliReaders with StrictLogging:
     val ProgramName = "CombineImagingFolders"
 
     final case class CliConfig(
@@ -33,7 +34,6 @@ object CombineImagingFolders extends StrictLogging:
     val parserBuilder = OParser.builder[CliConfig]
     
     def main(args: Array[String]): Unit = {
-        import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders.given
         import parserBuilder.*
 
         val parser = OParser.sequence(

@@ -12,6 +12,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.imagingTimepoint.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
 
+import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 
 /**
@@ -19,14 +20,13 @@ import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
  * 
  * @author Vince Reuter
  */
-object SummariseImagingRoundsConfiguration:
+object SummariseImagingRoundsConfiguration extends ScoptCliReaders:
     val ProgramName = "SummariseImagingRoundsConfiguration"
     
     final case class CliConfig(configFile: os.Path = null)
     val parserBuilder = OParser.builder[CliConfig]
     
     def main(args: Array[String]): Unit = {
-        import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders.given
         import parserBuilder.*
         
         given Ordering[ImagingTimepoint] = Order[ImagingTimepoint].toOrdering

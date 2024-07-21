@@ -7,8 +7,10 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration
 
+object scoptReaders extends ScoptCliReaders
+
 /** Allow custom types as CLI parameters. */
-object ScoptCliReaders:
+trait ScoptCliReaders:
     given pathRead(using fileRead: Read[java.io.File]): Read[os.Path] = fileRead.map(os.Path.apply)
     given nonNegIntRead(using intRead: Read[Int]): Read[NonnegativeInt] = intRead.map(NonnegativeInt.unsafe)
     given nonNegRealRead(using numRead: Read[Double]): Read[NonnegativeReal] = numRead.map(NonnegativeReal.unsafe)
