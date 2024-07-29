@@ -7,7 +7,7 @@ object Dependencies {
         def getModuleId(name: String) = groupId %% artifact(name) % version
         private val groupId = "com.github.gerlichlab"
         private def artifact(module: String): String = s"gerlib-$module"
-        private val version = "0.1.0"
+        private val version = "0.2.0"
     }
 
     /** Bundle data related to getting ModuleID for an iron subproject. */
@@ -21,6 +21,12 @@ object Dependencies {
         private val rootName = "iron"
         private val groupId = "io.github.iltotore"
         private val version = "2.6.0"
+    }
+
+    /** Build ModuleID for a com.lihaoyi JSON-related project. */
+    object HaoyiJson {
+        def getModuleId(name: String): ModuleID = "com.lihaoyi" %% name % latestVersion
+        private def latestVersion = "4.0.0"
     }
 
     /* Versions */
@@ -42,11 +48,11 @@ object Dependencies {
         "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
     )
     lazy val mouse = "org.typelevel" %% "mouse" % "1.2.3"
-    lazy val os = "com.lihaoyi" %% "os-lib" % "0.10.2"
+    lazy val os = "com.lihaoyi" %% "os-lib" % "0.10.3"
     lazy val scalaCsv = "com.github.tototoshi" %% "scala-csv" % "1.3.10"
     lazy val scopt = "com.github.scopt" %% "scopt" % "4.1.0"
-    lazy val uJson = "com.lihaoyi" %% "ujson" % "3.3.1"
-    lazy val uPickle = "com.lihaoyi" %% "upickle" % "3.3.1"
+    lazy val uJson = HaoyiJson.getModuleId("ujson")
+    lazy val uPickle = HaoyiJson.getModuleId("upickle")
 
     /* Test dependencies */
     lazy val gerlibTesting = Gerlib.getModuleId("testing")
