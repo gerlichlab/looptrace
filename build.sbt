@@ -12,6 +12,9 @@ ThisBuild / version          := "0.9.1"
 ThisBuild / organization     := orgName
 ThisBuild / organizationName := "Gerlich Group, IMBA, OEAW"
 
+// Needed for ZARR (jzarr) (?)
+ThisBuild / resolvers += "Unidata UCAR" at "https://artifacts.unidata.ucar.edu/content/repositories/unidata-releases/"
+
 /* sbt-github-actions settings */
 ThisBuild / githubWorkflowOSes := Seq(primaryOs, "ubuntu-20.04", "macos-latest")
 ThisBuild / githubWorkflowTargetBranches := Seq("main")
