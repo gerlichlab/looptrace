@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.9.1] - 2024-07-29
+
+### Fixed
+* Make spot detection not crash due to use of method as property in spot detection.
+
 ## [v0.9.0] - 2024-07-19
 
 ## Changed
@@ -17,6 +22,9 @@ The thinking is that the original naming/numbering of the FOVs should be preserv
 ## Fixed
 * Preserve field-of-view-based naming of nuclear mask centroid files, even when a field of view has been removed. See [Issue 285](https://github.com/gerlichlab/looptrace/issues/285) and [Issue 344](https://github.com/gerlichlab/looptrace/issues/344).
 * Catch correct error types at a couple places where a more generic / builtin exception was being caught, rather than the narrower domain-specific one which would've been thrown.
+
+### Known Issues
+* Spot detection will likely crash, due to a method being used like a property.
 
 ## [v0.8.0] - 2024-07-12
 
