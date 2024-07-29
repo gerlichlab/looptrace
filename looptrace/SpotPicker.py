@@ -473,7 +473,7 @@ class SpotPicker:
     @property
     def _spot_frame(self) -> list[TimepointFrom0]:
         """The imaging timepoints in which spot detection is to be done, generally those in which regional barcodes were imaged"""
-        return self.image_handler.list_all_regional_timepoints
+        return self.image_handler.list_all_regional_timepoints()
 
     @property
     def spot_images_path(self) -> str:
