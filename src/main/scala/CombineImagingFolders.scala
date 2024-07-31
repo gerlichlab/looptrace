@@ -3,7 +3,7 @@ package at.ac.oeaw.imba.gerlich.looptrace
 import scala.collection.immutable.SortedSet
 import scala.util.Try
 import cats.*
-import cats.data.{ NonEmptyList as NEL }
+import cats.data.NonEmptyList
 import cats.syntax.all.*
 import mouse.boolean.*
 import scopt.OParser
@@ -138,8 +138,9 @@ object CombineImagingFolders extends ScoptCliReaders with StrictLogging:
             )
     }
     
-    def prepareUpdatedTimepoints(inputFolders: NEL[os.Path], extToUse: Extension, filenameFieldSep: String, targetFolder: os.Path): 
-        Either[NEL[UnparseablePathException] | NEL[UnusableSubfolderException], List[(ImagingTimepoint, os.Path)]] = {
+    def prepareUpdatedTimepoints(inputFolders: NonEmptyList[os.Path], extToUse: Extension, filenameFieldSep: String, targetFolder: os.Path): 
+        Either[NonEmptyList[UnparseablePathException] | NonEmptyList[UnusableSubfolderException], List[(ImagingTimepoint, os.Path)]] = {
+        import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt.add
         val keepFile = (_: os.Path).ext === extToUse
         Alternative[List]
             .separate(inputFolders.toList.map{ p => prepareSubfolder(keepFile)(p, filenameFieldSep).map(p -> _) })
@@ -148,10 +149,10 @@ object CombineImagingFolders extends ScoptCliReaders with StrictLogging:
                 folderContentPairs => 
                     val (unusables, prepped) = Alternative[List].separate(
                         folderContentPairs.map{ (subfolder, contents) => 
-                            ensureNonemptyAndContinuous(contents).bimap(
+                            ensureUniqueTimepointsContiguousFromZero(contents.map(_._1)).bimap(
                                 UnparseablePathException(subfolder, _), 
                                 _ -> contents
-                                )
+                            )
                         }
                     )
                     unusables.toNel.toLeft(prepped)
@@ -163,19 +164,13 @@ object CombineImagingFolders extends ScoptCliReaders with StrictLogging:
                     case subs@((n1, first) :: rest) => rest.foldLeft(n1 -> first.toVector){
                         case ((accCount, timePathPairs), (n, sub)) => 
                             val newCount = accCount `add` n
-                            val newPairs = timePathPairs ++ sub.map(_.leftMap(t => ImagingTimepoint(t.get `add` accCount)))
+                            // TODO: use the ImagingTimepoint.shift functionality.
+                            val newPairs = timePathPairs ++ sub.map(_.leftMap(_.unsafeShift(accCount)))
                             newCount -> newPairs
                     }._2.toList
                 }
             }
     }
-
-    // Add a pair of nonnegative numbers, ensuring that the result stays as a nonnegative.
-    extension (n: NonnegativeInt)
-        infix def add(m: NonnegativeInt): NonnegativeInt = NonnegativeInt.either(n + m) match {
-            case Left(msg) => throw new ArithmeticException(s"Uh-Oh! $n + $m = ${n + m}; $msg")
-            case Right(result) => result
-        }
 
     /** 
      * Ensure subfolder contents are nonempty, and that the timepoints are continuous starting from 0.
@@ -183,27 +178,27 @@ object CombineImagingFolders extends ScoptCliReaders with StrictLogging:
      * @param subfolderContents Collection of pairs of timepoint and path from which it was parsed, all from the same subfolder
      * @return Either an error message or the number of unique timepoints
      */
-    def ensureNonemptyAndContinuous(subfolderContents: List[(ImagingTimepoint, os.Path)]): Either[String, NonnegativeInt] = 
-        validateContinuityFromZero(subfolderContents.map(_._1))
-            .map{ maxTime => maxTime.get `add` NonnegativeInt(1) }
+    def ensureUniqueTimepointsContiguousFromZero(timepoints: List[ImagingTimepoint]): Either[String, NonnegativeInt] = 
+        timepoints.toNel
+            .toRight("Empty set of timepoints!")
+            .flatMap{ ts => 
+                val repeats = ts.groupBy(identity).mapValues(_.size).filter(_._2 > 1)
+                repeats.isEmpty.either(s"${repeats.size} repeated timepoints: ${repeats}", ts.toNes)
+            }
+            .flatMap{ ts => 
+                val numTs = ts.size.toInt
+                val ideal = NonEmptyList(0, (1 until numTs).toList).map(ImagingTimepoint.unsafe).toNes
+                (ts === ideal).either("Timepoints don't form contiguous sequence from 0.", NonnegativeInt.unsafe(numTs))
+            }
 
     /** Select files to use, and map to {@code Right}-wrapped collection of pairs of time and path, or {@code Left}-wrapped errors. */
-    def prepareSubfolder(keepFile: os.Path => Boolean)(folder: os.Path, filenameFieldSep: String): Either[NEL[UnparseablePathException], List[(ImagingTimepoint, os.Path)]] = {
+    def prepareSubfolder(keepFile: os.Path => Boolean)(folder: os.Path, filenameFieldSep: String): Either[NonEmptyList[UnparseablePathException], List[(ImagingTimepoint, os.Path)]] = {
         val (bads, goods) = 
             Alternative[List].separate(os.list(folder).toList
                 .filter(f => os.isFile(f) && keepFile(f))
                 .map{ p => ImagingTimepoint.parseValueIndexPairFromPath(p, filenameFieldSep).bimap(UnparseablePathException(p, _), _._1 -> p) }
             )
         bads.toNel.toLeft(goods)
-    }
-
-    /** Check that the sequence of timepoints is continuous and starts from 0. */
-    def validateContinuityFromZero(ts: Seq[ImagingTimepoint]): Either[String, ImagingTimepoint] = {
-        val raws = SortedSet(ts.map(_.get)*)
-        Try { raws.max }.toEither.leftMap(_ => "Empty set of timepoints!").flatMap{ maxTime => 
-            val missing = (0 to maxTime).map(NonnegativeInt.unsafe)
-            missing.isEmpty.either(s"${missing.length} missing timepoints: $missing", ImagingTimepoint(maxTime))
-        }
     }
 
     private type Extension = String
