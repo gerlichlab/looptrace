@@ -10,6 +10,8 @@ import mouse.boolean.*
 import upickle.default.*
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.json.syntax.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 
@@ -98,10 +100,10 @@ object LocusSpotQC:
         
         /** Create a [[ujson.Obj]] representation of the given spot identifier, mapping each of its field names to simplified value. */
         private[LocusSpotQC] def toJsonObject(spotId: SpotIdentifier): ujson.Obj = ujson.Obj(
-            "position" -> ujson.Num(spotId.position.get),
-            "regionId" -> ujson.Num(spotId.regionId.get.get),
-            "traceId" -> ujson.Num(spotId.traceId.get), 
-            "locusId" -> ujson.Num(spotId.locusId.get.get), 
+            "position" -> spotId.position.get.asJson,
+            "regionId" -> spotId.regionId.get.asJson,
+            "traceId" -> spotId.traceId.get.asJson,
+            "locusId" -> spotId.locusId.get.asJson,
         )
 
         private[looptrace] def fromJson(json: ujson.Value): ErrMsgsOr[SpotIdentifier] = ???

@@ -12,9 +12,11 @@ import com.github.tototoshi.csv.*
 import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.syntax.all.*
+import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
@@ -353,7 +355,9 @@ object LabelAndFilterRois extends ScoptCliReaders, StrictLogging:
                         ).asRight
                     case (groupless, _) => 
                         val times = groupless.map(_._1.time).toSet
-                        val timesText = times.toList.map(_.get).sorted.mkString(", ")
+                        val timesText = 
+                            given Ordering[ImagingTimepoint] = summon[Order[ImagingTimepoint]].toOrdering
+                            times.toList.sorted.map(_.show_).mkString(", ")
                         s"${groupless.length} ROIs without timepoint declared in grouping. ${times.size} undeclared timepoints: $timesText".asLeft
                 }
         }
@@ -363,7 +367,7 @@ object LabelAndFilterRois extends ScoptCliReaders, StrictLogging:
     /** Parse a {@code ROI} value from an in-memory representation of a single line from a CSV file. */
     def rowToRoi(row: CsvRow): ErrMsgsOr[Roi] = {
         val indexNel = safeGetFromRow("", safeParseInt >>> RoiIndex.fromInt)(row)
-        val posNel = safeGetFromRow("position", PositionName.apply(_).asRight)(row)
+        val posNel = safeGetFromRow("position", PositionName.parse)(row)
         val regionNel = safeGetFromRow("frame", safeParseInt >>> RegionId.fromInt)(row)
         val channelNel = safeGetFromRow("ch", safeParseInt >>> ImagingChannel.fromInt)(row)
         val centroidNel = {
@@ -399,7 +403,7 @@ object LabelAndFilterRois extends ScoptCliReaders, StrictLogging:
      * @return Either a {@code Left}-wrapped nonempty collection of error messages, or a {@code Right}-wrapped record
      */
     private def rowToDriftRecord(row: CsvRow): ErrMsgsOr[DriftRecord] = {
-        val posNel = safeGetFromRow("position", PositionName.apply(_).asRight)(row)
+        val posNel = safeGetFromRow("position", PositionName.parse)(row)
         val timeNel = safeGetFromRow("frame", safeParseInt >>> ImagingTimepoint.fromInt)(row)
         val coarseDriftNel = {
             val zNel = safeGetFromRow("z_px_coarse", safeParseIntLike >> ZDir.apply)(row)

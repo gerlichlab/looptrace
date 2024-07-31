@@ -9,6 +9,8 @@ import mouse.boolean.*
 import upickle.default.*
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.imagingTimepoint.given
+import at.ac.oeaw.imba.gerlich.gerlib.json.syntax.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
@@ -173,9 +175,9 @@ final case class BlankImagingRound(name: String, time: ImagingTimepoint) extends
 
 object BlankImagingRound:
     private[looptrace] def blankRoundToJson(round: BlankImagingRound) = ujson.Obj(
-        "name" -> ujson.Str(round.name), 
-        "time" -> ujson.Num(round.time.get), 
-        "isBlank" -> ujson.Bool(true),
+        "name" -> round.name.asJson,
+        "time" -> round.time.asJson,
+        "isBlank" -> true.asJson,
         )
 end BlankImagingRound
 
@@ -212,9 +214,9 @@ object LocusImagingRound:
 
     private[looptrace] def locusRoundToJson(round: LocusImagingRound): ujson.Obj = 
         val baseData = NonEmptyList.of(
-            "name" -> ujson.Str(round.name), 
-            "probe" -> ujson.Str(round.probe.get),
-            "time" -> ujson.Num(round.time.get),
+            "name" -> round.name.asJson, 
+            "probe" -> round.probe.get.asJson,
+            "time" -> round.time.asJson,
             )
         val fullData = baseData ++ round.repeat.fold(List()){ n => List("repeat" -> ujson.Num(n)) }
         ujson.Obj(fullData.head, fullData.tail*)
@@ -238,9 +240,9 @@ object RegionalImagingRound:
         new RegionalImagingRound(maybeName.getOrElse(probe.get), time, probe)
 
     private[looptrace] def regionalRoundToJson(round: RegionalImagingRound) = ujson.Obj(
-        "name" -> round.name, 
-        "probe" -> round.probe.get,
-        "time" -> round.time.get, 
+        "name" -> round.name.asJson, 
+        "probe" -> round.probe.get.asJson,
+        "time" -> round.time.asJson, 
         "isRegional" -> true
         )
 end RegionalImagingRound

@@ -8,6 +8,10 @@ import upickle.default.*
 import com.typesafe.scalalogging.LazyLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
+
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
@@ -61,7 +65,7 @@ object TracingOutputAnalysis extends LazyLogging:
         val header = Array(SpotTimePair.regionalKey, SpotTimePair.localKey, "N")
         val fieldRecs = counts.toList
             .sortBy(_._1)(ev.toOrdering)
-            .map{ case ((r, l), n) => Array(r.index, l.index, n).map(_.show) }
+            .map{ case ((r, l), n) => Array(r.get.show_, l.get.show_, n.show_) }
         val lines = (header :: fieldRecs).map(sep.join(_) ++ "\n")
         os.write(outfile, lines)
     }

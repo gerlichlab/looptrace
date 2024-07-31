@@ -8,7 +8,9 @@ import cats.syntax.all.*
 import mouse.boolean.*
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
 /** Helpers for working with [[at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint]] values */
 trait SyntaxForImagingTimepoint:
@@ -34,7 +36,10 @@ trait SyntaxForImagingTimepoint:
                 >>= IT.fromInt
 
         /** Like a {@code Show}, but to display the value for use in a filename. */
-        def printForFilename(t: ImagingTimepoint): String = PrefixInFilename ++ "%05d".format(t.get)
+        def printForFilename(t: ImagingTimepoint): String = 
+            val rawTimeRep: String = t.show_
+            val lpad = "0" * (5 - rawTimeRep.length)
+            PrefixInFilename ++ lpad ++ rawTimeRep
 
         /** Assume given integer is nonnegative and lift it into the type for timepoints. */
         def unsafe: Int => ImagingTimepoint = NonnegativeInt.unsafe `andThen` ImagingTimepoint.apply
