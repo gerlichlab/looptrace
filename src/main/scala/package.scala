@@ -78,8 +78,7 @@ package object looptrace {
         def lengthOfNonempty[A : Order](xs: NonEmptySet[A]): PositiveInt = PositiveInt.unsafe(xs.length)
     end PositiveIntExtras
     
-    final case class LocusId(get: ImagingTimepoint) derives Order:
-        def index = get.get
+    final case class LocusId(get: ImagingTimepoint) derives Order
     
     object LocusId:
         def fromInt = NonnegativeInt.either.fmap(_.map(fromNonnegative))
@@ -98,8 +97,7 @@ package object looptrace {
 
     final case class ProbeName(get: String)
 
-    final case class RegionId(get: ImagingTimepoint) derives Order:
-        def index = get.get
+    final case class RegionId(get: ImagingTimepoint) derives Order
 
     object RegionId:
         def fromInt = NonnegativeInt.either.fmap(_.map(fromNonnegative))
@@ -121,21 +119,4 @@ package object looptrace {
         def fromRoiIndex(i: RoiIndex): TraceId = new TraceId(i.get)
         def unsafe = NonnegativeInt.unsafe.andThen(TraceId.apply)
     end TraceId
-
-    /**
-      * Write a mapping, from position and time pair to value, to JSON.
-      *
-      * @param vKey The key to use for the {@code V} element in each object
-      * @param ptToV The mapping of data to write
-      * @param writeV How to write each {@code V} element as JSON
-      * @return A JSON array of object corresponding to each element of the map
-      */
-    def posTimeMapToJson[V](vKey: String, ptToV: Map[(PositionIndex, ImagingTimepoint), V])(using writeV: (V) => ujson.Value): ujson.Value = {
-        val proc1 = (pt: (PositionIndex, ImagingTimepoint), v: V) => ujson.Obj(
-            "position" -> pt._1.get,
-            "timepoint" -> pt._2.get,
-            vKey -> writeV(v)
-        )
-        ptToV.toList.map(proc1.tupled)
-    }
 }

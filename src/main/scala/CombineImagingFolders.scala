@@ -182,7 +182,7 @@ object CombineImagingFolders extends ScoptCliReaders with StrictLogging:
         timepoints.toNel
             .toRight("Empty set of timepoints!")
             .flatMap{ ts => 
-                val repeats = ts.groupBy(identity).mapValues(_.size).filter(_._2 > 1)
+                val repeats = ts.groupBy(identity).view.mapValues(_.size).filter(_._2 > 1)
                 repeats.isEmpty.either(s"${repeats.size} repeated timepoints: ${repeats}", ts.toNes)
             }
             .flatMap{ ts => 

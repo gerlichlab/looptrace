@@ -13,6 +13,7 @@ import com.typesafe.scalalogging.LazyLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.imagingTimepoint.given
+import at.ac.oeaw.imba.gerlich.gerlib.json.syntax.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
@@ -130,19 +131,19 @@ object ImagingRoundsConfiguration extends LazyLogging:
                 // First, check that the union of values in the locus grouping is a subset of the locus-specific imaging rounds.
                 val subsetNel = (uniqueTimepointsInLocusGrouping -- locusTimesInSequence).toList match {
                     case Nil => ().validNel
-                    case ts => s"${ts.length} timepoint(s) in locus grouping and not found as locus imaging timepoints: ${ts.sorted.map(_.get).mkString(", ")}".invalidNel
+                    case ts => s"${ts.length} timepoint(s) in locus grouping and not found as locus imaging timepoints: ${mkStringTimepoints(ts)}".invalidNel
                 }
                 // Then, check that each locus-specific imaging round is in the locus grouping, as appropriate..
                 val supersetNel = 
                     if checkLocusTimepointCovering
                     then
                         val missing = locusTimesInSequence -- uniqueTimepointsInLocusGrouping
-                        logger.debug(s"${missing.size} locus imaging timepoint(s) missing from the locus grouping: ${mkStringTimepoints(missing)}")
+                        logger.debug(s"${missing.size} locus imaging timepoint(s) missing from the locus grouping: ${mkStringTimepoints(missing.toList)}")
                         val (correctlyMissing, wronglyMissing) = missing.partition(tracingExclusions.contains)
-                        logger.debug(s"${correctlyMissing.size} locus imaging timepoint(s) CORRECTLY missing from locus grouping: ${mkStringTimepoints(correctlyMissing)}")
+                        logger.debug(s"${correctlyMissing.size} locus imaging timepoint(s) CORRECTLY missing from locus grouping: ${mkStringTimepoints(correctlyMissing.toList)}")
                         if wronglyMissing.isEmpty 
                         then ().validNel
-                        else s"${wronglyMissing.size} locus timepoint(s) in imagingRounds and not found in locusGrouping (nor in tracingExclusions): ${mkStringTimepoints(wronglyMissing)}".invalidNel
+                        else s"${wronglyMissing.size} locus timepoint(s) in imagingRounds and not found in locusGrouping (nor in tracingExclusions): ${mkStringTimepoints(wronglyMissing.toList)}".invalidNel
                     else
                         ().validNel
                 (subsetNel, supersetNel)
@@ -171,7 +172,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
             .toEither
     }
 
-    private def mkStringTimepoints = (_: Set[ImagingTimepoint]).toList.sorted.map(_.get).mkString(", ")
+    private def mkStringTimepoints = (_: List[ImagingTimepoint]).sorted.map(_.show_).mkString(", ")
     
 
     /**
@@ -225,7 +226,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
                                 lociTimes <- maybeLociTimes.toNel.toRight(s"Empty locus times for region time $regionTimeRaw!").map(_.toNes)
                                 _ <- (
                                     if lociTimes.contains(regTime) 
-                                    then s"Regional time ${regTime.get} is contained in its own locus times group!".asLeft 
+                                    then s"Regional time ${regTime.show_} is contained in its own locus times group!".asLeft 
                                     else ().asRight
                                 )
                             } yield LocusGroup(regTime, lociTimes)).toValidatedNel
@@ -331,7 +332,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
      * @param locusTimepoints The imaging timepoints of DNA loci which will be illuminated together at the given regional timepoint
      */
     private[looptrace] final case class LocusGroup private[looptrace](regionalTimepoint: ImagingTimepoint, locusTimepoints: NonEmptySet[ImagingTimepoint]):
-        require(!locusTimepoints.contains(regionalTimepoint), s"Regional time (${regionalTimepoint.get}) must not be in locus times!")
+        require(!locusTimepoints.contains(regionalTimepoint), s"Regional time (${regionalTimepoint.show_}) must not be in locus times!")
     
     /** Helpers for working with locus groups */
     object LocusGroup:
@@ -343,7 +344,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
     object RegionalImageRoundGroup:
         /** JSON codec for group of imaging timepoints */
         given rwForRegionalImageRoundGroup: ReadWriter[NonEmptySet[ImagingTimepoint]] = readwriter[ujson.Value].bimap(
-            group => ujson.Arr(group.toList.map(name => ujson.Num(name.get))*), 
+            group => ujson.Arr(group.toList.map(_.asJson)*), 
             json => json.arr
                 .toList
                 .toNel

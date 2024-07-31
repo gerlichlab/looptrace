@@ -46,7 +46,7 @@ object SummariseImagingRoundsConfiguration extends ScoptCliReaders:
             case Some(opts) => 
                 println(s"Reading config file: ${opts.configFile}")
                 val config = ImagingRoundsConfiguration.unsafeFromJsonFile(opts.configFile)
-                val exclusions = config.tracingExclusions.map(_.get)
+                val exclusions = config.tracingExclusions
                 println(s"${exclusions.size} exclusion(s) from tracing: ${exclusions.toList.sorted.map(_.show_).mkString(", ")}")
                 println(s"${config.numberOfRounds} round(s) in total (listed below)")
                 config.allRounds.map(r => s"${r.time.show_}: ${r.name}").toList.foreach(println)

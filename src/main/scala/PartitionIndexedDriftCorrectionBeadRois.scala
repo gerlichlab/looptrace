@@ -11,9 +11,12 @@ import scopt.{ OParser, Read }
 import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.json.syntax.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.syntax.all.*
+import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
@@ -283,10 +286,27 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
         )
     }
 
-    /***********************/
-    /* Helper types        */
-    /***********************/
+    /******************************/
+    /* Helper types and functions */
+    /******************************/
 
+    /**
+      * Write a mapping, from position and time pair to value, to JSON.
+      *
+      * @param vKey The key to use for the {@code V} element in each object
+      * @param ptToV The mapping of data to write
+      * @param writeV How to write each {@code V} element as JSON
+      * @return A JSON array of object corresponding to each element of the map
+      */
+    def posTimeMapToJson[V](vKey: String, ptToV: Map[(PositionIndex, ImagingTimepoint), V])(using writeV: (V) => ujson.Value): ujson.Value = {
+        val proc1 = (pt: (PositionIndex, ImagingTimepoint), v: V) => ujson.Obj(
+            "position" -> pt._1.get.asJson,
+            "timepoint" -> pt._2.asJson,
+            vKey -> writeV(v)
+        )
+        ptToV.toList.map(proc1.tupled)
+    }
+    
     /** Write, to JSON, a pair of (FOV, image time) and a case of too-few-ROIs for shifting for drift correction. */
     private[looptrace] def readWriterForKeyedTooFewProblem: ReadWriter[KeyedProblem] = {
         import JsonMappable.*
@@ -342,7 +362,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
         private[PartitionIndexedDriftCorrectionBeadRois] val timeKey = "time"
         given jsonMappableForPosTimePair: JsonMappable[PosTimePair] with
             override def toJsonMap = (pos, time) => 
-                Map("position" -> ujson.Num(pos.get), timeKey -> ujson.Num(time.get))
+                Map("position" -> pos.get.asJson, timeKey -> time.asJson)
     end PosTimePair
 
     sealed trait RoisFileParseError extends Throwable
@@ -517,7 +537,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
 
     /** Encode FOV, timepoint, and intended purpose of ROI in filename. */
     def getOutputFilename(pos: PositionIndex, time: ImagingTimepoint, purpose: Purpose): Filename =
-        Filename(s"${BeadRoisPrefix}_${pos.get}_${time.get}.${purpose.lowercase}.json")
+        Filename(s"${BeadRoisPrefix}_${pos.get}_${time.show_}.${purpose.lowercase}.json")
 
     /** Name ROIs subfolder according to how the selected ROIs are to be used. */
     def getOutputSubfolder(root: os.Path) = root / (_: Purpose).lowercase
