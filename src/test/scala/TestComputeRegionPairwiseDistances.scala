@@ -12,8 +12,11 @@ import org.scalatest.matchers.*
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import io.github.iltotore.iron.scalacheck.char.given
+
 import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow
 import at.ac.oeaw.imba.gerlich.gerlib.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.PositionName
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
@@ -76,6 +79,9 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
     }
 
     test("Trying to use a file with just records and no header fails the parse as expected.") {
+        val myArbPos: Arbitrary[PositionName] = summon[Arbitrary[PositionName]]
+        val myArbReg: Arbitrary[RegionId] = summon[Arbitrary[RegionId]]
+        val myArbPt: Arbitrary[Point3D] = summon[Arbitrary[Point3D]]
         forAll { (records: NonEmptyList[Input.GoodRecord], includeIndexCol: Boolean) => 
             withTempDirectory{ (tempdir: os.Path) => 
                 val infile = tempdir / "input.csv"
@@ -212,7 +218,10 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
     }
 
     test("Distances computed are accurately Euclidean.") {
+        import io.github.iltotore.iron.autoRefine
+        
         def buildPoint(x: Double, y: Double, z: Double) = Point3D(XCoordinate(x), YCoordinate(y), ZCoordinate(z))
+        
         val pos = PositionName("P0001.zarr")
         val inputRecords = NonnegativeInt.indexed(List((2.0, 1.0, -1.0), (1.0, 5.0, 0.0), (3.0, 0.0, 2.0))).map{
             (pt, i) => Input.GoodRecord(pos, RegionId.unsafe(i), buildPoint.tupled(pt))
@@ -254,6 +263,8 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
     }
 
     test("(FOV, region ID) is NOT a key!") {
+        import io.github.iltotore.iron.autoRefine
+
         /* To encourage collisions, narrow the choices for grouping components. */
         given arbPosition: Arbitrary[PositionName] = Gen.const(PositionName("P0002.zarr")).toArbitrary
         given arbRegion: Arbitrary[RegionId] = Gen.oneOf(40, 41, 42).map(RegionId.unsafe).toArbitrary

@@ -34,7 +34,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite, should.Matchers:
     override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
     
-    val AllReqdColumns = List(
+    val AllRequiredColumns = List(
         Input.FieldOfViewColumn, 
         Input.TraceIdColumn, 
         Input.LocusSpecificBarcodeTimepointColumn, 
@@ -63,7 +63,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
             val infile = tempdir / "input.csv"
             val outfolder = tempdir / "output"
             os.makeDir(outfolder)
-            os.write(infile, Delimiter.CommaSeparator.join(AllReqdColumns) ++ "\n")
+            os.write(infile, Delimiter.CommaSeparator.join(AllRequiredColumns) ++ "\n")
             val expOutfile = outfolder / "input.pairwise_distances__locus_specific.csv"
             os.exists(expOutfile) shouldBe false
             workflow(inputFile = infile, outputFolder = outfolder)
@@ -84,7 +84,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
                     val textHead = recordToTextFields(records.head)
                     // Account for the fact that randomly drawn first-row elements could collide with 
                     // a required header field and therefore reduce the theoretically missing set.
-                    val expMiss = (AllReqdColumns.toNel.get.toNes -- textHead.toNel.get.toNes).toNonEmptySetUnsafe
+                    val expMiss = (AllRequiredColumns.toNel.get.toNes -- textHead.toNel.get.toNes).toNonEmptySetUnsafe
                     IllegalHeaderException(textHead, expMiss)
                 }
                 val obsError = intercept[IllegalHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
@@ -98,20 +98,20 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         
         def genExpHeadAndMiss: Gen[(ExpectedHeader, NonEmptySet[String])] = {
-            def genDeletions: Gen[(ExpectedHeader, NonEmptySet[String])] = Gen.choose(1, AllReqdColumns.length - 1)
-                .flatMap(Gen.pick(_, (0 until AllReqdColumns.length)))
+            def genDeletions: Gen[(ExpectedHeader, NonEmptySet[String])] = Gen.choose(1, AllRequiredColumns.length - 1)
+                .flatMap(Gen.pick(_, (0 until AllRequiredColumns.length)))
                 .map{ indices => 
-                    val (expHead, expMiss) = AllReqdColumns.zipWithIndex.partition((_, i) => !indices.contains(i))
+                    val (expHead, expMiss) = AllRequiredColumns.zipWithIndex.partition((_, i) => !indices.contains(i))
                     expHead.map(_._1) -> expMiss.map(_._1).toNel.get.toNes
                 }
             def genSubstitutions: Gen[(ExpectedHeader, NonEmptySet[String])] = for {
-                indicesToChange <- Gen.atLeastOne((0 until AllReqdColumns.length)).map(_.toSet) // Choose header fields to change.
-                expHead <- AllReqdColumns.zipWithIndex.traverse{ (col, idx) => 
+                indicesToChange <- Gen.atLeastOne((0 until AllRequiredColumns.length)).map(_.toSet) // Choose header fields to change.
+                expHead <- AllRequiredColumns.zipWithIndex.traverse{ (col, idx) => 
                     if indicesToChange contains idx 
                     then Gen.alphaNumStr.suchThat(_ =!= col) // Ensure the replacement differs from original.
                     else Gen.const(col) // Use the original value since this index isn't one at which to update.
                 }
-            } yield (expHead, indicesToChange.toList.toNel.get.toNes.map(AllReqdColumns.zipWithIndex.map(_.swap).toMap.apply))            
+            } yield (expHead, indicesToChange.toList.toNel.get.toNes.map(AllRequiredColumns.zipWithIndex.map(_.swap).toMap.apply))            
             Gen.oneOf(genSubstitutions, genDeletions).suchThat{ (head, miss) => (head.toSet & miss.toSortedSet).isEmpty }
         }
         
@@ -139,14 +139,14 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
             case s: String => s
         }) // used for .show'ing a generated value of more than one type possibility
         
-        def genDrops: Gen[Mutate] = Gen.atLeastOne((0 until AllReqdColumns.length)).map {
+        def genDrops: Gen[Mutate] = Gen.atLeastOne((0 until AllRequiredColumns.length)).map {
             indices => { (_: List[String]).zipWithIndex.filterNot((_, i) => indices.toSet.contains(i)).map(_._1) }
         }
         def genAdditions: Gen[Mutate] = 
             Gen.resize(5, Gen.nonEmptyListOf(Gen.choose(-3e-3, 3e3).map(_.toString))).map(additions => (_: List[String]) ++ additions)
         def genImproperlyTyped: Gen[Mutate] = {
             def genMutate[A : Show](col: String, alt: Gen[A]): Gen[Mutate] = {
-                val idx = AllReqdColumns.zipWithIndex.find(_._1 === col).map(_._2).getOrElse{
+                val idx = AllRequiredColumns.zipWithIndex.find(_._1 === col).map(_._2).getOrElse{
                     throw new Exception(s"Cannot find index for alleged input column: $col")
                 }
                 alt.map(a => { (_: List[String]).updated(idx, a.show) })
@@ -174,7 +174,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
             withTempDirectory{ (tempdir: os.Path) => 
                 val infile = tempdir / "input.csv"
                 os.isFile(infile) shouldBe false
-                writeMinimalInputCsv(infile, AllReqdColumns :: textRecords.toList)
+                writeMinimalInputCsv(infile, AllRequiredColumns :: textRecords.toList)
                 os.isFile(infile) shouldBe true
                 val error = intercept[Input.BadRecordsException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
                 error.records.map(_.lineNumber) shouldEqual expBadRows
@@ -183,7 +183,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
     }
 
     test("Pandas format IS accepted.") {
-        val augmentedHeader = "" :: AllReqdColumns
+        val augmentedHeader = "" :: AllRequiredColumns
         forAll { (records: NonEmptyList[Input.GoodRecord]) => 
             withTempDirectory{ (tempdir: os.Path) => 
                 /* Setup and pretests */
@@ -228,10 +228,11 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
             (pt, i) => Input.GoodRecord(pos, tid, reg, LocusId(ImagingTimepoint(i)), buildPoint.tupled(pt))
         }
         val getExpEuclDist = (i: Int, j: Int) => EuclideanDistance.between(inputRecords(i).point, inputRecords(j).point)
+        def rawAndTime: Int => (NonnegativeInt, LocusId) = n => (n, n).bimap(NonnegativeInt.unsafe, LocusId.unsafe)
         val expected: Iterable[OutputRecord] = List(0 -> 1, 0 -> 2, 1 -> 2).map{ (i, j) => 
-            val loc1 = LocusId.unsafe(i)
-            val loc2 = LocusId.unsafe(j)
-            OutputRecord(pos, tid, reg, loc1, loc2, getExpEuclDist(i, j), loc1.index, loc2.index)
+            val (idx1, loc1) = rawAndTime(i)
+            val (idx2, loc2) = rawAndTime(j)
+            OutputRecord(pos, tid, reg, loc1, loc2, getExpEuclDist(i, j), idx1, idx2)
         }
         val observed = inputRecordsToOutputRecords(NonnegativeInt.indexed(inputRecords))
         observed shouldEqual expected
@@ -256,7 +257,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
             ((0, 1, 2), (0, 0, 2), (0, 2, 2), (0, 3, 2)) -> List(), // All equal on 1st and 3rd elements, but not 2nd
             ((0, 1, 2), (1, 1, 2), (0, 2, 2), (2, 2, 2)) -> List(), // Mixed similarities
         )*)
-        forAll (inputTable) { case ((k1, k2, k3, k4), expectation) => 
+        forAll (inputTable) { case ((k1, k2, k3, k4), simplifiedExpectation) => 
             val records = NonnegativeInt.indexed(List(k1 -> pt1, k2 -> pt2, k3 -> pt3, k4 -> pt4)).map{ 
                 case (((pos, tid, reg), pt), i) => Input.GoodRecord(
                     PositionIndex.unsafe(pos), 
@@ -268,17 +269,17 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
             }
             val observation = inputRecordsToOutputRecords(NonnegativeInt.indexed(records))
             val simplifiedObservation = observation.map{ r => 
-                (r.position.get, r.trace.get, r.region.index, r.locus1.index, r.locus2.index) -> 
+                (r.position, r.trace, r.region, r.locus1, r.locus2) -> 
                 r.distance.get
             }.toList
-            val simplifiedExpectation = expectation.map{ case ((pos, tid, reg, t1, t2), d) => 
-                (NonnegativeInt.unsafe(pos), NonnegativeInt.unsafe(tid), reg, NonnegativeInt.unsafe(t1), NonnegativeInt.unsafe(t2)) -> 
+            val expectation = simplifiedExpectation.map{ case ((pos, tid, reg, t1, t2), d) => 
+                (PositionIndex.unsafe(pos), TraceId.unsafe(tid), RegionId.unsafe(reg), LocusId.unsafe(t1), LocusId.unsafe(t2)) -> 
                 NonnegativeReal.unsafe(d)
             }.toList
             // We're indifferent to the order of output records for this test, so check size then convert to maps.
-            simplifiedObservation.length shouldEqual simplifiedExpectation.length
-            simplifiedObservation.groupBy(_._1).view.mapValues(_.length).toMap shouldEqual simplifiedExpectation.groupBy(_._1).view.mapValues(_.length).toMap
-            simplifiedObservation.groupBy(_._1).view.mapValues(_.toSet).toMap shouldEqual simplifiedExpectation.groupBy(_._1).view.mapValues(_.toSet).toMap
+            simplifiedObservation.length shouldEqual expectation.length
+            simplifiedObservation.groupBy(_._1).view.mapValues(_.length).toMap shouldEqual expectation.groupBy(_._1).view.mapValues(_.length).toMap
+            simplifiedObservation.groupBy(_._1).view.mapValues(_.toSet).toMap shouldEqual expectation.groupBy(_._1).view.mapValues(_.toSet).toMap
         }
     }
 
@@ -342,7 +343,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
 
     /** Write the given records as CSV to the given file. */
     private def writeMinimalInputCsv(f: os.Path, records: NonEmptyList[Input.GoodRecord]): Unit = 
-        writeMinimalInputCsv(f, AllReqdColumns :: records.toList.map(recordToTextFields))
+        writeMinimalInputCsv(f, AllRequiredColumns :: records.toList.map(recordToTextFields))
 
     /** Convert a sequence of text fields into a single line (CSV), including newline. */
     private def rowToLine = Delimiter.CommaSeparator.join(_: List[String]) ++ "\n"

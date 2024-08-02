@@ -9,7 +9,9 @@ import org.scalatest.matchers.*
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.imagingTimepoint.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.LocusGroup
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
@@ -37,7 +39,7 @@ class TestLocusGroup extends AnyFunSuite with ScalaCheckPropertyChecks with shou
                 if includeRegional then
                     val lts = initLoci.add(rt)
                     val error = intercept[IllegalArgumentException]{ LocusGroup(rt, lts) }
-                    val expMsg = s"requirement failed: Regional time (${rt.get}) must not be in locus times!"
+                    val expMsg = s"requirement failed: Regional time (${rt.show_}) must not be in locus times!"
                     error.getMessage shouldEqual expMsg
                 else
                     LocusGroup(rt, initLoci).locusTimepoints shouldEqual initLoci

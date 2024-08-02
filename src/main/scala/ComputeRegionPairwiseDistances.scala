@@ -7,6 +7,7 @@ import mouse.boolean.*
 import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
 
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.PositionName
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
@@ -120,7 +121,7 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
                 getColParser(header)(col, lift)
 
             /* Component parsers, one for each field of interest from a record. */
-            val maybeParseFOV = getParser(FieldOfViewColumn, PositionName(_).asRight)
+            val maybeParseFOV = getParser(FieldOfViewColumn, PositionName.parse)
             val maybeParseRegion = getParser(RegionalBarcodeTimepointColumn, safeParseInt >>> RegionId.fromInt)
             val maybeParseX = getParser(XCoordinateColumn, safeParseDouble >> XCoordinate.apply)
             val maybeParseY = getParser(YCoordinateColumn, safeParseDouble >> YCoordinate.apply)

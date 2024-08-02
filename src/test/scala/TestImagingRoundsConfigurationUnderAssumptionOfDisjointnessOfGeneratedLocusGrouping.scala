@@ -17,6 +17,7 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.json.syntax.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
@@ -560,22 +561,22 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
     given rwForSeq: ReadWriter[ImagingSequence] = 
             ImagingRoundsConfiguration.rwForImagingSequence(using ImagingRound.rwForImagingRound)
     
-    given rwForTime: ReadWriter[ImagingTimepoint] = readwriter[ujson.Value].bimap(time => ujson.Num(time.get), json => ImagingTimepoint.unsafe(json.int))
+    given rwForTime: ReadWriter[ImagingTimepoint] = readwriter[ujson.Value].bimap(time => time.asJson, json => ImagingTimepoint.unsafe(json.int))
 
     private def proximityFilterStrategyToJson(grouping: NonEmptyList[List[ImagingTimepoint]]): ujson.Value = 
-        ujson.Arr(grouping.toList.map(ts => ujson.Arr(ts.map(t => ujson.Num(t.get))*))*)
+        ujson.Arr(grouping.toList.map(ts => ujson.Arr(ts.map(_.asJson)*))*)
 
     private def addLocusGroupingAndExclusions(baseData: Map[String, ujson.Value], optLocusGrouping: Option[NonEmptyList[LocusGroup]], exclusions: Set[ImagingTimepoint]): Map[String, ujson.Value] = {
         baseData ++ List(
             optLocusGrouping.map{ gs => 
                 val data: NonEmptyList[(String, ujson.Value)] = gs.map{ g => 
-                    g.regionalTimepoint.show_ -> ujson.Arr(g.locusTimepoints.toList.map(t => ujson.Num(t.get))*)
+                    g.regionalTimepoint.show_ -> ujson.Arr(g.locusTimepoints.toList.map(_.asJson)*)
                 }
                 "locusGrouping" -> ujson.Obj(data.head, data.tail*)
             }: Option[(String, ujson.Value)],
             exclusions.nonEmpty.option{
                 "tracingExclusions" -> 
-                ujson.Arr(exclusions.toList.map(t => ujson.Num(t.get))*)
+                ujson.Arr(exclusions.toList.map(_.asJson)*)
             }: Option[(String, ujson.Value)]
         ).flatten
     }
