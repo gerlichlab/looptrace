@@ -14,12 +14,17 @@ import org.scalatest.matchers.*
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import io.github.iltotore.iron.scalacheck.char.given
+
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.syntax.all.*
+import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.collections.*
+import at.ac.oeaw.imba.gerlich.looptrace.instances.roiId.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.Point3D.given // for cats.Order
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
@@ -517,12 +522,15 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         val time3 = 5
         val time4 = 6
         val timepoints = List(time1, time2, time3, time4).map(ImagingTimepoint.unsafe)
-        val rawPosName = "P0001.zarr"
+        val posName = {
+            import io.github.iltotore.iron.autoRefine
+            PositionName("P0001.zarr")
+        }
         val driftFileText = s""",frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
-            |0,${time1},${rawPosName},-2.0,8.0,-24.0,0.3048142040458287,0.2167426082715708,0.46295638298323727
-            |1,${time2},${rawPosName},2.0,4.0,-20.0,0.6521556133243969,-0.32279031643811845,0.8467576764912169
-            |2,${time3},${rawPosName},0.0,6.0,-16.0,-0.32831460930799267,0.5707716296861373,0.768359957646404
-            |3,${time4},${rawPosName},-2.0,2.0,-12.0,-0.6267951175716121,0.24476613641147094,0.5547602737043816
+            |0,${time1},${posName.show_},-2.0,8.0,-24.0,0.3048142040458287,0.2167426082715708,0.46295638298323727
+            |1,${time2},${posName.show_},2.0,4.0,-20.0,0.6521556133243969,-0.32279031643811845,0.8467576764912169
+            |2,${time3},${posName.show_},0.0,6.0,-16.0,-0.32831460930799267,0.5707716296861373,0.768359957646404
+            |3,${time4},${posName.show_},-2.0,2.0,-12.0,-0.6267951175716121,0.24476613641147094,0.5547602737043816
             |""".stripMargin
         
         def genRegionalRound(t: ImagingTimepoint)(using arbProbe: Arbitrary[ProbeName]): Gen[RegionalImagingRound] = 
@@ -558,7 +566,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         }
 
         /* Control the generation of ROIs to match the drift file text. */
-        given arbPos: Arbitrary[PositionName] = Gen.const(PositionName(rawPosName)).toArbitrary
+        given arbPos: Arbitrary[PositionName] = Gen.const(posName).toArbitrary
         given arbTimepoint: Arbitrary[ImagingTimepoint] = Gen.oneOf(timepoints).toArbitrary
         
         /* Generate reasonable ROIs (controlling centroid and bounding box). */
@@ -601,7 +609,9 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
 
         def genRois(lo: Int, hi: Int) = {
             def genOne = {
-                def genPos = Gen.oneOf("P0001.zarr", "P0001.zarr").map(PositionName.apply)
+                def genPos: Gen[PositionName] = 
+                    import io.github.iltotore.iron.autoRefine
+                    Gen.oneOf(PositionName("P0001.zarr"), PositionName("P0002.zarr"))
                 (arbitrary[RoiIndex], genPos, Gen.oneOf(regions), arbitrary[Point3D]).mapN((idx, pos, reg, pt) => 
                     val box = buildRectangularBox(pt)(margin, margin, margin)
                     RegionalBarcodeSpotRoi(idx, pos, reg, channel, pt, box)
@@ -802,8 +812,9 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         forAll (genSmallRoisAndGrouping) { (rois, uncoveredTimepoints, proxFilterStrategy) =>
             buildNeighboringRoisFinder(NonnegativeInt.indexed(rois), proxFilterStrategy) match {
                 case Left(obsErrMsg) => 
+                    given Ordering[ImagingTimepoint] = summon[Order[ImagingTimepoint]].toOrdering
                     val numGroupless = rois.filter{ r => uncoveredTimepoints.toNes.contains(r.time) }.length
-                    val timesText = uncoveredTimepoints.map(_.get).toList.sorted.mkString(", ")
+                    val timesText = uncoveredTimepoints.toList.sorted.map(_.show_).mkString(", ")
                     val expErrMsg = s"$numGroupless ROIs without timepoint declared in grouping. ${uncoveredTimepoints.size} undeclared timepoints: $timesText"
                     obsErrMsg shouldEqual expErrMsg
                 case Right(_) => fail("Expected error message about non-covering, but didn't get it.")
@@ -863,7 +874,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         /* Create all partitions of 5 as 2 and 3, mapping each partition to a position value for ROIs to be made. */
         val roiIndices = 0 until 5
         val partitions = roiIndices.combinations(3).map{
-            group => roiIndices.toList.map(i => PositionName(s"P000${if group.contains(i) then 1 else 2}.zarr"))
+            group => roiIndices.toList.map(i => PositionName.unsafe(s"P000${if group.contains(i) then 1 else 2}.zarr"))
         }
         
         /* Assert property for all partitions (on position) of 5 ROIs into a group of 2 and group of 3. */
@@ -1079,6 +1090,9 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
      ****************************************************************************************************************/
     private def canonicalRoi: Roi = canonicalRoi(Point3D(XCoordinate(1), YCoordinate(2), ZCoordinate(3)))
     private def canonicalRoi(point: Point3D): Roi = {
+        val posName: PositionName = 
+            import io.github.iltotore.iron.autoRefine
+            PositionName("P0001.zarr")
         point match { case Point3D(x, y, z) => 
             val xIntv = buildInterval(x, BoundingBox.Margin(NonnegativeReal(2)))(XCoordinate.apply)
             val yIntv = buildInterval(y, BoundingBox.Margin(NonnegativeReal(2)))(YCoordinate.apply)
@@ -1086,7 +1100,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
             val box = BoundingBox(xIntv, yIntv, zIntv)
             RegionalBarcodeSpotRoi(
                 RoiIndex(NonnegativeInt(0)), 
-                PositionName("P0001.zarr"), 
+                posName, 
                 RegionId(ImagingTimepoint(NonnegativeInt(0))), 
                 ImagingChannel(NonnegativeInt(0)), 
                 point, 
@@ -1172,7 +1186,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
 
     private def getDriftFileLines(driftRows: List[(PositionName, ImagingTimepoint, CoarseDrift, FineDrift)]): List[String] = 
         headDriftFile :: driftRows.zipWithIndex.map{ case ((pos, time, coarse, fine), i) => 
-            s"$i,${time.get},${pos.get},${coarse.z.get},${coarse.y.get},${coarse.x.get},${fine.z.get},${fine.y.get},${fine.x.get}"
+            s"$i,${time.show_},${pos.show_},${coarse.z.get},${coarse.y.get},${coarse.x.get},${fine.z.get},${fine.y.get},${fine.x.get}"
         }
 
     private def getSpotsFileLines(rois: List[RegionalBarcodeSpotRoi]): List[String] = headSpotsFile :: rois.map{ r => 
@@ -1180,7 +1194,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         val (loX, hiX, loY, hiY, loZ, hiZ) = r.boundingBox match { 
             case BoundingBox(sideX, sideY, sideZ) => (sideX.lo.get, sideX.hi.get, sideY.lo.get, sideY.hi.get, sideZ.lo.get, sideZ.hi.get)
         }
-        s"${r.index.get},${r.position.get},${r.time.get},${r.channel.get},$x,$y,$z,$loX,$hiX,$loY,$hiY,$loZ,$hiZ"
+        s"${r.index.show_},${r.position.show_},${r.time.show_},${r.channel.show_},$x,$y,$z,$loX,$hiX,$loY,$hiY,$loZ,$hiZ"
     }
 
     // Header for spots (ROIs) file

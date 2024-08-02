@@ -93,8 +93,6 @@ package object looptrace {
         def unsafe = NonnegativeInt.unsafe `andThen` PositionIndex.apply
     end PositionIndex
 
-    final case class PositionName(get: String) derives Order
-
     final case class ProbeName(get: String)
 
     final case class RegionId(get: ImagingTimepoint) derives Order

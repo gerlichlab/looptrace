@@ -16,13 +16,16 @@ import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 import at.ac.oeaw.imba.gerlich.gerlib.testing.NumericInstances
 
 import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionBeadRois.*
 import at.ac.oeaw.imba.gerlich.looptrace.PathHelpers.listPath
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.readJsonFile
+import at.ac.oeaw.imba.gerlich.looptrace.instances.positionIndex.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ CoordinateSequence, Point3D, XCoordinate, YCoordinate, ZCoordinate }
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
@@ -288,9 +291,9 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
             val wrongSubfolderFile = subBad / baseFilename
             val missingPrefixFile = subGood / baseFilename.replaceAll(BeadRoisPrefix, "")
             val wrongFilenameStructureFile1 = 
-                subGood / baseFilename.replaceAll(s"${pos.get}_${time.get}", s"${pos.get}.${time.get}")
+                subGood / baseFilename.replaceAll(s"${pos.show_}_${time.show_}", s"${pos.show_}.${time.show_}")
             val wrongFilenameStructureFile2 = 
-                subGood / baseFilename.replaceAll(s"${pos.get}_${time.get}", s"${pos.get}_${time.get}_0")
+                subGood / baseFilename.replaceAll(s"${pos.show_}_${time.show_}", s"${pos.show_}_${time.show_}_0")
             val goodFile1 = subGood / baseFilename
             val goodFile2 = subGood / getInputFilename(pt2._1, pt2._2)
             List(
@@ -778,7 +781,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
             .map { case ((p1, f1), (p2, f2)) => (PositionIndex(p1) -> ImagingTimepoint(f1), PositionIndex(p2) -> ImagingTimepoint(f2)) }
     
     /** Infer detected bead ROIs filename for particular field of view (@code pos) and timepoint ({@code time}). */
-    def getInputFilename(pos: PositionIndex, time: ImagingTimepoint): String = s"bead_rois__${pos.get}_${time.get}.csv"
+    def getInputFilename(pos: PositionIndex, time: ImagingTimepoint): String = s"bead_rois__${pos.show_}_${time.show_}.csv"
     
     /** Limit the number of ROIs generated to keep test cases (relatively) small even without shrinking. */
     def maxNumRoisSmallTests: ShiftingCount = ShiftingCount.unsafe(2 * ShiftingCount.AbsoluteMinimumShifting)

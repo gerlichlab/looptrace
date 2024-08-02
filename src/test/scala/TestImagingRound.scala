@@ -13,6 +13,7 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.json.syntax.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
@@ -32,7 +33,7 @@ class TestImagingRound extends AnyFunSuite, ScalaCheckPropertyChecks, ImagingRou
     test("BlankImagingRound can be instantiated (DIRECTLY) with just name and timepoint, but must have appropriate key-value to come from JSON through parent parser.") {
         assertCompiles{ "BlankImagingRound(\"absolutelynot\", ImagingTimepoint(NonnegativeInt(0)))" }
         forAll { (name: String, time: ImagingTimepoint) => 
-            val baseData = Map("name" -> ujson.Str(name), "time" -> ujson.Num(time.get))
+            val baseData = Map("name" -> name.asJson, "time" -> time.asJson)
             ImagingRound.parseFromJsonMap(baseData).isLeft shouldBe true
             ImagingRound.parseFromJsonMap(baseData + ("isBlank" -> ujson.Bool(false))).isLeft shouldBe true
             ImagingRound.parseFromJsonMap(baseData + ("isBlank" -> ujson.Bool(true))) shouldEqual BlankImagingRound(name, time).asRight
@@ -41,7 +42,7 @@ class TestImagingRound extends AnyFunSuite, ScalaCheckPropertyChecks, ImagingRou
 
     test("Non-blank round without probe contains appropriate error message.") {
         forAll { (name: String, time: ImagingTimepoint, useBlankKey: Boolean, regOpt: Option[Boolean], repOpt: Option[PositiveInt]) => 
-            val baseData = Map("name" -> ujson.Str(name), "time" -> ujson.Num(time.get))
+            val baseData = Map("name" -> name.asJson, "time" -> time.asJson)
             val extras = List(
                 regOpt.map{ p => "isRegional" -> ujson.Bool(p) }, 
                 repOpt.map{ n => "repeat" -> ujson.Num(n) }, 
@@ -67,7 +68,7 @@ class TestImagingRound extends AnyFunSuite, ScalaCheckPropertyChecks, ImagingRou
         given arbName: Arbitrary[String] = genNameForJson.toArbitrary
         given reader: Reader[ImagingRound] = ImagingRound.rwForImagingRound
         forAll { (optName: Option[String], time: ImagingTimepoint, probe: ProbeName, specifyBlankIsFalse: Boolean, optRegion: Option[Boolean]) =>
-            val baseData = List("time" -> ujson.Num(time.get), "probe" -> ujson.Str(probe.get))
+            val baseData = List("time" -> time.asJson, "probe" -> ujson.Str(probe.get))
             val extraData = List(
                 optName.map(n => "name" -> ujson.Str(n)),
                 specifyBlankIsFalse.option("isBlank" -> ujson.Bool(false)), 
@@ -108,7 +109,7 @@ class TestImagingRound extends AnyFunSuite, ScalaCheckPropertyChecks, ImagingRou
         
         forAll (arbitrary[String], arbitrary[ImagingTimepoint], arbitrary[Boolean], arbitrary[Option[ProbeName]], genBlankAndRepeat) { 
             case (name, time, explicitlyNonRegional, optProbe, (optBlank, optRepeat)) =>
-                val baseData = List("name" -> ujson.Str(name), "time" -> ujson.Num(time.get))
+                val baseData = List("name" -> name.asJson, "time" -> time.asJson)
                 val extraData = List(
                     optBlank.map{ p => "isBlank" -> ujson.Bool(p) },
                     optProbe.map{ p => "probe" -> ujson.Str(p.get) },
@@ -135,7 +136,7 @@ class TestImagingRound extends AnyFunSuite, ScalaCheckPropertyChecks, ImagingRou
         given reader: Reader[ImagingRound] = ImagingRound.rwForImagingRound
         
         forAll { (optName: Option[String], time: ImagingTimepoint, probe: ProbeName, explicitlyNonBlank: Boolean, explicitlyNonRegional: Boolean, optRepeat: Option[PositiveInt]) => 
-            val baseData = List("time" -> ujson.Num(time.get), "probe" -> ujson.Str(probe.get))
+            val baseData = List("time" -> time.asJson, "probe" -> ujson.Str(probe.get))
             val extraData = List(
                 optName.map{ n => "name" -> ujson.Str(n) },
                 explicitlyNonBlank.option{ "isBlank" -> ujson.Bool(false) }, 
@@ -157,7 +158,7 @@ class TestImagingRound extends AnyFunSuite, ScalaCheckPropertyChecks, ImagingRou
         given reader: Reader[ImagingRound] = ImagingRound.rwForImagingRound
 
         forAll { (name: String, time: ImagingTimepoint, repeat: PositiveInt) => 
-            val data = Map("name" -> ujson.Str(name), "time" -> ujson.Num(time.get), "isBlank" -> ujson.Bool(true), "repeat" -> ujson.Num(repeat))
+            val data = Map("name" -> name.asJson, "time" -> time.asJson, "isBlank" -> ujson.Bool(true), "repeat" -> ujson.Num(repeat))
             val jsonText = write(data)
             val error = intercept[ImagingRound.DecodingError]{ read[ImagingRound](jsonText) }
             error.messages.toList.count(_ === "Blank round cannot be a repeat!") shouldEqual 1

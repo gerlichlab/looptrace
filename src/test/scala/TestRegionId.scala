@@ -2,7 +2,6 @@ package at.ac.oeaw.imba.gerlich.looptrace
 
 import cats.syntax.all.*
 import org.scalacheck.Arbitrary
-import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
@@ -29,9 +28,7 @@ class TestRegionId extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite
 
     test("RegionId.fromNonnegative works; region ID must be nonnegative.") {
         forAll { (z: NonnegativeInt) => 
-            val rid = RegionId.fromNonnegative(z)
-            rid.get shouldEqual ImagingTimepoint(z)
-            rid.index shouldEqual z
+            RegionId.fromNonnegative(z).get shouldEqual ImagingTimepoint(z)
         }
     }
 
@@ -40,7 +37,7 @@ class TestRegionId extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite
     }
 
     test("Set respects region ID equivalence.") {
-        forAll (genValuesAndNumUnique(arbitrary[NonnegativeInt])(RegionId.fromNonnegative)) { 
+        forAll (genValuesAndNumUnique(Arbitrary.arbitrary[NonnegativeInt])(RegionId.fromNonnegative)) { 
             case (ids, exp) => ids.toSet shouldEqual exp
         }
     }

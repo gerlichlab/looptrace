@@ -13,10 +13,13 @@ import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.TracingOutputAnalysis.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.readJsonFile
+import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** Tests for pair of regional and locus-specific spot image timepoints. */
@@ -24,11 +27,7 @@ class TestSpotTimePair extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceS
     import SpotTimePair.given
     
     override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
-    
-    /* Typeclass instances to share among tests */
-    given showForRegional: Show[RegionId] = Show.show(_.index.toString)
-    given showForLocal: Show[LocusId] = Show.show(_.index.toString)
-    
+
     test("SpotTimePair equivalence is component-wise.") {
         /* Confine the bounds to generate more collisions */
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
@@ -42,7 +41,7 @@ class TestSpotTimePair extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceS
                 case (
                     (RegionId(rt1), LocusId(lt1)), 
                     (RegionId(rt2), LocusId(lt2))
-                ) => rt1.get == rt2.get && lt1.get == lt2.get
+                ) => rt1 === rt2 && lt1 === lt2
             }
             byInstance shouldBe byComponent
         }
@@ -323,7 +322,7 @@ class TestSpotTimePair extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceS
     } yield (toUse, allPairs -- toUse)
 
     private final def writeToCsv(pairs: List[SpotTimePair], f: os.Path) = 
-        val textPairs = pairs.map(_.bimap(_.show, _.show))
+        val textPairs = pairs.map(_.bimap(_.show_, _.show_))
         val lines = (("ref_frame", "frame") :: textPairs).map((_1, _2) => s"${_1},${_2}\n")
         os.write(f, lines)
 

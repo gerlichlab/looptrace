@@ -6,7 +6,6 @@ package object instances:
     private trait AllInstances extends 
         LocusIdInstances,
         PositionIndexInstances, 
-        PositionNameInstances, 
         ProbeNameInstances, 
         RegionIdInstances, 
         RoiIdInstances, 

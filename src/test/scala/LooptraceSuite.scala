@@ -33,9 +33,6 @@ trait LooptraceSuite extends GenericSuite, GeometricInstances, ImagingInstances,
 
     given arbitraryForPositionIndex(using idx: Arbitrary[NonnegativeInt]): Arbitrary[PositionIndex] = idx.map(PositionIndex.apply)
 
-    given arbitraryForPositionName: Arbitrary[PositionName] = 
-        Arbitrary{ Gen.alphaNumStr.suchThat(_.nonEmpty).map(PositionName.apply) }
-
     given arbitraryForProbeName(using arbName: Arbitrary[String]): Arbitrary[ProbeName] = arbName.suchThat(_.nonEmpty).map(ProbeName.apply)
 
     given arbitraryForRegionId(using arbTime: Arbitrary[ImagingTimepoint]): Arbitrary[RegionId] = arbTime.map(RegionId.apply)
