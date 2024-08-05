@@ -53,9 +53,13 @@ object CsvHelpers:
       * @param key The key of the field to read/parse
       * @param lift How to parse an {@code A} from raw string
       * @param row The row from which to parse the value
-      * @return Either a {@code Left}-wrapped error message, or a {@code Right}-wrapped parsed value
+      * @return Either a [[scala.util.Left]]-wrapped error message, or a [[scala.util.Right]]-wrapped parsed value
       */
-    def safeGetFromRow[A](key: String, lift: String => Either[String, A])(row: CsvRow) = Try(row(key)).continueParse(lift)
+    def safeGetFromRow[A](key: String, lift: String => Either[String, A])(row: CsvRow) = 
+      row.get(key)
+        .toRight(s"Row lacks key '$key'")
+        .flatMap{ raw => lift(raw).leftMap(msg => s"Failed to parse value ($raw) from key '$key': $msg") }
+        .toValidatedNel
 
     /**
       * Read given file as CSV with header, and handle resource safety.
