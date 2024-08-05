@@ -152,10 +152,14 @@ object LabelAndFilterRois extends ScoptCliReaders, StrictLogging:
         val (roisHeader, rowRoiPairs): (List[String], List[((CsvRow, Roi), LineNumber)]) = {
             safeReadAllWithOrderedHeaders(spotsFile).fold(
                 throw _, 
-                (head, spotRows) => Alternative[List].separate(spotRows.map(rowToRoi.throughRight)) match {
+                (head, spotRows) => Alternative[List].separate(
+                    spotRows.zipWithIndex.map{ 
+                        (row, i) => rowToRoi(row).bimap(i -> _, row -> _) 
+                    }
+                ) match {
                     case (Nil, rrPairs) => head -> NonnegativeInt.indexed(rrPairs)
-                    case (errors@(h :: _), _) => throw new Exception(
-                        s"${errors.length} error(s) converting spot file (${spotsFile}) rows to ROIs! First one: $h"
+                    case (errors@((i, h) :: _), _) => throw new Exception(
+                        s"${errors.length} error(s) converting spot file (${spotsFile}) rows to ROIs! First one (record $i): $h"
                         )
                 }
             )
@@ -164,10 +168,14 @@ object LabelAndFilterRois extends ScoptCliReaders, StrictLogging:
         /* Then, parse the drift correction records from the corresponding file. */
         val driftByPosTimePair = {
             val drifts = withCsvData(driftFile){
-                (driftRows: Iterable[CsvRow]) => Alternative[List].separate(driftRows.toList.map(rowToDriftRecord)) match {
+                (driftRows: Iterable[CsvRow]) => Alternative[List].separate(
+                    driftRows.toList.zipWithIndex.map{
+                        (row, i) => rowToDriftRecord(row).leftMap(i -> _)
+                    }
+                ) match {
                     case (Nil, drifts) => drifts
-                    case (errors@(h :: _), _) => throw new Exception(
-                        s"${errors.length} error(s) converting drift file (${driftFile}) rows to records! First one: $h"
+                    case (errors@((i, h) :: _), _) => throw new Exception(
+                        s"${errors.length} error(s) converting drift file (${driftFile}) rows to records! First one (record $i): $h"
                         )
                 }
             }.asInstanceOf[List[DriftRecord]]
