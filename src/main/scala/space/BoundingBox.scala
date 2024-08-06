@@ -1,6 +1,7 @@
 package at.ac.oeaw.imba.gerlich.looptrace
+package space
 
-import scala.util.NotGiven
+import scala.util.{ NotGiven, Try }
 import cats.*
 import cats.syntax.all.*
 
@@ -40,4 +41,10 @@ object BoundingBox:
         import Coordinate.given
         require(lo < hi, s"Lower bound not less than upper bound: ($lo, $hi)")
     end Interval
+
+    object Interval:
+        def fromTuple[C <: Coordinate : [C] =>> NotGiven[C =:= Coordinate]](t: (C, C)): Either[String, Interval[C]] = 
+            Try{ new Interval(t._1, t._2) }
+                .toEither
+                .leftMap{ e => s"Failed to create interval: ${e.getMessage}" }
 end BoundingBox

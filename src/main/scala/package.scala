@@ -10,7 +10,10 @@ import mouse.boolean.*
 import scopt.Read
 import com.github.tototoshi.csv.*
 
-import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import io.github.iltotore.iron.:|
+import io.github.iltotore.iron.constraint.char.*
+
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.{ ImagingTimepoint, PositionName }
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given // Order, Show
 

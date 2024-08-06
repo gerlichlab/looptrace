@@ -23,7 +23,7 @@ sealed trait RoiLike:
     def centroid: Point3D
 
 /** Type representing a detected fiducial bead region of interest (ROI) */
-final case class DetectedRoi(index: RoiIndex, centroid: Point3D, failCode: RoiFailCode) extends RoiLike:
+final case class FiducialBeadRoi(index: RoiIndex, centroid: Point3D, failCode: RoiFailCode) extends RoiLike:
     def isUsable: Boolean = failCode.indicatesSuccess
 
 /** A region of interest (ROI) selected for use in some process */
