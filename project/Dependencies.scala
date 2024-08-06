@@ -29,10 +29,10 @@ object Dependencies {
         private def latestVersion = "4.0.0"
     }
 
-    /* Versions */
+    /* versions */
     lazy val scalatestVersion = "3.2.18"
     
-    /* Core libraries */
+    /* core libraries */
     lazy val catsCore = "org.typelevel" %% "cats-core" % "2.12.0"
     lazy val gerlibs = Seq(
         "io",
@@ -40,21 +40,27 @@ object Dependencies {
         "numeric",
         "pan",
     ).map(Gerlib.getModuleId)
-    lazy val iron = Iron.moduleId
-    lazy val ironCats = Iron.getModuleID("cats")
-    lazy val ironScalacheck = Iron.getModuleID("scalacheck")
     lazy val logging = Seq(
         "ch.qos.logback" % "logback-classic" % "1.5.6", 
         "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
     )
     lazy val mouse = "org.typelevel" %% "mouse" % "1.2.3"
+
+    /* iron */
+    lazy val iron = Iron.moduleId
+    lazy val ironCats = Iron.getModuleID("cats")
+    lazy val ironScalacheck = Iron.getModuleID("scalacheck")
+    
+    /* IO-related dependencies */
+    lazy val fs2Csv = "org.gnieh" %% "fs2-data-csv" % "1.11.1"
+    lazy val fs2IO = "co.fs2" %% "fs2-io" % "3.10.2"
     lazy val os = "com.lihaoyi" %% "os-lib" % "0.10.3"
     lazy val scalaCsv = "com.github.tototoshi" %% "scala-csv" % "1.3.10"
     lazy val scopt = "com.github.scopt" %% "scopt" % "4.1.0"
     lazy val uJson = HaoyiJson.getModuleId("ujson")
     lazy val uPickle = HaoyiJson.getModuleId("upickle")
 
-    /* Test dependencies */
+    /* testing-related dependencies */
     lazy val gerlibTesting = Gerlib.getModuleId("testing")
     lazy val scalacheck = "org.scalacheck" %% "scalacheck" % "1.18.0"
     lazy val scalactic = "org.scalactic" %% "scalactic" % scalatestVersion

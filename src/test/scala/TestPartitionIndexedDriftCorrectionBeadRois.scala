@@ -327,7 +327,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
 
     test("Sampling result accords with expectation based on relation between usable ROI count and requested ROI counts.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
-        type InputsAndValidate = (ShiftingCount, PositiveInt, List[DetectedRoi], RoisSplit.Result => Any)
+        type InputsAndValidate = (ShiftingCount, PositiveInt, List[FiducialBeadRoi], RoisSplit.Result => Any)
         
         def genFewerThanAbsoluteMinimum: Gen[InputsAndValidate] = for {
             numShifting <- Gen.choose[Int](ShiftingCount.AbsoluteMinimumShifting, maxNumRoisSmallTests).map(ShiftingCount.unsafe)
@@ -416,7 +416,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => PositionIndex.unsafe(p) -> ImagingTimepoint.unsafe(t))
-        type PosTimeRois = (PosTimePair, List[DetectedRoi])
+        type PosTimeRois = (PosTimePair, List[FiducialBeadRoi])
         def genDetected(ptPairs: List[PosTimePair])(lo: Int, hi: Int): Gen[List[PosTimeRois]] = 
             ptPairs.traverse{ pt => genUsableRois(lo, hi).map(pt -> _) }
         val maxReqShifting = 2 * ShiftingCount.AbsoluteMinimumShifting
@@ -469,7 +469,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => PositionIndex.unsafe(p) -> ImagingTimepoint.unsafe(t))
         val maxReqShifting = 2 * ShiftingCount.AbsoluteMinimumShifting
-        def genArgs: Gen[(ShiftingCount, PositiveInt, List[(PosTimePair, List[DetectedRoi])])] = for {
+        def genArgs: Gen[(ShiftingCount, PositiveInt, List[(PosTimePair, List[FiducialBeadRoi])])] = for {
             numReqShifting <- Gen.choose(ShiftingCount.AbsoluteMinimumShifting, maxReqShifting).map(ShiftingCount.unsafe)
             numReqAccuracy <- Gen.choose(1, 100).map(PositiveInt.unsafe)
             numReq = numReqShifting + numReqAccuracy
@@ -763,16 +763,16 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     def genUsableRois(lo: Int, hi: Int)(using Arbitrary[RoiIndex], Arbitrary[Point3D]) = 
         genUnusableRois(lo, hi).map(_.map(_.setUsable))
 
-    /** Generate a single {@code DetectedRoi} with nonempty fail code. */
-    def genUnusableDetectedRoi(using Arbitrary[Point3D], Arbitrary[RoiIndex]): Gen[DetectedRoi] = for {
+    /** Generate a single {@code FiducialBeadRoi} with nonempty fail code. */
+    def genUnusableDetectedRoi(using Arbitrary[Point3D], Arbitrary[RoiIndex]): Gen[FiducialBeadRoi] = for {
         i <- arbitrary[RoiIndex]
         pt <- arbitrary[Point3D]
         failCode <- Gen.choose(1, 5).flatMap(Gen.listOfN(_, Gen.alphaChar).map(_.mkString("")))
-    } yield DetectedRoi(i, pt, RoiFailCode(failCode))
+    } yield FiducialBeadRoi(i, pt, RoiFailCode(failCode))
 
     /** Syntax additions on a detected ROI to set its usability flag */
-    extension (roi: DetectedRoi)
-        def setUsable: DetectedRoi = roi.copy(failCode = RoiFailCode.success)
+    extension (roi: FiducialBeadRoi)
+        def setUsable: FiducialBeadRoi = roi.copy(failCode = RoiFailCode.success)
 
     /** Generate a pair of pairs of nonnegative integers such that the first pair isn't the same as the second. */
     def genDistinctNonnegativePairs: Gen[(PosTimePair, PosTimePair)] = 
@@ -787,7 +787,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     def maxNumRoisSmallTests: ShiftingCount = ShiftingCount.unsafe(2 * ShiftingCount.AbsoluteMinimumShifting)
 
     /** Write the ROIs to file, with minimal data required to parse the fields consumed by the partition program under test here. */
-    def writeMinimalInputRoisCsv(rois: List[DetectedRoi], f: os.Path): Unit = {
+    def writeMinimalInputRoisCsv(rois: List[FiducialBeadRoi], f: os.Path): Unit = {
         val (header, getPointFields) = (
             Array("", ParserConfig.xCol.get, ParserConfig.yCol.get, ParserConfig.zCol.get, ParserConfig.qcCol),
             (p: Point3D) => Array(p.x.get, p.y.get, p.z.get).map(_.toString)

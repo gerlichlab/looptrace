@@ -35,7 +35,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
     type PosTimePair = (PositionIndex, ImagingTimepoint)
     type KeyedProblem = (PosTimePair, RoisSplit.Problem)
     type InitFile = (PosTimePair, os.Path)
-    type IndexedRoi = DetectedRoi | SelectedRoi
+    type IndexedRoi = FiducialBeadRoi | SelectedRoi
     type JsonWriter[*] = upickle.default.Writer[*]
 
     final case class CliConfig(
@@ -172,7 +172,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
         logger.info("Done!")
     }
 
-    def createParser(header: RawRecord): ErrMsgsOr[RawRecord => ErrMsgsOr[DetectedRoi]] = {
+    def createParser(header: RawRecord): ErrMsgsOr[RawRecord => ErrMsgsOr[FiducialBeadRoi]] = {
         import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.* // for >>> and >>, generally
         val maybeParseIndex = buildFieldParse(ParserConfig.indexCol.get, safeParseInt >>> RoiIndex.fromInt)(header)
         val maybeParseX = buildFieldParse(ParserConfig.xCol.get, safeParseDouble.andThen(_.map(XCoordinate.apply)))(header)
@@ -191,7 +191,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
                         val maybeZ = parseZ(record)
                         val maybeFailCode = parseFailCode(record)
                         (maybeIndex, maybeX, maybeY, maybeZ, maybeFailCode).mapN(
-                            (i, x, y, z, failCode) => DetectedRoi(i, Point3D(x, y, z), failCode)
+                            (i, x, y, z, failCode) => FiducialBeadRoi(i, Point3D(x, y, z), failCode)
                         ).toEither
                     }
             }
@@ -242,7 +242,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
       * @param roisFile The file to parse
       * @return A collection of ROIs, representing what was detected for a particular (FOV, time) combo
       */
-    def readRoisFile(roisFile: os.Path): Either[RoisFileParseError, Iterable[DetectedRoi]] = {
+    def readRoisFile(roisFile: os.Path): Either[RoisFileParseError, Iterable[FiducialBeadRoi]] = {
         prepFileRead(roisFile)
             .toEither
             .flatMap{ case (sep, head, lines) => createParser(sep `split` head).map(_ -> lines.map(sep.split)) }
@@ -268,7 +268,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
       * @param rois Collection of detected bead ROIs, from a single (FOV, time) pair
       * @return An explanation of failure if partition isn't possible, or a partition with perhaps a warning
       */
-    def sampleDetectedRois(numShifting: ShiftingCount, numAccuracy: PositiveInt)(rois: Iterable[DetectedRoi]): RoisSplit.Result = {
+    def sampleDetectedRois(numShifting: ShiftingCount, numAccuracy: PositiveInt)(rois: Iterable[FiducialBeadRoi]): RoisSplit.Result = {
         val sampleSize = numShifting + numAccuracy
         if (sampleSize < numShifting || sampleSize < numAccuracy) {
             val msg = s"Appears overflow occurred computing sample size: ${numShifting} + ${numAccuracy} = ${sampleSize}"
