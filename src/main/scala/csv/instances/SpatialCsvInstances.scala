@@ -22,7 +22,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.{
 }
 
 /** IO-related typeclass instances for spatial data types */
-trait SpatialInstances:
+trait SpatialCsvInstances:
     /** Attempt to parse the given string as a double. */
     private def readDouble: String => Either[String, Double] = s => 
         Try{ s.toDouble }
@@ -59,4 +59,4 @@ trait SpatialInstances:
                     DecoderError(msg)
                 }
 
-end SpatialInstances
+end SpatialCsvInstances
