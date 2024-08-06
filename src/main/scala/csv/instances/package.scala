@@ -2,6 +2,6 @@ package at.ac.oeaw.imba.gerlich.looptrace
 package csv
 
 package object instances:
-    object all extends AllInstances
+    object all extends AllCsvInstances
 
-    trait AllInstances extends SpatialInstances
+    trait AllCsvInstances extends RoiCsvInstances, SpatialCsvInstances
