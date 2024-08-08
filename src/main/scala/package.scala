@@ -19,18 +19,17 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given // 
 
 /** Chromatin fiber tracing with FISH probes */
 package object looptrace {
-    type CsvRow = Map[String, String]
     type ErrorMessages = NonEmptyList[String]
     type ErrMsgsOr[A] = Either[ErrorMessages, A]
 
     /** Use rows from a CSV file in arbitrary code. */
-    def withCsvData(filepath: os.Path)(code: Iterable[CsvRow] => Any): Any = {
+    def withCsvData(filepath: os.Path)(code: Iterable[Map[String, String]] => Any): Any = {
         val reader = CSVReader.open(filepath.toIO)
         try { code(reader.allWithHeaders()) } finally { reader.close() }
     }
 
     /** Do arbitrary code with rows from a pair of CSV files. */
-    def withCsvPair(f1: os.Path, f2: os.Path)(code: (Iterable[CsvRow], Iterable[CsvRow]) => Any): Any = {
+    def withCsvPair(f1: os.Path, f2: os.Path)(code: (Iterable[Map[String, String]], Iterable[Map[String, String]]) => Any): Any = {
         var reader1: CSVReader = null
         val reader2 = CSVReader.open(f2.toIO)
         try {

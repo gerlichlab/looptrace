@@ -17,6 +17,7 @@ final case class DetectedSpotRoi(
 
 /** Helpers for working with ROIs which come from initial spot detection */
 object DetectedSpotRoi:
+    /** Build the ROI by unpacking the appropriate data from the given spot. */
     def apply(spot: DetectedSpot[Double], box: BoundingBox): DetectedSpotRoi = 
         DetectedSpotRoi(
             spot.context, 

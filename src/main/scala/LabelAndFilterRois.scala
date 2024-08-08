@@ -141,7 +141,7 @@ object LabelAndFilterRois extends ScoptCliReaders, StrictLogging:
         val (writeUnfiltered, writeFiltered) = {
             val unfilteredNel = extantOutputHandler.getSimpleWriter(unfilteredOutputFile).toValidatedNel
             val filteredNel = extantOutputHandler.getSimpleWriter(filteredOutputFile).toValidatedNel
-            val writeCsv = (sink: os.Source => Boolean) => writeAllCsvUnsafe(sink)(_: List[String], _: Iterable[CsvRow])
+            val writeCsv = (sink: os.Source => Boolean) => writeAllCsvUnsafe(sink)(_: List[String], _: Iterable[Map[String, String]])
             (unfilteredNel, filteredNel).tupled.fold(
                 es => throw new Exception(s"${es.size} existence error(s) with output: ${es.map(_.getMessage)}"), 
                 _.mapBoth(writeCsv)
@@ -149,7 +149,7 @@ object LabelAndFilterRois extends ScoptCliReaders, StrictLogging:
         }
 
         /* Then, parse the ROI records from the (regional barcode) spots file. */
-        val (roisHeader, rowRoiPairs): (List[String], List[((CsvRow, Roi), LineNumber)]) = {
+        val (roisHeader, rowRoiPairs): (List[String], List[((Map[String, String], Roi), LineNumber)]) = {
             safeReadAllWithOrderedHeaders(spotsFile).fold(
                 throw _, 
                 (head, spotRows) => Alternative[List].separate(
@@ -168,7 +168,7 @@ object LabelAndFilterRois extends ScoptCliReaders, StrictLogging:
         /* Then, parse the drift correction records from the corresponding file. */
         val driftByPosTimePair = {
             val drifts = withCsvData(driftFile){
-                (driftRows: Iterable[CsvRow]) => Alternative[List].separate(
+                (driftRows: Iterable[Map[String, String]]) => Alternative[List].separate(
                     driftRows.toList.zipWithIndex.map{
                         (row, i) => rowToDriftRecord(row).leftMap(i -> _)
                     }
@@ -373,7 +373,7 @@ object LabelAndFilterRois extends ScoptCliReaders, StrictLogging:
     }
 
     /** Parse a {@code ROI} value from an in-memory representation of a single line from a CSV file. */
-    def rowToRoi(row: CsvRow): ErrMsgsOr[Roi] = {
+    def rowToRoi(row: Map[String, String]): ErrMsgsOr[Roi] = {
         val indexNel = safeGetFromRow("", safeParseInt >>> RoiIndex.fromInt)(row)
         val posNel = safeGetFromRow("position", PositionName.parse)(row)
         val regionNel = safeGetFromRow("frame", safeParseInt >>> RegionId.fromInt)(row)
@@ -410,7 +410,7 @@ object LabelAndFilterRois extends ScoptCliReaders, StrictLogging:
      * @param row The simply-parsed (all {@code String}) representation of a line from a CSV
      * @return Either a {@code Left}-wrapped nonempty collection of error messages, or a {@code Right}-wrapped record
      */
-    private def rowToDriftRecord(row: CsvRow): ErrMsgsOr[DriftRecord] = {
+    private def rowToDriftRecord(row: Map[String, String]): ErrMsgsOr[DriftRecord] = {
         val posNel = safeGetFromRow("position", PositionName.parse)(row)
         val timeNel = safeGetFromRow("frame", safeParseInt >>> ImagingTimepoint.fromInt)(row)
         val coarseDriftNel = {
