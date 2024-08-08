@@ -13,7 +13,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 object CsvHelpers:
 
     /** Alias for a bundle of line number, error message, and single row/record fields */
-    type ErrorData = (LineNumber, ErrMsg, CsvRow)
+    type ErrorData = (LineNumber, ErrMsg, Map[String, String])
     
     /** Alias for when text represents an error message */
     type ErrMsg = String
@@ -25,10 +25,10 @@ object CsvHelpers:
     private[looptrace] final case class FieldNameColumnNameMismatchException(records: NEL[ErrorData]) extends Throwable
 
     /** Order each row's fields according to the header, and ensure the exact match between fields and columns. */
-    def prepCsvWrite(header: List[String])(rows: Iterable[CsvRow]): Either[IllegalArgumentException | FieldNameColumnNameMismatchException, List[List[String]]] = for {
+    def prepCsvWrite(header: List[String])(rows: Iterable[Map[String, String]]): Either[IllegalArgumentException | FieldNameColumnNameMismatchException, List[List[String]]] = for {
         _ <- (header.toSet.size === header.length).either(IllegalArgumentException(s"Repeat elements present in header: $header"), ())
         getKey = header.zipWithIndex.toMap.apply
-        sortRowFields = (row: CsvRow) => {
+        sortRowFields = (row: Map[String, String]) => {
             val ordered = row.toList.sortBy((k, _) => getKey(k))
             (ordered.map(_._1) === header).either("Sorted field names differ from header", ordered.map(_._2))
         }
@@ -55,7 +55,7 @@ object CsvHelpers:
       * @param row The row from which to parse the value
       * @return Either a [[scala.util.Left]]-wrapped error message, or a [[scala.util.Right]]-wrapped parsed value
       */
-    def safeGetFromRow[A](key: String, lift: String => Either[String, A])(row: CsvRow) = 
+    def safeGetFromRow[A](key: String, lift: String => Either[String, A])(row: Map[String, String]) = 
       row.get(key)
         .toRight(s"Row lacks key '$key'")
         .flatMap{ raw => lift(raw).leftMap(msg => s"Failed to parse value ($raw) from key '$key': $msg") }
@@ -67,7 +67,7 @@ object CsvHelpers:
       * @param f The path to the file to read as CSV
       * @return Either a {@code Left}-wrapped exception or a {@code Right}-wrapped list of row records
       */
-    def safeReadAllWithHeaders(f: os.Path): Either[Throwable, List[CsvRow]] = for {
+    def safeReadAllWithHeaders(f: os.Path): Either[Throwable, List[Map[String, String]]] = for {
         reader <- Try{ CSVReader.open(f.toIO) }.toEither
         result <- Try{ reader.allWithHeaders() }.toEither
         _ = reader.close()
@@ -79,7 +79,7 @@ object CsvHelpers:
       * @param f The path to the file to read as CSV
       * @return Either a {@code Left}-wrapped exception or a {@code Right}-wrapped pair of columns and list of row records
       */
-    def safeReadAllWithOrderedHeaders(f: os.Path): Either[Throwable, (List[String], List[CsvRow])] = for {
+    def safeReadAllWithOrderedHeaders(f: os.Path): Either[Throwable, (List[String], List[Map[String, String]])] = for {
         reader <- Try{ CSVReader.open(f.toIO) }.toEither
         result <- Try{ reader.allWithOrderedHeaders() }.toEither
         _ = reader.close()
@@ -93,11 +93,11 @@ object CsvHelpers:
       * @param rows The individual rows/records of data to write as CSV
       * @return Either a {@code Left}-wrapped exception, or a {@code Right}-wrapped flag indicating whether the file was written
       */
-    def writeAllCsvSafe(writeLines: os.Source => Boolean)(header: List[String], rows: Iterable[CsvRow]): Either[IllegalArgumentException | FieldNameColumnNameMismatchException, Boolean] = 
+    def writeAllCsvSafe(writeLines: os.Source => Boolean)(header: List[String], rows: Iterable[Map[String, String]]): Either[IllegalArgumentException | FieldNameColumnNameMismatchException, Boolean] = 
         prepCsvWrite(header)(rows).map(recs => (header :: recs).map(_.mkString(",") ++ "\n")).map(recs => writeLines(recs))
 
     /** Safely write rows to CSV with header, ensuring each has exactly the header's fields, and is ordered accordingly. */
-    def writeAllCsvSafe(f: os.Path, header: List[String], rows: Iterable[CsvRow], handleExtant: ExtantOutputHandler): Either[Throwable, Boolean] = {
+    def writeAllCsvSafe(f: os.Path, header: List[String], rows: Iterable[Map[String, String]], handleExtant: ExtantOutputHandler): Either[Throwable, Boolean] = {
         val maybeWrite: Either[Throwable, os.Source => Boolean] = handleExtant.getSimpleWriter(f)
         val maybeLines: Either[Throwable, os.Source] = prepCsvWrite(header)(rows).map(recs => (header :: recs).map(_.mkString(",") ++ "\n"))
         maybeWrite <*> maybeLines
@@ -111,7 +111,7 @@ object CsvHelpers:
       * @param rows The individual rows / records to write as CSV
       * @return A flag indicating if the file was written (most likely), determined by the given writing function
       */
-    def writeAllCsvUnsafe(writeLines: os.Source => Boolean)(header: List[String], rows: Iterable[CsvRow]): Boolean = 
+    def writeAllCsvUnsafe(writeLines: os.Source => Boolean)(header: List[String], rows: Iterable[Map[String, String]]): Boolean = 
         writeAllCsvSafe(writeLines)(header, rows).fold(throw _, identity)
 
 end CsvHelpers

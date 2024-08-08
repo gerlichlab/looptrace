@@ -70,7 +70,7 @@ object TracingOutputAnalysis extends LazyLogging:
         os.write(outfile, lines)
     }
 
-    private def unsafeGetThroughTimepoint[A](key: String, build: ImagingTimepoint => A) = (row: CsvRow) => 
+    private def unsafeGetThroughTimepoint[A](key: String, build: ImagingTimepoint => A) = (row: Map[String, String]) => 
         safeGetFromRow(key, safeParseInt >>> ImagingTimepoint.fromInt)(row)
             .fold(errs => throw new Exception(s"Problem(s) parsing $key from row ($row): $errs"), build)
     
@@ -222,5 +222,5 @@ object TracingOutputAnalysis extends LazyLogging:
         records.groupBy(key).view.mapValues(_.size).toMap
     
     private def countByRegionLocusPairUnsafe = 
-        countByKey(_: Iterable[CsvRow]){ r => unsafeGetRegion(r) -> unsafeGetLocus(r) }
+        countByKey(_: Iterable[Map[String, String]]){ r => unsafeGetRegion(r) -> unsafeGetLocus(r) }
 end TracingOutputAnalysis

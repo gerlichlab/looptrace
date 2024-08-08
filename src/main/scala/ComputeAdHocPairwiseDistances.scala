@@ -71,8 +71,8 @@ object ComputeAdHocPairwiseDistances extends ScoptCliReaders with StrictLogging:
             case Some(opts) => 
                 logger.info(s"Reading input file: ${opts.infile}")
                 val (_, rows) = safeReadAllWithOrderedHeaders(opts.infile).fold(throw _, identity)
-                val parseId = (r: CsvRow) => r(opts.idKey)
-                val parsePoint = (r: CsvRow) => 
+                val parseId = (r: Map[String, String]) => r(opts.idKey)
+                val parsePoint = (r: Map[String, String]) => 
                     val z = ZCoordinate(r(opts.zKey).toDouble)
                     val y = YCoordinate(r(opts.yKey).toDouble)
                     val x = XCoordinate(r(opts.xKey).toDouble)
