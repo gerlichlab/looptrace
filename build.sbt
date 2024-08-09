@@ -64,8 +64,8 @@ lazy val root = (project in file("."))
     ),
     libraryDependencies ++= Seq(
       catsCore,
-      iron,     // indirect, but needs to be on classpath
-      ironCats, // indirect, but needs to be on classpath
+      iron, 
+      ironCats, 
       mouse,
       os, 
       scalaCsv,
