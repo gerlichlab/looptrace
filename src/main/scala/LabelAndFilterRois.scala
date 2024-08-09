@@ -11,6 +11,7 @@ import scopt.OParser
 import com.github.tototoshi.csv.*
 import com.typesafe.scalalogging.StrictLogging
 
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.BoundingBox
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
@@ -439,18 +440,19 @@ object LabelAndFilterRois extends ScoptCliReaders, StrictLogging:
     val MultiValueFieldInternalSeparator = "|"
 
     object Movement:
+        private type Interval[C <: Coordinate] = BoundingBox.Interval[Double, C]
         def shiftBy(del: XDir[Double])(c: XCoordinate): XCoordinate = XCoordinate(c.get + del.get)
         def shiftBy(del: YDir[Double])(c: YCoordinate): YCoordinate = YCoordinate(c.get + del.get)
         def shiftBy(del: ZDir[Double])(c: ZCoordinate): ZCoordinate = ZCoordinate(c.get + del.get)
-        def shiftBy(del: XDir[Double])(intv: BoundingBox.Interval[XCoordinate]): BoundingBox.Interval[XCoordinate] =
+        def shiftBy(del: XDir[Double])(intv: Interval[XCoordinate]): Interval[XCoordinate] =
             BoundingBox.Interval(shiftBy(del)(intv.lo), shiftBy(del)(intv.hi))
-        def shiftBy(del: YDir[Double])(intv: BoundingBox.Interval[YCoordinate]): BoundingBox.Interval[YCoordinate] =
+        def shiftBy(del: YDir[Double])(intv: Interval[YCoordinate]): Interval[YCoordinate] =
             BoundingBox.Interval(shiftBy(del)(intv.lo), shiftBy(del)(intv.hi))
-        def shiftBy(del: ZDir[Double])(intv: BoundingBox.Interval[ZCoordinate]): BoundingBox.Interval[ZCoordinate] =
+        def shiftBy(del: ZDir[Double])(intv: Interval[ZCoordinate]): Interval[ZCoordinate] =
             BoundingBox.Interval(shiftBy(del)(intv.lo), shiftBy(del)(intv.hi))
         def addDrift(drift: TotalDrift)(pt: Point3D): Point3D = 
             Point3D(shiftBy(drift.x)(pt.x), shiftBy(drift.y)(pt.y), shiftBy(drift.z)(pt.z))
-        def addDrift(drift: TotalDrift)(box: BoundingBox): BoundingBox = 
+        def addDrift(drift: TotalDrift)(box: BoundingBox[Double]): BoundingBox[Double] = 
             BoundingBox(shiftBy(drift.x)(box.sideX), shiftBy(drift.y)(box.sideY), shiftBy(drift.z)(box.sideZ))
     end Movement
 

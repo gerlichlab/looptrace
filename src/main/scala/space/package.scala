@@ -48,6 +48,8 @@ package object space:
         /** Try to parse given JSON value as enum instance. */
         def fromJsonSafe(json: ujson.Value): Either[Throwable, CoordinateSequence] = Try(json.str).toEither.flatMap(parse)
 
+    type BoundingBox = geometry.BoundingBox[Wrapped]
+
     type Point3D = geometry.Point3D[Wrapped]
 
     /** Helpers for working with points in 3D space */

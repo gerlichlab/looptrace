@@ -7,7 +7,6 @@ import at.ac.oeaw.imba.gerlich.gerlib.io.csv.getCsvRowDecoderForProduct2
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.given
 
 import at.ac.oeaw.imba.gerlich.looptrace.DetectedSpotRoi
-import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.spatial.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.BoundingBox
 
 /** Typeclass instances related to CSV, for ROI-related data types */
