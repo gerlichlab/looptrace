@@ -18,11 +18,13 @@ trait GenericSuite extends NumericInstances:
         try { testCode(tempRoot) } finally { os.remove.all(tempRoot) }
     }
 
+    /** NB: delimiter is only used to determine the filename extension. */
     def withTempFile(delimiter: Delimiter)(testCode: os.Path => Any): Any = 
         withTempFile(initData = null, delimiter = delimiter)(testCode)
 
+    /** NB: delimiter is only used to determine the filename extension. */
     def withTempFile(initData: os.Source, delimiter: Delimiter)(testCode: os.Path => Any): Any = 
-        withTempFile(initData = initData, suffix = "." ++ delimiter.ext)
+        withTempFile(initData = initData, suffix = "." ++ delimiter.ext)(testCode)
 
     /** Execute some test code that uses a {@code os.Path} file. */
     def withTempFile(initData: os.Source = null, suffix: String = "")(testCode: os.Path => Any): Any = {
@@ -31,5 +33,6 @@ trait GenericSuite extends NumericInstances:
     }
 
     /** Execute some test code that uses a JSON file {@code os.Path} file. */
-    def withTempJsonFile(initData: os.Source, suffix: String = ".json") = withTempFile(initData, suffix)(_: os.Path => Any)
+    def withTempJsonFile(initData: os.Source, suffix: String = ".json") = 
+        withTempFile(initData, suffix)(_: os.Path => Any)
 end GenericSuite

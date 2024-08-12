@@ -156,7 +156,10 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
         forAll { (delimiter: Delimiter) => 
             withTempFile("", delimiter){ (roisFile: os.Path) => 
                 os.isFile(roisFile) shouldBe true
-                readRoisFile(roisFile) shouldEqual Left(NonEmptyList.one(s"No lines in file! $roisFile"))
+                val expErrorMessages = NonEmptyList.one(s"No lines in file! $roisFile")
+                val expected = RoisFileParseFailedSetup(expErrorMessages).asLeft[Iterable[FiducialBeadRoi]]
+                val observed = readRoisFile(roisFile)
+                observed shouldEqual expected
             }
         }
     }
