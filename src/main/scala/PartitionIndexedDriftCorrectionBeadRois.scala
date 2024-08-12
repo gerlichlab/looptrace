@@ -365,8 +365,13 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
                 Map("position" -> pos.get.asJson, timeKey -> time.asJson)
     end PosTimePair
 
+    /** Type for when something gois wrong parsing a bead ROIs file */
     sealed trait RoisFileParseError extends Throwable
+    
+    /** One or more error messages about what went wrong setting up the parse of a bead ROIs file. */
     final case class RoisFileParseFailedSetup(get: ErrorMessages) extends RoisFileParseError
+    
+    /** One or more non-parseable records from a bead ROIs file */
     final case class RoisFileParseFailedRecords(get: NonEmptyList[BadRecord]) extends RoisFileParseError
     
     object RoisSplit:
