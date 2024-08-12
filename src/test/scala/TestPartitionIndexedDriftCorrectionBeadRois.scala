@@ -187,6 +187,8 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     }
 
     test("Any missing column name in header causes error.") {
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny
+        
         // Create the parser config and a strict subset of the column names.
         def genHeadFieldSubset: Gen[List[String]] = 
             Gen.choose(0, ColumnNamesToParse.length - 1).flatMap(Gen.pick(_, ColumnNamesToParse)).map(_.toList)
@@ -209,8 +211,8 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
                     readRoisFile(roisFile) match {
                         case Right(_) => fail("ROIs file read succeeded when it should've failed!")
                         case Left(RoisFileParseFailedSetup(errorMessages)) => 
-                            errorMessages.length shouldEqual expMissFields.size
                             errorMessages.toList.toSet shouldEqual expMessages
+                            errorMessages.length shouldEqual expMissFields.size
                         case Left(e) => fail(s"Parse failed but in unexpected (non-setup) way: $e")
                     }
                 }
