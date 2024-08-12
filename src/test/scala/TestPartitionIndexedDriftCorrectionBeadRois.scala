@@ -191,7 +191,14 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
         
         // Create the parser config and a strict subset of the column names.
         def genHeadFieldSubset: Gen[List[String]] = 
-            Gen.choose(0, ColumnNamesToParse.length - 1).flatMap(Gen.pick(_, ColumnNamesToParse)).map(_.toList)
+            // Generate at least one value, to avoid potential conflict of thinking 
+            // that the index column (perhaps empty string) is present.
+            Gen.choose(1, ColumnNamesToParse.length - 1)
+                .flatMap(Gen.pick(_, ColumnNamesToParse))
+                .map(_.toList)
+                // Don't generate just the empty string, as that could conceivably 
+                // trigger an error that the file is empty.
+                .suchThat(_ =!= List(""))
 
         // Optionally, generate some additional column names, limiting to relatively few columns.
         def genHeaderAndDelimiter = for {
@@ -729,7 +736,13 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     type NNPair = (NonnegativeInt, NonnegativeInt)
 
     /** Minimal detected bead ROIs field consumed by the partitioning program under test */
-    val ColumnNamesToParse = List(ParserConfig.xCol.get, ParserConfig.yCol.get, ParserConfig.zCol.get, ParserConfig.qcCol)
+    val ColumnNamesToParse = List(
+        ParserConfig.indexCol.get, 
+        ParserConfig.xCol.get, 
+        ParserConfig.yCol.get, 
+        ParserConfig.zCol.get, 
+        ParserConfig.qcCol,
+    )
 
     /**
      * Generate collection of detected ROIs in which usability is mixed, for tests where percentage/ratio should be irrelevant.
