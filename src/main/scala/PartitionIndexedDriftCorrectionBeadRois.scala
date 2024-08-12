@@ -175,7 +175,6 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
     def createParser(header: RawRecord): ErrMsgsOr[RawRecord => ErrMsgsOr[FiducialBeadRoi]] = {
         import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.* // for >>> and >>, generally
         val maybeParseIndex = buildFieldParse(ParserConfig.indexCol.get, safeParseInt >>> RoiIndex.fromInt)(header)
-            .leftMap(_.map("(To parse index) " ++ _))
         val maybeParseX = buildFieldParse(ParserConfig.xCol.get, safeParseDouble.andThen(_.map(XCoordinate.apply)))(header)
         val maybeParseY = buildFieldParse(ParserConfig.yCol.get, safeParseDouble.andThen(_.map(YCoordinate.apply)))(header)
         val maybeParseZ = buildFieldParse(ParserConfig.zCol.get, safeParseDouble.andThen(_.map(ZCoordinate.apply)))(header)
