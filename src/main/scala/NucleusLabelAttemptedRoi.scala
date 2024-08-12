@@ -1,16 +1,17 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
+import at.ac.oeaw.imba.gerlich.gerlib.cell.NuclearDesignation
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.Centroid
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingContext
-import at.ac.oeaw.imba.gerlich.looptrace.space.Point3D
 import at.ac.oeaw.imba.gerlich.gerlib.roi.measurement.Area
 import at.ac.oeaw.imba.gerlich.gerlib.roi.measurement.MeanIntensity
+
 import at.ac.oeaw.imba.gerlich.looptrace.space.BoundingBox
-import at.ac.oeaw.imba.gerlich.gerlib.cell.NuclearDesignation
 
 /** Add designation of nucleus to the data associated with a FISH spot ROI. */
 final case class NucleusLabelAttemptedRoi(
     context: ImagingContext, 
-    center: Point3D, 
+    center: Centroid[Double], 
     area: Area, 
     intensity: MeanIntensity, 
     box: BoundingBox, 
