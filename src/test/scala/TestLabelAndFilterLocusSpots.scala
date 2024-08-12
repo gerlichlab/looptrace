@@ -178,7 +178,7 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, ScalaCheckPropertyChecks
                         assertPairwiseEquality(observed = obsRows.toList, expected = expRowsAll.toList)
                     }
                     // Just use strings here since Int-to-String is 1:1 (essentially), and this obviates need to unsafely lift String to Int.
-                    val discard = (r: CsvRow) => exclusions.map(_.toString).toSet.contains(r("frame"))
+                    val discard = (r: Map[String, String]) => exclusions.map(_.toString).toSet.contains(r("frame"))
                     withCsvPair(expFilteredPath, wholemealFilteredExpectationFile){ (obsRows: CsvRows, expRowsAll: CsvRows) =>
                         val expRowsFilt = expRowsAll.filterNot(discard)
                         assertPairwiseEquality(observed = obsRows.toList, expected = expRowsFilt.toList)
@@ -226,7 +226,7 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, ScalaCheckPropertyChecks
     }
 
     /* Ancillary functions and types */
-    type CsvRows = Iterable[CsvRow]
+    type CsvRows = Iterable[Map[String, String]]
     private def componentExpectationFile = getResourcePath("traces.labeled.unfiltered.csv")
     private def wholemealFilteredExpectationFile = getResourcePath("traces.labeled.filtered.csv")
     private def getResourcePath(name: String): os.Path = 

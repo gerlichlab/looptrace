@@ -5,11 +5,21 @@ import cats.syntax.all.*
 import org.scalacheck.{ Arbitrary, Gen }
 import org.scalacheck.Arbitrary.arbitrary
 
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.BoundingBox
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.testing.{ GeometricInstances, ImagingInstances }
 
-import at.ac.oeaw.imba.gerlich.looptrace.space.*
+import at.ac.oeaw.imba.gerlich.looptrace.space.{
+    BoundingBox as BB,
+    Coordinate, 
+    CoordinateSequence, 
+    EuclideanDistance,
+    Point3D,
+    XCoordinate, 
+    YCoordinate, 
+    ZCoordinate,
+}
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** Base trait for tests in looptrace */
@@ -84,9 +94,9 @@ trait LooptraceSuite extends GenericSuite, GeometricInstances, ImagingInstances,
     protected def genNonNegInt(limit: NonnegativeInt): Gen[NonnegativeInt] = Gen.choose(0, limit).map(NonnegativeInt.unsafe)
     protected def genNonNegReal(limit: NonnegativeReal): Gen[NonnegativeReal] = Gen.choose(0.0, limit).map(NonnegativeReal.unsafe)
     protected def genPosReal(limit: PositiveReal): Gen[PositiveReal] = Gen.choose(0.0, limit).suchThat(_ > 0).map(PositiveReal.unsafe)
-    protected def buildRectangularBox(pt: Point3D)(xMargin: BoundingBox.Margin, yMargin: BoundingBox.Margin, zMargin: BoundingBox.Margin): BoundingBox = {
-        def buildInterval[C <: Coordinate : [C] =>> NotGiven[C =:= Coordinate]](lift: Double => C)(center: Double, margin: BoundingBox.Margin): BoundingBox.Interval[C] = 
-            BoundingBox.Interval.apply[C].tupled((center - margin.get, center + margin.get).mapBoth(lift))
+    protected def buildRectangularBox(pt: Point3D)(xMargin: BoundingBox.Margin, yMargin: BoundingBox.Margin, zMargin: BoundingBox.Margin): BB = {
+        def buildInterval[C <: Coordinate : [C] =>> NotGiven[C =:= Coordinate]](lift: Double => C)(center: Double, margin: BoundingBox.Margin): BoundingBox.Interval[Double, C] = 
+            BoundingBox.Interval.apply[Double, C].tupled((center - margin.get, center + margin.get).mapBoth(lift))
         val ix = buildInterval(XCoordinate.apply)(pt.x.get, xMargin)
         val iy = buildInterval(YCoordinate.apply)(pt.y.get, yMargin)
         val iz = buildInterval(ZCoordinate.apply)(pt.z.get, zMargin)

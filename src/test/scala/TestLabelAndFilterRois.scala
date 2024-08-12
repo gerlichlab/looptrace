@@ -16,6 +16,7 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import io.github.iltotore.iron.scalacheck.char.given
 
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.BoundingBox
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
@@ -25,7 +26,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.collections.*
 import at.ac.oeaw.imba.gerlich.looptrace.instances.roiId.given
-import at.ac.oeaw.imba.gerlich.looptrace.space.*
+import at.ac.oeaw.imba.gerlich.looptrace.space.{BoundingBox as BB, *}
 import at.ac.oeaw.imba.gerlich.looptrace.space.Point3D.given // for cats.Order
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.safeReadAllWithOrderedHeaders
@@ -1163,8 +1164,8 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
     }
     
     private def buildInterval[C <: Coordinate: [C] =>> NotGiven[C =:= Coordinate]](
-        c: C, margin: BoundingBox.Margin)(lift: Double => C): BoundingBox.Interval[C] = 
-        BoundingBox.Interval[C].apply.tupled((c.get - margin.get, c.get + margin.get).mapBoth(lift))
+        c: C, margin: BoundingBox.Margin)(lift: Double => C): BoundingBox.Interval[Double, C] = 
+        BoundingBox.Interval[Double, C].apply.tupled((c.get - margin.get, c.get + margin.get).mapBoth(lift))
 
     private def genThresholdAndRoisToFacilitateCollisions: Gen[(NonnegativeReal, List[Roi])] = {
         for {
