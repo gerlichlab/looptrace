@@ -19,25 +19,6 @@ package object collections:
         def ++(ys: Set[X])(using Ordering[X]): NonEmptySet[X] = ys.toNonEmptySet.fold(xs)(xs | _)
 
     /**
-      * Take the cartesian product over the given input collections.
-      *
-      * @tparam X The element type
-      * @param xss The collection of collections over which to take the cartesian product
-      * @return The cartesian product over the given input
-      */
-    def cartesianProduct[X](xss: Seq[Seq[X]]): Seq[Seq[X]] = {
-        @scala.annotation.tailrec
-        def go(rest: Seq[Seq[X]], acc: Seq[Seq[X]]): Seq[Seq[X]] = rest match {
-            case Nil => acc
-            // Prepend each current element to each (leftward-growing) output collection, starting a new "branch" for each new element.
-            case curr :: rest => go(rest, curr.flatMap{ x => acc.map(x +: _) })
-        }
-        // Flip the input since deconstruction will be left-to-right, but we'll be PRE-pending to accumulator.
-        // Initialise the accumulator with the terminus of an empty collection (itself a collection).
-        go(xss.reverse, Seq(Nil))
-    }
-
-    /**
       * Partition a collection of objects into {@code n} distinct parts (subsets).
       * 
       * @tparam X The type of object in the collection to partition
