@@ -16,6 +16,7 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import io.github.iltotore.iron.scalacheck.char.given
 
+import at.ac.oeaw.imba.gerlich.gerlib.collections.partition
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.BoundingBox
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
@@ -1203,5 +1204,4 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
 
     // Header for drift correction file
     private def headDriftFile = ",frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine"
-
 end TestLabelAndFilterRois
