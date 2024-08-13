@@ -288,6 +288,18 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
         arbPoint: Arbitrary[Point3D], 
     ): Arbitrary[Input.GoodRecord] = (arbPos, arbRegion, arbPoint).mapN(Input.GoodRecord.apply)
 
+    // nCk, i.e. number of ways to choose k indistinguishable objects from n
+    extension (n: Int)
+        infix private def choose(k: Int): Int = 
+            require(n >= 0 && n <= 10, s"n not in [0, 10] for nCk: $n")
+            require(k <= n, s"Cannot choose more items than available: $k > $n")
+            factorial(n) / (factorial(k) * factorial(n - k))
+
+    private def factorial(n: Int): Int = 
+        require(n >= 0 && n <= 10, s"Factorial arg not in [0, 10]: $n")
+        (1 to n).product
+
+
     /** Convert a sequence of text fields into a single line (CSV), including newline. */
     private def textFieldsToLine = Delimiter.CommaSeparator.join(_: List[String]) ++ "\n"
 
