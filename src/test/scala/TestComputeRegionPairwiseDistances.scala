@@ -33,7 +33,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
  *
  * @author Vince Reuter
  */
-class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite, MathSuite, should.Matchers:
+class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite, should.Matchers:
     override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
     
     val AllReqdColumns = List(
