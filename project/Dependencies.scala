@@ -44,7 +44,7 @@ object Dependencies {
         "ch.qos.logback" % "logback-classic" % "1.5.6", 
         "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
     )
-    lazy val mouse = "org.typelevel" %% "mouse" % "1.2.3"
+    lazy val mouse = "org.typelevel" %% "mouse" % "1.3.2"
 
     /* iron */
     lazy val iron = Iron.moduleId
