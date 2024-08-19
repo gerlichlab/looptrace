@@ -20,19 +20,20 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import io.github.iltotore.iron.{ autoCastIron, autoRefine }
 import io.github.iltotore.iron.scalacheck.all.given
 
+import at.ac.oeaw.imba.gerlich.gerlib.cell.{ NuclearDesignation, NucleusNumber, OutsideNucleus }
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.BoundingBox
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.Centroid
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{
-    ColumnName, 
-    ColumnNameLike, 
+    ColumnNames,
+    getCsvRowDecoderForProduct2,
+    getCsvRowDecoderForSingleton,
     getCsvRowEncoderForProduct2,
     readCsvToCaseClasses, 
     writeCaseClassesToCsv, 
 }
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.given
-import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.roi.getCsvRowDecoderForDetectedSpot
 import at.ac.oeaw.imba.gerlich.gerlib.roi.DetectedSpot
 import at.ac.oeaw.imba.gerlich.gerlib.roi.measurement.{ Area, MeanIntensity }
 import at.ac.oeaw.imba.gerlich.gerlib.testing.catsScalacheck.given
@@ -49,81 +50,80 @@ class TestParseRoisCsv extends AnyFunSuite, GenericSuite, should.Matchers, Scala
     type HeaderField = String
     type RawCoordinate = Double
 
-    private def unsafeRead[A](roisFile: os.Path)(using CsvRowDecoder[A, String], CharLikeChunks[IO, Byte]): List[A] = 
-        readCsvToCaseClasses[A](roisFile).unsafeRunSync()
-
     test("Small detected spot ROI example parses correctly.") {
         val linesToWrite = 
             """
             ,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber
             0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,0
             1,P0001.zarr,80,2,17.994259347453493,24.042015416774795,1360.0069098862991,213.58943029032,117.1394688491732,11.994259347453491,23.994259347453493,12.042015416774795,36.0420154167748,1348.0069098862991,1372.0069098862991,0
-            """.cleanLines.map(_ ++ "\n")
+            """.toLines
+    
+        val expectedRecords: List[DetectedSpotRoi] = {
+            val pos = PositionName("P0001.zarr")
 
-        val pos = PositionName("P0001.zarr")
-        
-        val expectedRecord1: DetectedSpotRoi = {
-            val xBounds = XCoordinate(859.9833511648726) -> XCoordinate(883.9833511648726)
-            val yBounds = YCoordinate(219.9874778925304) -> YCoordinate(243.9874778925304)
-            val zBounds = ZCoordinate(-2.092371012467521) -> ZCoordinate(9.90762898753248)
-            val spot = DetectedSpot(
-                ImagingContext(
-                    pos,
-                    ImagingTimepoint(79),
-                    ImagingChannel(0),
-                ),
-                Centroid.fromPoint(
-                    Point3D(
-                        XCoordinate(871.9833511648726),
-                        YCoordinate(231.9874778925304),
-                        ZCoordinate(3.907628987532479),
-                    ), 
-                ),
-                Area(240.00390423),
-                MeanIntensity(118.26726920593931),
-            )
-            val box = BoundingBox(
-                BoundingBox.Interval.unsafeFromTuple(xBounds), 
-                BoundingBox.Interval.unsafeFromTuple(yBounds), 
-                BoundingBox.Interval.unsafeFromTuple(zBounds),
-            )
-            DetectedSpotRoi(spot, box)
+            val rec1: DetectedSpotRoi = {
+                val xBounds = XCoordinate(859.9833511648726) -> XCoordinate(883.9833511648726)
+                val yBounds = YCoordinate(219.9874778925304) -> YCoordinate(243.9874778925304)
+                val zBounds = ZCoordinate(-2.092371012467521) -> ZCoordinate(9.90762898753248)
+                val spot = DetectedSpot(
+                    ImagingContext(
+                        pos,
+                        ImagingTimepoint(79),
+                        ImagingChannel(0),
+                    ),
+                    Centroid.fromPoint(
+                        Point3D(
+                            XCoordinate(871.9833511648726),
+                            YCoordinate(231.9874778925304),
+                            ZCoordinate(3.907628987532479),
+                        ), 
+                    ),
+                    Area(240.00390423),
+                    MeanIntensity(118.26726920593931),
+                )
+                val box = BoundingBox(
+                    BoundingBox.Interval.unsafeFromTuple(xBounds), 
+                    BoundingBox.Interval.unsafeFromTuple(yBounds), 
+                    BoundingBox.Interval.unsafeFromTuple(zBounds),
+                )
+                DetectedSpotRoi(spot, box)
+            }
+
+            val rec2: DetectedSpotRoi = {
+                val xBounds = XCoordinate(1348.0069098862991) -> XCoordinate(1372.0069098862991)
+                val yBounds = YCoordinate(12.042015416774795) -> YCoordinate(36.0420154167748)
+                val zBounds = ZCoordinate(11.994259347453491) -> ZCoordinate(23.994259347453493)
+                val spot = DetectedSpot(
+                    ImagingContext(
+                        pos,
+                        ImagingTimepoint(80),
+                        ImagingChannel(2),
+                    ),
+                    Centroid.fromPoint(
+                        Point3D(
+                            XCoordinate(1360.0069098862991),
+                            YCoordinate(24.042015416774795),
+                            ZCoordinate(17.994259347453493),
+                        ), 
+                    ),
+                    Area(213.58943029032),
+                    MeanIntensity(117.1394688491732),
+                )
+                val box = BoundingBox(
+                    BoundingBox.Interval.unsafeFromTuple(xBounds), 
+                    BoundingBox.Interval.unsafeFromTuple(yBounds), 
+                    BoundingBox.Interval.unsafeFromTuple(zBounds),
+                )
+                DetectedSpotRoi(spot, box)
+            }
+
+            List(rec1, rec2)
         }
-
-        val expectedRecord2: DetectedSpotRoi = {
-            val xBounds = XCoordinate(1348.0069098862991) -> XCoordinate(1372.0069098862991)
-            val yBounds = YCoordinate(12.042015416774795) -> YCoordinate(36.0420154167748)
-            val zBounds = ZCoordinate(11.994259347453491) -> ZCoordinate(23.994259347453493)
-            val spot = DetectedSpot(
-                ImagingContext(
-                    pos,
-                    ImagingTimepoint(80),
-                    ImagingChannel(2),
-                ),
-                Centroid.fromPoint(
-                    Point3D(
-                        XCoordinate(1360.0069098862991),
-                        YCoordinate(24.042015416774795),
-                        ZCoordinate(17.994259347453493),
-                    ), 
-                ),
-                Area(213.58943029032),
-                MeanIntensity(117.1394688491732),
-            )
-            val box = BoundingBox(
-                BoundingBox.Interval.unsafeFromTuple(xBounds), 
-                BoundingBox.Interval.unsafeFromTuple(yBounds), 
-                BoundingBox.Interval.unsafeFromTuple(zBounds),
-            )
-            DetectedSpotRoi(spot, box)
-        }
-
-        def expectedRecords: List[DetectedSpotRoi] = List(expectedRecord1, expectedRecord2)
 
         withTempFile(linesToWrite, Delimiter.CommaSeparator){ roisFile =>
-            val observed: List[DetectedSpotRoi] = unsafeRead(roisFile)
-            observed.length shouldEqual expectedRecords.length // quick, simplifying check
-            observed shouldEqual expectedRecords // full check
+            val observedRecords: List[DetectedSpotRoi] = unsafeRead(roisFile)
+            observedRecords.length shouldEqual expectedRecords.length // quick, simplifying check
+            observedRecords shouldEqual expectedRecords // full check
         }
     }
     
@@ -180,13 +180,126 @@ class TestParseRoisCsv extends AnyFunSuite, GenericSuite, should.Matchers, Scala
         }
     }
 
-    test("Small NucleusLabelAttemptedRoi example parses correctly.") { pending }
+    test("Small NucleusLabelAttemptedRoi example parses correctly.") {
+        val linesToWrite = 
+            """
+            ,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber
+            0,P0001.zarr,9,1,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,2
+            1,P0001.zarr,10,0,17.994259347453493,24.042015416774795,1360.0069098862991,213.58943029032,117.1394688491732,11.994259347453491,23.994259347453493,12.042015416774795,36.0420154167748,1348.0069098862991,1372.0069098862991,0
+            2,P0001.zarr,10,2,23.00910242218976,231.98008711401275,871.9596645390719,226.90422978,116.14075915047448,17.009102422189756,29.00910242218976,219.98008711401275,243.98008711401275,859.9596645390719,883.9596645390719,5
+            """.toLines
+
+        val pos = PositionName("P0001.zarr")
+
+        val expectedRecords: List[NucleusLabelAttemptedRoi] = {
+            val rec1: NucleusLabelAttemptedRoi = {
+                val xBounds = XCoordinate(859.9833511648726) -> XCoordinate(883.9833511648726)
+                val yBounds = YCoordinate(219.9874778925304) -> YCoordinate(243.9874778925304)
+                val zBounds = ZCoordinate(-2.092371012467521) -> ZCoordinate(9.90762898753248)
+                val spot = DetectedSpot(
+                    ImagingContext(
+                        pos,
+                        ImagingTimepoint(9),
+                        ImagingChannel(1),
+                    ),
+                    Centroid.fromPoint(
+                        Point3D(
+                            XCoordinate(871.9833511648726),
+                            YCoordinate(231.9874778925304),
+                            ZCoordinate(3.907628987532479),
+                        ), 
+                    ),
+                    Area(240.00390423),
+                    MeanIntensity(118.26726920593931),
+                )
+                val box = BoundingBox(
+                    BoundingBox.Interval.unsafeFromTuple(xBounds), 
+                    BoundingBox.Interval.unsafeFromTuple(yBounds), 
+                    BoundingBox.Interval.unsafeFromTuple(zBounds),
+                )
+                NucleusLabelAttemptedRoi(spot, box, NucleusNumber(2))
+            }
+
+            val rec2: NucleusLabelAttemptedRoi = {
+                val xBounds = XCoordinate(1348.0069098862991) -> XCoordinate(1372.0069098862991)
+                val yBounds = YCoordinate(12.042015416774795) -> YCoordinate(36.0420154167748)
+                val zBounds = ZCoordinate(11.994259347453491) -> ZCoordinate(23.994259347453493)
+                val spot = DetectedSpot(
+                    ImagingContext(
+                        pos,
+                        ImagingTimepoint(10),
+                        ImagingChannel(0),
+                    ),
+                    Centroid.fromPoint(
+                        Point3D(
+                            XCoordinate(1360.0069098862991),
+                            YCoordinate(24.042015416774795),
+                            ZCoordinate(17.994259347453493),
+                        ), 
+                    ),
+                    Area(213.58943029032),
+                    MeanIntensity(117.1394688491732),
+                )
+                val box = BoundingBox(
+                    BoundingBox.Interval.unsafeFromTuple(xBounds), 
+                    BoundingBox.Interval.unsafeFromTuple(yBounds), 
+                    BoundingBox.Interval.unsafeFromTuple(zBounds),
+                )
+                NucleusLabelAttemptedRoi(spot, box, OutsideNucleus)
+            }
+
+            val rec3: NucleusLabelAttemptedRoi = {
+                val xBounds = XCoordinate(859.9596645390719) -> XCoordinate(883.9596645390719)
+                val yBounds = YCoordinate(219.98008711401275) -> YCoordinate(243.98008711401275)
+                val zBounds = ZCoordinate(17.009102422189756) -> ZCoordinate(29.00910242218976)
+                val spot = DetectedSpot(
+                    ImagingContext(
+                        pos,
+                        ImagingTimepoint(10),
+                        ImagingChannel(2),
+                    ),
+                    Centroid.fromPoint(
+                        Point3D(
+                            XCoordinate(871.9596645390719),
+                            YCoordinate(231.98008711401275),
+                            ZCoordinate(23.00910242218976),
+                        ), 
+                    ),
+                    Area(226.90422978),
+                    MeanIntensity(116.14075915047448),
+                )
+                val box = BoundingBox(
+                    BoundingBox.Interval.unsafeFromTuple(xBounds), 
+                    BoundingBox.Interval.unsafeFromTuple(yBounds), 
+                    BoundingBox.Interval.unsafeFromTuple(zBounds),
+                )
+                NucleusLabelAttemptedRoi(spot, box, NucleusNumber(5))
+            }
+
+            List(rec1, rec2, rec3)
+        }
+
+        given CsvRowDecoder[NuclearDesignation, HeaderField] = 
+            getCsvRowDecoderForSingleton(ColumnNames.NucleusDesignationColumnName)
+
+        given CsvRowDecoder[NucleusLabelAttemptedRoi, HeaderField] = 
+            getCsvRowDecoderForProduct2(NucleusLabelAttemptedRoi.apply)
+
+        withTempFile(linesToWrite, Delimiter.CommaSeparator){ roisFile =>
+            val observedRecords: List[NucleusLabelAttemptedRoi] = unsafeRead(roisFile)
+            observedRecords.length shouldEqual expectedRecords.length // quick, simplifying check
+            observedRecords shouldEqual expectedRecords // full check
+        }
+    }
 
     test("NucleusLabelAttemptedRoi records roundtrip through CSV.") { pending }
 
     test("Header-only file gives empty list of results for NucleusLabelAttemptedRoi.") { pending }
 
+    private def unsafeRead[A](roisFile: os.Path)(using CsvRowDecoder[A, String], CharLikeChunks[IO, Byte]): List[A] = 
+        readCsvToCaseClasses[A](roisFile).unsafeRunSync()
+
     extension (example: String)
         // Utility function to trim line endings and whitespace, accounting for formatting of raw example data.
-        private def cleanLines: List[String] = example.split("\n").map(_.trim).filterNot(_.isEmpty).toList
+        private def toLines: List[String] = example.split("\n").map(_.trim).filterNot(_.isEmpty).toList.map(_ ++ "\n")
 end TestParseRoisCsv
