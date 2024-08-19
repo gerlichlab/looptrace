@@ -79,9 +79,6 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
     }
 
     test("Trying to use a file with just records and no header fails the parse as expected.") {
-        val myArbPos: Arbitrary[PositionName] = summon[Arbitrary[PositionName]]
-        val myArbReg: Arbitrary[RegionId] = summon[Arbitrary[RegionId]]
-        val myArbPt: Arbitrary[Point3D] = summon[Arbitrary[Point3D]]
         forAll { (records: NonEmptyList[Input.GoodRecord], includeIndexCol: Boolean) => 
             withTempDirectory{ (tempdir: os.Path) => 
                 val infile = tempdir / "input.csv"

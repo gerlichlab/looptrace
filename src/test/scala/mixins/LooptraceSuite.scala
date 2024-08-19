@@ -8,7 +8,8 @@ import org.scalacheck.Arbitrary.arbitrary
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.BoundingBox
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
-import at.ac.oeaw.imba.gerlich.gerlib.testing.{ GeometricInstances, ImagingInstances }
+import at.ac.oeaw.imba.gerlich.gerlib.testing.{ GeometricInstances, ImagingInstances, CatsScalacheckInstances }
+import at.ac.oeaw.imba.gerlich.gerlib.testing.syntax.SyntaxForScalacheck
 
 import at.ac.oeaw.imba.gerlich.looptrace.space.{
     BoundingBox as BB,
@@ -23,7 +24,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.{
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** Base trait for tests in looptrace */
-trait LooptraceSuite extends GenericSuite, GeometricInstances, ImagingInstances, ScalacheckGenericExtras:
+trait LooptraceSuite extends GenericSuite, GeometricInstances, ImagingInstances, CatsScalacheckInstances, SyntaxForScalacheck:
 
     /************************/
     /* Givens ("implicits") */
