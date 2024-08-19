@@ -25,3 +25,4 @@ object NucleusLabelAttemptedRoi:
             roi.box,
             nucleus,
         )
+end NucleusLabelAttemptedRoi
