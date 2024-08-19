@@ -53,10 +53,77 @@ class TestParseRoisCsv extends AnyFunSuite, GenericSuite, should.Matchers, Scala
         readCsvToCaseClasses[A](roisFile).unsafeRunSync()
 
     test("Small detected spot ROI example parses correctly.") {
-        withTempFile(Data.linesToWrite, Delimiter.CommaSeparator){ roisFile =>
+        val linesToWrite = 
+            """
+            ,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber
+            0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,0
+            1,P0001.zarr,80,2,17.994259347453493,24.042015416774795,1360.0069098862991,213.58943029032,117.1394688491732,11.994259347453491,23.994259347453493,12.042015416774795,36.0420154167748,1348.0069098862991,1372.0069098862991,0
+            """.cleanLines.map(_ ++ "\n")
+
+        val pos = PositionName("P0001.zarr")
+        
+        val expectedRecord1: DetectedSpotRoi = {
+            val xBounds = XCoordinate(859.9833511648726) -> XCoordinate(883.9833511648726)
+            val yBounds = YCoordinate(219.9874778925304) -> YCoordinate(243.9874778925304)
+            val zBounds = ZCoordinate(-2.092371012467521) -> ZCoordinate(9.90762898753248)
+            val spot = DetectedSpot(
+                ImagingContext(
+                    pos,
+                    ImagingTimepoint(79),
+                    ImagingChannel(0),
+                ),
+                Centroid.fromPoint(
+                    Point3D(
+                        XCoordinate(871.9833511648726),
+                        YCoordinate(231.9874778925304),
+                        ZCoordinate(3.907628987532479),
+                    ), 
+                ),
+                Area(240.00390423),
+                MeanIntensity(118.26726920593931),
+            )
+            val box = BoundingBox(
+                BoundingBox.Interval.unsafeFromTuple(xBounds), 
+                BoundingBox.Interval.unsafeFromTuple(yBounds), 
+                BoundingBox.Interval.unsafeFromTuple(zBounds),
+            )
+            DetectedSpotRoi(spot, box)
+        }
+
+        val expectedRecord2: DetectedSpotRoi = {
+            val xBounds = XCoordinate(1348.0069098862991) -> XCoordinate(1372.0069098862991)
+            val yBounds = YCoordinate(12.042015416774795) -> YCoordinate(36.0420154167748)
+            val zBounds = ZCoordinate(11.994259347453491) -> ZCoordinate(23.994259347453493)
+            val spot = DetectedSpot(
+                ImagingContext(
+                    pos,
+                    ImagingTimepoint(80),
+                    ImagingChannel(2),
+                ),
+                Centroid.fromPoint(
+                    Point3D(
+                        XCoordinate(1360.0069098862991),
+                        YCoordinate(24.042015416774795),
+                        ZCoordinate(17.994259347453493),
+                    ), 
+                ),
+                Area(213.58943029032),
+                MeanIntensity(117.1394688491732),
+            )
+            val box = BoundingBox(
+                BoundingBox.Interval.unsafeFromTuple(xBounds), 
+                BoundingBox.Interval.unsafeFromTuple(yBounds), 
+                BoundingBox.Interval.unsafeFromTuple(zBounds),
+            )
+            DetectedSpotRoi(spot, box)
+        }
+
+        def expectedRecords: List[DetectedSpotRoi] = List(expectedRecord1, expectedRecord2)
+
+        withTempFile(linesToWrite, Delimiter.CommaSeparator){ roisFile =>
             val observed: List[DetectedSpotRoi] = unsafeRead(roisFile)
-            observed.length shouldEqual Data.expectedRecords.length // quick, simplifying check
-            observed shouldEqual Data.expectedRecords // full check
+            observed.length shouldEqual expectedRecords.length // quick, simplifying check
+            observed shouldEqual expectedRecords // full check
         }
     }
     
@@ -118,76 +185,6 @@ class TestParseRoisCsv extends AnyFunSuite, GenericSuite, should.Matchers, Scala
     test("NucleusLabelAttemptedRoi records roundtrip through CSV.") { pending }
 
     test("Header-only file gives empty list of results for NucleusLabelAttemptedRoi.") { pending }
-
-    object Data:
-        private val inputLines = 
-            """
-            ,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber
-            0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,0
-            1,P0001.zarr,80,2,17.994259347453493,24.042015416774795,1360.0069098862991,213.58943029032,117.1394688491732,11.994259347453491,23.994259347453493,12.042015416774795,36.0420154167748,1348.0069098862991,1372.0069098862991,0
-            """.cleanLines
-        val linesToWrite = inputLines.map(_ ++ "\n")
-
-        val pos = PositionName("P0001.zarr")
-        
-        private val expectedRecord1: DetectedSpotRoi = {
-            val xBounds = XCoordinate(859.9833511648726) -> XCoordinate(883.9833511648726)
-            val yBounds = YCoordinate(219.9874778925304) -> YCoordinate(243.9874778925304)
-            val zBounds = ZCoordinate(-2.092371012467521) -> ZCoordinate(9.90762898753248)
-            val spot = DetectedSpot(
-                ImagingContext(
-                    pos,
-                    ImagingTimepoint(79),
-                    ImagingChannel(0),
-                ),
-                Centroid.fromPoint(
-                    Point3D(
-                        XCoordinate(871.9833511648726),
-                        YCoordinate(231.9874778925304),
-                        ZCoordinate(3.907628987532479),
-                    ), 
-                ),
-                Area(240.00390423),
-                MeanIntensity(118.26726920593931),
-            )
-            val box = BoundingBox(
-                BoundingBox.Interval.unsafeFromTuple(xBounds), 
-                BoundingBox.Interval.unsafeFromTuple(yBounds), 
-                BoundingBox.Interval.unsafeFromTuple(zBounds),
-            )
-            DetectedSpotRoi(spot, box)
-        }
-
-        private val expectedRecord2: DetectedSpotRoi = {
-            val xBounds = XCoordinate(1348.0069098862991) -> XCoordinate(1372.0069098862991)
-            val yBounds = YCoordinate(12.042015416774795) -> YCoordinate(36.0420154167748)
-            val zBounds = ZCoordinate(11.994259347453491) -> ZCoordinate(23.994259347453493)
-            val spot = DetectedSpot(
-                ImagingContext(
-                    pos,
-                    ImagingTimepoint(80),
-                    ImagingChannel(2),
-                ),
-                Centroid.fromPoint(
-                    Point3D(
-                        XCoordinate(1360.0069098862991),
-                        YCoordinate(24.042015416774795),
-                        ZCoordinate(17.994259347453493),
-                    ), 
-                ),
-                Area(213.58943029032),
-                MeanIntensity(117.1394688491732),
-            )
-            val box = BoundingBox(
-                BoundingBox.Interval.unsafeFromTuple(xBounds), 
-                BoundingBox.Interval.unsafeFromTuple(yBounds), 
-                BoundingBox.Interval.unsafeFromTuple(zBounds),
-            )
-            DetectedSpotRoi(spot, box)
-        }
-
-        def expectedRecords: List[DetectedSpotRoi] = List(expectedRecord1, expectedRecord2)
-    end Data
 
     extension (example: String)
         // Utility function to trim line endings and whitespace, accounting for formatting of raw example data.
