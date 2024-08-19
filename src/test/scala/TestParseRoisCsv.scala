@@ -60,8 +60,6 @@ class TestParseRoisCsv extends AnyFunSuite, GenericSuite, should.Matchers, Scala
         }
     }
     
-    test("Small nucleus label attempted spot ROI example parses correctly.") { pending }
-
     test("DetectedSpotRoi records roundtrip through CSV.") {
         given CsvRowEncoder[DetectedSpotRoi, String] = getCsvRowEncoderForProduct2(_.spot, _.box)
 
@@ -98,7 +96,7 @@ class TestParseRoisCsv extends AnyFunSuite, GenericSuite, should.Matchers, Scala
         }
     }
 
-    test("Header-only file gives empty list of results.") {
+    test("Header-only file gives empty list of results for DetectedSpotRoi.") {
         val headers = List(
             ",fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber",
             "fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber",
@@ -114,6 +112,12 @@ class TestParseRoisCsv extends AnyFunSuite, GenericSuite, should.Matchers, Scala
             }
         }
     }
+
+    test("Small NucleusLabelAttemptedRoi example parses correctly.") { pending }
+
+    test("NucleusLabelAttemptedRoi records roundtrip through CSV.") { pending }
+
+    test("Header-only file gives empty list of results for NucleusLabelAttemptedRoi.") { pending }
 
     object Data:
         private val inputLines = 
