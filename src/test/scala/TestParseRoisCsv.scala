@@ -1,10 +1,16 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 package csv
 
+import scala.util.{ Failure, Success, Try }
+
+import cats.data.NonEmptyList
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global // needed to call unsafeRunSync()
+import cats.syntax.all.*
 import fs2.{ Pipe, Stream }
 import fs2.data.csv.*
+import fs2.data.text.CharLikeChunks
+import fs2.data.text.utf8.byteStreamCharLike // to prove CharLikeChunks[cats.effect.IO, Byte]
 
 import org.scalacheck.*
 import org.scalatest.funsuite.AnyFunSuite
@@ -12,6 +18,7 @@ import org.scalatest.matchers.should
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import io.github.iltotore.iron.{ autoCastIron, autoRefine }
+import io.github.iltotore.iron.scalacheck.all.given
 
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.BoundingBox
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.Centroid
@@ -20,6 +27,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{
     ColumnName, 
     ColumnNameLike, 
+    getCsvRowEncoderForProduct2,
     readCsvToCaseClasses, 
     writeCaseClassesToCsv, 
 }
@@ -28,7 +36,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.roi.getCsvRowDecoderForDe
 import at.ac.oeaw.imba.gerlich.gerlib.roi.DetectedSpot
 import at.ac.oeaw.imba.gerlich.gerlib.roi.measurement.{ Area, MeanIntensity }
 import at.ac.oeaw.imba.gerlich.gerlib.testing.catsScalacheck.given
-import at.ac.oeaw.imba.gerlich.gerlib.testing.csv.given
+import at.ac.oeaw.imba.gerlich.gerlib.testing.all.given
 
 import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.{BoundingBox as BB, *}
@@ -36,16 +44,17 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.{BoundingBox as BB, *}
 /**
   * Tests for parsing different types of ROIs.
   */
-class TestParseRoiExamples extends AnyFunSuite, GenericSuite, should.Matchers, ScalaCheckPropertyChecks:
+class TestParseRoisCsv extends AnyFunSuite, GenericSuite, should.Matchers, ScalaCheckPropertyChecks:
 
     type HeaderField = String
     type RawCoordinate = Double
 
-    test("Small detected spot ROI example parses correctly.") {
-        import fs2.data.text.utf8.byteStreamCharLike // to prove CharLikeChunks[cats.effect.IO, Byte]
+    private def unsafeRead[A](roisFile: os.Path)(using CsvRowDecoder[A, String], CharLikeChunks[IO, Byte]): List[A] = 
+        readCsvToCaseClasses[A](roisFile).unsafeRunSync()
 
+    test("Small detected spot ROI example parses correctly.") {
         withTempFile(Data.linesToWrite, Delimiter.CommaSeparator){ roisFile =>
-            val observed: List[DetectedSpotRoi] = readCsvToCaseClasses[DetectedSpotRoi](roisFile).unsafeRunSync()
+            val observed: List[DetectedSpotRoi] = unsafeRead(roisFile)
             observed.length shouldEqual Data.expectedRecords.length // quick, simplifying check
             observed shouldEqual Data.expectedRecords // full check
         }
@@ -53,59 +62,58 @@ class TestParseRoiExamples extends AnyFunSuite, GenericSuite, should.Matchers, S
     
     test("Small nucleus label attempted spot ROI example parses correctly.") { pending }
 
-    /** Abbreviation for the heavily used column name like data type */
-    private type CN[A] = ColumnNameLike[A]
+    test("DetectedSpotRoi records roundtrip through CSV.") {
+        given CsvRowEncoder[DetectedSpotRoi, String] = getCsvRowEncoderForProduct2(_.spot, _.box)
 
-    /** The columns which correspond to the fields of a detected spoT */
-    private type SpotColumns = (
-        CN[FieldOfViewLike], 
-        CN[ImagingTimepoint], 
-        CN[ImagingChannel], 
-        CN[ZCoordinate], 
-        CN[YCoordinate], 
-        CN[XCoordinate], 
-        CN[Area], 
-        CN[MeanIntensity],
-    )
+        given Arbitrary[DetectedSpotRoi] = (
+            summon[Arbitrary[DetectedSpot[RawCoordinate]]], 
+            summon[Arbitrary[BoundingBox[RawCoordinate]]],
+        ).mapN(DetectedSpotRoi.apply)
 
-    private type BoxColumns = (
-        CN[ZCoordinate], 
-        CN[ZCoordinate], 
-        CN[YCoordinate],
-        CN[YCoordinate], 
-        CN[XCoordinate], 
-        CN[XCoordinate], 
-    )
+        forAll { (inputRecords: NonEmptyList[DetectedSpotRoi]) => 
+            withTempFile(Delimiter.CommaSeparator){ roisFile =>
+                /* First, write the records to CSV */
+                val sink: Pipe[IO, DetectedSpotRoi, Nothing] = writeCaseClassesToCsv[DetectedSpotRoi](roisFile)
+                Stream.emits(inputRecords.toList).through(sink).compile.drain.unsafeRunSync()
 
-    // test("DetectedSpotRoi records roundtrip through CSV.") {
-    //     // Choose an arbitrary permutation of the fixed input ROI records.
-    //     given Arbitrary[List[DetectedSpotRoi]] = Arbitrary{ Gen.oneOf(Data.expectedRecords.permutations.toList) }
-        
-    //     def genRois: Gen[List[DetectedSpotRoi]] = Arbitrary.arbitrary[List[DetectedSpotRoi]]
+                /* Then, do the parse-and-check. */
+                Try{ unsafeRead[DetectedSpotRoi](roisFile) } match {
+                    case Failure(e) => 
+                        println("LINES (below):")
+                        os.read.lines(roisFile).foreach(println)
+                        fail(s"Expected good parse but got error: $e")
+                    case Success(outputRecords) => 
+                        /* quick checks for proper record count */
+                        outputRecords.nonEmpty shouldBe true
+                        outputRecords.length shouldEqual inputRecords.length
+                        // Check the actual equality, element-by-element.-
+                        val unequal = inputRecords.toList.zip(outputRecords).filter{ (in, out) => in != out }
+                        if (unequal.nonEmpty) {
+                            fail(s"Unequal records pairs (below):\n${unequal.map{ (in, out) => in.toString ++ "\n" ++ out.toString }.mkString("\n\n")}")
+                        } else {
+                            succeed
+                        }
+                }
+            }
+        }
+    }
 
-    //     // Used to determine tempfile extension and the character(s) to avoid in generated column names
-    //     val delimiter = Delimiter.CommaSeparator
-
-    //     // Generate the column names such that there are no repeats and such that no column name contains the delimiter.
-    //     def genCols: Gen[SpotColumns] = Arbitrary.arbitrary[SpotColumns].suchThat{
-    //         case (fov, time, channel, z, y, x, area, intensity) => 
-    //             val rawNames = List(fov, time, channel, z, y, x, area, intensity).map(_.value)
-    //             rawNames.forall{ cn => !cn.contains(delimiter.sep) } && rawNames.length === rawNames.toSet.size
-    //     }
-    
-    //     forAll (genRois, genCols) { (inputRecords: List[DetectedSpotRoi], colnames: SpotColumns) => 
-
-    //         withTempFile(delimiter){ roisFile =>
-    //             /* First, write the records to CSV */
-    //             val sink: Pipe[IO, DetectedSpotRoi, Nothing] = writeCaseClassesToCsv[DetectedSpotRoi](roisFile)
-    //             Stream.emits(inputRecords).through(sink).compile.drain.unsafeRunSync()
-
-    //             /* Then, do the parse-and-check. */
-    //             val outputRecords: List[DetectedSpotRoi] = readCsvToCaseClasses[DetectedSpotRoi](roisFile).unsafeRunSync()
-    //             outputRecords shouldEqual inputRecords
-    //         }
-    //     }
-    // }
+    test("Header-only file gives empty list of results.") {
+        val headers = List(
+            ",fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber",
+            "fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber",
+        )
+        val newlines = List(false, true)
+        val grid = headers.flatMap(h => newlines.map(p => h -> p))
+        forAll (Table(("header", "newline"), grid*)) { (header, newline) => 
+            val fileData = header ++ (if newline then "\n" else "")
+            withTempFile(fileData, Delimiter.CommaSeparator) { roisFile => 
+                val expected = List.empty[DetectedSpotRoi]
+                val observed = unsafeRead[DetectedSpotRoi](roisFile)
+                observed shouldEqual expected
+            }
+        }
+    }
 
     object Data:
         private val inputLines = 
@@ -122,7 +130,7 @@ class TestParseRoiExamples extends AnyFunSuite, GenericSuite, should.Matchers, S
             val xBounds = XCoordinate(859.9833511648726) -> XCoordinate(883.9833511648726)
             val yBounds = YCoordinate(219.9874778925304) -> YCoordinate(243.9874778925304)
             val zBounds = ZCoordinate(-2.092371012467521) -> ZCoordinate(9.90762898753248)
-            DetectedSpotRoi(
+            val spot = DetectedSpot(
                 ImagingContext(
                     pos,
                     ImagingTimepoint(79),
@@ -137,19 +145,20 @@ class TestParseRoiExamples extends AnyFunSuite, GenericSuite, should.Matchers, S
                 ),
                 Area(240.00390423),
                 MeanIntensity(118.26726920593931),
-                BoundingBox(
-                    BoundingBox.Interval.unsafeFromTuple(xBounds), 
-                    BoundingBox.Interval.unsafeFromTuple(yBounds), 
-                    BoundingBox.Interval.unsafeFromTuple(zBounds),
-                ),
             )
+            val box = BoundingBox(
+                BoundingBox.Interval.unsafeFromTuple(xBounds), 
+                BoundingBox.Interval.unsafeFromTuple(yBounds), 
+                BoundingBox.Interval.unsafeFromTuple(zBounds),
+            )
+            DetectedSpotRoi(spot, box)
         }
 
         private val expectedRecord2: DetectedSpotRoi = {
             val xBounds = XCoordinate(1348.0069098862991) -> XCoordinate(1372.0069098862991)
             val yBounds = YCoordinate(12.042015416774795) -> YCoordinate(36.0420154167748)
             val zBounds = ZCoordinate(11.994259347453491) -> ZCoordinate(23.994259347453493)
-            DetectedSpotRoi(
+            val spot = DetectedSpot(
                 ImagingContext(
                     pos,
                     ImagingTimepoint(80),
@@ -164,12 +173,13 @@ class TestParseRoiExamples extends AnyFunSuite, GenericSuite, should.Matchers, S
                 ),
                 Area(213.58943029032),
                 MeanIntensity(117.1394688491732),
-                BoundingBox(
-                    BoundingBox.Interval.unsafeFromTuple(xBounds), 
-                    BoundingBox.Interval.unsafeFromTuple(yBounds), 
-                    BoundingBox.Interval.unsafeFromTuple(zBounds),
-                ),
             )
+            val box = BoundingBox(
+                BoundingBox.Interval.unsafeFromTuple(xBounds), 
+                BoundingBox.Interval.unsafeFromTuple(yBounds), 
+                BoundingBox.Interval.unsafeFromTuple(zBounds),
+            )
+            DetectedSpotRoi(spot, box)
         }
 
         def expectedRecords: List[DetectedSpotRoi] = List(expectedRecord1, expectedRecord2)
@@ -178,4 +188,4 @@ class TestParseRoiExamples extends AnyFunSuite, GenericSuite, should.Matchers, S
     extension (example: String)
         // Utility function to trim line endings and whitespace, accounting for formatting of raw example data.
         private def cleanLines: List[String] = example.split("\n").map(_.trim).filterNot(_.isEmpty).toList
-end TestParseRoiExamples
+end TestParseRoisCsv

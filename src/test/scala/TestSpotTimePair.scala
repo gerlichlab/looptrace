@@ -16,6 +16,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
+import at.ac.oeaw.imba.gerlich.gerlib.testing.syntax.SyntaxForScalacheck
 
 import at.ac.oeaw.imba.gerlich.looptrace.TracingOutputAnalysis.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.readJsonFile
@@ -23,7 +24,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** Tests for pair of regional and locus-specific spot image timepoints. */
-class TestSpotTimePair extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite, ScalacheckGenericExtras, should.Matchers:
+class TestSpotTimePair extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite, SyntaxForScalacheck, should.Matchers:
     import SpotTimePair.given
     
     override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)

@@ -21,6 +21,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 import at.ac.oeaw.imba.gerlich.gerlib.testing.NumericInstances
+import at.ac.oeaw.imba.gerlich.gerlib.testing.syntax.SyntaxForScalacheck
 
 import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionBeadRois.*
 import at.ac.oeaw.imba.gerlich.looptrace.PathHelpers.listPath
@@ -34,7 +35,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     AnyFunSuite, 
     NumericInstances, 
     ScalaCheckPropertyChecks, 
-    ScalacheckGenericExtras, 
+    SyntaxForScalacheck, 
     should.Matchers, 
     PartitionRoisSuite:
     

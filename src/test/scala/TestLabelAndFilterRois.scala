@@ -24,6 +24,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.syntax.all.*
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
+import at.ac.oeaw.imba.gerlich.gerlib.testing.syntax.scalacheck.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.collections.*
 import at.ac.oeaw.imba.gerlich.looptrace.instances.roiId.given
