@@ -37,7 +37,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.roi.DetectedSpot
 import at.ac.oeaw.imba.gerlich.gerlib.roi.measurement.{ Area, MeanIntensity }
 import at.ac.oeaw.imba.gerlich.gerlib.testing.catsScalacheck.given
-import at.ac.oeaw.imba.gerlich.gerlib.testing.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.testing.instances.all.given
 
 import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.{BoundingBox as BB, *}
@@ -279,12 +279,8 @@ class TestParseRoisCsv extends AnyFunSuite, GenericSuite, should.Matchers, Scala
             List(rec1, rec2, rec3)
         }
 
-        given CsvRowDecoder[NuclearDesignation, HeaderField] = 
-            getCsvRowDecoderForSingleton(ColumnNames.NucleusDesignationColumnName)
-
-        given CsvRowDecoder[NucleusLabelAttemptedRoi, HeaderField] = 
-            getCsvRowDecoderForProduct2(NucleusLabelAttemptedRoi.apply)
-
+        given CsvRowDecoder[NucleusLabelAttemptedRoi, HeaderField] = getNucRoiDecoder
+        
         withTempFile(linesToWrite, Delimiter.CommaSeparator){ roisFile =>
             val observedRecords: List[NucleusLabelAttemptedRoi] = unsafeRead(roisFile)
             observedRecords.length shouldEqual expectedRecords.length // quick, simplifying check
@@ -292,9 +288,55 @@ class TestParseRoisCsv extends AnyFunSuite, GenericSuite, should.Matchers, Scala
         }
     }
 
-    test("NucleusLabelAttemptedRoi records roundtrip through CSV.") { pending }
+    test("NucleusLabelAttemptedRoi records roundtrip through CSV.") {
+        given CsvRowEncoder[NucleusLabelAttemptedRoi, String] = getCsvRowEncoderForProduct2(_.spot, _.box)
+
+        given Arbitrary[NucleusLabelAttemptedRoi] = 
+            val arbRoi: Arbitrary[DetectedSpotRoi] = (
+                summon[Arbitrary[DetectedSpot[RawCoordinate]]], 
+                summon[Arbitrary[BoundingBox[RawCoordinate]]],
+            ).mapN(DetectedSpotRoi.apply)
+            (
+                arbRoi,
+                summon[Arbitrary[NuclearDesignation]],
+            ).mapN(NucleusLabelAttemptedRoi.apply)
+
+        given CsvRowDecoder[NucleusLabelAttemptedRoi, HeaderField] = getNucRoiDecoder
+
+        forAll { (inputRecords: NonEmptyList[NucleusLabelAttemptedRoi]) => 
+            withTempFile(Delimiter.CommaSeparator){ roisFile =>
+                /* First, write the records to CSV */
+                val sink: Pipe[IO, NucleusLabelAttemptedRoi, Nothing] = writeCaseClassesToCsv[NucleusLabelAttemptedRoi](roisFile)
+                Stream.emits(inputRecords.toList).through(sink).compile.drain.unsafeRunSync()
+
+                /* Then, do the parse-and-check. */
+                Try{ unsafeRead[NucleusLabelAttemptedRoi](roisFile) } match {
+                    case Failure(e) => 
+                        println("LINES (below):")
+                        os.read.lines(roisFile).foreach(println)
+                        fail(s"Expected good parse but got error: $e")
+                    case Success(outputRecords) => 
+                        /* quick checks for proper record count */
+                        outputRecords.nonEmpty shouldBe true
+                        outputRecords.length shouldEqual inputRecords.length
+                        // Check the actual equality, element-by-element.-
+                        val unequal = inputRecords.toList.zip(outputRecords).filter{ (in, out) => in != out }
+                        if (unequal.nonEmpty) {
+                            fail(s"Unequal records pairs (below):\n${unequal.map{ (in, out) => in.toString ++ "\n" ++ out.toString }.mkString("\n\n")}")
+                        } else {
+                            succeed
+                        }
+                }
+            }
+        }
+    }
 
     test("Header-only file gives empty list of results for NucleusLabelAttemptedRoi.") { pending }
+
+    private def getNucRoiDecoder: CsvRowDecoder[NucleusLabelAttemptedRoi, HeaderField] = 
+        given CsvRowDecoder[NuclearDesignation, HeaderField] = 
+            getCsvRowDecoderForSingleton(ColumnNames.NucleusDesignationColumnName)
+        getCsvRowDecoderForProduct2(NucleusLabelAttemptedRoi.apply)
 
     private def unsafeRead[A](roisFile: os.Path)(using CsvRowDecoder[A, String], CharLikeChunks[IO, Byte]): List[A] = 
         readCsvToCaseClasses[A](roisFile).unsafeRunSync()
