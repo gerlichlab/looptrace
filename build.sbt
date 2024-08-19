@@ -54,7 +54,7 @@ lazy val root = (project in file("."))
     scalacOptions ++= Seq(
       "-deprecation",
       "-encoding", "utf8",
-      //"-explain",
+      "-explain",
       "-feature",
       "-language:existentials",
       // https://contributors.scala-lang.org/t/for-comprehension-requires-withfilter-to-destructure-tuples/5953
