@@ -164,8 +164,8 @@ class TestParseRoisCsv extends AnyFunSuite, GenericSuite, should.Matchers, Scala
 
     test("Header-only file gives empty list of results for DetectedSpotRoi.") {
         val headers = List(
-            ",fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber",
-            "fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber",
+            ",fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax",
+            "fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax",
         )
         val newlines = List(false, true)
         val grid = headers.flatMap(h => newlines.map(p => h -> p))
@@ -335,12 +335,27 @@ class TestParseRoisCsv extends AnyFunSuite, GenericSuite, should.Matchers, Scala
         }
     }
 
-    test("Header-only file gives empty list of results for NucleusLabelAttemptedRoi.") { pending }
-
-    // private def getNucRoiEncoder: CsvRowEncoder[NucleusLabelAttemptedRoi, HeaderField] = 
-    //     given CsvRowEncoder[NuclearDesignation, HeaderField] = 
-    //         getCsv
-    //     getCsvRowEncoderForProduct2()
+    test("Header-only file gives empty list of results for NucleusLabelAttemptedRoi.") {
+        val headers = List(
+            ",fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber",
+            "fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber",
+        )
+        val newlines = List(false, true)
+        val grid = headers.flatMap(h => newlines.map(p => h -> p))
+        
+        // Additional component to CsvRowDecoder[DetectedSpotRoi, HeaderField] to derive 
+        // CsvRowDecoder[NucleusLabelAttemptedRoi, HeaderField]
+        given CsvRowDecoder[NuclearDesignation, HeaderField] = getCsvRowDecoderForNuclearDesignation()
+        
+        forAll (Table(("header", "newline"), grid*)) { (header, newline) => 
+            val fileData = header ++ (if newline then "\n" else "")
+            withTempFile(fileData, Delimiter.CommaSeparator) { roisFile => 
+                val expected = List.empty[NucleusLabelAttemptedRoi]
+                val observed = unsafeRead[NucleusLabelAttemptedRoi](roisFile)
+                observed shouldEqual expected
+            }
+        }
+    }
 
     private def unsafeRead[A](roisFile: os.Path)(using CsvRowDecoder[A, String], CharLikeChunks[IO, Byte]): List[A] = 
         readCsvToCaseClasses[A](roisFile).unsafeRunSync()
