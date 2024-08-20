@@ -8,7 +8,7 @@ import org.scalacheck.Arbitrary.arbitrary
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.BoundingBox
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
-import at.ac.oeaw.imba.gerlich.gerlib.testing.{ GeometricInstances, ImagingInstances, CatsScalacheckInstances }
+import at.ac.oeaw.imba.gerlich.gerlib.testing.instances.{ GeometricInstances, ImagingInstances, CatsScalacheckInstances }
 import at.ac.oeaw.imba.gerlich.gerlib.testing.syntax.SyntaxForScalacheck
 
 import at.ac.oeaw.imba.gerlich.looptrace.space.{

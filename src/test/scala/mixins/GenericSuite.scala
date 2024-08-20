@@ -4,7 +4,7 @@ import org.scalacheck.{ Arbitrary, Gen }
 import org.scalacheck.Arbitrary.arbitrary
 import com.github.tototoshi.csv.*
 
-import at.ac.oeaw.imba.gerlich.gerlib.testing.NumericInstances
+import at.ac.oeaw.imba.gerlich.gerlib.testing.instances.NumericInstances
 
 /** Tools very generally useful in automated testing */
 trait GenericSuite extends NumericInstances:    
