@@ -3,7 +3,7 @@ package at.ac.oeaw.imba.gerlich.looptrace
 import scala.util.Random
 import cats.syntax.all.*
 import org.scalacheck.Gen
-import at.ac.oeaw.imba.gerlich.gerlib.testing.CatsScalacheckInstances
+import at.ac.oeaw.imba.gerlich.gerlib.testing.instances.CatsScalacheckInstances
 
 /**
   * Helpers for the [[at.ac.oeaw.imba.gerlich.looptrace.ImagingRound]]-related tests

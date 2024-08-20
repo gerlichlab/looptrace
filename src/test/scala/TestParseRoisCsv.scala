@@ -36,7 +36,6 @@ import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.roi.DetectedSpot
 import at.ac.oeaw.imba.gerlich.gerlib.roi.measurement.{ Area, MeanIntensity }
-import at.ac.oeaw.imba.gerlich.gerlib.testing.catsScalacheck.given
 import at.ac.oeaw.imba.gerlich.gerlib.testing.instances.all.given
 
 import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
