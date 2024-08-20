@@ -26,14 +26,16 @@ import at.ac.oeaw.imba.gerlich.gerlib.geometry.Centroid
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{
-    ColumnNames,
     getCsvRowDecoderForProduct2,
-    getCsvRowDecoderForSingleton,
     getCsvRowEncoderForProduct2,
     readCsvToCaseClasses, 
     writeCaseClassesToCsv, 
 }
-import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.{
+    getCsvRowDecoderForNuclearDesignation,
+    getCsvRowEncoderForNuclearDesignation,
+    given,
+}
 import at.ac.oeaw.imba.gerlich.gerlib.roi.DetectedSpot
 import at.ac.oeaw.imba.gerlich.gerlib.roi.measurement.{ Area, MeanIntensity }
 import at.ac.oeaw.imba.gerlich.gerlib.testing.instances.all.given
@@ -127,8 +129,6 @@ class TestParseRoisCsv extends AnyFunSuite, GenericSuite, should.Matchers, Scala
     }
     
     test("DetectedSpotRoi records roundtrip through CSV.") {
-        given CsvRowEncoder[DetectedSpotRoi, String] = getCsvRowEncoderForProduct2(_.spot, _.box)
-
         given Arbitrary[DetectedSpotRoi] = (
             summon[Arbitrary[DetectedSpot[RawCoordinate]]], 
             summon[Arbitrary[BoundingBox[RawCoordinate]]],
@@ -278,7 +278,9 @@ class TestParseRoisCsv extends AnyFunSuite, GenericSuite, should.Matchers, Scala
             List(rec1, rec2, rec3)
         }
 
-        given CsvRowDecoder[NucleusLabelAttemptedRoi, HeaderField] = getNucRoiDecoder
+        // Additional component to CsvRowDecoder[DetectedSpotRoi, HeaderField] to derive 
+        // CsvRowDecoder[NucleusLabelAttemptedRoi, HeaderField]
+        given CsvRowDecoder[NuclearDesignation, HeaderField] = getCsvRowDecoderForNuclearDesignation()
         
         withTempFile(linesToWrite, Delimiter.CommaSeparator){ roisFile =>
             val observedRecords: List[NucleusLabelAttemptedRoi] = unsafeRead(roisFile)
@@ -288,8 +290,6 @@ class TestParseRoisCsv extends AnyFunSuite, GenericSuite, should.Matchers, Scala
     }
 
     test("NucleusLabelAttemptedRoi records roundtrip through CSV.") {
-        given CsvRowEncoder[NucleusLabelAttemptedRoi, String] = getCsvRowEncoderForProduct2(_.spot, _.box)
-
         given Arbitrary[NucleusLabelAttemptedRoi] = 
             val arbRoi: Arbitrary[DetectedSpotRoi] = (
                 summon[Arbitrary[DetectedSpot[RawCoordinate]]], 
@@ -300,7 +300,12 @@ class TestParseRoisCsv extends AnyFunSuite, GenericSuite, should.Matchers, Scala
                 summon[Arbitrary[NuclearDesignation]],
             ).mapN(NucleusLabelAttemptedRoi.apply)
 
-        given CsvRowDecoder[NucleusLabelAttemptedRoi, HeaderField] = getNucRoiDecoder
+        // Additional component to CsvRowDecoder[DetectedSpotRoi, HeaderField] to derive 
+        // CsvRowDecoder[NucleusLabelAttemptedRoi, HeaderField]
+        given CsvRowDecoder[NuclearDesignation, HeaderField] = getCsvRowDecoderForNuclearDesignation()
+        // Additional component to CsvRowEncoder[DetectedSpotRoi, HeaderField] to derive 
+        // CsvRowEncoder[NucleusLabelAttemptedRoi, HeaderField]
+        given CsvRowEncoder[NuclearDesignation, HeaderField] = getCsvRowEncoderForNuclearDesignation()
 
         forAll { (inputRecords: NonEmptyList[NucleusLabelAttemptedRoi]) => 
             withTempFile(Delimiter.CommaSeparator){ roisFile =>
@@ -332,10 +337,10 @@ class TestParseRoisCsv extends AnyFunSuite, GenericSuite, should.Matchers, Scala
 
     test("Header-only file gives empty list of results for NucleusLabelAttemptedRoi.") { pending }
 
-    private def getNucRoiDecoder: CsvRowDecoder[NucleusLabelAttemptedRoi, HeaderField] = 
-        given CsvRowDecoder[NuclearDesignation, HeaderField] = 
-            getCsvRowDecoderForSingleton(ColumnNames.NucleusDesignationColumnName)
-        getCsvRowDecoderForProduct2(NucleusLabelAttemptedRoi.apply)
+    // private def getNucRoiEncoder: CsvRowEncoder[NucleusLabelAttemptedRoi, HeaderField] = 
+    //     given CsvRowEncoder[NuclearDesignation, HeaderField] = 
+    //         getCsv
+    //     getCsvRowEncoderForProduct2()
 
     private def unsafeRead[A](roisFile: os.Path)(using CsvRowDecoder[A, String], CharLikeChunks[IO, Byte]): List[A] = 
         readCsvToCaseClasses[A](roisFile).unsafeRunSync()
