@@ -46,8 +46,6 @@ object LocusSpotQC:
             "y" -> ujson.Num(p.y.get),
             "z" -> ujson.Num(p.z.get),
         )
-
-        private[LocusSpotQC] def fromJson(json: ujson.Value): ErrMsgsOr[Point3D] = ???
     end PointCodec
 
     /**
