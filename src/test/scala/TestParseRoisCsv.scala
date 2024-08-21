@@ -395,8 +395,8 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
 
             val rec2: NucleusLabeledProximityAssessedRoi = {
                 val xBounds = XCoordinate(1348.0069098862991) -> XCoordinate(1372.0069098862991)
-                val yBounds = YCoordinate(12.042015416774795) -> YCoordinate(36.0420154167748)
-                val zBounds = ZCoordinate(11.994259347453491) -> ZCoordinate(23.994259347453493)
+                val yBounds = YCoordinate(12.042015416774795) -> YCoordinate(36.042015416774795)
+                val zBounds = ZCoordinate(11.994259347453493) -> ZCoordinate(23.994259347453493)
                 val spot = DetectedSpot(
                     ImagingContext(
                         pos,
@@ -411,7 +411,7 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
                         ), 
                     ),
                     Area(213.58943029032),
-                    MeanIntensity(117.1394688491732),
+                    MeanIntensity(117.13946884917321),
                 )
                 val box = BoundingBox(
                     BoundingBox.Interval.unsafeFromTuple(xBounds), 
@@ -439,6 +439,7 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
         withTempFile(linesToWrite, Delimiter.CommaSeparator){ roisFile =>
             val observedRecords: List[NucleusLabeledProximityAssessedRoi] = unsafeRead(roisFile)
             observedRecords.length shouldEqual expectedRecords.length // quick, simplifying check
+            observedRecords.map(_.roi.spot) shouldEqual expectedRecords.map(_.roi.spot)
             observedRecords shouldEqual expectedRecords // full check
         }
     }
