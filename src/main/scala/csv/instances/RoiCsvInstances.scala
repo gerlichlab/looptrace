@@ -47,7 +47,7 @@ trait RoiCsvInstances:
                     val repeats = allIndices.groupBy(identity).view.mapValues(_.length).filter(_._2 > 1).toMap
                     repeats.isEmpty.either(
                         DecoderError(s"Repeat counts by ROI index: $repeats"), 
-                        repeats.keySet
+                        allIndices.toSet
                     )
                 }
         
