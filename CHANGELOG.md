@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+* "Merge" ROIs which come from spots detected from the same regional barcode imaging timepoint, by defining a new ROI around the midpoint of the line segment between their centroids. See [Issue 279](https://github.com/gerlichlab/looptrace/issues/285)
+
+### Changed
+* Swapped the order of the proximity-based filtration and the through-nuclei filtration; the filtration through nuclei now happens first.
+* Bumped up to Scala 3.4.3.
+
 ## [v0.9.1] - 2024-07-29
 
 ### Fixed
@@ -11,7 +20,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 
 ## [v0.9.0] - 2024-07-19
 
-## Changed
+### Changed
 * _Minimum Python version is now 3.11_!
 * The `_nuclear_masks_visualisation/*.nuclear_masks.csv` files are now renamed as `_nuclear_masks_visualisation/*.nuclei_centroids.csv`, to better reflect the data content of these files and how they're used for the visualisation of the nuclear masks.
 * _Removed from API_: `looptrace.integer_naming.get_channel_name_short` and `looptrace.integer_naming.get_time_name_short`
@@ -19,7 +28,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 The thinking is that the original naming/numbering of the FOVs should be preserved.
 * Sorting ND2 and ZARR stacks by name of position / field of view.
 
-## Fixed
+### Fixed
 * Preserve field-of-view-based naming of nuclear mask centroid files, even when a field of view has been removed. See [Issue 285](https://github.com/gerlichlab/looptrace/issues/285) and [Issue 344](https://github.com/gerlichlab/looptrace/issues/344).
 * Catch correct error types at a couple places where a more generic / builtin exception was being caught, rather than the narrower domain-specific one which would've been thrown.
 
