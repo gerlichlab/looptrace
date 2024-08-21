@@ -8,6 +8,7 @@ import org.scalacheck.Arbitrary.arbitrary
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.BoundingBox
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+import at.ac.oeaw.imba.gerlich.gerlib.roi.DetectedSpot
 import at.ac.oeaw.imba.gerlich.gerlib.testing.instances.{ GeometricInstances, ImagingInstances, CatsScalacheckInstances }
 import at.ac.oeaw.imba.gerlich.gerlib.testing.syntax.SyntaxForScalacheck
 
@@ -22,6 +23,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.{
     ZCoordinate,
 }
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
+import at.ac.oeaw.imba.gerlich.gerlib.cell.NuclearDesignation
 
 /** Base trait for tests in looptrace */
 trait LooptraceSuite extends GenericSuite, GeometricInstances, ImagingInstances, CatsScalacheckInstances, SyntaxForScalacheck:
@@ -88,6 +90,11 @@ trait LooptraceSuite extends GenericSuite, GeometricInstances, ImagingInstances,
         } yield RegionalBarcodeSpotRoi(index = idx, position = pos, region = reg, channel = ch, centroid = pt, boundingBox = box)
         Arbitrary(genRoi)
     }
+
+    given arbitraryForDetectedSpotRoi(using 
+        arbSpot: Arbitrary[DetectedSpot[Double]], 
+        arbBox: Arbitrary[BoundingBox[Double]],
+    ): Arbitrary[DetectedSpotRoi] = (arbSpot, arbBox).mapN(DetectedSpotRoi.apply)
 
     /************************
      * Other definitions

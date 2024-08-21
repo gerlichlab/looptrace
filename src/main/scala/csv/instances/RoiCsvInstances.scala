@@ -38,7 +38,9 @@ trait RoiCsvInstances:
 
     given cellDecoderForRoiBag(using decOne: CellDecoder[RoiIndex]): CellDecoder[Set[RoiIndex]] = new:
         override def apply(cell: String): DecoderResult[Set[RoiIndex]] = 
-            cell.split(";")
+            if cell === "" 
+            then Set.empty.asRight 
+            else cell.split(";")
                 .toList
                 .traverse(decOne.apply)
                 .flatMap{ allIndices => 
@@ -83,10 +85,18 @@ trait RoiCsvInstances:
         decRoiIndices: CellDecoder[Set[RoiIndex]], 
     ): CsvRowDecoder[NucleusLabeledProximityAssessedRoi, Header] = new:
         override def apply(row: RowF[Some, Header]): DecoderResult[NucleusLabeledProximityAssessedRoi] = 
-            val indexNel = decIndex(row).toValidatedNel.leftMap(_.map(_.getMessage))
-            val roiNel = decRoi(row).toValidatedNel.leftMap(_.map(_.getMessage))
-            val tooCloseNel = ColumnNames.TooCloseRoisColumnName.from(row)
-            val mergeNel = ColumnNames.MergeRoisColumnName.from(row)
+            val indexNel = decIndex(row)
+                .toValidatedNel
+                .leftMap(es => NonEmptyList.one(s"${es.size} problem(s) with main ROI index: $es"))
+            val roiNel = decRoi(row)
+                .toValidatedNel.leftMap(_.map(_.getMessage))
+                .leftMap(es => NonEmptyList.one(s"${es.size} problem(s) with detected ROI: $es"))
+            val tooCloseNel = ColumnNames.TooCloseRoisColumnName
+                .from(row)
+                .leftMap(es => NonEmptyList.one(s"${es.size} problem(s) with too-close ROIs: $es"))
+            val mergeNel = ColumnNames.MergeRoisColumnName
+                .from(row)
+                .leftMap(es => NonEmptyList.one(s"${es.size} problem(s) with merge ROIs: $es"))
             (indexNel, roiNel, tooCloseNel, mergeNel)
                 .tupled
                 .toEither

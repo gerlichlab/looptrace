@@ -3,7 +3,11 @@ package at.ac.oeaw.imba.gerlich.looptrace
 import cats.data.NonEmptyList
 import cats.syntax.all.*
 import mouse.boolean.*
+
 import at.ac.oeaw.imba.gerlich.gerlib.cell.NuclearDesignation
+import at.ac.oeaw.imba.gerlich.gerlib.collections.*
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
 /** A ROI already assessed for nuclear attribution and proximity to other ROIs */
 final case class NucleusLabeledProximityAssessedRoi private(
@@ -25,14 +29,23 @@ object NucleusLabeledProximityAssessedRoi:
         tooClose: Set[RoiIndex], 
         merge: Set[RoiIndex],
     ): Either[NonEmptyList[String], NucleusLabeledProximityAssessedRoi] = 
-        val selfTooCloseNel = tooClose.contains(index).validatedNel("", ())
-        val selfMergeNel = merge.contains(index).validatedNel("", ())
+        val selfTooCloseNel = tooClose.excludes(index)
+            .validatedNel(s"An ROI cannot be too close to itself (index ${index.get.show_})", ())
+        val selfMergeNel = merge.excludes(index)
+            .validatedNel(s"An ROI cannot be merged with itself (index ${index.get.show_})", ())
         val closeMergeDisjointNel = 
             val overlap = tooClose & merge
-            overlap.isEmpty.validatedNel("", ())
+            overlap.isEmpty.validatedNel(s"Overlap between too-close ROIs and ROIs to merge: ${overlap}", ())
         (selfTooCloseNel, selfMergeNel, closeMergeDisjointNel)
             .tupled
-            .map{ Function.const{ singleton(index, roi, nucleus) } }
+            .map{
+                Function.const{
+                    singleton(index, roi, nucleus).copy(
+                        tooCloseNeighbors = tooClose, 
+                        mergeNeighbors = merge,
+                    )
+                }
+            }
             .toEither
 
     def singleton(
