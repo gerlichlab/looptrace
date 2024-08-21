@@ -21,7 +21,31 @@ class TestNucleusLabeledProximityAssessedRoi extends AnyFunSuite, LooptraceSuite
     private type RoiBags = (Set[RoiIndex], Set[RoiIndex])
 
     test("NucleusLabeledProximityAssessedRoi.build correctly passes through the proximal ROI indices.") {
-        pending
+        // Generate legal combination of main ROI index, too-close ROIs, and ROIs to merge.
+        given arbRoiIndexAndRoiBags(using Arbitrary[RoiIndex]): Arbitrary[(RoiIndex, RoiBags)] = Arbitrary{
+            for {
+                idx <- Arbitrary.arbitrary[RoiIndex]
+                raw1 <- Gen.listOf(Arbitrary.arbitrary[RoiIndex])
+                bag1 = raw1.toSet - idx // Prevent overlap with the main index
+                raw2 <- Gen.listOf(Arbitrary.arbitrary[RoiIndex])
+                bag2 = (raw2.toSet -- bag1) - idx // Prevent overlap with other bag and with main index.
+            } yield (idx, bag1 -> bag2)
+        }
+
+        // Avoid shrinking so that the invariant about the main index being in the set of 
+        // ROI indices "too close together" remains respected.
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny
+
+        forAll { (indexAndBags: (RoiIndex, RoiBags), roi: DetectedSpotRoi, nucleus: NuclearDesignation) => 
+            val (index, (tooClose, forMerge)) = indexAndBags
+            NucleusLabeledProximityAssessedRoi.build(index, roi, nucleus, tooClose, forMerge) match {
+                case Left(messages) => 
+                    fail(s"Expected ROI build success, but it failed with message(s): $messages")
+                case Right(roi) => 
+                    roi.tooCloseNeighbors shouldEqual tooClose
+                    roi.mergeNeighbors shouldEqual forMerge
+            }
+        }
     }
     
     test("NucleusLabeledProximityAssessedRoi.build correctly prohibits any intersection between ROI sets.") {
