@@ -14,7 +14,8 @@ final case class NucleusLabelAttemptedRoi(
     spot: DetectedSpot[Double],
     box: BoundingBox, 
     nucleus: NuclearDesignation
-)
+):
+    def toDetectedSpotRoi: DetectedSpotRoi = DetectedSpotRoi(spot, box)
 
 /** Helpers for working with detected ROIs for which nuclear attribution has been attempted */
 object NucleusLabelAttemptedRoi:
