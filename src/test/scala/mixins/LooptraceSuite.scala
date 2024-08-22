@@ -96,6 +96,11 @@ trait LooptraceSuite extends GenericSuite, GeometricInstances, ImagingInstances,
         arbBox: Arbitrary[BoundingBox[Double]],
     ): Arbitrary[DetectedSpotRoi] = (arbSpot, arbBox).mapN(DetectedSpotRoi.apply)
 
+    given arbitraryForNucleusLabelAttemptedRoi(using 
+        arbRoi: Arbitrary[DetectedSpotRoi], 
+        arbNuc: Arbitrary[NuclearDesignation],
+    ): Arbitrary[NucleusLabelAttemptedRoi] = (arbRoi, arbNuc).mapN(NucleusLabelAttemptedRoi.apply)
+
     /************************
      * Other definitions
      ***********************/
