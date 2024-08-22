@@ -11,8 +11,12 @@ import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{
     getCsvRowDecoderForProduct2, 
     getCsvRowDecoderForSingleton,
     getCsvRowEncoderForProduct2,
+    getCsvRowEncoderForSingleton,
+    fromSimpleShow
 }
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.roi.DetectedSpot
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
@@ -22,25 +26,31 @@ import at.ac.oeaw.imba.gerlich.looptrace.{
     NucleusLabeledProximityAssessedRoi, 
     RoiIndex, 
 }
+import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.BoundingBox
-import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.TooCloseRoisColumnName
-import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt
 
 /** Typeclass instances related to CSV, for ROI-related data types */
 trait RoiCsvInstances:
     private type Header = String
     
+    private def roiIndexDelimiter = ";"
+
     given cellDecoderForRoiIndex(using decRaw: CellDecoder[NonnegativeInt]): CellDecoder[RoiIndex] = 
         decRaw.map(RoiIndex.apply)
 
+    given cellEncoderForRoiIndex: CellEncoder[RoiIndex] = CellEncoder.fromSimpleShow[RoiIndex]
+
     given csvRowDecoderForRoiIndex(using CellDecoder[RoiIndex]): CsvRowDecoder[RoiIndex, Header] = 
         getCsvRowDecoderForSingleton(ColumnNames.RoiIndexColumnName)
+
+    given csvRowEncoderForRoiIndex(using CellEncoder[RoiIndex]): CsvRowEncoder[RoiIndex, Header] = 
+        getCsvRowEncoderForSingleton(ColumnNames.RoiIndexColumnName)
 
     given cellDecoderForRoiBag(using decOne: CellDecoder[RoiIndex]): CellDecoder[Set[RoiIndex]] = new:
         override def apply(cell: String): DecoderResult[Set[RoiIndex]] = 
             if cell === "" 
             then Set.empty.asRight 
-            else cell.split(";")
+            else cell.split(roiIndexDelimiter)
                 .toList
                 .traverse(decOne.apply)
                 .flatMap{ allIndices => 
@@ -50,7 +60,9 @@ trait RoiCsvInstances:
                         allIndices.toSet
                     )
                 }
-        
+    
+    given cellEncoderForRoiBag(using encOne: CellEncoder[RoiIndex]): CellEncoder[Set[RoiIndex]] = new:
+        override def apply(cell: Set[RoiIndex]): String = cell.map(encOne.apply).mkString(roiIndexDelimiter)
 
     given csvRowDecoderForDetectedSpotRoi(using 
         CsvRowDecoder[DetectedSpot[Double], Header],
