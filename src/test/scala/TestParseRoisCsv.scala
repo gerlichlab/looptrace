@@ -285,12 +285,6 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
     }
 
     test("NucleusLabelAttemptedRoi records roundtrip through CSV.") {
-        given Arbitrary[NucleusLabelAttemptedRoi] = 
-            (
-                summon[Arbitrary[DetectedSpotRoi]],
-                summon[Arbitrary[NuclearDesignation]],
-            ).mapN(NucleusLabelAttemptedRoi.apply)
-
         // Additional component to CsvRowDecoder[DetectedSpotRoi, HeaderField] to derive 
         // CsvRowDecoder[NucleusLabelAttemptedRoi, HeaderField]
         given CsvRowDecoder[NuclearDesignation, HeaderField] = getCsvRowDecoderForNuclearDesignation()
@@ -444,7 +438,64 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
         }
     }
 
-    test("NucleusLabeledProximityAssessedRoi records roundtrip through CSV.") { pending }
+    test("NucleusLabeledProximityAssessedRoi records roundtrip through CSV.") {
+        // Generate legal combination of main ROI index, too-close ROIs, and ROIs to merge.
+        def genRoiIndexAndRoiBags(using Arbitrary[RoiIndex]): Gen[(RoiIndex, (Set[RoiIndex], Set[RoiIndex]))] = 
+            for {
+                idx <- Arbitrary.arbitrary[RoiIndex]
+                raw1 <- Gen.listOf(Arbitrary.arbitrary[RoiIndex])
+                bag1 = raw1.toSet - idx // Prevent overlap with the main index
+                raw2 <- Gen.listOf(Arbitrary.arbitrary[RoiIndex])
+                bag2 = (raw2.toSet -- bag1) - idx // Prevent overlap with other bag and with main index.
+            } yield (idx, bag1 -> bag2)
+
+        given arbRoi(using Arbitrary[RoiIndex], Arbitrary[NucleusLabelAttemptedRoi]): Arbitrary[NucleusLabeledProximityAssessedRoi] = 
+            Arbitrary{
+                for {
+                    roi <- Arbitrary.arbitrary[NucleusLabelAttemptedRoi]
+                    (index, (tooClose, forMerge)) <- genRoiIndexAndRoiBags
+                } yield NucleusLabeledProximityAssessedRoi
+                    .build(index, roi.toDetectedSpotRoi, roi.nucleus, tooClose, forMerge)
+                    .fold(errors => throw new Exception(s"ROI build error(s): $errors"), identity)
+            }
+
+        // Additional component to CsvRowDecoder[DetectedSpotRoi, HeaderField] to derive 
+        // CsvRowDecoder[NucleusLabeledProximityAssessedRoi, HeaderField]
+        given CsvRowDecoder[NuclearDesignation, HeaderField] = getCsvRowDecoderForNuclearDesignation()
+        // Additional component to CsvRowEncoder[DetectedSpotRoi, HeaderField] to derive 
+        // CsvRowEncoder[NucleusLabeledProximityAssessedRoi, HeaderField]
+        given CsvRowEncoder[NuclearDesignation, HeaderField] = getCsvRowEncoderForNuclearDesignation()
+
+        summon[Arbitrary[NucleusLabelAttemptedRoi]]
+
+        forAll { (inputRecords: NonEmptyList[NucleusLabeledProximityAssessedRoi]) => 
+            withTempFile(Delimiter.CommaSeparator){ roisFile =>
+                /* First, write the records to CSV */
+                val sink: Pipe[IO, NucleusLabeledProximityAssessedRoi, Nothing] = 
+                    writeCaseClassesToCsv[NucleusLabeledProximityAssessedRoi](roisFile)
+                Stream.emits(inputRecords.toList).through(sink).compile.drain.unsafeRunSync()
+
+                /* Then, do the parse-and-check. */
+                Try{ unsafeRead[NucleusLabeledProximityAssessedRoi](roisFile) } match {
+                    case Failure(e) => 
+                        println("LINES (below):")
+                        os.read.lines(roisFile).foreach(println)
+                        fail(s"Expected good parse but got error: $e")
+                    case Success(outputRecords) => 
+                        /* quick checks for proper record count */
+                        outputRecords.nonEmpty shouldBe true
+                        outputRecords.length shouldEqual inputRecords.length
+                        // Check the actual equality, element-by-element.-
+                        val unequal = inputRecords.toList.zip(outputRecords).filter{ (in, out) => in != out }
+                        if (unequal.nonEmpty) {
+                            fail(s"Unequal records pairs (below):\n${unequal.map{ (in, out) => in.toString ++ "\n" ++ out.toString }.mkString("\n\n")}")
+                        } else {
+                            succeed
+                        }
+                }
+            }
+        }
+    }
 
     test("Header-only file gives empty list of results for NucleusLabeledProximityAssessedRoi.") {
         val headers = List(
