@@ -7,7 +7,7 @@ val rootPkg = s"$orgName.$projectName"
 val primaryJavaVersion = "11"
 val primaryOs = "ubuntu-latest"
 val isPrimaryOsAndPrimaryJavaTest = s"runner.os == '$primaryOs' && runner.java-version == '$primaryJavaVersion'"
-ThisBuild / scalaVersion     := "3.4.3"
+ThisBuild / scalaVersion     := "3.5.0"
 ThisBuild / version          := "0.9.1"
 ThisBuild / organization     := orgName
 ThisBuild / organizationName := "Gerlich Group, IMBA, OEAW"

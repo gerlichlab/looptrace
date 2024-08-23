@@ -11,7 +11,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 
 ### Changed
 * Swapped the order of the proximity-based filtration and the through-nuclei filtration; the filtration through nuclei now happens first.
-* Bumped up to Scala 3.4.3.
+* Bumped up to Scala 3.5.0.
 
 ## [v0.9.1] - 2024-07-29
 
