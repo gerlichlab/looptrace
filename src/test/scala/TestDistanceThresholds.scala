@@ -10,8 +10,8 @@ import org.scalatest.matchers.*
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.{ DistanceThreshold, EuclideanDistance, PiecewiseDistance, ProximityComparable }
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
-
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 
 /** Tests for distance thresholds */

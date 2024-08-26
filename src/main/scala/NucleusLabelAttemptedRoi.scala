@@ -15,6 +15,8 @@ final case class NucleusLabelAttemptedRoi(
     box: BoundingBox, 
     nucleus: NuclearDesignation
 ):
+    def context: ImagingContext = spot.context
+    def centroid: Centroid[Double] = spot.centroid
     def toDetectedSpotRoi: DetectedSpotRoi = DetectedSpotRoi(spot, box)
 
 /** Helpers for working with detected ROIs for which nuclear attribution has been attempted */

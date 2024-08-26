@@ -11,4 +11,5 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.*
 final case class DetectedSpotRoi(
     spot: DetectedSpot[Double],
     box: BoundingBox,
-)
+):
+    def centroid: Centroid[Double] = spot.centroid

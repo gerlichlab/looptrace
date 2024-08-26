@@ -7,6 +7,10 @@ import cats.syntax.either.*
 import upickle.default.*
 
 import at.ac.oeaw.imba.gerlich.gerlib.geometry
+import at.ac.oeaw.imba.gerlich.gerlib.json.JsonValueWriter
+import at.ac.oeaw.imba.gerlich.gerlib.json.instances.geometry.getPlainJsonValueWriter
+import at.ac.oeaw.imba.gerlich.gerlib.json.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.json.syntax.*
 
 /** Working with (3D) space */
 package object space:
@@ -16,8 +20,9 @@ package object space:
     type Coordinate = geometry.Coordinate[Wrapped]
 
     object Coordinate:
-        /** Ordering is only among coordinates along the same axis/dimension, and is by the wrapped value. */
-        given orderForCoordinate[C <: Coordinate : [C] =>> NotGiven[C =:= Coordinate]]: Order[C] = Order.by(_.get)
+        /** Get a writer of coordinate components as JSON values */
+        def getJsonWriter[C <: Coordinate: [C] =>> NotGiven[C =:= Coordinate]]: JsonValueWriter[C, ujson.Num] = 
+            getPlainJsonValueWriter[Double, C, ujson.Num]
 
     type XCoordinate = geometry.XCoordinate[Wrapped]
 

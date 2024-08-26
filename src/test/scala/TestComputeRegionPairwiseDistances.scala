@@ -15,6 +15,7 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import io.github.iltotore.iron.scalacheck.char.given
 
 import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.EuclideanDistance
 import at.ac.oeaw.imba.gerlich.gerlib.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.PositionName
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given

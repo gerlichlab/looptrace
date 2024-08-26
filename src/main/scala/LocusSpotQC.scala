@@ -2,6 +2,8 @@ package at.ac.oeaw.imba.gerlich.looptrace
 
 import scala.language.adhocExtensions // to extend ujson.Value.InvalidData
 import scala.math.max
+import scala.util.NotGiven
+
 import cats.*
 import cats.data.*
 import cats.data.Validated.{ Invalid, Valid }
@@ -11,6 +13,9 @@ import upickle.default.*
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.json.JsonValueWriter
+import at.ac.oeaw.imba.gerlich.gerlib.json.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.json.instances.geometry.getPlainJsonValueWriter
 import at.ac.oeaw.imba.gerlich.gerlib.json.syntax.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
@@ -41,11 +46,12 @@ object LocusSpotQC:
 
     /** A roundtrip through JSON for a 3D point, in the context of locus spot QC */
     object PointCodec:
-        private[LocusSpotQC] def toJsonObject(p: Point3D): ujson.Obj = ujson.Obj(
-            "x" -> ujson.Num(p.x.get),
-            "y" -> ujson.Num(p.y.get),
-            "z" -> ujson.Num(p.z.get),
-        )
+        private[LocusSpotQC] def toJsonObject(p: Point3D): ujson.Obj = 
+            ujson.Obj(
+                "x" -> Coordinate.getJsonWriter[XCoordinate](p.x),
+                "y" -> Coordinate.getJsonWriter[YCoordinate](p.y),
+                "z" -> Coordinate.getJsonWriter[ZCoordinate](p.z),
+            )
     end PointCodec
 
     /**
@@ -186,16 +192,16 @@ object LocusSpotQC:
                 sufficientSNR = hasSufficientSNR(minSNR), 
                 denseXY = isConcentratedXY(maxSigmaXY), 
                 denseZ = isConcentratedZ(maxSigmaZ), 
-                inBoundsX = withinSigmaOfBound(sigma = sigmaXY, boxBound = bounds.x.get)(centerInPhysicalUnits.x.get).merge, 
-                inBoundsY = withinSigmaOfBound(sigma = sigmaXY, boxBound = bounds.y.get)(centerInPhysicalUnits.y.get).merge, 
-                inBoundsZ = withinSigmaOfBound(sigma = sigmaZ, boxBound = bounds.z.get)(centerInPhysicalUnits.z.get).merge, 
+                inBoundsX = withinSigmaOfBound(XCoordinate.apply)(sigma = sigmaXY, boxBound = bounds.x.get)(centerInPhysicalUnits.x).merge, 
+                inBoundsY = withinSigmaOfBound(YCoordinate.apply)(sigma = sigmaXY, boxBound = bounds.y.get)(centerInPhysicalUnits.y).merge, 
+                inBoundsZ = withinSigmaOfBound(ZCoordinate.apply)(sigma = sigmaZ, boxBound = bounds.z.get)(centerInPhysicalUnits.z).merge, 
                 canBeDisplayed = (
-                    centerInImageUnits.z.get > 0 && 
-                    centerInImageUnits.z.get < roiSize.z.get && 
-                    centerInImageUnits.y.get > 0 && 
-                    centerInImageUnits.y.get < roiSize.y.get && 
-                    centerInImageUnits.x.get > 0 && 
-                    centerInImageUnits.x.get < roiSize.x.get
+                    centerInImageUnits.z > ZCoordinate(0) && 
+                    centerInImageUnits.z < ZCoordinate(roiSize.z.get) && 
+                    centerInImageUnits.y > YCoordinate(0) && 
+                    centerInImageUnits.y < YCoordinate(roiSize.y.get) && 
+                    centerInImageUnits.x > XCoordinate(0) && 
+                    centerInImageUnits.x < XCoordinate(roiSize.x.get)
                     )
                 )
 
@@ -204,12 +210,15 @@ object LocusSpotQC:
          *
          * @param sigma The standard deviation, along a particular axis, of a 3D Gaussian fit to the locus spot
          * @param boxBound The (upper) bound in a particular dimension of the bounding box around a locus-specific spot
-         * @param p The coordinate of a locus spot's center in a particular dimension
+         * @param c The coordinate of a locus spot's center in a particular dimension
          * @return Whether the given point is sufficiently "inside" (more than 1 `sigma`) the interval of the locus spot's 
          *     bounding box, with the interval being in a particular one of the three dimensions
          */
-        private final def withinSigmaOfBound(sigma: Double, boxBound: PositiveReal)(p: Double): Either[Boolean, Boolean] = 
-            (sigma > 0).either(0.0, sigma).mapBoth(s => p > s && p < boxBound - s)
+        private final def withinSigmaOfBound[C <: Coordinate : [C] =>> NotGiven[C =:= Coordinate]](lift: Double => C)(
+            sigma: Double, boxBound: PositiveReal
+        )(c: C): Either[Boolean, Boolean] = (sigma > 0)
+            .either(0.0, sigma)
+            .mapBoth{ s => c > lift(s) && c < lift(boxBound - s) }
     end InputRecord
     
     /** A bundle of the QC pass/fail components for individual rows/records supporting traces

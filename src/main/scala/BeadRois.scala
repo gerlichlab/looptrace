@@ -3,9 +3,19 @@ package at.ac.oeaw.imba.gerlich.looptrace
 import scala.util.NotGiven
 import upickle.default.*
 
+import at.ac.oeaw.imba.gerlich.gerlib.json.instances.all.{*, given}
+import at.ac.oeaw.imba.gerlich.gerlib.json.syntax.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
-import at.ac.oeaw.imba.gerlich.looptrace.space.{ Coordinate, CoordinateSequence, Point3D }
+import at.ac.oeaw.imba.gerlich.looptrace.space.{
+    Coordinate, 
+    CoordinateSequence, 
+    Point3D, 
+    XCoordinate, 
+    YCoordinate, 
+    ZCoordinate,
+}
+import at.ac.oeaw.imba.gerlich.gerlib.json.JsonValueWriter
 
 /** A type wrapper around a string with which to represent the reason(s) why a bead ROI is unusable */
 final case class RoiFailCode(get: String):
@@ -46,7 +56,14 @@ object SelectedRoi:
     val pointKey: String = "centroid"
 
     given coord2Value: (Coordinate => ujson.Value) with
-        def apply(x: Coordinate) = ujson.Num(x.get)
+        override def apply(c: Coordinate): ujson.Value = 
+            given writerForCoordinate[C <: Coordinate: [C] =>> NotGiven[C =:= Coordinate]]: JsonValueWriter[C, ujson.Num] = 
+                getPlainJsonValueWriter[Double, C, ujson.Num]
+            c match {
+                case x: XCoordinate => x.asJson
+                case y: YCoordinate => y.asJson
+                case z: ZCoordinate => z.asJson
+            }
 
     /** Serialise the index as a simple integer, and centroid as a simple array of Double, sequenced as requested. */
     def toJsonSimple(coordseq: CoordinateSequence)(roi: SelectedRoi): ujson.Obj = 
