@@ -14,6 +14,7 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.EuclideanDistance
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
@@ -354,5 +355,5 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
         given SimpleShow[Double] = SimpleShow.fromToString
         (r: Input.GoodRecord) => 
             val (x, y, z) = (r.point.x, r.point.y, r.point.z)
-            List(r.position.show_, r.trace.show_, r.region.show_, r.locus.show_, x.get.show_, y.get.show_, z.get.show_)
+            List(r.position.show_, r.trace.show_, r.region.show_, r.locus.show_, x.show_, y.show_, z.show_)
 end TestComputeLocusPairwiseDistances
