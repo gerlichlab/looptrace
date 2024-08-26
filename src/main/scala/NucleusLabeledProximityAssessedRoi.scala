@@ -1,13 +1,17 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
+import cats.Id
 import cats.data.NonEmptyList
 import cats.syntax.all.*
 import mouse.boolean.*
 
 import at.ac.oeaw.imba.gerlich.gerlib.cell.NuclearDesignation
 import at.ac.oeaw.imba.gerlich.gerlib.collections.*
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.Centroid
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingContext
+import at.ac.oewa.imba.gerlich.looptrace.RowIndexAdmission
 
 /** A ROI already assessed for nuclear attribution and proximity to other ROIs */
 final case class NucleusLabeledProximityAssessedRoi private(
@@ -17,6 +21,8 @@ final case class NucleusLabeledProximityAssessedRoi private(
     tooCloseNeighbors: Set[RoiIndex],
     mergeNeighbors: Set[RoiIndex],
 ):
+    def centroid: Centroid[Double] = roi.centroid
+    def context: ImagingContext = roi.spot.context
     def dropNeighbors: NucleusLabelAttemptedRoi = NucleusLabelAttemptedRoi(roi, nucleus)
 
 /** Tools for working with ROIs already assessed for nuclear attribution and proximity to other ROIs */
@@ -62,4 +68,7 @@ object NucleusLabeledProximityAssessedRoi:
     given ProximityMergeAssessedRoiLike[NucleusLabeledProximityAssessedRoi] with 
         override def getRoiIndex = _.index
         override def getMergeNeighbors = _.mergeNeighbors
+
+    given RowIndexAdmission[NucleusLabeledProximityAssessedRoi, Id] = 
+        RowIndexAdmission.intoIdentity(_.index.get)
 end NucleusLabeledProximityAssessedRoi

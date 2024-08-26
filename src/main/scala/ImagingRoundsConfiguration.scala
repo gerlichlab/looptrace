@@ -11,6 +11,7 @@ import mouse.boolean.*
 import upickle.default.*
 import com.typesafe.scalalogging.LazyLogging
 
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.{ DistanceThreshold, PiecewiseDistance }
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.imagingTimepoint.given
 import at.ac.oeaw.imba.gerlich.gerlib.json.syntax.*
@@ -19,7 +20,6 @@ import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.LocusGroup
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.{ readJsonFile, safeReadAs }
-import at.ac.oeaw.imba.gerlich.looptrace.space.{ DistanceThreshold, PiecewiseDistance }
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** Typical looptrace declaration/configuration of imaging rounds and how to use them */

@@ -16,6 +16,7 @@ import io.github.iltotore.iron.constraint.char.*
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.{ ImagingTimepoint, PositionName }
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given // Order, Show
+import at.ac.oewa.imba.gerlich.looptrace.RowIndexAdmission
 
 /** Chromatin fiber tracing with FISH probes */
 package object looptrace {
@@ -110,6 +111,8 @@ package object looptrace {
     object RoiIndex:
         def fromInt = NonnegativeInt.either.fmap(_.map(RoiIndex.apply))
         def unsafe = NonnegativeInt.unsafe.andThen(RoiIndex.apply)
+        given RowIndexAdmission[RoiIndex, Id] with
+            override def getRowIndex: RoiIndex => Id[NonnegativeInt] = _.get
     end RoiIndex
 
     final case class TraceId(get: NonnegativeInt) derives Order

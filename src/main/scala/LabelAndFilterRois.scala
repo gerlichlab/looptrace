@@ -11,7 +11,8 @@ import scopt.OParser
 import com.github.tototoshi.csv.*
 import com.typesafe.scalalogging.StrictLogging
 
-import at.ac.oeaw.imba.gerlich.gerlib.geometry.BoundingBox
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.{ BoundingBox, DistanceThreshold, PiecewiseDistance, ProximityComparable }
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
@@ -441,9 +442,9 @@ object LabelAndFilterRois extends ScoptCliReaders, StrictLogging:
 
     object Movement:
         private type Interval[C <: Coordinate] = BoundingBox.Interval[Double, C]
-        def shiftBy(del: XDir[Double])(c: XCoordinate): XCoordinate = XCoordinate(c.get + del.get)
-        def shiftBy(del: YDir[Double])(c: YCoordinate): YCoordinate = YCoordinate(c.get + del.get)
-        def shiftBy(del: ZDir[Double])(c: ZCoordinate): ZCoordinate = ZCoordinate(c.get + del.get)
+        def shiftBy(del: XDir[Double])(c: XCoordinate): XCoordinate = XCoordinate(del.get) |+| c
+        def shiftBy(del: YDir[Double])(c: YCoordinate): YCoordinate = YCoordinate(del.get) |+| c
+        def shiftBy(del: ZDir[Double])(c: ZCoordinate): ZCoordinate = ZCoordinate(del.get) |+| c
         def shiftBy(del: XDir[Double])(intv: Interval[XCoordinate]): Interval[XCoordinate] =
             BoundingBox.Interval(shiftBy(del)(intv.lo), shiftBy(del)(intv.hi))
         def shiftBy(del: YDir[Double])(intv: Interval[YCoordinate]): Interval[YCoordinate] =

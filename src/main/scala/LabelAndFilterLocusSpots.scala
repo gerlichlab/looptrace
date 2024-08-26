@@ -9,11 +9,13 @@ import mouse.boolean.*
 import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
 
-import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.* // for .show_ syntax
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.instances.simpleShow.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.* // for .show_ syntax
 
 import at.ac.oeaw.imba.gerlich.looptrace.HeadedFileWriter.DelimitedTextTarget.eqForDelimitedTextTarget
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
@@ -531,7 +533,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                                 .toRight(s"Missing locus time ${r.locusTime} in locus times for region time ${r.regionTime}!")
                         } yield ti
                     ).fold(msg => throw new Exception(msg), identity)
-                    val base = List(r.regionTime.show_, r.traceId.show_, r.locusTime.show_, t.show_, timeIndex.show, p.z.get.show, p.y.get.show, p.x.get.show)
+                    val base = List(r.regionTime.show_, r.traceId.show_, r.locusTime.show_, t.show_, timeIndex.show, p.z.show_, p.y.show_, p.x.show_)
                     addFailCodes(base, r.failureReasons)
                 }
                 os.write(outfile, (header :: outrecs).map(_.mkString(",") ++ "\n").toList)
