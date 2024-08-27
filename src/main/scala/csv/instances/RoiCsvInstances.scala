@@ -109,16 +109,20 @@ trait RoiCsvInstances:
             val mergeNel = ColumnNames.MergeRoisColumnName
                 .from(row)
                 .leftMap(es => NonEmptyList.one(s"${es.size} problem(s) with merge ROIs: $es"))
-            (indexNel, roiNel, tooCloseNel, mergeNel)
+            val groupNel = ColumnNames.GroupRoisColumnName
+                .from(row)
+                .leftMap(es => NonEmptyList.one(s"${es.size} problem(s) with analytical grouping ROIs: $es"))
+            (indexNel, roiNel, tooCloseNel, mergeNel, groupNel)
                 .tupled
                 .toEither
-                .flatMap{ (index, roi, tooClose, merge) => 
+                .flatMap{ (index, roi, tooClose, merge, group) => 
                     NucleusLabeledProximityAssessedRoi.build(
                         index, 
                         roi.toDetectedSpotRoi, 
                         roi.nucleus,
                         tooClose = tooClose, 
                         merge = merge,
+                        groupForAnalysis = group,
                     )
                 }
                 .leftMap{ messages => 
