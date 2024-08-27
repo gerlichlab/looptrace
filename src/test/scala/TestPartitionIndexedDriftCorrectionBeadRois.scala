@@ -15,8 +15,10 @@ import org.scalatest.matchers.*
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.instances.simpleShow.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
@@ -809,7 +811,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     def writeMinimalInputRoisCsv(rois: List[FiducialBeadRoi], f: os.Path): Unit = {
         val (header, getPointFields) = (
             Array("", ParserConfig.xCol.get, ParserConfig.yCol.get, ParserConfig.zCol.get, ParserConfig.qcCol),
-            (p: Point3D) => Array(p.x.get, p.y.get, p.z.get).map(_.toString)
+            (p: Point3D) => Array(p.x.show_, p.y.show_, p.z.show_)
         )
         val records = rois.map{ roi => roi.index.get.toString +: getPointFields(roi.centroid) :+ roi.failCode.get }
         os.write(f, (header +: records).map(_.mkString(",") ++ "\n"))

@@ -30,7 +30,11 @@ class TestDistanceThresholds extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
                     given arbRawCoord: Arbitrary[Double] = genReasonableCoordinate.toArbitrary // Prevent Euclidean overflow.
                     arbitrary[(Point3D, Point3D)]
                 }
-                tMin = extremePiecewiseDistance(_.max)(a, b) + 1
+                // Generate a threshold value that's 1 greater than the greatest component difference.
+                tMin = {
+                    val dist = PiecewiseDistance.between(a, b)
+                    1 + List(dist.getX, dist.getY, dist.getZ).max
+                }
                 t <- Gen.choose(tMin, Double.MaxValue).map(NonnegativeReal.unsafe)
             } yield (t, a, b)
         }
@@ -74,7 +78,4 @@ class TestDistanceThresholds extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
             PiecewiseDistance.ConjunctiveThreshold(t).toProximityComparable,
             EuclideanDistance.Threshold(t).toProximityComparable
         )
-    
-    private def extremePiecewiseDistance(f: List[Double] => Double)(a: Point3D, b: Point3D): Double = 
-        f(List(a.x.get - b.x.get, a.y.get - b.y.get, a.z.get - b.z.get) `map` abs)
 end TestDistanceThresholds

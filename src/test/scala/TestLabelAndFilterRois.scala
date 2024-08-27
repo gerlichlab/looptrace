@@ -1,6 +1,6 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
-import scala.util.{ NotGiven, Random, Try }
+import scala.util.{ Random, Try }
 import cats.*
 import cats.data.{ NonEmptyList, NonEmptySet }
 import cats.syntax.all.*
@@ -16,10 +16,13 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import io.github.iltotore.iron.scalacheck.char.given
 
+import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow
 import at.ac.oeaw.imba.gerlich.gerlib.collections.partition
-import at.ac.oeaw.imba.gerlich.gerlib.geometry.BoundingBox
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.{BoundingBox, PiecewiseDistance}
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.instances.simpleShow.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.syntax.all.*
@@ -754,9 +757,9 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
                 ch <- arbitrary[ImagingChannel]
                 rois <- NonnegativeInt.indexed(pointTimePairs).traverse{ case ((pt, time), i) => 
                     arbitrary[(BoundingBox.Margin, BoundingBox.Margin, BoundingBox.Margin)].map{ (offX, offY, offZ) => 
-                        val intvX = buildInterval(pt.x, offX)(XCoordinate.apply)
-                        val intvY = buildInterval(pt.y, offY)(YCoordinate.apply)
-                        val intvZ = buildInterval(pt.z, offZ)(ZCoordinate.apply)
+                        val intvX = buildInterval(XCoordinate.apply)(pt.x, offX)
+                        val intvY = buildInterval(YCoordinate.apply)(pt.y, offY)
+                        val intvZ = buildInterval(ZCoordinate.apply)(pt.z, offZ)
                         val bbox = BoundingBox(intvX, intvY, intvZ)
                         RegionalBarcodeSpotRoi(RoiIndex(i), posName, RegionId.unsafe(time), ch, pt, bbox)
                     }
@@ -1097,9 +1100,9 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
             import io.github.iltotore.iron.autoRefine
             PositionName("P0001.zarr")
         point match { case Point3D(x, y, z) => 
-            val xIntv = buildInterval(x, BoundingBox.Margin(NonnegativeReal(2)))(XCoordinate.apply)
-            val yIntv = buildInterval(y, BoundingBox.Margin(NonnegativeReal(2)))(YCoordinate.apply)
-            val zIntv = buildInterval(z, BoundingBox.Margin(NonnegativeReal(1)))(ZCoordinate.apply)
+            val xIntv = buildInterval(XCoordinate.apply)(x, BoundingBox.Margin(NonnegativeReal(2)))
+            val yIntv = buildInterval(YCoordinate.apply)(y, BoundingBox.Margin(NonnegativeReal(2)))
+            val zIntv = buildInterval(ZCoordinate.apply)(z, BoundingBox.Margin(NonnegativeReal(1)))
             val box = BoundingBox(xIntv, yIntv, zIntv)
             RegionalBarcodeSpotRoi(
                 RoiIndex(NonnegativeInt(0)), 
@@ -1165,10 +1168,6 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         }
     }
     
-    private def buildInterval[C <: Coordinate: [C] =>> NotGiven[C =:= Coordinate]](
-        c: C, margin: BoundingBox.Margin)(lift: Double => C): BoundingBox.Interval[Double, C] = 
-        BoundingBox.Interval[Double, C].apply.tupled((c.get - margin.get, c.get + margin.get).mapBoth(lift))
-
     private def genThresholdAndRoisToFacilitateCollisions: Gen[(NonnegativeReal, List[Roi])] = {
         for {
             threshold <- Gen.choose(1e-323, 10.0).map(NonnegativeReal.unsafe)
@@ -1188,16 +1187,20 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         summon[Arbitrary[Point3D]]
 
     private def getDriftFileLines(driftRows: List[(PositionName, ImagingTimepoint, CoarseDrift, FineDrift)]): List[String] = 
+        extension [A: SimpleShow](d: Direction[A])
+            // Just a local syntax extension to facilitate "show"ing each of the drift components
+            def showDir: String = d.get.show_
         headDriftFile :: driftRows.zipWithIndex.map{ case ((pos, time, coarse, fine), i) => 
-            s"$i,${time.show_},${pos.show_},${coarse.z.get},${coarse.y.get},${coarse.x.get},${fine.z.get},${fine.y.get},${fine.x.get}"
+            s"$i,${time.show_},${pos.show_},${coarse.z.showDir},${coarse.y.showDir},${coarse.x.showDir},${fine.z.showDir},${fine.y.showDir},${fine.x.showDir}"
         }
 
     private def getSpotsFileLines(rois: List[RegionalBarcodeSpotRoi]): List[String] = headSpotsFile :: rois.map{ r => 
-        val (x, y, z) = r.centroid match { case Point3D(x, y, z) => (x.get, y.get, z.get) }
+        val (x, y, z) = r.centroid match { case Point3D(x, y, z) => (x, y, z) }
         val (loX, hiX, loY, hiY, loZ, hiZ) = r.boundingBox match { 
-            case BoundingBox(sideX, sideY, sideZ) => (sideX.lo.get, sideX.hi.get, sideY.lo.get, sideY.hi.get, sideZ.lo.get, sideZ.hi.get)
+            case BoundingBox(sideX, sideY, sideZ) => 
+                (sideX.lo, sideX.hi, sideY.lo, sideY.hi, sideZ.lo, sideZ.hi)
         }
-        s"${r.index.show_},${r.position.show_},${r.time.show_},${r.channel.show_},$x,$y,$z,$loX,$hiX,$loY,$hiY,$loZ,$hiZ"
+        s"${r.index.show_},${r.position.show_},${r.time.show_},${r.channel.show_},${x.show_},${y.show_},${z.show_},${loX.show_},${hiX.show_},${loY.show_},${hiY.show_},${loZ.show_},${hiZ.show_}"
     }
 
     // Header for spots (ROIs) file
