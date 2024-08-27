@@ -38,7 +38,7 @@ class TestNucleusLabeledProximityAssessedRoi extends AnyFunSuite, LooptraceSuite
 
         forAll { (indexAndBags: (RoiIndex, RoiBags), roi: DetectedSpotRoi, nucleus: NuclearDesignation) => 
             val (index, (tooClose, forMerge)) = indexAndBags
-            NucleusLabeledProximityAssessedRoi.build(index, roi, nucleus, tooClose, forMerge) match {
+            NucleusLabeledProximityAssessedRoi.build(index, roi, nucleus, tooClose, forMerge, Set()) match {
                 case Left(messages) => 
                     fail(s"Expected ROI build success, but it failed with message(s): $messages")
                 case Right(roi) => 
