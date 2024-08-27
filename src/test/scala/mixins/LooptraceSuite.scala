@@ -108,9 +108,9 @@ trait LooptraceSuite extends GenericSuite, GeometricInstances, ImagingInstances,
      ***********************/
     protected def genNonNegReal(limit: NonnegativeReal): Gen[NonnegativeReal] = Gen.choose(0.0, limit).map(NonnegativeReal.unsafe)
     protected def genPosReal(limit: PositiveReal): Gen[PositiveReal] = Gen.choose(0.0, limit).suchThat(_ > 0).map(PositiveReal.unsafe)
-    protected def buildRectangularBox(pt: Point3D)(xMargin: BoundingBox.Margin, yMargin: BoundingBox.Margin, zMargin: BoundingBox.Margin): BB = {
-        def buildInterval[C <: Coordinate : [C] =>> NotGiven[C =:= Coordinate]](lift: Double => C)(center: C, margin: BoundingBox.Margin)(using Monoid[C]): BoundingBox.Interval[Double, C] = 
+    protected def buildInterval[C <: Coordinate : [C] =>> NotGiven[C =:= Coordinate]](lift: Double => C)(center: C, margin: BoundingBox.Margin)(using Semigroup[C]): BoundingBox.Interval[Double, C] = 
             BoundingBox.Interval(center |+| lift(-margin.get), center |+| lift(margin.get))
+    protected def buildRectangularBox(pt: Point3D)(xMargin: BoundingBox.Margin, yMargin: BoundingBox.Margin, zMargin: BoundingBox.Margin): BB = {
         val ix = buildInterval(XCoordinate.apply)(pt.x, xMargin)
         val iy = buildInterval(YCoordinate.apply)(pt.y, yMargin)
         val iz = buildInterval(ZCoordinate.apply)(pt.z, zMargin)

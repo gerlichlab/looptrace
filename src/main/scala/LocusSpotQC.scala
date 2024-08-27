@@ -11,6 +11,7 @@ import cats.syntax.all.*
 import mouse.boolean.*
 import upickle.default.*
 
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.coordinate.given
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.json.JsonValueWriter

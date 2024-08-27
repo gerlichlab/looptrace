@@ -7,6 +7,7 @@ import cats.syntax.either.*
 import upickle.default.*
 
 import at.ac.oeaw.imba.gerlich.gerlib.geometry
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.coordinate.given
 import at.ac.oeaw.imba.gerlich.gerlib.json.JsonValueWriter
 import at.ac.oeaw.imba.gerlich.gerlib.json.instances.geometry.getPlainJsonValueWriter
 import at.ac.oeaw.imba.gerlich.gerlib.json.instances.all.given
