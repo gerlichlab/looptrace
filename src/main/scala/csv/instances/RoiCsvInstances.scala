@@ -140,6 +140,7 @@ trait RoiCsvInstances:
             val extra = NonEmptyList.of(
                 ColumnNames.TooCloseRoisColumnName -> encRoiIndices(elem.tooCloseNeighbors), 
                 ColumnNames.MergeRoisColumnName -> encRoiIndices(elem.mergeNeighbors), 
+                ColumnNames.GroupRoisColumnName -> encRoiIndices(elem.analyticalGroupingPartners), 
             )
             val (extraCols, extraValues) = extra.unzip
             val iRow = encIndex(elem.index)
