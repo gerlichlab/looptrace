@@ -344,9 +344,9 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
 
     test("Small NucleusLabeledProximityAssessedRoi example parses correctly.") {
         val linesToWrite = """
-            index,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber,tooCloseRois,mergeRois
-            0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,2,4;3,10
-            1,P0001.zarr,80,2,17.994259347453493,24.042015416774795,1360.0069098862991,213.58943029032,117.13946884917321,11.994259347453493,23.994259347453493,12.042015416774795,36.042015416774795,1348.0069098862991,1372.0069098862991,0,5,7;8
+            index,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber,tooCloseRois,mergeRois,groupingRois
+            0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,2,4;3,10,9;8;7
+            1,P0001.zarr,80,2,17.994259347453493,24.042015416774795,1360.0069098862991,213.58943029032,117.13946884917321,11.994259347453493,23.994259347453493,12.042015416774795,36.042015416774795,1348.0069098862991,1372.0069098862991,0,5,7;8,4;6
             """.toLines
 
         val expectedRecords: List[NucleusLabeledProximityAssessedRoi] = {
@@ -383,6 +383,7 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
                     NucleusNumber(2),
                     tooClose = Set(3, 4).map(RoiIndex.unsafe),
                     merge = Set(10).map(RoiIndex.unsafe),
+                    groupForAnalysis = Set(7, 8, 9).map(RoiIndex.unsafe)
                 )
                 .fold(errors => throw new Exception(s"${errors.length} error(s) building ROI example."), identity)
             }
@@ -418,6 +419,7 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
                     OutsideNucleus,
                     tooClose = Set(5).map(RoiIndex.unsafe),
                     merge = Set(7, 8).map(RoiIndex.unsafe),
+                    groupForAnalysis = Set(4, 6).map(RoiIndex.unsafe)
                 ).fold(errors => throw new Exception(s"${errors.length} error(s) building ROI example."), identity)
             }
 
@@ -427,8 +429,6 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
         // Additional component to CsvRowDecoder[DetectedSpotRoi, HeaderField] to derive 
         // CsvRowDecoder[NucleusLabeledProximityAssessedRoi, HeaderField]
         given CsvRowDecoder[NuclearDesignation, HeaderField] = getCsvRowDecoderForNuclearDesignation()
-
-        val myDec: CellDecoder[RoiIndex] = summon[CellDecoder[RoiIndex]]
 
         withTempFile(linesToWrite, Delimiter.CommaSeparator){ roisFile =>
             val observedRecords: List[NucleusLabeledProximityAssessedRoi] = unsafeRead(roisFile)
@@ -440,22 +440,24 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
 
     test("NucleusLabeledProximityAssessedRoi records roundtrip through CSV.") {
         // Generate legal combination of main ROI index, too-close ROIs, and ROIs to merge.
-        def genRoiIndexAndRoiBags(using Arbitrary[RoiIndex]): Gen[(RoiIndex, (Set[RoiIndex], Set[RoiIndex]))] = 
+        def genRoiIndexAndRoiBags(using Arbitrary[RoiIndex]): Gen[(RoiIndex, (Set[RoiIndex], Set[RoiIndex], Set[RoiIndex]))] = 
             for {
                 idx <- Arbitrary.arbitrary[RoiIndex]
                 raw1 <- Gen.listOf(Arbitrary.arbitrary[RoiIndex])
                 bag1 = raw1.toSet - idx // Prevent overlap with the main index
                 raw2 <- Gen.listOf(Arbitrary.arbitrary[RoiIndex])
                 bag2 = (raw2.toSet -- bag1) - idx // Prevent overlap with other bag and with main index.
-            } yield (idx, bag1 -> bag2)
+                raw3 <- Gen.listOf(Arbitrary.arbitrary[RoiIndex])
+                bag3 = ((raw3.toSet -- bag2) -- bag1) - idx
+            } yield (idx, (bag1, bag2, bag3))
 
         given arbRoi(using Arbitrary[RoiIndex], Arbitrary[NucleusLabelAttemptedRoi]): Arbitrary[NucleusLabeledProximityAssessedRoi] = 
             Arbitrary{
                 for {
                     roi <- Arbitrary.arbitrary[NucleusLabelAttemptedRoi]
-                    (index, (tooClose, forMerge)) <- genRoiIndexAndRoiBags
+                    (index, (tooClose, forMerge, forGroup)) <- genRoiIndexAndRoiBags
                 } yield NucleusLabeledProximityAssessedRoi
-                    .build(index, roi.toDetectedSpotRoi, roi.nucleus, tooClose, forMerge)
+                    .build(index, roi.toDetectedSpotRoi, roi.nucleus, tooClose, forMerge, forGroup)
                     .fold(errors => throw new Exception(s"ROI build error(s): $errors"), identity)
             }
 
@@ -465,8 +467,6 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
         // Additional component to CsvRowEncoder[DetectedSpotRoi, HeaderField] to derive 
         // CsvRowEncoder[NucleusLabeledProximityAssessedRoi, HeaderField]
         given CsvRowEncoder[NuclearDesignation, HeaderField] = getCsvRowEncoderForNuclearDesignation()
-
-        summon[Arbitrary[NucleusLabelAttemptedRoi]]
 
         forAll { (inputRecords: NonEmptyList[NucleusLabeledProximityAssessedRoi]) => 
             withTempFile(Delimiter.CommaSeparator){ roisFile =>
