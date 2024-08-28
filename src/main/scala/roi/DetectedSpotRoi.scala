@@ -13,3 +13,4 @@ final case class DetectedSpotRoi(
     box: BoundingBox,
 ):
     def centroid: Centroid[Double] = spot.centroid
+    def context: ImagingContext = spot.context

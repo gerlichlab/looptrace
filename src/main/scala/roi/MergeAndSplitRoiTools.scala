@@ -14,7 +14,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.{ BoundingBox, Point3D }
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt
 
 /** Tools for merging ROIs */
-object MergeTools:
+object MergeAndSplitRoiTools:
     private type Numbered[A] = (A, NonnegativeInt)
 
     private type MergeResult = (
@@ -23,7 +23,13 @@ object MergeTools:
         List[MergedRoiRecord],
     )
 
-    def processRois(rois: List[NucleusLabeledProximityAssessedRoi])(using Order[NuclearDesignation], Monoid[BoundingBox]): MergeResult = 
+    // private type SplitResult = (
+    //     List[],
+    //     List[],
+    //     List[MergedRoiRecord]
+    // )
+
+    def mergeRois(rois: List[NucleusLabeledProximityAssessedRoi])(using Order[NuclearDesignation], Monoid[BoundingBox]): MergeResult = 
         val initAcc: MergeResult = (List(), List(), List())
         rois match {
             case Nil => initAcc
@@ -41,6 +47,10 @@ object MergeTools:
                     }
                 }._1
         }
+
+    // def splitRois(rois: List[NucleusLabeledProximityAssessedRoi | MergedRoiRecord]): (
+
+    // )
 
     /** Do the merge for a single ROI record. */
     private[looptrace] def doOneMerge(
