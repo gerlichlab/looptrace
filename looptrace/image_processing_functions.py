@@ -201,11 +201,3 @@ def nuc_segmentation_watershed(nuc_img, bg_thresh = 800, fg_thresh = 5000):
     ws = watershed(edges, markers)
     seg = label(ws == foreground)
     return seg
-
-
-def _index_as_roi_id(props_table: pd.DataFrame) -> pd.DataFrame:
-    return props_table.rename(columns={'index': 'roi_id'})
-
-
-def _reindex_to_roi_id(props_table: pd.DataFrame) -> pd.DataFrame:
-    return _index_as_roi_id(props_table.reset_index(drop=True))
