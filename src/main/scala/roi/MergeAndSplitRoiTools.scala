@@ -1,14 +1,15 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
 import cats.*
-import cats.data.NonEmptyList
+import cats.data.{ NonEmptyList, NonEmptySet, ValidatedNel }
 import cats.syntax.all.*
 import mouse.boolean.*
 
-import at.ac.oeaw.imba.gerlich.gerlib.cell.NuclearDesignation
+import at.ac.oeaw.imba.gerlich.gerlib.cell.{ NuclearDesignation, OutsideNucleus }
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.Centroid
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.syntax.*
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingContext
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ BoundingBox, Point3D }
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt
@@ -18,19 +19,23 @@ object MergeAndSplitRoiTools:
     private type Numbered[A] = (A, NonnegativeInt)
 
     private type MergeResult = (
-        List[(Numbered[NucleusLabeledProximityAssessedRoi], NonEmptyList[String])], 
-        List[Numbered[NucleusLabeledProximityAssessedRoi]], 
-        List[MergedRoiRecord],
+        List[(Numbered[ProximityAssessedRoi], NonEmptyList[String])], // errors
+        List[Numbered[ProximityAssessedRoi]], // non-participants in merge
+        List[MergeContributorRoi], // merge inputs
+        List[MergedRoiRecord], // merge outputs
     )
 
-    // private type SplitResult = (
-    //     List[],
-    //     List[],
-    //     List[MergedRoiRecord]
-    // )
+    /** A record of an ROI after the merge process has been considered and done. */
+    private[looptrace] final case class MergedRoiRecord private[MergeAndSplitRoiTools](
+        index: RoiIndex, 
+        context: ImagingContext, // must be identical among all merge partners
+        centroid: Centroid[Double], // averaged over merged partners
+        box: BoundingBox, 
+        contributors: NonEmptySet[RoiIndex], 
+    )
 
-    def mergeRois(rois: List[NucleusLabeledProximityAssessedRoi])(using Order[NuclearDesignation], Monoid[BoundingBox]): MergeResult = 
-        val initAcc: MergeResult = (List(), List(), List())
+    def mergeRois(rois: List[ProximityAssessedRoi])(using Order[NuclearDesignation], Semigroup[BoundingBox]): MergeResult = 
+        val initAcc: MergeResult = (List(), List(), List(), List())
         rois match {
             case Nil => initAcc
             case _ => 
@@ -39,25 +44,27 @@ object MergeAndSplitRoiTools:
                 val pool = indexed.map{ (r, i) => RoiIndex(i) -> r }.toMap
                 given Ordering[RoiIndex] = summon[Order[RoiIndex]].toOrdering
                 val initNewIndex = incrementIndex(rois.map(_.index).max)
-                indexed.foldRight(initAcc -> initNewIndex){ case (curr@(r, i), ((accErr, accSkip, accMerge), currIndex)) => 
+                indexed.foldRight(initAcc -> initNewIndex){ case (curr@(r, i), ((accErr, accSkip, accContrib, accMerge), currIndex)) => 
                     doOneMerge(pool)(currIndex, r) match {
-                        case None => (accErr, curr :: accSkip, accMerge) -> currIndex
-                        case Some(Left(errors)) => ((curr, errors) :: accErr, accSkip, accMerge) -> currIndex
-                        case Some(Right(rec)) => (accErr, accSkip, rec :: accMerge) -> incrementIndex(currIndex)
+                        case None => 
+                            // no merge action
+                            (accErr, curr :: accSkip, accContrib, accMerge) -> currIndex
+                        case Some(Left(errors)) => 
+                            // error case
+                            ((curr, errors) :: accErr, accSkip, accContrib, accMerge) -> currIndex
+                        case Some(Right(rec)) => 
+                            // merge action
+                            (accErr, accSkip, accContrib, rec :: accMerge) -> incrementIndex(currIndex)
                     }
                 }._1
         }
 
-    // def splitRois(rois: List[NucleusLabeledProximityAssessedRoi | MergedRoiRecord]): (
-
-    // )
-
     /** Do the merge for a single ROI record. */
     private[looptrace] def doOneMerge(
-        pool: Map[RoiIndex, NucleusLabeledProximityAssessedRoi]
-    )(potentialNewIndex: RoiIndex, roi: NucleusLabeledProximityAssessedRoi)(using 
+        pool: Map[RoiIndex, ProximityAssessedRoi]
+    )(potentialNewIndex: RoiIndex, roi: ProximityAssessedRoi)(using 
         Order[NuclearDesignation], 
-        Monoid[BoundingBox]
+        Semigroup[BoundingBox]
     ): Option[Either[NonEmptyList[String], MergedRoiRecord]] = 
         roi.mergeNeighbors.toList.toNel.map(
             _.traverse{ i => 
@@ -67,29 +74,23 @@ object MergeAndSplitRoiTools:
             }
             .toEither
             .flatMap{ partners => 
-                val nucs = partners.map(_.nucleus).toNes
                 val contexts = partners.map(_.context).toNes
-                val nucleusNel = (nucs.size === 1).validatedNel(
-                    s"${nucs.size} unique nuclei designations (not just 1) in ROI group to merge", 
-                    partners.head.nucleus
-                )
-                val contextNel = (contexts.size === 1).validatedNel(
-                    s"${contexts.size} unique imaging context (not just 1) in ROI group to merge", 
-                    partners.head.context
-                )
-                (nucleusNel, contextNel).mapN((nucleus, context) => 
-                    val newCenter: Point3D = partners.map(_.centroid.asPoint).centroid
-                    val newBox: BoundingBox = partners.map(_.roi.box).combineAll
-                    val result = MergedRoiRecord(
-                        potentialNewIndex, 
-                        context, 
-                        Centroid.fromPoint(newCenter), 
-                        newBox, 
-                        nucleus,
-                        partners.map(_.index).toNes,
+                (contexts.size === 1)
+                    .validatedNel(
+                        s"${contexts.size} unique imaging context (not just 1) in ROI group to merge", 
+                        partners.head.context
                     )
-                    result
-                )
-                .toEither
+                    .map{ ctx => 
+                        val newCenter: Point3D = partners.map(_.centroid.asPoint).centroid
+                        val newBox: BoundingBox = partners.map(_.roi.box).reduce
+                        MergedRoiRecord(
+                            potentialNewIndex, 
+                            ctx, 
+                            Centroid.fromPoint(newCenter), 
+                            newBox, 
+                            partners.map(_.index).toNes,
+                        )
+                    }
+                    .toEither
             }
         )

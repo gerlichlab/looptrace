@@ -15,27 +15,24 @@ import at.ac.oewa.imba.gerlich.looptrace.RowIndexAdmission
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 
 /** A ROI already assessed for nuclear attribution and proximity to other ROIs */
-final case class NucleusLabeledProximityAssessedRoi private(
+final case class ProximityAssessedRoi private(
     index: RoiIndex, 
     roi: DetectedSpotRoi, 
-    nucleus: NuclearDesignation,
     tooCloseNeighbors: Set[RoiIndex],
     mergeNeighbors: Set[RoiIndex],
 ):
     def centroid: Centroid[Double] = roi.centroid
     def context: ImagingContext = roi.context
-    def dropNeighbors: NucleusLabelAttemptedRoi = NucleusLabelAttemptedRoi(roi, nucleus)
 
 /** Tools for working with ROIs already assessed for nuclear attribution and proximity to other ROIs */
-object NucleusLabeledProximityAssessedRoi:
+object ProximityAssessedRoi:
 
     def build(
         index: RoiIndex, 
         roi: DetectedSpotRoi, 
-        nucleus: NuclearDesignation, 
         tooClose: Set[RoiIndex], 
         merge: Set[RoiIndex],
-    ): Either[NonEmptyList[String], NucleusLabeledProximityAssessedRoi] = 
+    ): Either[NonEmptyList[String], ProximityAssessedRoi] = 
         val selfTooCloseNel = tooClose.excludes(index)
             .validatedNel(s"An ROI cannot be too close to itself (index ${index.show_})", ())
         val selfMergeNel = merge.excludes(index)
@@ -47,7 +44,7 @@ object NucleusLabeledProximityAssessedRoi:
             .tupled
             .map{
                 Function.const{
-                    singleton(index, roi, nucleus).copy(
+                    singleton(index, roi).copy(
                         tooCloseNeighbors = tooClose, 
                         mergeNeighbors = merge,
                     )
@@ -58,18 +55,17 @@ object NucleusLabeledProximityAssessedRoi:
     def singleton(
         index: RoiIndex, 
         roi: DetectedSpotRoi, 
-        nucleus: NuclearDesignation,
-    ): NucleusLabeledProximityAssessedRoi = 
-        new NucleusLabeledProximityAssessedRoi(index, roi, nucleus, Set(), Set())
+    ): ProximityAssessedRoi = 
+        new ProximityAssessedRoi(index, roi, Set(), Set())
 
-    given ProximityExclusionAssessedRoiLike[NucleusLabeledProximityAssessedRoi] with
+    given ProximityExclusionAssessedRoiLike[ProximityAssessedRoi] with
         override def getRoiIndex = _.index
         override def getTooCloseNeighbors = _.tooCloseNeighbors
 
-    given ProximityMergeAssessedRoiLike[NucleusLabeledProximityAssessedRoi] with 
+    given ProximityMergeAssessedRoiLike[ProximityAssessedRoi] with 
         override def getRoiIndex = _.index
         override def getMergeNeighbors = _.mergeNeighbors
 
-    given RowIndexAdmission[NucleusLabeledProximityAssessedRoi, Id] = 
+    given RowIndexAdmission[ProximityAssessedRoi, Id] = 
         RowIndexAdmission.intoIdentity(_.index.get)
-end NucleusLabeledProximityAssessedRoi
+end ProximityAssessedRoi

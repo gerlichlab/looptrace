@@ -22,8 +22,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.{
     DetectedSpotRoi, 
-    NucleusLabelAttemptedRoi,
-    NucleusLabeledProximityAssessedRoi, 
+    ProximityAssessedRoi, 
     RoiIndex, 
 }
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
@@ -76,27 +75,12 @@ trait RoiCsvInstances:
     ): CsvRowEncoder[DetectedSpotRoi, Header] = 
         getCsvRowEncoderForProduct2(_.spot, _.box)
 
-    given csvRowDecoderForNucleusLabelAttemptedRoi(using 
-        CsvRowDecoder[DetectedSpotRoi, Header],
-        CsvRowDecoder[NuclearDesignation, Header]
-    ): CsvRowDecoder[NucleusLabelAttemptedRoi, Header] = 
-        getCsvRowDecoderForProduct2(NucleusLabelAttemptedRoi.apply)
-
-    given csvRowEncoderForNucleusLabelAttemptedRoi(using 
-        CsvRowEncoder[DetectedSpotRoi, Header], 
-        CsvRowEncoder[NuclearDesignation, Header]
-    ): CsvRowEncoder[NucleusLabelAttemptedRoi, Header] = 
-        getCsvRowEncoderForProduct2(
-            _.toDetectedSpotRoi,
-            _.nucleus
-        )
-
-    given csvRowDecoderForNucleusLabeledProximityAssessedRoi(using 
+    given csvRowDecoderForProximityAssessedRoi(using 
         decIndex: CsvRowDecoder[RoiIndex, Header],
-        decRoi: CsvRowDecoder[NucleusLabelAttemptedRoi, Header], 
+        decRoi: CsvRowDecoder[DetectedSpotRoi, Header], 
         decRoiIndices: CellDecoder[Set[RoiIndex]], 
-    ): CsvRowDecoder[NucleusLabeledProximityAssessedRoi, Header] = new:
-        override def apply(row: RowF[Some, Header]): DecoderResult[NucleusLabeledProximityAssessedRoi] = 
+    ): CsvRowDecoder[ProximityAssessedRoi, Header] = new:
+        override def apply(row: RowF[Some, Header]): DecoderResult[ProximityAssessedRoi] = 
             val indexNel = decIndex(row)
                 .toValidatedNel
                 .leftMap(es => NonEmptyList.one(s"${es.size} problem(s) with main ROI index: $es"))
@@ -113,10 +97,9 @@ trait RoiCsvInstances:
                 .tupled
                 .toEither
                 .flatMap{ (index, roi, tooClose, merge) => 
-                    NucleusLabeledProximityAssessedRoi.build(
+                    ProximityAssessedRoi.build(
                         index, 
-                        roi.toDetectedSpotRoi, 
-                        roi.nucleus,
+                        roi, 
                         tooClose = tooClose, 
                         merge = merge,
                     )
@@ -126,13 +109,13 @@ trait RoiCsvInstances:
                     DecoderError(s"${messages.length} $context ($row): ${messages.mkString_("; ")}")
                 }
 
-    given csvRowEncoderForNucleusLabeledProximityAssessedRoi(using 
-        encRoi: CsvRowEncoder[NucleusLabelAttemptedRoi, Header], 
+    given csvRowEncoderForProximityAssessedRoi(using 
+        encRoi: CsvRowEncoder[DetectedSpotRoi, Header], 
         encIndex: CsvRowEncoder[RoiIndex, Header],
         encRoiIndices: CellEncoder[Set[RoiIndex]],
-    ): CsvRowEncoder[NucleusLabeledProximityAssessedRoi, Header] = new:
-        override def apply(elem: NucleusLabeledProximityAssessedRoi): RowF[Some, Header] = 
-            val init: RowF[Some, Header] = encRoi(elem.dropNeighbors)
+    ): CsvRowEncoder[ProximityAssessedRoi, Header] = new:
+        override def apply(elem: ProximityAssessedRoi): RowF[Some, Header] = 
+            val init: RowF[Some, Header] = encRoi(elem.roi)
             val extra = NonEmptyList.of(
                 ColumnNames.TooCloseRoisColumnName -> encRoiIndices(elem.tooCloseNeighbors), 
                 ColumnNames.MergeRoisColumnName -> encRoiIndices(elem.mergeNeighbors), 
