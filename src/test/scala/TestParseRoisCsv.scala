@@ -20,7 +20,6 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import io.github.iltotore.iron.{ autoCastIron, autoRefine }
 import io.github.iltotore.iron.scalacheck.all.given
 
-import at.ac.oeaw.imba.gerlich.gerlib.cell.{ NuclearDesignation, NucleusNumber, OutsideNucleus }
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.BoundingBox
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.Centroid
 
@@ -174,185 +173,17 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
         }
     }
 
-    test("Small NucleusLabelAttemptedRoi example parses correctly.") {
-        val linesToWrite = 
-            """
-            ,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber
-            0,P0001.zarr,9,1,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,2
-            1,P0001.zarr,10,0,17.994259347453493,24.042015416774795,1360.0069098862991,213.58943029032,117.1394688491732,11.994259347453491,23.994259347453493,12.042015416774795,36.0420154167748,1348.0069098862991,1372.0069098862991,0
-            2,P0001.zarr,10,2,23.00910242218976,231.98008711401275,871.9596645390719,226.90422978,116.14075915047448,17.009102422189756,29.00910242218976,219.98008711401275,243.98008711401275,859.9596645390719,883.9596645390719,5
-            """.toLines
-
-        val pos = PositionName("P0001.zarr")
-
-        val expectedRecords: List[NucleusLabelAttemptedRoi] = {
-            val rec1: NucleusLabelAttemptedRoi = {
-                val xBounds = XCoordinate(859.9833511648726) -> XCoordinate(883.9833511648726)
-                val yBounds = YCoordinate(219.9874778925304) -> YCoordinate(243.9874778925304)
-                val zBounds = ZCoordinate(-2.092371012467521) -> ZCoordinate(9.90762898753248)
-                val spot = DetectedSpot(
-                    ImagingContext(
-                        pos,
-                        ImagingTimepoint(9),
-                        ImagingChannel(1),
-                    ),
-                    Centroid.fromPoint(
-                        Point3D(
-                            XCoordinate(871.9833511648726),
-                            YCoordinate(231.9874778925304),
-                            ZCoordinate(3.907628987532479),
-                        ), 
-                    ),
-                    Area(240.00390423),
-                    MeanIntensity(118.26726920593931),
-                )
-                val box = BoundingBox(
-                    BoundingBox.Interval.unsafeFromTuple(xBounds), 
-                    BoundingBox.Interval.unsafeFromTuple(yBounds), 
-                    BoundingBox.Interval.unsafeFromTuple(zBounds),
-                )
-                NucleusLabelAttemptedRoi(spot, box, NucleusNumber(2))
-            }
-
-            val rec2: NucleusLabelAttemptedRoi = {
-                val xBounds = XCoordinate(1348.0069098862991) -> XCoordinate(1372.0069098862991)
-                val yBounds = YCoordinate(12.042015416774795) -> YCoordinate(36.0420154167748)
-                val zBounds = ZCoordinate(11.994259347453491) -> ZCoordinate(23.994259347453493)
-                val spot = DetectedSpot(
-                    ImagingContext(
-                        pos,
-                        ImagingTimepoint(10),
-                        ImagingChannel(0),
-                    ),
-                    Centroid.fromPoint(
-                        Point3D(
-                            XCoordinate(1360.0069098862991),
-                            YCoordinate(24.042015416774795),
-                            ZCoordinate(17.994259347453493),
-                        ), 
-                    ),
-                    Area(213.58943029032),
-                    MeanIntensity(117.1394688491732),
-                )
-                val box = BoundingBox(
-                    BoundingBox.Interval.unsafeFromTuple(xBounds), 
-                    BoundingBox.Interval.unsafeFromTuple(yBounds), 
-                    BoundingBox.Interval.unsafeFromTuple(zBounds),
-                )
-                NucleusLabelAttemptedRoi(spot, box, OutsideNucleus)
-            }
-
-            val rec3: NucleusLabelAttemptedRoi = {
-                val xBounds = XCoordinate(859.9596645390719) -> XCoordinate(883.9596645390719)
-                val yBounds = YCoordinate(219.98008711401275) -> YCoordinate(243.98008711401275)
-                val zBounds = ZCoordinate(17.009102422189756) -> ZCoordinate(29.00910242218976)
-                val spot = DetectedSpot(
-                    ImagingContext(
-                        pos,
-                        ImagingTimepoint(10),
-                        ImagingChannel(2),
-                    ),
-                    Centroid.fromPoint(
-                        Point3D(
-                            XCoordinate(871.9596645390719),
-                            YCoordinate(231.98008711401275),
-                            ZCoordinate(23.00910242218976),
-                        ), 
-                    ),
-                    Area(226.90422978),
-                    MeanIntensity(116.14075915047448),
-                )
-                val box = BoundingBox(
-                    BoundingBox.Interval.unsafeFromTuple(xBounds), 
-                    BoundingBox.Interval.unsafeFromTuple(yBounds), 
-                    BoundingBox.Interval.unsafeFromTuple(zBounds),
-                )
-                NucleusLabelAttemptedRoi(spot, box, NucleusNumber(5))
-            }
-
-            List(rec1, rec2, rec3)
-        }
-
-        // Additional component to CsvRowDecoder[DetectedSpotRoi, HeaderField] to derive 
-        // CsvRowDecoder[NucleusLabelAttemptedRoi, HeaderField]
-        given CsvRowDecoder[NuclearDesignation, HeaderField] = getCsvRowDecoderForNuclearDesignation()
-        
-        withTempFile(linesToWrite, Delimiter.CommaSeparator){ roisFile =>
-            val observedRecords: List[NucleusLabelAttemptedRoi] = unsafeRead(roisFile)
-            observedRecords.length shouldEqual expectedRecords.length // quick, simplifying check
-            observedRecords shouldEqual expectedRecords // full check
-        }
-    }
-
-    test("NucleusLabelAttemptedRoi records roundtrip through CSV.") {
-        // Additional component to CsvRowDecoder[DetectedSpotRoi, HeaderField] to derive 
-        // CsvRowDecoder[NucleusLabelAttemptedRoi, HeaderField]
-        given CsvRowDecoder[NuclearDesignation, HeaderField] = getCsvRowDecoderForNuclearDesignation()
-        // Additional component to CsvRowEncoder[DetectedSpotRoi, HeaderField] to derive 
-        // CsvRowEncoder[NucleusLabelAttemptedRoi, HeaderField]
-        given CsvRowEncoder[NuclearDesignation, HeaderField] = getCsvRowEncoderForNuclearDesignation()
-
-        forAll { (inputRecords: NonEmptyList[NucleusLabelAttemptedRoi]) => 
-            withTempFile(Delimiter.CommaSeparator){ roisFile =>
-                /* First, write the records to CSV */
-                val sink: Pipe[IO, NucleusLabelAttemptedRoi, Nothing] = writeCaseClassesToCsv[NucleusLabelAttemptedRoi](roisFile)
-                Stream.emits(inputRecords.toList).through(sink).compile.drain.unsafeRunSync()
-
-                /* Then, do the parse-and-check. */
-                Try{ unsafeRead[NucleusLabelAttemptedRoi](roisFile) } match {
-                    case Failure(e) => 
-                        println("LINES (below):")
-                        os.read.lines(roisFile).foreach(println)
-                        fail(s"Expected good parse but got error: $e")
-                    case Success(outputRecords) => 
-                        /* quick checks for proper record count */
-                        outputRecords.nonEmpty shouldBe true
-                        outputRecords.length shouldEqual inputRecords.length
-                        // Check the actual equality, element-by-element.-
-                        val unequal = inputRecords.toList.zip(outputRecords).filter{ (in, out) => in != out }
-                        if (unequal.nonEmpty) {
-                            fail(s"Unequal records pairs (below):\n${unequal.map{ (in, out) => in.toString ++ "\n" ++ out.toString }.mkString("\n\n")}")
-                        } else {
-                            succeed
-                        }
-                }
-            }
-        }
-    }
-
-    test("Header-only file gives empty list of results for NucleusLabelAttemptedRoi.") {
-        val headers = List(
-            ",fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber",
-            "fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber",
-        )
-        val newlines = List(false, true)
-        val grid = headers.flatMap(h => newlines.map(p => h -> p))
-        
-        // Additional component to CsvRowDecoder[DetectedSpotRoi, HeaderField] to derive 
-        // CsvRowDecoder[NucleusLabelAttemptedRoi, HeaderField]
-        given CsvRowDecoder[NuclearDesignation, HeaderField] = getCsvRowDecoderForNuclearDesignation()
-        
-        forAll (Table(("header", "newline"), grid*)) { (header, newline) => 
-            val fileData = header ++ (if newline then "\n" else "")
-            withTempFile(fileData, Delimiter.CommaSeparator) { roisFile => 
-                val expected = List.empty[NucleusLabelAttemptedRoi]
-                val observed = unsafeRead[NucleusLabelAttemptedRoi](roisFile)
-                observed shouldEqual expected
-            }
-        }
-    }
-
-    test("Small NucleusLabeledProximityAssessedRoi example parses correctly.") {
+    test("Small ProximityAssessedRoi example parses correctly.") {
         val linesToWrite = """
-            index,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber,tooCloseRois,mergeRois
-            0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,2,4;3,10
-            1,P0001.zarr,80,2,17.994259347453493,24.042015416774795,1360.0069098862991,213.58943029032,117.13946884917321,11.994259347453493,23.994259347453493,12.042015416774795,36.042015416774795,1348.0069098862991,1372.0069098862991,0,5,7;8
+            index,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,tooCloseRois,mergeRois
+            0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,4;3,10
+            1,P0001.zarr,80,2,17.994259347453493,24.042015416774795,1360.0069098862991,213.58943029032,117.13946884917321,11.994259347453493,23.994259347453493,12.042015416774795,36.042015416774795,1348.0069098862991,1372.0069098862991,5,7;8
             """.toLines
 
-        val expectedRecords: List[NucleusLabeledProximityAssessedRoi] = {
+        val expectedRecords: List[ProximityAssessedRoi] = {
             val pos = PositionName("P0001.zarr")
 
-            val rec1: NucleusLabeledProximityAssessedRoi = {
+            val rec1: ProximityAssessedRoi = {
                 val xBounds = XCoordinate(859.9833511648726) -> XCoordinate(883.9833511648726)
                 val yBounds = YCoordinate(219.9874778925304) -> YCoordinate(243.9874778925304)
                 val zBounds = ZCoordinate(-2.092371012467521) -> ZCoordinate(9.90762898753248)
@@ -377,17 +208,16 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
                     BoundingBox.Interval.unsafeFromTuple(yBounds), 
                     BoundingBox.Interval.unsafeFromTuple(zBounds),
                 )
-                NucleusLabeledProximityAssessedRoi.build(
+                ProximityAssessedRoi.build(
                     RoiIndex(0), 
                     DetectedSpotRoi(spot, box), 
-                    NucleusNumber(2),
                     tooClose = Set(3, 4).map(RoiIndex.unsafe),
                     merge = Set(10).map(RoiIndex.unsafe),
                 )
                 .fold(errors => throw new Exception(s"${errors.length} error(s) building ROI example."), identity)
             }
 
-            val rec2: NucleusLabeledProximityAssessedRoi = {
+            val rec2: ProximityAssessedRoi = {
                 val xBounds = XCoordinate(1348.0069098862991) -> XCoordinate(1372.0069098862991)
                 val yBounds = YCoordinate(12.042015416774795) -> YCoordinate(36.042015416774795)
                 val zBounds = ZCoordinate(11.994259347453493) -> ZCoordinate(23.994259347453493)
@@ -412,10 +242,9 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
                     BoundingBox.Interval.unsafeFromTuple(yBounds), 
                     BoundingBox.Interval.unsafeFromTuple(zBounds),
                 )
-                NucleusLabeledProximityAssessedRoi.build(
+                ProximityAssessedRoi.build(
                     RoiIndex(1), 
                     DetectedSpotRoi(spot, box), 
-                    OutsideNucleus,
                     tooClose = Set(5).map(RoiIndex.unsafe),
                     merge = Set(7, 8).map(RoiIndex.unsafe),
                 ).fold(errors => throw new Exception(s"${errors.length} error(s) building ROI example."), identity)
@@ -424,19 +253,15 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
             List(rec1, rec2)
         }
         
-        // Additional component to CsvRowDecoder[DetectedSpotRoi, HeaderField] to derive 
-        // CsvRowDecoder[NucleusLabeledProximityAssessedRoi, HeaderField]
-        given CsvRowDecoder[NuclearDesignation, HeaderField] = getCsvRowDecoderForNuclearDesignation()
-
         withTempFile(linesToWrite, Delimiter.CommaSeparator){ roisFile =>
-            val observedRecords: List[NucleusLabeledProximityAssessedRoi] = unsafeRead(roisFile)
+            val observedRecords: List[ProximityAssessedRoi] = unsafeRead(roisFile)
             observedRecords.length shouldEqual expectedRecords.length // quick, simplifying check
             observedRecords.map(_.roi.spot) shouldEqual expectedRecords.map(_.roi.spot)
             observedRecords shouldEqual expectedRecords // full check
         }
     }
 
-    test("NucleusLabeledProximityAssessedRoi records roundtrip through CSV.") {
+    test("ProximityAssessedRoi records roundtrip through CSV.") {
         // Generate legal combination of main ROI index, too-close ROIs, and ROIs to merge.
         def genRoiIndexAndRoiBags(using Arbitrary[RoiIndex]): Gen[(RoiIndex, (Set[RoiIndex], Set[RoiIndex]))] = 
             for {
@@ -447,32 +272,25 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
                 bag2 = (raw2.toSet -- bag1) - idx // Prevent overlap with other bag and with main index.
             } yield (idx, (bag1, bag2))
 
-        given arbRoi(using Arbitrary[RoiIndex], Arbitrary[NucleusLabelAttemptedRoi]): Arbitrary[NucleusLabeledProximityAssessedRoi] = 
+        given arbRoi(using Arbitrary[RoiIndex], Arbitrary[DetectedSpotRoi]): Arbitrary[ProximityAssessedRoi] = 
             Arbitrary{
                 for {
-                    roi <- Arbitrary.arbitrary[NucleusLabelAttemptedRoi]
+                    roi <- Arbitrary.arbitrary[DetectedSpotRoi]
                     (index, (tooClose, forMerge)) <- genRoiIndexAndRoiBags
-                } yield NucleusLabeledProximityAssessedRoi
-                    .build(index, roi.toDetectedSpotRoi, roi.nucleus, tooClose, forMerge)
+                } yield ProximityAssessedRoi
+                    .build(index, roi, tooClose, forMerge)
                     .fold(errors => throw new Exception(s"ROI build error(s): $errors"), identity)
             }
 
-        // Additional component to CsvRowDecoder[DetectedSpotRoi, HeaderField] to derive 
-        // CsvRowDecoder[NucleusLabeledProximityAssessedRoi, HeaderField]
-        given CsvRowDecoder[NuclearDesignation, HeaderField] = getCsvRowDecoderForNuclearDesignation()
-        // Additional component to CsvRowEncoder[DetectedSpotRoi, HeaderField] to derive 
-        // CsvRowEncoder[NucleusLabeledProximityAssessedRoi, HeaderField]
-        given CsvRowEncoder[NuclearDesignation, HeaderField] = getCsvRowEncoderForNuclearDesignation()
-
-        forAll { (inputRecords: NonEmptyList[NucleusLabeledProximityAssessedRoi]) => 
+        forAll { (inputRecords: NonEmptyList[ProximityAssessedRoi]) => 
             withTempFile(Delimiter.CommaSeparator){ roisFile =>
                 /* First, write the records to CSV */
-                val sink: Pipe[IO, NucleusLabeledProximityAssessedRoi, Nothing] = 
-                    writeCaseClassesToCsv[NucleusLabeledProximityAssessedRoi](roisFile)
+                val sink: Pipe[IO, ProximityAssessedRoi, Nothing] = 
+                    writeCaseClassesToCsv[ProximityAssessedRoi](roisFile)
                 Stream.emits(inputRecords.toList).through(sink).compile.drain.unsafeRunSync()
 
                 /* Then, do the parse-and-check. */
-                Try{ unsafeRead[NucleusLabeledProximityAssessedRoi](roisFile) } match {
+                Try{ unsafeRead[ProximityAssessedRoi](roisFile) } match {
                     case Failure(e) => 
                         println("LINES (below):")
                         os.read.lines(roisFile).foreach(println)
@@ -493,65 +311,53 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
         }
     }
 
-    test("Header-only file gives empty list of results for NucleusLabeledProximityAssessedRoi.") {
+    test("Header-only file gives empty list of results for ProximityAssessedRoi.") {
         val headers = List(
-            "index,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber,tooCloseRois,mergeRois",
+            "index,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,tooCloseRois,mergeRois",
         )
         val newlines = List(false, true)
         val grid = headers.flatMap(h => newlines.map(p => h -> p))
         
-        // Additional component to CsvRowDecoder[DetectedSpotRoi, HeaderField] to derive 
-        // CsvRowDecoder[NucleusLabeledProximityAssessedRoi, HeaderField]
-        given CsvRowDecoder[NuclearDesignation, HeaderField] = getCsvRowDecoderForNuclearDesignation()
-        
         forAll (Table(("header", "newline"), grid*)) { (header, newline) => 
             val fileData = header ++ (if newline then "\n" else "")
             withTempFile(fileData, Delimiter.CommaSeparator) { roisFile => 
-                val expected = List.empty[NucleusLabelAttemptedRoi]
-                val observed = unsafeRead[NucleusLabelAttemptedRoi](roisFile)
+                val expected = List.empty[ProximityAssessedRoi]
+                val observed = unsafeRead[ProximityAssessedRoi](roisFile)
                 observed shouldEqual expected
             }
         }
     }
 
-    test("NucleusLabeledProximityAssessedRoi cannot be parsed from pandas-style no-name index column.") {
+    test("ProximityAssessedRoi cannot be parsed from pandas-style no-name index column.") {
         val initData = """
-            ,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber,tooCloseRois,mergeRois
-            0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,2,,
+            ,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,tooCloseRois,mergeRois
+            0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,,
             """.toLines
         
-        // Additional component to CsvRowDecoder[DetectedSpotRoi, HeaderField] to derive 
-        // CsvRowDecoder[NucleusLabeledProximityAssessedRoi, HeaderField]
-        given CsvRowDecoder[NuclearDesignation, HeaderField] = getCsvRowDecoderForNuclearDesignation()
-        
         withTempFile(initData, Delimiter.CommaSeparator) { roisFile => 
-            assertThrows[DecoderError]{ unsafeRead[NucleusLabeledProximityAssessedRoi](roisFile) }
+            assertThrows[DecoderError]{ unsafeRead[ProximityAssessedRoi](roisFile) }
         }
     }
 
-    test("NucleusLabeledProximityAssessedRoi cannot be parsed when either proximal ROIs column is missing.") {
+    test("ProximityAssessedRoi cannot be parsed when either proximal ROIs column is missing.") {
         val datas = List(
             """
-            index,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber,tooCloseRois
-            0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,2,
+            index,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,tooCloseRois
+            0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,
             """.toLines,
             """
-            index,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber,mergeRois
-            0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,2,
+            index,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,mergeRois
+            0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,
             """.toLines,
             """
-            index,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber
-            0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,2
+            index,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax
+            0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726
             """.toLines,
         )
 
-        // Additional component to CsvRowDecoder[DetectedSpotRoi, HeaderField] to derive 
-        // CsvRowDecoder[NucleusLabeledProximityAssessedRoi, HeaderField]
-        given CsvRowDecoder[NuclearDesignation, HeaderField] = getCsvRowDecoderForNuclearDesignation()
-        
         forAll (Table(("initData"), datas*)) { initData => 
             withTempFile(initData, Delimiter.CommaSeparator) { roisFile => 
-                assertThrows[DecoderError]{ unsafeRead[NucleusLabeledProximityAssessedRoi](roisFile) }
+                assertThrows[DecoderError]{ unsafeRead[ProximityAssessedRoi](roisFile) }
             }
         }
     }
