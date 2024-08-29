@@ -22,7 +22,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.{
     DetectedSpotRoi, 
-    ProximityAssessedRoi, 
+    MergerAssessedRoi, 
     RoiIndex, 
 }
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
@@ -75,49 +75,40 @@ trait RoiCsvInstances:
     ): CsvRowEncoder[DetectedSpotRoi, Header] = 
         getCsvRowEncoderForProduct2(_.spot, _.box)
 
-    given csvRowDecoderForProximityAssessedRoi(using 
+    given csvRowDecoderForMergerAssessedRoi(using 
         decIndex: CsvRowDecoder[RoiIndex, Header],
         decRoi: CsvRowDecoder[DetectedSpotRoi, Header], 
         decRoiIndices: CellDecoder[Set[RoiIndex]], 
-    ): CsvRowDecoder[ProximityAssessedRoi, Header] = new:
-        override def apply(row: RowF[Some, Header]): DecoderResult[ProximityAssessedRoi] = 
+    ): CsvRowDecoder[MergerAssessedRoi, Header] = new:
+        override def apply(row: RowF[Some, Header]): DecoderResult[MergerAssessedRoi] = 
             val indexNel = decIndex(row)
                 .toValidatedNel
                 .leftMap(es => NonEmptyList.one(s"${es.size} problem(s) with main ROI index: $es"))
             val roiNel = decRoi(row)
                 .toValidatedNel.leftMap(_.map(_.getMessage))
                 .leftMap(es => NonEmptyList.one(s"${es.size} problem(s) with detected ROI: $es"))
-            val tooCloseNel = ColumnNames.TooCloseRoisColumnName
-                .from(row)
-                .leftMap(es => NonEmptyList.one(s"${es.size} problem(s) with too-close ROIs: $es"))
             val mergeNel = ColumnNames.MergeRoisColumnName
                 .from(row)
                 .leftMap(es => NonEmptyList.one(s"${es.size} problem(s) with merge ROIs: $es"))
-            (indexNel, roiNel, tooCloseNel, mergeNel)
+            (indexNel, roiNel, mergeNel)
                 .tupled
                 .toEither
-                .flatMap{ (index, roi, tooClose, merge) => 
-                    ProximityAssessedRoi.build(
-                        index, 
-                        roi, 
-                        tooClose = tooClose, 
-                        merge = merge,
-                    )
+                .flatMap{ (index, roi, merge) => 
+                    MergerAssessedRoi.build(index, roi, merge = merge).leftMap(NonEmptyList.one)
                 }
                 .leftMap{ messages => 
                     val context = "error(s) decoding nucleus-labeled, proximity-assessed ROI from CSV row"
                     DecoderError(s"${messages.length} $context ($row): ${messages.mkString_("; ")}")
                 }
 
-    given csvRowEncoderForProximityAssessedRoi(using 
+    given csvRowEncoderForMergerAssessedRoi(using 
         encRoi: CsvRowEncoder[DetectedSpotRoi, Header], 
         encIndex: CsvRowEncoder[RoiIndex, Header],
         encRoiIndices: CellEncoder[Set[RoiIndex]],
-    ): CsvRowEncoder[ProximityAssessedRoi, Header] = new:
-        override def apply(elem: ProximityAssessedRoi): RowF[Some, Header] = 
+    ): CsvRowEncoder[MergerAssessedRoi, Header] = new:
+        override def apply(elem: MergerAssessedRoi): RowF[Some, Header] = 
             val init: RowF[Some, Header] = encRoi(elem.roi)
-            val extra = NonEmptyList.of(
-                ColumnNames.TooCloseRoisColumnName -> encRoiIndices(elem.tooCloseNeighbors), 
+            val extra = NonEmptyList.one(
                 ColumnNames.MergeRoisColumnName -> encRoiIndices(elem.mergeNeighbors), 
             )
             val (extraCols, extraValues) = extra.unzip

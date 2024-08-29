@@ -11,6 +11,5 @@ final case class MergeContributorRoi(
     context: ImagingContext,
     centroid: Centroid[Double],
     box: BoundingBox, 
-    nucleus: NucleusNumber,
     mergeIndex: RoiIndex
 )
