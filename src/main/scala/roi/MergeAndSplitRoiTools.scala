@@ -19,8 +19,8 @@ object MergeAndSplitRoiTools:
     private type Numbered[A] = (A, NonnegativeInt)
 
     private type MergeResult = (
-        List[(Numbered[ProximityAssessedRoi], NonEmptyList[String])], // errors
-        List[Numbered[ProximityAssessedRoi]], // non-participants in merge
+        List[(Numbered[MergerAssessedRoi], NonEmptyList[String])], // errors
+        List[Numbered[MergerAssessedRoi]], // non-participants in merge
         List[MergeContributorRoi], // merge inputs
         List[MergedRoiRecord], // merge outputs
     )
@@ -34,7 +34,7 @@ object MergeAndSplitRoiTools:
         contributors: NonEmptySet[RoiIndex], 
     )
 
-    def mergeRois(rois: List[ProximityAssessedRoi])(using Order[NuclearDesignation], Semigroup[BoundingBox]): MergeResult = 
+    def mergeRois(rois: List[MergerAssessedRoi])(using Order[NuclearDesignation], Semigroup[BoundingBox]): MergeResult = 
         val initAcc: MergeResult = (List(), List(), List(), List())
         rois match {
             case Nil => initAcc
@@ -61,8 +61,8 @@ object MergeAndSplitRoiTools:
 
     /** Do the merge for a single ROI record. */
     private[looptrace] def doOneMerge(
-        pool: Map[RoiIndex, ProximityAssessedRoi]
-    )(potentialNewIndex: RoiIndex, roi: ProximityAssessedRoi)(using 
+        pool: Map[RoiIndex, MergerAssessedRoi]
+    )(potentialNewIndex: RoiIndex, roi: MergerAssessedRoi)(using 
         Order[NuclearDesignation], 
         Semigroup[BoundingBox]
     ): Option[Either[NonEmptyList[String], MergedRoiRecord]] = 

@@ -53,9 +53,9 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
     test("Small detected spot ROI example parses correctly.") {
         val linesToWrite = 
             """
-            ,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,nucleusNumber
-            0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,0
-            1,P0001.zarr,80,2,17.994259347453493,24.042015416774795,1360.0069098862991,213.58943029032,117.1394688491732,11.994259347453491,23.994259347453493,12.042015416774795,36.0420154167748,1348.0069098862991,1372.0069098862991,0
+            ,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax
+            0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726
+            1,P0001.zarr,80,2,17.994259347453493,24.042015416774795,1360.0069098862991,213.58943029032,117.1394688491732,11.994259347453491,23.994259347453493,12.042015416774795,36.0420154167748,1348.0069098862991,1372.0069098862991
             """.toLines
     
         val expectedRecords: List[DetectedSpotRoi] = {
@@ -173,17 +173,17 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
         }
     }
 
-    test("Small ProximityAssessedRoi example parses correctly.") {
+    test("Small MergerAssessedRoi example parses correctly.") {
         val linesToWrite = """
-            index,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,tooCloseRois,mergeRois
-            0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,4;3,10
-            1,P0001.zarr,80,2,17.994259347453493,24.042015416774795,1360.0069098862991,213.58943029032,117.13946884917321,11.994259347453493,23.994259347453493,12.042015416774795,36.042015416774795,1348.0069098862991,1372.0069098862991,5,7;8
+            index,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,mergeRois
+            0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,10
+            1,P0001.zarr,80,2,17.994259347453493,24.042015416774795,1360.0069098862991,213.58943029032,117.13946884917321,11.994259347453493,23.994259347453493,12.042015416774795,36.042015416774795,1348.0069098862991,1372.0069098862991,7;8
             """.toLines
 
-        val expectedRecords: List[ProximityAssessedRoi] = {
+        val expectedRecords: List[MergerAssessedRoi] = {
             val pos = PositionName("P0001.zarr")
 
-            val rec1: ProximityAssessedRoi = {
+            val rec1: MergerAssessedRoi = {
                 val xBounds = XCoordinate(859.9833511648726) -> XCoordinate(883.9833511648726)
                 val yBounds = YCoordinate(219.9874778925304) -> YCoordinate(243.9874778925304)
                 val zBounds = ZCoordinate(-2.092371012467521) -> ZCoordinate(9.90762898753248)
@@ -208,16 +208,15 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
                     BoundingBox.Interval.unsafeFromTuple(yBounds), 
                     BoundingBox.Interval.unsafeFromTuple(zBounds),
                 )
-                ProximityAssessedRoi.build(
+                MergerAssessedRoi.build(
                     RoiIndex(0), 
                     DetectedSpotRoi(spot, box), 
-                    tooClose = Set(3, 4).map(RoiIndex.unsafe),
                     merge = Set(10).map(RoiIndex.unsafe),
                 )
                 .fold(errors => throw new Exception(s"${errors.length} error(s) building ROI example."), identity)
             }
 
-            val rec2: ProximityAssessedRoi = {
+            val rec2: MergerAssessedRoi = {
                 val xBounds = XCoordinate(1348.0069098862991) -> XCoordinate(1372.0069098862991)
                 val yBounds = YCoordinate(12.042015416774795) -> YCoordinate(36.042015416774795)
                 val zBounds = ZCoordinate(11.994259347453493) -> ZCoordinate(23.994259347453493)
@@ -242,10 +241,9 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
                     BoundingBox.Interval.unsafeFromTuple(yBounds), 
                     BoundingBox.Interval.unsafeFromTuple(zBounds),
                 )
-                ProximityAssessedRoi.build(
+                MergerAssessedRoi.build(
                     RoiIndex(1), 
                     DetectedSpotRoi(spot, box), 
-                    tooClose = Set(5).map(RoiIndex.unsafe),
                     merge = Set(7, 8).map(RoiIndex.unsafe),
                 ).fold(errors => throw new Exception(s"${errors.length} error(s) building ROI example."), identity)
             }
@@ -254,43 +252,40 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
         }
         
         withTempFile(linesToWrite, Delimiter.CommaSeparator){ roisFile =>
-            val observedRecords: List[ProximityAssessedRoi] = unsafeRead(roisFile)
+            val observedRecords: List[MergerAssessedRoi] = unsafeRead(roisFile)
             observedRecords.length shouldEqual expectedRecords.length // quick, simplifying check
             observedRecords.map(_.roi.spot) shouldEqual expectedRecords.map(_.roi.spot)
             observedRecords shouldEqual expectedRecords // full check
         }
     }
 
-    test("ProximityAssessedRoi records roundtrip through CSV.") {
+    test("MergerAssessedRoi records roundtrip through CSV.") {
         // Generate legal combination of main ROI index, too-close ROIs, and ROIs to merge.
-        def genRoiIndexAndRoiBags(using Arbitrary[RoiIndex]): Gen[(RoiIndex, (Set[RoiIndex], Set[RoiIndex]))] = 
+        def genRoiIndexAndMergeIndices(using Arbitrary[RoiIndex]): Gen[(RoiIndex, Set[RoiIndex])] = 
             for {
                 idx <- Arbitrary.arbitrary[RoiIndex]
-                raw1 <- Gen.listOf(Arbitrary.arbitrary[RoiIndex])
-                bag1 = raw1.toSet - idx // Prevent overlap with the main index
-                raw2 <- Gen.listOf(Arbitrary.arbitrary[RoiIndex])
-                bag2 = (raw2.toSet -- bag1) - idx // Prevent overlap with other bag and with main index.
-            } yield (idx, (bag1, bag2))
+                forMergeRaw <- Gen.listOf(Arbitrary.arbitrary[RoiIndex])
+            } yield (idx, forMergeRaw.toSet - idx)
 
-        given arbRoi(using Arbitrary[RoiIndex], Arbitrary[DetectedSpotRoi]): Arbitrary[ProximityAssessedRoi] = 
+        given arbRoi(using Arbitrary[RoiIndex], Arbitrary[DetectedSpotRoi]): Arbitrary[MergerAssessedRoi] = 
             Arbitrary{
                 for {
                     roi <- Arbitrary.arbitrary[DetectedSpotRoi]
-                    (index, (tooClose, forMerge)) <- genRoiIndexAndRoiBags
-                } yield ProximityAssessedRoi
-                    .build(index, roi, tooClose, forMerge)
+                    (index, forMerge) <- genRoiIndexAndMergeIndices
+                } yield MergerAssessedRoi
+                    .build(index, roi, forMerge)
                     .fold(errors => throw new Exception(s"ROI build error(s): $errors"), identity)
             }
 
-        forAll { (inputRecords: NonEmptyList[ProximityAssessedRoi]) => 
+        forAll { (inputRecords: NonEmptyList[MergerAssessedRoi]) => 
             withTempFile(Delimiter.CommaSeparator){ roisFile =>
                 /* First, write the records to CSV */
-                val sink: Pipe[IO, ProximityAssessedRoi, Nothing] = 
-                    writeCaseClassesToCsv[ProximityAssessedRoi](roisFile)
+                val sink: Pipe[IO, MergerAssessedRoi, Nothing] = 
+                    writeCaseClassesToCsv[MergerAssessedRoi](roisFile)
                 Stream.emits(inputRecords.toList).through(sink).compile.drain.unsafeRunSync()
 
                 /* Then, do the parse-and-check. */
-                Try{ unsafeRead[ProximityAssessedRoi](roisFile) } match {
+                Try{ unsafeRead[MergerAssessedRoi](roisFile) } match {
                     case Failure(e) => 
                         println("LINES (below):")
                         os.read.lines(roisFile).foreach(println)
@@ -311,9 +306,9 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
         }
     }
 
-    test("Header-only file gives empty list of results for ProximityAssessedRoi.") {
+    test("Header-only file gives empty list of results for MergerAssessedRoi.") {
         val headers = List(
-            "index,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,tooCloseRois,mergeRois",
+            "index,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,mergeRois",
         )
         val newlines = List(false, true)
         val grid = headers.flatMap(h => newlines.map(p => h -> p))
@@ -321,34 +316,26 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
         forAll (Table(("header", "newline"), grid*)) { (header, newline) => 
             val fileData = header ++ (if newline then "\n" else "")
             withTempFile(fileData, Delimiter.CommaSeparator) { roisFile => 
-                val expected = List.empty[ProximityAssessedRoi]
-                val observed = unsafeRead[ProximityAssessedRoi](roisFile)
+                val expected = List.empty[MergerAssessedRoi]
+                val observed = unsafeRead[MergerAssessedRoi](roisFile)
                 observed shouldEqual expected
             }
         }
     }
 
-    test("ProximityAssessedRoi cannot be parsed from pandas-style no-name index column.") {
+    test("MergerAssessedRoi cannot be parsed from pandas-style no-name index column.") {
         val initData = """
-            ,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,tooCloseRois,mergeRois
-            0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,,
+            ,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,mergeRois
+            0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,
             """.toLines
         
         withTempFile(initData, Delimiter.CommaSeparator) { roisFile => 
-            assertThrows[DecoderError]{ unsafeRead[ProximityAssessedRoi](roisFile) }
+            assertThrows[DecoderError]{ unsafeRead[MergerAssessedRoi](roisFile) }
         }
     }
 
-    test("ProximityAssessedRoi cannot be parsed when either proximal ROIs column is missing.") {
+    test("MergerAssessedRoi cannot be parsed when either merger ROIs column is missing.") {
         val datas = List(
-            """
-            index,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,tooCloseRois
-            0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,
-            """.toLines,
-            """
-            index,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,mergeRois
-            0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,
-            """.toLines,
             """
             index,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax
             0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726
@@ -357,7 +344,7 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
 
         forAll (Table(("initData"), datas*)) { initData => 
             withTempFile(initData, Delimiter.CommaSeparator) { roisFile => 
-                assertThrows[DecoderError]{ unsafeRead[ProximityAssessedRoi](roisFile) }
+                assertThrows[DecoderError]{ unsafeRead[MergerAssessedRoi](roisFile) }
             }
         }
     }
