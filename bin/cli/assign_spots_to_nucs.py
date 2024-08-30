@@ -70,35 +70,27 @@ def filter_rois_in_nucs(
             spot_label = 0
         return int(spot_label)
 
-    try:
-        # Remove the labels column if it already exists.
-        new_rois.drop(columns=[new_col], inplace=True)
-    except KeyError:
-        # Ignore case in which we're replacing an extant label column.
-        pass
+    # Remove the labels column if it already exists.
+    new_rois.drop(columns=[new_col], inplace=True, errors="ignore")
 
-    if nuc_drifts is not None:
-        rois_shifted = new_rois.copy()
-        shifts = []
-        for _, row in rois_shifted.iterrows():
-            curr_pos_name = row['position']
-            raw_nuc_drift_match = nuc_drifts[nuc_drifts['position'] == curr_pos_name]
-            if not isinstance(raw_nuc_drift_match, pd.DataFrame):
-                raise TypeError(f"Nuclear drift for position {curr_pos_name} is not a data frame, but {type(raw_nuc_drift_match).__name__}")
-            if not raw_nuc_drift_match.shape[0] == 1:
-                raise DimensionalityError(f"Nuclear drift for position {curr_pos_name} is not exactly 1 row, but {raw_nuc_drift_match.shape[0]} rows!")
-            drift_target = raw_nuc_drift_match[['z_px_coarse', 'y_px_coarse', 'x_px_coarse']].to_numpy()
-            drift_roi = spot_drifts[(spot_drifts['position'] == curr_pos_name) & (spot_drifts['frame'] == row['frame'])][['z_px_coarse', 'y_px_coarse', 'x_px_coarse']].to_numpy()
-            shift = drift_target - drift_roi
-            shifts.append(shift[0])
-        shifts = pd.DataFrame(shifts, columns=['z', 'y', 'x'])
-        rois_shifted[['zc', 'yc', 'xc']] = rois_shifted[['zc', 'yc', 'xc']].to_numpy() - shifts[['z','y','x']].to_numpy()
+    rois_shifted = new_rois.copy()
+    shifts = []
+    for _, row in rois_shifted.iterrows():
+        curr_pos_name = row['position']
+        raw_nuc_drift_match = nuc_drifts[nuc_drifts['position'] == curr_pos_name]
+        if not isinstance(raw_nuc_drift_match, pd.DataFrame):
+            raise TypeError(f"Nuclear drift for position {curr_pos_name} is not a data frame, but {type(raw_nuc_drift_match).__name__}")
+        if not raw_nuc_drift_match.shape[0] == 1:
+            raise DimensionalityError(f"Nuclear drift for position {curr_pos_name} is not exactly 1 row, but {raw_nuc_drift_match.shape[0]} rows!")
+        drift_target = raw_nuc_drift_match[['z_px_coarse', 'y_px_coarse', 'x_px_coarse']].to_numpy()
+        drift_roi = spot_drifts[(spot_drifts['position'] == curr_pos_name) & (spot_drifts['frame'] == row['frame'])][['z_px_coarse', 'y_px_coarse', 'x_px_coarse']].to_numpy()
+        shift = drift_target - drift_roi
+        shifts.append(shift[0])
+    shifts = pd.DataFrame(shifts, columns=['z', 'y', 'x'])
+    rois_shifted[['zc', 'yc', 'xc']] = rois_shifted[['zc', 'yc', 'xc']].to_numpy() - shifts[['z','y','x']].to_numpy()
 
-        new_rois.loc[:, new_col] = rois_shifted.apply(spot_in_nuc, nuc_label_img=nuc_label_img, axis=1)
+    new_rois.loc[:, new_col] = rois_shifted.apply(spot_in_nuc, nuc_label_img=nuc_label_img, axis=1)
     
-    else:
-        new_rois.loc[:, new_col] = new_rois.apply(spot_in_nuc, nuc_label_img=nuc_label_img, axis=1)
-
     return new_rois
 
 
@@ -123,13 +115,13 @@ def workflow(
 
     logger.info(f"Reading coarse-drift file for nuclei: {N.drift_correction_file__coarse}")
     drift_table_nuclei = read_table_pandas(N.drift_correction_file__coarse)
-    get_nuc_drifts = query_table_for_pos(drift_table_nuclei)
+    get_nuc_drifts: Callable[[str], pd.DataFrame] = query_table_for_pos(drift_table_nuclei)
     
     logger.info(f"Reading coarse-drift file for spots: {H.drift_correction_file__coarse}")
     drift_table_spots = read_table_pandas(H.drift_correction_file__coarse)
     get_spot_drifts = query_table_for_pos(drift_table_spots)
     
-    rois_table = read_table_pandas(H.proximity_filtered_spots_file_path)
+    rois_table = read_table_pandas(H.raw_spots_file)
     get_rois = query_table_for_pos(rois_table)
 
     logger.info("Assigning spots to nuclei labels...")
@@ -140,7 +132,7 @@ def workflow(
             logger.warn(f"No ROIs for position: {pos}")
             continue
 
-        nuc_drifts = get_nuc_drifts(pos)
+        nuc_drifts: pd.DataFrame = get_nuc_drifts(pos)
         spot_drifts = get_spot_drifts(pos)
         
         filter_kwargs = {"nuc_drifts": nuc_drifts, "spot_drifts": spot_drifts}
