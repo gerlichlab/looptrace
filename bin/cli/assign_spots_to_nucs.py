@@ -19,7 +19,7 @@ __credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 logger = logging.getLogger()
 
 
-NUC_LABEL_COL = "nuc_label"
+NUC_LABEL_COL = "nucleusNumber"
 
 
 def filter_rois_in_nucs(
