@@ -1,69 +1,86 @@
 package at.ac.oeaw.imba.gerlich.looptrace
+package roi
 
 import cats.*
 import cats.data.{ NonEmptyList, NonEmptySet, ValidatedNel }
 import cats.syntax.all.*
 import mouse.boolean.*
 
-import at.ac.oeaw.imba.gerlich.gerlib.cell.{ NuclearDesignation, OutsideNucleus }
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.Centroid
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.syntax.*
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingContext
-import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
-import at.ac.oeaw.imba.gerlich.looptrace.space.{ BoundingBox, Point3D }
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
+import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
+import at.ac.oeaw.imba.gerlich.looptrace.space.{ BoundingBox, Point3D }
+import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.ProximityFilterStrategy
+import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.UniversalProximityPermission
+import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.UniversalProximityProhibition
+import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.SelectiveProximityPermission
+import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.SelectiveProximityProhibition
 
 /** Tools for merging ROIs */
 object MergeAndSplitRoiTools:
-    private type Numbered[A] = (A, NonnegativeInt)
+    def assessForMerge(rois: List[DetectedSpotRoi]): List[MergerAssessedRoi] = ???
 
-    private type MergeResult = (
-        List[(Numbered[MergerAssessedRoi], NonEmptyList[String])], // errors
-        List[Numbered[MergerAssessedRoi]], // non-participants in merge
-        List[MergeContributorRoi], // merge inputs
-        List[MergedRoiRecord], // merge outputs
-    )
+    def assessForMutualExclusion(proximityFilterStrategy: ProximityFilterStrategy)(rois: List[IndexedSpot | MergedRoiRecord]): 
+        (List[UnidentifiableRoi], List[IndexedSpot | MergedRoiRecord]) = 
+        proximityFilterStrategy match {
+            case UniversalProximityPermission => List() -> rois
+            case UniversalProximityProhibition(minSpotSeparation) => ???
+            case SelectiveProximityPermission(minSpotSeparation, grouping) => ???
+            case SelectiveProximityProhibition(minSpotSeparation, grouping) => ???
+        }
 
-    /** A record of an ROI after the merge process has been considered and done. */
-    private[looptrace] final case class MergedRoiRecord private[MergeAndSplitRoiTools](
-        index: RoiIndex, 
-        context: ImagingContext, // must be identical among all merge partners
-        centroid: Centroid[Double], // averaged over merged partners
-        box: BoundingBox, 
-        contributors: NonEmptySet[RoiIndex], 
-    )
-
-    def mergeRois(rois: List[MergerAssessedRoi])(using Order[NuclearDesignation], Semigroup[BoundingBox]): MergeResult = 
-        val initAcc: MergeResult = (List(), List(), List(), List())
+    def mergeRois(rois: List[MergerAssessedRoi])(using Semigroup[BoundingBox]): MergeResult = 
         rois match {
-            case Nil => initAcc
+            case Nil => (List(), List(), List(), List())
             case _ => 
                 val indexed = NonnegativeInt.indexed(rois)
                 def incrementIndex: RoiIndex => RoiIndex = i => RoiIndex.unsafe(i.get + 1)
                 val pool = indexed.map{ (r, i) => RoiIndex(i) -> r }.toMap
                 given Ordering[RoiIndex] = summon[Order[RoiIndex]].toOrdering
                 val initNewIndex = incrementIndex(rois.map(_.index).max)
-                indexed.foldRight(initAcc -> initNewIndex){ case (curr@(r, i), ((accErr, accSkip, accContrib, accMerge), currIndex)) => 
-                    doOneMerge(pool)(currIndex, r) match {
-                        case None => 
-                            // no merge action
-                            (accErr, curr :: accSkip, accContrib, accMerge) -> currIndex
-                        case Some(Left(errors)) => 
-                            // error case
-                            ((curr, errors) :: accErr, accSkip, accContrib, accMerge) -> currIndex
-                        case Some(Right(rec)) => 
-                            // merge action
-                            (accErr, accSkip, accContrib, rec :: accMerge) -> incrementIndex(currIndex)
+                val ((allErrored, allSkipped, allMerged), _) = 
+                    indexed.foldRight(((List.empty[MergeError], List.empty[IndexedSpot], List.empty[MergedRoiRecord]), initNewIndex)){
+                        case (curr@(r, i), ((accErr, accSkip, accMerge), currIndex)) => 
+                            considerOneMerge(pool)(currIndex, r) match {
+                                case None => 
+                                    // no merge action; simply eliminate the empty mergePartners collection
+                                    (accErr, (r.index, r.roi) :: accSkip, accMerge) -> currIndex
+                                case Some(Left(errors)) => 
+                                    // error case
+                                    ((curr, errors) :: accErr, accSkip, accMerge) -> currIndex
+                                case Some(Right(rec)) =>
+                                    // merge action
+                                    (accErr, accSkip, rec :: accMerge) -> incrementIndex(currIndex)
+                        }
                     }
-                }._1
+                val allContrib: List[MergeContributorRoi] = allMerged
+                    .flatMap{ roi => roi.contributors.toList.map(_ -> roi.index) }
+                    .map{ (contribIndex, mergedIndex) => 
+                        val original = pool.getOrElse(
+                            contribIndex, 
+                            throw new Exception(s"Cannot find original ROI for alleged contributor index ${contribIndex.show_}")
+                        )
+                        MergeContributorRoi(
+                            contribIndex, 
+                            original.context, 
+                            original.centroid, 
+                            original.roi.box,
+                            mergedIndex, 
+                        )
+                    }
+                    .sortBy(_.index)
+                (allErrored, allSkipped, allContrib, allMerged)                
         }
-
+    
     /** Do the merge for a single ROI record. */
-    private[looptrace] def doOneMerge(
+    private[looptrace] def considerOneMerge(
         pool: Map[RoiIndex, MergerAssessedRoi]
     )(potentialNewIndex: RoiIndex, roi: MergerAssessedRoi)(using 
-        Order[NuclearDesignation], 
         Semigroup[BoundingBox]
     ): Option[Either[NonEmptyList[String], MergedRoiRecord]] = 
         roi.mergeNeighbors.toList.toNel.map(
@@ -94,3 +111,32 @@ object MergeAndSplitRoiTools:
                     .toEither
             }
         )
+
+    /** A ROI that's merged with one or more others on account of proximity. */
+    private[looptrace] final case class MergeContributorRoi(
+        index: RoiIndex, 
+        context: ImagingContext,
+        centroid: Centroid[Double],
+        box: BoundingBox, 
+        mergeIndex: RoiIndex
+    )
+
+    /** A record of an ROI after the merge process has been considered and done. */
+    private[looptrace] final case class MergedRoiRecord(
+        index: RoiIndex, 
+        context: ImagingContext, // must be identical among all merge partners
+        centroid: Centroid[Double], // averaged over merged partners
+        box: BoundingBox, 
+        contributors: NonEmptySet[RoiIndex], 
+    )
+
+    private type MergeError = ((MergerAssessedRoi, NonnegativeInt), ErrorMessages)
+    
+    private type IndexedSpot = (RoiIndex, DetectedSpotRoi)
+
+    private type MergeResult = (
+        List[MergeError], // errors
+        List[IndexedSpot], // non-participants in merge
+        List[MergeContributorRoi], // contributors to merge
+        List[MergedRoiRecord], // merge outputs
+    )

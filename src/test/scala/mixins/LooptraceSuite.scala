@@ -6,6 +6,7 @@ import cats.syntax.all.*
 import org.scalacheck.{ Arbitrary, Gen }
 import org.scalacheck.Arbitrary.arbitrary
 
+import at.ac.oeaw.imba.gerlich.gerlib.cell.NuclearDesignation
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.{BoundingBox, EuclideanDistance}
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
@@ -24,8 +25,9 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.{
     YCoordinate, 
     ZCoordinate,
 }
+
+import at.ac.oeaw.imba.gerlich.looptrace.roi.{ DetectedSpotRoi, RegionalBarcodeSpotRoi }
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
-import at.ac.oeaw.imba.gerlich.gerlib.cell.NuclearDesignation
 
 /** Base trait for tests in looptrace */
 trait LooptraceSuite extends GenericSuite, GeometricInstances, ImagingInstances, CatsScalacheckInstances, SyntaxForScalacheck:

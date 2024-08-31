@@ -24,12 +24,11 @@ import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
+import at.ac.oeaw.imba.gerlich.looptrace.roi.RegionalBarcodeSpotRoi
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /**
- * Measure data across all timepoints in the regions identified during spot detection.
- * 
  * Filter out spots that are too close together (e.g., because disambiguation 
  * of spots from indiviudal FISH probes in each region would be impossible in a multiplexed 
  * experiment).

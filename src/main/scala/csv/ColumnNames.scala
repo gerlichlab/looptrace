@@ -9,9 +9,9 @@ object ColumnNames:
 
     val RoiIndexColumnName: ColumnName[RoiIndex] = ColumnName[RoiIndex]("index")
 
-    val TooCloseRoisColumnName: ColumnName[RoiBag] = ColumnName[RoiBag]("tooCloseRois")
-    
     val MergeRoisColumnName: ColumnName[RoiBag] = ColumnName[RoiBag]("mergeRois")
+    
+    val TooCloseRoisColumnName: ColumnName[RoiBag] = ColumnName[RoiBag]("tooCloseRois")
 
     val GroupRoisColumnName: ColumnName[RoiBag] = ColumnName[RoiBag]("groupingRois")
 end ColumnNames
