@@ -1,4 +1,5 @@
 package at.ac.oeaw.imba.gerlich.looptrace
+package roi
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ BoundingBox, Point3D }

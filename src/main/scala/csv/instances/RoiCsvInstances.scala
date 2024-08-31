@@ -20,12 +20,9 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.roi.DetectedSpot
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
-import at.ac.oeaw.imba.gerlich.looptrace.{
-    DetectedSpotRoi, 
-    MergerAssessedRoi, 
-    RoiIndex, 
-}
+import at.ac.oeaw.imba.gerlich.looptrace.RoiIndex
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
+import at.ac.oeaw.imba.gerlich.looptrace.roi.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.BoundingBox
 
 /** Typeclass instances related to CSV, for ROI-related data types */
