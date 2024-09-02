@@ -1,17 +1,20 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 package csv
 
+import cats.data.NonEmptySet
+
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnName
 
 /** Collection of names of critical columns from which to parse data */
 object ColumnNames:
-    private type RoiBag = Set[RoiIndex]
+    val RoiIndexColumnName: ColumnName[RoiIndex] = ColumnName("index")
 
-    val RoiIndexColumnName: ColumnName[RoiIndex] = ColumnName[RoiIndex]("index")
+    val MergedIndexColumnName: ColumnName[RoiIndex] = ColumnName("mergeIndex")
 
-    val MergeRoisColumnName: ColumnName[RoiBag] = ColumnName[RoiBag]("mergeRois")
-    
-    val TooCloseRoisColumnName: ColumnName[RoiBag] = ColumnName[RoiBag]("tooCloseRois")
+    val MergeRoisColumnName: ColumnName[Set[RoiIndex]] = ColumnName(mergeContributorsName)
 
-    val GroupRoisColumnName: ColumnName[RoiBag] = ColumnName[RoiBag]("groupingRois")
+    /** Distinguished from [[MergedRoisColumnName]] by static guarantee of nonemptiness */
+    val MergeContributorsColumnName: ColumnName[NonEmptySet[RoiIndex]] = ColumnName(mergeContributorsName)
+
+    private def mergeContributorsName: String = "mergeRois"
 end ColumnNames

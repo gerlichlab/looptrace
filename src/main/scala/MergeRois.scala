@@ -63,12 +63,12 @@ object MergeRois extends StrictLogging:
                 else failure(s"Non-unique in/out paths for ROI merge: ${paths}")
             },
             checkConfig{ c => 
-                if !c.overwrite && os.isFile(c.mergeContributorsFile)
+                if !c.overwrite && os.exists(c.mergeContributorsFile)
                 then failure(s"Overwrite isn't authorised but output file exists: ${c.mergeContributorsFile}")
                 else success
             },
             checkConfig{ c => 
-                if !c.overwrite && os.isFile(c.mergeResultsFile)
+                if !c.overwrite && os.exists(c.mergeResultsFile)
                 then failure(s"Overwrite isn't authorised but output file exists: ${c.mergeResultsFile}")
                 else success
             },

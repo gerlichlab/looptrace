@@ -25,8 +25,8 @@ import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.SelectivePro
 object MergeAndSplitRoiTools:
     def assessForMerge(rois: List[DetectedSpotRoi]): List[MergerAssessedRoi] = ???
 
-    def assessForMutualExclusion(proximityFilterStrategy: ProximityFilterStrategy)(rois: List[IndexedSpot | MergedRoiRecord]): 
-        (List[UnidentifiableRoi], List[IndexedSpot | MergedRoiRecord]) = 
+    def assessForMutualExclusion(proximityFilterStrategy: ProximityFilterStrategy)(rois: List[IndexedDetectedSpot | MergedRoiRecord]): 
+        (List[UnidentifiableRoi], List[IndexedDetectedSpot | MergedRoiRecord]) = 
         proximityFilterStrategy match {
             case UniversalProximityPermission => List() -> rois
             case UniversalProximityProhibition(minSpotSeparation) => ???
@@ -44,7 +44,7 @@ object MergeAndSplitRoiTools:
                 given Ordering[RoiIndex] = summon[Order[RoiIndex]].toOrdering
                 val initNewIndex = incrementIndex(rois.map(_.index).max)
                 val ((allErrored, allSkipped, allMerged), _) = 
-                    indexed.foldRight(((List.empty[MergeError], List.empty[IndexedSpot], List.empty[MergedRoiRecord]), initNewIndex)){
+                    indexed.foldRight(((List.empty[MergeError], List.empty[IndexedDetectedSpot], List.empty[MergedRoiRecord]), initNewIndex)){
                         case (curr@(r, i), ((accErr, accSkip, accMerge), currIndex)) => 
                             considerOneMerge(pool)(currIndex, r) match {
                                 case None => 
@@ -112,31 +112,13 @@ object MergeAndSplitRoiTools:
             }
         )
 
-    /** A ROI that's merged with one or more others on account of proximity. */
-    private[looptrace] final case class MergeContributorRoi(
-        index: RoiIndex, 
-        context: ImagingContext,
-        centroid: Centroid[Double],
-        box: BoundingBox, 
-        mergeIndex: RoiIndex
-    )
-
-    /** A record of an ROI after the merge process has been considered and done. */
-    private[looptrace] final case class MergedRoiRecord(
-        index: RoiIndex, 
-        context: ImagingContext, // must be identical among all merge partners
-        centroid: Centroid[Double], // averaged over merged partners
-        box: BoundingBox, 
-        contributors: NonEmptySet[RoiIndex], 
-    )
-
     private type MergeError = ((MergerAssessedRoi, NonnegativeInt), ErrorMessages)
     
-    private type IndexedSpot = (RoiIndex, DetectedSpotRoi)
+    private[roi] type IndexedDetectedSpot = (RoiIndex, DetectedSpotRoi)
 
     private type MergeResult = (
         List[MergeError], // errors
-        List[IndexedSpot], // non-participants in merge
+        List[IndexedDetectedSpot], // non-participants in merge
         List[MergeContributorRoi], // contributors to merge
         List[MergedRoiRecord], // merge outputs
     )

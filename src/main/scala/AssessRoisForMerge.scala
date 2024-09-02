@@ -4,7 +4,7 @@ import cats.*
 import cats.effect.IO
 import cats.syntax.all.*
 import mouse.boolean.*
-import scopt.{ OParser }
+import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{ readCsvToCaseClasses, writeCaseClassesToCsv }
