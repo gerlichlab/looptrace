@@ -33,4 +33,8 @@ private[looptrace] object MergedRoiRecord:
     def apply(idxRoi: IndexedDetectedSpot, contributors: NonEmptySet[RoiIndex]): MergedRoiRecord = 
         val (idx, roi) = idxRoi
         apply(idx, roi, contributors)
+
+    given AdmitsRoiIndex[MergedRoiRecord] = AdmitsRoiIndex.instance(_.index)
+
+    given AdmitsImagingContext[MergedRoiRecord] = AdmitsImagingContext.instance(_.context)
 end MergedRoiRecord

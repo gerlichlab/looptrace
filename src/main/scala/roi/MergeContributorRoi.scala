@@ -27,3 +27,8 @@ object MergeContributorRoi:
             spot.box, 
             mergeIndex,
         ).asRight
+
+    given AdmitsRoiIndex[MergeContributorRoi] = AdmitsRoiIndex.instance(_.index)
+
+    given AdmitsImagingContext[MergeContributorRoi] = AdmitsImagingContext.instance(_.context)
+end MergeContributorRoi
