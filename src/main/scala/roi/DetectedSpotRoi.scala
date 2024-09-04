@@ -15,3 +15,8 @@ final case class DetectedSpotRoi(
 ):
     def centroid: Centroid[Double] = spot.centroid
     def context: ImagingContext = spot.context
+end DetectedSpotRoi
+
+object DetectedSpotRoi:
+    given AdmitsImagingContext[DetectedSpotRoi] = AdmitsImagingContext.instance(_.context)
+end DetectedSpotRoi

@@ -6,32 +6,108 @@ import cats.data.{ NonEmptyList, NonEmptySet, ValidatedNel }
 import cats.syntax.all.*
 import mouse.boolean.*
 
-import at.ac.oeaw.imba.gerlich.gerlib.geometry.Centroid
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.{ Centroid, DistanceThreshold, PiecewiseDistance, ProximityComparable }
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.syntax.*
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingContext
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ BoundingBox, Point3D }
-import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.ProximityFilterStrategy
+import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.NontrivialProximityFilter
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.UniversalProximityPermission
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.UniversalProximityProhibition
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.SelectiveProximityPermission
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.SelectiveProximityProhibition
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.FieldOfViewLike
+import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.ProximityFilterStrategy
 
 /** Tools for merging ROIs */
 object MergeAndSplitRoiTools:
+    private type PostMergeRoi = IndexedDetectedSpot | MergedRoiRecord
+
     def assessForMerge(rois: List[DetectedSpotRoi]): List[MergerAssessedRoi] = ???
 
-    def assessForMutualExclusion(proximityFilterStrategy: ProximityFilterStrategy)(rois: List[IndexedDetectedSpot | MergedRoiRecord]): 
-        (List[UnidentifiableRoi], List[IndexedDetectedSpot | MergedRoiRecord]) = 
-        proximityFilterStrategy match {
-            case UniversalProximityPermission => List() -> rois
+    def buildMutualExclusionLookup[A, G, K: Order](
+        items: List[A], 
+        getGroupKey: A => G,
+        useEligiblePair: (A, A) => Boolean, 
+        getPoint: A => Point3D, 
+        minDist: DistanceThreshold,
+        getItemKey: A => K,
+    ): Map[K, NonEmptySet[K]] = 
+        import ProximityComparable.proximal
+        given proxComp: ProximityComparable[A] = DistanceThreshold.defineProximityPointwise(minDist)(getPoint)
+        items.groupBy(getGroupKey)
+            .values
+            .map{ group => 
+                val closePairs: List[(K, K)] = group.combinations(2)
+                    .flatMap{
+                        case a1 :: a2 :: Nil => 
+                            (useEligiblePair(a1, a2) && (a1 `proximal` a2))
+                                .option{ getItemKey(a1) -> getItemKey(a2) }
+                        case nonPair => throw new Exception(s"Got ${nonPair.length} items when taking pairs!")
+                    }
+                    .toList
+                closePairs.foldLeft(Map.empty[K, NonEmptySet[K]]){ case (acc, (k1, k2)) => 
+                    val v1 = acc.get(k1).fold(NonEmptySet.one[K])(_.add)(k2)
+                    val v2 = acc.get(k2).fold(NonEmptySet.one[K])(_.add)(k1)
+                    acc ++ Map(k1 -> v1, k2 -> v2)
+                }
+            }
+            .toSeq
+            .combineAll
+
+    /** Use the given grouping strategy and minimal separation threshold to determine which ROIs mutually exclude each other due to lack of identifiability. */
+    def assessForMutualExclusion(proximityFilterStrategy: NontrivialProximityFilter)(rois: List[PostMergeRoi])(using Eq[FieldOfViewLike], AdmitsRoiIndex[PostMergeRoi]): 
+        (List[UnidentifiableRoi], List[PostMergeRoi]) = 
+        import IndexedDetectedSpot.given
+        import AdmitsRoiIndex.*
+        
+        extension (roi: PostMergeRoi)
+            def context(using 
+                AdmitsImagingContext[IndexedDetectedSpot],
+                AdmitsImagingContext[MergedRoiRecord],
+            ): ImagingContext = 
+                import AdmitsImagingContext.*
+                roi match {
+                    case unmerged: IndexedDetectedSpot => unmerged.imagingContext
+                    case merged: MergedRoiRecord => merged.imagingContext
+                    }
+        
+        val usePair: (PostMergeRoi, PostMergeRoi) => Boolean = (a, b) => 
+            a.context.fieldOfView === b.context.fieldOfView && a.context.timepoint =!= b.context.timepoint
+        val getItemKey: PostMergeRoi => RoiIndex = _.roiIndex
+        val getCenterAndBox = (_: PostMergeRoi) match {
+            case roi: MergedRoiRecord => roi.centroid -> roi.box
+            case (_, roi: DetectedSpotRoi) => roi.centroid -> roi.box
+        }
+        val minDist: DistanceThreshold = PiecewiseDistance.ConjunctiveThreshold(proximityFilterStrategy.minSpotSeparation)
+
+        val getGroupKey: PostMergeRoi => Option[Int] = proximityFilterStrategy match {
             case UniversalProximityProhibition(minSpotSeparation) => ???
             case SelectiveProximityPermission(minSpotSeparation, grouping) => ???
             case SelectiveProximityProhibition(minSpotSeparation, grouping) => ???
+        }
+        
+        val lookup = buildMutualExclusionLookup(rois, getGroupKey, usePair, getCenterAndBox.map(_._1.asPoint), minDist, getItemKey)
+
+        Alternative[List].separate(rois.map{ roi => 
+            val key = getItemKey(roi)
+            lookup.get(key).toLeft(roi).leftMap{ tooClose => 
+                val (pt, box) = getCenterAndBox(roi)
+                UnidentifiableRoi(key, roi.context, pt, box, tooClose)
+            }
+        })
+
+    /** Eliminate the trivial filtration strategy as a possibility, and defer to the more general implementation. */
+    def assessForMutualExclusion(proximityFilterStrategy: ProximityFilterStrategy)(rois: List[PostMergeRoi])(using Eq[FieldOfViewLike], AdmitsRoiIndex[PostMergeRoi]): 
+        (List[UnidentifiableRoi], List[PostMergeRoi]) = 
+        proximityFilterStrategy match {
+            case UniversalProximityPermission => List() -> rois
+            case strat: NontrivialProximityFilter => assessForMutualExclusion(strat)(rois)
         }
 
     def mergeRois(rois: List[MergerAssessedRoi])(using Semigroup[BoundingBox]): MergeResult = 
@@ -116,9 +192,17 @@ object MergeAndSplitRoiTools:
     
     private[roi] type IndexedDetectedSpot = (RoiIndex, DetectedSpotRoi)
 
+    private[roi] object IndexedDetectedSpot:
+        given AdmitsRoiIndex[IndexedDetectedSpot] = AdmitsRoiIndex.instance(_._1)
+
+        given admitsImagingContextForIndexedDetectedSpot(using forSpot: AdmitsImagingContext[DetectedSpotRoi]): AdmitsImagingContext[IndexedDetectedSpot] = 
+            forSpot.contramap(_._2)
+    end IndexedDetectedSpot
+
     private type MergeResult = (
         List[MergeError], // errors
         List[IndexedDetectedSpot], // non-participants in merge
         List[MergeContributorRoi], // contributors to merge
         List[MergedRoiRecord], // merge outputs
     )
+end MergeAndSplitRoiTools

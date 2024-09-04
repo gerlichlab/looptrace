@@ -12,11 +12,10 @@ import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.BoundingBox
 
-/** Small extension of a basic ROI-like type to account for the assessment of proximal ROIs */
-final case class IdentifiabilityAssessedRoi(
-    index: RoiIndex,
-    context: ImagingContext,
-    centroid: Centroid[Double],
-    box: BoundingBox,
-    tooClose: Set[RoiIndex],
+final case class UnidentifiableRoi(
+    index: RoiIndex, 
+    context: ImagingContext, 
+    centroid: Centroid[Double], 
+    box: BoundingBox, 
+    tooClose: NonEmptySet[RoiIndex]
 )

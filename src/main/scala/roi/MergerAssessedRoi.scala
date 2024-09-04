@@ -44,4 +44,8 @@ object MergerAssessedRoi:
 
     given RowIndexAdmission[MergerAssessedRoi, Id] = 
         RowIndexAdmission.intoIdentity(_.index.get)
+
+    given AdmitsRoiIndex[MergerAssessedRoi] = AdmitsRoiIndex.instance(_.index)
+
+    given AdmitsImagingContext[MergerAssessedRoi] = AdmitsImagingContext.instance(_.context)
 end MergerAssessedRoi
