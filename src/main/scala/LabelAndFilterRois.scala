@@ -437,7 +437,7 @@ object LabelAndFilterRois extends ScoptCliReaders, StrictLogging:
      ****************************************************************************************************************/
 
     // Delimiter between fields within a multi-valued field (i.e., multiple values in 1 CSV column)
-    val MultiValueFieldInternalSeparator = "|"
+    val MultiValueFieldInternalSeparator = ";"
 
     object Movement:
         private type Interval[C <: Coordinate] = BoundingBox.Interval[Double, C]
