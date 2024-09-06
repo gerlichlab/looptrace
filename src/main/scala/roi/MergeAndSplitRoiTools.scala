@@ -30,7 +30,7 @@ object MergeAndSplitRoiTools:
 
     def assessForMerge(rois: List[DetectedSpotRoi]): List[MergerAssessedRoi] = ???
 
-    def buildMutualExclusionLookup[A, G, K: Order](
+    private def buildMutualExclusionLookup[A, G, K: Order](
         items: List[A], 
         getGroupKey: A => G,
         useEligiblePair: (A, A) => Boolean, 
