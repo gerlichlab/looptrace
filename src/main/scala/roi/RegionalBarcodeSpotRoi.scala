@@ -12,6 +12,7 @@ final case class RegionalBarcodeSpotRoi(
     channel: ImagingChannel, 
     centroid: Point3D, 
     boundingBox: BoundingBox,
+    contributors: Set[RoiIndex],
 ):
     final def time: ImagingTimepoint = region.get
 end RegionalBarcodeSpotRoi

@@ -37,13 +37,13 @@ from looptrace.wrappers import phase_xcor
 FRAME_COLUMN = "frame"
 POSITION_COLUMN = "position"
 CoarseDriftTableRow = Tuple[int, str, NumberLike, NumberLike, NumberLike]
-Z_PX_COARSE = 'z_px_coarse'
-Y_PX_COARSE = 'y_px_coarse'
-X_PX_COARSE = 'x_px_coarse'
+Z_PX_COARSE = 'zDriftCoarsePixels'
+Y_PX_COARSE = 'yDriftCoarsePixels'
+X_PX_COARSE = 'xDriftCoarsePixels'
 COARSE_DRIFT_COLUMNS = [Z_PX_COARSE, Y_PX_COARSE, X_PX_COARSE]
 COARSE_DRIFT_TABLE_COLUMNS = [FRAME_COLUMN, POSITION_COLUMN] + COARSE_DRIFT_COLUMNS
 FullDriftTableRow = Tuple[int, str, NumberLike, NumberLike, NumberLike, NumberLike, NumberLike, NumberLike]
-FULL_DRIFT_TABLE_COLUMNS = COARSE_DRIFT_TABLE_COLUMNS + ['z_px_fine', 'y_px_fine', 'x_px_fine']
+FULL_DRIFT_TABLE_COLUMNS = COARSE_DRIFT_TABLE_COLUMNS + ['zDriftFinePixels', 'yDriftFinePixels', 'xDriftFinePixels']
 DUMMY_SHIFT = [0, 0, 0]
 
 
@@ -550,7 +550,7 @@ class Drifter():
         pos_index = self.pos_list.index(pos)
         pos_img = []
         for t in range(n_t):
-            shift = tuple(self.drift_table.query('position == @pos').iloc[t][['z_px_coarse', 'y_px_coarse', 'x_px_coarse']])
+            shift = tuple(self.drift_table.query('position == @pos').iloc[t][['zDriftCoarsePixels', 'yDriftCoarsePixels', 'xDriftCoarsePixels']])
             pos_img.append(da.roll(self.images[pos_index][t], shift = shift, axis = (1,2,3)))
         self.dc_images = da.stack(pos_img)
 
@@ -586,7 +586,7 @@ class Drifter():
             n_t = proj_img.shape[0]
             
             for t in tqdm.tqdm(range(n_t)):
-                shift = self.image_handler.tables[self.image_handler.reg_input_moving + '_drift_correction'].query('position == @pos').iloc[t][['y_px_coarse', 'x_px_coarse', 'y_px_fine', 'x_px_fine']]
+                shift = self.image_handler.tables[self.image_handler.reg_input_moving + '_drift_correction'].query('position == @pos').iloc[t][['yDriftCoarsePixels', 'xDriftCoarsePixels', 'yDriftFinePixels', 'xDriftFinePixels']]
                 shift = (shift[0]+shift[2], shift[1]+shift[3])
                 z[t] = ndi.shift(proj_img[t].compute(), shift=(0,)+shift, order = 2)
         
@@ -620,7 +620,7 @@ class Drifter():
             n_t = pos_img.shape[0]
             
             for t in tqdm.tqdm(range(n_t)):
-                shift = self.image_handler.tables[self.image_handler.reg_input_moving + '_drift_correction'].query('position == @pos').iloc[t][['z_px_coarse', 'y_px_coarse', 'x_px_coarse']]
+                shift = self.image_handler.tables[self.image_handler.reg_input_moving + '_drift_correction'].query('position == @pos').iloc[t][['zDriftCoarsePixels', 'yDriftCoarsePixels', 'xDriftCoarsePixels']]
                 shift = (shift[0], shift[1], shift[2])
                 z[t] = ndi.shift(pos_img[t].compute(), shift=(0,)+shift, order = 0)
         

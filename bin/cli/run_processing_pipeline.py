@@ -89,15 +89,14 @@ def run_spot_proximity_filtration(rounds_config: ExtantFile, params_config: Exta
         "--configuration",
         str(rounds_config.path),
         "--spotsFile",
-        str(H.raw_spots_file),
+        str(H.nuclei_labeled_spots_file_path),
         "--driftFile", 
         str(H.drift_correction_file__fine),
         "--unfilteredOutputFile",
         str(H.proximity_labeled_spots_file_path),
         "--filteredOutputFile",
         str(H.proximity_filtered_spots_file_path),
-        "--handleExtantOutput",
-        "OVERWRITE" # TODO: parameterise this, see: https://github.com/gerlichlab/looptrace/issues/142
+        "--overwrite",
     ]
     logging.info(f"Running spot filtering on proximity: {' '.join(cmd_parts)}")
     subprocess.check_call(cmd_parts)
@@ -384,8 +383,8 @@ class LooptracePipeline(pypiper.Pipeline):
                 f_kwargs={"params_config": self.params_config},
             ), 
             pypiper.Stage(name=SPOT_DETECTION_STAGE_NAME, func=run_spot_detection, f_kwargs=rounds_params_images), # generates *_rois.csv (regional spots)
-            pypiper.Stage(name="spot_proximity_filtration", func=run_spot_proximity_filtration, f_kwargs=rounds_params_images),
             pypiper.Stage(name="spot_nucleus_filtration", func=run_spot_nucleus_filtration, f_kwargs=rounds_params_images), 
+            pypiper.Stage(name="spot_proximity_filtration", func=run_spot_proximity_filtration, f_kwargs=rounds_params_images),
             pypiper.Stage(
                 name="regional_spots_visualisation_data_prep", 
                 func=run_regional_spot_viewing_prep, 
