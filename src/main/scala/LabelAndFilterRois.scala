@@ -217,17 +217,19 @@ object LabelAndFilterRois extends ScoptCliReaders, StrictLogging:
                 case (_: FieldOfView, _: PositionName) => false
             }
 
-        val shiftedRois: IO[EitherNel[Throwable, List[PostMergeRoi]]] = for {
+        val writeOutputs: (List[UnidentifiableRoi], List[PostMergeRoi]) => (os.Path, os.Path) = 
+            (unidentifiables, wellSeparatedRois) => ???
+
+        val program: IO[Unit] = for {
             rois <- readRois
             maybeDrifts <- readKeyedDrifts.map(_.leftMap(msg => new Exception(msg)))
-        } yield maybeDrifts
-            .flatMap(keyedDrifts => applyDrifts(keyedDrifts)(rois))
-            .leftMap(NonEmptyList.one)
-
-        val siftedRois: IO[EitherNel[Throwable, (List[UnidentifiableRoi], List[PostMergeRoi])]] = 
-            shiftedRois.map(_.map(assessForMutualExclusion(proximityFilterStrategy)))
-
-        // TODO: write the output.
+            shiftedRois = maybeDrifts.flatMap(keyedDrifts => applyDrifts(keyedDrifts)(rois)).leftMap(NonEmptyList.one)
+            siftedRois = shiftedRois.map(assessForMutualExclusion(proximityFilterStrategy))
+            maybePaths = siftedRois.map(writeOutputs.tupled)
+        } yield maybePaths.fold(
+            errors => ???, // TODO: throw error.
+            (unidentifiablesFile, wellSeparatedsFile) => ??? // TODO: log the written files.
+        )
     }
 
     private def applyDrifts(keyedDrifts: Map[DriftKey, DriftRecord])(using Eq[FieldOfViewLike]): List[PostMergeRoi] => Either[Throwable, List[PostMergeRoi]] = 
