@@ -12,7 +12,6 @@ import fs2.data.text.utf8.byteStreamCharLike
 import mouse.boolean.*
 
 import scopt.OParser
-import com.github.tototoshi.csv.*
 import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.{
@@ -149,6 +148,12 @@ object LabelAndFilterRois extends ScoptCliReaders, StrictLogging:
                 val filepaths = List(c.spotsFile, c.driftFile, c.fileForDiscards, c.fileForKeepers)
                 if filepaths.length === filepaths.toSet.size then success
                 else failure(s"Repeat(s) are present among given filepaths: ${filepaths.mkString(", ")}")
+            }, 
+            checkConfig{ c => 
+                if c.overwrite then success
+                else if os.exists(c.fileForDiscards) then failure(s"Discards file exists: ${c.fileForDiscards}")
+                else if os.exists(c.fileForKeepers) then failure(s"Keepers file exists: ${c.fileForKeepers}")
+                else success
             }
         )
 
@@ -161,7 +166,7 @@ object LabelAndFilterRois extends ScoptCliReaders, StrictLogging:
                 fileForDiscards = opts.fileForDiscards,
                 fileForKeepers = opts.fileForKeepers, 
                 overwrite = opts.overwrite,
-                )
+            )
         }
     }
 
