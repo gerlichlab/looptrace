@@ -1,18 +1,33 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
-import scala.util.Try
+import scala.util.{ NotGiven, Try }
 import upickle.default.*
 import cats.*
 import cats.data.*
+import cats.effect.IO
+import cats.effect.unsafe.IORuntime
 import cats.syntax.all.*
+import fs2.data.csv.*
+import fs2.data.text.utf8.byteStreamCharLike
 import mouse.boolean.*
 
 import scopt.OParser
 import com.github.tototoshi.csv.*
 import com.typesafe.scalalogging.StrictLogging
 
-import at.ac.oeaw.imba.gerlich.gerlib.geometry.{ BoundingBox, DistanceThreshold, PiecewiseDistance, ProximityComparable }
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.{
+    AxisX, 
+    AxisY, 
+    AxisZ, 
+    BoundingBox as BBox, 
+    Centroid, 
+    DistanceThreshold, 
+    PiecewiseDistance, 
+    ProximityComparable,
+}
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.readCsvToCaseClasses
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
@@ -23,10 +38,32 @@ import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
+import at.ac.oeaw.imba.gerlich.looptrace.collections.*
+import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.{
+    MergeRoisColumnName,
+    PositionNameColumnName,
+    RoiIndexColumnName,
+}
+import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
+import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.roi.parseFromRow
+import at.ac.oeaw.imba.gerlich.looptrace.drift.*
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
-import at.ac.oeaw.imba.gerlich.looptrace.roi.RegionalBarcodeSpotRoi
+import at.ac.oeaw.imba.gerlich.looptrace.roi.{
+    DetectedSpotRoi,
+    MergedRoiRecord,
+    RegionalBarcodeSpotRoi,
+}
+import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.{
+    IndexedDetectedSpot, 
+    PostMergeRoi,
+}
+import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.IndexedDetectedSpot.given
+import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.PostMergeRoi.*
+import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.PostMergeRoi.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
+import at.ac.oeaw.imba.gerlich.looptrace.roi.UnidentifiableRoi
+import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.assessForMutualExclusion
 
 /**
  * Filter out spots that are too close together (e.g., because disambiguation 
@@ -62,17 +99,17 @@ object LabelAndFilterRois extends ScoptCliReaders, StrictLogging:
       * @param configuration The configuration of the imaging rounds
       * @param spotsFile Path to the regional spots file in which to label records as too proximal or not
       * @param driftFile Path to the file with drift correction information for all ROIs, across all timepoints
-      * @param unfilteredOutputFile Path to which to write unfiltered (but proximity-labeled) output
-      * @param filteredOutputFile Path to which to write proximity-filtered (unlabeled) output
+      * @param fileForDiscards Path to which to write discarded ROIs (too close together)
+      * @param fileForKeepers Path to which to write kept ROIs (not too close together)
       * @param extantOutputHandler How to handle if an output target already exists
       */
     final case class CliConfig(
         configuration: ImagingRoundsConfiguration = null, // unconditionally required
         spotsFile: os.Path = null, // unconditionally required
         driftFile: os.Path = null, // unconditionally required
-        unfilteredOutputFile: UnfilteredOutputFile = null, // unconditionally required
-        filteredOutputFile: FilteredOutputFile = null, // unconditionally required
-        extantOutputHandler: ExtantOutputHandler = null, // unconditionally required
+        fileForDiscards: os.Path = null, // unconditionally required
+        fileForKeepers: os.Path = null, // unconditionally required
+        overwrite: Boolean = false,
         )
 
     val parserBuilder = OParser.builder[CliConfig]
@@ -97,18 +134,22 @@ object LabelAndFilterRois extends ScoptCliReaders, StrictLogging:
                 .action((f, c) => c.copy(driftFile = f))
                 .validate(f => os.isFile(f).either(f"Alleged drift file isn't a file: $f", ()))
                 .text("Path to drift correction file"),
-            opt[UnfilteredOutputFile]("unfilteredOutputFile")
+            opt[os.Path]("fileForDiscards")
                 .required()
-                .action((f, c) => c.copy(unfilteredOutputFile = f))
-                .text("Path to file to which to write unfiltered output"),
-            opt[FilteredOutputFile]("filteredOutputFile")
+                .action((f, c) => c.copy(fileForDiscards = f))
+                .text("Path to file for ROIs to discard on account of being too close together"),
+            opt[os.Path]("fileForKeepers")
                 .required()
-                .action((f, c) => c.copy(filteredOutputFile = f))
-                .text("Path to file to which to write filtered output"),
-            opt[ExtantOutputHandler]("handleExtantOutput")
-                .required()
-                .action((h, c) => c.copy(extantOutputHandler = h))
-                .text("How to handle writing output when target already exists"),
+                .action((f, c) => c.copy(fileForKeepers = f))
+                .text("Path to file to which to write ROIs to continue processing, based on being sufficiently well separated"),
+            opt[Unit]("overwrite")
+                .action((_, c) => c.copy(overwrite = true))
+                .text("License overwriting existing output"),
+            checkConfig{ c => 
+                val filepaths = List(c.spotsFile, c.driftFile, c.fileForDiscards, c.fileForKeepers)
+                if filepaths.length === filepaths.toSet.size then success
+                else failure(s"Repeat(s) are present among given filepaths: ${filepaths.mkString(", ")}")
+            }
         )
 
         OParser.parse(parser, args, CliConfig()) match {
@@ -117,9 +158,9 @@ object LabelAndFilterRois extends ScoptCliReaders, StrictLogging:
                 spotsFile = opts.spotsFile, 
                 driftFile = opts.driftFile, 
                 proximityFilterStrategy = opts.configuration.proximityFilterStrategy, 
-                unfilteredOutputFile = opts.unfilteredOutputFile,
-                filteredOutputFile = opts.filteredOutputFile, 
-                extantOutputHandler = opts.extantOutputHandler,
+                fileForDiscards = opts.fileForDiscards,
+                fileForKeepers = opts.fileForKeepers, 
+                overwrite = opts.overwrite,
                 )
         }
     }
@@ -128,62 +169,23 @@ object LabelAndFilterRois extends ScoptCliReaders, StrictLogging:
         spotsFile: os.Path, 
         driftFile: os.Path, 
         proximityFilterStrategy: ImagingRoundsConfiguration.ProximityFilterStrategy,
-        unfilteredOutputFile: UnfilteredOutputFile, 
-        filteredOutputFile: FilteredOutputFile, 
-        extantOutputHandler: ExtantOutputHandler
+        fileForDiscards: os.Path, 
+        fileForKeepers: os.Path, 
+        overwrite: Boolean,
         ): Unit = {
         require(
-            unfilteredOutputFile.toIO.getPath =!= filteredOutputFile.toIO.getPath, 
-            s"Unfiltered and filtered outputs match: ${(unfilteredOutputFile, filteredOutputFile)}"
+            fileForDiscards.toIO.getPath =!= fileForKeepers.toIO.getPath, 
+            s"Discards and keepers output filepaths match: ${(fileForDiscards, fileForKeepers)}"
         )
         
-        /* Create unsafe CSV writer for each output type, failing fast if either output exists and overwrite is not active.
-           In the process, bind each target output file to its corresponding named function. */
-        val (writeUnfiltered, writeFiltered) = {
-            val unfilteredNel = extantOutputHandler.getSimpleWriter(unfilteredOutputFile).toValidatedNel
-            val filteredNel = extantOutputHandler.getSimpleWriter(filteredOutputFile).toValidatedNel
-            val writeCsv = (sink: os.Source => Boolean) => writeAllCsvUnsafe(sink)(_: List[String], _: Iterable[Map[String, String]])
-            (unfilteredNel, filteredNel).tupled.fold(
-                es => throw new Exception(s"${es.size} existence error(s) with output: ${es.map(_.getMessage)}"), 
-                _.mapBoth(writeCsv)
-                )
-        }
+        // The first program in the chain: read in the ROIs, a possible mix  of singletons and merged records.
+        val readRois: IO[List[PostMergeRoi]] = 
+            readCsvToCaseClasses[PostMergeRoi](spotsFile)
 
-        /* Then, parse the ROI records from the (regional barcode) spots file. */
-        val (roisHeader, rowRoiPairs): (List[String], List[((Map[String, String], Roi), LineNumber)]) = {
-            safeReadAllWithOrderedHeaders(spotsFile).fold(
-                throw _, 
-                (head, spotRows) => Alternative[List].separate(
-                    spotRows.zipWithIndex.map{ 
-                        (row, i) => rowToRoi(row).bimap(i -> _, row -> _) 
-                    }
-                ) match {
-                    case (Nil, rrPairs) => head -> NonnegativeInt.indexed(rrPairs)
-                    case (errors@((i, h) :: _), _) => throw new Exception(
-                        s"${errors.length} error(s) converting spot file (${spotsFile}) rows to ROIs! First one (record $i): $h"
-                        )
-                }
-            )
-        }
-        
-        /* Then, parse the drift correction records from the corresponding file. */
-        val driftByPosTimePair = {
-            val drifts = withCsvData(driftFile){
-                (driftRows: Iterable[Map[String, String]]) => Alternative[List].separate(
-                    driftRows.toList.zipWithIndex.map{
-                        (row, i) => rowToDriftRecord(row).leftMap(i -> _)
-                    }
-                ) match {
-                    case (Nil, drifts) => drifts
-                    case (errors@((i, h) :: _), _) => throw new Exception(
-                        s"${errors.length} error(s) converting drift file (${driftFile}) rows to records! First one (record $i): $h"
-                        )
-                }
-            }.asInstanceOf[List[DriftRecord]]
-
+        val keyDrifts: List[DriftRecord] => Either[String, Map[DriftKey, DriftRecord]] = drifts => 
             val (recordNumbersByKey, keyed) = 
                 NonnegativeInt.indexed(drifts)
-                    .foldLeft(Map.empty[DriftKey, NonEmptySet[LineNumber]] -> Map.empty[DriftKey, DriftRecord]){ 
+                    .foldLeft(Map.empty[DriftKey, NonEmptySet[NonnegativeInt]] -> Map.empty[DriftKey, DriftRecord]){ 
                         case ((reps, acc), (drift, recnum)) =>  
                             val p = drift.position
                             val t = drift.time
@@ -194,303 +196,139 @@ object LabelAndFilterRois extends ScoptCliReaders, StrictLogging:
                             }
                     }
             val repeats = recordNumbersByKey.filter(_._2.size > 1)
-            if (repeats.nonEmpty) { 
-                val simpleReps = repeats.toList.map{ 
-                    case ((PositionName(p), ImagingTimepoint(t)), lineNums) => (p, t) -> lineNums.toList.sorted
-                }.sortBy(_._1)
-                throw new Exception(s"${simpleReps.length} repeated (pos, time) pairs: ${simpleReps}")
+            if repeats.isEmpty then keyed.asRight
+            else { 
+                val simpleReps = repeats.toList.map{ (k, lineNums) => k -> lineNums.toList.sorted }
+                s"${simpleReps.length} repeated (pos, time) pairs: ${simpleReps}".asLeft
             }
-            keyed
-        }
 
-        /* For each ROI (by line number), look up its (too-proximal, according to distance threshold) neighbors. */
-        // TODO: allow empty grouping here. https://github.com/gerlichlab/looptrace/issues/147
-        val lookupNeighbors: LineNumber => Option[NonEmptySet[LineNumber]] = proximityFilterStrategy match {
-            case ImagingRoundsConfiguration.UniversalProximityPermission => Function.const(None)
-            case strategy: ImagingRoundsConfiguration.NontrivialProximityFilter =>
-                val shiftedRoisNumbered = rowRoiPairs.map{ case ((_, oldRoi), idx) => 
-                    val posTimePair = oldRoi.position -> oldRoi.time
-                    val drift = driftByPosTimePair.getOrElse(posTimePair, throw new DriftRecordNotFoundError(posTimePair))
-                    val newRoi = applyDrift(oldRoi, drift)
-                    newRoi -> idx
-                }
-                buildNeighboringRoisFinder(shiftedRoisNumbered, strategy) match {
-                    case Left(errMsg) => throw new Exception(errMsg)
-                    case Right(neighborsByRecordNumber) => neighborsByRecordNumber.get
-                }
-        }
+        // TODO: need to bring in the CsvRowDecoder[DriftRecord, String] instance
+        val readKeyedDrifts: IO[Either[String, Map[DriftKey, DriftRecord]]] = 
+            import DriftRecord.given
+            summon[CellDecoder[Int]]
+            summon[CsvRowDecoder[CoarseDrift, String]]
+            readCsvToCaseClasses[DriftRecord](driftFile).map(keyDrifts)
 
-        // For each record (ROI, line), find the line number of any proximal (according to a distance threshold) ROI.
-        val roiRecordsLabeled = rowRoiPairs.map{ 
-            case ((row, _), linenum) => row -> lookupNeighbors(linenum).map(_.toNonEmptyList.sorted)
-        }
-
-        /* Write the unfiltered output and print out the header */
-        val _: Unit = {
-            val neighborColumnName = "neighbors"
-            val header = roisHeader :+ neighborColumnName
-            val records = roiRecordsLabeled.map{ case (row, maybeNeighbors) => 
-                row + (neighborColumnName -> maybeNeighbors.fold(List())(_.toList).mkString(MultiValueFieldInternalSeparator))
+        given Eq[FieldOfViewLike] with
+            override def eqv(a: FieldOfViewLike, b: FieldOfViewLike): Boolean = (a, b) match {
+                case (fov1: PositionName, fov2: PositionName) => fov1 === fov2
+                case (fov1: FieldOfView, fov2: FieldOfView) => fov1 === fov2
+                case (_: PositionName, _: FieldOfView) => false
+                case (_: FieldOfView, _: PositionName) => false
             }
-            val wroteIt = writeUnfiltered(header, records)
-            logger.info(s"${if wroteIt then "Wrote" else "Did not write"} unfiltered output file: $filteredOutputFile")
-            ()
-        }
-        
-        val _: Unit = {
-            val wroteIt = writeFiltered(roisHeader, roiRecordsLabeled.filter(_._2.isEmpty).map(_._1))
-            logger.info(s"${if wroteIt then "Wrote" else "Did not write"} filtered output file: $filteredOutputFile")
-        }
 
+        val shiftedRois: IO[EitherNel[Throwable, List[PostMergeRoi]]] = for {
+            rois <- readRois
+            maybeDrifts <- readKeyedDrifts.map(_.leftMap(msg => new Exception(msg)))
+        } yield maybeDrifts
+            .flatMap(keyedDrifts => applyDrifts(keyedDrifts)(rois))
+            .leftMap(NonEmptyList.one)
+
+        val siftedRois: IO[EitherNel[Throwable, (List[UnidentifiableRoi], List[PostMergeRoi])]] = 
+            shiftedRois.map(_.map(assessForMutualExclusion(proximityFilterStrategy)))
+
+        // TODO: write the output.
     }
+
+    private def applyDrifts(keyedDrifts: Map[DriftKey, DriftRecord])(using Eq[FieldOfViewLike]): List[PostMergeRoi] => Either[Throwable, List[PostMergeRoi]] = 
+        val tryApp: PostMergeRoi => Either[Throwable, PostMergeRoi] = r => 
+            val fovTimePair = r.context.fieldOfView -> r.context.timepoint
+            keyedDrifts.get(fovTimePair)
+                .toRight(DriftRecordNotFoundError(fovTimePair))
+                .flatMap{ drift => Try{ applyDrift(r, drift) }.toEither }
+        _.traverse(tryApp)
 
     /****************************************************************************************************************
      * Main types and business logic
      ****************************************************************************************************************/
-    final case class DriftRecord(position: PositionName, time: ImagingTimepoint, coarse: CoarseDrift, fine: FineDrift):
+    final case class DriftRecord(position: FieldOfViewLike, time: ImagingTimepoint, coarse: CoarseDrift, fine: FineDrift):
         def total = 
             // For justification of additivity, see: https://github.com/gerlichlab/looptrace/issues/194
             TotalDrift(
-                ZDir(coarse.z.get + fine.z.get), 
-                YDir(coarse.y.get + fine.y.get), 
-                XDir(coarse.x.get + fine.x.get)
-                )
+                DriftComponent.total[AxisZ](coarse.z.value + fine.z.value), 
+                DriftComponent.total[AxisY](coarse.y.value + fine.y.value), 
+                DriftComponent.total[AxisX](coarse.x.value + fine.x.value),
+            )
+    end DriftRecord
+
+    object DriftRecord:
+        given decoderForDriftRecord(using 
+            CsvRowDecoder[ImagingContext, String],
+            CsvRowDecoder[CoarseDrift, String], 
+            CsvRowDecoder[FineDrift, String],
+        ): CsvRowDecoder[DriftRecord, String] with
+            override def apply(row: RowF[Some, String]): DecoderResult[DriftRecord] = 
+                val contextNel = parseFromRow[ImagingContext]("Error(s) reading imaging context from CSV row")(row)
+                val coarseDriftNel = parseFromRow[CoarseDrift]("Error(s) reading coarse drift from CSV row")(row)
+                val fineDriftNel = parseFromRow[FineDrift]("Error(s) reading coarse drift from CSV row")(row)
+                (contextNel, coarseDriftNel, fineDriftNel).mapN{ (context, coarseDrift, fineDrift) =>  
+                    DriftRecord(context.fieldOfView, context.timepoint, coarseDrift, fineDrift)
+                }
+                .leftMap{ messages => 
+                    DecoderError(s"Failed to parse drift record from CSV row. Messages: ${messages.mkString_("; ")}")
+                }
+                .toEither
+    end DriftRecord
 
     final case class DriftRecordNotFoundError(key: DriftKey) extends NoSuchElementException(s"key not found: ($key)")
 
     /** Add the given total drift (coarse + fine) to the given ROI, updating its centroid and its bounding box accordingly. */
-    private def applyDrift(roi: Roi, drift: DriftRecord): Roi = {
+    private def applyDrift(roi: PostMergeRoi, drift: DriftRecord)(using Eq[FieldOfViewLike]): PostMergeRoi = {
         require(
-            roi.position === drift.position && roi.time === drift.time, 
-            s"ROI and drift don't match on (FOV, time): (${roi.position -> roi.time} and (${drift.position -> drift.time})"
+            roi.context.fieldOfView === drift.position && roi.context.timepoint === drift.time, 
+            s"ROI and drift don't match on (FOV, time): (${roi.context.fieldOfView -> roi.context.timepoint} and (${drift.position -> drift.time})"
             )
-        roi.copy(centroid = Movement.addDrift(drift.total)(roi.centroid), boundingBox = Movement.addDrift(drift.total)(roi.boundingBox))
+        val (center, box) = PostMergeRoi.getCenterAndBox(roi)
+        val newCenter = Centroid.fromPoint(Movement.addDrift(drift.total)(center.asPoint))
+        val newBox = Movement.addDrift(drift.total)(box)
+        roi match {
+            case (idx, DetectedSpotRoi(spot, _)) => idx -> DetectedSpotRoi(spot.copy(centroid = newCenter), newBox)
+            case rec: MergedRoiRecord => rec.copy(centroid = newCenter, box = newBox)
+        }
     }
 
-    /**
-      * Create a mapping from item to other items within given distance threshold of that item.
-      * 
-      * An item is not considered its own neigbor, and this is omitting from the result any item with no proximal neighbors.
-      *
-      * @tparam B THe initial value type, associated with a key `K`
-      * @tparam A The type items of interest, for which to compute sets of proximal neighbors
-      * @tparam K The type of value on which to group the items
-      * @param kvPairs The pairs of keying value and actual item
-      * @param usePair Whether to consider a given pair of items for proximity, otherwise skip
-      * @param getPoint How to get a point in 3D space from each arbitrary item
-      * @param minDist The threshold distance by which to define two points as proximal
-      * @param simplify How to get from a more complex value `B` to a simpler `A`
-      * @return A mapping from item to set of proximal (closer than given distance threshold) neighbors, omitting each item with no neighbors
-      */
-    private[looptrace] def buildNeighborsLookupKeyed[B, A : Order, K : Order](
-        kvPairs: Iterable[(K, B)], usePair: (B, B) => Boolean, getPoint: A => Point3D, minDist: DistanceThreshold, simplify: B => A
-        ): Map[A, NonEmptySet[A]] = 
-        import ProximityComparable.proximal
-        given proxComp: ProximityComparable[A] = DistanceThreshold.defineProximityPointwise(minDist)(getPoint)
-        // In the reduction, we don't care if on collision the Semigroup instance for Map will combine values or will overwrite them, 
-        // since the partition on keys here guarantees no collisions between resulting submaps that are being combined.
-        kvPairs.groupBy(_._1)
-            .values // Keys are only used to create the partitions within which to compute distances, so discard after grouping.
-            .map(_.map(_._2))
-            .map{ part => 
-                // Find all pairs of values more within the threshold of proximity w.r.t. one another.
-                val closePairs: List[(A, A)] = part.toList.combinations(2).flatMap{
-                    case b1 :: b2 :: Nil => usePair(b1, b2)
-                        .option(simplify(b1) -> simplify(b2))
-                        .flatMap{ (a1, a2) => (a1 `proximal` a2).option(a1 -> a2) }
-                    case xs => throw new Exception(s"${xs.length} (not 2) element(s) when taking pairwise combinations!")
-                }.toList
-                // BIDIRECTIONALLY add the pair to the mapping, as we need the redundancy in order to remove BOTH spots.
-                // https://github.com/gerlichlab/looptrace/issues/148
-                closePairs.foldLeft(Map.empty[A, NonEmptySet[A]]){ case (acc, (a1, a2)) => 
-                    val v1 = acc.get(a1).fold(NonEmptySet.one[A])(_.add)(a2)
-                    val v2 = acc.get(a2).fold(NonEmptySet.one[A])(_.add)(a1)
-                    acc ++ Map(a1 -> v1, a2 -> v2)
+    given decoderForRoi(using 
+        CellDecoder[RoiIndex],
+        CsvRowDecoder[DetectedSpotRoi, String], 
+    ): CsvRowDecoder[PostMergeRoi, String] = 
+        given Ordering[RoiIndex] = summon[Order[RoiIndex]].toOrdering
+        new:
+            override def apply(row: RowF[Some, String]): DecoderResult[PostMergeRoi] = 
+                val idxNel = RoiIndexColumnName.from(row)
+                val roiNel = parseFromRow[DetectedSpotRoi]("Error(s) decoding ROI")(row)
+                val contributorsNel = MergeRoisColumnName.from(row)
+                (idxNel, roiNel, contributorsNel).mapN{
+                    (idx, roi, contributors) => contributors.toNonEmptySet match {
+                        case None => (idx, roi)
+                        case Some(contribs) => MergedRoiRecord(
+                            idx, 
+                            roi.context, 
+                            roi.centroid, 
+                            roi.box, 
+                            contribs,
+                        )
+                    }
                 }
-            } // Compute the neighbors mapping within each part.
-            .toSeq.combineAll // Combine all the partitioned neighbors mappings.
-
-    /**
-      * Create a mapping from record number (ROI) to set of record numbers encoding neighboring ROIs.
-      * 
-      * A ROI is not considered its own neigbor, and this is omitting from the result any item with no proximal neighbors.
-      * 
-      * @param rois Pair of {@code Roi} and its record number (0-based) from a CSV file
-      * @param proxFilterStrategy Strategy with which to consider points as proximal ("neighbors") or not
-      * @return A mapping from item to set of proximal (closer than given distance threshold) neighbors, omitting each item with no neighbors; 
-      *         otherwise, a {@code Left}-wrapped error message about what went wrong
-      */
-    private[looptrace] def buildNeighboringRoisFinder(rois: List[RoiLinenumPair], proxFilterStrategy: ImagingRoundsConfiguration.ProximityFilterStrategy): Either[String, Map[LineNumber, NonEmptySet[LineNumber]]] = {
-        import scala.language.implicitConversions
-        given orderForRoiLinenumPair: Order[RoiLinenumPair] = Order.by(_._2)
-        type GroupId = NonnegativeInt
-        type IndexedRoi = (RegionalBarcodeSpotRoi, NonnegativeInt)
-        val getPoint = (_: RoiLinenumPair)._1.centroid
-        val groupedRoiLinenumPairs: Either[String, Map[RoiLinenumPair, NonEmptySet[RoiLinenumPair]]] = proxFilterStrategy match {
-            case ImagingRoundsConfiguration.UniversalProximityPermission => Map.empty.asRight
-            case strat: ImagingRoundsConfiguration.UniversalProximityProhibition => 
-                val minSep = PiecewiseDistance.ConjunctiveThreshold(strat.minSpotSeparation)
-                // Records from the same timepoint must never exclude one another, so don't consider them as neighbors by proximity.
-                val considerRoiPair = { (a: IndexedRoi, b: IndexedRoi) => a._1.time =!= b._1.time }
-                buildNeighborsLookupKeyed(
-                    // Key each record by its field of view.
-                    rois.map{ case pair@(r, _) => r.position -> pair },
-                    considerRoiPair, 
-                    getPoint, 
-                    minSep, 
-                    identity,
-                ).asRight
-            case strat: (ImagingRoundsConfiguration.SelectiveProximityProhibition | ImagingRoundsConfiguration.SelectiveProximityPermission) => 
-                val minSep = PiecewiseDistance.ConjunctiveThreshold(strat.minSpotSeparation)
-                val groupIds = NonnegativeInt.indexed(strat.grouping.toList).flatMap((g, i) => g.toList.map(_ -> i)).toMap
-                Alternative[List].separate(rois.map{ case pair@(roi, _) => groupIds.get(roi.time).toRight(pair).map(_ -> pair)}) match {
-                    case (Nil, withGroupsAssigned) => 
-                        // NB: "eligible" refers to eligibility to be deemed in violation of proximity rule, not "eligible" to be kept for further processing.
-                        // Spots from the SAME timepoint can never be "eligible" for exclusion on the basis of proximity; instead, they're ALWAYS 
-                        // retained and perhaps will have their ROIs merged.
-                        val eligibleByTime = { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => a._2._1.time =!= b._2._1.time }
-                        val eligibleByGroup = strat match {
-                            // In the grouping, we declare which regional timepoints are "together" for the purpose of BEING REGARDED AS IN VIOLATION OF PROXIMITY.
-                            // That is, it's NOT about which timepoints' spots are allowed or not to exist in close proximity (in fact, the opposite).
-                            case _: ImagingRoundsConfiguration.SelectiveProximityProhibition => { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => a._1 === b._1 }
-                            case _: ImagingRoundsConfiguration.SelectiveProximityPermission => { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => a._1 =!= b._1 }
-                        }
-                        val considerRoiPair = { (a: (GroupId, IndexedRoi), b: (GroupId, IndexedRoi)) => eligibleByTime(a, b) && eligibleByGroup(a, b) }
-                        buildNeighborsLookupKeyed(
-                            withGroupsAssigned.map{ case (gi, pair@(roi, _)) => roi.position -> (gi -> pair) }, 
-                            considerRoiPair, 
-                            getPoint, 
-                            minSep, _._2,
-                        ).asRight
-                    case (groupless, _) => 
-                        val times = groupless.map(_._1.time).toSet
-                        val timesText = 
-                            given Ordering[ImagingTimepoint] = summon[Order[ImagingTimepoint]].toOrdering
-                            times.toList.sorted.map(_.show_).mkString(", ")
-                        s"${groupless.length} ROIs without timepoint declared in grouping. ${times.size} undeclared timepoints: $timesText".asLeft
-                }
-        }
-        groupedRoiLinenumPairs.map(_.map{ case ((_, idx), indexedNeighbors) => idx -> indexedNeighbors.map(_._2) })
-    }
-
-    /** Parse a {@code ROI} value from an in-memory representation of a single line from a CSV file. */
-    def rowToRoi(row: Map[String, String]): ErrMsgsOr[Roi] = {
-        val indexNel = safeGetFromRow("", safeParseInt >>> RoiIndex.fromInt)(row)
-        val posNel = safeGetFromRow("position", PositionName.parse)(row)
-        val regionNel = safeGetFromRow("frame", safeParseInt >>> RegionId.fromInt)(row)
-        val channelNel = safeGetFromRow("ch", safeParseInt >>> ImagingChannel.fromInt)(row)
-        val centroidNel = {
-            val zNel = safeGetFromRow("zc", safeParseDouble >> ZCoordinate.apply)(row)
-            val yNel = safeGetFromRow("yc", safeParseDouble >> YCoordinate.apply)(row)
-            val xNel = safeGetFromRow("xc", safeParseDouble >> XCoordinate.apply)(row)
-            (zNel, yNel, xNel).mapN((z, y, x) => Point3D(x, y, z))
-        }
-        val bboxNel = {
-            val zMinNel = safeGetFromRow("z_min", safeParseDouble >> ZCoordinate.apply)(row)
-            val zMaxNel = safeGetFromRow("z_max", safeParseDouble >> ZCoordinate.apply)(row)
-            val yMinNel = safeGetFromRow("y_min", safeParseDouble >> YCoordinate.apply)(row)
-            val yMaxNel = safeGetFromRow("y_max", safeParseDouble >> YCoordinate.apply)(row)
-            val xMinNel = safeGetFromRow("x_min", safeParseDouble >> XCoordinate.apply)(row)
-            val xMaxNel = safeGetFromRow("x_max", safeParseDouble >> XCoordinate.apply)(row)
-            (zMinNel, zMaxNel, yMinNel, yMaxNel, xMinNel, xMaxNel).mapN(
-                (zMin, zMax, yMin, yMax, xMin, xMax) => BoundingBox(
-                    sideX = BoundingBox.Interval(xMin, xMax),
-                    sideY = BoundingBox.Interval(yMin, yMax),
-                    sideZ = BoundingBox.Interval(zMin, zMax)
-                )
-            )
-        }
-        (indexNel, posNel, regionNel, channelNel, centroidNel, bboxNel)
-            .mapN(RegionalBarcodeSpotRoi.apply)
-            .toEither
-    }
+                .leftMap{ messages => DecoderError(s"${messages.length} error(s) decoding ROI: ${messages.mkString_("; ")}") }
+                .toEither
     
-    /** 
-     * Try to arse a single line of a CSV file to a representation of a drift correction record.
-     * 
-     * @param row The simply-parsed (all {@code String}) representation of a line from a CSV
-     * @return Either a {@code Left}-wrapped nonempty collection of error messages, or a {@code Right}-wrapped record
-     */
-    private def rowToDriftRecord(row: Map[String, String]): ErrMsgsOr[DriftRecord] = {
-        val posNel = safeGetFromRow("position", PositionName.parse)(row)
-        val timeNel = safeGetFromRow("frame", safeParseInt >>> ImagingTimepoint.fromInt)(row)
-        val coarseDriftNel = {
-            val zNel = safeGetFromRow("z_px_coarse", safeParseIntLike >> ZDir.apply)(row)
-            val yNel = safeGetFromRow("y_px_coarse", safeParseIntLike >> YDir.apply)(row)
-            val xNel = safeGetFromRow("x_px_coarse", safeParseIntLike >> XDir.apply)(row)
-            (zNel, yNel, xNel).mapN(CoarseDrift.apply)
-        }
-        val fineDriftNel = {
-            val zNel = safeGetFromRow("z_px_fine", safeParseDouble >> ZDir.apply)(row)
-            val yNel = safeGetFromRow("x_px_fine", safeParseDouble >> YDir.apply)(row)
-            val xNel = safeGetFromRow("y_px_fine", safeParseDouble >> XDir.apply)(row)
-            (zNel, yNel, xNel).mapN(FineDrift.apply)
-        }
-        (posNel, timeNel, coarseDriftNel, fineDriftNel).mapN(DriftRecord.apply).toEither
-    }
-
-    /** Try to read an integer from a string, failing if it's non-numeric or if conversion to {@code Int} would be lossy. */
-    def safeParseIntLike: String => Either[String, Int] = safeParseDouble >>> tryToInt
-
     /****************************************************************************************************************
      * Ancillary definitions
      ****************************************************************************************************************/
-
-    // Delimiter between fields within a multi-valued field (i.e., multiple values in 1 CSV column)
-    val MultiValueFieldInternalSeparator = ";"
-
     object Movement:
-        private type Interval[C <: Coordinate] = BoundingBox.Interval[Double, C]
-        def shiftBy(del: XDir[Double])(c: XCoordinate): XCoordinate = XCoordinate(del.get) |+| c
-        def shiftBy(del: YDir[Double])(c: YCoordinate): YCoordinate = YCoordinate(del.get) |+| c
-        def shiftBy(del: ZDir[Double])(c: ZCoordinate): ZCoordinate = ZCoordinate(del.get) |+| c
-        def shiftBy(del: XDir[Double])(intv: Interval[XCoordinate]): Interval[XCoordinate] =
-            BoundingBox.Interval(shiftBy(del)(intv.lo), shiftBy(del)(intv.hi))
-        def shiftBy(del: YDir[Double])(intv: Interval[YCoordinate]): Interval[YCoordinate] =
-            BoundingBox.Interval(shiftBy(del)(intv.lo), shiftBy(del)(intv.hi))
-        def shiftBy(del: ZDir[Double])(intv: Interval[ZCoordinate]): Interval[ZCoordinate] =
-            BoundingBox.Interval(shiftBy(del)(intv.lo), shiftBy(del)(intv.hi))
+        private type Interval[C <: Coordinate] = BBox.Interval[Double, C]
+        def shiftBy(del: TotalDriftComponent[AxisX])(c: XCoordinate): XCoordinate = XCoordinate(del.value) |+| c
+        def shiftBy(del: TotalDriftComponent[AxisY])(c: YCoordinate): YCoordinate = YCoordinate(del.value) |+| c
+        def shiftBy(del: TotalDriftComponent[AxisZ])(c: ZCoordinate): ZCoordinate = ZCoordinate(del.value) |+| c
         def addDrift(drift: TotalDrift)(pt: Point3D): Point3D = 
             Point3D(shiftBy(drift.x)(pt.x), shiftBy(drift.y)(pt.y), shiftBy(drift.z)(pt.z))
-        def addDrift(drift: TotalDrift)(box: BoundingBox[Double]): BoundingBox[Double] = 
-            BoundingBox(shiftBy(drift.x)(box.sideX), shiftBy(drift.y)(box.sideY), shiftBy(drift.z)(box.sideZ))
+        def addDrift(drift: TotalDrift)(box: BoundingBox): BoundingBox = BBox(
+            BBox.Interval(shiftBy(drift.x)(box.sideX.lo), shiftBy(drift.x)(box.sideX.hi)),
+            BBox.Interval(shiftBy(drift.y)(box.sideY.lo), shiftBy(drift.y)(box.sideY.hi)), 
+            BBox.Interval(shiftBy(drift.z)(box.sideZ.lo), shiftBy(drift.z)(box.sideZ.hi)),
+        )
     end Movement
 
-    sealed trait Direction[A : Numeric] { def get: A }
-    final case class XDir[A : Numeric](get: A) extends Direction[A]
-    final case class YDir[A : Numeric](get: A) extends Direction[A]
-    final case class ZDir[A : Numeric](get: A) extends Direction[A]
-
-    sealed trait Drift[A : Numeric]:
-        def z: ZDir[A]
-        def y: YDir[A]
-        def x: XDir[A]
-    end Drift
-    final case class CoarseDrift(z: ZDir[Int], y: YDir[Int], x: XDir[Int]) extends Drift[Int]
-    final case class FineDrift(z: ZDir[Double], y: YDir[Double], x: XDir[Double]) extends Drift[Double]
-    final case class TotalDrift(z: ZDir[Double], y: YDir[Double], x: XDir[Double]) extends Drift[Double]
-
     /* Type aliases */
-    type DriftKey = (PositionName, ImagingTimepoint)
-    type LineNumber = NonnegativeInt
-    type PosInt = PositiveInt
-    type Roi = RegionalBarcodeSpotRoi
-    type RoiLinenumPair = (Roi, NonnegativeInt)
-    
-    /* Distinguish, at the type level, the semantic meaning of each output target. */
-    opaque type FilteredOutputFile <: os.Path = os.Path
-    object FilteredOutputFile:
-        def fromPath(p: os.Path): FilteredOutputFile = p : FilteredOutputFile
-    opaque type UnfilteredOutputFile <: os.Path = os.Path
-    object UnfilteredOutputFile:
-        def fromPath(p: os.Path): UnfilteredOutputFile = p : UnfilteredOutputFile
-
-    extension [A](rw: ReadWriter[List[A]])
-        def toNel(context: String): ReadWriter[NonEmptyList[A]] = 
-            rw.bimap(_.toList, _.toNel.getOrElse{ throw new Exception(s"$context: No elements to read as nonempty list!") })
-
-    /** Push a value through to the right side of an {@code Either}, pairing with the wrapped value */
-    extension [A, L, R](f: A => Either[L, R])
-        def throughRight: A => Either[L, (A, R)] = a => f(a).map(a -> _)
-
+    type DriftKey = (FieldOfViewLike, ImagingTimepoint)
 end LabelAndFilterRois

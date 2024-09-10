@@ -406,9 +406,9 @@ def fit_single_roi(
 def apply_fine_scale_drift_correction(traces: pd.DataFrame) -> pd.DataFrame:
     """Shift pixel coordinates by the amount of fine-scale drift correction."""
     try:
-        traces['z_px_dc'] = traces['z_px'] + traces['z_px_fine']
-        traces['y_px_dc'] = traces['y_px'] + traces['y_px_fine']
-        traces['x_px_dc'] = traces['x_px'] + traces['x_px_fine']
+        traces['z_px_dc'] = traces['z_px'] + traces['zDriftFinePixels']
+        traces['y_px_dc'] = traces['y_px'] + traces['yDriftFinePixels']
+        traces['x_px_dc'] = traces['x_px'] + traces['xDriftFinePixels']
     except KeyError as e:
         logging.exception(f"Error ({e}) during application of drift correction. Available columns in traces table: {', '.join(map(str, traces.columns))}")
         raise

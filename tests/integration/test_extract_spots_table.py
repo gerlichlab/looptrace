@@ -56,7 +56,7 @@ REGIONAL_SPOT_LINES = f""",position,frame,ch,zc,yc,xc,intensity_mean,z_min,z_max
 """.splitlines(keepends=True)
 
 
-DRIFT_CORRECTION_LINES = f""",frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
+DRIFT_CORRECTION_LINES = f""",frame,position,zDriftCoarsePixels,yDriftCoarsePixels,xDriftCoarsePixels,zDriftFinePixels,yDriftFinePixels,xDriftFinePixels
 0,0,{FOV_NAME},0.0,6.0,-8.0,-0.5830231542670684,-0.531531046456028,0.8461834758622996
 1,1,{FOV_NAME},0.0,6.0,-2.0,-0.3410879696406834,-0.4880472193110993,-0.106246765430774
 2,2,{FOV_NAME},0.0,4.0,-2.0,-0.2580592154863836,0.4307058830617659,0.1742932564653559

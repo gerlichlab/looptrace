@@ -141,17 +141,17 @@ trait RoiCsvInstances:
                     DecoderError(s"${messages.length} error(s) decoding merge contributor ROI: ${messages.mkString_("; ")}") 
                 }
 
-    private def parseFromRow[A](messagePrefix: String)(using dec: CsvRowDecoder[A, Header]): RowF[Some, Header] => ValidatedNel[String, A] = 
+    def parseFromRow[A](messagePrefix: String)(using dec: CsvRowDecoder[A, Header]): RowF[Some, Header] => ValidatedNel[String, A] = 
         row => dec(row)
             .leftMap{ e => s"$messagePrefix: ${e.getMessage}" }
             .toValidatedNel
         
-    private def parseDetectedSpotRoi(using CsvRowDecoder[DetectedSpotRoi, Header]): RowF[Some, Header] => ValidatedNel[String, DetectedSpotRoi] = 
+    def parseDetectedSpotRoi(using CsvRowDecoder[DetectedSpotRoi, Header]): RowF[Some, Header] => ValidatedNel[String, DetectedSpotRoi] = 
         parseFromRow("Error decoding ROI")
 
     given csvRowDecoderForMergedRoiRecord(using 
-        decodeOneIndex: CsvRowDecoder[RoiIndex, Header], 
-        decRoi: CsvRowDecoder[DetectedSpotRoi, Header], 
+        CellDecoder[RoiIndex], 
+        CsvRowDecoder[DetectedSpotRoi, Header], 
     ): CsvRowDecoder[MergedRoiRecord, Header] = 
         import at.ac.oeaw.imba.gerlich.looptrace.collections.toNonEmptySet
         given Ordering[RoiIndex] = summon[Order[RoiIndex]].toOrdering

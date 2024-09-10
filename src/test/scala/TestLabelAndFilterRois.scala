@@ -102,25 +102,25 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         
         // Drift file data
         object DriftFileTexts:
-            val allZero = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
+            val allZero = """,frame,position,zDriftCoarsePixels,yDriftCoarsePixels,xDriftCoarsePixels,zDriftFinePixels,yDriftFinePixels,xDriftFinePixels
                 |0,27,P0001.zarr,0,0,0,0,0,0
                 |1,28,P0001.zarr,0,0,0,0,0,0
                 |2,29,P0001.zarr,0.0,0,0,0,0,0
                 |3,30,P0001.zarr,0.0,0,0,0,0,0
                 |"""
-            val nonZero = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
+            val nonZero = """,frame,position,zDriftCoarsePixels,yDriftCoarsePixels,xDriftCoarsePixels,zDriftFinePixels,yDriftFinePixels,xDriftFinePixels
                 |0,27,P0001.zarr,-2.0,8.0,-24.0,0.3048142040458287,0.2167426082715708,0.46295638298323727
                 |1,28,P0001.zarr,2.0,4.0,-20.0,0.6521556133243969,-0.32279031643811845,0.8467576764912169
                 |2,29,P0001.zarr,0.0,6.0,-16.0,-0.32831460930799267,0.5707716296861373,0.768359957646404
                 |3,30,P0001.zarr,-2.0,2.0,-12.0,-0.6267951175716121,0.24476613641147094,0.5547602737043816
                 |"""
-            val zeroCoarse = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
+            val zeroCoarse = """,frame,position,zDriftCoarsePixels,yDriftCoarsePixels,xDriftCoarsePixels,zDriftFinePixels,yDriftFinePixels,xDriftFinePixels
                 |0,27,P0001.zarr,0.0,0.0,0.0,0.3048142040458287,0.2167426082715708,0.46295638298323727
                 |1,28,P0001.zarr,0.0,0.0,0.0,0.6521556133243969,-0.32279031643811845,0.8467576764912169
                 |2,29,P0001.zarr,0.0,0.0,0.0,-0.32831460930799267,0.5707716296861373,0.768359957646404
                 |3,30,P0001.zarr,0.0,0.0,0.0,-0.6267951175716121,0.24476613641147094,0.5547602737043816
                 |"""
-            val zeroFine = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
+            val zeroFine = """,frame,position,zDriftCoarsePixels,yDriftCoarsePixels,xDriftCoarsePixels,zDriftFinePixels,yDriftFinePixels,xDriftFinePixels
                 |0,27,P0001.zarr,-4.0,8.0,-24.0,0,0,0
                 |1,28,P0001.zarr,-2.0,4.0,-20.0,0,0,0
                 |2,29,P0001.zarr,2.0,6.0,-16.0,0,0,0
@@ -353,14 +353,14 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
             |1,P0001.zarr,27,0,18.45511019130035,1739.9764501391553,264.9779910476261,10.45511019130035,26.45511019130035,1723.9764501391553,1755.9764501391553,248.97799104762612,280.9779910476261
             |""".stripMargin
         
-        val coarseDriftLines = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse
+        val coarseDriftLines = """,frame,position,zDriftCoarsePixels,yDriftCoarsePixels,xDriftCoarsePixels
             |0,0,P0001.zarr,-2.0,8.0,-24.0
             |1,1,P0001.zarr,-2.0,8.0,-20.0
             |2,0,P0002.zarr,0.0,2.0,-6.0
             |3,1,P0002.zarr,0.0,0.0,-4.0
             |""".stripMargin
         
-        val fineDriftLines = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
+        val fineDriftLines = """,frame,position,zDriftCoarsePixels,yDriftCoarsePixels,xDriftCoarsePixels,zDriftFinePixels,yDriftFinePixels,xDriftFinePixels
             |0,0,P0001.zarr,-2.0,8.0,-24.0,0.3048142040458287,0.2167426082715708,0.46295638298323727
             |1,1,P0001.zarr,-2.0,8.0,-20.0,0.6521556133243969,-0.32279031643811845,0.8467576764912169
             |2,2,P0001.zarr,0.0,6.0,-16.0,-0.32831460930799267,0.5707716296861373,0.768359957646404
@@ -532,7 +532,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
             import io.github.iltotore.iron.autoRefine
             PositionName("P0001.zarr")
         }
-        val driftFileText = s""",frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
+        val driftFileText = s""",frame,position,zDriftCoarsePixels,yDriftCoarsePixels,xDriftCoarsePixels,zDriftFinePixels,yDriftFinePixels,xDriftFinePixels
             |0,${time1},${posName.show_},-2.0,8.0,-24.0,0.3048142040458287,0.2167426082715708,0.46295638298323727
             |1,${time2},${posName.show_},2.0,4.0,-20.0,0.6521556133243969,-0.32279031643811845,0.8467576764912169
             |2,${time3},${posName.show_},0.0,6.0,-16.0,-0.32831460930799267,0.5707716296861373,0.768359957646404
@@ -840,7 +840,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
             |5,P0002.zarr,29,0,12,102,1003,1,23,91,113,995,1011
             |"""
         
-        val allZeroDrift = """,frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine
+        val allZeroDrift = """,frame,position,zDriftCoarsePixels,yDriftCoarsePixels,xDriftCoarsePixels,zDriftFinePixels,yDriftFinePixels,xDriftFinePixels
             |0,27,P0001.zarr,0,0,0,0,0,0
             |1,28,P0001.zarr,0,0,0,0,0,0
             |2,29,P0001.zarr,0.0,0,0,0,0,0
@@ -1187,7 +1187,7 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
         summon[Arbitrary[Point3D]]
 
     private def getDriftFileLines(driftRows: List[(PositionName, ImagingTimepoint, CoarseDrift, FineDrift)]): List[String] = 
-        extension [A: SimpleShow](d: Direction[A])
+        extension [A: SimpleShow](d: DriftComponent[A])
             // Just a local syntax extension to facilitate "show"ing each of the drift components
             def showDir: String = d.get.show_
         headDriftFile :: driftRows.zipWithIndex.map{ case ((pos, time, coarse, fine), i) => 
@@ -1207,5 +1207,5 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
     private def headSpotsFile = ",position,frame,ch,zc,yc,xc,z_min,z_max,y_min,y_max,x_min,x_max"
 
     // Header for drift correction file
-    private def headDriftFile = ",frame,position,z_px_coarse,y_px_coarse,x_px_coarse,z_px_fine,y_px_fine,x_px_fine"
+    private def headDriftFile = ",frame,position,zDriftCoarsePixels,yDriftCoarsePixels,xDriftCoarsePixels,zDriftFinePixels,yDriftFinePixels,xDriftFinePixels"
 end TestLabelAndFilterRois

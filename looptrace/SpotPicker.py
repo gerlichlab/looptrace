@@ -756,14 +756,14 @@ def build_locus_spot_data_extraction_table(
                             z_min, z_max, y_min, y_max, x_min, x_max, 
                             pad_z_min, pad_z_max, pad_y_min, pad_y_max, pad_x_min, pad_x_max,
                             z_drift_coarse, y_drift_coarse, x_drift_coarse, 
-                            dc_row['z_px_fine'], dc_row['y_px_fine'], dc_row['x_px_fine']])
+                            dc_row['zDriftFinePixels'], dc_row['yDriftFinePixels'], dc_row['xDriftFinePixels']])
 
     return pd.DataFrame(all_rois, columns=[
         'position', 'pos_index', 'roi_number', 'roi_id', 'frame', 'ref_frame', 'ch', 
         "z_min", "z_max", "y_min", "y_max", "x_min", "x_max",
         'pad_z_min', 'pad_z_max', 'pad_y_min', 'pad_y_max', 'pad_x_min', 'pad_x_max', 
-        'z_px_coarse', 'y_px_coarse', 'x_px_coarse',
-        'z_px_fine', 'y_px_fine', 'x_px_fine'
+        'zDriftCoarsePixels', 'yDriftCoarsePixels', 'xDriftCoarsePixels',
+        'zDriftFinePixels', 'yDriftFinePixels', 'xDriftFinePixels'
     ])
 
 
