@@ -18,8 +18,8 @@ import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.assessForMerg
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** Consider the collection of detected spot ROIs for which ones to merge. */
-object AssessRoisForMerge extends StrictLogging:
-    val ProgramName = "AssessRoisForMerge"
+object DetermineRoiMerge extends StrictLogging:
+    val ProgramName = "DetermineRoiMerge"
 
     final case class CliConfig(
         inputFile: os.Path = null, // unconditionally required
@@ -87,4 +87,4 @@ object AssessRoisForMerge extends StrictLogging:
                 logger.info("Done!")
         }
     }
-end AssessRoisForMerge
+end DetermineRoiMerge
