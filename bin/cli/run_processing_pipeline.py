@@ -13,7 +13,6 @@ import yaml
 
 from expression import Result
 from gertils import ExtantFile, ExtantFolder
-import pandas as pd
 import pypiper
 
 from looptrace import *
@@ -89,13 +88,13 @@ def run_spot_proximity_filtration(rounds_config: ExtantFile, params_config: Exta
         "--configuration",
         str(rounds_config.path),
         "--spotsFile",
-        str(H.nuclei_labeled_spots_file_path),
+        str(H.post_merge_spots_file_path),
         "--driftFile", 
         str(H.drift_correction_file__fine),
-        "--unfilteredOutputFile",
-        str(H.proximity_labeled_spots_file_path),
-        "--filteredOutputFile",
-        str(H.proximity_filtered_spots_file_path),
+        "--fileForDiscards",
+        str(H.proximity_rejected_spots_file_path),
+        "--fileForKeepers",
+        str(H.proximity_accepted_spots_file_path),
         "--overwrite",
     ]
     logging.info(f"Running spot filtering on proximity: {' '.join(cmd_parts)}")
@@ -342,6 +341,34 @@ def run_coarse_drift_correction(
     return coarse_correction_workflow(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder, **extra_kwargs)
 
 
+def run_spot_merge_determination(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> None:
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
+
+    # Command construction, printing, and execution
+    prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.DetermineRoiMerge"
+    cmd_parts = [
+        "java", 
+        "-cp",
+        str(LOOPTRACE_JAR_PATH),
+        prog_path, 
+        "-I",
+        str(H.raw_spots_file),
+        "-O",
+        str(H.pre_merge_spots_file_path),
+        "--overwrite",
+    ]
+    logging.info(f"Running spot merge determination: {' '.join(cmd_parts)}")
+    subprocess.check_call(cmd_parts)
+
+
+def run_spot_merge_execution(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> None:
+    pass
+
+
+def run_spot_marshaling(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> None:
+    pass
+
+
 class LooptracePipeline(pypiper.Pipeline):
     """Main looptrace processing pipeline"""
 
@@ -383,8 +410,11 @@ class LooptracePipeline(pypiper.Pipeline):
                 f_kwargs={"params_config": self.params_config},
             ), 
             pypiper.Stage(name=SPOT_DETECTION_STAGE_NAME, func=run_spot_detection, f_kwargs=rounds_params_images), # generates *_rois.csv (regional spots)
-            pypiper.Stage(name="spot_nucleus_filtration", func=run_spot_nucleus_filtration, f_kwargs=rounds_params_images), 
+            pypiper.Stage(name="spot_merge_determination", func=run_spot_merge_determination, f_kwargs=None),
+            pypiper.Stage(name="spot_merge_execution", func=run_spot_merge_execution, f_kwargs=None),
+            pypiper.Stage(name="merged_spot_marshaling", func=run_spot_marshaling, f_kwargs=None),
             pypiper.Stage(name="spot_proximity_filtration", func=run_spot_proximity_filtration, f_kwargs=rounds_params_images),
+            pypiper.Stage(name="spot_nucleus_filtration", func=run_spot_nucleus_filtration, f_kwargs=rounds_params_images), 
             pypiper.Stage(
                 name="regional_spots_visualisation_data_prep", 
                 func=run_regional_spot_viewing_prep, 
