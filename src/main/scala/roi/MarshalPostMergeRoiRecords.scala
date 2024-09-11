@@ -11,7 +11,7 @@ import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.Centroid
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{
-    getCsvRowDecoderForProduct2, 
+    getCsvRowDecoderForTuple2, 
     readCsvToCaseClasses, 
     writeCaseClassesToCsv,
 }
@@ -138,6 +138,5 @@ object MarshalPostMergeRoiRecords extends StrictLogging:
             }
 
     given CsvRowDecoder[IndexedDetectedSpot, String] = 
-        // Parse the index directly, and decode the ROI components to build it.
-        getCsvRowDecoderForProduct2{ (idx: RoiIndex, roi: DetectedSpotRoi) => idx -> roi }
+        getCsvRowDecoderForTuple2[RoiIndex, DetectedSpotRoi, String]
 end MarshalPostMergeRoiRecords

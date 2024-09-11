@@ -25,7 +25,6 @@ import at.ac.oeaw.imba.gerlich.gerlib.geometry.Centroid
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{
-    getCsvRowDecoderForProduct2,
     getCsvRowEncoderForProduct2,
     readCsvToCaseClasses, 
     writeCaseClassesToCsv, 

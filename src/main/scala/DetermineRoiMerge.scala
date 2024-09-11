@@ -3,11 +3,18 @@ package at.ac.oeaw.imba.gerlich.looptrace
 import cats.*
 import cats.effect.IO
 import cats.syntax.all.*
+import fs2.data.csv.*
 import mouse.boolean.*
 import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
 
-import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{ readCsvToCaseClasses, writeCaseClassesToCsv }
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.{ DistanceThreshold, PiecewiseDistance }
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeReal
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{ 
+    getCsvRowDecoderForTuple2, 
+    readCsvToCaseClasses, 
+    writeCaseClassesToCsv, 
+}
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.given
 
 import at.ac.oeaw.imba.gerlich.looptrace.cli.scoptReaders.given
@@ -24,6 +31,7 @@ object DetermineRoiMerge extends StrictLogging:
     final case class CliConfig(
         inputFile: os.Path = null, // unconditionally required
         outputFile: os.Path = null, // unconditionally required
+        distanceThreshold: DistanceThreshold = null, // unconditionally required,
         overwrite: Boolean = false,
     )
 
@@ -49,6 +57,10 @@ object DetermineRoiMerge extends StrictLogging:
                     .either(f"Path to folder for ROI merge assessment output file isn't an extant folder: ${f.parent}", ())
                 }
                 .text("Path to the output file to write"),
+            opt[NonnegativeReal]('D', "distanceThreshold")
+                .required()
+                .action((d, c) => c.copy(distanceThreshold = PiecewiseDistance.ConjunctiveThreshold(d)))
+                .text("Distance of centroid separation, beneath which ROIs will be merged"),
             opt[Unit]("overwrite")
                 .action((_, c) => c.copy(overwrite = true))
                 .text("Allow overwriting output file."),
@@ -72,14 +84,28 @@ object DetermineRoiMerge extends StrictLogging:
                 import cats.effect.unsafe.implicits.global // needed for cats.effect.IORuntime
                 import fs2.data.text.utf8.* // for CharLikeChunks typeclass instances
 
+                given CsvRowDecoder[(RoiIndex, DetectedSpotRoi), String] = 
+                    getCsvRowDecoderForTuple2[RoiIndex, DetectedSpotRoi, String]
+
                 /* Build up the program. */
-                val read: os.Path => IO[List[DetectedSpotRoi]] = readCsvToCaseClasses[DetectedSpotRoi]
-                val write: List[MergerAssessedRoi] => IO[Unit] = 
-                    rois => fs2.Stream.emits(rois)
-                        .through(writeCaseClassesToCsv(opts.outputFile))
-                        .compile
-                        .drain
-                val prog: IO[Unit] = read(opts.inputFile).map(assessForMerge).flatMap(write)
+                val read: os.Path => IO[List[(RoiIndex, DetectedSpotRoi)]] = 
+                    readCsvToCaseClasses[(RoiIndex, DetectedSpotRoi)] // TODO: adapt the Decoder to grab the index.
+                val write: os.Path => (List[MergerAssessedRoi] => IO[Unit]) = 
+                    outfile => {
+                        fs2.Stream.emits(_)
+                            .through(writeCaseClassesToCsv(outfile))
+                            .compile
+                            .drain
+                    }
+                val prog: IO[Unit] = read(opts.inputFile)
+                    .map(assessForMerge(opts.distanceThreshold))
+                    .flatMap(_.fold(
+                        errors => 
+                            throw new Exception(
+                                s"${errors.length} error(s) determining spots' merger. First one: ${errors.head}"
+                            ), 
+                        write(opts.outputFile)
+                    ))
                 
                 /* Run the program. */
                 logger.info(s"Reading from: ${opts.inputFile}")
