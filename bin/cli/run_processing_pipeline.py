@@ -79,7 +79,7 @@ def run_spot_proximity_filtration(rounds_config: ExtantFile, params_config: Exta
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
 
     # Command construction, printing, and execution
-    prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.LabelAndFilterRois"
+    prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.FilterRoisByProximity"
     cmd_parts = [
         "java", 
         "-cp",
@@ -362,11 +362,25 @@ def run_spot_merge_determination(rounds_config: ExtantFile, params_config: Extan
 
 
 def run_spot_merge_execution(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> None:
-    pass
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
 
-
-def run_spot_marshaling(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> None:
-    pass
+    # Command construction, printing, and execution
+    prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.MergeRois"
+    cmd_parts = [
+        "java", 
+        "-cp",
+        str(LOOPTRACE_JAR_PATH),
+        prog_path, 
+        "-I",
+        str(H.pre_merge_spots_file_path),
+        "--mergeContributorsFile",
+        str(H.spot_merge_contributors_file),
+        "--mergeResultsFile",
+        str(H.spot_merge_results_file),
+        "--overwrite",
+    ]
+    logging.info(f"Running spot merge execution: {' '.join(cmd_parts)}")
+    subprocess.check_call(cmd_parts)
 
 
 class LooptracePipeline(pypiper.Pipeline):
@@ -412,7 +426,6 @@ class LooptracePipeline(pypiper.Pipeline):
             pypiper.Stage(name=SPOT_DETECTION_STAGE_NAME, func=run_spot_detection, f_kwargs=rounds_params_images), # generates *_rois.csv (regional spots)
             pypiper.Stage(name="spot_merge_determination", func=run_spot_merge_determination, f_kwargs=None),
             pypiper.Stage(name="spot_merge_execution", func=run_spot_merge_execution, f_kwargs=None),
-            pypiper.Stage(name="merged_spot_marshaling", func=run_spot_marshaling, f_kwargs=None),
             pypiper.Stage(name="spot_proximity_filtration", func=run_spot_proximity_filtration, f_kwargs=rounds_params_images),
             pypiper.Stage(name="spot_nucleus_filtration", func=run_spot_nucleus_filtration, f_kwargs=rounds_params_images), 
             pypiper.Stage(

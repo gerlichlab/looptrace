@@ -57,7 +57,27 @@ object MergeAndSplitRoiTools:
         }
     end PostMergeRoi
 
-    def assessForMerge(rois: List[DetectedSpotRoi]): List[MergerAssessedRoi] = ???
+    def assessForMerge(minDist: DistanceThreshold)(rois: List[(RoiIndex, DetectedSpotRoi)]): EitherNel[String, List[MergerAssessedRoi]] = 
+        import ProximityComparable.proximal
+        given proxComp: ProximityComparable[DetectedSpotRoi] = 
+            DistanceThreshold.defineProximityPointwise(minDist)(_.centroid.asPoint)
+        val lookup: Map[RoiIndex, Set[RoiIndex]] = 
+            rois.groupBy(_._2.context)
+                .values
+                .flatMap(_.combinations(2).flatMap{
+                    case (i1, roi1) :: (i2, roi2) :: Nil => 
+                        (roi1 `proximal` roi2).option{ Map(i1 -> Set(i2), i2 -> Set(i1)) }
+                    case notPair => throw new Exception(s"Got ${notPair.length} element(s) when taking pairs!")
+                })
+                .toList
+                .combineAll
+        val (errors, records) = Alternative[List].separate(
+            rois.map{ (i, roi) => 
+                MergerAssessedRoi.build(i, roi, lookup.getOrElse(i, Set.empty))
+            }
+        )
+        errors.toNel.toLeft(records)
+        
 
     private def buildMutualExclusionLookup[A, G, K: Order](
         items: List[A], 

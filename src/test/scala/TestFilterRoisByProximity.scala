@@ -35,7 +35,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.{BoundingBox as BB, *}
 import at.ac.oeaw.imba.gerlich.looptrace.space.Point3D.given // for cats.Order
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.safeReadAllWithOrderedHeaders
-import at.ac.oeaw.imba.gerlich.looptrace.LabelAndFilterRois.*
+import at.ac.oeaw.imba.gerlich.looptrace.FilterRoisByProximity.*
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.{
     SelectiveProximityPermission, 
     SelectiveProximityProhibition,
@@ -44,7 +44,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.{
 }
 
 /** Tests for the filtration of the individual supports (single FISH probes) of chromatin fiber traces */
-class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, DistanceSuite, LooptraceSuite, should.Matchers:
+class TestFilterRoisByProximity extends AnyFunSuite, ScalaCheckPropertyChecks, DistanceSuite, LooptraceSuite, should.Matchers:
     override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
 
     test("Drift file is required (so that distance/proximity comparisons can use drift-corrected coordinates.)") {
@@ -1208,4 +1208,4 @@ class TestLabelAndFilterRois extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
 
     // Header for drift correction file
     private def headDriftFile = ",frame,position,zDriftCoarsePixels,yDriftCoarsePixels,xDriftCoarsePixels,zDriftFinePixels,yDriftFinePixels,xDriftFinePixels"
-end TestLabelAndFilterRois
+end TestFilterRoisByProximity

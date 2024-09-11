@@ -111,8 +111,6 @@ object LocusSpotQC:
             "locusId" -> spotId.locusId.get.asJson,
         )
 
-        private[looptrace] def fromJson(json: ujson.Value): ErrMsgsOr[SpotIdentifier] = ???
-
         /** A JSON codec which unwraps the components and maps field names to the refined values */
         def rwForSpotIdentifier: ReadWriter[SpotIdentifier] = readwriter[ujson.Value].bimap(
             toJsonObject,
@@ -278,8 +276,6 @@ object LocusSpotQC:
             "inBoundsZ" -> ujson.Bool(r.inBoundsZ),
             "canBeDisplayed" -> ujson.Bool(r.canBeDisplayed),
         )
-
-        private[LocusSpotQC] def fromJson(json: ujson.Value): ErrMsgsOr[ResultRecord] = ???
     end ResultRecord
 
     /** The (Euclidean)  distance between a locus-specific spot's center and the center of its associated regional spot */

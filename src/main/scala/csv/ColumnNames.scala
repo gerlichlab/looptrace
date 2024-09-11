@@ -39,6 +39,9 @@ object ColumnNames:
     val FineDriftColumnNameZ: ColumnName[FineDriftComponent[AxisZ]] = 
         fineDriftColumnName[AxisZ](EuclideanAxis.Z)
 
+    val TooCloseRoisColumnName: ColumnName[NonEmptySet[RoiIndex]] = 
+        ColumnName("tooCloseRois")
+
     private def coarseDriftColumnName[A <: EuclideanAxis](a: A): ColumnName[CoarseDriftComponent[A]] = 
         val coarseDriftColumnSuffix: String = "CoarseDriftPixels"
         ColumnName(a match {

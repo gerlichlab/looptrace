@@ -3,15 +3,28 @@ package at.ac.oeaw.imba.gerlich.looptrace
 import cats.*
 import cats.effect.IO
 import cats.syntax.all.*
+import fs2.Stream
 import mouse.boolean.*
 import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{ readCsvToCaseClasses, writeCaseClassesToCsv }
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.given
 
+import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.cli.scoptReaders.given
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
+import at.ac.oeaw.imba.gerlich.looptrace.roi.{
+    MergerAssessedRoi, 
+    MergedRoiRecord,
+}
+import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.{ 
+    IndexedDetectedSpot, 
+    PostMergeRoi,
+    mergeRois,
+}
+import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeContributorRoi
 
 /** Merge sufficiently proximal FISH spot regions of interest (ROIs). */
 object MergeRois extends StrictLogging:
@@ -78,7 +91,39 @@ object MergeRois extends StrictLogging:
             case None => 
                 // CLI parser gives error message.
                 throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help")
-            case Some(opts) => ???
+            case Some(opts) => 
+                import cats.effect.unsafe.implicits.global // needed for cats.effect.IORuntime
+                import fs2.data.text.utf8.* // for CharLikeChunks typeclass instances
+
+                // TODO: CsvRowEncoder[PostMergeRoi, String]
+
+                val writeUnusable: List[MergeContributorRoi] => IO[os.Path] = 
+                    val outfile = opts.mergeContributorsFile
+                    Stream.emits(_)
+                        .through(writeCaseClassesToCsv(outfile))
+                        .compile
+                        .drain
+                        .map(Function.const(outfile))
+                
+                val writeUsable: (List[IndexedDetectedSpot], List[MergedRoiRecord]) => IO[os.Path] = (singletons, merged) => 
+                    val outfile = opts.mergeResultsFile
+                    val rois: List[PostMergeRoi] = singletons ::: merged
+                    Stream.emits(rois)
+                        .through(writeCaseClassesToCsv(outfile))
+                        .compile
+                        .drain
+                        .map(Function.const(outfile))
+
+                // TODO: need Semigroup[BoundingBox] for mergeRois()
+
+                logger.info(s"Will read ROIs from file: ${opts.inputFile}")
+                val prog: IO[Unit] = for {
+                    rois <- readCsvToCaseClasses[MergerAssessedRoi](opts.inputFile)
+                    (errors, individuals, contributors, merged) = mergeRois(rois)
+
+                } yield ()
+                prog.unsafeRunSync()
+                logger.info("Done!")
         }
     }
 
