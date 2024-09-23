@@ -129,6 +129,21 @@ def find_config_file_errors(rounds_config: ExtantFile, params_config: ExtantFile
         if not isinstance(min_sep, (int, float)) or min_sep < 0:
             errors.append(ConfigurationValueError(f"Illegal minimum spot separation value in imaging rounds configuration: {min_sep}"))
 
+    # Spot merge
+    try:
+        min_pixels_to_avoid_spot_merge = parameters["pixelSeparationBeneathWhichSpotRoisWillMerge"]
+    except KeyError:
+        pass # no problem, spot merge won't be done
+    else:
+        if not isinstance(min_pixels_to_avoid_spot_merge, int):
+            errors.append(ConfigurationValueError(
+                f"Non-integer ({type(min_pixels_to_avoid_spot_merge).__name__}) value for min pixel count to avoid spot merge: {min_pixels_to_avoid_spot_merge}"
+            ))
+        elif min_pixels_to_avoid_spot_merge <= 0:
+            errors.append(ConfigurationValueError(
+                f"Min pixel count to avoid spot merge must be natural number, not {min_pixels_to_avoid_spot_merge}"
+            ))
+
     # Tracing
     if parameters.get("mask_fits", False):
         errors.append(ConfigurationValueError(MASK_FITS_ERROR_MESSAGE))
