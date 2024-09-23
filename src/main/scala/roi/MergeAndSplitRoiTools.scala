@@ -267,7 +267,9 @@ object MergeAndSplitRoiTools:
     private[looptrace] object IndexedDetectedSpot:
         given AdmitsRoiIndex[IndexedDetectedSpot] = AdmitsRoiIndex.instance(_._1)
 
-        given admitsImagingContextForIndexedDetectedSpot(using forSpot: AdmitsImagingContext[DetectedSpotRoi]): AdmitsImagingContext[IndexedDetectedSpot] = 
+        given admitsImagingContextForIndexedDetectedSpot(
+            using forSpot: AdmitsImagingContext[DetectedSpotRoi]
+        ): AdmitsImagingContext[IndexedDetectedSpot] = 
             forSpot.contramap(_._2)
     end IndexedDetectedSpot
 
