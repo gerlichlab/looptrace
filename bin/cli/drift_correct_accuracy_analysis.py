@@ -191,7 +191,7 @@ def process_single_FOV_single_reference_frame(
 
     # TODO: could type-refine the argument values to these parameters (which should be nonnegative).
     def proc1(frame_index: int, ref_ch: int, centroid: np.ndarray) -> Iterable[NumberLike]:
-        coarse_shift = curr_fov_drift_subtable[curr_fov_drift_subtable.frame == frame_index][['z_px_coarse', 'y_px_coarse', 'x_px_coarse']].values[0]
+        coarse_shift = curr_fov_drift_subtable[curr_fov_drift_subtable.frame == frame_index][['zDriftCoarsePixels', 'yDriftCoarsePixels', 'xDriftCoarsePixels']].values[0]
         img = image_stack[frame_index, ref_ch].compute()
         bead_img = extract_single_bead(centroid, img, bead_roi_px=bead_roi_px, drift_coarse=coarse_shift)
         return fitSymmetricGaussian3D(bead_img, sigma=1, center='max')[0]
@@ -213,7 +213,7 @@ def process_single_FOV_single_reference_frame(
         # TODO: update if ever allowing channel (reg_ch_template) to be List[int] rather than simple int.
         mov_points = fits.loc[(fits.t == t) & (fits.c == bead_detection_params.reference_channel), ['z_loc', 'y_loc', 'x_loc']].to_numpy() # Fits of fiducial beads in moving frame
         print(f"mov_points shape: {mov_points.shape}")
-        shift = drift_table.loc[(drift_table.position == pos) & (drift_table.frame == t), ['z_px_fine', 'y_px_fine', 'x_px_fine']].values[0]
+        shift = drift_table.loc[(drift_table.position == pos) & (drift_table.frame == t), ['zDriftFinePixels', 'yDriftFinePixels', 'xDriftFinePixels']].values[0]
         shift[0] =  shift[0] * camera_params.nanometers_z # Extract calculated drift correction from drift correction file.
         shift[1] =  shift[1] * camera_params.nanometers_xy
         shift[2] =  shift[2] * camera_params.nanometers_xy
