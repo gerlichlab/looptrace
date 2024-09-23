@@ -82,8 +82,8 @@ def filter_rois_in_nucs(
             raise TypeError(f"Nuclear drift for position {curr_pos_name} is not a data frame, but {type(raw_nuc_drift_match).__name__}")
         if not raw_nuc_drift_match.shape[0] == 1:
             raise DimensionalityError(f"Nuclear drift for position {curr_pos_name} is not exactly 1 row, but {raw_nuc_drift_match.shape[0]} rows!")
-        drift_target = raw_nuc_drift_match[['z_px_coarse', 'y_px_coarse', 'x_px_coarse']].to_numpy()
-        drift_roi = spot_drifts[(spot_drifts['position'] == curr_pos_name) & (spot_drifts['frame'] == row['frame'])][['z_px_coarse', 'y_px_coarse', 'x_px_coarse']].to_numpy()
+        drift_target = raw_nuc_drift_match[['zDriftCoarsePixels', 'yDriftCoarsePixels', 'xDriftCoarsePixels']].to_numpy()
+        drift_roi = spot_drifts[(spot_drifts['position'] == curr_pos_name) & (spot_drifts['frame'] == row['frame'])][['zDriftCoarsePixels', 'yDriftCoarsePixels', 'xDriftCoarsePixels']].to_numpy()
         shift = drift_target - drift_roi
         shifts.append(shift[0])
     shifts = pd.DataFrame(shifts, columns=['z', 'y', 'x'])
