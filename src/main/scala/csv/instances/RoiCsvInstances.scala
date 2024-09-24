@@ -143,6 +143,19 @@ trait RoiCsvInstances:
                     DecoderError(s"${messages.length} error(s) decoding merge contributor ROI: ${messages.mkString_("; ")}") 
                 }
 
+    given csvRowEncoderForMergeContributorRoi(using
+        encIndex: CellEncoder[RoiIndex], 
+        encContext: CsvRowEncoder[ImagingContext, Header], 
+        encCentroid: CsvRowEncoder[Centroid[Double], Header],
+        encBox: CsvRowEncoder[BoundingBox, Header],
+    ): CsvRowEncoder[MergeContributorRoi, Header] = new:
+        override def apply(elem: MergeContributorRoi): RowF[Some, Header] = 
+            val originalIndexRow: NamedRow = ColumnNames.RoiIndexColumnName.write(elem.index)
+            val contextRow: NamedRow = encContext(elem.context)
+            val centroidRow: NamedRow = encCentroid(elem.centroid)
+            val boxRow: NamedRow = encBox(elem.box)
+            originalIndexRow |+| contextRow |+| centroidRow |+| boxRow
+
     def parseFromRow[A](messagePrefix: String)(using dec: CsvRowDecoder[A, Header]): RowF[Some, Header] => ValidatedNel[String, A] = 
         row => dec(row)
             .leftMap{ e => s"$messagePrefix: ${e.getMessage}" }
