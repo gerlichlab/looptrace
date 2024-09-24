@@ -1,6 +1,7 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
 import cats.*
+import cats.data.NonEmptyList
 import cats.effect.IO
 import cats.syntax.all.*
 import fs2.Stream
@@ -8,8 +9,11 @@ import mouse.boolean.*
 import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
 
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.{ BoundingBox as BBox }
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{ readCsvToCaseClasses, writeCaseClassesToCsv }
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 
 import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.cli.scoptReaders.given
@@ -25,6 +29,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.{
     mergeRois,
 }
 import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeContributorRoi
+import at.ac.oeaw.imba.gerlich.looptrace.space.{ BoundingBox, Point3D }
 
 /** Merge sufficiently proximal FISH spot regions of interest (ROIs). */
 object MergeRois extends StrictLogging:
@@ -95,8 +100,6 @@ object MergeRois extends StrictLogging:
                 import cats.effect.unsafe.implicits.global // needed for cats.effect.IORuntime
                 import fs2.data.text.utf8.* // for CharLikeChunks typeclass instances
 
-                // TODO: CsvRowEncoder[PostMergeRoi, String]
-
                 val writeUnusable: List[MergeContributorRoi] => IO[os.Path] = 
                     val outfile = opts.mergeContributorsFile
                     Stream.emits(_)
@@ -105,26 +108,45 @@ object MergeRois extends StrictLogging:
                         .drain
                         .map(Function.const(outfile))
                 
-                val writeUsable: (List[IndexedDetectedSpot], List[MergedRoiRecord]) => IO[os.Path] = (singletons, merged) => 
-                    val outfile = opts.mergeResultsFile
-                    val rois: List[PostMergeRoi] = singletons ::: merged
-                    Stream.emits(rois)
-                        .through(writeCaseClassesToCsv(outfile))
-                        .compile
-                        .drain
-                        .map(Function.const(outfile))
+                // using CsvRowEncoder[PostMergeRoi, String]
+                val writeUsable: (List[IndexedDetectedSpot], List[MergedRoiRecord]) => IO[os.Path] = 
+                    (singletons, merged) => 
+                        val outfile = opts.mergeResultsFile
+                        val rois: List[PostMergeRoi] = singletons ::: merged
+                        Stream.emits(rois)
+                            .through(writeCaseClassesToCsv(outfile))
+                            .compile
+                            .drain
+                            .map(Function.const(outfile))
 
                 // TODO: need Semigroup[BoundingBox] for mergeRois()
 
                 logger.info(s"Will read ROIs from file: ${opts.inputFile}")
                 val prog: IO[Unit] = for {
                     rois <- readCsvToCaseClasses[MergerAssessedRoi](opts.inputFile)
-                    (errors, individuals, contributors, merged) = mergeRois(rois)
+                    (errors, individuals, contributors, merged) = mergeRois(unsafeTakeMaxBoxSize)(rois)
 
                 } yield ()
                 prog.unsafeRunSync()
                 logger.info("Done!")
         }
     }
+
+    def unsafeTakeMaxBoxSize(center: Point3D, boxes: NonEmptyList[BoundingBox]): BoundingBox = 
+        boxes.traverse(BBox.Dimensions.tryFromBox).fold(
+            errorMessages => throw new Exception(
+                s"${errorMessages.length} error(s) creating max bounding box. First one: ${errorMessages.head}"
+            ),
+            dimensions => 
+                given Semigroup[BBox.Dimensions] with
+                    override def combine(a: BBox.Dimensions, b: BBox.Dimensions): BBox.Dimensions = 
+                        BBox.Dimensions((a.x, b.x).max, (a.y, b.y).max, (a.z, b.z).max)
+                val maxDim = dimensions.reduce
+                BBox.around(center)(maxDim)
+        )
+
+    extension [A](t: (A, A))
+        // Take the max element of a pair.
+        private def max(using Order[A]): A = if t._1 > t._2 then t._1 else t._2
 
 end MergeRois

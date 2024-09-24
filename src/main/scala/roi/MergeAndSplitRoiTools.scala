@@ -182,7 +182,7 @@ object MergeAndSplitRoiTools:
             case strat: NontrivialProximityFilter => assessForMutualExclusion(strat)(rois)
         }
 
-    def mergeRois(rois: List[MergerAssessedRoi])(using Semigroup[BoundingBox]): MergeResult = 
+    def mergeRois(buildNewBox: (Point3D, NonEmptyList[BoundingBox]) => BoundingBox)(rois: List[MergerAssessedRoi]): MergeResult = 
         rois match {
             case Nil => (List(), List(), List(), List())
             case _ => 
@@ -194,7 +194,7 @@ object MergeAndSplitRoiTools:
                 val ((allErrored, allSkipped, allMerged), _) = 
                     indexed.foldRight(((List.empty[MergeError], List.empty[IndexedDetectedSpot], List.empty[MergedRoiRecord]), initNewIndex)){
                         case (curr@(r, i), ((accErr, accSkip, accMerge), currIndex)) => 
-                            considerOneMerge(pool)(currIndex, r) match {
+                            considerOneMerge(pool, buildNewBox)(currIndex, r) match {
                                 case None => 
                                     // no merge action; simply eliminate the empty mergePartners collection
                                     (accErr, (r.index, r.roi) :: accSkip, accMerge) -> currIndex
@@ -227,10 +227,9 @@ object MergeAndSplitRoiTools:
     
     /** Do the merge for a single ROI record. */
     private[looptrace] def considerOneMerge(
-        pool: Map[RoiIndex, MergerAssessedRoi]
-    )(potentialNewIndex: RoiIndex, roi: MergerAssessedRoi)(using 
-        Semigroup[BoundingBox]
-    ): Option[Either[NonEmptyList[String], MergedRoiRecord]] = 
+        pool: Map[RoiIndex, MergerAssessedRoi], 
+        buildNewBox: (Point3D, NonEmptyList[BoundingBox]) => BoundingBox,
+    )(potentialNewIndex: RoiIndex, roi: MergerAssessedRoi): Option[Either[NonEmptyList[String], MergedRoiRecord]] = 
         roi.mergeNeighbors.toList.toNel.map(
             _.traverse{ i => 
                 pool.get(i)
@@ -247,7 +246,7 @@ object MergeAndSplitRoiTools:
                     )
                     .map{ ctx => 
                         val newCenter: Point3D = partners.map(_.centroid.asPoint).centroid
-                        val newBox: BoundingBox = partners.map(_.roi.box).reduce
+                        val newBox: BoundingBox = buildNewBox(newCenter, partners.map(_.roi.box))
                         MergedRoiRecord(
                             potentialNewIndex, 
                             ctx, 
