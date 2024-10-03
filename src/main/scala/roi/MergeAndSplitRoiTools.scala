@@ -62,7 +62,7 @@ object MergeAndSplitRoiTools:
         given proxComp: ProximityComparable[DetectedSpotRoi] = 
             DistanceThreshold.defineProximityPointwise(minDist)(_.centroid.asPoint)
         val lookup: Map[RoiIndex, Set[RoiIndex]] = 
-            rois.groupBy(_._2.context)
+            rois.groupBy(_._2.context) // Only merge ROIs from the same context (FOV, time, channel).
                 .values
                 .flatMap(_.combinations(2).flatMap{
                     case (i1, roi1) :: (i2, roi2) :: Nil => 
@@ -77,8 +77,7 @@ object MergeAndSplitRoiTools:
             }
         )
         errors.toNel.toLeft(records)
-        
-
+    
     private def buildMutualExclusionLookup[A, G, K: Order](
         items: List[A], 
         getGroupKey: A => G,
