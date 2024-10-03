@@ -9,7 +9,7 @@ import warnings
 from gertils import ExtantFile
 
 from looptrace import ConfigurationValueError, Drifter, LOOPTRACE_JAR_PATH, ZARR_CONVERSIONS_KEY
-from looptrace.configuration import get_minimum_regional_spot_separation, read_parameters_configuration_file
+from looptrace.configuration import KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS, get_minimum_regional_spot_separation, read_parameters_configuration_file
 from looptrace.Deconvolver import REQ_GPU_KEY
 from looptrace.NucDetector import NucDetector, SegmentationMethod as NucSegMethod
 from looptrace.SpotPicker import DetectionMethod, CROSSTALK_SUBTRACTION_KEY, DETECTION_METHOD_KEY as SPOT_DETECTION_METHOD_KEY
@@ -131,7 +131,7 @@ def find_config_file_errors(rounds_config: ExtantFile, params_config: ExtantFile
 
     # Spot merge
     try:
-        min_pixels_to_avoid_spot_merge = parameters["pixelSeparationBeneathWhichSpotRoisWillMerge"]
+        min_pixels_to_avoid_spot_merge = parameters[KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS]
     except KeyError:
         pass # no problem, spot merge won't be done
     else:
