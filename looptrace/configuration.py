@@ -9,6 +9,7 @@ __author__ = "Vince Reuter"
 __credits__ = ["Vince Reuter"]
 
 __all__ = [
+    "KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS",
     "MINIMUM_SPOT_SEPARATION_KEY", 
     "get_minimum_spot_separation", 
     "get_region_grouping_config",
@@ -16,7 +17,8 @@ __all__ = [
     ]
 
 
-MINIMUM_SPOT_SEPARATION_KEY = "minimumPixelLikeSeparation"
+KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS = "pixelSeparationBeneathWhichSpotRoisWillMerge" # to avoid merger
+MINIMUM_SPOT_SEPARATION_KEY = "minimumPixelLikeSeparation" # to avoid filtration
 SEMANTIC_KEY = "semantic"
 
 
