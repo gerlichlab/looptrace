@@ -4373,7 +4373,7 @@ test = ["pytest"]
 
 [[package]]
 name = "spotfishing"
-version = "0.1.0"
+version = "0.2.0"
 description = "Detecting spots in FISH images"
 optional = false
 python-versions = ">= 3.10.0, < 3.12"
@@ -4390,8 +4390,8 @@ scipy = "^1.10.1"
 [package.source]
 type = "git"
 url = "https://github.com/gerlichlab/spotfishing"
-reference = "v0.1.0"
-resolved_reference = "ae687682330acf53ebfafd45e703c4609b2d044d"
+reference = "v0.2.0"
+resolved_reference = "e9aa6849346432edcd73e78ff02c509a2e205f42"
 
 [[package]]
 name = "stack-data"
@@ -5138,4 +5138,4 @@ test = ["hypothesis", "more-itertools", "pytest", "pytest-skip-slow"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.11, < 3.12"
-content-hash = "e698ca995414ae453e195b0af9a31ed88bf0657b38845e6f3086aef43eb9af7a"
+content-hash = "04c5dfa25c4e329140073f427a81717daaebf12b02632bfcba497678c7029eca"
