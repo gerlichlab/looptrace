@@ -39,6 +39,10 @@ import at.ac.oeaw.imba.gerlich.gerlib.roi.measurement.{ Area, MeanIntensity }
 import at.ac.oeaw.imba.gerlich.gerlib.testing.instances.all.given
 
 import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
+import at.ac.oeaw.imba.gerlich.looptrace.roi.{
+    DetectedSpotRoi,
+    MergerAssessedRoi,
+}
 import at.ac.oeaw.imba.gerlich.looptrace.space.{BoundingBox as BB, *}
 
 /**

@@ -16,6 +16,14 @@ import at.ac.oeaw.imba.gerlich.gerlib.roi.DetectedSpot
 import at.ac.oeaw.imba.gerlich.gerlib.testing.instances.{ GeometricInstances, ImagingInstances, CatsScalacheckInstances }
 import at.ac.oeaw.imba.gerlich.gerlib.testing.syntax.SyntaxForScalacheck
 
+import at.ac.oeaw.imba.gerlich.looptrace.roi.{ 
+    DetectedSpotRoi, 
+    MergedRoiRecord, 
+}
+import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.{
+    IndexedDetectedSpot, 
+    PostMergeRoi,
+}
 import at.ac.oeaw.imba.gerlich.looptrace.space.{
     BoundingBox as BB,
     Coordinate, 
@@ -25,8 +33,6 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.{
     YCoordinate, 
     ZCoordinate,
 }
-
-import at.ac.oeaw.imba.gerlich.looptrace.roi.{ DetectedSpotRoi, RegionalBarcodeSpotRoi }
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** Base trait for tests in looptrace */
@@ -76,42 +82,26 @@ trait LooptraceSuite extends GenericSuite, GeometricInstances, ImagingInstances,
             (arbName, arbTime, arbProbe, arbRepOpt).mapN(LocusImagingRound.apply)
         }
 
-    given arbitraryForRegionalBarcodeSpotRoi(using
-        arbRoiIdx: Arbitrary[RoiIndex], 
-        arbPosName: Arbitrary[PositionName], 
-        arbRegion: Arbitrary[RegionId], 
-        arbCh: Arbitrary[ImagingChannel], 
-        arbPt: Arbitrary[Point3D],
-        arbMargin: Arbitrary[BoundingBox.Margin],
-        ): Arbitrary[RegionalBarcodeSpotRoi] = {
-        def genRoi: Gen[RegionalBarcodeSpotRoi] = for {
-            idx <- arbitrary[RoiIndex]
-            pos <- arbitrary[PositionName]
-            reg <- arbitrary[RegionId]
-            ch <- arbitrary[ImagingChannel]
-            pt <- arbitrary[Point3D]
-            box <- arbitrary[(BoundingBox.Margin, BoundingBox.Margin, BoundingBox.Margin)].map(buildRectangularBox(pt).tupled)
-        } yield RegionalBarcodeSpotRoi(index = idx, position = pos, region = reg, channel = ch, centroid = pt, boundingBox = box)
-        Arbitrary(genRoi)
-    }
-
     given arbitraryForDetectedSpotRoi(using 
         arbSpot: Arbitrary[DetectedSpot[Double]], 
         arbBox: Arbitrary[BoundingBox[Double]],
     ): Arbitrary[DetectedSpotRoi] = (arbSpot, arbBox).mapN(DetectedSpotRoi.apply)
 
+    given arbitraryForIndexedDetectedSpot(using 
+        arbIndex: Arbitrary[RoiIndex],
+        arbRoi: Arbitrary[DetectedSpotRoi],
+    ): Arbitrary[IndexedDetectedSpot] = (arbIndex, arbRoi).tupled
+
+    // TODO: use this to reconstruct proximity-based filtration tests.
+    given arbitraryForPostMergeRoi(using 
+        Arbitrary[IndexedDetectedSpot], 
+        Arbitrary[MergedRoiRecord],
+    ): Arbitrary[PostMergeRoi] = 
+        Arbitrary.oneOf[IndexedDetectedSpot, MergedRoiRecord]
+    
     /************************
      * Other definitions
      ***********************/
     protected def genNonNegReal(limit: NonnegativeReal): Gen[NonnegativeReal] = Gen.choose(0.0, limit).map(NonnegativeReal.unsafe)
     protected def genPosReal(limit: PositiveReal): Gen[PositiveReal] = Gen.choose(0.0, limit).suchThat(_ > 0).map(PositiveReal.unsafe)
-    protected def buildInterval[C <: Coordinate : [C] =>> NotGiven[C =:= Coordinate]](lift: Double => C)(center: C, margin: BoundingBox.Margin)(using Semigroup[C]): BoundingBox.Interval[Double, C] = 
-            BoundingBox.Interval(center |+| lift(-margin.get), center |+| lift(margin.get))
-    protected def buildRectangularBox(pt: Point3D)(xMargin: BoundingBox.Margin, yMargin: BoundingBox.Margin, zMargin: BoundingBox.Margin): BB = {
-        val ix = buildInterval(XCoordinate.apply)(pt.x, xMargin)
-        val iy = buildInterval(YCoordinate.apply)(pt.y, yMargin)
-        val iz = buildInterval(ZCoordinate.apply)(pt.z, zMargin)
-        BoundingBox(ix, iy, iz)
-    }
-
 end LooptraceSuite

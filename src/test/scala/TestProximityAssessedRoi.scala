@@ -13,6 +13,10 @@ import io.github.iltotore.iron.scalacheck.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.cell.NuclearDesignation
 import at.ac.oeaw.imba.gerlich.gerlib.collections.*
 import at.ac.oeaw.imba.gerlich.gerlib.testing.instances.all.given
+import at.ac.oeaw.imba.gerlich.looptrace.roi.{
+    DetectedSpotRoi,
+    MergerAssessedRoi,
+}
 
 /** Tests for the correctness of the main smart constructor of [[at.ac.oeaw.imba.gerlich.looptrace.MergerAssessedRoi]]. */
 class TestMergerAssessedRoi extends AnyFunSuite, LooptraceSuite, ScalaCheckPropertyChecks, should.Matchers:

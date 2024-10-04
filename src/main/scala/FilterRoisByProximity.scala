@@ -55,7 +55,6 @@ import at.ac.oeaw.imba.gerlich.looptrace.roi.{
     AdmitsRoiIndex,
     DetectedSpotRoi,
     MergedRoiRecord,
-    RegionalBarcodeSpotRoi,
 }
 import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.{
     IndexedDetectedSpot, 
