@@ -96,13 +96,6 @@ object CsvHelpers:
     def writeAllCsvSafe(writeLines: os.Source => Boolean)(header: List[String], rows: Iterable[Map[String, String]]): Either[IllegalArgumentException | FieldNameColumnNameMismatchException, Boolean] = 
         prepCsvWrite(header)(rows).map(recs => (header :: recs).map(_.mkString(",") ++ "\n")).map(recs => writeLines(recs))
 
-    /** Safely write rows to CSV with header, ensuring each has exactly the header's fields, and is ordered accordingly. */
-    def writeAllCsvSafe(f: os.Path, header: List[String], rows: Iterable[Map[String, String]], handleExtant: ExtantOutputHandler): Either[Throwable, Boolean] = {
-        val maybeWrite: Either[Throwable, os.Source => Boolean] = handleExtant.getSimpleWriter(f)
-        val maybeLines: Either[Throwable, os.Source] = prepCsvWrite(header)(rows).map(recs => (header :: recs).map(_.mkString(",") ++ "\n"))
-        maybeWrite <*> maybeLines
-    }
-
     /**
       * Write given header and rows data as CSV to a target parameterised already in the given writing function
       *

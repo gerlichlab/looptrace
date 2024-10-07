@@ -49,9 +49,6 @@ trait LooptraceSuite extends GenericSuite, GeometricInstances, ImagingInstances,
     given arbitraryForEuclideanThreshold(using arbT: Arbitrary[NonnegativeReal]): Arbitrary[EuclideanDistance.Threshold] = 
         arbT.map(EuclideanDistance.Threshold.apply)
 
-    given arbitraryForExtantOutputHandler: Arbitrary[ExtantOutputHandler] = 
-        Arbitrary{ Gen.oneOf(ExtantOutputHandler.values.toIndexedSeq) }
-
     given arbitraryForLocusId(using arbTime: Arbitrary[ImagingTimepoint]): Arbitrary[LocusId] = arbTime.map(LocusId.apply)
 
     given arbitraryForPositionIndex(using idx: Arbitrary[NonnegativeInt]): Arbitrary[PositionIndex] = idx.map(PositionIndex.apply)
