@@ -325,11 +325,11 @@ class ImageHandler:
 
     @property
     def nuclei_filtered_spots_file_path(self) -> Path:
-        return self.proximity_filtered_spots_file_path.with_suffix(".nuclei_filtered.csv")
+        return self.proximity_accepted_spots_file_path.with_suffix(".nuclei_filtered.csv")
 
     @property
     def nuclei_labeled_spots_file_path(self) -> Path:
-        return self.proximity_filtered_spots_file_path.with_suffix(".nuclei_labeled.csv")
+        return self.proximity_accepted_spots_file_path.with_suffix(".nuclei_labeled.csv")
 
     @property
     def num_bead_rois_for_drift_correction(self) -> int:
@@ -360,12 +360,12 @@ class ImageHandler:
         return os.path.join(self.analysis_path, self.analysis_filename_prefix + fn_extra)
 
     @property
-    def proximity_filtered_spots_file_path(self) -> Path:
-        return self.raw_spots_file.with_suffix(".proximity_filtered.csv")
+    def proximity_accepted_spots_file_path(self) -> Path:
+        return self.raw_spots_file.with_suffix(".proximity_accepted.csv")
 
     @property
-    def proximity_labeled_spots_file_path(self) -> Path:
-        return self.raw_spots_file.with_suffix(".proximity_labeled.csv")
+    def proximity_rejected_spots_file_path(self) -> Path:
+        return self.raw_spots_file.with_suffix(".proximity_rejected.csv")
 
     @property
     def raw_spots_file(self) -> Path:

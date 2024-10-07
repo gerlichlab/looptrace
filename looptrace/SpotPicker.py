@@ -529,7 +529,7 @@ class SpotPicker:
         print("Generating list of all ROIs for tracing...")
 
         spotfile = self.image_handler.nuclei_filtered_spots_file_path if self.spot_in_nuc \
-            else self.image_handler.proximity_filtered_spots_file_path
+            else self.image_handler.proximity_accepted_spots_file_path
         key_rois_table, _ = os.path.splitext(spotfile.name)
         key_rois_table = key_rois_table\
             .removeprefix(self.analysis_filename_prefix)\
