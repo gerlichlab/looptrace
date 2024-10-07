@@ -119,8 +119,6 @@ object MergeRois extends StrictLogging:
                             .drain
                             .map(Function.const(outfile))
 
-                // TODO: need Semigroup[BoundingBox] for mergeRois()
-
                 logger.info(s"Will read ROIs from file: ${opts.inputFile}")
                 val prog: IO[Unit] = for {
                     rois <- readCsvToCaseClasses[MergerAssessedRoi](opts.inputFile)
