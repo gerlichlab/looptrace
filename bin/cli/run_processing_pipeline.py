@@ -342,8 +342,8 @@ def run_coarse_drift_correction(
     return coarse_correction_workflow(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder, **extra_kwargs)
 
 
-def run_spot_merge_determination(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> None:
-    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
+def run_spot_merge_determination(rounds_config: ExtantFile, params_config: ExtantFile) -> None:
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config)
 
     # Command construction, printing, and execution
     prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.DetermineRoiMerge"
@@ -357,15 +357,15 @@ def run_spot_merge_determination(rounds_config: ExtantFile, params_config: Extan
         "-D", 
         str(H.config[KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS]),
         "-O",
-        str(H.pre_merge_spots_file_path),
+        str(H.pre_merge_spots_file),
         "--overwrite",
     ]
     logging.info(f"Running spot merge determination: {' '.join(cmd_parts)}")
     subprocess.check_call(cmd_parts)
 
 
-def run_spot_merge_execution(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> None:
-    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
+def run_spot_merge_execution(rounds_config: ExtantFile, params_config: ExtantFile) -> None:
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config)
 
     # Command construction, printing, and execution
     prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.MergeRois"
@@ -375,7 +375,7 @@ def run_spot_merge_execution(rounds_config: ExtantFile, params_config: ExtantFil
         str(LOOPTRACE_JAR_PATH),
         prog_path, 
         "-I",
-        str(H.pre_merge_spots_file_path),
+        str(H.pre_merge_spots_file),
         "--mergeContributorsFile",
         str(H.spot_merge_contributors_file),
         "--mergeResultsFile",
@@ -396,10 +396,11 @@ class LooptracePipeline(pypiper.Pipeline):
         super(LooptracePipeline, self).__init__(name=PIPE_NAME, outfolder=str(output_folder.path), **pl_mgr_kwargs)
 
     def stages(self) -> list[pypiper.Stage]:
-        rounds_params_images = {"rounds_config": self.rounds_config, "params_config": self.params_config, "images_folder": self.images_folder}
+        rounds_params = {"rounds_config": self.rounds_config, "params_config": self.params_config}
+        rounds_params_images = {**rounds_params, "images_folder": self.images_folder}
         return [
             pypiper.Stage(name="imaging_rounds_validation", func=validate_imaging_rounds_config, f_kwargs={"rounds_config": self.rounds_config}),
-            pypiper.Stage(name="pipeline_precheck", func=pretest, f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config}),
+            pypiper.Stage(name="pipeline_precheck", func=pretest, f_kwargs=rounds_params),
             pypiper.Stage(name="zarr_production", func=run_zarr_production, f_kwargs=rounds_params_images),
             pypiper.Stage(name="psf_extraction", func=run_psf_extraction, f_kwargs=rounds_params_images),
             # Really just for denoising, no need for structural disambiguation
@@ -427,10 +428,14 @@ class LooptracePipeline(pypiper.Pipeline):
                 f_kwargs={"params_config": self.params_config},
             ), 
             pypiper.Stage(name=SPOT_DETECTION_STAGE_NAME, func=run_spot_detection, f_kwargs=rounds_params_images), # generates *_rois.csv (regional spots)
-            pypiper.Stage(name="spot_merge_determination", func=run_spot_merge_determination, f_kwargs=None),
-            pypiper.Stage(name="spot_merge_execution", func=run_spot_merge_execution, f_kwargs=None),
+            pypiper.Stage(name="spot_merge_determination", func=run_spot_merge_determination, f_kwargs=rounds_params),
+            pypiper.Stage(name="spot_merge_execution", func=run_spot_merge_execution, f_kwargs=rounds_params),
             pypiper.Stage(name="spot_proximity_filtration", func=run_spot_proximity_filtration, f_kwargs=rounds_params_images),
-            pypiper.Stage(name="spot_nucleus_filtration", func=run_spot_nucleus_filtration, f_kwargs=rounds_params_images), 
+            pypiper.Stage(
+                name="spot_nucleus_filtration", 
+                func=run_spot_nucleus_filtration, 
+                f_kwargs=rounds_params_images, # images are needed since H.image_lists is iterated in workflow.
+            ), 
             pypiper.Stage(
                 name="regional_spots_visualisation_data_prep", 
                 func=run_regional_spot_viewing_prep, 
