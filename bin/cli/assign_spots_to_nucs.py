@@ -129,7 +129,7 @@ def workflow(
     for i, pos in tqdm.tqdm(enumerate(H.image_lists[H.spot_input_name])):
         rois = get_rois(pos)
         if len(rois) == 0:
-            logger.warn(f"No ROIs for position: {pos}")
+            logger.warning(f"No ROIs for position: {pos}")
             continue
 
         nuc_drifts: pd.DataFrame = get_nuc_drifts(pos)
@@ -147,7 +147,7 @@ def workflow(
     
     outfile = H.nuclei_labeled_spots_file_path
     if len(all_rois) == 0:
-        logger.warn(f"No ROIs! Cannot write nuclei-labeled spots file: {outfile}")
+        logger.warning(f"No ROIs! Cannot write nuclei-labeled spots file: {outfile}")
     else:
         all_rois = pd.concat(all_rois).sort_values(["position", "frame"])
         logger.info(f"Writing nuclei-labeled spots file: {outfile}")

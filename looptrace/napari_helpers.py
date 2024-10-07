@@ -89,5 +89,5 @@ def save_napari_screenshot(viewer: napari.Viewer, outfile: Union[str, Path], *, 
 
 def shutdown_napari() -> None:
     """Close remaining napari windows to prepare for clean program exit."""
-    logger.warn("Closing any remaining napari windows...")
+    logger.warning("Closing any remaining napari windows...")
     napari.Viewer.close_all()
