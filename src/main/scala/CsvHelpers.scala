@@ -65,7 +65,7 @@ object CsvHelpers:
       * Read given file as CSV with header, and handle resource safety.
       *
       * @param f The path to the file to read as CSV
-      * @return Either a {@code Left}-wrapped exception or a {@code Right}-wrapped list of row records
+      * @return Either a [[scala.util.Left]]-wrapped exception or a [[scala.util.Right]]-wrapped list of row records
       */
     def safeReadAllWithHeaders(f: os.Path): Either[Throwable, List[Map[String, String]]] = for {
         reader <- Try{ CSVReader.open(f.toIO) }.toEither
@@ -77,7 +77,7 @@ object CsvHelpers:
       * Read given file as CSV with header, and handle resource safety.
       *
       * @param f The path to the file to read as CSV
-      * @return Either a {@code Left}-wrapped exception or a {@code Right}-wrapped pair of columns and list of row records
+      * @return Either a [[scala.util.Left]]-wrapped exception or a [[scala.util.Right]]-wrapped pair of columns and list of row records
       */
     def safeReadAllWithOrderedHeaders(f: os.Path): Either[Throwable, (List[String], List[Map[String, String]])] = for {
         reader <- Try{ CSVReader.open(f.toIO) }.toEither
@@ -91,7 +91,7 @@ object CsvHelpers:
       * @param writeLines How to write data to a fixed (already parameterised) file, possibly skipping the write e.g. if target already exists
       * @param header The header fields to write to the target file
       * @param rows The individual rows/records of data to write as CSV
-      * @return Either a {@code Left}-wrapped exception, or a {@code Right}-wrapped flag indicating whether the file was written
+      * @return Either a [[scala.util.Left]]-wrapped exception, or a [[scala.util.Right]]-wrapped flag indicating whether the file was written
       */
     def writeAllCsvSafe(writeLines: os.Source => Boolean)(header: List[String], rows: Iterable[Map[String, String]]): Either[IllegalArgumentException | FieldNameColumnNameMismatchException, Boolean] = 
         prepCsvWrite(header)(rows).map(recs => (header :: recs).map(_.mkString(",") ++ "\n")).map(recs => writeLines(recs))
