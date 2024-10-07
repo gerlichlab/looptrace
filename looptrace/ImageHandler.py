@@ -360,6 +360,11 @@ class ImageHandler:
         return os.path.join(self.analysis_path, self.analysis_filename_prefix + fn_extra)
 
     @property
+    def pre_merge_spots_file(self) -> Path:
+        """Annotated with how/what will be merged, but not executed"""
+        return self.raw_spots_file.with_suffix(".merge_determined.csv")
+
+    @property
     def proximity_accepted_spots_file_path(self) -> Path:
         return self.raw_spots_file.with_suffix(".proximity_accepted.csv")
 
@@ -408,6 +413,16 @@ class ImageHandler:
     @property
     def spot_input_name(self) -> str:
         return self.config["spot_input_name"]
+
+    @property
+    def spot_merge_contributors_file(self) -> Path:
+        """Annotated with how/what will be merged, but not executed"""
+        return self.raw_spots_file.with_suffix(".merge_contributors.csv")
+
+    @property
+    def spot_merge_results_file(self) -> Path:
+        """Annotated with how/what will be merged, but not executed"""
+        return self.raw_spots_file.with_suffix(".post_merge.csv")
 
     @property
     def traces_path(self) -> Path:
