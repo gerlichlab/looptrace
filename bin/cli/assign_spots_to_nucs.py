@@ -121,7 +121,7 @@ def workflow(
     drift_table_spots = read_table_pandas(H.drift_correction_file__coarse)
     get_spot_drifts = query_table_for_pos(drift_table_spots)
     
-    rois_table = read_table_pandas(H.raw_spots_file)
+    rois_table = read_table_pandas(H.proximity_accepted_spots_file_path)
     get_rois = query_table_for_pos(rois_table)
 
     logger.info("Assigning spots to nuclei labels...")

@@ -129,7 +129,7 @@ def plot_spot_counts(rounds_config: ExtantFile, params_config: ExtantFile, spot_
     if not analysis_script_file.is_file():
         raise FileNotFoundError(f"Missing regional spot counts plot script: {analysis_script_file}")
     if spot_type == SpotType.REGIONAL:
-        filtered = H.proximity_filtered_spots_file_path
+        filtered = H.proximity_accepted_spots_file_path
         extra_files = [
             "--unfiltered-spots-file", str(H.raw_spots_file), 
             "--nuclei-filtered-spots-file", str(H.nuclei_filtered_spots_file_path),
@@ -221,7 +221,7 @@ def compute_region_pairwise_distances(rounds_config: ExtantFile, params_config: 
         str(LOOPTRACE_JAR_PATH),
         f"{LOOPTRACE_JAVA_PACKAGE}.ComputeRegionPairwiseDistances",
         "--roisFile",
-        str(H.nuclei_filtered_spots_file_path if H.spot_in_nuc else H.proximity_filtered_spots_file_path),
+        str(H.nuclei_filtered_spots_file_path if H.spot_in_nuc else H.proximity_accepted_spots_file_path),
         "-O", 
         H.analysis_path,
     ]
@@ -298,7 +298,7 @@ def run_regional_spot_viewing_prep(rounds_config: ExtantFile, params_config: Ext
         output_folder=H.regional_spots_visualisation_data_path,
         spots_files=[
             H.raw_spots_file, 
-            H.proximity_filtered_spots_file_path, 
+            H.proximity_accepted_spots_file_path, 
             H.nuclei_filtered_spots_file_path,
         ],
     )
