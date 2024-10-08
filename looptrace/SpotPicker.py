@@ -596,7 +596,7 @@ class SpotPicker:
         skip_spot_image_reasons = defaultdict(lambda: defaultdict(dict))
         pos_index = self.image_handler.image_lists[self.input_name].index(pos_group_name)
         for frame, frame_group in tqdm.tqdm(pos_group_data.groupby('frame')):
-            for ch, ch_group in frame_group.groupby('ch'):
+            for ch, ch_group in frame_group.groupby("channel"):
                 image_stack = np.array(self.images[pos_index][int(frame), int(ch)])
                 for _, roi in ch_group.iterrows():
                     fn_key = RoiOrderingSpecification.FilenameKey.from_roi(roi)
@@ -676,7 +676,7 @@ class SpotPicker:
             full_image = np.array(self.images[pos_index])
             for roi in group.to_dict('records'):
                 spot_stack = full_image[:, 
-                                roi['ch'], 
+                                roi["channel"], 
                                 roi["z_min"]:roi["z_max"], 
                                 roi["y_min"]:roi["y_max"],
                                 roi["x_min"]:roi["x_max"]].copy()
@@ -759,7 +759,7 @@ def build_locus_spot_data_extraction_table(
                             dc_row["zDriftFinePixels"], dc_row["yDriftFinePixels"], dc_row["xDriftFinePixels"]])
 
     return pd.DataFrame(all_rois, columns=[
-        "position", "pos_index", "roi_number", "roi_id", "frame", "ref_timepoint", "ch", 
+        "position", "pos_index", "roi_number", "roi_id", "frame", "ref_timepoint", "channel", 
         "z_min", "z_max", "y_min", "y_max", "x_min", "x_max",
         "pad_z_min", "pad_z_max", "pad_y_min", "pad_y_max", "pad_x_min", "pad_x_max", 
         "zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels",
