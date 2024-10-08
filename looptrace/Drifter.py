@@ -18,7 +18,6 @@ from typing import *
 import numpy as np
 import pandas as pd
 import dask.array as da
-from dask.delayed import delayed
 from joblib import Parallel, delayed
 from scipy import ndimage as ndi
 from scipy.stats import trim_mean
