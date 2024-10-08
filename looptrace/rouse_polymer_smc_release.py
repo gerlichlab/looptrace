@@ -39,7 +39,7 @@ spec_ctcf = [
             ('smc_bound_lifetime', types.int_),
             ('bound', types.boolean),
             ('age', types.int_),
-            ('position', types.int_),
+            ("position", types.int_),
             ('direction', types.int_),
             ('lifetime', float64),
             ('ctcf_id', types.int_),

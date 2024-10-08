@@ -105,7 +105,7 @@ class RoiOrderingSpecification:
 
     @staticmethod
     def row_order_columns() -> List[str]:
-        return ['position', 'roi_id', 'ref_timepoint', 'frame']
+        return ["position", 'roi_id', 'ref_timepoint', 'frame']
     
     @classmethod
     def get_file_sort_key(cls, file_key: str) -> FilenameKey:
@@ -657,7 +657,7 @@ class SpotPicker:
             os.mkdir(self.spot_background_path)
 
         skip_spot_image_reasons = OrderedDict()
-        for pos, pos_group in tqdm.tqdm(rois.groupby('position')):
+        for pos, pos_group in tqdm.tqdm(rois.groupby("position")):
             skip_reasons = self.write_single_fov_data(pos_group_name=pos, pos_group_data=pos_group)
             skip_spot_image_reasons[pos] = skip_reasons
         
@@ -671,7 +671,7 @@ class SpotPicker:
         # Use this simplified function if the images that the spots are gathered from are already coarsely drift corrected!
         print('Generating single spot image stacks from coarsely drift corrected images.')
         rois = self.spot_image_volume_extraction_table
-        for pos, group in tqdm.tqdm(rois.groupby('position')):
+        for pos, group in tqdm.tqdm(rois.groupby("position")):
             pos_index = self.image_handler.image_lists[self.input_name].index(pos)
             full_image = np.array(self.images[pos_index])
             for roi in group.to_dict('records'):

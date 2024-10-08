@@ -428,7 +428,7 @@ def apply_pixels_to_nanometers(traces: pd.DataFrame, z_nm_per_px: float, xy_nm_p
 
 
 @doc(
-    summary="Compute a list of multiarrays, grouping and stacking by 'position' (FOV).",
+    summary="Compute a list of multiarrays, grouping and stacking by "position" (FOV).",
     extended_summary="""
         The expectation is that the data underlying the NPZ input will be a list of 4D arrays, each corresponding to 
         one of the retained (after filtering) regional barcode spots. The 4 dimensions: (time, z, y, x). 

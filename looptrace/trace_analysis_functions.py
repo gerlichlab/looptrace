@@ -140,8 +140,8 @@ def view_context(all_images,
         viewer = napari.Viewer()
         if trace_id is not None:
             point = np.array(rois.iloc[trace_id][['zc', 'yc', 'xc']])
-            positions = list(rois['position'].unique())
-            pos_index = int(positions.index(rois.iloc[trace_id]['position'])) #Get pos_index from W00XX format
+            positions = list(rois["position"].unique())
+            pos_index = int(positions.index(rois.iloc[trace_id]["position"])) #Get pos_index from W00XX format
 
             for ch in range(all_images.shape[2]):
                 viewer.add_image(all_images[pos_index,:,ch],
