@@ -25,7 +25,7 @@ spec_ctcf = [
             ('bound', types.boolean),
             ('i', types.int_),
             ('random_numbers', types.float32[:]),
-            ('position', types.int_),
+            ("position", types.int_),
             ('direction', types.int_),
             ('lifetime', float64),
             ('ctcf_id', types.int_),
