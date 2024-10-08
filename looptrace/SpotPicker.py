@@ -205,7 +205,7 @@ def detect_spot_single_fov_single_frame(
     spot_detection_result: spotfishing.DetectionResult = detection_parameters.detection_function(img, threshold=spot_threshold)
     spot_props: pd.DataFrame = spot_detection_result.table
     spot_props = detection_parameters.try_centering_spot_box_coordinates(spots_table=spot_props)
-    columns_to_scale = ["z_min", "y_min", "x_min", "z_max", "y_max", "x_max", "zc", "yc", "xc"]
+    columns_to_scale = ["zMin", "yMin", "xMin", "zMax", "yMax", "xMax", "zc", "yc", "xc"]
     spot_props[columns_to_scale] = spot_props[columns_to_scale] * detection_parameters.downsampling
     return spot_props
 
@@ -677,9 +677,9 @@ class SpotPicker:
             for roi in group.to_dict('records'):
                 spot_stack = full_image[:, 
                                 roi["channel"], 
-                                roi["z_min"]:roi["z_max"], 
-                                roi["y_min"]:roi["y_max"],
-                                roi["x_min"]:roi["x_max"]].copy()
+                                roi["zMin"]:roi["zMax"], 
+                                roi["yMin"]:roi["yMax"],
+                                roi["xMin"]:roi["xMax"]].copy()
                 fn = pos+'_'+str(roi['frame'])+'_'+str(roi['roi_id_pos']).zfill(4)
                 arr_out = os.path.join(self.spot_images_path, fn + ".npy")
                 np.save(arr_out, spot_stack)
@@ -760,7 +760,7 @@ def build_locus_spot_data_extraction_table(
 
     return pd.DataFrame(all_rois, columns=[
         "position", "pos_index", "roi_number", "roi_id", "frame", "ref_timepoint", "channel", 
-        "z_min", "z_max", "y_min", "y_max", "x_min", "x_max",
+        "zMin", "zMax", "yMin", "yMax", "xMin", "xMax",
         "pad_z_min", "pad_z_max", "pad_y_min", "pad_y_max", "pad_x_min", "pad_x_max", 
         "zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels",
         "zDriftFinePixels", "yDriftFinePixels", "xDriftFinePixels"
@@ -798,9 +798,9 @@ def extract_single_roi_img_inmem(
     z_pad, y_pad, x_pad = ((single_roi[f"pad_{dim}_min"], single_roi[f"pad_{dim}_max"]) for dim in ("z", "y", "x"))
     # Compute bounds for extracting the unpadded image.
     # Because of inclusiveness of lower and exclusiveness of upper bound, truncate decimals here.
-    z = slice(_down_to_int(single_roi["z_min"]), _down_to_int(single_roi["z_max"]))
-    y = slice(_down_to_int(single_roi["y_min"]), _down_to_int(single_roi["y_max"]))
-    x = slice(_down_to_int(single_roi["x_min"]), _down_to_int(single_roi["x_max"]))
+    z = slice(_down_to_int(single_roi["zMin"]), _down_to_int(single_roi["zMax"]))
+    y = slice(_down_to_int(single_roi["yMin"]), _down_to_int(single_roi["yMax"]))
+    x = slice(_down_to_int(single_roi["xMin"]), _down_to_int(single_roi["xMax"]))
     # Determine any error.
     error = None
     if z.stop > Z or y.stop > Y or x.stop > X:
@@ -834,12 +834,12 @@ def extract_single_roi_img_inmem(
 def roi_center_to_bbox(rois: pd.DataFrame, roi_size: RoiImageSize):
     """Make bounding box coordinates around centers of regions of interest, based on box dimensions."""
     halved = roi_size.div_by(2)
-    rois["z_min"] = rois["zc"] - halved.z
-    rois["z_max"] = rois["zc"] + halved.z
-    rois["y_min"] = rois["yc"] - halved.y
-    rois["y_max"] = rois["yc"] + halved.y
-    rois["x_min"] = rois["xc"] - halved.x
-    rois["x_max"] = rois["xc"] + halved.x
+    rois["zMin"] = rois["zc"] - halved.z
+    rois["zMax"] = rois["zc"] + halved.z
+    rois["yMin"] = rois["yc"] - halved.y
+    rois["yMax"] = rois["yc"] + halved.y
+    rois["xMin"] = rois["xc"] - halved.x
+    rois["xMax"] = rois["xc"] + halved.x
     return rois
 
 
