@@ -126,7 +126,7 @@ class Tracer:
             filenames=self._iter_filenames(),
             image_data=self._images_wrapper, 
             background_data=self._background_wrapper, 
-            mask_ref_frames=self.roi_table["frame"].to_list() if self.image_handler.config.get("mask_fits", False) else None, 
+            mask_ref_timepoints=self.roi_table["frame"].to_list() if self.image_handler.config.get("mask_fits", False) else None, 
             cores=self.config.get("tracing_cores"),
         )
         
@@ -302,7 +302,7 @@ def find_trace_fits(
     image_data: NPZ_wrapper, 
     *,
     background_data: Optional[NPZ_wrapper], 
-    mask_ref_frames: Optional[List[int]], 
+    mask_ref_timepoints: Optional[List[int]], 
     cores: Optional[int] = None,
 ) -> pd.DataFrame:
     """
@@ -318,7 +318,7 @@ def find_trace_fits(
         Single-spot time stacks in NPZ
     background_data : NPZ_wrapper, optional
         Wrapper around NPZ stack of per-spot background data to subtract, optional
-    mask_ref_frames : list of int, optional
+    mask_ref_timepoints : list of int, optional
         Frames to use for masking when fitting, indexed by FOV
     cores : int, optional
         How many CPUs to use
@@ -330,7 +330,7 @@ def find_trace_fits(
         denote the parameters of the optimised functional form for each one
     """
     # NB: For these iterations, each is expected to be a 4D array (first dimension being hybridisation round, and (z, y, x) for each).
-    if mask_ref_frames:
+    if mask_ref_timepoints:
         raise NotImplementedError(MASK_FITS_ERROR_MESSAGE)
         if background_data is None:
             def finalise_spot_img(img, _):
@@ -340,7 +340,7 @@ def find_trace_fits(
                 return img.astype(np.int16) - fov_imgs[background_data.frame_index].astype(np.int16)
         fits = []
         for p, single_roi_timecourse in tqdm(enumerate(images), total=len(images)):
-            ref_img = single_roi_timecourse[mask_ref_frames[p]]
+            ref_img = single_roi_timecourse[mask_ref_timepoints[p]]
             #print(ref_img.shape)
             for t, spot_img in enumerate(single_roi_timecourse):
                 #if background_data is not None:
@@ -505,9 +505,9 @@ def compute_spot_images_multiarray_per_fov(
     for pos, pos_group in itertools.groupby(keyed, lambda k_: k_[0].position):
         logging.info("Computing spot image arrays stack for position '%s'...", pos)
         current_stack: list[np.ndarray] = []
-        for filename_key, filename in sorted(pos_group, key=lambda fk_fn: (fk_fn[0].ref_frame, fk_fn[0].roi_id)):
+        for filename_key, filename in sorted(pos_group, key=lambda fk_fn: (fk_fn[0].ref_timepoint, fk_fn[0].roi_id)):
             pixel_array = get_pixel_array(filename)
-            reg_time: TimepointFrom0 = TimepointFrom0(filename_key.ref_frame)
+            reg_time: TimepointFrom0 = TimepointFrom0(filename_key.ref_timepoint)
             obs_num_times: int = pixel_array.shape[0]
             if locus_grouping:
                 # For nonempty locus grouping case, try to validate the time dimension.

@@ -129,7 +129,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
         /** The default definition of how to parse the data relevant here from the traces file */
         def default = ParserConfig(
             fovColumn = "pos_index",
-            regionColumn = "ref_frame",
+            regionColumn = "ref_timepoint",
             traceIdColumn = "trace_id",
             timeColumn = "frame",
             xySigmaColumn = "sigma_xy", 

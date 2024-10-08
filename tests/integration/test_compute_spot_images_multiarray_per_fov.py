@@ -86,13 +86,13 @@ def gen_legal_input(
         RoiOrderingSpecification.FilenameKey(
             position=get_name_for_raw_zero_based_fov(fov),
             roi_id=tid.get,
-            ref_frame=rt,
+            ref_timepoint=rt,
         ) 
         for (fov, rt), tid in zip(fov_rt_pairs, trace_ids, strict=True)
     ]
 
     # The regional timepoints actually used may not be the whole pool, so determine what we're really using.
-    reg_times: set[TimepointFrom0] = {TimepointFrom0(k.ref_frame) for k in fn_keys}
+    reg_times: set[TimepointFrom0] = {TimepointFrom0(k.ref_timepoint) for k in fn_keys}
 
     # Generate either a null or a fixed number of timepoints for the experiment, which will then be used 
     # to generate the primary dimension (time) of the spot image volume for each regional spot generated.
@@ -124,8 +124,8 @@ def gen_legal_input(
         # Add 1 to the number of locus times, to account for regional time itself.
         (k, draw(hyp_npy.arrays(dtype=SPOT_IMAGE_PIXEL_VALUE_TYPE, shape=(nt + 1, *spot_image_dims)))) 
         for k, nt in [
-            (k, num_loc_times_by_reg_time[TimepointFrom0(k.ref_frame)]) 
-            for k in sorted(fn_keys, key=lambda k: (k.position, k.roi_id, k.ref_frame))
+            (k, num_loc_times_by_reg_time[TimepointFrom0(k.ref_timepoint)]) 
+            for k in sorted(fn_keys, key=lambda k: (k.position, k.roi_id, k.ref_timepoint))
         ]
     ]
     if not allow_empty_spots:
@@ -189,7 +189,7 @@ def test_spot_images_finish_by_all_having_the_max_number_of_timepoints(tmp_path,
     # For each FOV, determine which regional timepoints have spot data for that FOV.
     regional_times_by_fov: dict[str, list[TimepointFrom0]] = {}
     for fn_key, _ in fnkey_image_pairs:
-        regional_times_by_fov.setdefault(fn_key.position, []).append(TimepointFrom0(fn_key.ref_frame))
+        regional_times_by_fov.setdefault(fn_key.position, []).append(TimepointFrom0(fn_key.ref_timepoint))
 
     # Mock the input and make the call under test.
     npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
@@ -265,7 +265,7 @@ def get_locus_time_count_by_reg_time(fnkey_image_pairs: Iterable[tuple[RoiOrderi
     result: dict[TimepointFrom0, int] = {}
     for key, img in fnkey_image_pairs:
         curr_num_time = img.shape[0]
-        rt = TimepointFrom0(key.ref_frame)
+        rt = TimepointFrom0(key.ref_timepoint)
         try:
             prev_num_time = result[rt]
         except KeyError:

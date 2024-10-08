@@ -85,15 +85,15 @@ class RoiOrderingSpecification:
     class FilenameKey:
         position: str
         roi_id: int
-        ref_frame: int
+        ref_timepoint: int
         
         @classmethod
         def from_roi(cls, roi: Union[pd.Series, Mapping[str, Any]]) -> "FilenameKey":
-            return cls(position=roi["position"], roi_id=roi["roi_id"], ref_frame=roi["ref_frame"])
+            return cls(position=roi["position"], roi_id=roi["roi_id"], ref_timepoint=roi["ref_timepoint"])
 
         @property
         def file_name_base(self) -> str:
-            return "_".join([self.position, str(self.roi_id).zfill(5), str(self.ref_frame)])
+            return "_".join([self.position, str(self.roi_id).zfill(5), str(self.ref_timepoint)])
 
         @property
         def name_roi_file(self) -> str:
@@ -101,11 +101,11 @@ class RoiOrderingSpecification:
         
         @property
         def to_tuple(self) -> Tuple[str, int, int]:
-            return self.position, self.roi_id, self.ref_frame
+            return self.position, self.roi_id, self.ref_timepoint
 
     @staticmethod
     def row_order_columns() -> List[str]:
-        return ['position', 'roi_id', 'ref_frame', 'frame']
+        return ['position', 'roi_id', 'ref_timepoint', 'frame']
     
     @classmethod
     def get_file_sort_key(cls, file_key: str) -> FilenameKey:
@@ -114,7 +114,7 @@ class RoiOrderingSpecification:
         except ValueError:
             print(f"Failed to get key for file key: {file_key}")
             raise
-        return cls.FilenameKey(position=pos, roi_id=int(roi), ref_frame=int(ref))
+        return cls.FilenameKey(position=pos, roi_id=int(roi), ref_timepoint=int(ref))
 
 
 def finalise_single_spot_props_table(spot_props: pd.DataFrame, position: str, frame: int, channel: int) -> pd.DataFrame:
@@ -141,7 +141,7 @@ def finalise_single_spot_props_table(spot_props: pd.DataFrame, position: str, fr
         A table annotated with the fields for context (field of view, hybridisation timepoint / round, and imaging channel)
     """
     old_cols = list(spot_props.columns)
-    new_cols = ["position", "frame", "ch"]
+    new_cols = ["position", "timepoint", "channel"]
     spot_props[new_cols] = [position, frame, channel]
     return spot_props[new_cols + old_cols]
 
@@ -610,12 +610,12 @@ class SpotPicker:
                         raise ArrayDimensionalityError(f"Got not 3, but {len(roi_img.shape)} dimension(s) for ROI image: {roi_img.shape}. fn_key: {fn_key}")
                     roi_img = roi_img.astype(SPOT_IMAGE_PIXEL_VALUE_TYPE)
                     if error is not None:
-                        skip_spot_image_reasons[fn_key.ref_frame][fn_key.roi_id][frame] = str(error)
+                        skip_spot_image_reasons[fn_key.ref_timepoint][fn_key.roi_id][frame] = str(error)
                     if frame == self.image_handler.background_subtraction_frame:
                         n_frames = 1
                         array_file_dir = self.spot_background_path
                     else:
-                        n_frames = get_num_frames(fn_key.ref_frame)
+                        n_frames = get_num_frames(fn_key.ref_timepoint)
                         array_file_dir = self.spot_images_path
                     fp = os.path.join(array_file_dir, fn_key.name_roi_file)
                     try:
@@ -633,7 +633,7 @@ class SpotPicker:
                         print(f"\n\nERROR adding ROI spot image to stack! Context follows below.")
                         print(f"Current filename key: {fn_key}")
                         print(f"Current file: {fp}")
-                        print(f"Current regional time: {fn_key.ref_frame}")
+                        print(f"Current regional time: {fn_key.ref_timepoint}")
                         print(f"Current locus time: {frame}")
                         print(f"Current ROI: {roi}")
                         raise
@@ -699,17 +699,17 @@ def build_locus_spot_data_extraction_table(
     all_rois = []
 
     for idx, (_, roi) in tqdm.tqdm(enumerate(rois_table.iterrows()), total=len(rois_table)):
-        ref_frame: int = roi["frame"]
-        if not isinstance(ref_frame, int):
-            raise TypeError(f"Non-integer ({type(ref_frame).__name__}) timepoint: {ref_frame}")
+        ref_timepoint: int = roi["timepoint"]
+        if not isinstance(ref_timepoint, int):
+            raise TypeError(f"Non-integer ({type(ref_timepoint).__name__}) timepoint: {ref_timepoint}")
         
         is_locus_time: Callable[[int], bool]
         if get_locus_timepoints is None:
             is_locus_time = lambda _: True
         else:
-            locus_times: set[int] = {lt.get for lt in get_locus_timepoints(TimepointFrom0(ref_frame))}
+            locus_times: set[int] = {lt.get for lt in get_locus_timepoints(TimepointFrom0(ref_timepoint))}
             if not locus_times:
-                logging.debug("No locus timepoints for regional timepoint %d, skipping ROI", ref_frame)
+                logging.debug("No locus timepoints for regional timepoint %d, skipping ROI", ref_timepoint)
                 continue
             is_locus_time = lambda t: t in locus_times
         
@@ -724,17 +724,17 @@ def build_locus_spot_data_extraction_table(
         pos = roi["position"]
         pos_index = get_pos_idx(pos)
         sel_dc = get_dc_table(pos_index)
-        ch = roi["ch"]
-        ref_offset = sel_dc.query('frame == @ref_frame')
+        ch = roi["channel"]
+        ref_offset = sel_dc.query('frame == @ref_timepoint')
         # TODO: here we can update to iterate over channels for doing multi-channel extraction.
         # https://github.com/gerlichlab/looptrace/issues/138
         Z, Y, X = get_zyx(pos_index, ch)
         for _, dc_row in sel_dc.iterrows():
-            frame: int = dc_row["frame"]
+            frame: int = dc_row["timepoint"]
             if not isinstance(frame, int):
                 raise TypeError(f"Non-integer ({type(frame).__name__}) timepoint: {frame}")
-            if not (is_locus_time(frame) or frame == ref_frame or is_background_time(frame)):
-                logging.debug("Timepoint %d isn't eligible for tracing in a spot from timepoint %d; skipping", frame, ref_frame)
+            if not (is_locus_time(frame) or frame == ref_timepoint or is_background_time(frame)):
+                logging.debug("Timepoint %d isn't eligible for tracing in a spot from timepoint %d; skipping", frame, ref_timepoint)
                 continue
             # min/max ensure that the slicing of the image array to make the small image for tracing doesn't go out of bounds.
             # Padding ensures homogeneity of size of spot images to be used for tracing.
@@ -743,27 +743,27 @@ def build_locus_spot_data_extraction_table(
                 (y_drift_coarse, y_min, y_max, pad_y_min, pad_y_max), 
                 (x_drift_coarse, x_min, x_max, pad_x_min, pad_x_max)
             ) = (get_one_dim_drift_and_bound_and_pad(
-                roi_min=roi[f"{dim}_min"], 
-                roi_max=roi[f"{dim}_max"], 
+                roi_min=roi[f"{dim}Min"], 
+                roi_max=roi[f"{dim}Max"], 
                 dim_limit=lim, 
-                frame_drift=dc_row[f"{dim}_px_coarse"], 
-                ref_drift=ref_offset[f"{dim}_px_coarse"]
+                frame_drift=dc_row[f"{dim}DriftCoarsePixels"], 
+                ref_drift=ref_offset[f"{dim}DriftCoarsePixels"]
                 ) for dim, lim in (("z", Z), ("y", Y), ("x", X))
                 )
 
             # roi.name is the index value.
-            all_rois.append([pos, pos_index, idx, roi.name, frame, ref_frame, ch, 
+            all_rois.append([pos, pos_index, idx, roi.name, frame, ref_timepoint, ch, 
                             z_min, z_max, y_min, y_max, x_min, x_max, 
                             pad_z_min, pad_z_max, pad_y_min, pad_y_max, pad_x_min, pad_x_max,
                             z_drift_coarse, y_drift_coarse, x_drift_coarse, 
-                            dc_row['zDriftFinePixels'], dc_row['yDriftFinePixels'], dc_row['xDriftFinePixels']])
+                            dc_row["zDriftFinePixels"], dc_row["yDriftFinePixels"], dc_row["xDriftFinePixels"]])
 
     return pd.DataFrame(all_rois, columns=[
-        'position', 'pos_index', 'roi_number', 'roi_id', 'frame', 'ref_frame', 'ch', 
+        "position", "pos_index", "roi_number", "roi_id", "frame", "ref_timepoint", "ch", 
         "z_min", "z_max", "y_min", "y_max", "x_min", "x_max",
-        'pad_z_min', 'pad_z_max', 'pad_y_min', 'pad_y_max', 'pad_x_min', 'pad_x_max', 
-        'zDriftCoarsePixels', 'yDriftCoarsePixels', 'xDriftCoarsePixels',
-        'zDriftFinePixels', 'yDriftFinePixels', 'xDriftFinePixels'
+        "pad_z_min", "pad_z_max", "pad_y_min", "pad_y_max", "pad_x_min", "pad_x_max", 
+        "zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels",
+        "zDriftFinePixels", "yDriftFinePixels", "xDriftFinePixels"
     ])
 
 

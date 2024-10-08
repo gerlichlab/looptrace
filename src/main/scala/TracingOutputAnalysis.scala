@@ -74,7 +74,7 @@ object TracingOutputAnalysis extends LazyLogging:
         safeGetFromRow(key, safeParseInt >>> ImagingTimepoint.fromInt)(row)
             .fold(errs => throw new Exception(s"Problem(s) parsing $key from row ($row): $errs"), build)
     
-    private def unsafeGetRegion = unsafeGetThroughTimepoint("ref_frame", RegionId.apply)
+    private def unsafeGetRegion = unsafeGetThroughTimepoint("ref_timepoint", RegionId.apply)
     
     private def unsafeGetLocus = unsafeGetThroughTimepoint("frame", LocusId.apply)
 
@@ -128,7 +128,7 @@ object TracingOutputAnalysis extends LazyLogging:
          * @throws Throwable
          */
         def fromCsvFileUnsafe(f: os.Path): RegLocFilter = {
-            val expectedHeader =  List("ref_frame", "frame")
+            val expectedHeader =  List("ref_timepoint", "frame")
             val (head, rows) = safeReadAllWithOrderedHeaders(f).fold(throw _, identity)
             if (head =!= expectedHeader)
                 throw new Exception(s"Unexpected header ($head) from regional/local pairs filter file ($f)! Expected: $expectedHeader")
