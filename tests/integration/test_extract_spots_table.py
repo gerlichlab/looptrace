@@ -225,9 +225,9 @@ def test_only_region_timepoints_and_their_locus_timepoints_have_records_in_spot_
     print(f"Obs row count: {spot_extraction_table.shape[0]}")
 
     obs_reg_time_loc_time_pairs: list[(int, int)] = \
-        [(row["ref_frame"], row["frame"]) for _, row in spot_extraction_table.iterrows()]
+        [(row["ref_timepoint"], row["frame"]) for _, row in spot_extraction_table.iterrows()]
     
-    obs_region_times = set(spot_extraction_table["ref_frame"].to_list())
+    obs_region_times = set(spot_extraction_table["ref_timepoint"].to_list())
     assert obs_region_times == exp_region_times, f"Expected and Observed region times differ: Expected = {exp_region_times}. Observed = {obs_region_times}"
 
     assert len(obs_reg_time_loc_time_pairs) == len(exp_reg_time_loc_time_pairs)

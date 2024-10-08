@@ -149,7 +149,7 @@ def workflow(
     if len(all_rois) == 0:
         logger.warning(f"No ROIs! Cannot write nuclei-labeled spots file: {outfile}")
     else:
-        all_rois = pd.concat(all_rois).sort_values(["position", "frame"])
+        all_rois = pd.concat(all_rois).sort_values(["position", "timepoint"])
         logger.info(f"Writing nuclei-labeled spots file: {outfile}")
         all_rois.to_csv(outfile)
         logger.info(f"Writing nuclei-filtered spots file: {H.nuclei_filtered_spots_file_path}")

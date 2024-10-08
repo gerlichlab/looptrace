@@ -12,14 +12,14 @@ from looptrace import read_table_pandas
 def apply_frame_names_and_spatial_information(traces_file: Path, frame_names: Iterable[str]) -> pd.DataFrame:
     traces = read_traces_and_apply_frame_names(traces_file=traces_file, frame_names=frame_names)
     if "ref_dist" not in traces.columns:
-        traces["ref_dist"] = compute_ref_frame_spatial_information(traces)
+        traces["ref_dist"] = compute_ref_timepoint_spatial_information(traces)
     return traces
 
 
-def compute_ref_frame_spatial_information(df: pd.DataFrame) -> pd.DataFrame:
+def compute_ref_timepoint_spatial_information(df: pd.DataFrame) -> pd.DataFrame:
     """Populate table with coordinates of probe's reference point and distance of each spot to its reference."""
-    refs = df[df['frame'] == df['ref_frame']]
-    keycols = ['pos_index', 'trace_id', 'ref_frame']
+    refs = df[df['frame'] == df['ref_timepoint']]
+    keycols = ['pos_index', 'trace_id', 'ref_timepoint']
     refkeys = refs[keycols].apply(lambda r: tuple(map(lambda c: r[c], keycols)), axis=1)
     for dim in ['z', 'y', 'x']:
         refs_map = dict(zip(refkeys, refs[dim]))

@@ -34,14 +34,14 @@ from looptrace.numeric_types import FloatLike, NumberLike
 from looptrace.wrappers import phase_xcor
 
 
-FRAME_COLUMN = "frame"
+TIMEPOINT_COLUMN = "timepoint"
 POSITION_COLUMN = "position"
 CoarseDriftTableRow = Tuple[int, str, NumberLike, NumberLike, NumberLike]
 Z_PX_COARSE = "zDriftCoarsePixels"
 Y_PX_COARSE = "yDriftCoarsePixels"
 X_PX_COARSE = "xDriftCoarsePixels"
 COARSE_DRIFT_COLUMNS = [Z_PX_COARSE, Y_PX_COARSE, X_PX_COARSE]
-COARSE_DRIFT_TABLE_COLUMNS = [FRAME_COLUMN, POSITION_COLUMN] + COARSE_DRIFT_COLUMNS
+COARSE_DRIFT_TABLE_COLUMNS = [TIMEPOINT_COLUMN, POSITION_COLUMN] + COARSE_DRIFT_COLUMNS
 FullDriftTableRow = Tuple[int, str, NumberLike, NumberLike, NumberLike, NumberLike, NumberLike, NumberLike]
 FULL_DRIFT_TABLE_COLUMNS = COARSE_DRIFT_TABLE_COLUMNS + ["zDriftFinePixels", "yDriftFinePixels", "xDriftFinePixels"]
 DUMMY_SHIFT = [0, 0, 0]
@@ -303,12 +303,12 @@ def fine_correction_workflow(rounds_config: ExtantFile, params_config: ExtantFil
 def iter_coarse_drifts_by_position(filepath: Union[str, Path, ExtantFile]) -> Iterable[Tuple[str, pd.DataFrame]]:
     print(f"Reading coarse drift table: {filepath}")
     coarse_table = read_table_pandas(filepath)
-    coarse_table = coarse_table.sort_values([POSITION_COLUMN, FRAME_COLUMN]) # Sort so that grouping by position then frame doesn't alter order.
+    coarse_table = coarse_table.sort_values([POSITION_COLUMN, TIMEPOINT_COLUMN]) # Sort so that grouping by position then frame doesn't alter order.
     return coarse_table.groupby(POSITION_COLUMN)
 
 
 def _get_frame_and_coarse(row) -> Tuple[int, Tuple[int, int, int]]:
-    return row[FRAME_COLUMN], tuple(row[COARSE_DRIFT_COLUMNS])
+    return row[TIMEPOINT_COLUMN], tuple(row[COARSE_DRIFT_COLUMNS])
 
 
 def compute_fine_drifts(drifter: "Drifter") -> None:
