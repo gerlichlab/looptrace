@@ -57,7 +57,7 @@ object MergeAndSplitRoiTools:
         }
     end PostMergeRoi
 
-    def assessForMerge(minDist: DistanceThreshold)(rois: List[(RoiIndex, DetectedSpotRoi)]): EitherNel[String, List[MergerAssessedRoi]] = 
+    def assessForMerge(minDist: DistanceThreshold)(rois: List[IndexedDetectedSpot]): EitherNel[String, List[MergerAssessedRoi]] = 
         import ProximityComparable.proximal
         given proxComp: ProximityComparable[DetectedSpotRoi] = 
             DistanceThreshold.defineProximityPointwise(minDist)(_.centroid.asPoint)
