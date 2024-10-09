@@ -319,7 +319,7 @@ class NucDetector:
                 path=self.nuclear_masks_path, 
                 name=self.MASKS_KEY, 
                 pos_name=pos, 
-                axes=('z','y','x'), 
+                axes=("z","y","x"), 
                 dtype=bit_depth.value, 
                 chunk_split=(1,1),
             )

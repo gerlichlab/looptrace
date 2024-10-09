@@ -154,8 +154,8 @@ def single_position_to_zarr(
     name: str, 
     pos_name: str, 
     dtype: Type, 
-    axes = ('t','c','z','y','x'), 
-    chunk_axes = ('y', 'x'), 
+    axes = ('t','c',"z","y","x"), 
+    chunk_axes = ("y", "x"), 
     chunk_split = (2,2),  
     metadata: dict = None,
     compressor: Optional[numcodecs.abc.Codec] = None,
@@ -183,7 +183,7 @@ def single_position_to_zarr(
     # Namely, different readers may not like the fact that the shape and chunks don't match underlying data.
     # This can happen when one or more dimensions collapses down flat, to a trivial single dimension.
     # See: https://github.com/gerlichlab/looptrace/issues/245
-    default_axes = ('t','c','z','y','x')
+    default_axes = ('t','c',"z","y","x")
     try:
         print(f"Building metdata for image with shape {images.shape}")
     except AttributeError:
@@ -214,7 +214,7 @@ def single_position_to_zarr(
             'version': '0.3', 
             'name': name + '_' + pos_name, 
             'datasets': [{'path': '0'}],
-            'axes': ['t','c','z','y','x'],
+            'axes': ['t','c',"z","y","x"],
         }]
     }
     if metadata:

@@ -86,8 +86,8 @@ def filter_rois_in_nucs(
         drift_roi = spot_drifts[(spot_drifts["position"] == curr_pos_name) & (spot_drifts["frame"] == row["frame"])][["zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels"]].to_numpy()
         shift = drift_target - drift_roi
         shifts.append(shift[0])
-    shifts = pd.DataFrame(shifts, columns=['z', 'y', 'x'])
-    rois_shifted[['zc', 'yc', 'xc']] = rois_shifted[['zc', 'yc', 'xc']].to_numpy() - shifts[['z','y','x']].to_numpy()
+    shifts = pd.DataFrame(shifts, columns=["z", "y", "x"])
+    rois_shifted[["zc", "yc", "xc"]] = rois_shifted[["zc", "yc", "xc"]].to_numpy() - shifts[["z","y","x"]].to_numpy()
 
     new_rois.loc[:, new_col] = rois_shifted.apply(spot_in_nuc, nuc_label_img=nuc_label_img, axis=1)
     
