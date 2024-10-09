@@ -76,7 +76,7 @@ object TracingOutputAnalysis extends LazyLogging:
     
     private def unsafeGetRegion = unsafeGetThroughTimepoint("ref_timepoint", RegionId.apply)
     
-    private def unsafeGetLocus = unsafeGetThroughTimepoint("frame", LocusId.apply)
+    private def unsafeGetLocus = unsafeGetThroughTimepoint("timepoint", LocusId.apply)
 
     /**
       * A typeclass representing how to build a (positive) selector for elements from an arbitary pool
@@ -128,7 +128,7 @@ object TracingOutputAnalysis extends LazyLogging:
          * @throws Throwable
          */
         def fromCsvFileUnsafe(f: os.Path): RegLocFilter = {
-            val expectedHeader =  List("ref_timepoint", "frame")
+            val expectedHeader =  List("ref_timepoint", "timepoint")
             val (head, rows) = safeReadAllWithOrderedHeaders(f).fold(throw _, identity)
             if (head =!= expectedHeader)
                 throw new Exception(s"Unexpected header ($head) from regional/local pairs filter file ($f)! Expected: $expectedHeader")

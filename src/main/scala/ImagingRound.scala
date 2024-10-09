@@ -80,7 +80,7 @@ object ImagingRound:
                 val blankRegionalNel = (!isRegional || !isBlank).either("Image round can't be both blank and regional!", ()).toValidatedNel
                 val blankProbeNel = ((probeOpt, isBlank) match {
                     /* Ensure that blank spec and probe spec are compatible. */
-                    case (Some(_), true) => "Blank frame cannot have probe specified!".asLeft
+                    case (Some(_), true) => "Blank timepoint cannot have probe specified!".asLeft
                     case (None, false) => "Probe is required when a round isn't blank!".asLeft
                     case _ => ().asRight
                 }).toValidatedNel

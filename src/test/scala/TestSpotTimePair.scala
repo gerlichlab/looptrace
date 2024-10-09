@@ -99,9 +99,9 @@ class TestSpotTimePair extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceS
     }
 
     test("Counts by spot time pair are accurate, declaring filter as empty or JSON or CSV.") {
-        /* The hypothetical lines in which to count records by (ref_timepoint, frame) */
+        /* The hypothetical lines in which to count records by (ref_timepoint, timepoint) */
         val lines = List(
-            "position,pos_id,ref_timepoint,roi_id,frame,z,y,x",
+            "position,pos_id,ref_timepoint,roi_id,timepoint,z,y,x",
             "P0001.zarr,0,5,0,0,-1.0,2.0,1.0",
             "P0001.zarr,0,5,0,1,0.0,3.0,4.0",
             "P0001.zarr,0,5,0,2,-2.0,1.0,0.0",
@@ -192,7 +192,7 @@ class TestSpotTimePair extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceS
 
     test("Attempt to count grouped records with an interest file is error if interest file has unknown extension.") {
         val lines = List(
-            "position,pos_id,ref_timepoint,roi_id,frame,z,y,x",
+            "position,pos_id,ref_timepoint,roi_id,timepoint,z,y,x",
             "P0001.zarr,0,5,0,0,-1.0,2.0,1.0",
             "P0001.zarr,0,5,0,1,0.0,3.0,4.0",
             "P0001.zarr,0,5,0,2,-2.0,1.0,0.0",
@@ -227,7 +227,7 @@ class TestSpotTimePair extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceS
 
     test("Mismatch--when writing counts--between extension and delimiter is an error, whether filtering or not.") {
         val lines = List(
-            "position,pos_id,ref_timepoint,roi_id,frame,z,y,x",
+            "position,pos_id,ref_timepoint,roi_id,timepoint,z,y,x",
             "P0001.zarr,0,5,0,0,-1.0,2.0,1.0",
             "P0001.zarr,0,5,0,1,0.0,3.0,4.0",
             "P0001.zarr,0,5,0,2,-2.0,1.0,0.0",
@@ -278,7 +278,7 @@ class TestSpotTimePair extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceS
             val allIn = lineByPair.map(_._2)
                 .permutations
                 .toList
-                .map("position,pos_id,ref_timepoint,roi_id,frame,z,y,x" :: _)
+                .map("position,pos_id,ref_timepoint,roi_id,timepoint,z,y,x" :: _)
             val expOut = {
                 val expData = lineByPair.groupBy(_._1).view.mapValues(_.length).toList
                 "regional,local,N" :: expData.sortBy(_._1).map{ case ((reg, loc), n) => s"$reg,$loc,$n" }
@@ -324,7 +324,7 @@ class TestSpotTimePair extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceS
 
     private final def writeToCsv(pairs: List[SpotTimePair], f: os.Path) = 
         val textPairs = pairs.map(_.bimap(_.show_, _.show_))
-        val lines = (("ref_timepoint", "frame") :: textPairs).map((_1, _2) => s"${_1},${_2}\n")
+        val lines = (("ref_timepoint", "timepoint") :: textPairs).map((_1, _2) => s"${_1},${_2}\n")
         os.write(f, lines)
 
     private final def genPairsWithCollision = {
