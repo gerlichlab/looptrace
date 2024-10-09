@@ -262,7 +262,7 @@ def finalise_traces(*, rois: pd.DataFrame, fits: pd.DataFrame, z_nm: NumberLike,
     traces = apply_pixels_to_nanometers(traces, z_nm_per_px=z_nm, xy_nm_per_px=xy_nm)
     traces = traces.sort_values(RoiOrderingSpecification.row_order_columns())
     # Finally, rename columns and yield the result.
-    traces.rename(columns={"roi_id": "trace_id"}, inplace=True)
+    traces.rename(columns={"roi_id": "traceId"}, inplace=True)
     return traces
 
 

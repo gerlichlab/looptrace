@@ -51,9 +51,9 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, ScalaCheckPropertyChecks
 
     test("Each points file has a header that works for napari (index, axis-0, axis-1, axis-2, axis-3, axis-4).") { pending }
 
-    test("The seequence of axis-0 values ('trace_id') in each points file has endpoints 0 and T, where T is the number of unique trace IDs for the field of view.") { pending }
+    test("The seequence of axis-0 values ('traceId') in each points file has endpoints 0 and T, where T is the number of unique trace IDs for the field of view.") { pending }
 
-    test("The seequence of axis-0 values ('trace_id') in each points file has a 'hole' exactly where there's a trace ID with no displayable points.") { pending }
+    test("The seequence of axis-0 values ('traceId') in each points file has a 'hole' exactly where there's a trace ID with no displayable points.") { pending }
 
     test("Each points file is correctly sorted in ascending order of (traceId, timepont), i.e. ('axis-0', 'axis-1') for napar.") { pending }
 

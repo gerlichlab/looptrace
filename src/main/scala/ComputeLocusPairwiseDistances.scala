@@ -110,7 +110,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
     object Input:
         /* These come from the *traces.csv file produced at the end of looptrace. */
         val FieldOfViewColumn = "pos_index"
-        val TraceIdColumn = "trace_id"
+        val TraceIdColumn = "traceId"
         val RegionalBarcodeTimepointColumn = "ref_timepoint"
         val LocusSpecificBarcodeTimepointColumn = "timepoint"
         val XCoordinateColumn = "x"
