@@ -56,7 +56,7 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
     test("Small detected spot ROI example parses correctly.") {
         val linesToWrite = 
             """
-            ,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax
+            index,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax
             0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726
             1,P0001.zarr,80,2,17.994259347453493,24.042015416774795,1360.0069098862991,213.58943029032,117.1394688491732,11.994259347453491,23.994259347453493,12.042015416774795,36.0420154167748,1348.0069098862991,1372.0069098862991
             """.toLines
@@ -161,8 +161,8 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
 
     test("Header-only file gives empty list of results for DetectedSpotRoi.") {
         val headers = List(
-            ",fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax",
-            "fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax",
+            "index,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax",
+            "index,fieldOfView,timepoint,roiChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax",
         )
         val newlines = List(false, true)
         val grid = headers.flatMap(h => newlines.map(p => h -> p))

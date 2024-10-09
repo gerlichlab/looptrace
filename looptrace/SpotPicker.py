@@ -516,8 +516,8 @@ class SpotPicker:
         outfile = outfile or self.image_handler.raw_spots_file
         n_spots = output.shape[0]
         (logger.warning if n_spots == 0 else logger.info)(f"Writing initial spot ROIs with {n_spots} spot(s): {outfile}")
-        output.to_csv(outfile)
-        return outfile        
+        output.to_csv(outfile, index_label="index") # Here we introduce the RoiIndexColumnName field, giving each ROI an ID.
+        return outfile
 
     def make_dc_rois_all_timepoints(self) -> str:
         #Precalculate all ROIs for extracting spot images, based on identified ROIs and precalculated drifts between timepoints.
