@@ -7,7 +7,7 @@ from looptrace.tracing_qc_support import compute_ref_timepoint_spatial_informati
 
 
 TRACES_FILE_LINES = """
-,position,pos_index,trace_id,frame,ref_timepoint,ch,z,y,x
+,position,pos_index,trace_id,timepoint,ref_timepoint,channel,z,y,x
 0,P0001.zarr,0,0,0,22,0,-120.7606701885158,-118.6606985242512,-164.68454811375952
 1,P0001.zarr,0,0,0,23,0,-120.7606701885158,-118.6606985242512,-164.68454811375952
 2,P0002.zarr,1,0,0,22,0,-481.54656448857935,-125.74304582138444,-176.7951017332434
@@ -103,8 +103,8 @@ def test_rows_with_same_reference_coordinates_are_all_same_fov_region_and_trace_
 def test_all_reference_frame_data_points_have_zero_distance(traces_table, reference_frame):
     traces_table = _apply_reference_distances(traces_table)
     # Assertion applies only where frame is reference frame, and we parametrize in each reference frame.
-    subtab = traces_table[(traces_table.frame == traces_table.ref_timepoint) & (traces_table.ref_timepoint == reference_frame)]
-    print(subtab[['pos_index', 'trace_id', 'frame', 'ref_timepoint', 'ref_dist']]) # for debugging if failing
+    subtab = traces_table[(traces_table.timepoint == traces_table.ref_timepoint) & (traces_table.ref_timepoint == reference_frame)]
+    print(subtab[['pos_index', 'trace_id', "frame", 'ref_timepoint', 'ref_dist']]) # for debugging if failing
     assert not subtab.empty and (subtab[REF_DIST_COL] == 0).all()
 
 

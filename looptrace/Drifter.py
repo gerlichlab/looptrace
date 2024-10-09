@@ -549,7 +549,7 @@ class Drifter():
         pos_index = self.pos_list.index(pos)
         pos_img = []
         for t in range(n_t):
-            shift = tuple(self.drift_table.query('position == @pos').iloc[t][['zDriftCoarsePixels', 'yDriftCoarsePixels', 'xDriftCoarsePixels']])
+            shift = tuple(self.drift_table.query('position == @pos').iloc[t][["zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels"]])
             pos_img.append(da.roll(self.images[pos_index][t], shift = shift, axis = (1,2,3)))
         self.dc_images = da.stack(pos_img)
 
@@ -585,7 +585,7 @@ class Drifter():
             n_t = proj_img.shape[0]
             
             for t in tqdm.tqdm(range(n_t)):
-                shift = self.image_handler.tables[self.image_handler.reg_input_moving + '_drift_correction'].query('position == @pos').iloc[t][['yDriftCoarsePixels', 'xDriftCoarsePixels', 'yDriftFinePixels', 'xDriftFinePixels']]
+                shift = self.image_handler.tables[self.image_handler.reg_input_moving + '_drift_correction'].query('position == @pos').iloc[t][["yDriftCoarsePixels", "xDriftCoarsePixels", 'yDriftFinePixels', 'xDriftFinePixels']]
                 shift = (shift[0]+shift[2], shift[1]+shift[3])
                 z[t] = ndi.shift(proj_img[t].compute(), shift=(0,)+shift, order = 2)
         
@@ -619,7 +619,7 @@ class Drifter():
             n_t = pos_img.shape[0]
             
             for t in tqdm.tqdm(range(n_t)):
-                shift = self.image_handler.tables[self.image_handler.reg_input_moving + '_drift_correction'].query('position == @pos').iloc[t][['zDriftCoarsePixels', 'yDriftCoarsePixels', 'xDriftCoarsePixels']]
+                shift = self.image_handler.tables[self.image_handler.reg_input_moving + '_drift_correction'].query('position == @pos').iloc[t][["zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels"]]
                 shift = (shift[0], shift[1], shift[2])
                 z[t] = ndi.shift(pos_img[t].compute(), shift=(0,)+shift, order = 0)
         

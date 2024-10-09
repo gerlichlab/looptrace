@@ -53,14 +53,14 @@ PathFilter = Callable[[Union[os.DirEntry, Path]], bool]
 @dataclass(frozen=True, kw_only=True, order=True)
 class BeadRoisFilenameSpecification:
     fov: int
-    frame: int
+    timepoint: int
     purpose: Optional[str]
 
     def __post_init__(self) -> None:
-        if not isinstance(self.fov, int) or not isinstance(self.frame, int):
-            raise TypeError(f"For bead ROIs filename spec, FOV and frame must be int; got {type(self.fov).__name__} and {type(self.frame).__name__}")
-        if self.fov < 0 or self.frame < 0:
-            raise ValueError(f"fov and frame must be nonnegative; got {self.fov} and {self.frame}")
+        if not isinstance(self.fov, int) or not isinstance(self.timepoint, int):
+            raise TypeError(f"For bead ROIs filename spec, FOV and frame must be int; got {type(self.fov).__name__} and {type(self.timepoint).__name__}")
+        if self.fov < 0 or self.timepoint < 0:
+            raise ValueError(f"fov and frame must be nonnegative; got {self.fov} and {self.timepoint}")
         if self.purpose is not None:
             if not isinstance(self.purpose, str):
                 raise TypeError(f"For bead ROIs filename spec, purpose must be null or str, not {type(self.purpose).__name__}")
@@ -75,7 +75,7 @@ class BeadRoisFilenameSpecification:
 
     @property
     def get_filename(self) -> str:
-        base = self.prefix + str(self.fov) + "_" + str(self.frame)
+        base = self.prefix + str(self.fov) + "_" + str(self.timepoint)
         return base + self._suffix
     
     @classmethod

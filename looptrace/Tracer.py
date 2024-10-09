@@ -153,7 +153,7 @@ class Tracer:
             logging.info("Subsetting ROIs table to exclude background timepoint records before pairing ROIs with fits...")
             bg_time = self.image_handler.background_subtraction_frame
             assert isinstance(bg_time, int) and bg_time >= 0, f"Background subtraction timepoint isn't nonnegative int: {bg_time}"
-            rois_table = rois_table[rois_table.frame != bg_time].reset_index(drop=True)
+            rois_table = rois_table[rois_table.timepoint != bg_time].reset_index(drop=True)
             spot_fits = spot_fits.reset_index(drop=True)
         
         logging.info("Finalising traces table...")

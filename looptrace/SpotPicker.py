@@ -105,7 +105,7 @@ class RoiOrderingSpecification:
 
     @staticmethod
     def row_order_columns() -> List[str]:
-        return ["position", 'roi_id', 'ref_timepoint', 'frame']
+        return ["position", 'roi_id', 'ref_timepoint', "frame"]
     
     @classmethod
     def get_file_sort_key(cls, file_key: str) -> FilenameKey:
@@ -217,7 +217,7 @@ def build_spot_prop_table(
         frame_spec: "SingleFrameDetectionSpec", 
         detection_parameters: "SpotDetectionParameters"
         ) -> pd.DataFrame:
-    frame = frame_spec.frame
+    frame = frame_spec.timepoint
     print(f"Building spot properties table; position={position}, frame={frame}, channel={channel}")
     spot_props = detect_spot_single_fov_single_frame(
         single_fov_img=img, 
@@ -283,7 +283,7 @@ class DetectionMethod(Enum):
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class SingleFrameDetectionSpec:
     # TODO: refine these values as nonnegative.
-    frame: int # specifies the index of the hybridisation round/timepoint
+    timepoint: int # specifies the index of the hybridisation round/timepoint
     threshold: int # specifies a threshold value for intensity-based detection or detection with difference of Gaussians
 
 
@@ -406,23 +406,18 @@ class SpotPicker:
         """Name of the input to the spot detection phase of the pipeline; in particular, a subfolder of the 'all images' folder typically passed to looptrace"""
         return self.image_handler.spot_input_name
 
-    def iter_frames_and_channels(self) -> Iterable[Tuple[Tuple[int, int], int]]:
-        for i, frame in self._iter_frames():
-            for channel in self.spot_channel:
-                yield (i, frame), channel
-
     def iter_frame_threshold_pairs(self) -> Iterable[SingleFrameDetectionSpec]:
         """Iterate over the frames in which to detect spots, and the corresponding threshold for each (typically uniform across all frames)."""
-        for i, frame in self._iter_frames():
-            yield SingleFrameDetectionSpec(frame=frame, threshold=self.spot_threshold[i])
+        for i, t in self._iter_timepoints():
+            yield SingleFrameDetectionSpec(timepoint=t, threshold=self.spot_threshold[i])
 
     def iter_pos_img_pairs(self) -> Iterable[Tuple[str, np.ndarray]]:
         """Iterate over pairs of position (FOV) name, and corresponding 5-tensor (t, c, z, y, x) of images."""
         for i, pos in enumerate(self.pos_list):
             yield pos, self.images[i]
 
-    def _iter_frames(self) -> Iterable[tuple[int, int]]:
-        for i, t in enumerate(self._spot_frame):
+    def _iter_timepoints(self) -> Iterable[tuple[int, int]]:
+        for i, t in enumerate(self._spot_times):
             yield i, t.get
 
     @property
@@ -471,7 +466,7 @@ class SpotPicker:
         return spot_ch if isinstance(spot_ch, list) else [spot_ch]
 
     @property
-    def _spot_frame(self) -> list[TimepointFrom0]:
+    def _spot_times(self) -> list[TimepointFrom0]:
         """The imaging timepoints in which spot detection is to be done, generally those in which regional barcodes were imaged"""
         return self.image_handler.list_all_regional_timepoints()
 
@@ -493,7 +488,7 @@ class SpotPicker:
         if isinstance(threshold, list):
             return threshold
         elif isinstance(threshold, int):
-            return [threshold] * len(self._spot_frame)
+            return [threshold] * len(self._spot_times)
         raise TypeError(f"Spot detection threshold is neither int nor list, but {type(threshold).__name__}")
 
     def rois_from_spots(self, outfile: Optional[Union[str, Path]] = None) -> Union[str, Path]:
@@ -584,7 +579,7 @@ class SpotPicker:
         get_num_frames: Callable[[int], int]
         if not self.image_handler.locus_grouping:
             print("No locus grouping is present, so all timepoints will be used.")
-            total_num_times = len(pos_group_data.frame.unique())
+            total_num_times = len(pos_group_data.timepoint.unique())
             get_num_frames = lambda _: total_num_times
         else:
             num_loc_times_by_reg_time_raw = {rt.get: len(lts) for rt, lts in self.image_handler.locus_grouping.items()}
@@ -595,7 +590,7 @@ class SpotPicker:
         num_frames_processed: dict[str, int] = {}
         skip_spot_image_reasons = defaultdict(lambda: defaultdict(dict))
         pos_index = self.image_handler.image_lists[self.input_name].index(pos_group_name)
-        for frame, frame_group in tqdm.tqdm(pos_group_data.groupby('frame')):
+        for frame, frame_group in tqdm.tqdm(pos_group_data.groupby("frame")):
             for ch, ch_group in frame_group.groupby("channel"):
                 image_stack = np.array(self.images[pos_index][int(frame), int(ch)])
                 for _, roi in ch_group.iterrows():
@@ -680,7 +675,7 @@ class SpotPicker:
                                 roi["zMin"]:roi["zMax"], 
                                 roi["yMin"]:roi["yMax"],
                                 roi["xMin"]:roi["xMax"]].copy()
-                fn = pos+'_'+str(roi['frame'])+'_'+str(roi['roi_id_pos']).zfill(4)
+                fn = pos+'_'+str(roi["frame"])+'_'+str(roi['roi_id_pos']).zfill(4)
                 arr_out = os.path.join(self.spot_images_path, fn + ".npy")
                 np.save(arr_out, spot_stack)
         return self.spot_images_path
@@ -725,7 +720,7 @@ def build_locus_spot_data_extraction_table(
         pos_index = get_pos_idx(pos)
         sel_dc = get_dc_table(pos_index)
         ch = roi["channel"]
-        ref_offset = sel_dc.query('frame == @ref_timepoint')
+        ref_offset = sel_dc.query('timepoint == @ref_timepoint')
         # TODO: here we can update to iterate over channels for doing multi-channel extraction.
         # https://github.com/gerlichlab/looptrace/issues/138
         Z, Y, X = get_zyx(pos_index, ch)

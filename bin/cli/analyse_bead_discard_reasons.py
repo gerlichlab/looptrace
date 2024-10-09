@@ -106,8 +106,8 @@ def workflow(*, root_folder: Path, output_folder: Path, reference_timepoint: Opt
     bad_times_by_fov: dict[int, list[int]] = {}
     for spec in sorted(impossible_specs):
         logging.info(spec)
-        bad_times_by_fov.setdefault(spec.fov, []).append(spec.frame)
-        if spec.frame == reference_timepoint:
+        bad_times_by_fov.setdefault(spec.fov, []).append(spec.timepoint)
+        if spec.timepoint == reference_timepoint:
             logging.warning("Impossible FOV for reference: %d", spec.fov)
             fovs_without_reference.append(spec.fov)
     impossibles_data = {

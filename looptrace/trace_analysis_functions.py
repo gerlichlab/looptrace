@@ -85,9 +85,9 @@ def gen_random_coil(g_dist, s_dist = 24.7, std_scaling = 0.5, deg=360, n_traces 
 #
     traces = np.concatenate(traces)
     traces = pd.DataFrame(traces)#.reset_index(drop=True)
-    traces.columns = ['trace_id','frame','x','y','z','QC']
-    traces = traces.astype({'trace_id': int, 'frame': int, 'QC': int})
-    traces['frame_name']='H'+traces['frame'].astype(str).str.zfill(2)
+    traces.columns = ['trace_id',"frame",'x','y','z','QC']
+    traces = traces.astype({'trace_id': int, "frame": int, 'QC': int})
+    traces['frame_name']='H'+traces["frame"].astype(str).str.zfill(2)
 
     return traces
 
@@ -116,7 +116,7 @@ def pylochrom_coords_to_traces(coords):
         trace['z'] = coords[i,:,0]
         trace['y'] = coords[i,:,1]
         trace['x'] = coords[i,:,2]
-        trace['frame'] = list(range(N_steps))
+        trace["frame"] = list(range(N_steps))
         trace['trace_id'] = [i]*N_steps 
         trace['QC'] = [1]*N_steps
         #print(pd.DataFrame(trace))
@@ -166,7 +166,7 @@ def view_fits(traces, imgs, mode='2D', contrast=(100,1000), axis=2):
     Convenience function to view 3d guassian fits on top of 2D (max z-projection) or 3D spot data.
     '''
     import napari
-    points = traces[['trace_id', 'frame', 'z_px', 'y_px', 'x_px', 'QC']].to_numpy()
+    points = traces[['trace_id', "frame", 'z_px', 'y_px', 'x_px', 'QC']].to_numpy()
     points = points[points[:,5].astype(bool),0:5]
     print(points)
     if mode == '2D':
