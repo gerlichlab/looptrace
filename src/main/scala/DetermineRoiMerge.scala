@@ -21,7 +21,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.cli.scoptReaders.given
 import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.roi.{ DetectedSpotRoi, MergerAssessedRoi }
-import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.assessForMerge
+import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.{ IndexedDetectedSpot, assessForMerge }
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** Consider the collection of detected spot ROIs for which ones to merge. */
@@ -84,12 +84,12 @@ object DetermineRoiMerge extends StrictLogging:
                 import cats.effect.unsafe.implicits.global // needed for cats.effect.IORuntime
                 import fs2.data.text.utf8.* // for CharLikeChunks typeclass instances
 
-                given CsvRowDecoder[(RoiIndex, DetectedSpotRoi), String] = 
+                given CsvRowDecoder[IndexedDetectedSpot, String] = 
                     getCsvRowDecoderForTuple2[RoiIndex, DetectedSpotRoi, String]
 
                 /* Build up the program. */
-                val read: os.Path => IO[List[(RoiIndex, DetectedSpotRoi)]] = 
-                    readCsvToCaseClasses[(RoiIndex, DetectedSpotRoi)] // TODO: adapt the Decoder to grab the index.
+                val read: os.Path => IO[List[IndexedDetectedSpot]] = 
+                    readCsvToCaseClasses[IndexedDetectedSpot] // TODO: adapt the Decoder to grab the index.
                 val write: os.Path => (List[MergerAssessedRoi] => IO[Unit]) = 
                     outfile => {
                         fs2.Stream.emits(_)
