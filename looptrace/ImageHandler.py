@@ -42,12 +42,12 @@ PathFilter = Callable[[Union[os.DirEntry, Path]], bool]
     summary="Store the parameters which uniquely specify the name of a file for fiducial bead ROIs.",
     parameters=dict(
         fov="0-based index of position / field of view",
-        frame="0-based index of timepoint in imaging sequence",
+        timepoint="0-based index of timepoint in imaging sequence",
         purpose="What the ROIs will be used for; set to null if these are generic ROIs",
     ),
     raises=dict(
-        TypeError="If fov or frame is non-int, or if purpose is non-str",
-        ValueError="If fov or frame is negative, or if purpose contains a period"
+        TypeError="If fov or timepoint is non-int, or if purpose is non-str",
+        ValueError="If fov or timepoint is negative, or if purpose contains a period"
     ),
 )
 @dataclass(frozen=True, kw_only=True, order=True)
@@ -58,9 +58,9 @@ class BeadRoisFilenameSpecification:
 
     def __post_init__(self) -> None:
         if not isinstance(self.fov, int) or not isinstance(self.timepoint, int):
-            raise TypeError(f"For bead ROIs filename spec, FOV and frame must be int; got {type(self.fov).__name__} and {type(self.timepoint).__name__}")
+            raise TypeError(f"For bead ROIs filename spec, FOV and timepoint must be int; got {type(self.fov).__name__} and {type(self.timepoint).__name__}")
         if self.fov < 0 or self.timepoint < 0:
-            raise ValueError(f"fov and frame must be nonnegative; got {self.fov} and {self.timepoint}")
+            raise ValueError(f"fov and timepoint must be nonnegative; got {self.fov} and {self.timepoint}")
         if self.purpose is not None:
             if not isinstance(self.purpose, str):
                 raise TypeError(f"For bead ROIs filename spec, purpose must be null or str, not {type(self.purpose).__name__}")
@@ -100,18 +100,18 @@ class BeadRoisFilenameSpecification:
             return None
         try:
             fov = int(data[0])
-            frame = int(data[1])
+            timepoint = int(data[1])
         except:
             return None
-        return cls(fov=fov, frame=frame, purpose=purpose)
+        return cls(fov=fov, timepoint=timepoint, purpose=purpose)
 
     @classmethod
     def from_filepath(cls, fp: Path) -> Optional["BeadRoisFilenameSpecification"]:
         return cls.from_filename(fp.name)
 
 
-def bead_rois_filename(pos_idx: int, frame: int, purpose: Optional[str]) -> str:
-    return BeadRoisFilenameSpecification(fov=pos_idx, frame=frame, purpose=purpose).get_filename
+def bead_rois_filename(pos_idx: int, timepoint: int, purpose: Optional[str]) -> str:
+    return BeadRoisFilenameSpecification(fov=pos_idx, timepoint=timepoint, purpose=purpose).get_filename
 
 
 def _read_bead_rois_file(fp: ExtantFile) -> np.ndarray[int]:
@@ -168,24 +168,24 @@ class ImageHandler:
         return get_analysis_path(self.config)
 
     @property
-    def background_subtraction_frame(self) -> Optional[int]:
+    def background_subtraction_timepoint(self) -> Optional[int]:
         return self.config.get("subtract_background")
     
     @property
     def bead_rois_path(self) -> Path:
         return Path(self.analysis_path) / "bead_rois"
 
-    def get_bead_rois_file(self, pos_idx: int, frame: int, purpose: Optional[str]) -> ExtantFile:
-        filename = bead_rois_filename(pos_idx=pos_idx, frame=frame, purpose=purpose)
+    def get_bead_rois_file(self, pos_idx: int, timepoint: int, purpose: Optional[str]) -> ExtantFile:
+        filename = bead_rois_filename(pos_idx=pos_idx, timepoint=timepoint, purpose=purpose)
         folder = self.bead_rois_path if purpose is None else self.bead_rois_path / purpose
         return ExtantFile(folder / filename)
 
-    def read_bead_rois_file_accuracy(self, pos_idx: int, frame: int) -> np.ndarray[np.ndarray]:
-        fp = self.get_bead_rois_file(pos_idx=pos_idx, frame=frame, purpose="accuracy").path
+    def read_bead_rois_file_accuracy(self, pos_idx: int, timepoint: int) -> np.ndarray[np.ndarray]:
+        fp = self.get_bead_rois_file(pos_idx=pos_idx, timepoint=timepoint, purpose="accuracy").path
         return _read_bead_rois_file(fp)
 
-    def read_bead_rois_file_shifting(self, pos_idx: int, frame: int) -> ExtantFile:
-        fp = self.get_bead_rois_file(pos_idx=pos_idx, frame=frame, purpose="shifting").path
+    def read_bead_rois_file_shifting(self, pos_idx: int, timepoint: int) -> ExtantFile:
+        fp = self.get_bead_rois_file(pos_idx=pos_idx, timepoint=timepoint, purpose="shifting").path
         return _read_bead_rois_file(fp)
     
     @property
@@ -194,7 +194,7 @@ class ImageHandler:
         return ExtantFile(fp) if fp.exists() else None
 
     @property
-    def position_frame_pairs_with_severe_problems(self) -> Set[Tuple[int, int]]:
+    def position_timepoint_pairs_with_severe_problems(self) -> Set[Tuple[int, int]]:
         fp = self._severe_bead_roi_partition_problems_file
         if fp is None:
             return set()
@@ -244,14 +244,14 @@ class ImageHandler:
 
     @property
     def drift_correction_reference_timepoint(self) -> int:
-        return self.config["reg_ref_frame"]
+        return self.config["reg_ref_timepoint"]
 
     @property
     def drift_correction_reference_images(self) -> Sequence[np.ndarray]:
         return self.images[self.reg_input_template]
 
     @property
-    def frame_names(self) -> List[str]:
+    def timepoint_names(self) -> List[str]:
         """The sequence of names corresponding to the imaging rounds used in the experiment"""
         names = []
         for round in self.iter_imaging_rounds():
@@ -342,15 +342,15 @@ class ImageHandler:
     @property
     def num_rounds(self) -> int:
         n1 = self.config.get("num_rounds")
-        if n1 is None: # no frame count defined, try counting names
-            return len(self.frame_names)
+        if n1 is None: # no timepoint count defined, try counting names
+            return len(self.timepoint_names)
         try:
-            n2 = len(self.frame_names)
-        except KeyError: # no frame names defined, use parsed count
+            n2 = len(self.timepoint_names)
+        except KeyError: # no timepoint names defined, use parsed count
             return n1
         if n1 == n2:
             return n1
-        raise Exception(f"Declared frame count ({n1}) from config disagrees with frame name count ({n2})")
+        raise Exception(f"Declared timepoint count ({n1}) from config disagrees with timepoint name count ({n2})")
 
     @property
     def num_timepoints(self) -> int:

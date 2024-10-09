@@ -16,7 +16,7 @@ Typically there will be one entry for the sequential FISH images' folder and ano
 * `decon_iter` should be set to a nonnegative integer. If you don't want to run deconvolution, set this to 0. Setting this to 0 obviates the need for NVIDIA and GPUs, so you could change `nvidia-docker` to simply `docker` when [running the pipeline](./running-the-pipeline.md#general-workflow).
 * `decon_input_name` should likely be the single value in the `zarr_conversions` mapping.
 * `reg_input_template` and `reg_input_moving` should likely match each other and should correspond to adding a `_decon` suffix to the value of `decon_input_name`.
-* `reg_ref_frame` should be set to something approximately equal to the middle of the imaging timecourse (i.e, midway between first and last timepoint).
+* `reg_ref_timepoint` should be set to something approximately equal to the middle of the imaging timecourse (i.e, midway between first and last timepoint).
 * `num_bead_rois_for_drift_correction` should be set to 100 or 200 (number of beads to use for drift correction).
 Having bead count fewer than the value will impede processing, but higher values _may_ given a bit better drift correction.
 Judge in accordance with how many beads you anticipate having per image.

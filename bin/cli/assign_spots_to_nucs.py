@@ -65,7 +65,7 @@ def filter_rois_in_nucs(
             idx = (idx_px_z, ) + base_idx
         try:
             spot_label = nuc_label_img[idx]
-        except IndexError as e: # If, due to drift spot, is outside frame?
+        except IndexError as e: # If, due to drift spot, is outside timepoint?
             print(f"IndexError ({e}) extracting {idx} from image of shape {nuc_label_img.shape}. Spot label set to 0.")
             spot_label = 0
         return int(spot_label)

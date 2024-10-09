@@ -173,12 +173,12 @@ def process_single_FOV_single_reference_timepoint(
     T = reference_image_stack_definition.num_timepoints
     fov_idx = reference_image_stack_definition.index
 
-    skips = image_handler.position_frame_pairs_with_severe_problems
+    skips = image_handler.position_timepoint_pairs_with_severe_problems
     print(f"(FOV, time) pairs to skip: {skips}")
     timepoints = [t for t in range(T) if (fov_idx, t) not in skips]
     
     # Get the bead ROIs for the current combo of FOV and timepoint.
-    roi_centers = image_handler.read_bead_rois_file_accuracy(pos_idx=fov_idx, frame=bead_detection_params.reference_timepoint)
+    roi_centers = image_handler.read_bead_rois_file_accuracy(pos_idx=fov_idx, timepoint=bead_detection_params.reference_timepoint)
     if len(roi_centers) != image_handler.num_bead_rois_for_drift_correction_accuracy:
         warnings.warn(RuntimeWarning(f"Fewer ROIs available ({len(roi_centers)}) than requested ({image_handler.num_bead_rois_for_drift_correction_accuracy}) for FOV {fov_idx}"))
 
@@ -190,14 +190,14 @@ def process_single_FOV_single_reference_timepoint(
     curr_fov_drift_subtable = drift_table[drift_table.position == pos]
 
     # TODO: could type-refine the argument values to these parameters (which should be nonnegative).
-    def proc1(frame_index: int, ref_ch: int, centroid: np.ndarray) -> Iterable[NumberLike]:
-        coarse_shift = curr_fov_drift_subtable[curr_fov_drift_subtable.timepoint == frame_index][["zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels"]].values[0]
-        img = image_stack[frame_index, ref_ch].compute()
+    def proc1(timepoint_index: int, ref_ch: int, centroid: np.ndarray) -> Iterable[NumberLike]:
+        coarse_shift = curr_fov_drift_subtable[curr_fov_drift_subtable.timepoint == timepoint_index][["zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels"]].values[0]
+        img = image_stack[timepoint_index, ref_ch].compute()
         bead_img = extract_single_bead(centroid, img, bead_roi_px=bead_roi_px, drift_coarse=coarse_shift)
         return fitSymmetricGaussian3D(bead_img, sigma=1, center='max')[0]
 
     fits = Parallel(n_jobs=-1, prefer='threads')(
-        delayed(lambda t, c, i, roi: [fov_idx, t, c, i] + list(proc1(frame_index=t, ref_ch=c, centroid=roi)))(t=t, c=c, i=i, roi=roi) 
+        delayed(lambda t, c, i, roi: [fov_idx, t, c, i] + list(proc1(timepoint_index=t, ref_ch=c, centroid=roi)))(t=t, c=c, i=i, roi=roi) 
         for t in tqdm.tqdm(timepoints)
         for c in [bead_detection_params.reference_channel] 
         for i, roi in enumerate(roi_centers)
@@ -206,12 +206,12 @@ def process_single_FOV_single_reference_timepoint(
     fits = express_pixel_columns_as_nanometers(fits=fits, xy_cols=('y_loc', 'x_loc', 'sigma_xy'), z_cols=('z_loc', 'sigma_z'), camera_params=camera_params)
     
     # TODO: update if ever allowing channel (reg_ch_template) to be List[int] rather than simple int.
-    ref_points = fits.loc[(fits.t == bead_detection_params.reference_timepoint) & (fits.c == bead_detection_params.reference_channel), ['z_loc', 'y_loc', 'x_loc']].to_numpy() # Fits of fiducial beads in ref frame
+    ref_points = fits.loc[(fits.t == bead_detection_params.reference_timepoint) & (fits.c == bead_detection_params.reference_channel), ['z_loc', 'y_loc', 'x_loc']].to_numpy() # Fits of fiducial beads in ref timepoint
     print(f"Reference point count: {len(ref_points)}")
     res = []
     for t in tqdm.tqdm(timepoints):
         # TODO: update if ever allowing channel (reg_ch_template) to be List[int] rather than simple int.
-        mov_points = fits.loc[(fits.t == t) & (fits.c == bead_detection_params.reference_channel), ['z_loc', 'y_loc', 'x_loc']].to_numpy() # Fits of fiducial beads in moving frame
+        mov_points = fits.loc[(fits.t == t) & (fits.c == bead_detection_params.reference_channel), ['z_loc', 'y_loc', 'x_loc']].to_numpy() # Fits of fiducial beads in moving timepoint
         print(f"mov_points shape: {mov_points.shape}")
         shift = drift_table.loc[(drift_table.position == pos) & (drift_table.timepoint == t), ['zDriftFinePixels', 'yDriftFinePixels', 'xDriftFinePixels']].values[0]
         shift[0] =  shift[0] * camera_params.nanometers_z # Extract calculated drift correction from drift correction file.
@@ -235,7 +235,7 @@ def express_pixel_columns_as_nanometers(fits: pd.DataFrame, xy_cols: Iterable[st
     Parameters
     ----------
     fits : pd.DataFrame
-        The frame in which values are to be converted
+        The timepoint in which values are to be converted
     xy_cols : Iterable of str
         Names of columns representing values in x- or y-direction
     z_cols : Iterable of str
@@ -262,7 +262,7 @@ def finalise_fits_frame(fits: pd.DataFrame, min_signal_noise_ratio: NumberLike) 
     Parameters
     ----------
     fits : pd.DataFrame
-    The frame in which data are to be quality controlled
+    The timepoint in which data are to be quality controlled
     min_signal_noise_ratio : NumberLike
         The minimum value of signal-to-noise ratio that a point can have and still pass QC
 

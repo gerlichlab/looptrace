@@ -30,7 +30,7 @@ def workflow(
         image_save_path=None,
         )
     picker = SpotPicker(image_handler=image_handler)
-    return picker.make_dc_rois_all_frames()
+    return picker.make_dc_rois_all_timepoints()
 
 
 if __name__ == "__main__":

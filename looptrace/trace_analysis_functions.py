@@ -44,66 +44,8 @@ import tqdm
 
 warnings.simplefilter('ignore', category=NumbaPerformanceWarning)
 
-
 logger = logging.getLogger()
 
-
-def gen_random_coil(g_dist, s_dist = 24.7, std_scaling = 0.5, deg=360, n_traces = 1000, sigma_noise = 2):
-    traces = []
-    for j in range(n_traces):
-        L = [np.random.normal(np.sqrt(d)*s_dist, np.sqrt(d)*s_dist*std_scaling, 1) for d in g_dist]  # Calculate the step lengths, drawn from normal distribution according to paramters set above.
-        N = len(L)+1
-        #N = 1135//step_denom #Number of steps in each random walk
-        #N = np.sum(g_dist).astype(int)//step_denom + 1
-        R = deg*(np.random.rand(N)) #Get the polar angles between. Picks random angle between 0-deg 
-        A = deg*(np.random.rand(N)) #Get the azimethal angels. Picks random angle between 0-deg
-
-        #We need to keep track of the change in angle over subsequent positions so the origin isn't reset at every point.
-        R = np.cumsum(R)
-        A = np.cumsum(A) 
-        
-        #Initialize trace arrays
-        trace_id = np.ones(N) * j
-        frame = np.array(range(N))+1
-        x = np.zeros(N)
-        y = np.zeros(N)
-        z = np.zeros(N)
-        qc = np.ones(N)
-        
-        for i in range(1,N): #converting spherical coordinates to cartesian.
-            x[i] = x[i-1] + L[i-1]*sin(radians(R[i]))*cos(radians(A[i]))
-            y[i] = y[i-1] + L[i-1]*sin(radians(R[i]))*sin(radians(A[i]))
-            z[i] = z[i-1] + L[i-1]*cos(radians(R[i]))
-        x = x + np.random.normal(0, sigma_noise, size=x.shape)
-        y = y + np.random.normal(0, sigma_noise, size=y.shape)
-        z = z + np.random.normal(0, sigma_noise, size=z.shape)
-
-        # Create 6xN dataframe in the format (trace_id, frame, x, y, z, QC)
-        traces.append(np.column_stack((trace_id, frame, x, y, z, qc)))
-        #sampling = np.cumsum(np.round([0]+g_dist)).astype(int)//step_denom
-        #xyz_array = xyz_array[sampling,:]
-#
-    traces = np.concatenate(traces)
-    traces = pd.DataFrame(traces)#.reset_index(drop=True)
-    traces.columns = ['trace_id',"timepoint","x","y","z",'QC']
-    traces = traces.astype({'trace_id': int, "timepoint": int, 'QC': int})
-    traces['frame_name']='H'+traces["timepoint"].astype(str).str.zfill(2)
-
-    return traces
-
-def genomic_distance_map(genomic_positions):
-    '''
-    Generate mapping of position combination names to genomic distance
-    from dict of the format {'frame_name':genomic_position}.
-    Used for calculating genomic vs spatial distances.
-    '''
-
-    combos = itertools.combinations(genomic_positions.keys(), 2)
-    g_dists = {}
-    for c in combos:
-        dist = genomic_positions[c[1]]-genomic_positions[c[0]]
-        g_dists[str(c)] = dist
-    return g_dists
 
 def pwd_calc(traces):
     '''
@@ -1304,15 +1246,15 @@ def plot_traces(traces, trace_id, split=False):
     if type(trace_id) == int:
         trace_id=[trace_id]
     df=traces[traces['trace_id'].isin(trace_id)]
-    df['keys'] = df['frame_name'].astype(str).str[0]
-    labels=list(df['frame_name'])
+    df['keys'] = df["timepoint_name"].astype(str).str[0]
+    labels=list(df["timepoint_name"])
     print(labels)
 
     fig = px.scatter_3d(df, x="x", y="y", z="z", 
                 symbol='keys',
-                color='frame_name', 
+                color="timepoint_name", 
                 color_discrete_sequence = px.colors.sequential.Inferno,
-                labels={'frame_name' : 'Exchange', 'keys':'Group'})
+                labels={"timepoint_name" : 'Exchange', 'keys':'Group'})
 
     for i in trace_id:
         for key in list(df['keys'].unique()):

@@ -93,7 +93,7 @@ def _fit_3d_gaussian(fit_proc: callable, img_data: numpy.ndarray, sigma: NumberL
         The fitting procedure / optimisation strategy, e.g. maximum-likelihood estimation or least squares
     img_data : np.ndarray
         The array of pixel intensities to which to fit a Gaussian; this corresponds to a single round / 
-        hybridisation / frame / probe, for a particular field of view and a particular channel. 
+        hybridisation / timepoint / probe, for a particular field of view and a particular channel. 
         Namely, then, it fixes FOV and 2 of the 5 dimensions, leaving (z,y,x), and hence this is a 3D 
         numpy array.
     sigma : NumberLike

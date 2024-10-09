@@ -20,7 +20,7 @@ def workflow(
         params_config: ExtantFile,
         images_folder: ExtantFolder, 
         output_folder: Union[None, Path, ExtantFolder] = None, 
-        frame_range: Optional[Iterable[int]] = None,
+        timepoint_range: Optional[Iterable[int]] = None,
         **joblib_kwargs
         ) -> Iterable[Tuple[Path, pd.DataFrame]]:
     
@@ -32,17 +32,17 @@ def workflow(
     output_folder = output_folder or H.bead_rois_path
     output_folder.mkdir(exist_ok=True, parents=False)
 
-    # Determine the range of frames / hybridisation rounds to use.
-    frame_range = frame_range or range(H.num_rounds)
+    # Determine the range of timepoints / hybridisation rounds to use.
+    timepoint_range = timepoint_range or range(H.num_rounds)
 
     # Function to get (z, y, x) (stack of 2D images) for a particular FOV and imaging round.
-    def get_image_stack(pos_idx: int, frame_idx: int) -> np.ndarray:
-        return D.get_moving_image(pos_idx=pos_idx, frame_idx=frame_idx)
+    def get_image_stack(pos_idx: int, timepoint_idx: int) -> np.ndarray:
+        return D.get_moving_image(pos_idx=pos_idx, timepoint_idx=timepoint_idx)
     
     return generate_all_bead_rois_from_getter(
         get_3d_stack=get_image_stack, 
         iter_position=range(len(D.images_moving)), 
-        iter_frame=frame_range, 
+        iter_timepoint=timepoint_range, 
         output_folder=output_folder,
         params=D.bead_roi_parameters,
         **joblib_kwargs

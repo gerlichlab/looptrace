@@ -29,7 +29,7 @@ from looptrace.SpotPicker import SPOT_IMAGE_PIXEL_VALUE_TYPE, RoiOrderingSpecifi
 from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
 from looptrace.image_io import NPZ_wrapper, write_jvm_compatible_zarr_store
 from looptrace.numeric_types import NumberLike
-from looptrace.tracing_qc_support import apply_frame_names_and_spatial_information
+from looptrace.tracing_qc_support import apply_timepoint_names_and_spatial_information
 
 BOX_Z_COL = "spot_box_z"
 BOX_Y_COL = "spot_box_y"
@@ -49,7 +49,7 @@ class FunctionalForm:
             raise NotImplementedError("Only currently supporting dimensionality = 3 for functional form fit")
 
 
-def run_frame_name_and_distance_application(
+def run_timepoint_name_and_distance_application(
     rounds_config: ExtantFile, 
     params_config: ExtantFile, 
     images_folder: ExtantFolder,
@@ -60,7 +60,7 @@ def run_frame_name_and_distance_application(
         images_folder=images_folder,
         )
     T = Tracer(H)
-    traces = apply_frame_names_and_spatial_information(traces_file=T.traces_path, frame_names=H.frame_names)
+    traces = apply_timepoint_names_and_spatial_information(traces_file=T.traces_path, timepoint_names=H.timepoint_names)
     outfile = T.traces_path_enriched
     print(f"Writing enriched traces file: {outfile}")
     traces.to_csv(outfile)
@@ -118,7 +118,7 @@ class Tracer:
         return self.finalise_suffix(self.image_handler.spot_fits_file)
 
     def trace_all_rois(self) -> Path:
-        """Fits 3D gaussian to previously detected ROIs across positions and timeframes"""
+        """Fits 3D gaussian to previously detected ROIs across positions and timepoints"""
         spot_fits = find_trace_fits(
             fit_func_spec=self.fit_func_spec,
             # TODO: fix this brittle / fragile / incredibly error-prone thing; #84
@@ -151,7 +151,7 @@ class Tracer:
             logging.info("No background subtraction; will pair fits with full ROIs table")
         else:
             logging.info("Subsetting ROIs table to exclude background timepoint records before pairing ROIs with fits...")
-            bg_time = self.image_handler.background_subtraction_frame
+            bg_time = self.image_handler.background_subtraction_timepoint
             assert isinstance(bg_time, int) and bg_time >= 0, f"Background subtraction timepoint isn't nonnegative int: {bg_time}"
             rois_table = rois_table[rois_table.timepoint != bg_time].reset_index(drop=True)
             spot_fits = spot_fits.reset_index(drop=True)
@@ -195,13 +195,13 @@ class Tracer:
         )
     @property
     def _background_wrapper(self) -> Optional[NPZ_wrapper]:
-        bg_time: Optional[int] = self.image_handler.background_subtraction_frame
+        bg_time: Optional[int] = self.image_handler.background_subtraction_timepoint
         if bg_time is None:
             return None
         try:
             return self.image_handler.images["spot_background"]
         except KeyError as e:
-            sure_message = f"Background subtraction frame ({bg_time}) is non-null, but no spot image background was found."
+            sure_message = f"Background subtraction timepoint ({bg_time}) is non-null, but no spot image background was found."
             zip_path = get_spot_images_zipfile(self.image_handler.image_save_path, is_background=True)
             best_guess = f"Has {zip_path} been generated?"
             raise RuntimeError(f"{sure_message} {best_guess}") from e
@@ -242,7 +242,7 @@ def finalise_traces(*, rois: pd.DataFrame, fits: pd.DataFrame, z_nm: NumberLike,
     Parameters
     ----------
     rois : pd.DataFrame
-        The table of data for each spot in each hybridisation frame
+        The table of data for each spot in each hybridisation timepoint
     fits : pd.DataFrame
         The table of functional form fits for each row in the ROIs frame
     z_nm : NumberLike
@@ -268,12 +268,12 @@ def finalise_traces(*, rois: pd.DataFrame, fits: pd.DataFrame, z_nm: NumberLike,
 
 def pair_rois_with_fits(rois: pd.DataFrame, fits: pd.DataFrame) -> pd.DataFrame:
     """
-    Merge (horizontally) the data from the individual spots / ROIs (1 per frame per regional spot) and the Gaussian fits.
+    Merge (horizontally) the data from the individual spots / ROIs (1 per timepoint per regional spot) and the Gaussian fits.
 
     Parameters
     ----------
     rois : pd.DataFrame
-        Individual spot data (1 per frame per regional spot)
+        Individual spot data (1 per timepoint per regional spot)
     fits : pd.DataFrame
         Parameters for function fit to each individual spot
     
@@ -319,7 +319,7 @@ def find_trace_fits(
     background_data : NPZ_wrapper, optional
         Wrapper around NPZ stack of per-spot background data to subtract, optional
     mask_ref_timepoints : list of int, optional
-        Frames to use for masking when fitting, indexed by FOV
+        Timepoints to use for masking when fitting, indexed by FOV
     cores : int, optional
         How many CPUs to use
     
@@ -337,14 +337,14 @@ def find_trace_fits(
                 return img
         else:
             def finalise_spot_img(img, fov_imgs):
-                return img.astype(np.int16) - fov_imgs[background_data.frame_index].astype(np.int16)
+                return img.astype(np.int16) - fov_imgs[background_data.timepoint_index].astype(np.int16)
         fits = []
         for p, single_roi_timecourse in tqdm(enumerate(images), total=len(images)):
             ref_img = single_roi_timecourse[mask_ref_timepoints[p]]
             #print(ref_img.shape)
             for t, spot_img in enumerate(single_roi_timecourse):
                 #if background_data is not None:
-                    #shift = ndi.shift(single_roi_timecourse[background_data.frame_index], shift=background_data.drifts[t])
+                    #shift = ndi.shift(single_roi_timecourse[background_data.timepoint_index], shift=background_data.drifts[t])
                     #spot_img = np.clip(spot_img.astype(np.int16) - shift, a_min = 0, a_max = None)
                 spot_img = finalise_spot_img(spot_img, single_roi_timecourse)
                 fits.append(fit_single_roi(fit_func_spec=fit_func_spec, roi_img=spot_img, mask=ref_img))

@@ -1,4 +1,4 @@
-# Plot counts of detected regional barcode spots, aggregated by timepoint (probe/frame).
+# Plot counts of detected regional barcode spots, aggregated by probe/timepoint.
 
 library("argparse")
 library("data.table")
@@ -15,8 +15,8 @@ kSpotCountPrefix <- "spot_counts"
 #   spots_table: data table with regional spots data
 #   probe_names: ordered list of names to give the imaging timepoints
 addProbeNames <- function(spots_table, probe_names) {
-    if ("frame_name" %in% colnames(spots_table)) { stop("Table already contains column for probe names!") }
-    probe_index <- (spots_table$frame + 1)
+    if ("timepoint_name" %in% colnames(spots_table)) { stop("Table already contains column for probe names!") }
+    probe_index <- (spots_table$timepoint + 1)
     if ( ! all(probe_index %in% (1:length(probe_names))) ) {
         stop(sprintf(
             "Can't index (1-based, inclusive) into vector of %s probe names with these values: %s", 
@@ -24,14 +24,14 @@ addProbeNames <- function(spots_table, probe_names) {
             paste0(Filter(function(i) !(i %in% (1:length(probe_names))) , unique(probe_index)), collapse = ", ")
             ))
     }
-    spots_table$frame_name <- sapply(probe_index, function(i) probe_names[i])
+    spots_table$timepoint_name <- sapply(probe_index, function(i) probe_names[i])
     spots_table
 }
 
 # Create the heatmap for the given counts data (1 count per (FOV, time) pair).
 buildCountsHeatmap <- function(spots_table) {
-    counts_table <- spots_table[, .(count = .N), by = list(position, frame_name)]
-    ggplot(counts_table, aes(x = frame_name, y = position, fill = count)) + 
+    counts_table <- spots_table[, .(count = .N), by = list(position, timepoint_name)]
+    ggplot(counts_table, aes(x = timepoint_name, y = position, fill = count)) + 
         geom_tile() + 
         xlab("probe") + 
         theme_bw()
@@ -100,7 +100,7 @@ cli_parser$add_argument(
 cli_parser$add_argument(
     "--probe-names", 
     nargs = "*",
-    help = "Ordered list of names, used to each frame/timepoint with a probe; required iff spots data is regional"
+    help = "Ordered list of names, used to each timepoint with a probe; required iff spots data is regional"
     )
 cli_parser$add_argument(
     "-o", "--output-folder", 
@@ -161,9 +161,9 @@ if (opts$spot_file_type == kRegionalName) {
     # Create a side-by-side grouped barchart, with unfiltered count next to filtered count for each timepoint.
     spotCountsCombined <- rbindlist(lapply(names(spot_tables), function(filt_type) {
         dat_tab <- spot_tables[[filt_type]]
-        dat_tab[, .(frame_name = frame_name, filter_status = filt_type)]
-    }))[, .(count = .N), by = list(filter_status, frame_name)]
-    combinedBarchart <- ggplot(spotCountsCombined, aes(x = as.factor(frame_name), y = count, fill = filter_status)) + 
+        dat_tab[, .(timepoint_name = timepoint_name, filter_status = filt_type)]
+    }))[, .(count = .N), by = list(filter_status, timepoint_name)]
+    combinedBarchart <- ggplot(spotCountsCombined, aes(x = as.factor(timepoint_name), y = count, fill = filter_status)) + 
         geom_bar(stat = "identity", position = "dodge") + 
         xlab("probe") + 
         ggtitle(sprintf("Spot counts, %s", kRegionalName)) + 
@@ -188,7 +188,7 @@ if (opts$spot_file_type == kRegionalName) {
         spot_type_name = opts$spot_file_type, 
         output_folder = opts$output_folder
         )
-    bargraph <- ggplot(filteredSpots[, .(count = .N), by = frame_name], aes(x = frame_name, y = count)) + 
+    bargraph <- ggplot(filteredSpots[, .(count = .N), by = timepoint_name], aes(x = timepoint_name, y = count)) + 
         geom_bar(stat = "identity") + 
         xlab("probe") + 
         ggtitle(sprintf("Spot counts, %s", kLocusSpecificName)) + 
