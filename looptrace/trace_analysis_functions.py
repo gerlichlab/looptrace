@@ -83,9 +83,9 @@ def trace_analysis(traces, pwds):
     '''
 
     points = np.stack(points_from_traces(traces))
-    trace_idx = traces.trace_id.unique()
+    trace_idx = traces.traceId.unique()
     res = trace_analysis_loop(points, pwds, trace_idx)
-    #pairwise_trace_idx = list(itertools.combinations(traces['trace_id'].unique(),2))
+    #pairwise_trace_idx = list(itertools.combinations(traces["traceId"].unique(),2))
     #pairwise_pwd_idx = list(itertools.combinations(range(pwds.shape[0]),2))
     #res = Parallel(n_jobs=-2)(delayed(single_trace_analysis)
     #                          (traces, pwds, idx1, idx2, idx_p1, idx_p2) for 
@@ -114,8 +114,8 @@ def trace_analysis_loop(points, pwds, trace_idx):
 def compare_trace_analysis(traces1, traces2, pwds1, pwds2):
     points1 = points_from_traces(traces1)
     points2 = points_from_traces(traces2)
-    trace_idx1 = list(traces1.trace_id.unique())
-    trace_idx2 = list(traces2.trace_id.unique())
+    trace_idx1 = list(traces1.traceId.unique())
+    trace_idx2 = list(traces2.traceId.unique())
     idx1 = list(range(len(points1)))
     idx2 = list(range(len(points2)))
     res = []
@@ -194,7 +194,7 @@ def pwd_clustering(traces, metric='pcc', embedding='umap', clust_method='kmeans_
     import umap
 
     if extra_column is not None:
-        extra_data = traces.groupby('trace_id')[extra_column].max().to_numpy()
+        extra_data = traces.groupby("traceId")[extra_column].max().to_numpy()
 
         #print(extra_data)
     points = points_from_traces_nan(traces, trace_ids = -1)
@@ -285,14 +285,14 @@ def pwd_clustering(traces, metric='pcc', embedding='umap', clust_method='kmeans_
         model = BayesianGaussianMixture(n_components=n_clusters)
         features = pos
 
-    trace_ids = list(traces.trace_id.unique())
+    trace_ids = list(traces.traceId.unique())
     clusters = model.fit_predict(features)
 
     data = np.array([trace_ids, clusters, pos[:,0], pos[:,1]]).T
     print(data.shape)
     
-    res = pd.DataFrame(data, columns=['trace_id', 'cluster', 'pos_x', 'pos_y'])
-    res['trace_id'] = res['trace_id'].astype(int)
+    res = pd.DataFrame(data, columns=["traceId", 'cluster', 'pos_x', 'pos_y'])
+    res["traceId"] = res["traceId"].astype(int)
     res['cluster'] = res['cluster'].astype(int)
     if extra_column is not None:
         res[extra_column] = extra_data
@@ -332,7 +332,7 @@ def trace_clustering(pairs, metric='pwd_pcc', dendro_method='single', color_thre
         color_threshold = 0.7*max(Z[:,2])
     clusters=fcluster(Z, color_threshold, criterion='distance')
     cluster_df=pd.DataFrame([labels, clusters]).T 
-    cluster_df.columns=['trace_id', 'dendro']
+    cluster_df.columns=["traceId", 'dendro']
     return cluster_df
 
 def further_trace_clustering(pairs, cluster_df, metric, n_clusters=5):
@@ -405,10 +405,10 @@ def cluster_similarity(traces, cluster_df, method='cluster', metric='aligned_pcc
     clust_pairs = list(itertools.combinations(clust_ids,2))
     res_combo = []
     for i, j in clust_pairs:
-        clust1 = sorted(cluster_df.query('{0} == {1}'.format(method, i)).trace_id.unique())
-        clust2 = sorted(cluster_df.query('{0} == {1}'.format(method, j)).trace_id.unique())
-        traces1 = traces[traces['trace_id'].isin(clust1)]
-        traces2 = traces[traces['trace_id'].isin(clust2)]
+        clust1 = sorted(cluster_df.query('{0} == {1}'.format(method, i)).traceId.unique())
+        clust2 = sorted(cluster_df.query('{0} == {1}'.format(method, j)).traceId.unique())
+        traces1 = traces[traces["traceId"].isin(clust1)]
+        traces2 = traces[traces["traceId"].isin(clust2)]
         pwds1 = pwd_calc(traces1)
         pwds2 = pwd_calc(traces2)
 
@@ -417,8 +417,8 @@ def cluster_similarity(traces, cluster_df, method='cluster', metric='aligned_pcc
 
     res_single = []
     for i in clust_ids:
-        clust_i = sorted(cluster_df.query('{0} == {1}'.format(method, i)).trace_id.unique())
-        traces_i = traces[traces['trace_id'].isin(clust_i)]
+        clust_i = sorted(cluster_df.query('{0} == {1}'.format(method, i)).traceId.unique())
+        traces_i = traces[traces["traceId"].isin(clust_i)]
         pwds_i = pwd_calc(traces_i)
         pairs_i = trace_analysis(traces_i, pwds_i)
         res_single.append(pairs_i[metric].mean())
@@ -437,7 +437,7 @@ def run_gpa_all_clusters(traces, cluster_df, metric='dendro', min_cluster = 1):
     #Generate list of lists of all cluster members over min_cluster length.
     all_cluster_members = []
     for cluster_id in cluster_ids:
-        cluster_members = cluster_df[cluster_df[metric]==cluster_id]['trace_id'].values
+        cluster_members = cluster_df[cluster_df[metric]==cluster_id]["traceId"].values
         if len(cluster_members)>=min_cluster:
             all_cluster_members.append(cluster_members)
             print(f'Cluster ID {cluster_id}, members: {cluster_members}.')
@@ -464,7 +464,7 @@ def general_procrustes_analysis(traces, trace_ids='all', crit=0.01, template_poi
     Returns all the aligned traces, the mean trace and the std of all the aligned traces.
     '''
     if isinstance(trace_ids, str):
-        trace_ids = list(traces['trace_id'].unique())
+        trace_ids = list(traces["traceId"].unique())
     elif isinstance(trace_ids, list):
         pass
     else:
@@ -510,7 +510,7 @@ def piecewise_gpa(traces, trace_ids='all', crit=0.01, segment_length = 5, overla
     Returns all the aligned traces, the mean trace and the std of all the aligned traces.
     '''
     if trace_ids == 'all':
-        trace_ids = list(traces['trace_id'].unique())
+        trace_ids = list(traces["traceId"].unique())
     else:
         trace_ids=list(trace_ids.astype(int))
     # Make list of all points of selected traces
@@ -729,7 +729,7 @@ def points_from_traces(traces, trace_ids=-1):
     points_qc : list of  Nx4 np array with trace coordinates and QC value.
     '''
     
-    arr = traces[['trace_id', "z", "y", "x", 'QC']].to_numpy()
+    arr = traces[["traceId", "z", "y", "x", 'QC']].to_numpy()
     
     
     if trace_ids == -1:
@@ -758,7 +758,7 @@ def points_from_traces_qc_filt(traces, trace_ids=-1):
     '''
 
 
-    arr = traces[['trace_id', "z", "y", "x", 'QC']].to_numpy()
+    arr = traces[["traceId", "z", "y", "x", 'QC']].to_numpy()
     qc_idx = arr[:,4] == 1
     arr = arr[qc_idx,0:4]
 
@@ -786,7 +786,7 @@ def points_from_traces_nan(traces, trace_ids=-1):
     points : Nx3 np array with trace coordinates, NaN row returned if point did not pass QC.
     '''
 
-    arr = traces[['trace_id', "z", "y", "x", 'QC']].to_numpy()
+    arr = traces[["traceId", "z", "y", "x", 'QC']].to_numpy()
     qc_idx = arr[:,4] == 1
     arr[~qc_idx,1:4] = np.nan
 
@@ -976,7 +976,7 @@ def trace_metrics(traces, use_interp = False, diagonal = 0, contact_cutoff = 150
     points_qc = points_from_traces_qc_filt(traces)
     #ind_u = np.triu_indices(points_nan[0].shape[0], k=2)
     ind_l = np.tril_indices(points_nan[0].shape[0], k=0)
-    trace_ids = traces.trace_id.unique()
+    trace_ids = traces.traceId.unique()
     metrics = []
     loop_metrics = []
     for i in tqdm.tqdm(range(len(points_nan))):
@@ -1045,8 +1045,8 @@ def trace_metrics(traces, use_interp = False, diagonal = 0, contact_cutoff = 150
         interp_rog = radius_of_gyration(interp_point_set)
 
         metrics.append([trace_ids[i], n_contacts, trace_elongation, rog, contour, av_loop_size, nn_dist, interp_contour, interp_rog, freq_nested])
-    metrics = pd.DataFrame(metrics, columns=['trace_id', 'n_contacts','elongation', 'rog', 'contour', 'av_loop_size', 'av_nn_dist', 'interp_contour', 'interp_rog', 'freq_nested'])
-    loop_metrics = pd.DataFrame(loop_metrics, columns = ['trace_id', 'loop_id', 'loop_coords_0', 'loop_coords_1','contour', 'stacked'])
+    metrics = pd.DataFrame(metrics, columns=["traceId", 'n_contacts','elongation', 'rog', 'contour', 'av_loop_size', 'av_nn_dist', 'interp_contour', 'interp_rog', 'freq_nested'])
+    loop_metrics = pd.DataFrame(loop_metrics, columns = ["traceId", 'loop_id', 'loop_coords_0', 'loop_coords_1','contour', 'stacked'])
     loop_metrics['loop_coords_dist'] = loop_metrics['loop_coords_1']-loop_metrics['loop_coords_0']
     loop_metrics['loop_coords'] = loop_metrics['loop_coords_0'].astype(str).str.zfill(2)+'_'+loop_metrics['loop_coords_1'].astype(str).str.zfill(2)
     return metrics, loop_metrics
@@ -1133,7 +1133,7 @@ def plot_heatmap(traces, trace_ids=None, ax=None, zmin=0, zmax=600, cmap = 'RdBu
     else:
         if type(trace_ids) == int:
             trace_ids = [trace_ids]
-        pwds = pwd_calc(traces[traces['trace_id'].isin(trace_ids)])
+        pwds = pwd_calc(traces[traces["traceId"].isin(trace_ids)])
         pwds_mean = np.nanmedian(pwds, axis=0)
 
     if crop:
@@ -1171,7 +1171,7 @@ def plot_contacts(traces, trace_ids=None, cutoff=150, ax=None, zmin=0, zmax=1, c
     else:
         if type(trace_ids) == int:
             trace_ids = [trace_ids]
-        pwds = pwd_calc(traces[traces['trace_id'].isin(trace_ids)])
+        pwds = pwd_calc(traces[traces["traceId"].isin(trace_ids)])
         dist = np.nansum(pwds<cutoff, axis=0)/np.nansum(pwds>0, axis=0)
 
 
@@ -1207,7 +1207,7 @@ def plot_n_positions(traces, trace_id='all', ax=None, zmin=0, zmax=1, cmap = 'vi
     if trace_id != 'all':
         if type(trace_id) == int:
             trace_id = [trace_id]
-        pwds = pwd_calc(traces[traces['trace_id'].isin(trace_id)])
+        pwds = pwd_calc(traces[traces["traceId"].isin(trace_id)])
         dist = np.nansum(pwds>0, axis=0)
     else:
         pwds = pwd_calc(traces)
@@ -1245,7 +1245,7 @@ def plot_traces(traces, trace_id, split=False):
 
     if type(trace_id) == int:
         trace_id=[trace_id]
-    df=traces[traces['trace_id'].isin(trace_id)]
+    df=traces[traces["traceId"].isin(trace_id)]
     df['keys'] = df["timepoint_name"].astype(str).str[0]
     labels=list(df["timepoint_name"])
     print(labels)
@@ -1258,7 +1258,7 @@ def plot_traces(traces, trace_id, split=False):
 
     for i in trace_id:
         for key in list(df['keys'].unique()):
-            df_i = df[(df['trace_id'] == i) & (df['keys'] == key)]
+            df_i = df[(df["traceId"] == i) & (df['keys'] == key)]
             #print(df_i)
             z_f, y_f, x_f=spline_interp([df_i["z"].values,
                                         df_i["y"].values,
