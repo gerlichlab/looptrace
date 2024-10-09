@@ -85,7 +85,7 @@ def gen_random_coil(g_dist, s_dist = 24.7, std_scaling = 0.5, deg=360, n_traces 
 #
     traces = np.concatenate(traces)
     traces = pd.DataFrame(traces)#.reset_index(drop=True)
-    traces.columns = ['trace_id',"frame",'x','y','z','QC']
+    traces.columns = ['trace_id',"frame","x","y","z",'QC']
     traces = traces.astype({'trace_id': int, "frame": int, 'QC': int})
     traces['frame_name']='H'+traces["frame"].astype(str).str.zfill(2)
 
@@ -113,9 +113,9 @@ def pylochrom_coords_to_traces(coords):
     traces = []
     for i in range(N_traces):
         trace = {}
-        trace['z'] = coords[i,:,0]
-        trace['y'] = coords[i,:,1]
-        trace['x'] = coords[i,:,2]
+        trace["z"] = coords[i,:,0]
+        trace["y"] = coords[i,:,1]
+        trace["x"] = coords[i,:,2]
         trace["frame"] = list(range(N_steps))
         trace['trace_id'] = [i]*N_steps 
         trace['QC'] = [1]*N_steps
@@ -139,7 +139,7 @@ def view_context(all_images,
     with napari.gui_qt():
         viewer = napari.Viewer()
         if trace_id is not None:
-            point = np.array(rois.iloc[trace_id][['zc', 'yc', 'xc']])
+            point = np.array(rois.iloc[trace_id][["zc", "yc", "xc"]])
             positions = list(rois["position"].unique())
             pos_index = int(positions.index(rois.iloc[trace_id]["position"])) #Get pos_index from W00XX format
 
@@ -191,9 +191,9 @@ def euclidean_dist(traces, frame_names, column = 'frame_name'):
     df_sel = traces[traces[column].isin(frame_names)]
     trace_ids = df_sel['trace_id'].unique()
     qc = df_sel.groupby(['trace_id'])[['QC']].sum()['QC'].values
-    df_sel = df_sel.groupby(['trace_id'])[['z','y','x']].diff().dropna()
-    df_sel['euclidean'] = ((df_sel['z'])**2 + df_sel['y']**2 + df_sel['x']**2)**0.5
-    df_sel['euclidean_res'] = ((0.5*df_sel['z'])**2 + df_sel['y']**2 + df_sel['x']**2)**0.5
+    df_sel = df_sel.groupby(['trace_id'])[["z","y","x"]].diff().dropna()
+    df_sel['euclidean'] = ((df_sel["z"])**2 + df_sel["y"]**2 + df_sel["x"]**2)**0.5
+    df_sel['euclidean_res'] = ((0.5*df_sel["z"])**2 + df_sel["y"]**2 + df_sel["x"]**2)**0.5
     df_sel['QC'] = qc
     df_sel['trace_id'] = trace_ids
     df_sel['id'] = str(frame_names)
@@ -908,7 +908,7 @@ def points_from_traces(traces, trace_ids=-1):
     points_qc : list of  Nx4 np array with trace coordinates and QC value.
     '''
     
-    arr = traces[['trace_id', 'z', 'y', 'x', 'QC']].to_numpy()
+    arr = traces[['trace_id', "z", "y", "x", 'QC']].to_numpy()
     
     
     if trace_ids == -1:
@@ -936,7 +936,7 @@ def points_from_traces_qc_filt(traces, trace_ids=-1):
     '''
 
 
-    arr = traces[['trace_id', 'z', 'y', 'x', 'QC']].to_numpy()
+    arr = traces[['trace_id', "z", "y", "x", 'QC']].to_numpy()
     qc_idx = arr[:,4] == 1
     arr = arr[qc_idx,0:4]
 
@@ -964,7 +964,7 @@ def points_from_traces_nan(traces, trace_ids=-1):
     points : Nx3 np array with trace coordinates, NaN row returned if point did not pass QC.
     '''
 
-    arr = traces[['trace_id', 'z', 'y', 'x', 'QC']].to_numpy()
+    arr = traces[['trace_id', "z", "y", "x", 'QC']].to_numpy()
     qc_idx = arr[:,4] == 1
     arr[~qc_idx,1:4] = np.nan
 
@@ -1414,7 +1414,7 @@ def plot_traces(traces, trace_id, split=False):
     labels=list(df['frame_name'])
     print(labels)
 
-    fig = px.scatter_3d(df, x='x', y='y', z='z', 
+    fig = px.scatter_3d(df, x="x", y="y", z="z", 
                 symbol='keys',
                 color='frame_name', 
                 color_discrete_sequence = px.colors.sequential.Inferno,
@@ -1424,9 +1424,9 @@ def plot_traces(traces, trace_id, split=False):
         for key in list(df['keys'].unique()):
             df_i = df[(df['trace_id'] == i) & (df['keys'] == key)]
             #print(df_i)
-            z_f, y_f, x_f=spline_interp([df_i['z'].values,
-                                        df_i['y'].values,
-                                        df_i['x'].values])
+            z_f, y_f, x_f=spline_interp([df_i["z"].values,
+                                        df_i["y"].values,
+                                        df_i["x"].values])
             fig.add_trace(go.Scatter3d(x=x_f, 
                                     y=y_f, 
                                     z=z_f,
@@ -1763,7 +1763,7 @@ def plot_2d_proj(points, std_points=None, plane='best', ax=None, line_color='#1f
     qc = points[:,3] == 1
 
     if plane != 'best':
-        axis_map = {'z':0, 'y':1, 'x':2}
+        axis_map = {"z":0, "y":1, "x":2}
         axis_x = axis_map[plane[0]]
         axis_y = axis_map[plane[1]]
         x = points[qc,axis_x]
@@ -1856,7 +1856,7 @@ def plot_2d_proj_kde(mean_points, aligned_points, ax=None, line_color='#1f77b4',
     y_all = np.hstack(y_all)
     pos_all = np.hstack(pos_all)
 
-    data = pd.DataFrame(np.array([x_all, y_all, pos_all]).T, columns=['x', 'y', 'pos'])
+    data = pd.DataFrame(np.array([x_all, y_all, pos_all]).T, columns=["x", "y", 'pos'])
 
     #fig = plt.figure(figsize=(8,8))
 
@@ -1877,8 +1877,8 @@ def plot_2d_proj_kde(mean_points, aligned_points, ax=None, line_color='#1f77b4',
 #        newcmp = ListedColormap(vals)
     ax = ax or plt.gca()
     if kde:
-        sns.kdeplot(ax=ax, data=data, x='y', y='x', hue='pos', palette=palette, linewidths=0.05, common_norm=False, fill=False, legend=None, levels = 25, thresh=0.75, alpha=0.4)
-    #sns.scatterplot(data=data, x='y', y='x', hue='pos', palette='inferno', s = 6, alpha = 0.3, legend=None)
+        sns.kdeplot(ax=ax, data=data, x="y", y="x", hue='pos', palette=palette, linewidths=0.05, common_norm=False, fill=False, legend=None, levels = 25, thresh=0.75, alpha=0.4)
+    #sns.scatterplot(data=data, x="y", y="x", hue='pos', palette='inferno', s = 6, alpha = 0.3, legend=None)
     ax.plot(yf,xf, zorder=10, color=line_color, linewidth=3, clip_on=False)
     #print(y_m, x_m)
     color_positions = np.array(range(y_m.shape[0]))
