@@ -36,14 +36,14 @@ class IllegalParametersError(Exception):
 @dataclasses.dataclass
 class BeadDetectionParameters:
     """A bundle of parameters related to bead detection for assessment of drift correction accuracy"""
-    reference_frame: int
+    reference_timepoint: int
     reference_channel: int
     threshold: int
     min_intensity: int
     roi_pixels: int
 
     def _invalidate(self):
-        int_valued_attributes = ("reference_frame", "reference_channel", "threshold", "min_intensity", "roi_pixels")
+        int_valued_attributes = ("reference_timepoint", "reference_channel", "threshold", "min_intensity", "roi_pixels")
         errors = []
         for attr_name in int_valued_attributes:
             attr_value = getattr(self, attr_name)
@@ -130,7 +130,7 @@ class ReferenceImageStackDefinition:
         return self.image_stack.shape[0]
 
 
-def process_single_FOV_single_reference_frame(
+def process_single_FOV_single_reference_timepoint(
     image_handler: ImageHandler,
     reference_image_stack_definition: ReferenceImageStackDefinition,
     drift_table: pd.DataFrame,
@@ -139,7 +139,7 @@ def process_single_FOV_single_reference_frame(
     camera_params: CameraParameters, 
     ) -> pd.DataFrame:
     """
-    Compute the drift correction accuracy for a single hybridisation round / imaging frame, within a single field-of-view.
+    Compute the drift correction accuracy for a single hybridisation round / imaging timepoint, within a single field-of-view.
 
     Parameters
     ----------
@@ -177,8 +177,8 @@ def process_single_FOV_single_reference_frame(
     print(f"(FOV, time) pairs to skip: {skips}")
     timepoints = [t for t in range(T) if (fov_idx, t) not in skips]
     
-    # Get the bead ROIs for the current combo of FOV and frame/timepoint.
-    roi_centers = image_handler.read_bead_rois_file_accuracy(pos_idx=fov_idx, frame=bead_detection_params.reference_frame)
+    # Get the bead ROIs for the current combo of FOV and timepoint.
+    roi_centers = image_handler.read_bead_rois_file_accuracy(pos_idx=fov_idx, frame=bead_detection_params.reference_timepoint)
     if len(roi_centers) != image_handler.num_bead_rois_for_drift_correction_accuracy:
         warnings.warn(RuntimeWarning(f"Fewer ROIs available ({len(roi_centers)}) than requested ({image_handler.num_bead_rois_for_drift_correction_accuracy}) for FOV {fov_idx}"))
 
@@ -206,7 +206,7 @@ def process_single_FOV_single_reference_frame(
     fits = express_pixel_columns_as_nanometers(fits=fits, xy_cols=('y_loc', 'x_loc', 'sigma_xy'), z_cols=('z_loc', 'sigma_z'), camera_params=camera_params)
     
     # TODO: update if ever allowing channel (reg_ch_template) to be List[int] rather than simple int.
-    ref_points = fits.loc[(fits.t == bead_detection_params.reference_frame) & (fits.c == bead_detection_params.reference_channel), ['z_loc', 'y_loc', 'x_loc']].to_numpy() # Fits of fiducial beads in ref frame
+    ref_points = fits.loc[(fits.t == bead_detection_params.reference_timepoint) & (fits.c == bead_detection_params.reference_channel), ['z_loc', 'y_loc', 'x_loc']].to_numpy() # Fits of fiducial beads in ref frame
     print(f"Reference point count: {len(ref_points)}")
     res = []
     for t in tqdm.tqdm(timepoints):
@@ -323,7 +323,7 @@ def workflow(
     
     # Detection parameters
     bead_detection_params = BeadDetectionParameters(
-        reference_frame=H.drift_correction_reference_frame,
+        reference_timepoint=H.drift_correction_reference_timepoint,
         reference_channel=get_beads_channel(config), 
         threshold=config["bead_threshold"], 
         min_intensity=config["min_bead_intensity"],
@@ -373,7 +373,7 @@ def workflow(
     else:
         refspecs = (ReferenceImageStackDefinition(index=i, image_stack=imgs[i]) for i in range(len(drift_table.position.unique())))
     fits = (
-        process_single_FOV_single_reference_frame(
+        process_single_FOV_single_reference_timepoint(
             image_handler=H,
             reference_image_stack_definition=spec, 
             drift_table=drift_table, 

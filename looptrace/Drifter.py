@@ -166,7 +166,7 @@ def generate_drift_function_arguments__coarse_drift_only(
     full_pos_list: List[str], 
     pos_list: Iterable[str], 
     reference_images: List[np.ndarray], 
-    reference_frame: int, 
+    reference_timepoint: int, 
     reference_channel: int, 
     moving_images: List[np.ndarray], 
     moving_channel: int, 
@@ -185,7 +185,7 @@ def generate_drift_function_arguments__coarse_drift_only(
         Names over which to iterate
     reference_images : list of np.ndarray
         The image arrays on which to base the shifts
-    reference_frame : int
+    reference_timepoint : int
         The index of the frame (hybridisation round) on which the shifts are to be based
     reference_channel : int
         The index of the channel in which the reference signal is imaged (e.g., beads channel)
@@ -215,7 +215,7 @@ def generate_drift_function_arguments__coarse_drift_only(
         raise ArrayLikeLengthMismatchError(f"Full pos: {len(full_pos_list)}, ref imgs: {len(reference_images)}, mov imgs: {len(moving_images)}")
     for i, pos in takewhile(lambda i_and_p: i_and_p[0] <= stop_after, map(lambda p: (full_pos_list.index(p), p), pos_list)):
         print(f'Running coarse drift correction for position: {pos}.')
-        t_img = np.array(reference_images[i][reference_frame, reference_channel, ::downsampling, ::downsampling, ::downsampling])
+        t_img = np.array(reference_images[i][reference_timepoint, reference_channel, ::downsampling, ::downsampling, ::downsampling])
         mov_img = moving_images[i]
         if nuclei_mode:
             o_img = np.array(mov_img[moving_channel, ::downsampling, ::downsampling, ::downsampling])
@@ -261,7 +261,7 @@ def coarse_correction_workflow(
         full_pos_list=D.full_pos_list, 
         pos_list=D.pos_list, 
         reference_images=D.images_template, 
-        reference_frame=D.reference_frame, 
+        reference_timepoint=D.reference_timepoint, 
         reference_channel=D.reference_channel,
         moving_images=D.images_moving, 
         moving_channel=D.moving_channel, 
@@ -335,10 +335,10 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
         ref_img = drifter.get_reference_image(pos_idx)
         get_no_partition_message = lambda t: f"No bead ROIs partition for (pos={pos_idx}, frame={t})"
         
-        bead_rois = drifter.image_handler.read_bead_rois_file_shifting(pos_idx=pos_idx, frame=drifter.reference_frame)
+        bead_rois = drifter.image_handler.read_bead_rois_file_shifting(pos_idx=pos_idx, frame=drifter.reference_timepoint)
         
         if bead_rois.shape != beads_exp_shape:
-            msg_base = f"Unexpected bead ROIs shape for reference (pos={pos_idx}, frame={drifter.reference_frame})! ({bead_rois.shape}), expecting {beads_exp_shape}"
+            msg_base = f"Unexpected bead ROIs shape for reference (pos={pos_idx}, frame={drifter.reference_timepoint})! ({bead_rois.shape}), expecting {beads_exp_shape}"
             if len(bead_rois.shape) == 2 and bead_rois.shape[1] == beads_exp_shape[1]:
                 print(f"WARNING: {msg_base}")
             else:
@@ -531,14 +531,14 @@ class Drifter():
         return self.image_handler.drift_correction_reference_channel
 
     @property
-    def reference_frame(self) -> int:
-        return self.image_handler.drift_correction_reference_frame
+    def reference_timepoint(self) -> int:
+        return self.image_handler.drift_correction_reference_timepoint
 
     def get_moving_image(self, pos_idx: int, frame_idx: int) -> np.ndarray:
         return np.array(self.images_moving[pos_idx][frame_idx, self.moving_channel])
 
     def get_reference_image(self, pos_idx: int) -> np.ndarray:
-        return np.array(self.images_template[pos_idx][self.reference_frame, self.reference_channel])
+        return np.array(self.images_template[pos_idx][self.reference_timepoint, self.reference_channel])
 
     def gen_dc_images(self, pos):
         '''
