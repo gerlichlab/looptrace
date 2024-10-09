@@ -51,9 +51,9 @@ final case class RoiForAccuracy(index: RoiIndex, centroid: Point3D) extends Sele
 /** Helpers for working with indexed regions of interest (ROIs) */
 object SelectedRoi:
     /** The key for the ROI's index in JSON representation */
-    val indexKey: String = "index"
+    private val indexKey: String = "index"
     /** The key for the ROI's point/centroid in JSON representation */
-    val pointKey: String = "centroid"
+    private val pointKey: String = "centroid"
 
     given coord2Value: (Coordinate => ujson.Value) with
         override def apply(c: Coordinate): ujson.Value = 
