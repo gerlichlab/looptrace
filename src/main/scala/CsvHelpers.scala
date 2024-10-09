@@ -65,18 +65,6 @@ object CsvHelpers:
       * Read given file as CSV with header, and handle resource safety.
       *
       * @param f The path to the file to read as CSV
-      * @return Either a [[scala.util.Left]]-wrapped exception or a [[scala.util.Right]]-wrapped list of row records
-      */
-    def safeReadAllWithHeaders(f: os.Path): Either[Throwable, List[Map[String, String]]] = for {
-        reader <- Try{ CSVReader.open(f.toIO) }.toEither
-        result <- Try{ reader.allWithHeaders() }.toEither
-        _ = reader.close()
-    } yield result
-
-    /**
-      * Read given file as CSV with header, and handle resource safety.
-      *
-      * @param f The path to the file to read as CSV
       * @return Either a [[scala.util.Left]]-wrapped exception or a [[scala.util.Right]]-wrapped pair of columns and list of row records
       */
     def safeReadAllWithOrderedHeaders(f: os.Path): Either[Throwable, (List[String], List[Map[String, String]])] = for {
