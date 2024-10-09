@@ -131,7 +131,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
             fovColumn = "pos_index",
             regionColumn = "ref_timepoint",
             traceIdColumn = "trace_id",
-            timeColumn = "frame",
+            timeColumn = "timepoint",
             xySigmaColumn = "sigma_xy", 
             zSigmaColumn = "sigma_z", 
             zPointColumn = PointColumnZ("z"),
@@ -571,7 +571,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
             ev.contramap(_.identifier)
     end NapariSortable
     
-    /** Status of a point to display in napari, based on QC results and its position within the spot image frame */
+    /** Status of a point to display in napari, based on QC results and its position within the spot image timepoint */
     enum PointDisplayType:
         /** Point that has fulfilled all QC criteria */
         case QCPass

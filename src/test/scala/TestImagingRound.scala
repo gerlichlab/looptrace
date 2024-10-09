@@ -94,7 +94,7 @@ class TestImagingRound extends AnyFunSuite, ScalaCheckPropertyChecks, ImagingRou
             val data = ImagingRound.roundToJsonObject(blank).obj.toMap + ("probe" -> ujson.Str(probe.get))
             val error = intercept[ImagingRound.DecodingError]{ read[BlankImagingRound](write(data)) }
             error.whatWasBeingDecoded shouldEqual "ImagingRound"
-            error.messages.toList.count(_ ===  "Blank frame cannot have probe specified!") shouldEqual 1
+            error.messages.toList.count(_ ===  "Blank timepoint cannot have probe specified!") shouldEqual 1
         }
     }
 
@@ -126,7 +126,7 @@ class TestImagingRound extends AnyFunSuite, ScalaCheckPropertyChecks, ImagingRou
                     case (Some(true), None) => read[ImagingRound](jsonText) shouldEqual BlankImagingRound(name, time)
                     case (Some(true), Some(_)) => 
                         val error = intercept[ImagingRound.DecodingError]{ read[ImagingRound](jsonText) }
-                        error.messages.toList.count(_ === "Blank frame cannot have probe specified!") shouldEqual 1
+                        error.messages.toList.count(_ === "Blank timepoint cannot have probe specified!") shouldEqual 1
                 }
         }
     }
@@ -153,7 +153,7 @@ class TestImagingRound extends AnyFunSuite, ScalaCheckPropertyChecks, ImagingRou
         }
     }
 
-    test("Specifying that a blank frame is a repeat is an error, since doing so would have no effect.") {
+    test("Specifying that a blank timepoint is a repeat is an error, since doing so would have no effect.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         given arbName: Arbitrary[String] = genNameForJson.toArbitrary
         given reader: Reader[ImagingRound] = ImagingRound.rwForImagingRound

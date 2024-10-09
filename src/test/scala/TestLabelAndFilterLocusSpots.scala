@@ -144,7 +144,7 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, ScalaCheckPropertyChecks
     test("Probe exclusion is correct.") {
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
 
-        // Taken from the frame column of the traces input file
+        // Taken from the timepoint column of the traces input file
         // Regional time 5 has rows where it's the "locus time" also, but regional time 4 doesn't have this.
         val expectedTimepoints = (0 to 9).toSet - 4
         
@@ -178,7 +178,7 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, ScalaCheckPropertyChecks
                         assertPairwiseEquality(observed = obsRows.toList, expected = expRowsAll.toList)
                     }
                     // Just use strings here since Int-to-String is 1:1 (essentially), and this obviates need to unsafely lift String to Int.
-                    val discard = (r: Map[String, String]) => exclusions.map(_.toString).toSet.contains(r("frame"))
+                    val discard = (r: Map[String, String]) => exclusions.map(_.toString).toSet.contains(r("timepoint"))
                     withCsvPair(expFilteredPath, wholemealFilteredExpectationFile){ (obsRows: CsvRows, expRowsAll: CsvRows) =>
                         val expRowsFilt = expRowsAll.filterNot(discard)
                         assertPairwiseEquality(observed = obsRows.toList, expected = expRowsFilt.toList)

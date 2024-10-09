@@ -112,7 +112,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
         val FieldOfViewColumn = "pos_index"
         val TraceIdColumn = "trace_id"
         val RegionalBarcodeTimepointColumn = "ref_timepoint"
-        val LocusSpecificBarcodeTimepointColumn = "frame"
+        val LocusSpecificBarcodeTimepointColumn = "timepoint"
         val XCoordinateColumn = "x"
         val YCoordinateColumn = "y"
         val ZCoordinateColumn = "z"
