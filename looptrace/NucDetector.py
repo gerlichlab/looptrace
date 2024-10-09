@@ -422,7 +422,7 @@ class NucDetector:
             full_pos_list=self.pos_list, 
             pos_list=self.pos_list, 
             reference_images=self.image_handler.drift_correction_reference_images, 
-            reference_frame=self.image_handler.drift_correction_reference_frame,
+            reference_timepoint=self.image_handler.drift_correction_reference_timepoint,
             reference_channel=self.image_handler.drift_correction_reference_channel,
             moving_images=self.input_images,
             moving_channel=self.image_handler.drift_correction_moving_channel,

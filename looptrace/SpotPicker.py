@@ -105,7 +105,7 @@ class RoiOrderingSpecification:
 
     @staticmethod
     def row_order_columns() -> List[str]:
-        return ["position", 'roi_id', 'ref_timepoint', "frame"]
+        return ["position", 'roi_id', 'ref_timepoint', "timepoint"]
     
     @classmethod
     def get_file_sort_key(cls, file_key: str) -> FilenameKey:
@@ -590,7 +590,7 @@ class SpotPicker:
         num_frames_processed: dict[str, int] = {}
         skip_spot_image_reasons = defaultdict(lambda: defaultdict(dict))
         pos_index = self.image_handler.image_lists[self.input_name].index(pos_group_name)
-        for frame, frame_group in tqdm.tqdm(pos_group_data.groupby("frame")):
+        for frame, frame_group in tqdm.tqdm(pos_group_data.groupby("timepoint")):
             for ch, ch_group in frame_group.groupby("channel"):
                 image_stack = np.array(self.images[pos_index][int(frame), int(ch)])
                 for _, roi in ch_group.iterrows():
@@ -675,7 +675,7 @@ class SpotPicker:
                                 roi["zMin"]:roi["zMax"], 
                                 roi["yMin"]:roi["yMax"],
                                 roi["xMin"]:roi["xMax"]].copy()
-                fn = pos+'_'+str(roi["frame"])+'_'+str(roi['roi_id_pos']).zfill(4)
+                fn = pos+'_'+str(roi["timepoint"])+'_'+str(roi['roi_id_pos']).zfill(4)
                 arr_out = os.path.join(self.spot_images_path, fn + ".npy")
                 np.save(arr_out, spot_stack)
         return self.spot_images_path
@@ -754,7 +754,7 @@ def build_locus_spot_data_extraction_table(
                             dc_row["zDriftFinePixels"], dc_row["yDriftFinePixels"], dc_row["xDriftFinePixels"]])
 
     return pd.DataFrame(all_rois, columns=[
-        "position", "pos_index", "roi_number", "roi_id", "frame", "ref_timepoint", "channel", 
+        "position", "pos_index", "roi_number", "roi_id", "timepoint", "ref_timepoint", "channel", 
         "zMin", "zMax", "yMin", "yMax", "xMin", "xMax",
         "pad_z_min", "pad_z_max", "pad_y_min", "pad_y_max", "pad_x_min", "pad_x_max", 
         "zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels",
@@ -803,7 +803,7 @@ def extract_single_roi_img_inmem(
     elif z.start == z.stop or y.start == y.stop or x.start == x.stop:
         error = SpotImageSliceEmpty(f"Slice would result in at least one empty dimension: {(z, y, x)}")
     elif x_pad != (0, 0) or y_pad != (0, 0):
-        if background_frame is None or single_roi["frame"] != background_frame:
+        if background_frame is None or single_roi["timepoint"] != background_frame:
             error = SpotImagePaddingError(f"x or y has nonzero padding: x={x_pad}, y={y_pad}")
     # Determine the final ROI (sub)image of a spot for tracing.
     roi_img = np.array(image_stack[z, y, x]) if error is None else np.zeros((z.stop - z.start, y.stop - y.start, x.stop - x.start))

@@ -196,7 +196,7 @@ def test_only_region_timepoints_and_their_locus_timepoints_have_records_in_spot_
         exp_region_times = set(REGIONAL_TIMES)
         exp_reg_time_loc_time_pairs = [
             (rt, lt) 
-            for rt in rois_table["frame"]
+            for rt in rois_table["timepoint"]
             for lt in sorted(REGIONAL_TIMES + NON_REGIONAL_TIMES)
         ]
     else:
@@ -211,7 +211,7 @@ def test_only_region_timepoints_and_their_locus_timepoints_have_records_in_spot_
             # The regional spot itself is collected w/ its locus spots.
             loc_times = sorted([rt, *loc_times])
             # One record is generated per locus timepoint, per regional spot.
-            curr_reg_time_spot_count = (rois_table["frame"] == rt.get).sum()
+            curr_reg_time_spot_count = (rois_table["timepoint"] == rt.get).sum()
             exp_reg_time_loc_time_pairs.extend([(rt.get, lt.get) for lt in loc_times] * curr_reg_time_spot_count)
 
     spot_extraction_table: pd.DataFrame = build_locus_spot_data_extraction_table(
@@ -225,7 +225,7 @@ def test_only_region_timepoints_and_their_locus_timepoints_have_records_in_spot_
     print(f"Obs row count: {spot_extraction_table.shape[0]}")
 
     obs_reg_time_loc_time_pairs: list[(int, int)] = \
-        [(row["ref_timepoint"], row["frame"]) for _, row in spot_extraction_table.iterrows()]
+        [(row["ref_timepoint"], row["timepoint"]) for _, row in spot_extraction_table.iterrows()]
     
     obs_region_times = set(spot_extraction_table["ref_timepoint"].to_list())
     assert obs_region_times == exp_region_times, f"Expected and Observed region times differ: Expected = {exp_region_times}. Observed = {obs_region_times}"

@@ -126,7 +126,7 @@ class Tracer:
             filenames=self._iter_filenames(),
             image_data=self._images_wrapper, 
             background_data=self._background_wrapper, 
-            mask_ref_timepoints=self.roi_table["frame"].to_list() if self.image_handler.config.get("mask_fits", False) else None, 
+            mask_ref_timepoints=self.roi_table["timepoint"].to_list() if self.image_handler.config.get("mask_fits", False) else None, 
             cores=self.config.get("tracing_cores"),
         )
         

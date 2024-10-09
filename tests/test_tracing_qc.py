@@ -45,10 +45,9 @@ TRACES_FILE_LINES = """
 REF_DIST_COL = "ref_dist"
 REFERENCE_COORDINATES = ["z_ref", "y_ref", "x_ref"]
 
-# "frame" in the data
-REFERENCE_FRAMES = [22, 23]
-NON_REFERENCE_FRAMES = [0, 1]
-HYBRIDISATION_ROUNDS = NON_REFERENCE_FRAMES + REFERENCE_FRAMES
+REFERENCE_TIMEPOINTS = [22, 23]
+NON_REFERENCE_TIMEPOINTS = [0, 1]
+HYBRIDISATION_ROUNDS = NON_REFERENCE_TIMEPOINTS + REFERENCE_TIMEPOINTS
 
 
 @pytest.fixture(scope="session")
@@ -81,11 +80,11 @@ def test_reference_point_distance_computation_writes_reference__coordindates(tra
 
 @pytest.mark.parametrize("field_of_view", [0, 1])
 @pytest.mark.parametrize("trace_id", [0, 1])
-@pytest.mark.parametrize("reference_frame", REFERENCE_FRAMES)
+@pytest.mark.parametrize("reference_timepoint", REFERENCE_TIMEPOINTS)
 @pytest.mark.parametrize("ref_val_col", REFERENCE_COORDINATES)
-def test_rows_with_same_fov_region_and_trace_id_have_same_reference_coordinates(traces_table, field_of_view, trace_id, reference_frame, ref_val_col):
+def test_rows_with_same_fov_region_and_trace_id_have_same_reference_coordinates(traces_table, field_of_view, trace_id, reference_timepoint, ref_val_col):
     traces_table = _apply_reference_distances(traces_table)
-    subtab = traces_table[(traces_table.pos_index == field_of_view) & (traces_table.trace_id == trace_id) & (traces_table.ref_timepoint == reference_frame)]
+    subtab = traces_table[(traces_table.pos_index == field_of_view) & (traces_table.trace_id == trace_id) & (traces_table.ref_timepoint == reference_timepoint)]
     assert 1 == subtab[ref_val_col].nunique()
 
 
@@ -99,12 +98,12 @@ def test_rows_with_same_reference_coordinates_are_all_same_fov_region_and_trace_
     assert (1 == ref_val_groups).all()
 
 
-@pytest.mark.parametrize("reference_frame", REFERENCE_FRAMES)
-def test_all_reference_frame_data_points_have_zero_distance(traces_table, reference_frame):
+@pytest.mark.parametrize("reference_timepoint", REFERENCE_TIMEPOINTS)
+def test_all_reference_timepoint_data_points_have_zero_distance(traces_table, reference_timepoint):
     traces_table = _apply_reference_distances(traces_table)
     # Assertion applies only where frame is reference frame, and we parametrize in each reference frame.
-    subtab = traces_table[(traces_table.timepoint == traces_table.ref_timepoint) & (traces_table.ref_timepoint == reference_frame)]
-    print(subtab[['pos_index', 'trace_id', "frame", 'ref_timepoint', 'ref_dist']]) # for debugging if failing
+    subtab = traces_table[(traces_table.timepoint == traces_table.ref_timepoint) & (traces_table.ref_timepoint == reference_timepoint)]
+    print(subtab[['pos_index', 'trace_id', "timepoint", 'ref_timepoint', 'ref_dist']]) # for debugging if failing
     assert not subtab.empty and (subtab[REF_DIST_COL] == 0).all()
 
 

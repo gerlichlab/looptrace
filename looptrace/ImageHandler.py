@@ -243,7 +243,7 @@ class ImageHandler:
         return self.config["reg_ch_template"]
 
     @property
-    def drift_correction_reference_frame(self) -> int:
+    def drift_correction_reference_timepoint(self) -> int:
         return self.config["reg_ref_frame"]
 
     @property
