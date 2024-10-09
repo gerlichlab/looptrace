@@ -209,29 +209,29 @@ def single_position_to_zarr(
     chunks = tuple([chunk_dict[ax] for ax in default_axes])
     images = np.reshape(images, shape)
 
-    root.attrs['multiscale'] = {
-        'multiscales': [{
-            'version': '0.3', 
-            'name': name + '_' + pos_name, 
-            'datasets': [{'path': '0'}],
-            'axes': ['t','c',"z","y","x"],
+    root.attrs["multiscale"] = {
+        "multiscales": [{
+            "version": "0.3", 
+            "name": name + "_" + pos_name, 
+            "datasets": [{"path": "0"}],
+            "axes": ["t","c","z","y","x"],
         }]
     }
     if metadata:
-        root.attrs['metadata'] = metadata
+        root.attrs["metadata"] = metadata
 
-    compressor = compressor or numcodecs.Blosc(cname='zstd', clevel=5, shuffle=numcodecs.Blosc.BITSHUFFLE)
+    compressor = compressor or numcodecs.Blosc(cname="zstd", clevel=5, shuffle=numcodecs.Blosc.BITSHUFFLE)
 
     multiscale_level = root.create_dataset(name=str(0), compressor=compressor, shape=shape, chunks=chunks, dtype=dtype)
-    if 't' in chunk_axes:
+    if "t" in chunk_axes:
         multiscale_level[:] = images
-    elif size['t'] < 10 or images.size < 1e9:
-        for i in range(size['t']):
+    elif size["t"] < 10 or images.size < 1e9:
+        for i in range(size["t"]):
             single_image_to_zarr(multiscale_level, i, images[i])
     else:
         import joblib
-        joblib.Parallel(n_jobs=-1, prefer='threads', verbose=10)(joblib.delayed(single_image_to_zarr)
-                                                            (multiscale_level, i, images[i]) for i in range(size['t']))
+        joblib.Parallel(n_jobs=-1, prefer="threads", verbose=10)(joblib.delayed(single_image_to_zarr)
+                                                            (multiscale_level, i, images[i]) for i in range(size["t"]))
 
 
 def nuc_multipos_single_time_max_z_proj_zarr(
@@ -318,7 +318,7 @@ def images_to_ome_zarr(
             metadata=metadata,
             )
 
-    print('OME ZARR images generated.')
+    print("OME ZARR images generated.")
 
 
 def create_zarr_store(  path: Union[str, Path],
@@ -332,9 +332,9 @@ def create_zarr_store(  path: Union[str, Path],
     store = zarr.NestedDirectoryStore(os.path.join(path, pos_name))
     root = zarr.group(store=store, overwrite=True)
 
-    root.attrs['multiscales'] = [{'version': '0.4', 
-                                    'name': name + '_' + pos_name, 
-                                    'datasets': [{'path': '0',                     
+    root.attrs["multiscales"] = [{"version": "0.4", 
+                                    "name": name + "_" + pos_name, 
+                                    "datasets": [{"path": "0",                     
                                                     "coordinateTransformations": [{"type": "scale",
                                                                                     "scale": [1.0, 1.0] + voxel_size}]},],
                                     "axes": [
@@ -344,9 +344,9 @@ def create_zarr_store(  path: Union[str, Path],
                                         {"name": "y", "type": "space", "unit": "micrometer"},
                                         {"name": "x", "type": "space", "unit": "micrometer"}],}]
     if metadata is not None:
-        root.attrs['metadata'] = metadata
+        root.attrs["metadata"] = metadata
 
-    compressor = numcodecs.Blosc(cname='zstd', clevel=5, shuffle=numcodecs.Blosc.BITSHUFFLE)
+    compressor = numcodecs.Blosc(cname="zstd", clevel=5, shuffle=numcodecs.Blosc.BITSHUFFLE)
 
     level_store = root.create_dataset(name=str(0), compressor=compressor, shape=shape, chunks=chunks, dtype=dtype)
     return level_store
@@ -358,7 +358,7 @@ def zip_folder(folder, out_file, compression = zipfile.ZIP_STORED, remove_folder
     if remove_folder and os.path.dirname(out_file) == folder:
         raise ValueError(f"Cannot zip to file ({out_file}) in folder to be deleted ({folder})")
     filelist = sorted([(p.path, p.name) for p in os.scandir(folder)], key=itemgetter(0))
-    with zipfile.ZipFile(out_file, mode='w', compression=compression, compresslevel=3) as zfile:
+    with zipfile.ZipFile(out_file, mode="w", compression=compression, compresslevel=3) as zfile:
         for f, fn in tqdm.tqdm(filelist, total=len(filelist)):
             zfile.write(f, arcname=os.path.splitext(fn)[0])
     if remove_folder:
@@ -380,7 +380,7 @@ def zip_folder(folder, out_file, compression = zipfile.ZIP_STORED, remove_folder
 def image_from_svih5(path,ch=None,index=(slice(None),
                                     slice(None),
                                     slice(None))):
-    '''
+    """
     Parameters
     ----------
     path : String with file path to h5 file.
@@ -390,24 +390,24 @@ def image_from_svih5(path,ch=None,index=(slice(None),
     Returns
     -------
     Image as numpy array.
-    '''
+    """
     import h5py    
-    with h5py.File(path, 'r') as f:
+    with h5py.File(path, "r") as f:
         if ch is not None:
             index=(slice(ch,ch+1),slice(None),)+index
-            img=f[list(f.keys())[0]]['ImageData']['Image'][index][()][0,0]
+            img=f[list(f.keys())[0]]["ImageData"]["Image"][index][()][0,0]
         else:
             index=(slice(None),slice(None))+index
-            img=f[list(f.keys())[0]]['ImageData']['Image'][index][()][:,0]
+            img=f[list(f.keys())[0]]["ImageData"]["Image"][index][()][:,0]
         
     return img
 
 
 def all_matching_files_in_subfolders(path, template):
-    '''
+    """
     Generates a sorted list of all files with the template in the 
     filename in directory and subdirectories.
-    '''
+    """
 
     files = []
     # r=root, d=directories, f = files
@@ -418,12 +418,12 @@ def all_matching_files_in_subfolders(path, template):
     return sorted(files)
 
 def group_filelist(input_list, re_phrase):
-    '''
+    """
     Takes a list of strings (typically filepaths) and groups them according
     to a given element given by its position after splitting the string at split_char.
     E.g.for '..._WXXXX_PXXXX_TXXXX.ext' format this will by split_char='_' and element = -3.
     Returns a list of the , and 
-    '''
+    """
     grouped_list = []
     groups=[]
     for k, g in itertools.groupby(sorted(input_list),

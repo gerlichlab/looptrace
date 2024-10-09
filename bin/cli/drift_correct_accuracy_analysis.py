@@ -202,26 +202,26 @@ def process_single_FOV_single_reference_timepoint(
         for c in [bead_detection_params.reference_channel] 
         for i, roi in enumerate(roi_centers)
         )
-    fits = pd.DataFrame(fits, columns=['reference_fov', 't', 'c', 'roi', 'BG', 'A', 'z_loc', 'y_loc', 'x_loc', 'sigma_z', 'sigma_xy'])
-    fits = express_pixel_columns_as_nanometers(fits=fits, xy_cols=('y_loc', 'x_loc', 'sigma_xy'), z_cols=('z_loc', 'sigma_z'), camera_params=camera_params)
+    fits = pd.DataFrame(fits, columns=["reference_fov", "t", "c", "roi", "BG", "A", "z_loc", "y_loc", "x_loc", "sigma_z", "sigma_xy"])
+    fits = express_pixel_columns_as_nanometers(fits=fits, xy_cols=("y_loc", "x_loc", "sigma_xy"), z_cols=("z_loc", "sigma_z"), camera_params=camera_params)
     
     # TODO: update if ever allowing channel (reg_ch_template) to be List[int] rather than simple int.
-    ref_points = fits.loc[(fits.t == bead_detection_params.reference_timepoint) & (fits.c == bead_detection_params.reference_channel), ['z_loc', 'y_loc', 'x_loc']].to_numpy() # Fits of fiducial beads in ref timepoint
+    ref_points = fits.loc[(fits.t == bead_detection_params.reference_timepoint) & (fits.c == bead_detection_params.reference_channel), ["z_loc", "y_loc", "x_loc"]].to_numpy() # Fits of fiducial beads in ref timepoint
     print(f"Reference point count: {len(ref_points)}")
     res = []
     for t in tqdm.tqdm(timepoints):
         # TODO: update if ever allowing channel (reg_ch_template) to be List[int] rather than simple int.
-        mov_points = fits.loc[(fits.t == t) & (fits.c == bead_detection_params.reference_channel), ['z_loc', 'y_loc', 'x_loc']].to_numpy() # Fits of fiducial beads in moving timepoint
+        mov_points = fits.loc[(fits.t == t) & (fits.c == bead_detection_params.reference_channel), ["z_loc", "y_loc", "x_loc"]].to_numpy() # Fits of fiducial beads in moving timepoint
         print(f"mov_points shape: {mov_points.shape}")
-        shift = drift_table.loc[(drift_table.position == pos) & (drift_table.timepoint == t), ['zDriftFinePixels', 'yDriftFinePixels', 'xDriftFinePixels']].values[0]
+        shift = drift_table.loc[(drift_table.position == pos) & (drift_table.timepoint == t), ["zDriftFinePixels", "yDriftFinePixels", "xDriftFinePixels"]].values[0]
         shift[0] =  shift[0] * camera_params.nanometers_z # Extract calculated drift correction from drift correction file.
         shift[1] =  shift[1] * camera_params.nanometers_xy
         shift[2] =  shift[2] * camera_params.nanometers_xy
         # TODO: some of these statements can be combined to share values without needing to reindex and reconvert between data types.
-        fits.loc[(fits.t == t), ['z_dc', 'y_dc', 'x_dc']] = mov_points + shift #Apply precalculated drift correction to moving fits
+        fits.loc[(fits.t == t), ["z_dc", "y_dc", "x_dc"]] = mov_points + shift #Apply precalculated drift correction to moving fits
         # TODO: what happens if there's more than 1 channel here (within each timepoint), but ref points are just from 1 channel (dimensionality problem?)
-        fits.loc[(fits.t == t), ['z_dc_rel', 'y_dc_rel', 'x_dc_rel']] = np.abs(fits.loc[(fits.t == t), ['z_dc', 'y_dc', 'x_dc']].to_numpy() - ref_points)# Find offset between moving and reference points.
-        fits.loc[(fits.t == t), ['euc_dc_rel']] = np.sqrt(np.sum((fits.loc[(fits.t == t), ['z_dc', 'y_dc', 'x_dc']].to_numpy() - ref_points)**2, axis=1)) # Calculate 3D eucledian distance between points and reference.
+        fits.loc[(fits.t == t), ["z_dc_rel", "y_dc_rel", "x_dc_rel"]] = np.abs(fits.loc[(fits.t == t), ["z_dc", "y_dc", "x_dc"]].to_numpy() - ref_points)# Find offset between moving and reference points.
+        fits.loc[(fits.t == t), ["euc_dc_rel"]] = np.sqrt(np.sum((fits.loc[(fits.t == t), ["z_dc", "y_dc", "x_dc"]].to_numpy() - ref_points)**2, axis=1)) # Calculate 3D eucledian distance between points and reference.
         res.append(shift) # NB: the shift values are expressed in units of nanometers rather than pixels.
 
     # TODO: consider returning (and/or writing to disk) the resulting shift array (1 shift (1D array of size 3) per timepoint, for this field of view).
@@ -267,9 +267,9 @@ def finalise_fits_frame(fits: pd.DataFrame, min_signal_noise_ratio: NumberLike) 
         The minimum value of signal-to-noise ratio that a point can have and still pass QC
 
     """
-    fits[SIGNAL_NOISE_RATIO_NAME] = fits['A'] / fits['BG']
-    fits['QC'] = 0
-    fits.loc[fits[SIGNAL_NOISE_RATIO_NAME] >= min_signal_noise_ratio, 'QC'] = 1
+    fits[SIGNAL_NOISE_RATIO_NAME] = fits["A"] / fits["BG"]
+    fits["QC"] = 0
+    fits.loc[fits[SIGNAL_NOISE_RATIO_NAME] >= min_signal_noise_ratio, "QC"] = 1
     return fits
 
 
