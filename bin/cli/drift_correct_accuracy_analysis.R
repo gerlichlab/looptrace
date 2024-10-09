@@ -62,7 +62,7 @@ plot_means_and_intervals <- function(full_plot_data, fov = NULL) {
         geom_ribbon(aes(ymin = X$ci95_lower, ymax = X$ci95_upper), alpha=0.25) +
         geom_line(aes(y = X$mean_value), linewidth = 0.8) + 
         ylab("means and 95% CIs") + 
-        geom_point(alpha = 0.5) + xlab("frame index") + theme_minimal() + 
+        geom_point(alpha = 0.5) + xlab("timepoint") + theme_minimal() + 
         SCALE_FILL_4 + SCALE_COLOUR_4
     return(p)
 }
@@ -74,7 +74,7 @@ plot_medians_and_iqrs <- function(full_plot_data, fov = NULL) {
         geom_ribbon(aes(ymin = X$iqr_lower, ymax = X$iqr_upper), alpha=0.25) +
         geom_line(aes(y = X$median_value), linewidth = 0.8) + 
         ylab("medians and IQRs") + 
-        geom_point(alpha = 0.5) + xlab("frame index") + theme_minimal() + 
+        geom_point(alpha = 0.5) + xlab("timepoint") + theme_minimal() + 
         SCALE_FILL_4 + SCALE_COLOUR_4
     return(p)
 }

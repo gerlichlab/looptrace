@@ -19,7 +19,7 @@ from looptrace import *
 from looptrace.Drifter import coarse_correction_workflow, fine_correction_workflow as run_fine_drift_correction
 from looptrace.ImageHandler import ImageHandler
 from looptrace.NucDetector import NucDetector
-from looptrace.Tracer import Tracer, run_frame_name_and_distance_application
+from looptrace.Tracer import Tracer, run_timepoint_name_and_distance_application
 from looptrace.configuration import KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS
 from looptrace.conversion_to_zarr import one_to_one as run_zarr_production
 from looptrace.image_processing_functions import extract_labeled_centroids
@@ -134,7 +134,7 @@ def plot_spot_counts(rounds_config: ExtantFile, params_config: ExtantFile, spot_
             "--unfiltered-spots-file", str(H.raw_spots_file), 
             "--nuclei-filtered-spots-file", str(H.nuclei_filtered_spots_file_path),
             ]
-        probe_name_extra = ["--probe-names"] + H.frame_names
+        probe_name_extra = ["--probe-names"] + H.timepoint_names
     elif spot_type == SpotType.LOCUS_SPECIFIC:
         filtered = H.traces_file_qc_filtered
         extra_files = []
@@ -415,7 +415,7 @@ class LooptracePipeline(pypiper.Pipeline):
                 nofail=True,
             ),
             pypiper.Stage(name="drift_correction__coarse", func=run_coarse_drift_correction, f_kwargs=rounds_params_images), 
-            # Find/define all the bead ROIs in each (FOV, frame) pair.
+            # Find/define all the bead ROIs in each (FOV, timepoint) pair.
             pypiper.Stage(name="bead_roi_generation", func=gen_all_bead_rois, f_kwargs=rounds_params_images),
             # Count detected bead ROIs for each timepoint, mainly to see if anything went awry during some phase of the imaging, e.g. air bubble.
             pypiper.Stage(name="bead_roi_detection_analysis", func=run_all_bead_roi_detection_analysis, f_kwargs=rounds_params_images),
@@ -447,7 +447,7 @@ class LooptracePipeline(pypiper.Pipeline):
                 func=plot_spot_counts, 
                 f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config, "spot_type": SpotType.REGIONAL},
             ), 
-            # computes pad_x_min, etc.; writes *_dc_rois.csv (much bigger, since regional spots x frames)
+            # computes pad_x_min, etc.; writes *_dc_rois.csv (much bigger, since regional spots x timepoints)
             pypiper.Stage(name="spot_bounding", func=run_spot_bounding, f_kwargs=rounds_params_images),
             pypiper.Stage(name="spot_extraction", func=run_spot_extraction, f_kwargs=rounds_params_images),
             pypiper.Stage(
@@ -462,7 +462,7 @@ class LooptracePipeline(pypiper.Pipeline):
             ),
             pypiper.Stage(name="tracing", func=run_chromatin_tracing, f_kwargs=rounds_params_images),
             pypiper.Stage(name="trace_annotation", func=annotate_traces, f_kwargs=rounds_params_images),
-            pypiper.Stage(name="spot_region_distances", func=run_frame_name_and_distance_application, f_kwargs=rounds_params_images), 
+            pypiper.Stage(name="spot_region_distances", func=run_timepoint_name_and_distance_application, f_kwargs=rounds_params_images), 
             pypiper.Stage(name=TRACING_QC_STAGE_NAME, func=qc_locus_spots_and_prep_points, f_kwargs=rounds_params_images),
             pypiper.Stage(
                 name="spot_counts_visualisation__locus_specific", 

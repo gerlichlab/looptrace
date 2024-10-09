@@ -46,7 +46,7 @@ def workflow(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run spot detection on all frames and channels listed in config.")
+    parser = argparse.ArgumentParser(description="Run spot detection on all timepoints and channels listed in config.")
     parser.add_argument("rounds_config", type=ExtantFile.from_string, help="Imaging rounds config file path")
     parser.add_argument("params_config", type=ExtantFile.from_string, help="Looptrace parameters config file path")
     parser.add_argument("images_folder", type=ExtantFolder.from_string, help="Path to folder with images to read.")

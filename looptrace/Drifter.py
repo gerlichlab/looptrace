@@ -186,7 +186,7 @@ def generate_drift_function_arguments__coarse_drift_only(
     reference_images : list of np.ndarray
         The image arrays on which to base the shifts
     reference_timepoint : int
-        The index of the frame (hybridisation round) on which the shifts are to be based
+        The index of the timepoint (hybridisation round) on which the shifts are to be based
     reference_channel : int
         The index of the channel in which the reference signal is imaged (e.g., beads channel)
     moving_images : list of np.ndarray
@@ -203,7 +203,7 @@ def generate_drift_function_arguments__coarse_drift_only(
     Returns
     -------
     Iterable of (str, int, np.ndarray, np.ndarray)
-        Bundle of position (FOV), frame (hybdridisation timepoint), reference image, and shifted image
+        Bundle of position (FOV), timepoint, reference image, and shifted image
 
     Raises
     ------
@@ -302,11 +302,11 @@ def fine_correction_workflow(rounds_config: ExtantFile, params_config: ExtantFil
 def iter_coarse_drifts_by_position(filepath: Union[str, Path, ExtantFile]) -> Iterable[Tuple[str, pd.DataFrame]]:
     print(f"Reading coarse drift table: {filepath}")
     coarse_table = read_table_pandas(filepath)
-    coarse_table = coarse_table.sort_values([POSITION_COLUMN, TIMEPOINT_COLUMN]) # Sort so that grouping by position then frame doesn't alter order.
+    coarse_table = coarse_table.sort_values([POSITION_COLUMN, TIMEPOINT_COLUMN]) # Sort so that grouping by position then timepoint doesn't alter order.
     return coarse_table.groupby(POSITION_COLUMN)
 
 
-def _get_frame_and_coarse(row) -> Tuple[int, Tuple[int, int, int]]:
+def _get_timepoint_and_coarse(row) -> Tuple[int, Tuple[int, int, int]]:
     return row[TIMEPOINT_COLUMN], tuple(row[COARSE_DRIFT_COLUMNS])
 
 
@@ -325,7 +325,7 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
     """
     roi_px = drifter.bead_roi_px
     beads_exp_shape = (drifter.num_bead_rois_for_drift_correction, 3)
-    pos_time_problems = drifter.image_handler.position_frame_pairs_with_severe_problems
+    pos_time_problems = drifter.image_handler.position_timepoint_pairs_with_severe_problems
     for position, position_group in iter_coarse_drifts_by_position(filepath=drifter.dc_file_path__coarse):
         pos_idx = drifter.full_pos_list.index(position)
         if not drifter.overwrite and drifter.checkpoint_filepath(pos_idx=pos_idx).is_file():
@@ -333,12 +333,12 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
             continue
         print(f"Running fine drift correction for position {position} (index {pos_idx})")
         ref_img = drifter.get_reference_image(pos_idx)
-        get_no_partition_message = lambda t: f"No bead ROIs partition for (pos={pos_idx}, frame={t})"
+        get_no_partition_message = lambda t: f"No bead ROIs partition for (pos={pos_idx}, timepoint={t})"
         
-        bead_rois = drifter.image_handler.read_bead_rois_file_shifting(pos_idx=pos_idx, frame=drifter.reference_timepoint)
+        bead_rois = drifter.image_handler.read_bead_rois_file_shifting(pos_idx=pos_idx, timepoint=drifter.reference_timepoint)
         
         if bead_rois.shape != beads_exp_shape:
-            msg_base = f"Unexpected bead ROIs shape for reference (pos={pos_idx}, frame={drifter.reference_timepoint})! ({bead_rois.shape}), expecting {beads_exp_shape}"
+            msg_base = f"Unexpected bead ROIs shape for reference (pos={pos_idx}, timepoint={drifter.reference_timepoint})! ({bead_rois.shape}), expecting {beads_exp_shape}"
             if len(bead_rois.shape) == 2 and bead_rois.shape[1] == beads_exp_shape[1]:
                 print(f"WARNING: {msg_base}")
             else:
@@ -353,51 +353,51 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
             # Exactly 1 row per FOV per timepoint; here, we iterate over timepoints for current FOV.
             for _, row in position_group.iterrows():
                 # This should be unique now in frame, since we're iterating within a single FOV.
-                frame, coarse = _get_frame_and_coarse(row)
-                print(f"Current frame: {frame}")
+                timepoint, coarse = _get_timepoint_and_coarse(row)
+                print(f"Current timepoint: {timepoint}")
                 
                 # Use current (FOV, time) pair if and only if it has a beads partition defined.
                 try:
-                    _ = drifter.image_handler.get_bead_rois_file(pos_idx=pos_idx, frame=frame, purpose="shifting")
+                    _ = drifter.image_handler.get_bead_rois_file(pos_idx=pos_idx, timepoint=timepoint, purpose="shifting")
                 except PathWrapperException: # arises iff the file doesn't exist for current (FOV, time), because ExtantFile wrapping fails
-                    print(f"WARNING: {get_no_partition_message(frame)}")
-                    assert (pos_idx, frame) in pos_time_problems, \
-                        f"No bead ROIs for fine DC for (FOV={pos_idx}, time={frame}), but no evidence of a problem there"
+                    print(f"WARNING: {get_no_partition_message(timepoint)}")
+                    assert (pos_idx, timepoint) in pos_time_problems, \
+                        f"No bead ROIs for fine DC for (FOV={pos_idx}, time={timepoint}), but no evidence of a problem there"
                     fine = (0.0, 0.0, 0.0)
                 else:
-                    mov_img = drifter.get_moving_image(pos_idx=pos_idx, frame_idx=frame)
-                    print(f"Computing fine drifts: ({position}, {frame})")
+                    mov_img = drifter.get_moving_image(pos_idx=pos_idx, timepoint_idx=timepoint)
+                    print(f"Computing fine drifts: ({position}, {timepoint})")
                     mov_bead_subimgs = Parallel(n_jobs=-1, prefer='threads')(delayed(extract_single_bead)(pt, mov_img, bead_roi_px=roi_px, drift_coarse=coarse) for pt in tqdm.tqdm(bead_rois))
                     mov_bead_fits = Parallel(n_jobs=-1, prefer='threads')(delayed(fit_bead_coordinates)(mbi) for mbi in tqdm.tqdm(mov_bead_subimgs))
                     fine_drifts = [subtract_point_fits(ref, mov) for ref, mov in zip(ref_bead_fits, mov_bead_fits)]
                     fine = finalise_fine_drift(fine_drifts)
-                curr_position_rows.append((frame, position) + coarse + fine)
+                curr_position_rows.append((timepoint, position) + coarse + fine)
         elif drifter.method_name == Methods.CROSS_CORRELATION_NAME.value:
             print("Extracting reference bead images")
             ref_bead_subimgs = [extract_single_bead(point, ref_img, bead_roi_px=roi_px) for point in bead_rois]
-            print("Iterating over frames/timepoints/hybridisations")
+            print("Iterating over timepoints/hybridisations")
             for _, row in position_group.iterrows():
                 # This should be unique now in frame, since we're iterating within a single FOV.
-                frame, coarse = _get_frame_and_coarse(row)
-                print(f"Current frame: {frame}")
+                timepoint, coarse = _get_timepoint_and_coarse(row)
+                print(f"Current timepoint: {timepoint}")
                 
                 # Use current (FOV, time) pair if and only if it has a beads partition defined.
                 try:
-                    _ = drifter.image_handler.get_bead_rois_file(pos_idx=pos_idx, frame=frame, purpose="shifting")
+                    _ = drifter.image_handler.get_bead_rois_file(pos_idx=pos_idx, timepoint=timepoint, purpose="shifting")
                 except PathWrapperException: # Current (FOV, time) pair doesn't have a beads partition defined.
-                    print(f"WARNING: {get_no_partition_message(frame)}")
-                    assert (pos_idx, frame) in pos_time_problems, \
-                        f"No bead ROIs for fine DC for (FOV={pos_idx}, time={frame}), but no evidence of a problem there"
+                    print(f"WARNING: {get_no_partition_message(timepoint)}")
+                    assert (pos_idx, timepoint) in pos_time_problems, \
+                        f"No bead ROIs for fine DC for (FOV={pos_idx}, time={timepoint}), but no evidence of a problem there"
                     fine = (0.0, 0.0, 0.0)
                 else:
-                    mov_img = drifter.get_moving_image(pos_idx=pos_idx, frame_idx=frame)
-                    print(f"Computing fine drifts: ({position}, {frame})")
+                    mov_img = drifter.get_moving_image(pos_idx=pos_idx, timepoint_idx=timepoint)
+                    print(f"Computing fine drifts: ({position}, {timepoint})")
                     fine_drifts = Parallel(n_jobs=-1, prefer='threads')(
                         delayed(lambda point, ref_bead_img: correlate_single_bead(ref_bead_img, extract_single_bead(point, mov_img, bead_roi_px=roi_px, drift_coarse=coarse), 100))(*args)
                         for args in tqdm.tqdm(zip(bead_rois, ref_bead_subimgs))
                         )
                     fine = finalise_fine_drift(fine_drifts)
-                curr_position_rows.append((frame, position) + coarse + fine)
+                curr_position_rows.append((timepoint, position) + coarse + fine)
         else:
             raise Exception(f"Unknown drift correction method: {drifter.method_name}")
         
@@ -534,8 +534,8 @@ class Drifter():
     def reference_timepoint(self) -> int:
         return self.image_handler.drift_correction_reference_timepoint
 
-    def get_moving_image(self, pos_idx: int, frame_idx: int) -> np.ndarray:
-        return np.array(self.images_moving[pos_idx][frame_idx, self.moving_channel])
+    def get_moving_image(self, pos_idx: int, timepoint_idx: int) -> np.ndarray:
+        return np.array(self.images_moving[pos_idx][timepoint_idx, self.moving_channel])
 
     def get_reference_image(self, pos_idx: int) -> np.ndarray:
         return np.array(self.images_template[pos_idx][self.reference_timepoint, self.reference_channel])

@@ -17,7 +17,7 @@ cli_parser$add_argument("--num-rounds", type = "integer", required = TRUE, help=
 cli_parser$add_argument("--counts-files-prefix", default = "bead_rois__", help = "Prefix for files to find to count ROIs")
 cli_parser$add_argument("--counts-files-extension", default = "csv", help = "Extension for files to fine to count ROIs")
 cli_parser$add_argument("--do-not-modify-counts", action = "store_true", help = "Indicate that counts are real counts not line counts (no header, e.g.)")
-cli_parser$add_argument("--position-frame-delimiter", default = "_", help = "Delimiter between position and frame in filename")
+cli_parser$add_argument("--position-timepoint-delimiter", default = "_", help = "Delimiter between position and timepoint in filename")
 cli_parser$add_argument("--qc-code-column", type = "integer", default = 7, help="Column index (1-based) of the field with the QC value (empty for QC pass) in each bead ROIs file")
 ## Parse the CLI arguments.
 opts <- cli_parser$parse_args()
@@ -37,25 +37,25 @@ stripPrefix <- function(prefix, target) {
 stripSuffix <- function(suffix, target) {
     stringi::stri_replace_last_fixed(str = target, pattern = suffix, replacement = "")
 }
-## Parse field of view (FOV / position) and frame / hybridisation timepoint/round from given filename, based 
-## on given prefix and extension at command-line, and delimiter assumed or given between position and frame in filename.
-parsePositionAndFrame <- function(fn) {
+## Parse field of view (FOV / position) and hybridisation timepoint/round from given filename, based 
+## on given prefix and extension at command-line, and delimiter assumed or given between position and timepoint in filename.
+parsePositionAndTimepoint <- function(fn) {
     encoded <- stripPrefix(prefix = opts$counts_files_prefix, target = fn)
     encoded <- stripSuffix(suffix = paste0(".", opts$counts_files_extension), target = encoded)
-    fields <- unlist(strsplit(encoded, opts$position_frame_delimiter))
+    fields <- unlist(strsplit(encoded, opts$position_timepoint_delimiter))
     if (length(fields) != 2) {
-        stop(sprintf("Failed to parse position and frame from filename: %s. %s field(s): %s", fn, length(fields), paste0(fields, collapse = ",")))
+        stop(sprintf("Failed to parse position and timepoint from filename: %s. %s field(s): %s", fn, length(fields), paste0(fields, collapse = ",")))
     }
-    list(position = as.integer(fields[1]), frame = as.integer(fields[2]))
+    list(position = as.integer(fields[1]), timepoint = as.integer(fields[2]))
 }
 
 # Count the number of QC-passing (non-failed) ROIs in a particular file (1 file per FOV + timepoint pair).
 countPassingQC <- function(f) {
     fn <- basename(f)
-    p_and_f <- parsePositionAndFrame(fn)
+    p_and_t <- parsePositionAndTimepoint(fn)
     codes <- fread(f, sep = delimiter)[[opts$qc_code_column]]
     n_qc_pass <- sum(codes == "") + sum(is.na(codes))
-    list(position = p_and_f[["position"]], frame = p_and_f[["frame"]], filename = fn, count = n_qc_pass)
+    list(position = p_and_t[["position"]], timepoint = p_and_t[["timepoint"]], filename = fn, count = n_qc_pass)
 }
 
 # Write the count of ROIs from each (FOV, timepoint) file, either unfiltered or filtered counts.
@@ -67,11 +67,11 @@ writeDataFile <- function(counts_table) {
 }
 
 buildUnfilteredHeatmap <- function(counts_table) {
-    ggplot(counts_table, aes(x = frame, y = position, fill = count_unfiltered))
+    ggplot(counts_table, aes(x = timepoint, y = position, fill = count_unfiltered))
 }
 
 buildFilteredHeatmap <- function(counts_table) {
-    ggplot(counts_table, aes(x = frame, y = position, fill = count_filtered))
+    ggplot(counts_table, aes(x = timepoint, y = position, fill = count_filtered))
 }
 
 # Create the heatmap for the given counts data (1 count per (FOV, time) pair).
@@ -101,7 +101,7 @@ saveCountsPlot <- function(fig, plot_type_name) {
 }
 
 # Sort by FOV and then timepoint.
-setKeyPF <- function(unkeyed) { setkey(unkeyed, position, frame) }
+setKeyPF <- function(unkeyed) { setkey(unkeyed, position, timepoint) }
 
 # Build the unfiltered table.
 pattern <- sprintf("%s*.%s", opts$counts_files_prefix, opts$counts_files_extension)
@@ -122,7 +122,7 @@ roi_counts <- roi_counts[filename != "total", ]
 ##       but also validate that hierarchy / particular counts, too.
 exp_rows_counts <- opts$num_positions * opts$num_rounds
 if (nrow(roi_counts) != exp_rows_counts) {
-    stop(sprintf("For %s positions and %s frames, %s counts are expected, but got %s", opts$num_positions, opts$num_rounds, exp_rows_counts, nrow(roi_counts)))
+    stop(sprintf("For %s positions and %s timepoints, %s counts are expected, but got %s", opts$num_positions, opts$num_rounds, exp_rows_counts, nrow(roi_counts)))
 }
 if (any(!startsWith(roi_counts$filename, opts$counts_files_prefix))) {
     stop("Number of rows with invalid prefix: ", sum(!startsWith(roi_counts$filename, opts$counts_files_prefix)))
@@ -145,12 +145,12 @@ if (any(roi_counts$count < 0)) {
 ## Print the validated table.
 message("Printing validated table")
 roi_counts
-## Parse position and frame from each filename.
-pos_and_frame <- lapply(roi_counts$filename, parsePositionAndFrame)
-## Finalise the table by adding the position and frame information.
-roi_counts$position <- sapply(pos_and_frame, function(e) e[["position"]])
-roi_counts$frame <- sapply(pos_and_frame, function(e) e[["frame"]])
-roi_counts[, .(position, frame, filename, count)] # more natural/intuitive sequence of columns
+## Parse position and timepoint from each filename.
+pos_and_timepoint <- lapply(roi_counts$filename, parsePositionAndTimepoint)
+## Finalise the table by adding the position and timepoint information.
+roi_counts$position <- sapply(pos_and_timepoint, function(e) e[["position"]])
+roi_counts$timepoint <- sapply(pos_and_timepoint, function(e) e[["timepoint"]])
+roi_counts[, .(position, timepoint, filename, count)] # more natural/intuitive sequence of columns
 setKeyPF(roi_counts)
 
 # Create the filtered counts table.
@@ -162,7 +162,7 @@ message("...done.")
 message("Printing filtered counts table (before sorting)...")
 roi_counts_filtered
 ## ...then, convert the values by column, according to column type...
-type_by_column = list(position = as.integer, frame = as.integer, filename = as.character, count = as.integer)
+type_by_column = list(position = as.integer, timepoint = as.integer, filename = as.character, count = as.integer)
 for (col in names(type_by_column)) {
     convert = type_by_column[[col]]
     set(roi_counts_filtered, j = col, value = convert(roi_counts_filtered[[col]]))
@@ -173,9 +173,9 @@ setKeyPF(roi_counts_filtered)
 count_column_suffixes <- c("_unfiltered", "_filtered")
 
 data_table_merged <- merge(
-    roi_counts[, .(position, frame, count)], 
-    roi_counts_filtered[, .(position, frame, count)], 
-    by = c("position", "frame"), 
+    roi_counts[, .(position, timepoint, count)], 
+    roi_counts_filtered[, .(position, timepoint, count)], 
+    by = c("position", "timepoint"), 
     suffixes = count_column_suffixes
 )
 
@@ -188,7 +188,7 @@ for (count_suffix in count_column_suffixes) {
 data_file <- writeDataFile(data_table_merged)
 message("Wrote combined data: ", data_file)
 
-message("Building (frame, FOV) bead ROI count heatmaps")
+message("Building (timepoint, FOV) bead ROI count heatmaps")
 roi_counts_heatmap <- buildCountsHeatmap(data_table_merged, "unfiltered")
 saveCountsPlot(fig = roi_counts_heatmap, plot_type_name = "unfiltered.heatmap")
 roi_counts_heatmap <- buildCountsHeatmap(data_table_merged, "filtered")

@@ -83,11 +83,11 @@ def find_config_file_errors(rounds_config: ExtantFile, params_config: ExtantFile
         if nuclei_detection_method != NucSegMethod.CELLPOSE.value:
             errors.append(f"Unsupported nuclei detection method (key '{NucDetector.DETECTION_METHOD_KEY}')! {nuclei_detection_method}")
     try:
-        nuc_ref_timepoint = parameters["nuc_ref_frame"]
+        nuc_ref_timepoint = parameters["nuc_ref_timepoint"]
     except KeyError:
         pass
     else:
-        msg_base = f"Nuclei frame ('nuc_ref_frame') is deprecated, as it's assumed that nuclei are imaged in exactly 1 timepoint."
+        msg_base = f"Nuclei timepoint ('nuc_ref_timepoint') is deprecated, as it's assumed that nuclei are imaged in exactly 1 timepoint."
         if nuc_ref_timepoint == 0:
             warnings.warn(msg_base, DeprecationWarning)
         else:

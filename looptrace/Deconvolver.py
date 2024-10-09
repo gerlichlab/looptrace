@@ -125,7 +125,7 @@ class Deconvolver:
         from looptrace.bead_roi_generation import extract_single_bead, generate_bead_rois
         from looptrace.gaussfit import fitSymmetricGaussian3DMLE
 
-        t_slice = self.config['psf_bead_frame']
+        t_slice = self.config['psf_bead_timepoint']
         ch = self.config['psf_bead_ch']
         
         threshold = self.config['bead_threshold']

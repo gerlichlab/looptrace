@@ -117,7 +117,7 @@ class RoiOrderingSpecification:
         return cls.FilenameKey(position=pos, roi_id=int(roi), ref_timepoint=int(ref))
 
 
-def finalise_single_spot_props_table(spot_props: pd.DataFrame, position: str, frame: int, channel: int) -> pd.DataFrame:
+def finalise_single_spot_props_table(spot_props: pd.DataFrame, position: str, timepoint: int, channel: int) -> pd.DataFrame:
     """
     Perform the addition of several context-relevant fields to the table of detected spot properties for a particular image and channel.
 
@@ -130,7 +130,7 @@ def finalise_single_spot_props_table(spot_props: pd.DataFrame, position: str, fr
         Data table with properties (location, intensity, etc.) of detected spots
     position : str
         Hybridisation round / timepoint in which spots were detected
-    frame : int
+    timepoint : int
         Hybridisation round / timepoint for which spots were detected
     channel : int
         Imaging channel in which spots were detected
@@ -142,7 +142,7 @@ def finalise_single_spot_props_table(spot_props: pd.DataFrame, position: str, fr
     """
     old_cols = list(spot_props.columns)
     new_cols = ["position", "timepoint", "channel"]
-    spot_props[new_cols] = [position, frame, channel]
+    spot_props[new_cols] = [position, timepoint, channel]
     return spot_props[new_cols + old_cols]
 
 
@@ -155,7 +155,7 @@ class SpotDetectionParameters:
     # TODO: non-nullity requirement for crosstalk_channel is coupled to this condition, and this should be reflected in the types.
     subtract_beads: bool
     crosstalk_channel: Optional[int]
-    crosstalk_frame: Optional[int]
+    crosstalk_timepoint: Optional[int]
     roi_image_size: Optional[RoiImageSize]
 
     def try_centering_spot_box_coordinates(self, spots_table: pd.DataFrame) -> pd.DataFrame:
@@ -165,7 +165,7 @@ class SpotDetectionParameters:
         return roi_center_to_bbox(spots_table, roi_size=dims)
 
 
-def compute_downsampled_image(full_image: da.core.Array, *, frame: int, channel: int, downsampling: int) -> np.ndarray:
+def compute_downsampled_image(full_image: da.core.Array, *, timepoint: int, channel: int, downsampling: int) -> np.ndarray:
     """
     Standardise the way to pull--for a single FOV--the data for a particular (time, channel) combo, with downsampling.
 
@@ -173,7 +173,7 @@ def compute_downsampled_image(full_image: da.core.Array, *, frame: int, channel:
     ----------
     full_image : np.ndarray
         The full dask array of image data, with all timepoints, channels, and spatial dimensions for a particular FOV
-    frame : int
+    timepoint : int
         The imaging timepoint for which to pull data
     channel : int
         The imaging channel for which to pull data
@@ -183,24 +183,24 @@ def compute_downsampled_image(full_image: da.core.Array, *, frame: int, channel:
     Returns
     -------
     np.ndarray
-        The pixel data for the particular frame and channel requested, with the given downsampling factor
+        The pixel data for the particular timepoint and channel requested, with the given downsampling factor
     """
-    return full_image[frame, channel, ::downsampling, ::downsampling, ::downsampling].compute()
+    return full_image[timepoint, channel, ::downsampling, ::downsampling, ::downsampling].compute()
 
 
-def detect_spot_single_fov_single_frame(
+def detect_spot_single_fov_single_timepoint(
         single_fov_img: np.ndarray, 
-        frame: int, 
+        timepoint: int, 
         fish_channel: int, 
         spot_threshold: NumberLike, 
         detection_parameters: SpotDetectionParameters
         ) -> pd.DataFrame:
     print(f"Computing image for spot detection based on downsampling ({detection_parameters.downsampling})")
-    img = compute_downsampled_image(single_fov_img, frame=frame, channel=fish_channel, downsampling=detection_parameters.downsampling)
-    crosstalk_frame = frame if detection_parameters.crosstalk_frame is None else detection_parameters.crosstalk_frame
+    img = compute_downsampled_image(single_fov_img, timepoint=timepoint, channel=fish_channel, downsampling=detection_parameters.downsampling)
+    crosstalk_timepoint = timepoint if detection_parameters.crosstalk_timepoint is None else detection_parameters.crosstalk_timepoint
     if detection_parameters.subtract_beads:
         # TODO: non-nullity requirement for crosstalk_channel is coupled to this condition, and this should be reflected in the types.
-        bead_img = compute_downsampled_image(single_fov_img, frame=crosstalk_frame, channel=detection_parameters.crosstalk_channel, downsampling=detection_parameters.downsampling)
+        bead_img = compute_downsampled_image(single_fov_img, timepoint=crosstalk_timepoint, channel=detection_parameters.crosstalk_channel, downsampling=detection_parameters.downsampling)
         img, _ = ip.subtract_crosstalk(source=img, bleed=bead_img, threshold=0)
     spot_detection_result: spotfishing.DetectionResult = detection_parameters.detection_function(img, threshold=spot_threshold)
     spot_props: pd.DataFrame = spot_detection_result.table
@@ -214,24 +214,24 @@ def build_spot_prop_table(
         img: np.ndarray, 
         position: str, 
         channel: int, 
-        frame_spec: "SingleFrameDetectionSpec", 
+        timepoint_spec: "SingleTimepointDetectionSpec", 
         detection_parameters: "SpotDetectionParameters"
         ) -> pd.DataFrame:
-    frame = frame_spec.timepoint
-    print(f"Building spot properties table; position={position}, frame={frame}, channel={channel}")
-    spot_props = detect_spot_single_fov_single_frame(
+    timepoint = timepoint_spec.timepoint
+    print(f"Building spot properties table; position={position}, timepoint={timepoint}, channel={channel}")
+    spot_props = detect_spot_single_fov_single_timepoint(
         single_fov_img=img, 
-        frame=frame, 
+        timepoint=timepoint, 
         fish_channel=channel, 
-        spot_threshold=frame_spec.threshold, 
+        spot_threshold=timepoint_spec.threshold, 
         detection_parameters=detection_parameters,
         )
-    return finalise_single_spot_props_table(spot_props=spot_props, position=position, frame=frame, channel=channel)
+    return finalise_single_spot_props_table(spot_props=spot_props, position=position, timepoint=timepoint, channel=channel)
 
 
 def detect_spots_multiple(
         pos_img_pairs: Iterable[Tuple[str, np.ndarray]], 
-        frame_specs: Iterable["SingleFrameDetectionSpec"], 
+        timepoint_specs: Iterable["SingleTimepointDetectionSpec"], 
         channels: Iterable[int], 
         spot_detection_parameters: "SpotDetectionParameters", 
         parallelise: bool = False,
@@ -243,17 +243,17 @@ def detect_spots_multiple(
     if parallelise:
         subframes = Parallel(**kwargs)(
             delayed(build_spot_prop_table)(
-                img=img, position=pos, channel=ch, frame_spec=spec, detection_parameters=spot_detection_parameters
+                img=img, position=pos, channel=ch, timepoint_spec=spec, detection_parameters=spot_detection_parameters
                 )
-            for pos, img in tqdm.tqdm(pos_img_pairs) for spec in frame_specs for ch in channels
+            for pos, img in tqdm.tqdm(pos_img_pairs) for spec in timepoint_specs for ch in channels
             )
     else:
         subframes = []
         for pos, img in tqdm.tqdm(pos_img_pairs):
-            for spec in tqdm.tqdm(frame_specs):
+            for spec in tqdm.tqdm(timepoint_specs):
                 for ch in channels:
                     spots = build_spot_prop_table(
-                        img=img, position=pos, channel=ch, frame_spec=spec, detection_parameters=spot_detection_parameters
+                        img=img, position=pos, channel=ch, timepoint_spec=spec, detection_parameters=spot_detection_parameters
                         )
                     print(f"Spot count: {len(spots)}")
                     subframes.append(spots)
@@ -281,13 +281,13 @@ class DetectionMethod(Enum):
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
-class SingleFrameDetectionSpec:
+class SingleTimepointDetectionSpec:
     # TODO: refine these values as nonnegative.
     timepoint: int # specifies the index of the hybridisation round/timepoint
     threshold: int # specifies a threshold value for intensity-based detection or detection with difference of Gaussians
 
 
-def get_one_dim_drift_and_bound_and_pad(roi_min: NumberLike, roi_max: NumberLike, dim_limit: int, frame_drift: NumberLike, ref_drift: NumberLike) -> Tuple[int, NumberLike, NumberLike, NumberLike, NumberLike]:
+def get_one_dim_drift_and_bound_and_pad(roi_min: NumberLike, roi_max: NumberLike, dim_limit: int, timepoint_drift: NumberLike, ref_drift: NumberLike) -> Tuple[int, NumberLike, NumberLike, NumberLike, NumberLike]:
     """
     Get the coarse drift, interval, and padding for a single dimension (z, y, or x) for a single ROI.
 
@@ -299,7 +299,7 @@ def get_one_dim_drift_and_bound_and_pad(roi_min: NumberLike, roi_max: NumberLike
         The upper bound in the current dimension for this ROI
     dim_limit : int
         The number of "pixels" value in this dimension (e.g., 2044/2048 for xy, ~30-40 for z)
-    frame_drift : NumberLike
+    timepoint_drift : NumberLike
         Coarse drift in the current dimension, of the current timepoint 
     ref_drift : NumberLike
         Coarse drift in the current dimension, of the reference timepoint 
@@ -310,9 +310,9 @@ def get_one_dim_drift_and_bound_and_pad(roi_min: NumberLike, roi_max: NumberLike
         Coarse drift for current dimension, ROI min in dimension, ROI max in dimension, lower padding in dimension, upper padding in dimension
     """
     try:
-        coarse_drift = int(frame_drift) - int(ref_drift)
+        coarse_drift = int(timepoint_drift) - int(ref_drift)
     except TypeError:
-        logger.error(f"Debugging info -- type(frame_drift): {type(frame_drift).__name__}. Value: {frame_drift}")
+        logger.error(f"Debugging info -- type(timepoint_drift): {type(timepoint_drift).__name__}. Value: {timepoint_drift}")
         logger.error(f"Debugging info -- type(ref_drift): {type(ref_drift).__name__}. Value: {ref_drift}")
         raise
     target_min = roi_min - coarse_drift
@@ -385,7 +385,7 @@ class SpotPicker:
             minimum_distance_between=self.image_handler.minimum_spot_separation, 
             subtract_beads=subtract_beads, 
             crosstalk_channel=crosstalk_ch, 
-            crosstalk_frame=None, 
+            crosstalk_timepoint=None, 
             roi_image_size=self.roi_image_size, 
             )
 
@@ -406,10 +406,10 @@ class SpotPicker:
         """Name of the input to the spot detection phase of the pipeline; in particular, a subfolder of the 'all images' folder typically passed to looptrace"""
         return self.image_handler.spot_input_name
 
-    def iter_frame_threshold_pairs(self) -> Iterable[SingleFrameDetectionSpec]:
-        """Iterate over the frames in which to detect spots, and the corresponding threshold for each (typically uniform across all frames)."""
+    def iter_timepoint_threshold_pairs(self) -> Iterable[SingleTimepointDetectionSpec]:
+        """Iterate over the timepoints in which to detect spots, and the corresponding threshold for each (typically uniform across all timepoints)."""
         for i, t in self._iter_timepoints():
-            yield SingleFrameDetectionSpec(timepoint=t, threshold=self.spot_threshold[i])
+            yield SingleTimepointDetectionSpec(timepoint=t, threshold=self.spot_threshold[i])
 
     def iter_pos_img_pairs(self) -> Iterable[Tuple[str, np.ndarray]]:
         """Iterate over pairs of position (FOV) name, and corresponding 5-tensor (t, c, z, y, x) of images."""
@@ -508,7 +508,7 @@ class SpotPicker:
         logger.info(f"Using '{self.detection_method_name}' for spot detection, threshold = {self.spot_threshold}, downsampling = {params.downsampling}")
         output = detect_spots_multiple(
             pos_img_pairs=self.iter_pos_img_pairs(), 
-            frame_specs=list(self.iter_frame_threshold_pairs()), 
+            timepoint_specs=list(self.iter_timepoint_threshold_pairs()), 
             channels=list(self.spot_channel), 
             spot_detection_parameters=params, 
             parallelise=self.parallelise,
@@ -519,8 +519,8 @@ class SpotPicker:
         output.to_csv(outfile)
         return outfile        
 
-    def make_dc_rois_all_frames(self) -> str:
-        #Precalculate all ROIs for extracting spot images, based on identified ROIs and precalculated drifts between time frames.
+    def make_dc_rois_all_timepoints(self) -> str:
+        #Precalculate all ROIs for extracting spot images, based on identified ROIs and precalculated drifts between timepoints.
         print("Generating list of all ROIs for tracing...")
 
         spotfile = self.image_handler.nuclei_filtered_spots_file_path if self.spot_in_nuc \
@@ -548,7 +548,7 @@ class SpotPicker:
             get_dc_table=get_dc_table,
             get_locus_timepoints=get_locus_timepoints,
             get_zyx=get_zyx,
-            background_frame=self.image_handler.background_subtraction_frame,
+            background_timepoint=self.image_handler.background_subtraction_timepoint,
         )
         self.all_rois = self.all_rois.sort_values(RoiOrderingSpecification.row_order_columns()).reset_index(drop=True)
         
@@ -574,51 +574,51 @@ class SpotPicker:
         Returns
         -------
         SkipReasonsMapping
-            Mapping from ref frame to mapping from ROI ID to mapping from frame to skip reason
+            Mapping from ref timepoint to mapping from ROI ID to mapping from timepoint to skip reason
         """
-        get_num_frames: Callable[[int], int]
+        get_num_timepoints: Callable[[int], int]
         if not self.image_handler.locus_grouping:
             print("No locus grouping is present, so all timepoints will be used.")
             total_num_times = len(pos_group_data.timepoint.unique())
-            get_num_frames = lambda _: total_num_times
+            get_num_timepoints = lambda _: total_num_times
         else:
             num_loc_times_by_reg_time_raw = {rt.get: len(lts) for rt, lts in self.image_handler.locus_grouping.items()}
             print(f"Locus time counts by regional time (before +1): {num_loc_times_by_reg_time_raw}")
             # +1 to account for regional timepoint itself.
-            get_num_frames = lambda reg_time_raw: 1 + num_loc_times_by_reg_time_raw[reg_time_raw]
+            get_num_timepoints = lambda reg_time_raw: 1 + num_loc_times_by_reg_time_raw[reg_time_raw]
 
-        num_frames_processed: dict[str, int] = {}
+        num_timepoints_processed: dict[str, int] = {}
         skip_spot_image_reasons = defaultdict(lambda: defaultdict(dict))
         pos_index = self.image_handler.image_lists[self.input_name].index(pos_group_name)
-        for frame, frame_group in tqdm.tqdm(pos_group_data.groupby("timepoint")):
-            for ch, ch_group in frame_group.groupby("channel"):
-                image_stack = np.array(self.images[pos_index][int(frame), int(ch)])
+        for timepoint, timepoint_group in tqdm.tqdm(pos_group_data.groupby("timepoint")):
+            for ch, ch_group in timepoint_group.groupby("channel"):
+                image_stack = np.array(self.images[pos_index][int(timepoint), int(ch)])
                 for _, roi in ch_group.iterrows():
                     fn_key = RoiOrderingSpecification.FilenameKey.from_roi(roi)
                     roi_img, error = extract_single_roi_img_inmem(
                         single_roi=roi, 
                         image_stack=image_stack, 
                         pad_mode=self.padding_method,
-                        background_frame=self.image_handler.background_subtraction_frame, 
+                        background_timepoint=self.image_handler.background_subtraction_timepoint, 
                         )
                     if len(roi_img.shape) != 3:
                         raise ArrayDimensionalityError(f"Got not 3, but {len(roi_img.shape)} dimension(s) for ROI image: {roi_img.shape}. fn_key: {fn_key}")
                     roi_img = roi_img.astype(SPOT_IMAGE_PIXEL_VALUE_TYPE)
                     if error is not None:
-                        skip_spot_image_reasons[fn_key.ref_timepoint][fn_key.roi_id][frame] = str(error)
-                    if frame == self.image_handler.background_subtraction_frame:
-                        n_frames = 1
+                        skip_spot_image_reasons[fn_key.ref_timepoint][fn_key.roi_id][timepoint] = str(error)
+                    if timepoint == self.image_handler.background_subtraction_timepoint:
+                        n_timepoints = 1
                         array_file_dir = self.spot_background_path
                     else:
-                        n_frames = get_num_frames(fn_key.ref_timepoint)
+                        n_timepoints = get_num_timepoints(fn_key.ref_timepoint)
                         array_file_dir = self.spot_images_path
                     fp = os.path.join(array_file_dir, fn_key.name_roi_file)
                     try:
-                        f_id = num_frames_processed[fp]
+                        f_id = num_timepoints_processed[fp]
                     except KeyError:
                         # New data stack (from new regional spot)
                         f_id = 0
-                        arr = open_memmap(fp, mode='w+', dtype=roi_img.dtype, shape=(n_frames, ) + roi_img.shape)
+                        arr = open_memmap(fp, mode='w+', dtype=roi_img.dtype, shape=(n_timepoints, ) + roi_img.shape)
                     else:
                         # Some processing is done already for this data stack.
                         arr = open_memmap(fp, mode='r+')
@@ -629,11 +629,11 @@ class SpotPicker:
                         print(f"Current filename key: {fn_key}")
                         print(f"Current file: {fp}")
                         print(f"Current regional time: {fn_key.ref_timepoint}")
-                        print(f"Current locus time: {frame}")
+                        print(f"Current locus time: {timepoint}")
                         print(f"Current ROI: {roi}")
                         raise
                     arr.flush()
-                    num_frames_processed[fp] = f_id + 1
+                    num_timepoints_processed[fp] = f_id + 1
         return skip_spot_image_reasons
 
     @property
@@ -648,7 +648,7 @@ class SpotPicker:
 
         if not os.path.isdir(self.spot_images_path):
             os.mkdir(self.spot_images_path)
-        if self.image_handler.background_subtraction_frame is not None and not os.path.isdir(self.spot_background_path):
+        if self.image_handler.background_subtraction_timepoint is not None and not os.path.isdir(self.spot_background_path):
             os.mkdir(self.spot_background_path)
 
         skip_spot_image_reasons = OrderedDict()
@@ -688,7 +688,7 @@ def build_locus_spot_data_extraction_table(
     get_dc_table: Callable[[int], pd.DataFrame], 
     get_locus_timepoints: Optional[Callable[[TimepointFrom0], set[TimepointFrom0]]],
     get_zyx: Callable[[int, int], tuple[int, int, int]], # Provide FOV index + channel, get (Z, Y, X).
-    background_frame: Optional[int] = None,
+    background_timepoint: Optional[int] = None,
 ) -> pd.DataFrame:
     
     all_rois = []
@@ -709,12 +709,12 @@ def build_locus_spot_data_extraction_table(
             is_locus_time = lambda t: t in locus_times
         
         is_background_time: Callable[[int], bool]
-        if background_frame is None:
+        if background_timepoint is None:
             is_background_time = lambda _: False
-        elif not isinstance(background_frame, int):
-            raise TypeError(f"background_frame is not int, but {type(background_frame).__name__}")
+        elif not isinstance(background_timepoint, int):
+            raise TypeError(f"background_timepoint is not int, but {type(background_timepoint).__name__}")
         else:
-            is_background_time = lambda t: t == background_frame
+            is_background_time = lambda t: t == background_timepoint
         
         pos = roi["position"]
         pos_index = get_pos_idx(pos)
@@ -725,11 +725,11 @@ def build_locus_spot_data_extraction_table(
         # https://github.com/gerlichlab/looptrace/issues/138
         Z, Y, X = get_zyx(pos_index, ch)
         for _, dc_row in sel_dc.iterrows():
-            frame: int = dc_row["timepoint"]
-            if not isinstance(frame, int):
-                raise TypeError(f"Non-integer ({type(frame).__name__}) timepoint: {frame}")
-            if not (is_locus_time(frame) or frame == ref_timepoint or is_background_time(frame)):
-                logging.debug("Timepoint %d isn't eligible for tracing in a spot from timepoint %d; skipping", frame, ref_timepoint)
+            timepoint: int = dc_row["timepoint"]
+            if not isinstance(timepoint, int):
+                raise TypeError(f"Non-integer ({type(timepoint).__name__}) timepoint: {timepoint}")
+            if not (is_locus_time(timepoint) or timepoint == ref_timepoint or is_background_time(timepoint)):
+                logging.debug("Timepoint %d isn't eligible for tracing in a spot from timepoint %d; skipping", timepoint, ref_timepoint)
                 continue
             # min/max ensure that the slicing of the image array to make the small image for tracing doesn't go out of bounds.
             # Padding ensures homogeneity of size of spot images to be used for tracing.
@@ -741,13 +741,13 @@ def build_locus_spot_data_extraction_table(
                 roi_min=roi[f"{dim}Min"], 
                 roi_max=roi[f"{dim}Max"], 
                 dim_limit=lim, 
-                frame_drift=dc_row[f"{dim}DriftCoarsePixels"], 
+                timepoint_drift=dc_row[f"{dim}DriftCoarsePixels"], 
                 ref_drift=ref_offset[f"{dim}DriftCoarsePixels"]
                 ) for dim, lim in (("z", Z), ("y", Y), ("x", X))
                 )
 
             # roi.name is the index value.
-            all_rois.append([pos, pos_index, idx, roi.name, frame, ref_timepoint, ch, 
+            all_rois.append([pos, pos_index, idx, roi.name, timepoint, ref_timepoint, ch, 
                             z_min, z_max, y_min, y_max, x_min, x_max, 
                             pad_z_min, pad_z_max, pad_y_min, pad_y_max, pad_x_min, pad_x_max,
                             z_drift_coarse, y_drift_coarse, x_drift_coarse, 
@@ -766,7 +766,7 @@ def extract_single_roi_img_inmem(
     single_roi: pd.Series, 
     image_stack: np.ndarray, 
     pad_mode: str, 
-    background_frame: Optional[int],
+    background_timepoint: Optional[int],
     ) -> Tuple[np.ndarray, Union[None, "SpotImagePaddingError", "SpotImageSliceOOB", "SpotImageSliceEmpty"]]:
     """Function for extracting a single cropped region defined by ROI from a larger 3D image
     
@@ -776,7 +776,7 @@ def extract_single_roi_img_inmem(
         A single row iteration over the drift corrected ROIs file (1 row per timepoint per regional ROI)
     image_stack : np.ndarray
         The image for the current ROI, time, channel combination (corresponding to the single_roi)
-    background_frame : int or None
+    background_timepoint : int or None
         Optinally, the timepoint to be used for background subtraction and therefore excepted from the 
         prohibition on padding in x and y
     pad_mode : str
@@ -803,7 +803,7 @@ def extract_single_roi_img_inmem(
     elif z.start == z.stop or y.start == y.stop or x.start == x.stop:
         error = SpotImageSliceEmpty(f"Slice would result in at least one empty dimension: {(z, y, x)}")
     elif x_pad != (0, 0) or y_pad != (0, 0):
-        if background_frame is None or single_roi["timepoint"] != background_frame:
+        if background_timepoint is None or single_roi["timepoint"] != background_timepoint:
             error = SpotImagePaddingError(f"x or y has nonzero padding: x={x_pad}, y={y_pad}")
     # Determine the final ROI (sub)image of a spot for tracing.
     roi_img = np.array(image_stack[z, y, x]) if error is None else np.zeros((z.stop - z.start, y.stop - y.start, x.stop - x.start))
