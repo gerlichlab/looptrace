@@ -105,7 +105,7 @@ class RoiOrderingSpecification:
 
     @staticmethod
     def row_order_columns() -> List[str]:
-        return ["position", 'roi_id', 'ref_timepoint', "timepoint"]
+        return ["position", 'roi_id', "ref_timepoint", "timepoint"]
     
     @classmethod
     def get_file_sort_key(cls, file_key: str) -> FilenameKey:

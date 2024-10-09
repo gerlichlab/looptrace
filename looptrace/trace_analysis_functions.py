@@ -729,7 +729,7 @@ def points_from_traces(traces, trace_ids=-1):
     points_qc : list of  Nx4 np array with trace coordinates and QC value.
     '''
     
-    arr = traces[["traceId", "z", "y", "x", 'QC']].to_numpy()
+    arr = traces[["traceId", "z", "y", "x", "QC"]].to_numpy()
     
     
     if trace_ids == -1:
@@ -758,7 +758,7 @@ def points_from_traces_qc_filt(traces, trace_ids=-1):
     '''
 
 
-    arr = traces[["traceId", "z", "y", "x", 'QC']].to_numpy()
+    arr = traces[["traceId", "z", "y", "x", "QC"]].to_numpy()
     qc_idx = arr[:,4] == 1
     arr = arr[qc_idx,0:4]
 
@@ -786,7 +786,7 @@ def points_from_traces_nan(traces, trace_ids=-1):
     points : Nx3 np array with trace coordinates, NaN row returned if point did not pass QC.
     '''
 
-    arr = traces[["traceId", "z", "y", "x", 'QC']].to_numpy()
+    arr = traces[["traceId", "z", "y", "x", "QC"]].to_numpy()
     qc_idx = arr[:,4] == 1
     arr[~qc_idx,1:4] = np.nan
 
