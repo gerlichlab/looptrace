@@ -40,7 +40,7 @@ You'll roughly never need to directly use the output of this step.
 This uses the output of spot zipping and coarse + fine drift correction.
 You won't work directly with this step's output, but rather with that of its successors.
 * `spot_region_distances` uses the output of the tracing and of the drift correction to compute the distance between the center of each locus-specific spot and its corresponding regional spot's center. 
-It also maps timepoint to frame name. 
+It also maps timepoint _number_ to timepoint _name_. 
 It produces the `*.traces.enriched.csv` file. 
 Generally you won't work directly with this file, but perhaps one of the ones produced subsequently by the tracing QC step.
 * `tracing_QC` produces the `*.traces.enriched.unfiltered.csv` and `*.traces.enriched.filtered.csv` file. 

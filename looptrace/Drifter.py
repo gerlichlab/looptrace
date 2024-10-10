@@ -352,7 +352,7 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
             print("Iterating over timepoints/hybridisations")
             # Exactly 1 row per FOV per timepoint; here, we iterate over timepoints for current FOV.
             for _, row in position_group.iterrows():
-                # This should be unique now in frame, since we're iterating within a single FOV.
+                # This should be unique now in timepoint, since we're iterating within a single FOV.
                 timepoint, coarse = _get_timepoint_and_coarse(row)
                 print(f"Current timepoint: {timepoint}")
                 
@@ -377,7 +377,7 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
             ref_bead_subimgs = [extract_single_bead(point, ref_img, bead_roi_px=roi_px) for point in bead_rois]
             print("Iterating over timepoints/hybridisations")
             for _, row in position_group.iterrows():
-                # This should be unique now in frame, since we're iterating within a single FOV.
+                # This should be unique now in timepoint, since we're iterating within a single FOV.
                 timepoint, coarse = _get_timepoint_and_coarse(row)
                 print(f"Current timepoint: {timepoint}")
                 
