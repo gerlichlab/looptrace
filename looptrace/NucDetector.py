@@ -441,7 +441,7 @@ class NucDetector:
             raise
         outfile = self.drift_correction_file__coarse
         print(f"Writing coarse drifts: {outfile}")
-        coarse_drifts.to_csv(outfile)
+        coarse_drifts.to_csv(outfile, index=False)
         return outfile
 
 

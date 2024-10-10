@@ -555,7 +555,7 @@ class SpotPicker:
         print(self.all_rois)
         outfile = self.image_handler.drift_corrected_all_timepoints_rois_file
         print(f"Writing all ROIs file: {outfile}")
-        self.all_rois.to_csv(outfile)
+        self.all_rois.to_csv(outfile, index=False)
         self.image_handler.load_tables()
         return outfile
 
