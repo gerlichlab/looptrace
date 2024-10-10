@@ -63,7 +63,7 @@ def run_timepoint_name_and_distance_application(
     traces = apply_timepoint_names_and_spatial_information(traces_file=T.traces_path, timepoint_names=H.timepoint_names)
     outfile = T.traces_path_enriched
     print(f"Writing enriched traces file: {outfile}")
-    traces.to_csv(outfile)
+    traces.to_csv(outfile, index=False)
     return traces, outfile
 
 
@@ -131,7 +131,7 @@ class Tracer:
         )
         
         logging.info("Writing spot fits: %s", self.spot_fits_file)
-        spot_fits.to_csv(self.spot_fits_file)
+        spot_fits.to_csv(self.spot_fits_file, index=False)
         return self.spot_fits_file
 
     @property
@@ -165,7 +165,7 @@ class Tracer:
         )
         
         logging.info("Writing traces: %s", self.traces_path)
-        traces.to_csv(self.traces_path)
+        traces.to_csv(self.traces_path, index=False)
 
         return self.traces_path
 

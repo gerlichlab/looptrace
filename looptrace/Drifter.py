@@ -282,7 +282,7 @@ def coarse_correction_workflow(
         raise
     outfile = update_outfile(D.dc_file_path__coarse)
     print(f"Writing coarse drifts: {outfile}")
-    coarse_drifts.to_csv(outfile)
+    coarse_drifts.to_csv(outfile, index=False)
     return outfile
 
 
@@ -295,7 +295,7 @@ def fine_correction_workflow(rounds_config: ExtantFile, params_config: ExtantFil
     all_drifts.columns = FULL_DRIFT_TABLE_COLUMNS
     outfile = D.dc_file_path__fine
     print(f"Writing fine drifts: {outfile}")
-    all_drifts.to_csv(outfile) # Write the single full drift correction table.
+    all_drifts.to_csv(outfile, index=False) # Write the single full drift correction table.
     return outfile
 
 
@@ -404,7 +404,7 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
         drifter.fine_correction_subfolder.mkdir(exist_ok=True)
         curr_position_temp = drifter.fine_correction_tempfile(pos_idx=pos_idx)
         print(f"Writing drift correction tempfile for FOV {pos_idx}: {curr_position_temp}")
-        pd.DataFrame(curr_position_rows).to_csv(curr_position_temp)
+        pd.DataFrame(curr_position_rows).to_csv(curr_position_temp, index=False)
         checkpoint_file = drifter.fine_correction_subfolder / f"{pos_idx}.checkpoint"
         print(f"Touching checkpoint: {checkpoint_file}")
         with open(checkpoint_file, 'w'): # Just create the empty file.

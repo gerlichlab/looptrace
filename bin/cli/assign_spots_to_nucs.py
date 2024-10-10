@@ -151,9 +151,9 @@ def workflow(
     else:
         all_rois = pd.concat(all_rois).sort_values(["position", "timepoint"])
         logger.info(f"Writing nuclei-labeled spots file: {outfile}")
-        all_rois.to_csv(outfile)
+        all_rois.to_csv(outfile, index=False)
         logger.info(f"Writing nuclei-filtered spots file: {H.nuclei_filtered_spots_file_path}")
-        all_rois[all_rois[NUC_LABEL_COL] != 0].to_csv(H.nuclei_filtered_spots_file_path)
+        all_rois[all_rois[NUC_LABEL_COL] != 0].to_csv(H.nuclei_filtered_spots_file_path, index=False)
 
     logger.info("Done!")
 
