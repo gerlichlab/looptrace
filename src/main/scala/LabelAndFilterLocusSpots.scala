@@ -410,7 +410,9 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                 val (actualHeader, finaliseOriginal) = header.head match {
                     // Handle the fact that original input may've had index column and therefore an empty first header field.
                     // TODO: https://github.com/gerlichlab/looptrace/issues/261
-                    case "" => (header.tail, (_: Array[String]).tail)
+                    case "" => 
+                        logger.warn("First field of CSV header is empty/unnamed!")
+                        (header.tail, (_: Array[String]).tail)
                     case _ => (header, identity(_: Array[String]))
                 }
                 

@@ -810,7 +810,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     /** Write the ROIs to file, with minimal data required to parse the fields consumed by the partition program under test here. */
     def writeMinimalInputRoisCsv(rois: List[FiducialBeadRoi], f: os.Path): Unit = {
         val (header, getPointFields) = (
-            Array("", ParserConfig.xCol.get, ParserConfig.yCol.get, ParserConfig.zCol.get, ParserConfig.qcCol),
+            Array(ParserConfig.indexCol, ParserConfig.xCol.get, ParserConfig.yCol.get, ParserConfig.zCol.get, ParserConfig.qcCol),
             (p: Point3D) => Array(p.x.show_, p.y.show_, p.z.show_)
         )
         val records = rois.map{ roi => roi.index.get.toString +: getPointFields(roi.centroid) :+ roi.failCode.get }
