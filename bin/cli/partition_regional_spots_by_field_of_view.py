@@ -1,6 +1,7 @@
 """Partition full-experiment regional spots file(s) by field of view (FOV)."""
 
 import argparse
+from collections.abc import Iterable
 import logging
 from pathlib import Path
 import sys
@@ -15,22 +16,19 @@ def parse_cmdl(cmdl: list[str]) -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "-N",
-        "--nuclei-filtered-spots-file",
+        "--merge-contributors-file",
         type=Path,
-        help="Path to nuclei-filtered regional spots file",
+        help="Path to regional spots file of ROIs which contributed to a merger",
     )
     parser.add_argument(
-        "-P",
-        "--proximity-filtered-spots-file",
+        "--proximity-discards-file",
         type=Path,
-        help="Path to proximity-filtered regional spots file",
+        help="Path to regional spots file of ROIs discarded due to being too close together",
     )
     parser.add_argument(
-        "-U",
-        "--unfiltered-spots-file",
+        "--nuclei-labeled-file",
         type=Path,
-        help="Path to unfiltered regional spots file",
+        help="Path to regional spots file of ROIs which passed proximity filtration and are labeled with nuclus assignment",
     )
     parser.add_argument(
         "-O",
@@ -42,7 +40,7 @@ def parse_cmdl(cmdl: list[str]) -> argparse.Namespace:
     return parser.parse_args(cmdl)
 
 
-def workflow(*, output_folder: Path, spots_files: list[Path]) -> dict[str, list[Path]]:
+def workflow(*, output_folder: Path, spots_files: Iterable[Path]) -> dict[str, list[Path]]:
     """Main workhorse of this script"""
     outputs: dict[str, list[Path]] = {}
     for fp in spots_files:
@@ -64,9 +62,9 @@ def main(cmdl: list[str]) -> None:
     spots_files: list[Path] = [
         f
         for f in [
-            opts.nuclei_filtered_spots_file,
-            opts.proximity_filtered_spots_file,
-            opts.unfiltered_spots_file,
+            opts.merge_contributors_file,
+            opts.proximity_discards_file,
+            opts.nuclei_labeled_file,
         ]
         if f is not None
     ]
