@@ -102,7 +102,7 @@ class Deconvolver:
 
     @property
     def get_input_filepath_and_input_image(self):
-        input_key = self.config['psf_input_name']
+        input_key = self.config["psf_input_name"]
         input_names = self.image_handler.image_lists[input_key]
         input_images = self.image_handler.images[input_key]
         n_names = len(input_names)
@@ -113,23 +113,23 @@ class Deconvolver:
         raise Exception(f"{n_names} PSF input names and images; should be just 1")
 
     def extract_exp_psf(self) -> Path:
-        '''
+        """
         Extract an experimental point-spread function from a bead image.
 
         Parameters read from config to segment same beads as used for drift correction.
         Segments and extract beads, filters the intensities to remove possible doublets,
         fits the centers, registers and overlays the beads, calculates an average and normalizes the signal.
         Saves as a .npy ndarray, image is a centered PSF useful for deconvolution.
-        '''
+        """
         from scipy.ndimage import shift as shift_image
         from looptrace.bead_roi_generation import extract_single_bead, generate_bead_rois
         from looptrace.gaussfit import fitSymmetricGaussian3DMLE
 
-        t_slice = self.config['psf_bead_timepoint']
-        ch = self.config['psf_bead_ch']
+        t_slice = self.config["psf_bead_timepoint"]
+        ch = self.config["psf_bead_ch"]
         
-        threshold = self.config['bead_threshold']
-        min_bead_int = self.config['min_bead_intensity']
+        threshold = self.config["bead_threshold"]
+        min_bead_int = self.config["min_bead_intensity"]
 
         # Region size setting
         bead_d = self.bead_roi_size # diameter

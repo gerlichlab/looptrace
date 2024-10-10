@@ -9,7 +9,7 @@ zarr_conversions:
 
 nuc_input_name: nuc_images_zarr
 nuc_channel: 0
-nuc_ref_frame: 0
+nuc_ref_timepoint: 0
 nuc_slice: -1
 nuc_3d: False
 nuc_method: cellpose
@@ -20,7 +20,7 @@ nuc_min_size: 10
 
 psf_input_name: psf_images_raw
 psf_bead_ch: 0
-psf_bead_frame: 0
+psf_bead_timepoint: 0
 num_beads_psf: 500
 decon_input_name: seq_images_zarr
 decon_output_name: seq_images_zarr_decon
@@ -36,7 +36,7 @@ reg_input_template: seq_images_zarr_decon
 reg_input_moving: seq_images_zarr_decon
 reg_ch_template: 1
 reg_ch_moving: 1
-reg_ref_frame : 27
+reg_ref_timepoint : 27
 bead_threshold: 10000
 min_bead_intensity: 15000
 bead_roi_size: 16
