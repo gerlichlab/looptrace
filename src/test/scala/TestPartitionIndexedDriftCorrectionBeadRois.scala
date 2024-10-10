@@ -740,7 +740,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
 
     /** Minimal detected bead ROIs field consumed by the partitioning program under test */
     val ColumnNamesToParse = List(
-        ParserConfig.indexCol.get, 
+        ParserConfig.indexCol, 
         ParserConfig.xCol.get, 
         ParserConfig.yCol.get, 
         ParserConfig.zCol.get, 
