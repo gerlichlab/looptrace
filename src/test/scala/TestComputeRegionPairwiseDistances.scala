@@ -60,13 +60,13 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
     }
 
     test("Input file that's just a header produces an output file that's just a header.") {
-        forAll(Table("includeIndexCol", List(false, true)*)) { includeIndexCol => 
+        forAll(Table("includePandasIndexCol", List(false, true)*)) { includePandasIndexCol => 
             withTempDirectory{ (tempdir: os.Path) => 
                 /* Setup and pretests */
                 val infile = tempdir / "input.csv"
                 val outfolder = tempdir / "output"
                 os.makeDir(outfolder)
-                val cols = if includeIndexCol then "" :: AllReqdColumns else AllReqdColumns
+                val cols = if includePandasIndexCol then "" :: AllReqdColumns else AllReqdColumns
                 os.write(infile, Delimiter.CommaSeparator.join(cols) ++ "\n")
                 val expOutfile = outfolder / "input.pairwise_distances__regional.csv"
                 os.exists(expOutfile) shouldBe false
@@ -81,11 +81,11 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
     }
 
     test("Trying to use a file with just records and no header fails the parse as expected.") {
-        forAll { (records: NonEmptyList[Input.GoodRecord], includeIndexCol: Boolean) => 
+        forAll { (records: NonEmptyList[Input.GoodRecord], includeIndex: Boolean) => 
             withTempDirectory{ (tempdir: os.Path) => 
                 val infile = tempdir / "input.csv"
                 val toTextFields: (Input.GoodRecord, Int) => List[String] = 
-                    if includeIndexCol 
+                    if includeIndex
                     then { (r, i) => i.show_ :: recordToTextFields(r) }
                     else { (r, _) => recordToTextFields(r) }
                 os.write(infile, records.toList.zipWithIndex.map(toTextFields.tupled `andThen` textFieldsToLine))
@@ -120,9 +120,9 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
             Gen.oneOf(genSubstitutions, genDeletions).toArbitrary
         }
         
-        forAll { (expectedHeader: ExpectedHeader, records: NonEmptyList[Input.GoodRecord], includeIndexCol: Boolean) =>
+        forAll { (expectedHeader: ExpectedHeader, records: NonEmptyList[Input.GoodRecord], includePandasIndexColumn: Boolean) =>
             val (expHead, textRows) = 
-                if includeIndexCol 
+                if includePandasIndexColumn 
                 then ("" :: expectedHeader, records.toList.zipWithIndex.map{ (r, i) => i.show_ :: recordToTextFields(r) })
                 else (expectedHeader, records.toList.map(recordToTextFields))
             withTempDirectory{ (tempdir: os.Path) => 
@@ -178,12 +178,12 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                 .map(_.toMap)
         } yield (indices, goods.zipWithIndex.map{ (r, i) => mutations.get(i).fold(r)(_(r)) })
         
-        forAll (genBadRecords, arbitrary[Boolean]) { case ((expBadRows, textRecords), includeIndexCol) =>
+        forAll (genBadRecords, arbitrary[Boolean]) { case ((expBadRows, textRecords), includePandasIndexColumn) =>
             withTempDirectory{ (tempdir: os.Path) => 
                 val infile = tempdir / "input.csv"
                 os.isFile(infile) shouldBe false
                 val (head, textRows) = 
-                    if includeIndexCol 
+                    if includePandasIndexColumn 
                     then ("" :: AllReqdColumns, textRecords.zipWithIndex.map((r, i) => i.show_ :: r))
                     else (AllReqdColumns, textRecords)
                 os.write(infile, (head :: textRows.toList) map textFieldsToLine)
@@ -195,11 +195,11 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
     }
 
     test("Output file always has the correct header.") {
-        forAll { (records: NonEmptyList[Input.GoodRecord], includeIndexCol: Boolean) => 
+        forAll { (records: NonEmptyList[Input.GoodRecord], includePandasIndexColumn: Boolean) => 
             withTempDirectory{ (tempdir: os.Path) => 
                 val infile = tempdir / "input_with_suffix.some.random.extensions.csv"
                 val (head, textRows) = 
-                    if includeIndexCol
+                    if includePandasIndexColumn
                     then ("" :: AllReqdColumns, records.zipWithIndex.map((r, i) => i.show_ :: recordToTextFields(r)))
                     else (AllReqdColumns, records.map(recordToTextFields))
                 os.write(infile, (head :: textRows.toList).map(textFieldsToLine))

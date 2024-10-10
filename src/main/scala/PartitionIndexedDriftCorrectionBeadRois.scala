@@ -522,18 +522,17 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
     enum Purpose derives ReadWriter:
         case Shifting, Accuracy
         def lowercase = this.toString.toLowerCase
+    
+    /** Typeclass instances for working with bead purpose */
     object Purpose:
         given eqForPurpose: Eq[Purpose] = Eq.fromUniversalEquals[Purpose]
     
+    /** Designate a text value as representing a filename. */
     final case class Filename(get: String)
-
-    object PandasCsvIndexColumn:
-        /** Empty string corresponds to column before first comma in pandas format. */
-        def get: String = ""
 
     /** Helpers for working with the parser configuration */
     object ParserConfig:
-        val indexCol = PandasCsvIndexColumn
+        val indexCol = "" // This is the pandas.DataFrame.to_csv way to write the index by default.
         val xCol = XColumn("centroid-2")
         val yCol = YColumn("centroid-1")
         val zCol = ZColumn("centroid-0")
