@@ -45,12 +45,12 @@ Below are the sequential pipeline stage names.
 * imaging_rounds_validation
 * pipeline_precheck
 * zarr_production
+* psf_extraction
+* deconvolution
 * nuclei_detection
 * nuclei_drift_correction
 * nuclear_masks_visualisation_data_prep
 * move_nuclear_masks_visualisation_data
-* psf_extraction
-* deconvolution
 * drift_correction__coarse
 * bead_roi_generation
 * bead_roi_detection_analysis
@@ -59,6 +59,8 @@ Below are the sequential pipeline stage names.
 * drift_correction_accuracy_analysis
 * drift_correction_accuracy_visualisation
 * spot_detection
+* spot_merge_determination
+* spot_merge_execution
 * spot_proximity_filtration
 * spot_nucleus_filtration
 * regional_spots_visualisation_data_prep
