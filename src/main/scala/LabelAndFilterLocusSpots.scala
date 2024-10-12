@@ -13,6 +13,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.instances.simpleShow.given
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.FieldOfViewColumnName
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.* // for .show_ syntax
@@ -128,7 +129,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
 
         /** The default definition of how to parse the data relevant here from the traces file */
         def default = ParserConfig(
-            fovColumn = "pos_index",
+            fovColumn = FieldOfViewColumnName.value,
             regionColumn = "ref_timepoint",
             traceIdColumn = "traceId",
             timeColumn = "timepoint",

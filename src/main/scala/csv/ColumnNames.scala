@@ -17,8 +17,6 @@ object ColumnNames:
     /** Distinguished from [[MergedRoisColumnName]] by static guarantee of nonemptiness */
     val MergeContributorsColumnName: ColumnName[NonEmptySet[RoiIndex]] = ColumnName(mergeContributorsName)
 
-    val PositionNameColumnName: ColumnName[PositionName] = ColumnName("position")
-
     val RoiIndexColumnName: ColumnName[RoiIndex] = ColumnName("index")
 
     val CoarseDriftColumnNameX: ColumnName[CoarseDriftComponent[AxisX]] = 

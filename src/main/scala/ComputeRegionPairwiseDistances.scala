@@ -10,6 +10,7 @@ import com.typesafe.scalalogging.StrictLogging
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.EuclideanDistance
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.PositionName
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.FieldOfViewColumnName
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
@@ -101,7 +102,7 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
 
     object Input:
         /* These come from the *traces.csv file produced at the end of looptrace. */
-        val FieldOfViewColumn = "position"
+        val FieldOfViewColumn = FieldOfViewColumnName.value
         val RegionalBarcodeTimepointColumn = "timepoint"
         val XCoordinateColumn = "xc"
         val YCoordinateColumn = "yc"

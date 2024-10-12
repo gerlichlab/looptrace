@@ -51,7 +51,6 @@ import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
 import at.ac.oeaw.imba.gerlich.looptrace.collections.*
 import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.{
     MergeRoisColumnName,
-    PositionNameColumnName,
     RoiIndexColumnName,
 }
 import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
