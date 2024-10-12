@@ -155,10 +155,10 @@ class NucDetector:
             imgs = all_imgs[self._input_name]
         except KeyError as e:
             raise MissingImagesError(f"No images available ({self._input_name}) as raw input for nuclei segmentation!") from e
-        if len(imgs) != len(self.pos_list):
-            raise ArrayDimensionalityError(f"{len(imgs)} images and {len(self.pos_list)} positions; these should be equal!")
+        if len(imgs) != len(self.fov_list):
+            raise ArrayDimensionalityError(f"{len(imgs)} images and {len(self.fov_list)} positions; these should be equal!")
         exp_shape_len = 4 # (ch, z, y, x) -- no time dimension since only 1 timepoint's imaged for nuclei.
-        bad_images = {p: i.shape for p, i in zip(self.pos_list, imgs) if len(i.shape) != exp_shape_len}
+        bad_images = {p: i.shape for p, i in zip(self.fov_list, imgs) if len(i.shape) != exp_shape_len}
         if bad_images:
             item_list_text = ", ".join(f"{p}: {shape}" for p, shape in sorted(bad_images.items(), key=itemgetter(0)))
             raise ArrayDimensionalityError(f"{len(bad_images)} images with bad shape (length not equal to {exp_shape_len}): {item_list_text}")
@@ -203,7 +203,7 @@ class NucDetector:
         return self._get_img_save_path(self.MASKS_KEY)
     
     @property
-    def pos_list(self) -> list[str]:
+    def fov_list(self) -> list[str]:
         """List of names for the fields of view (FOVs) in which nuclei images were taken"""
         try:
             image_lists = self.image_handler.image_lists
@@ -233,10 +233,10 @@ class NucDetector:
         return self.config["nuc_input_name"]
 
     def iterate_over_pairs_of_position_and_mask_image(self) -> Iterable[Tuple[str, np.ndarray]]:
-        return zip(self.pos_list, self.mask_images, strict=True)
+        return zip(self.fov_list, self.mask_images, strict=True)
 
     def iterate_over_pairs_of_position_and_segmentation_image(self) -> Iterable[Tuple[str, np.ndarray]]:
-        return zip(self.pos_list, self.images_for_segmentation, strict=True)
+        return zip(self.fov_list, self.images_for_segmentation, strict=True)
 
     @property
     def nuclear_segmentation_images_path(self) -> Path:
@@ -262,7 +262,7 @@ class NucDetector:
         arr_to_numpy = lambda a: a if isinstance(a, np.ndarray) else a.compute()
         name_img_pairs = [
             (pos_name, arr_to_numpy(prep(self.input_images[i][self.channel]))) 
-            for i, pos_name in tqdm.tqdm(enumerate(self.pos_list))
+            for i, pos_name in tqdm.tqdm(enumerate(self.fov_list))
         ]
         print("Generating and saving nuclei images...")
         if self.do_in_3d:
@@ -419,8 +419,8 @@ class NucDetector:
         downsampling = self.config["coarse_drift_downsample"]
         # TODO: check that the structure of the images (moving and template) matches the indexing in this function w.r.t. (t, c, z, y, x). See #241.
         all_args = generate_drift_function_arguments__coarse_drift_only(
-            full_pos_list=self.pos_list, 
-            pos_list=self.pos_list, 
+            full_fov_list=self.fov_list, 
+            fov_list=self.fov_list, 
             reference_images=self.image_handler.drift_correction_reference_images, 
             reference_timepoint=self.image_handler.drift_correction_reference_timepoint,
             reference_channel=self.image_handler.drift_correction_reference_channel,

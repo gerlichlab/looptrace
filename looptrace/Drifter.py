@@ -163,8 +163,8 @@ class ArrayLikeLengthMismatchError(Exception):
 
 
 def generate_drift_function_arguments__coarse_drift_only(
-    full_pos_list: List[str], 
-    pos_list: Iterable[str], 
+    full_fov_list: List[str], 
+    fov_list: Iterable[str], 
     reference_images: List[np.ndarray], 
     reference_timepoint: int, 
     reference_channel: int, 
@@ -179,9 +179,9 @@ def generate_drift_function_arguments__coarse_drift_only(
 
     Parameters
     ----------
-    full_pos_list : list of str
+    full_fov_list : list of str
         Names of all known positions / fields of view
-    pos_list : Iterable of str
+    fov_list : Iterable of str
         Names over which to iterate
     reference_images : list of np.ndarray
         The image arrays on which to base the shifts
@@ -211,9 +211,9 @@ def generate_drift_function_arguments__coarse_drift_only(
         If the full list of positions doesn't match in length to the list of reference images, 
         or if the full list of positions doesn't match in length to the list of moving images
     """
-    if len(full_pos_list) != len(reference_images) or len(full_pos_list) != len(moving_images):
-        raise ArrayLikeLengthMismatchError(f"Full pos: {len(full_pos_list)}, ref imgs: {len(reference_images)}, mov imgs: {len(moving_images)}")
-    for i, pos in takewhile(lambda i_and_p: i_and_p[0] <= stop_after, map(lambda p: (full_pos_list.index(p), p), pos_list)):
+    if len(full_fov_list) != len(reference_images) or len(full_fov_list) != len(moving_images):
+        raise ArrayLikeLengthMismatchError(f"Full pos: {len(full_fov_list)}, ref imgs: {len(reference_images)}, mov imgs: {len(moving_images)}")
+    for i, pos in takewhile(lambda i_and_p: i_and_p[0] <= stop_after, map(lambda p: (full_fov_list.index(p), p), fov_list)):
         print(f'Running coarse drift correction for position: {pos}.')
         t_img = np.array(reference_images[i][reference_timepoint, reference_channel, ::downsampling, ::downsampling, ::downsampling])
         mov_img = moving_images[i]
@@ -258,8 +258,8 @@ def coarse_correction_workflow(
     else:
         update_outfile = lambda fp: fp.with_suffix(f".halt_after_{pos_halt_point}.csv")
     all_args = generate_drift_function_arguments__coarse_drift_only(
-        full_pos_list=D.full_pos_list, 
-        pos_list=D.pos_list, 
+        full_fov_list=D.full_fov_list, 
+        fov_list=D.fov_list, 
         reference_images=D.images_template, 
         reference_timepoint=D.reference_timepoint, 
         reference_channel=D.reference_channel,
@@ -325,9 +325,9 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
     """
     roi_px = drifter.bead_roi_px
     beads_exp_shape = (drifter.num_bead_rois_for_drift_correction, 3)
-    pos_time_problems = drifter.image_handler.position_timepoint_pairs_with_severe_problems
+    pos_time_problems = drifter.image_handler.fov_timepoint_pairs_with_severe_problems
     for position, position_group in iter_coarse_drifts_by_position(filepath=drifter.dc_file_path__coarse):
-        pos_idx = drifter.full_pos_list.index(position)
+        pos_idx = drifter.full_fov_list.index(position)
         if not drifter.overwrite and drifter.checkpoint_filepath(pos_idx=pos_idx).is_file():
             print(f"Fine DC checkpoint exists, skipping FOV: {pos_idx}")
             continue
@@ -477,7 +477,7 @@ class Drifter():
         return self.fine_correction_subfolder / f"{pos_idx}.dc_fine.tmp.csv"
 
     @property
-    def full_pos_list(self) -> List[str]:
+    def full_fov_list(self) -> List[str]:
         return self.image_handler.drift_correction_fov_names
 
     @property
@@ -506,15 +506,15 @@ class Drifter():
 
     @property
     def num_positions(self) -> int:
-        return len(self.full_pos_list)
+        return len(self.full_fov_list)
 
     @property
     def overwrite(self) -> bool:
         return self.config.get("overwrite_fine_dc", False)
 
     @property
-    def pos_list(self) -> List[str]:
-        return self.full_pos_list
+    def fov_list(self) -> List[str]:
+        return self.full_fov_list
 
     def read_all_fine_drifts(self) -> pd.DataFrame:
         files = [
@@ -546,7 +546,7 @@ class Drifter():
         correction (see Drifter class for details).
         '''
         n_t = self.images[0].shape[0]
-        pos_index = self.pos_list.index(pos)
+        pos_index = self.fov_list.index(pos)
         pos_img = []
         for t in range(n_t):
             shift = tuple(self.drift_table.query('position == @pos').iloc[t][["zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels"]])
@@ -568,8 +568,8 @@ class Drifter():
             os.mkdir(self.maxz_dc_folder)
         '''
 
-        for pos in tqdm.tqdm(self.pos_list):
-            pos_index = self.full_pos_list.index(pos)
+        for pos in tqdm.tqdm(self.fov_list):
+            pos_index = self.full_fov_list.index(pos)
             pos_img = self.images_moving[pos_index]
             proj_img = da.max(pos_img, axis=2)
             zarr_out_path = os.path.join(self.image_handler.image_save_path, self.image_handler.reg_input_moving + '_max_proj_dc')
@@ -604,7 +604,7 @@ class Drifter():
             os.mkdir(self.maxz_dc_folder)
         '''
 
-        for pos in tqdm.tqdm(self.pos_list):
+        for pos in tqdm.tqdm(self.fov_list):
             pos_index = self.image_handler.image_lists['seq_images'].index(pos)
             pos_img = self.images[pos_index]
             #proj_img = da.max(pos_img, axis=2)

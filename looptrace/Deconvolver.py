@@ -81,7 +81,7 @@ class Deconvolver:
         return None if raw_spec is None else PointSpreadFunctionStrategy.from_string(raw_spec)
 
     @property
-    def pos_list(self):
+    def fov_list(self):
         try:
             ret = self.image_handler.image_lists[self.input_name]
         except KeyError as e:
@@ -180,7 +180,7 @@ class Deconvolver:
             print("Deconvolution iterations set to 0, doing nothing")
             return
 
-        positions = self.pos_list
+        positions = self.fov_list
         print(f"Will deconvolve {positions} field of views: {positions}")
 
         num_gpus_avail = count_tensorflow_gpus()

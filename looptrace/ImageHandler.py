@@ -194,7 +194,7 @@ class ImageHandler:
         return ExtantFile(fp) if fp.exists() else None
 
     @property
-    def position_timepoint_pairs_with_severe_problems(self) -> Set[Tuple[int, int]]:
+    def fov_timepoint_pairs_with_severe_problems(self) -> Set[Tuple[int, int]]:
         fp = self._severe_bead_roi_partition_problems_file
         if fp is None:
             return set()

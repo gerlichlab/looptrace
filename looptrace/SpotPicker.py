@@ -413,7 +413,7 @@ class SpotPicker:
 
     def iter_pos_img_pairs(self) -> Iterable[Tuple[str, np.ndarray]]:
         """Iterate over pairs of position (FOV) name, and corresponding 5-tensor (t, c, z, y, x) of images."""
-        for i, pos in enumerate(self.pos_list):
+        for i, pos in enumerate(self.fov_list):
             yield pos, self.images[i]
 
     def _iter_timepoints(self) -> Iterable[tuple[int, int]]:
@@ -443,7 +443,7 @@ class SpotPicker:
         return self.path_to_detected_spot_images_folder / fn
 
     @property
-    def pos_list(self) -> List[str]:
+    def fov_list(self) -> List[str]:
         return self.image_handler.image_lists[self.input_name]
 
     @property

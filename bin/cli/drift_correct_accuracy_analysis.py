@@ -173,7 +173,7 @@ def process_single_FOV_single_reference_timepoint(
     T = reference_image_stack_definition.num_timepoints
     fov_idx = reference_image_stack_definition.index
 
-    skips = image_handler.position_timepoint_pairs_with_severe_problems
+    skips = image_handler.fov_timepoint_pairs_with_severe_problems
     print(f"(FOV, time) pairs to skip: {skips}")
     timepoints = [t for t in range(T) if (fov_idx, t) not in skips]
     
