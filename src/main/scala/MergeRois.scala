@@ -5,13 +5,20 @@ import cats.data.NonEmptyList
 import cats.effect.IO
 import cats.syntax.all.*
 import fs2.Stream
+import fs2.data.csv.CsvRowEncoder
 import mouse.boolean.*
 import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.{ BoundingBox as BBox }
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
-import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{ readCsvToCaseClasses, writeCaseClassesToCsv }
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingChannel
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{
+    getCsvRowEncoderForSingleton,
+    readCsvToCaseClasses, 
+    writeCaseClassesToCsv,
+}
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.SpotChannelColumnName
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 
@@ -99,6 +106,9 @@ object MergeRois extends StrictLogging:
             case Some(opts) => 
                 import cats.effect.unsafe.implicits.global // needed for cats.effect.IORuntime
                 import fs2.data.text.utf8.* // for CharLikeChunks typeclass instances
+
+                given CsvRowEncoder[ImagingChannel, String] = 
+                    getCsvRowEncoderForSingleton(SpotChannelColumnName)
 
                 val writeUnusable: List[MergeContributorRoi] => IO[os.Path] = 
                     val outfile = opts.mergeContributorsFile

@@ -27,12 +27,19 @@ import at.ac.oeaw.imba.gerlich.gerlib.geometry.{
 }
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.given
-import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{ 
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{
+    ColumnName, 
+    getCsvRowDecoderForSingleton,
+    getCsvRowEncoderForSingleton,
     readCsvToCaseClasses, 
     writeCaseClassesToCsv,
 }
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.{
+    SpotChannelColumnName,
+    TimepointColumnName
+}
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.syntax.all.*
@@ -48,7 +55,6 @@ import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.{
     RoiIndexColumnName,
 }
 import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
-import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.roi.parseFromRow
 import at.ac.oeaw.imba.gerlich.looptrace.drift.*
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.roi.{
@@ -214,9 +220,10 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
 
         // TODO: need to bring in the CsvRowDecoder[DriftRecord, String] instance
         val readKeyedDrifts: IO[Either[String, Map[DriftKey, DriftRecord]]] = 
-            import DriftRecord.given
-            summon[CellDecoder[Int]]
-            summon[CsvRowDecoder[CoarseDrift, String]]
+            given CsvRowDecoder[FieldOfViewLike, String] = 
+                getCsvRowDecoderForSingleton(ColumnName[FieldOfViewLike]("position"))
+            given CsvRowDecoder[ImagingTimepoint, String] = 
+                getCsvRowDecoderForSingleton(TimepointColumnName)
             readCsvToCaseClasses[DriftRecord](driftFile).map(keyDrifts)
 
         given Eq[FieldOfViewLike] with
@@ -229,6 +236,8 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
 
         val writeOutputs: (List[UnidentifiableRoi], List[PostMergeRoi]) => IO[(os.Path, os.Path)] = 
             (unidentifiables, wellSeparatedRois) => 
+                given CsvRowEncoder[ImagingChannel, String] = 
+                    getCsvRowEncoderForSingleton(SpotChannelColumnName)
                 val writeDiscards = Stream.emits(unidentifiables)
                     .through(writeCaseClassesToCsv(fileForDiscards))
                     .compile
@@ -266,35 +275,6 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
     /****************************************************************************************************************
      * Main types and business logic
      ****************************************************************************************************************/
-    final case class DriftRecord(position: FieldOfViewLike, time: ImagingTimepoint, coarse: CoarseDrift, fine: FineDrift):
-        def total = 
-            // For justification of additivity, see: https://github.com/gerlichlab/looptrace/issues/194
-            TotalDrift(
-                DriftComponent.total[AxisZ](coarse.z.value + fine.z.value), 
-                DriftComponent.total[AxisY](coarse.y.value + fine.y.value), 
-                DriftComponent.total[AxisX](coarse.x.value + fine.x.value),
-            )
-    end DriftRecord
-
-    object DriftRecord:
-        given decoderForDriftRecord(using 
-            CsvRowDecoder[ImagingContext, String],
-            CsvRowDecoder[CoarseDrift, String], 
-            CsvRowDecoder[FineDrift, String],
-        ): CsvRowDecoder[DriftRecord, String] with
-            override def apply(row: RowF[Some, String]): DecoderResult[DriftRecord] = 
-                val contextNel = parseFromRow[ImagingContext]("Error(s) reading imaging context from CSV row")(row)
-                val coarseDriftNel = parseFromRow[CoarseDrift]("Error(s) reading coarse drift from CSV row")(row)
-                val fineDriftNel = parseFromRow[FineDrift]("Error(s) reading coarse drift from CSV row")(row)
-                (contextNel, coarseDriftNel, fineDriftNel).mapN{ (context, coarseDrift, fineDrift) =>  
-                    DriftRecord(context.fieldOfView, context.timepoint, coarseDrift, fineDrift)
-                }
-                .leftMap{ messages => 
-                    DecoderError(s"Failed to parse drift record from CSV row. Messages: ${messages.mkString_("; ")}")
-                }
-                .toEither
-    end DriftRecord
-
     final case class DriftRecordNotFoundError(key: DriftKey) extends NoSuchElementException(s"key not found: ($key)")
 
     /** Add the given total drift (coarse + fine) to the given ROI, updating its centroid and its bounding box accordingly. */
