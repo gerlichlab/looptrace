@@ -7,7 +7,7 @@ from looptrace.tracing_qc_support import compute_ref_timepoint_spatial_informati
 
 
 TRACES_FILE_LINES = """
-,position,pos_index,traceId,timepoint,ref_timepoint,channel,z,y,x
+,position,pos_index,traceId,timepoint,ref_timepoint,spotChannel,z,y,x
 0,P0001.zarr,0,0,0,22,0,-120.7606701885158,-118.6606985242512,-164.68454811375952
 1,P0001.zarr,0,0,0,23,0,-120.7606701885158,-118.6606985242512,-164.68454811375952
 2,P0002.zarr,1,0,0,22,0,-481.54656448857935,-125.74304582138444,-176.7951017332434

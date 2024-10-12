@@ -141,7 +141,7 @@ def finalise_single_spot_props_table(spot_props: pd.DataFrame, position: str, ti
         A table annotated with the fields for context (field of view, hybridisation timepoint / round, and imaging channel)
     """
     old_cols = list(spot_props.columns)
-    new_cols = ["position", "timepoint", "channel"]
+    new_cols = ["position", "timepoint", "spotChannel"]
     spot_props[new_cols] = [position, timepoint, channel]
     return spot_props[new_cols + old_cols]
 
@@ -591,7 +591,7 @@ class SpotPicker:
         skip_spot_image_reasons = defaultdict(lambda: defaultdict(dict))
         pos_index = self.image_handler.image_lists[self.input_name].index(pos_group_name)
         for timepoint, timepoint_group in tqdm.tqdm(pos_group_data.groupby("timepoint")):
-            for ch, ch_group in timepoint_group.groupby("channel"):
+            for ch, ch_group in timepoint_group.groupby("spotChannel"):
                 image_stack = np.array(self.images[pos_index][int(timepoint), int(ch)])
                 for _, roi in ch_group.iterrows():
                     fn_key = RoiOrderingSpecification.FilenameKey.from_roi(roi)
@@ -671,7 +671,7 @@ class SpotPicker:
             full_image = np.array(self.images[pos_index])
             for roi in group.to_dict('records'):
                 spot_stack = full_image[:, 
-                                roi["channel"], 
+                                roi["spotChannel"], 
                                 roi["zMin"]:roi["zMax"], 
                                 roi["yMin"]:roi["yMax"],
                                 roi["xMin"]:roi["xMax"]].copy()
@@ -719,7 +719,7 @@ def build_locus_spot_data_extraction_table(
         pos = roi["position"]
         pos_index = get_pos_idx(pos)
         sel_dc = get_dc_table(pos_index)
-        ch = roi["channel"]
+        ch = roi["spotChannel"]
         ref_offset = sel_dc.query('timepoint == @ref_timepoint')
         # TODO: here we can update to iterate over channels for doing multi-channel extraction.
         # https://github.com/gerlichlab/looptrace/issues/138
@@ -754,7 +754,7 @@ def build_locus_spot_data_extraction_table(
                             dc_row["zDriftFinePixels"], dc_row["yDriftFinePixels"], dc_row["xDriftFinePixels"]])
 
     return pd.DataFrame(all_rois, columns=[
-        "position", "pos_index", "roi_number", "roi_id", "timepoint", "ref_timepoint", "channel", 
+        "position", "pos_index", "roi_number", "roi_id", "timepoint", "ref_timepoint", "spotChannel", 
         "zMin", "zMax", "yMin", "yMax", "xMin", "xMax",
         "pad_z_min", "pad_z_max", "pad_y_min", "pad_y_max", "pad_x_min", "pad_x_max", 
         "zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels",
