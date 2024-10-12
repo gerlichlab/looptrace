@@ -17,7 +17,7 @@ from looptrace import ArrayDimensionalityError
 from looptrace.ImageHandler import LocusGroupingData
 from looptrace.SpotPicker import SPOT_IMAGE_PIXEL_VALUE_TYPE, RoiOrderingSpecification
 from looptrace.Tracer import compute_spot_images_multiarray_per_fov
-from looptrace.integer_naming import IndexToNaturalNumberText, get_position_name_short
+from looptrace.integer_naming import IndexToNaturalNumberText, get_fov_name_short
 
 
 DEFAULT_MIN_NUM_PASSING = 500 # 5x the hypothesis default to ensure we really explore the search space
@@ -39,7 +39,7 @@ gen_spot_box = st.sampled_from([(2, 4, 4), (3, 3, 3)])
 gen_trace_id = st.integers(min_value=0, max_value=MAX_RAW_TRACE_ID).map(TraceIdFrom0)
 
 def get_name_for_raw_zero_based_fov(fov: int) -> str:
-    return get_position_name_short(fov) + ".zarr"
+    return get_fov_name_short(fov) + ".zarr"
 
 
 BuildInput = tuple[Iterable[RoiOrderingSpecification.FilenameKey], LocusGroupingData]

@@ -12,7 +12,7 @@ __author__ = "Vince Reuter"
 __email__ = "vincent.reuter@imba.oeaw.ac.at"
 
 from looptrace.nd2io import *
-from looptrace.integer_naming import get_position_names_N
+from looptrace.integer_naming import get_fov_names_N
 
 POSITION_PREFIX = "Point000"
 non_neg_ints_pair = st.tuples(st.integers(min_value=0), st.integers(min_value=0))
@@ -162,7 +162,7 @@ pfx_ext_and_exp_use = st.one_of(
     # Avoid shrinking here since size range is narrow, so shrinking will yield little benefit and be slow.
     phases=tuple(p for p in hyp.Phase if p != hyp.Phase.shrink)
     )
-def test_underscore_prefixed_and_or_non_nd2_files_are_skipped_and_good_ones_have_correct_position_names(
+def test_underscore_prefixed_and_or_non_nd2_files_are_skipped_and_good_ones_have_correct_fov_names(
     tmp_path_factory, input_params,
     ):
     """Result for list of position names must match expectation and correctly exclude the expect files to skip."""
@@ -184,7 +184,7 @@ def test_underscore_prefixed_and_or_non_nd2_files_are_skipped_and_good_ones_have
         mock.patch("looptrace.nd2io.da.moveaxis", side_effect=lambda _1, _2, _3: mock.Mock(shape=None)):
         _, obs_pos_names, _ = stack_nd2_to_dask(tmp_path)
     assert len(mock_nd2_read.call_args_list) == exp_num_use
-    assert obs_pos_names == get_position_names_N(len(unique_positions))
+    assert obs_pos_names == get_fov_names_N(len(unique_positions))
 
 
 @pytest.mark.parametrize(

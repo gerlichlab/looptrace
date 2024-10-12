@@ -90,10 +90,10 @@ class Deconvolver:
 
     @property
     def position_indices(self) -> Iterable[int]:
-        return range(len(self.position_names))
+        return range(len(self.fov_names))
 
     @property
-    def position_names(self) -> List[str]:
+    def fov_names(self) -> List[str]:
         return self.image_handler.image_lists[self.input_name]
 
     @property
@@ -226,7 +226,7 @@ class Deconvolver:
         
         for pos in tqdm.tqdm(positions):
             print(f"Deconvolving position: {pos}")
-            pos_index = self.position_names.index(pos)
+            pos_index = self.fov_names.index(pos)
             pos_img = self.image_handler.images[self.input_name][pos_index]
             z = create_zarr_store(path=self.output_path,
                     name = self.output_name, 

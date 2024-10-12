@@ -13,8 +13,8 @@ __author__ = "Vince Reuter"
 __credits__ = ["Vince Reuter"]
 
 __all__ = [
-    "get_position_name_short", 
-    "get_position_names_N", 
+    "get_fov_name_short", 
+    "get_fov_names_N", 
     "parse_semantic_and_value",
     ]
 
@@ -88,17 +88,17 @@ def _get_short_name(*, semantic: "NameableSemantic", i: int, namer: "IndexToNatu
     return semantic.value + namer.get_name(i)
 
 
-def get_position_name_short(i: int, *, namer: IndexToNaturalNumberText = _DEFAULT_NAMER) -> str:
+def get_fov_name_short(i: int, *, namer: IndexToNaturalNumberText = _DEFAULT_NAMER) -> str:
     """Get the position-like (field of view) name for the given index."""
     return _get_short_name(semantic=NameableSemantic.Point, i=i, namer=namer)
 
 
-def get_position_names_N(num_names: int, namer: IndexToNaturalNumberText = _DEFAULT_NAMER) -> List[str]:
+def get_fov_names_N(num_names: int, namer: IndexToNaturalNumberText = _DEFAULT_NAMER) -> List[str]:
     """Get the position-like (field of view) name for the first n indices."""
     _typecheck(num_names, ctx="Number of names")
     if num_names < 0:
         raise ValueError(f"Number of names is negative: {num_names}")
-    return [get_position_name_short(i, namer=namer) for i in range(num_names)]
+    return [get_fov_name_short(i, namer=namer) for i in range(num_names)]
 
 
 def parse_semantic_and_value(s: str, *, namer: IndexToNaturalNumberText) -> Result[tuple["NameableSemantic", int], str]:

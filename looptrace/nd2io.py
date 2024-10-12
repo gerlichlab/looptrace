@@ -12,7 +12,7 @@ import nd2
 import tqdm
 
 from looptrace.image_io import parse_positions_from_text, parse_times_from_text
-from looptrace.integer_naming import get_position_names_N
+from looptrace.integer_naming import get_fov_names_N
 
 __author__ = "Vince Reuter"
 __all__ = [
@@ -101,7 +101,7 @@ def stack_nd2_to_dask(folder: str, position_id: int = None):
     image_files = sorted([p.path for p in os.scandir(folder) if (p.name.endswith('.nd2') and not p.name.startswith('_'))])
     
     keyed_images_folders = key_image_file_names_by_point_and_time(image_files)
-    pos_names = get_position_names_N(len(keyed_images_folders))
+    pos_names = get_fov_names_N(len(keyed_images_folders))
 
     if position_id is not None:
         # Allow caller to specify single FOV to use, and select it here.

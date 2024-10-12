@@ -16,7 +16,7 @@ import tqdm
 from gertils import ExtantFile, ExtantFolder
 from looptrace import image_io, nd2io
 from looptrace.ImageHandler import ImageHandler
-from looptrace.integer_naming import get_position_name_short
+from looptrace.integer_naming import get_fov_name_short
 
 
 def workflow(n_pos: int, input_folders: Iterable[Path], output_folder: Path) -> None:
@@ -34,7 +34,7 @@ def workflow(n_pos: int, input_folders: Iterable[Path], output_folder: Path) -> 
         z = image_io.create_zarr_store(
             path=output_folder,
             name = os.path.basename(output_folder), 
-            pos_name = get_position_name_short(pos_id) + ".zarr",
+            pos_name = get_fov_name_short(pos_id) + ".zarr",
             shape = imgs.shape, 
             dtype = np.uint16,  
             chunks = (1, 1, 1, imgs.shape[-2], imgs.shape[-1]),

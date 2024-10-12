@@ -20,7 +20,7 @@ from looptrace import ArrayDimensionalityError, ConfigurationValueError, Missing
 from looptrace.ImageHandler import ImageHandler
 from looptrace.NucDetector import NucDetector, SegmentationMethod
 from looptrace.image_io import write_jvm_compatible_zarr_store
-from looptrace.integer_naming import get_position_name_short
+from looptrace.integer_naming import get_fov_name_short
 
 __author__ = "Vince Reuter"
 
@@ -84,7 +84,7 @@ def test_accessing_certain_attrs__is_defined_iff_certain_3d_status(dummy_rounds_
         assert run() == expect
 
 
-def test_position_names_images_list_relationship(dummy_rounds_config, complete_config_data, tmp_path):
+def test_fov_names_images_list_relationship(dummy_rounds_config, complete_config_data, tmp_path):
     input_key = complete_config_data["nuc_input_name"]
     N = get_nuc_detector(rounds_config=dummy_rounds_config, conf_data=complete_config_data, conf_file=tmp_path / "conf.yaml")
     # Initially, the input images don't exist, and so there are no position names.
@@ -177,7 +177,7 @@ def test_nuc_detector__generates_image_of_proper_dimension(
     N.image_handler.images = {}
     N.image_handler.image_lists = {}
     gen_img = lambda: runif(size=(2, 3, 4, 6))
-    inputs = [(get_position_name_short(i), gen_img()) for i in range(num_pos)]
+    inputs = [(get_fov_name_short(i), gen_img()) for i in range(num_pos)]
     images_folder = tmp_path / "images"
     nuc_subfolder = images_folder / "nuc_images_zarr"
     nuc_subfolder.mkdir(parents=True, exist_ok=True)

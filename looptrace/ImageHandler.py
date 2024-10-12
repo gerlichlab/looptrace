@@ -235,7 +235,7 @@ class ImageHandler:
         return self.images[self.reg_input_moving]
 
     @property
-    def drift_correction_position_names(self) -> List[str]:
+    def drift_correction_fov_names(self) -> List[str]:
         return self.image_lists[self.reg_input_moving]
 
     @property

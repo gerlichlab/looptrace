@@ -478,7 +478,7 @@ class Drifter():
 
     @property
     def full_pos_list(self) -> List[str]:
-        return self.image_handler.drift_correction_position_names
+        return self.image_handler.drift_correction_fov_names
 
     @property
     def images_moving(self) -> Sequence[np.ndarray]:

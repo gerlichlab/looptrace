@@ -4,21 +4,21 @@ from math import log10
 from expression import Result
 from hypothesis import given, strategies as st
 import pytest
-from looptrace.integer_naming import IndexToNaturalNumberText, get_position_names_N, get_position_name_short
+from looptrace.integer_naming import IndexToNaturalNumberText, get_fov_names_N, get_fov_name_short
 
 __author__ = "Vince Reuter"
 
 
 @given(st.integers(min_value=1, max_value=9997))
-def test_get_position_name_N__length_is_number_given__when_legal(n):
-    names = get_position_names_N(n)
+def test_get_fov_name_N__length_is_number_given__when_legal(n):
+    names = get_fov_names_N(n)
     assert len(names) == n
 
 
 @given(st.integers(min_value=1, max_value=9998))
-def test_get_position_name_N_over_domain__is_equivalent_to_one_at_a_time__at_shared_domain(n):
-    manual = [get_position_name_short(i) for i in range(n)]
-    auto = get_position_names_N(n)
+def test_get_fov_name_N_over_domain__is_equivalent_to_one_at_a_time__at_shared_domain(n):
+    manual = [get_fov_name_short(i) for i in range(n)]
+    auto = get_fov_names_N(n)
     assert manual == auto
 
 
@@ -30,22 +30,22 @@ def test_get_position_name_N_over_domain__is_equivalent_to_one_at_a_time__at_sha
     (100, "P0101"), (331, "P0332"), (999, "P1000"), 
     (1000, "P1001"), (4236, "P4237"),
     ])
-def test_get_position_name_short_over_domain__is_accurate(pos, exp):
-    assert get_position_name_short(pos) == exp
+def test_get_fov_name_short_over_domain__is_accurate(pos, exp):
+    assert get_fov_name_short(pos) == exp
 
 
 @pytest.mark.parametrize(
     ["fun", "arg", "expected_structure"], [
-        (get_position_name_short, -1, ValueError("-1 is out-of-bounds [0, 9999) for for namer 'TenThousand'")), 
-        (get_position_names_N, -1, ValueError("Number of names is negative: -1")),
-        (get_position_name_short, 0, (lambda obs: obs, "P0001")), 
-        (get_position_names_N, 0, (lambda obs: obs, [])), 
-        (get_position_name_short, 9998, (lambda obs: obs, "P9999")), 
-        (get_position_names_N, 9998, (len, 9998)), 
-        (get_position_name_short, 9999, ValueError("9999 is out-of-bounds [0, 9999) for for namer 'TenThousand'")), 
-        (get_position_names_N, 9999, (len, 9999)), 
-        (get_position_name_short, 10000, ValueError("10000 is out-of-bounds [0, 9999) for for namer 'TenThousand'")), 
-        (get_position_names_N, 10000, ValueError("9999 is out-of-bounds [0, 9999) for for namer 'TenThousand'")), 
+        (get_fov_name_short, -1, ValueError("-1 is out-of-bounds [0, 9999) for for namer 'TenThousand'")), 
+        (get_fov_names_N, -1, ValueError("Number of names is negative: -1")),
+        (get_fov_name_short, 0, (lambda obs: obs, "P0001")), 
+        (get_fov_names_N, 0, (lambda obs: obs, [])), 
+        (get_fov_name_short, 9998, (lambda obs: obs, "P9999")), 
+        (get_fov_names_N, 9998, (len, 9998)), 
+        (get_fov_name_short, 9999, ValueError("9999 is out-of-bounds [0, 9999) for for namer 'TenThousand'")), 
+        (get_fov_names_N, 9999, (len, 9999)), 
+        (get_fov_name_short, 10000, ValueError("10000 is out-of-bounds [0, 9999) for for namer 'TenThousand'")), 
+        (get_fov_names_N, 10000, ValueError("9999 is out-of-bounds [0, 9999) for for namer 'TenThousand'")), 
     ])
 def test_behavior_near_domain_boundaries(fun, arg, expected_structure):
     if isinstance(expected_structure, BaseException):
@@ -61,8 +61,8 @@ def test_behavior_near_domain_boundaries(fun, arg, expected_structure):
 
 @given(st.tuples(
     st.sampled_from((
-        (get_position_name_short, "Index to name"), 
-        (get_position_names_N, "Number of names"),
+        (get_fov_name_short, "Index to name"), 
+        (get_fov_names_N, "Number of names"),
     )), 
     st.one_of(
         st.just(None),
@@ -77,7 +77,7 @@ def test_behavior_near_domain_boundaries(fun, arg, expected_structure):
         st.text()
         )
 ))
-def test_get_position_name__is_expected_error_when_input_is_not_int(func_and_prefix__num_pair):
+def test_get_fov_name__is_expected_error_when_input_is_not_int(func_and_prefix__num_pair):
     (func, exp_msg_prefix), alleged_number = func_and_prefix__num_pair
     with pytest.raises(TypeError) as err_ctx:
         func(alleged_number)

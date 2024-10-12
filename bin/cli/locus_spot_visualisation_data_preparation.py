@@ -7,7 +7,7 @@ import sys
 from typing import Optional
 
 from gertils.types import FieldOfViewFrom1
-from looptrace.integer_naming import get_position_name_short
+from looptrace.integer_naming import get_fov_name_short
 
 
 logger = logging.getLogger(__name__)
@@ -69,7 +69,7 @@ def workflow(*, infolder: Path, outfolder: Optional[Path] = None) -> list[tuple[
         by_fov.setdefault(fov, []).append(fp)
     src_dst_pairs: list[tuple[Path, Path]] = []
     for fov, files_group in by_fov.items():
-        subfolder = outfolder / get_position_name_short(fov.get - 1)
+        subfolder = outfolder / get_fov_name_short(fov.get - 1)
         if not subfolder.is_dir():
             logger.info("Creating folder: %s", subfolder)
             subfolder.mkdir(parents=True)

@@ -185,9 +185,9 @@ def process_single_FOV_single_reference_timepoint(
     bead_roi_px = bead_detection_params.roi_pixels
     
     # TODO: this requires that the drift table be ordered such that the FOVs are as expected; need flexibility.
-    pos = drift_table.position.unique()[fov_idx]
+    pos = drift_table.fieldOfView.unique()[fov_idx]
     print(f"Inferred position (for reference FOV index {fov_idx}): {pos}")
-    curr_fov_drift_subtable = drift_table[drift_table.position == pos]
+    curr_fov_drift_subtable = drift_table[drift_table.fieldOfView == pos]
 
     # TODO: could type-refine the argument values to these parameters (which should be nonnegative).
     def proc1(timepoint_index: int, ref_ch: int, centroid: np.ndarray) -> Iterable[NumberLike]:
@@ -213,7 +213,7 @@ def process_single_FOV_single_reference_timepoint(
         # TODO: update if ever allowing channel (reg_ch_template) to be List[int] rather than simple int.
         mov_points = fits.loc[(fits.t == t) & (fits.c == bead_detection_params.reference_channel), ["z_loc", "y_loc", "x_loc"]].to_numpy() # Fits of fiducial beads in moving timepoint
         print(f"mov_points shape: {mov_points.shape}")
-        shift = drift_table.loc[(drift_table.position == pos) & (drift_table.timepoint == t), ["zDriftFinePixels", "yDriftFinePixels", "xDriftFinePixels"]].values[0]
+        shift = drift_table.loc[(drift_table.fieldOfView == pos) & (drift_table.timepoint == t), ["zDriftFinePixels", "yDriftFinePixels", "xDriftFinePixels"]].values[0]
         shift[0] =  shift[0] * camera_params.nanometers_z # Extract calculated drift correction from drift correction file.
         shift[1] =  shift[1] * camera_params.nanometers_xy
         shift[2] =  shift[2] * camera_params.nanometers_xy
@@ -371,7 +371,7 @@ def workflow(
         # TODO: parameterise with config.
         refspecs = [ReferenceImageStackDefinition(index=reference_fov, image_stack=imgs[reference_fov])]
     else:
-        refspecs = (ReferenceImageStackDefinition(index=i, image_stack=imgs[i]) for i in range(len(drift_table.position.unique())))
+        refspecs = (ReferenceImageStackDefinition(index=i, image_stack=imgs[i]) for i in range(len(drift_table.fieldOfView.unique())))
     fits = (
         process_single_FOV_single_reference_timepoint(
             image_handler=H,
