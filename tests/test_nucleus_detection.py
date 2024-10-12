@@ -91,7 +91,7 @@ def test_fov_names_images_list_relationship(dummy_rounds_config, complete_config
     with pytest.raises(MissingImagesError):
         N.input_images
     with pytest.raises(AttributeError) as err_ctx:
-        N.pos_list
+        N.fov_list
     assert str(err_ctx.value) == "Position names list for nuclei isn't defined when there are no images!"
     # We can populate with an empty list of images.
     N.image_handler.images = {}
@@ -99,11 +99,11 @@ def test_fov_names_images_list_relationship(dummy_rounds_config, complete_config
     N.image_handler.image_lists = {}
     N.image_handler.image_lists[input_key] = []
     assert N.input_images == []
-    assert N.pos_list == []
+    assert N.fov_list == []
     # If position names list length differs from image list length, that's bad!
     pos_names = ["P0001.zarr", "P0002.zarr"]
     N.image_handler.image_lists[input_key] = pos_names
-    assert N.pos_list == pos_names
+    assert N.fov_list == pos_names
     with pytest.raises(ArrayDimensionalityError) as err_ctx:
         N.input_images
     assert str(err_ctx.value) == f"0 images and {len(pos_names)} positions; these should be equal!"

@@ -13,6 +13,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.imagingTimepoint.given
 import at.ac.oeaw.imba.gerlich.gerlib.json.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.json.syntax.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.positiveInt.given
 
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
@@ -64,7 +65,6 @@ object ImagingRound:
 
     /** Try to parse a single imaging round instance from a raw JSON data mapping */
     def parseFromJsonMap(data: Map[String, ujson.Value]): ErrMsgsOr[ImagingRound] = 
-        import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.positiveInt.given
         val keys = data.keySet
         val timeNel = (data.get("time").toRight("Missing timepoint!") >>= parseTimeValue).toValidatedNel
         val isRegionalNel = extractDefaultFalse("isRegional")(data).toValidatedNel
@@ -203,7 +203,6 @@ final case class LocusImagingRound(name: String, time: ImagingTimepoint, probe: 
 
 /** Helpers and alternate constructors for working with imaging rounds of specific genomic loci */
 object LocusImagingRound:
-    import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.positiveInt.given
     
     def apply(time: ImagingTimepoint, probe: ProbeName): LocusImagingRound = apply(None, time, probe, None)
     

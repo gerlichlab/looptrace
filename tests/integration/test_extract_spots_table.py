@@ -185,8 +185,8 @@ def test_only_region_timepoints_and_their_locus_timepoints_have_records_in_spot_
     rois_table: pd.DataFrame = pd.read_csv(rois_file, index_col=0)
 
     # ...then, check that downstream assumption of exactly 1 FOV in each data table is valid.
-    assert rois_table["position"].nunique() == 1, f"Expected just 1 unique position in ROIs table, but got {rois_table.position.nunique()}"
-    assert drift_table["position"].nunique() == 1, f"Expected just 1 unique position in drift table, but got {drift_table.position.nunique()}"
+    assert rois_table["position"].nunique() == 1, f"Expected just 1 unique position in ROIs table, but got {rois_table.fieldOfView.nunique()}"
+    assert drift_table["position"].nunique() == 1, f"Expected just 1 unique position in drift table, but got {drift_table.fieldOfView.nunique()}"
 
     exp_region_times: set[int]
     exp_reg_time_loc_time_pairs: list[(int, int)]

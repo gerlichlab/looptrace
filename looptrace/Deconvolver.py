@@ -49,7 +49,7 @@ class Deconvolver:
 
     @property
     def field_of_view_indices(self) -> Iterable[int]:
-        return self.position_indices
+        return range(len(self.fov_names))
 
     @property
     def input_name(self) -> str:
@@ -87,10 +87,6 @@ class Deconvolver:
         except KeyError as e:
             raise MissingInputException(f"Deconvolution stage is missing input images: {self.input_name}") from e
         return ret if self.array_id is None else [ret[int(self.array_id)]]
-
-    @property
-    def position_indices(self) -> Iterable[int]:
-        return range(len(self.fov_names))
 
     @property
     def fov_names(self) -> List[str]:

@@ -125,7 +125,7 @@ def gen_legal_input(
         (k, draw(hyp_npy.arrays(dtype=SPOT_IMAGE_PIXEL_VALUE_TYPE, shape=(nt + 1, *spot_image_dims)))) 
         for k, nt in [
             (k, num_loc_times_by_reg_time[TimepointFrom0(k.ref_timepoint)]) 
-            for k in sorted(fn_keys, key=lambda k: (k.position, k.roi_id, k.ref_timepoint))
+            for k in sorted(fn_keys, key=lambda k: (k.field_of_view, k.roi_id, k.ref_timepoint))
         ]
     ]
     if not allow_empty_spots:
@@ -161,7 +161,7 @@ def test_fields_of_view__are_correct_and_in_order(tmp_path, fnkey_image_pairs_an
     kwargs = {"locus_grouping": locus_grouping} if locus_grouping else {"num_timepoints": max(img.shape[0] for _, img in fnkey_image_pairs)}
     result = compute_spot_images_multiarray_per_fov(npz=npz_wrapper, bg_npz=None, **kwargs)
     obs = [fov_name for fov_name, _ in result]
-    exp = list(sorted(set(k.position for k, _ in fnkey_image_pairs)))
+    exp = list(sorted(set(k.field_of_view for k, _ in fnkey_image_pairs)))
     assert obs == exp
 
 
@@ -189,7 +189,7 @@ def test_spot_images_finish_by_all_having_the_max_number_of_timepoints(tmp_path,
     # For each FOV, determine which regional timepoints have spot data for that FOV.
     regional_times_by_fov: dict[str, list[TimepointFrom0]] = {}
     for fn_key, _ in fnkey_image_pairs:
-        regional_times_by_fov.setdefault(fn_key.position, []).append(TimepointFrom0(fn_key.ref_timepoint))
+        regional_times_by_fov.setdefault(fn_key.field_of_view, []).append(TimepointFrom0(fn_key.ref_timepoint))
 
     # Mock the input and make the call under test.
     npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)

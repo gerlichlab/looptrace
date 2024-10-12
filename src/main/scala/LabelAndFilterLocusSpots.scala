@@ -10,7 +10,10 @@ import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
-import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.{
+    ImagingTimepoint, 
+    PositionName,
+}
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.instances.simpleShow.given
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.FieldOfViewColumnName
@@ -262,7 +265,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
             case (Nil | (_ :: Nil)) => logger.info("Traces file has no records, skipping QC labeling and filtering")
             case header :: records => 
                 val maybeParse: ErrMsgsOr[Array[String] => ErrMsgsOr[(LocusSpotQC.SpotIdentifier, LocusSpotQC.InputRecord)]] = {
-                    val maybeParseFov = buildFieldParse(pc.fovColumn, safeParseInt >>> PositionIndex.fromInt)(header)
+                    val maybeParseFov = buildFieldParse(pc.fovColumn, PositionName.parse)(header)
                     val maybeParseRegion = buildFieldParse(pc.regionColumn, safeParseInt >>> RegionId.fromInt)(header)
                     val maybeParseTraceId = buildFieldParse(pc.traceIdColumn, safeParseInt >>> TraceId.fromInt)(header)
                     val maybeParseTime = buildFieldParse(pc.timeColumn, safeParseInt >>> ImagingTimepoint.fromInt)(header)
@@ -456,12 +459,12 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                 writeTextFile(filteredOutputFile, filteredHeader :: recordsToWrite, delimiter, overwrite = overwrite)
             
                 /** Points CSVs for visualisation with `napari` */
-                val groupedAndTagged: List[(PositionIndex, List[(List[(LocusSpotQC.OutputRecord, PointDisplayType)], NonnegativeInt)])] = 
+                val groupedAndTagged: List[(PositionName, List[(List[(LocusSpotQC.OutputRecord, PointDisplayType)], NonnegativeInt)])] = 
                     unfiltered.map(_._1)
-                        .groupBy(_.identifier.position)
+                        .groupBy(_.identifier.fieldOfView)
                         .view.mapValues(_.fproduct(PointDisplayType.forRecord))
                         .toList
-                        .sortBy(_._1)(using Order[PositionIndex].toOrdering)
+                        .sortBy(_._1)(using Order[PositionName].toOrdering)
                         .map{ (pos, posGroup) => 
                             // Within each field of view, order by trace ID, and reset to start counting 0, 1, 2, ...
                             val processedGroup = posGroup.groupBy(_._1.traceId)
@@ -472,7 +475,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                         }
 
 
-                val (groupedFailQC, groupedPassQC): (List[(PositionIndex, List[TraceRecordPair])], List[(PositionIndex, List[TraceRecordPair])]) = 
+                val (groupedFailQC, groupedPassQC): (List[(PositionName, List[TraceRecordPair])], List[(PositionName, List[TraceRecordPair])]) = 
                     Alternative[List].separate(groupedAndTagged.flatMap{ (pos, traceGroups) =>
                         val (failed, passed) = Alternative[List].separate(traceGroups.flatMap((g, t) => g.flatMap{
                             case (_, PointDisplayType.Invisible) => None
@@ -490,12 +493,11 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
         }
     }
 
-    private def writePointsForNapari(folder: os.Path)(groupedByPos: List[(PositionIndex, List[TraceRecordPair])], roundsConfig: ImagingRoundsConfiguration) = {
+    private def writePointsForNapari(folder: os.Path)(groupedByPos: List[(PositionName, List[TraceRecordPair])], roundsConfig: ImagingRoundsConfiguration) = {
         import NapariSortKey.given
         import NapariSortKey.*
-        val getOutfileAndHeader = (pos: PositionIndex, qcType: PointDisplayType) => {
-            val numText = "%04d".format(pos.get + 1)
-            val fp = folder /  s"P${numText}.${qcType.toString.toLowerCase}.csv"
+        val getOutfileAndHeader = (pos: PositionName, qcType: PointDisplayType) => {
+            val fp = folder /  s"${pos.show_}.${qcType.toString.toLowerCase}.csv"
             val baseHeader = List("regionTime", "traceId", "locusTime", "traceIndex", "timeIndex", "z", "y", "x")
             val header = qcType match {
                 case PointDisplayType.QCPass => baseHeader
@@ -551,7 +553,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
     }
 
     /** From a spot identifier, obtain the elements needed to group it by logical tracing unit. */
-    def getGroupId(identifier: LocusSpotQC.SpotIdentifier): (PositionIndex, RegionId, TraceId) = (identifier.position, identifier.regionId, identifier.traceId)
+    def getGroupId(identifier: LocusSpotQC.SpotIdentifier): (PositionName, RegionId, TraceId) = (identifier.fieldOfView, identifier.regionId, identifier.traceId)
 
     /**
      * A type that can be ordered for visualisation with `napari`, ordering along one or more slider bars for the viewer
@@ -568,7 +570,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                     def getSortKey: B => NapariSortKey = f `andThen` s.getSortKey
 
         given napariSortableForSpotIdentifier: NapariSortable[LocusSpotQC.SpotIdentifier] with
-            def getSortKey = (ident: LocusSpotQC.SpotIdentifier) => NapariSortKey(ident.position, ident.traceId, ident.locusId.get)
+            def getSortKey = (ident: LocusSpotQC.SpotIdentifier) => NapariSortKey(ident.fieldOfView, ident.traceId, ident.locusId.get)
         
         given napariSortableForOutputRecord(using ev: NapariSortable[LocusSpotQC.SpotIdentifier]): NapariSortable[LocusSpotQC.OutputRecord] = 
             ev.contramap(_.identifier)
@@ -594,9 +596,9 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
         }
     end PointDisplayType
 
-    private[LabelAndFilterLocusSpots] final case class NapariSortKey(position: PositionIndex, traceId: TraceId, time: ImagingTimepoint)
+    private[LabelAndFilterLocusSpots] final case class NapariSortKey(fieldOfView: PositionName, traceId: TraceId, time: ImagingTimepoint)
     object NapariSortKey:
-        given orderForNapariSortKey: Order[NapariSortKey] = Order.by{ k => (k.position, k.traceId, k.time) }
+        given orderForNapariSortKey: Order[NapariSortKey] = Order.by{ k => (k.fieldOfView, k.traceId, k.time) }
         extension [A](as: List[A])(using ev: NapariSortable[A])
             def sortForNapari: List[A] = as.sortBy(ev.getSortKey)(orderForNapariSortKey.toOrdering)
 

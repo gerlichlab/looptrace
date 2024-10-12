@@ -202,9 +202,9 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
                 NonnegativeInt.indexed(drifts)
                     .foldLeft(Map.empty[DriftKey, NonEmptySet[NonnegativeInt]] -> Map.empty[DriftKey, DriftRecord]){ 
                         case ((reps, acc), (drift, recnum)) =>  
-                            val p = drift.position
+                            val fov = drift.fieldOfView
                             val t = drift.time
-                            val k = p -> t
+                            val k = fov -> t
                             reps.get(k) match {
                                 case None => (reps + (k -> NonEmptySet.one(recnum)), acc + (k -> drift))
                                 case Some(prevLineNums) => (reps + (k -> prevLineNums.add(recnum)), acc)
@@ -279,8 +279,8 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
     /** Add the given total drift (coarse + fine) to the given ROI, updating its centroid and its bounding box accordingly. */
     private def applyDrift(roi: PostMergeRoi, drift: DriftRecord)(using Eq[FieldOfViewLike]): PostMergeRoi = {
         require(
-            roi.context.fieldOfView === drift.position && roi.context.timepoint === drift.time, 
-            s"ROI and drift don't match on (FOV, time): (${roi.context.fieldOfView -> roi.context.timepoint} and (${drift.position -> drift.time})"
+            roi.context.fieldOfView === drift.fieldOfView && roi.context.timepoint === drift.time, 
+            s"ROI and drift don't match on (FOV, time): (${roi.context.fieldOfView -> roi.context.timepoint} and (${drift.fieldOfView -> drift.time})"
             )
         val (center, box) = PostMergeRoi.getCenterAndBox(roi)
         val newCenter = Centroid.fromPoint(Movement.addDrift(drift.total)(center.asPoint))

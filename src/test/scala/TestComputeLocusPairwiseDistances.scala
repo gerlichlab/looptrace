@@ -3,6 +3,7 @@ package at.ac.oeaw.imba.gerlich.looptrace
 import cats.*
 import cats.data.*
 import cats.syntax.all.*
+import io.github.iltotore.iron.scalacheck.all.given
 import mouse.boolean.*
 
 import org.scalacheck.{ Arbitrary, Gen, Shrink }
@@ -15,11 +16,15 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.EuclideanDistance
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
-import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.{
+    ImagingTimepoint, 
+    PositionName, 
+}
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.* // for .show_ syntax
+import at.ac.oeaw.imba.gerlich.gerlib.testing.instances.all.given
 
 import at.ac.oeaw.imba.gerlich.looptrace.ComputeLocusPairwiseDistances.*
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.safeReadAllWithOrderedHeaders
@@ -223,7 +228,9 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
 
     test("Distances computed are accurately Euclidean.") {
         def buildPoint(x: Double, y: Double, z: Double) = Point3D(XCoordinate(x), YCoordinate(y), ZCoordinate(z))
-        val pos = PositionIndex(NonnegativeInt(0))
+        val pos = 
+            import io.github.iltotore.iron.autoRefine
+            PositionName("P0001.zarr")
         val tid = TraceId(NonnegativeInt(1))
         val reg = RegionId(ImagingTimepoint(NonnegativeInt(40)))
         val inputRecords = NonnegativeInt.indexed(List((2.0, 1.0, -1.0), (1.0, 5.0, 0.0), (3.0, 0.0, 2.0))).map{
@@ -246,9 +253,6 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
         val pt2 = buildPoint(1.0, 5.0, 4.0)
         val pt3 = buildPoint(3.0, 4.0, 6.0)
         val pt4 = buildPoint(-2.0, -3.0, 1.0)
-        val lonePosition = 1 -> (PositionIndex(NonnegativeInt(2)), TraceId(NonnegativeInt(1)))
-        val pairPosition = 2 -> (PositionIndex(NonnegativeInt(5)), TraceId(NonnegativeInt(4)))
-        val trioPosition = 3 -> (PositionIndex(NonnegativeInt(7)), TraceId(NonnegativeInt(2)))
         val inputTable = Table(("groupingKeys", "simplifiedExpectation"), List(
             ((1, 1, 1), (2, 1, 1), (2, 1, 2), (1, 1, 1)) -> List((1, 1, 1, 0, 3) -> math.sqrt(27)), 
             ((2, 1, 1), (2, 1, 1), (2, 1, 2), (2, 1, 2)) -> List((2, 1, 1, 0, 1) -> math.sqrt(29), (2, 1, 2, 2, 3) -> math.sqrt(99)), 
@@ -262,7 +266,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
         forAll (inputTable) { case ((k1, k2, k3, k4), simplifiedExpectation) => 
             val records = NonnegativeInt.indexed(List(k1 -> pt1, k2 -> pt2, k3 -> pt3, k4 -> pt4)).map{ 
                 case (((pos, tid, reg), pt), i) => Input.GoodRecord(
-                    PositionIndex.unsafe(pos), 
+                    PositionName.unsafe(s"P000${pos}.zarr"), 
                     TraceId(NonnegativeInt.unsafe(tid)), 
                     RegionId.unsafe(reg), 
                     LocusId.unsafe(i), 
@@ -271,7 +275,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
             }
             val observation = inputRecordsToOutputRecords(NonnegativeInt.indexed(records))
             val simplifiedObservation = observation.map{ r => 
-                (r.position, r.trace, r.region, r.locus1, r.locus2) -> 
+                (r.fieldOfView, r.trace, r.region, r.locus1, r.locus2) -> 
                 r.distance.get
             }.toList
             val expectation = simplifiedExpectation.map{ case ((pos, tid, reg, t1, t2), d) => 
@@ -332,7 +336,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
     
     /** Use arbitrary instances for components to derive an an instance for the sum type. */
     given arbitraryForGoodInputRecord(using 
-        arbPos: Arbitrary[PositionIndex], 
+        arbPos: Arbitrary[PositionName], 
         arbTrace: Arbitrary[TraceId], 
         arbRegion: Arbitrary[RegionId], 
         arbLocus: Arbitrary[LocusId], 
@@ -355,5 +359,5 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
         given SimpleShow[Double] = SimpleShow.fromToString
         (r: Input.GoodRecord) => 
             val (x, y, z) = (r.point.x, r.point.y, r.point.z)
-            List(r.position.show_, r.trace.show_, r.region.show_, r.locus.show_, x.show_, y.show_, z.show_)
+            List(r.fieldOfView.show_, r.trace.show_, r.region.show_, r.locus.show_, x.show_, y.show_, z.show_)
 end TestComputeLocusPairwiseDistances

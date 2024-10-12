@@ -73,7 +73,7 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
             case (Some(bads), _) => throw Input.BadRecordsException(bads)
             case (None, outputRecords) => 
                 val recs = outputRecords.toList.sortBy{ r => 
-                    (r.position, r.region1, r.region2, r.distance)
+                    (r.fieldOfView, r.region1, r.region2, r.distance)
                 }(summon[Order[(PositionName, RegionId, RegionId, EuclideanDistance)]].toOrdering)
                 logger.info(s"Writing output file: ${expectedOutputFile.filepath}")
                 OutputWriter.writeRecordsToFile(recs, expectedOutputFile)
@@ -90,11 +90,11 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
     }
 
     def inputRecordsToOutputRecords(inrecs: Iterable[(Input.GoodRecord, NonnegativeInt)]): Iterable[OutputRecord] = {
-        inrecs.groupBy((r, _) => Input.getGroupingKey(r)).toList.flatMap{ case (pos, groupedRecords) => 
+        inrecs.groupBy((r, _) => Input.getGroupingKey(r)).toList.flatMap{ case (fov, groupedRecords) => 
             groupedRecords.toList.combinations(2).map{
                 case (r1, i1) :: (r2, i2) :: Nil => 
                     val d = EuclideanDistance.between(r1.point, r2.point)
-                    OutputRecord(position = pos, region1 = r1.region, region2 = r2.region, distance = d, inputIndex1 = i1, inputIndex2 = i2)
+                    OutputRecord(fieldOfView = fov, region1 = r1.region, region2 = r2.region, distance = d, inputIndex1 = i1, inputIndex2 = i2)
                 case rs => throw new Exception(s"${rs.length} records (not 2) when taking pairs!")
             }
         }
@@ -144,18 +144,18 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
         }
 
         /** How records must be grouped for consideration of between which pairs to compute distance */
-        def getGroupingKey = (_: GoodRecord).position
+        def getGroupingKey = (_: GoodRecord).fieldOfView
         
         /**
          * Wrapper around data representing a successfully parsed record from the input file
          * 
-         * @param position The field of view (FOV) in which this spot was detected
+         * @param fieldOfView The field of view (FOV) in which this spot was detected
          * @param trace The identifier of the trace to which this spot belongs
          * @param region The timepoint in which this spot's associated regional barcode was imaged
          * @param time The timepoint in which the (locus-specific) spot was imaged
          * @param point The 3D spatial coordinates of the center of a FISH spot
          */
-        final case class GoodRecord(position: PositionName, region: RegionId, point: Point3D)
+        final case class GoodRecord(fieldOfView: PositionName, region: RegionId, point: Point3D)
         
         /**
          * Bundle of data representing a bad record (line) from input file
@@ -179,7 +179,7 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
 
     /** Bundler of data which represents a single output record (pairwise distance) */
     final case class OutputRecord(
-        position: PositionName, 
+        fieldOfView: PositionName, 
         region1: RegionId, 
         region2: RegionId, 
         distance: EuclideanDistance, 
@@ -190,7 +190,7 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
     /** How to write the output records from this program */
     object OutputWriter extends HeadedFileWriter[OutputRecord]:
         // These are our names.
-        override def header: List[String] = List("position", "region1", "region2", "distance", "inputIndex1", "inputIndex2")
+        override def header: List[String] = List(FieldOfViewColumnName.value, "region1", "region2", "distance", "inputIndex1", "inputIndex2")
         override def toTextFields(r: OutputRecord): List[String] = r match {
             case OutputRecord(pos, region1, region2, distance, idx1, idx2) => 
                 List(pos.show_, region1.show_, region2.show_, distance.get.toString, idx1.show_, idx2.show_)

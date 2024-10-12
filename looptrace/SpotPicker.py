@@ -83,17 +83,17 @@ class RoiOrderingSpecification:
 
     @dataclasses.dataclass(frozen=True, kw_only=True)
     class FilenameKey:
-        position: str
+        field_of_view: str
         roi_id: int
         ref_timepoint: int
         
         @classmethod
         def from_roi(cls, roi: Union[pd.Series, Mapping[str, Any]]) -> "FilenameKey":
-            return cls(position=roi["position"], roi_id=roi["roi_id"], ref_timepoint=roi["ref_timepoint"])
+            return cls(field_of_view=roi["fieldOfView"], roi_id=roi["roi_id"], ref_timepoint=roi["ref_timepoint"])
 
         @property
         def file_name_base(self) -> str:
-            return "_".join([self.position, str(self.roi_id).zfill(5), str(self.ref_timepoint)])
+            return "_".join([self.field_of_view, str(self.roi_id).zfill(5), str(self.ref_timepoint)])
 
         @property
         def name_roi_file(self) -> str:
@@ -101,23 +101,23 @@ class RoiOrderingSpecification:
         
         @property
         def to_tuple(self) -> Tuple[str, int, int]:
-            return self.position, self.roi_id, self.ref_timepoint
+            return self.field_of_view, self.roi_id, self.ref_timepoint
 
     @staticmethod
     def row_order_columns() -> List[str]:
-        return ["position", "roi_id", "ref_timepoint", "timepoint"]
+        return ["fieldOfView", "roi_id", "ref_timepoint", "timepoint"]
     
     @classmethod
     def get_file_sort_key(cls, file_key: str) -> FilenameKey:
         try:
-            pos, roi, ref = file_key.split("_")
+            fov, roi, ref = file_key.split("_")
         except ValueError:
             print(f"Failed to get key for file key: {file_key}")
             raise
-        return cls.FilenameKey(position=pos, roi_id=int(roi), ref_timepoint=int(ref))
+        return cls.FilenameKey(field_of_view=fov, roi_id=int(roi), ref_timepoint=int(ref))
 
 
-def finalise_single_spot_props_table(spot_props: pd.DataFrame, position: str, timepoint: int, channel: int) -> pd.DataFrame:
+def finalise_single_spot_props_table(spot_props: pd.DataFrame, field_of_view: str, timepoint: int, channel: int) -> pd.DataFrame:
     """
     Perform the addition of several context-relevant fields to the table of detected spot properties for a particular image and channel.
 
@@ -128,8 +128,8 @@ def finalise_single_spot_props_table(spot_props: pd.DataFrame, position: str, ti
     ----------
     spot_props : pd.DataFrame
         Data table with properties (location, intensity, etc.) of detected spots
-    position : str
-        Hybridisation round / timepoint in which spots were detected
+    field_of_view : str
+        Field of view in which spots were detected
     timepoint : int
         Hybridisation round / timepoint for which spots were detected
     channel : int
@@ -141,8 +141,8 @@ def finalise_single_spot_props_table(spot_props: pd.DataFrame, position: str, ti
         A table annotated with the fields for context (field of view, hybridisation timepoint / round, and imaging channel)
     """
     old_cols = list(spot_props.columns)
-    new_cols = ["position", "timepoint", "spotChannel"]
-    spot_props[new_cols] = [position, timepoint, channel]
+    new_cols = ["fieldOfView", "timepoint", "spotChannel"]
+    spot_props[new_cols] = [field_of_view, timepoint, channel]
     return spot_props[new_cols + old_cols]
 
 
@@ -211,14 +211,14 @@ def detect_spot_single_fov_single_timepoint(
 
 
 def build_spot_prop_table(
-        img: np.ndarray, 
-        position: str, 
-        channel: int, 
-        timepoint_spec: "SingleTimepointDetectionSpec", 
-        detection_parameters: "SpotDetectionParameters"
-        ) -> pd.DataFrame:
+    img: np.ndarray, 
+    field_of_view: str, 
+    channel: int, 
+    timepoint_spec: "SingleTimepointDetectionSpec", 
+    detection_parameters: "SpotDetectionParameters"
+) -> pd.DataFrame:
     timepoint = timepoint_spec.timepoint
-    print(f"Building spot properties table; position={position}, timepoint={timepoint}, channel={channel}")
+    print(f"Building spot properties table; field_of_view={field_of_view}, timepoint={timepoint}, channel={channel}")
     spot_props = detect_spot_single_fov_single_timepoint(
         single_fov_img=img, 
         timepoint=timepoint, 
@@ -226,30 +226,30 @@ def build_spot_prop_table(
         spot_threshold=timepoint_spec.threshold, 
         detection_parameters=detection_parameters,
         )
-    return finalise_single_spot_props_table(spot_props=spot_props, position=position, timepoint=timepoint, channel=channel)
+    return finalise_single_spot_props_table(spot_props=spot_props, field_of_view=field_of_view, timepoint=timepoint, channel=channel)
 
 
 def detect_spots_multiple(
-        pos_img_pairs: Iterable[Tuple[str, np.ndarray]], 
-        timepoint_specs: Iterable["SingleTimepointDetectionSpec"], 
-        channels: Iterable[int], 
-        spot_detection_parameters: "SpotDetectionParameters", 
-        parallelise: bool = False,
-        **joblib_kwargs
-        ) -> pd.DataFrame:
+    fov_img_pairs: Iterable[Tuple[str, np.ndarray]], 
+    timepoint_specs: Iterable["SingleTimepointDetectionSpec"], 
+    channels: Iterable[int], 
+    spot_detection_parameters: "SpotDetectionParameters", 
+    parallelise: bool = False,
+    **joblib_kwargs
+) -> pd.DataFrame:
     """Detect spots in each relevant channel and for each given timepoint for the given whole-FOV images."""
     kwargs = copy.copy(joblib_kwargs)
     kwargs.setdefault("n_jobs", -1)
     if parallelise:
         subframes = Parallel(**kwargs)(
             delayed(build_spot_prop_table)(
-                img=img, position=pos, channel=ch, timepoint_spec=spec, detection_parameters=spot_detection_parameters
+                img=img, field_of_view=fov, channel=ch, timepoint_spec=spec, detection_parameters=spot_detection_parameters
                 )
-            for pos, img in tqdm.tqdm(pos_img_pairs) for spec in timepoint_specs for ch in channels
+            for fov, img in tqdm.tqdm(fov_img_pairs) for spec in timepoint_specs for ch in channels
             )
     else:
         subframes = []
-        for pos, img in tqdm.tqdm(pos_img_pairs):
+        for pos, img in tqdm.tqdm(fov_img_pairs):
             for spec in tqdm.tqdm(timepoint_specs):
                 for ch in channels:
                     spots = build_spot_prop_table(
@@ -411,7 +411,7 @@ class SpotPicker:
         for i, t in self._iter_timepoints():
             yield SingleTimepointDetectionSpec(timepoint=t, threshold=self.spot_threshold[i])
 
-    def iter_pos_img_pairs(self) -> Iterable[Tuple[str, np.ndarray]]:
+    def iter_fov_img_pairs(self) -> Iterable[Tuple[str, np.ndarray]]:
         """Iterate over pairs of position (FOV) name, and corresponding 5-tensor (t, c, z, y, x) of images."""
         for i, pos in enumerate(self.fov_list):
             yield pos, self.images[i]
@@ -507,7 +507,7 @@ class SpotPicker:
         params = self.detection_parameters
         logger.info(f"Using '{self.detection_method_name}' for spot detection, threshold = {self.spot_threshold}, downsampling = {params.downsampling}")
         output = detect_spots_multiple(
-            pos_img_pairs=self.iter_pos_img_pairs(), 
+            fov_img_pairs=self.iter_fov_img_pairs(), 
             timepoint_specs=list(self.iter_timepoint_threshold_pairs()), 
             channels=list(self.spot_channel), 
             spot_detection_parameters=params, 

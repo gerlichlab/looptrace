@@ -12,8 +12,12 @@ import mouse.boolean.*
 import upickle.default.*
 
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.coordinate.given
-import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.{
+    ImagingTimepoint, 
+    PositionName,
+}
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.FieldOfViewColumnName
 import at.ac.oeaw.imba.gerlich.gerlib.json.JsonValueWriter
 import at.ac.oeaw.imba.gerlich.gerlib.json.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.json.instances.geometry.getPlainJsonValueWriter
@@ -85,12 +89,12 @@ object LocusSpotQC:
     /**
       * Bundle of data with which to uniquely identify a locus-specific spot in an experiment
       *
-      * @param position Field of view, 0-based index
+      * @param fieldOfView Field of view, 0-based index
       * @param regionId Wrapper around the timepoint at which the spot's associated region was imaged
       * @param traceId 0-based index identifying the trace, ideally uniquely within the experiment but perhaps not
       * @param locusId Wrapper around the timepoint at which the spot was imaged
       */
-    final case class SpotIdentifier(position: PositionIndex, regionId: RegionId, traceId: TraceId, locusId: LocusId)
+    final case class SpotIdentifier(fieldOfView: PositionName, regionId: RegionId, traceId: TraceId, locusId: LocusId)
     
     /** Helpers for working with identifiers of locus-specific spots */
     object SpotIdentifier:
@@ -105,7 +109,7 @@ object LocusSpotQC:
         
         /** Create a [[ujson.Obj]] representation of the given spot identifier, mapping each of its field names to simplified value. */
         private[LocusSpotQC] def toJsonObject(spotId: SpotIdentifier): ujson.Obj = ujson.Obj(
-            "position" -> spotId.position.get.asJson,
+            "position" -> spotId.fieldOfView.asJson,
             "regionId" -> spotId.regionId.get.asJson,
             "traceId" -> spotId.traceId.get.asJson,
             "locusId" -> spotId.locusId.get.asJson,
@@ -115,11 +119,11 @@ object LocusSpotQC:
         def rwForSpotIdentifier: ReadWriter[SpotIdentifier] = readwriter[ujson.Value].bimap(
             toJsonObject,
             json => 
-                val posIdNel = safeExtractE("position", safeParseInt >>> PositionIndex.fromInt)(json)
+                val fovNel = safeExtractE(FieldOfViewColumnName.value, PositionName.parse)(json)
                 val regIdNel = safeExtractE("regionId", safeParseInt >>> RegionId.fromInt)(json)
                 val traceIdNel = safeExtractE("traceId", safeParseInt >>> TraceId.fromInt)(json)
                 val locusIdNel = safeExtractE("locusId", safeParseInt >>> LocusId.fromInt)(json)
-                (posIdNel, regIdNel, traceIdNel, locusIdNel).mapN(SpotIdentifier.apply) match {
+                (fovNel, regIdNel, traceIdNel, locusIdNel).mapN(SpotIdentifier.apply) match {
                     case Invalid(messages) => throw new DecodingError(messages, json)
                     case Valid(spotId) => spotId
                 }

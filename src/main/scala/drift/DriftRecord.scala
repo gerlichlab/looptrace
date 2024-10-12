@@ -4,7 +4,7 @@ package drift
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.*
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 
-final case class DriftRecord(position: FieldOfViewLike, time: ImagingTimepoint, coarse: CoarseDrift, fine: FineDrift):
+final case class DriftRecord(fieldOfView: FieldOfViewLike, time: ImagingTimepoint, coarse: CoarseDrift, fine: FineDrift):
     def total = 
         // For justification of additivity, see: https://github.com/gerlichlab/looptrace/issues/194
         TotalDrift(

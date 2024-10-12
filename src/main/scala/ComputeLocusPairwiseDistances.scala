@@ -8,6 +8,10 @@ import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.EuclideanDistance
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.{
+    FieldOfViewLike, 
+    PositionName,
+}
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.FieldOfViewColumnName
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
@@ -71,8 +75,8 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
             case (Some(bads), _) => throw Input.BadRecordsException(bads)
             case (None, outputRecords) => 
                 val recs = outputRecords.toList.sortBy{ r => 
-                    (r.position, r.region, r.trace, r.locus1, r.locus2)
-                }(summon[Order[(PositionIndex, RegionId, TraceId, LocusId, LocusId)]].toOrdering)
+                    (r.fieldOfView, r.region, r.trace, r.locus1, r.locus2)
+                }(summon[Order[(PositionName, RegionId, TraceId, LocusId, LocusId)]].toOrdering)
                 logger.info(s"Writing output file: ${expectedOutputFile.filepath}")
                 OutputWriter.writeRecordsToFile(recs, expectedOutputFile)
         }
@@ -89,11 +93,11 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
 
     def inputRecordsToOutputRecords(inrecs: Iterable[(Input.GoodRecord, NonnegativeInt)]): Iterable[OutputRecord] = {
         inrecs.groupBy((r, _) => Input.getGroupingKey(r)).toList.flatMap{ 
-            case ((pos, tid, reg), groupedRecords) => 
+            case ((fov, tid, reg), groupedRecords) => 
                 groupedRecords.toList.combinations(2).flatMap{
                     case (r1, i1) :: (r2, i2) :: Nil => (r1.locus =!= r2.locus).option(
                         OutputRecord(
-                            position = pos,
+                            fieldOfView = fov,
                             trace = tid,
                             region = reg,
                             locus1 = r1.locus, 
@@ -133,7 +137,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
                 getColParser(header)(col, lift)
 
             /* Component parsers, one for each field of interest from a record. */
-            val maybeParseFOV = getParser(FieldOfViewColumn, safeParseInt >>> PositionIndex.fromInt)
+            val maybeParseFOV = getParser(FieldOfViewColumn, PositionName.parse)
             val maybeParseTrace = getParser(TraceIdColumn, safeParseInt >>> TraceId.fromInt)
             val maybeParseRegion = getParser(RegionalBarcodeTimepointColumn, safeParseInt >>> RegionId.fromInt)
             val maybeParseLocus = getParser(LocusSpecificBarcodeTimepointColumn, safeParseInt >>> LocusId.fromInt)
@@ -156,18 +160,18 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
         }
 
         /** How records must be grouped for consideration of between which pairs to compute distance */
-        def getGroupingKey(r: GoodRecord) = (r.position, r.trace, r.region)
+        def getGroupingKey(r: GoodRecord) = (r.fieldOfView, r.trace, r.region)
         
         /**
          * Wrapper around data representing a successfully parsed record from the input file
          * 
-         * @param position The field of view (FOV) in which this spot was detected
+         * @param fieldOfView The field of view (FOV) in which this spot was detected
          * @param trace The identifier of the trace to which this spot belongs
          * @param region The timepoint in which this spot's associated regional barcode was imaged
          * @param time The timepoint in which the (locus-specific) spot was imaged
          * @param point The 3D spatial coordinates of the center of a FISH spot
          */
-        final case class GoodRecord(position: PositionIndex, trace: TraceId, region: RegionId, locus: LocusId, point: Point3D)
+        final case class GoodRecord(fieldOfView: PositionName, trace: TraceId, region: RegionId, locus: LocusId, point: Point3D)
 
         /**
          * Bundle of data representing a bad record (line) from input file
@@ -191,7 +195,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
 
     /** Bundler of data which represents a single output record (pairwise distance) */
     final case class OutputRecord(
-        position: PositionIndex, 
+        fieldOfView: PositionName, 
         trace: TraceId, 
         region: RegionId, 
         locus1: LocusId, 
@@ -204,10 +208,25 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
     /** How to write the output records from this program */
     object OutputWriter extends HeadedFileWriter[OutputRecord]:
         // These are our names.
-        override def header: List[String] = List("position", "traceId", "region", "locus1", "locus2", "distance", "inputIndex1", "inputIndex2")
-        override def toTextFields(r: OutputRecord): List[String] = r match {
-            case OutputRecord(pos, trace, region, locus1, locus2, distance, idx1, idx2) => 
-                List(pos.show_, trace.show_, region.show_, locus1.show_, locus2.show_, distance.get.toString, idx1.show_, idx2.show_)
-        }
+        override def header: List[String] = List(
+            FieldOfViewColumnName.value, 
+            "traceId", 
+            "region", 
+            "locus1", 
+            "locus2", 
+            "distance", 
+            "inputIndex1", 
+            "inputIndex2",
+        )
+        override def toTextFields(r: OutputRecord): List[String] = List(
+            r.fieldOfView.show_, 
+            r.trace.show_, 
+            r.region.show_, 
+            r.locus1.show_, 
+            r.locus2.show_, 
+            r.distance.toString, 
+            r.inputIndex1.show_, 
+            r.inputIndex2.show_, 
+        )
     end OutputWriter
 end ComputeLocusPairwiseDistances

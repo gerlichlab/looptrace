@@ -428,7 +428,7 @@ def apply_pixels_to_nanometers(traces: pd.DataFrame, z_nm_per_px: float, xy_nm_p
 
 
 @doc(
-    summary="Compute a list of multiarrays, grouping and stacking by "fieldOfView" (FOV).",
+    summary="Compute a list of multiarrays, grouping and stacking by 'fieldOfView' (FOV).",
     extended_summary="""
         The expectation is that the data underlying the NPZ input will be a list of 4D arrays, each corresponding to 
         one of the retained (after filtering) regional barcode spots. The 4 dimensions: (time, z, y, x). 
@@ -502,7 +502,7 @@ def compute_spot_images_multiarray_per_fov(
 
     result: list[tuple[str, np.ndarray]] = []
 
-    for pos, pos_group in itertools.groupby(keyed, lambda k_: k_[0].position):
+    for pos, pos_group in itertools.groupby(keyed, lambda k_: k_[0].field_of_view):
         logging.info("Computing spot image arrays stack for position '%s'...", pos)
         current_stack: list[np.ndarray] = []
         for filename_key, filename in sorted(pos_group, key=lambda fk_fn: (fk_fn[0].ref_timepoint, fk_fn[0].roi_id)):

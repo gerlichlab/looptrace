@@ -269,10 +269,10 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
         given arbRegion: Arbitrary[RegionId] = Gen.oneOf(40, 41, 42).map(RegionId.unsafe).toArbitrary
         forAll (Gen.choose(5, 10).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord]))) { (records: List[Input.GoodRecord]) => 
             // Pretest: must be multiple records of same region even within same FOV.
-            records.groupBy(r => r.position -> r.region).view.mapValues(_.length).toMap.filter(_._2 > 1).nonEmpty shouldBe true
+            records.groupBy(r => r.fieldOfView -> r.region).view.mapValues(_.length).toMap.filter(_._2 > 1).nonEmpty shouldBe true
             val getKey = (_: Input.GoodRecord | OutputRecord) match {
-                case i: Input.GoodRecord => i.position
-                case o: OutputRecord => o.position
+                case i: Input.GoodRecord => i.fieldOfView
+                case o: OutputRecord => o.fieldOfView
             }
             val expGroupSizes = records.groupBy(getKey).view.mapValues(g => g.size `choose` 2).toMap
             val obsGroupSizes = inputRecordsToOutputRecords(NonnegativeInt.indexed(records)).groupBy(getKey).view.mapValues(_.size).toMap
@@ -307,6 +307,6 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
         given SimpleShow[Double] = SimpleShow.fromToString
         (r: Input.GoodRecord) => 
             val (x, y, z) = (r.point.x, r.point.y, r.point.z)
-            List(r.position.show_, r.region.show_, x.show_, y.show_, z.show_)
+            List(r.fieldOfView.show_, r.region.show_, x.show_, y.show_, z.show_)
 end TestComputeRegionPairwiseDistances
 
