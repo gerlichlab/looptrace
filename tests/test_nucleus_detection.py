@@ -106,7 +106,7 @@ def test_fov_names_images_list_relationship(dummy_rounds_config, complete_config
     assert N.fov_list == pos_names
     with pytest.raises(ArrayDimensionalityError) as err_ctx:
         N.input_images
-    assert str(err_ctx.value) == f"0 images and {len(pos_names)} FOV(s); these should be equal!"
+    assert str(err_ctx.value) == f"0 image(s) and {len(pos_names)} FOV(s); these should be equal!"
 
 
 @pytest.mark.parametrize(

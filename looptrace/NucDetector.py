@@ -156,7 +156,7 @@ class NucDetector:
         except KeyError as e:
             raise MissingImagesError(f"No images available ({self._input_name}) as raw input for nuclei segmentation!") from e
         if len(imgs) != len(self.fov_list):
-            raise ArrayDimensionalityError(f"{len(imgs)} images and {len(self.fov_list)} FOVs; these should be equal!")
+            raise ArrayDimensionalityError(f"{len(imgs)} image(s) and {len(self.fov_list)} FOV(s); these should be equal!")
         exp_shape_len = 4 # (ch, z, y, x) -- no time dimension since only 1 timepoint's imaged for nuclei.
         bad_images = {p: i.shape for p, i in zip(self.fov_list, imgs) if len(i.shape) != exp_shape_len}
         if bad_images:
