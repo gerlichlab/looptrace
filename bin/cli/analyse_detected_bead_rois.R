@@ -39,7 +39,7 @@ stripSuffix <- function(suffix, target) {
 }
 ## Parse field of view and hybridisation timepoint/round from given filename, based 
 ## on given prefix and extension at command-line, and delimiter assumed or given between FOV and timepoint in filename.
-parsePositionAndTimepoint <- function(fn) {
+parseFieldOfViewAndTimepoint <- function(fn) {
     encoded <- stripPrefix(prefix = opts$counts_files_prefix, target = fn)
     encoded <- stripSuffix(suffix = paste0(".", opts$counts_files_extension), target = encoded)
     fields <- unlist(strsplit(encoded, opts$fov_timepoint_delimiter))
@@ -52,7 +52,7 @@ parsePositionAndTimepoint <- function(fn) {
 # Count the number of QC-passing (non-failed) ROIs in a particular file (1 file per FOV + timepoint pair).
 countPassingQC <- function(f) {
     fn <- basename(f)
-    p_and_t <- parsePositionAndTimepoint(fn)
+    p_and_t <- parseFieldOfViewAndTimepoint(fn)
     codes <- fread(f, sep = delimiter)[[opts$qc_code_column]]
     n_qc_pass <- sum(codes == "") + sum(is.na(codes))
     list(fieldOfView = p_and_t[["fieldOfView"]], timepoint = p_and_t[["timepoint"]], filename = fn, count = n_qc_pass)
@@ -146,7 +146,7 @@ if (any(roi_counts$count < 0)) {
 message("Printing validated table")
 roi_counts
 ## Parse field of view and timepoint from each filename.
-pos_and_timepoint <- lapply(roi_counts$filename, parsePositionAndTimepoint)
+pos_and_timepoint <- lapply(roi_counts$filename, parseFieldOfViewAndTimepoint)
 ## Finalise the table by adding the FOV and timepoint information.
 roi_counts$fieldOfView <- sapply(pos_and_timepoint, function(e) e[["fieldOfView"]])
 roi_counts$timepoint <- sapply(pos_and_timepoint, function(e) e[["timepoint"]])
