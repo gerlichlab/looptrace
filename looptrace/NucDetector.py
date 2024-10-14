@@ -205,14 +205,15 @@ class NucDetector:
     @property
     def fov_list(self) -> list[str]:
         """List of names for the fields of view (FOVs) in which nuclei images were taken"""
+        error_message = "Field of view names list for nuclei isn't defined when there are no images!"
         try:
             image_lists = self.image_handler.image_lists
         except AttributeError as e:
-            raise AttributeError("Position names list for nuclei isn't defined when there are no images!") from e
+            raise AttributeError(error_message) from e
         try:
             return image_lists[self._input_name]
         except KeyError as e:
-            raise AttributeError("Position names list for nuclei isn't defined when there are no nuclei images!") from e
+            raise AttributeError(error_message) from e
 
     @property
     def segmentation_method(self) -> SegmentationMethod:

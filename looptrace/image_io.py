@@ -297,7 +297,7 @@ def images_to_ome_zarr(
         raise TypeError("axes argument must be tuple[str])")
     if "p" in axes:
         raise ValueError(
-            "Position/FOV axis 'p' was supplied, but images_to_ome_zarr assumes each image is for a field of view."
+            "Field of view axis 'p' was supplied, but images_to_ome_zarr assumes each image is for a field of view."
         )
     
     if not os.path.isdir(path):
