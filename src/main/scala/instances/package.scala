@@ -8,7 +8,6 @@ package object instances:
     /** A bundle of typeclass instances for many of this package's custom data types */
     private trait AllInstances extends 
         LocusIdInstances,
-        PositionIndexInstances, 
         ProbeNameInstances, 
         RegionIdInstances, 
         RoiIdInstances, 

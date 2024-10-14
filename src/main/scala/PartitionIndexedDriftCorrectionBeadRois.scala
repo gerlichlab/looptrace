@@ -10,7 +10,10 @@ import upickle.default.*
 import scopt.{ OParser, Read }
 import com.typesafe.scalalogging.StrictLogging
 
-import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.{
+    FieldOfView,
+    ImagingTimepoint, 
+}
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.{
     FieldOfViewColumnName, 
@@ -37,7 +40,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
 
     /* Type aliases */
     type RawRecord = Array[String]
-    type FovTimePair = (PositionIndex, ImagingTimepoint)
+    type FovTimePair = (FieldOfView, ImagingTimepoint)
     type KeyedProblem = (FovTimePair, RoisSplit.Problem)
     type InitFile = (FovTimePair, os.Path)
     type IndexedRoi = FiducialBeadRoi | SelectedRoi
@@ -210,7 +213,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
             if (filename.startsWith(BeadRoisPrefix)) {
                 filename.split("\\.").head.stripPrefix(BeadRoisPrefix).split("_").toList match {
                     case "" :: rawPosIdx :: rawTime :: Nil => 
-                        (tryReadThruNN(PositionIndex.apply)(rawPosIdx), tryReadThruNN(ImagingTimepoint.apply)(rawTime)).tupled.map(_ -> filepath)
+                        (tryReadThruNN(FieldOfView.apply)(rawPosIdx), tryReadThruNN(ImagingTimepoint.apply)(rawTime)).tupled.map(_ -> filepath)
                     case _ => None
                 }
             } else { None }
@@ -303,9 +306,9 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
       * @param writeV How to write each {@code V} element as JSON
       * @return A JSON array of object corresponding to each element of the map
       */
-    def posTimeMapToJson[V](vKey: String, timeByFov: Map[(PositionIndex, ImagingTimepoint), V])(using writeV: (V) => ujson.Value): ujson.Value = {
-        val proc1 = (pt: (PositionIndex, ImagingTimepoint), v: V) => ujson.Obj(
-            FieldOfViewColumnName.value -> pt._1.get.asJson,
+    def posTimeMapToJson[V](vKey: String, timeByFov: Map[(FieldOfView, ImagingTimepoint), V])(using writeV: (V) => ujson.Value): ujson.Value = {
+        val proc1 = (pt: (FieldOfView, ImagingTimepoint), v: V) => ujson.Obj(
+            FieldOfViewColumnName.value -> pt._1.asJson,
             TimepointColumnName.value -> pt._2.asJson,
             vKey -> writeV(v)
         )
@@ -322,7 +325,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
                 .combineSafely(List(pair.toJsonMap, problem.toJsonMap))
                 .fold(reps => throw RepeatedKeysException(reps), identity), 
             json => 
-                val fovNel = Try{ PositionIndex.unsafe(json(FieldOfViewColumnName.value).int) }.toValidatedNel
+                val fovNel = Try{ FieldOfView.unsafeLift(json(FieldOfViewColumnName.value).int) }.toValidatedNel
                 val timeNel = Try{ ImagingTimepoint.unsafe(json(FovTimePair.timeKey).int) }.toValidatedNel
                 val reqdNel = Try{ PositiveInt.unsafe(json("requested").int) }.toValidatedNel
                 val realNel = Try{ NonnegativeInt.unsafe(json("realized").int) }.toValidatedNel
@@ -366,8 +369,8 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
     object FovTimePair:
         private[PartitionIndexedDriftCorrectionBeadRois] val timeKey = "time"
         given jsonMappableForFovTimePair: JsonMappable[FovTimePair] with
-            override def toJsonMap = (pos, time) => 
-                Map(FieldOfViewColumnName.value -> pos.get.asJson, timeKey -> time.asJson)
+            override def toJsonMap = (fov, time) => 
+                Map(FieldOfViewColumnName.value -> fov.asJson, timeKey -> time.asJson)
     end FovTimePair
 
     /** Type for when something gois wrong parsing a bead ROIs file */
@@ -545,14 +548,14 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
     end ParserConfig
 
     /** Encode FOV, timepoint, and intended purpose of ROI in filename. */
-    def getOutputFilename(pos: PositionIndex, time: ImagingTimepoint, purpose: Purpose): Filename =
-        Filename(s"${BeadRoisPrefix}_${pos.get}_${time.show_}.${purpose.lowercase}.json")
+    def getOutputFilename(fov: FieldOfView, time: ImagingTimepoint, purpose: Purpose): Filename =
+        Filename(s"${BeadRoisPrefix}_${fov.show_}_${time.show_}.${purpose.lowercase}.json")
 
     /** Name ROIs subfolder according to how the selected ROIs are to be used. */
     def getOutputSubfolder(root: os.Path) = root / (_: Purpose).lowercase
 
     /** Name ROIs subfolder according to how the selected ROIs are to be used, and encode the purpose in the filename also. */
-    def getOutputFilepath(root: os.Path)(pos: PositionIndex, time: ImagingTimepoint, purpose: Purpose): os.Path = 
+    def getOutputFilepath(root: os.Path)(pos: FieldOfView, time: ImagingTimepoint, purpose: Purpose): os.Path = 
         getOutputSubfolder(root)(purpose) / getOutputFilename(pos, time, purpose).get
 
     /** Infer delimiter and get header + data lines. */

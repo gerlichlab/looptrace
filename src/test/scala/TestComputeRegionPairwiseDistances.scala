@@ -17,9 +17,12 @@ import io.github.iltotore.iron.scalacheck.char.given
 import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.EuclideanDistance
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
-import at.ac.oeaw.imba.gerlich.gerlib.instances.all.given
-import at.ac.oeaw.imba.gerlich.gerlib.imaging.PositionName
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.{
+    FieldOfView,
+    PositionName,
+}
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
@@ -252,7 +255,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
 
     test("Any output record's original record indices map them back to input records with identical FOV.") {
         /* To encourage collisions, narrow the choices for grouping components. */
-        given arbPos: Arbitrary[PositionIndex] = Gen.oneOf(0, 1).map(PositionIndex.unsafe).toArbitrary
+        given arbPos: Arbitrary[FieldOfView] = Gen.oneOf(0, 1).map(FieldOfView.unsafeLift).toArbitrary
         forAll (Gen.choose(10, 100).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord]))) { (records: List[Input.GoodRecord]) => 
             val indexedRecords = NonnegativeInt.indexed(records)
             val getKey = indexedRecords.map(_.swap).toMap.apply.andThen(Input.getGroupingKey)

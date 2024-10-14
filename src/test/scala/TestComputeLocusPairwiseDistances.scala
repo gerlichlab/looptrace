@@ -17,6 +17,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.EuclideanDistance
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.{
+    FieldOfView,
     ImagingTimepoint, 
     PositionName, 
 }
@@ -279,7 +280,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
                 r.distance.get
             }.toList
             val expectation = simplifiedExpectation.map{ case ((pos, tid, reg, t1, t2), d) => 
-                (PositionIndex.unsafe(pos), TraceId.unsafe(tid), RegionId.unsafe(reg), LocusId.unsafe(t1), LocusId.unsafe(t2)) -> 
+                (FieldOfView.unsafeLift(pos), TraceId.unsafe(tid), RegionId.unsafe(reg), LocusId.unsafe(t1), LocusId.unsafe(t2)) -> 
                 NonnegativeReal.unsafe(d)
             }.toList
             // We're indifferent to the order of output records for this test, so check size then convert to maps.
@@ -308,7 +309,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
 
     test("Any output record's original record indices map them back to input records with identical grouping elements.") {
         /* To encourage collisions, narrow the choices for grouping components. */
-        given arbPos: Arbitrary[PositionIndex] = Gen.oneOf(0, 1).map(PositionIndex.unsafe).toArbitrary
+        given arbPos: Arbitrary[FieldOfView] = Gen.oneOf(0, 1).map(FieldOfView.unsafeLift).toArbitrary
         given arbTrace: Arbitrary[TraceId] = Gen.oneOf(2, 3).map(NonnegativeInt.unsafe `andThen` TraceId.apply).toArbitrary
         given arbRegion: Arbitrary[RegionId] = Gen.oneOf(40, 41).map(RegionId.unsafe).toArbitrary
         forAll (Gen.choose(10, 100).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord]))) { (records: List[Input.GoodRecord]) => 
@@ -321,7 +322,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
 
     test("Distance is never computed between records with identically-valued locus-specific timepoints, even if the grouping elements place them together.") {
         /* To encourage collisions, narrow the choices for grouping components. */
-        given arbPos: Arbitrary[PositionIndex] = Gen.oneOf(0, 1).map(PositionIndex.unsafe).toArbitrary
+        given arbPos: Arbitrary[FieldOfView] = Gen.oneOf(0, 1).map(FieldOfView.unsafeLift).toArbitrary
         given arbTrace: Arbitrary[TraceId] = Gen.oneOf(2, 3).map(NonnegativeInt.unsafe `andThen` TraceId.apply).toArbitrary
         given arbRegion: Arbitrary[RegionId] = Gen.oneOf(40, 41).map(RegionId.unsafe).toArbitrary
         given arbTime: Arbitrary[ImagingTimepoint] = Gen.const(ImagingTimepoint(NonnegativeInt(10))).toArbitrary

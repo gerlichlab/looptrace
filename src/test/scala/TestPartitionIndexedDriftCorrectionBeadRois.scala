@@ -16,7 +16,10 @@ import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
-import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.{
+    FieldOfView,
+    ImagingTimepoint,
+}
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.instances.simpleShow.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
@@ -28,7 +31,6 @@ import at.ac.oeaw.imba.gerlich.gerlib.testing.syntax.SyntaxForScalacheck
 import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionBeadRois.*
 import at.ac.oeaw.imba.gerlich.looptrace.PathHelpers.listPath
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.readJsonFile
-import at.ac.oeaw.imba.gerlich.looptrace.instances.positionIndex.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ CoordinateSequence, Point3D, XCoordinate, YCoordinate, ZCoordinate }
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
@@ -430,7 +432,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
-        ).toList.map((p, t) => PositionIndex.unsafe(p) -> ImagingTimepoint.unsafe(t))
+        ).toList.map((p, t) => FieldOfView.unsafeLift(p) -> ImagingTimepoint.unsafe(t))
         type PosTimeRois = (FovTimePair, List[FiducialBeadRoi])
         def genDetected(ptPairs: List[FovTimePair])(lo: Int, hi: Int): Gen[List[PosTimeRois]] = 
             ptPairs.traverse{ pt => genUsableRois(lo, hi).map(pt -> _) }
@@ -482,7 +484,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
-        ).toList.map((p, t) => PositionIndex.unsafe(p) -> ImagingTimepoint.unsafe(t))
+        ).toList.map((p, t) => FieldOfView.unsafeLift(p) -> ImagingTimepoint.unsafe(t))
         val maxReqShifting = 2 * ShiftingCount.AbsoluteMinimumShifting
         def genArgs: Gen[(ShiftingCount, PositiveInt, List[(FovTimePair, List[FiducialBeadRoi])])] = for {
             numReqShifting <- Gen.choose(ShiftingCount.AbsoluteMinimumShifting, maxReqShifting).map(ShiftingCount.unsafe)
@@ -534,7 +536,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
-        ).toList.map((p, t) => PositionIndex.unsafe(p) -> ImagingTimepoint.unsafe(t))
+        ).toList.map((p, t) => FieldOfView.unsafeLift(p) -> ImagingTimepoint.unsafe(t))
         def genDetected(lo: Int, hi: Int) = 
             (_: List[FovTimePair]).traverse{ pt => genMixedUsabilityRoisEachSize(lo, hi).map(pt -> _) }
         def genArgs = for {
@@ -570,7 +572,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
-        ).toList.map((p, t) => PositionIndex.unsafe(p) -> ImagingTimepoint.unsafe(t))
+        ).toList.map((p, t) => FieldOfView.unsafeLift(p) -> ImagingTimepoint.unsafe(t))
         def genDetected(lo: Int, hi: Int) = 
             // Make all ROIs usable so that the math about how many will be realized (used) is easier; 
             // in particular, we don't want that math dependent on counting the number of usable vs. unusable ROIs.
@@ -641,7 +643,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
-        ).toList.map((p, t) => PositionIndex.unsafe(p) -> ImagingTimepoint.unsafe(t))
+        ).toList.map((p, t) => FieldOfView.unsafeLift(p) -> ImagingTimepoint.unsafe(t))
         def genArgs = for {
             rois <- posTimePairs.traverse{ pt => genUsableRois(ShiftingCount.AbsoluteMinimumShifting, maxNumRoisSmallTests).map(pt -> _) }
             numShifting <- Gen.choose(rois.map(_._2.length).max, 1000).map(ShiftingCount.unsafe)
@@ -680,7 +682,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
         }
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
-        ).toList.map((p, t) => PositionIndex.unsafe(p) -> ImagingTimepoint.unsafe(t))
+        ).toList.map((p, t) => FieldOfView.unsafeLift(p) -> ImagingTimepoint.unsafe(t))
         def genArgs = for {
             numShifting <- Gen.choose(ShiftingCount.AbsoluteMinimumShifting, 50).map(ShiftingCount.unsafe)
             numAccuracy <- Gen.choose(1, 50).map(PositiveInt.unsafe)
@@ -799,10 +801,10 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     def genDistinctNonnegativePairs: Gen[(FovTimePair, FovTimePair)] = 
         Gen.zip(arbitrary[(NonnegativeInt, NonnegativeInt)], arbitrary[(NonnegativeInt, NonnegativeInt)])
             .suchThat{ case (p1, p2) => p1 =!= p2 }
-            .map { case ((p1, f1), (p2, f2)) => (PositionIndex(p1) -> ImagingTimepoint(f1), PositionIndex(p2) -> ImagingTimepoint(f2)) }
+            .map { case ((p1, f1), (p2, f2)) => (FieldOfView(p1) -> ImagingTimepoint(f1), FieldOfView(p2) -> ImagingTimepoint(f2)) }
     
     /** Infer detected bead ROIs filename for particular field of view (@code pos) and timepoint ({@code time}). */
-    def getInputFilename(pos: PositionIndex, time: ImagingTimepoint): String = s"bead_rois__${pos.show_}_${time.show_}.csv"
+    def getInputFilename(pos: FieldOfView, time: ImagingTimepoint): String = s"bead_rois__${pos.show_}_${time.show_}.csv"
     
     /** Limit the number of ROIs generated to keep test cases (relatively) small even without shrinking. */
     def maxNumRoisSmallTests: ShiftingCount = ShiftingCount.unsafe(2 * ShiftingCount.AbsoluteMinimumShifting)
