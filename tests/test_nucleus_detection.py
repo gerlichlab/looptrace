@@ -92,7 +92,7 @@ def test_fov_names_images_list_relationship(dummy_rounds_config, complete_config
         N.input_images
     with pytest.raises(AttributeError) as err_ctx:
         N.fov_list
-    assert str(err_ctx.value) == "Position names list for nuclei isn't defined when there are no images!"
+    assert str(err_ctx.value) == "Field of view names list for nuclei isn't defined when there are no images!"
     # We can populate with an empty list of images.
     N.image_handler.images = {}
     N.image_handler.images[input_key] = []
