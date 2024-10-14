@@ -89,9 +89,12 @@ object DetermineRoiMerge extends StrictLogging:
 
                 /* Build up the program. */
                 val read: os.Path => IO[List[IndexedDetectedSpot]] = 
-                    readCsvToCaseClasses[IndexedDetectedSpot] // TODO: adapt the Decoder to grab the index.
+                    infile => 
+                        logger.info(s"Reading from: ${opts.inputFile}")
+                        readCsvToCaseClasses[IndexedDetectedSpot](infile) // TODO: adapt the Decoder to grab the index.
                 val write: os.Path => (List[MergerAssessedRoi] => IO[Unit]) = 
                     outfile => {
+                        logger.info(s"Writing: ${outfile}")
                         fs2.Stream.emits(_)
                             .through(writeCaseClassesToCsv(outfile))
                             .compile
@@ -108,7 +111,6 @@ object DetermineRoiMerge extends StrictLogging:
                     ))
                 
                 /* Run the program. */
-                logger.info(s"Reading from: ${opts.inputFile}")
                 prog.unsafeRunSync()
                 logger.info("Done!")
         }
