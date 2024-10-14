@@ -255,12 +255,12 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
 
     test("Any output record's original record indices map them back to input records with identical FOV.") {
         /* To encourage collisions, narrow the choices for grouping components. */
-        given arbPos: Arbitrary[FieldOfView] = Gen.oneOf(0, 1).map(FieldOfView.unsafeLift).toArbitrary
-        forAll (Gen.choose(10, 100).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord]))) { (records: List[Input.GoodRecord]) => 
-            val indexedRecords = NonnegativeInt.indexed(records)
-            val getKey = indexedRecords.map(_.swap).toMap.apply.andThen(Input.getGroupingKey)
-            val observed = inputRecordsToOutputRecords(indexedRecords)
-            observed.filter{ r => getKey(r.inputIndex1) === getKey(r.inputIndex2) } shouldEqual observed
+        forAll (Gen.choose(10, 100).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord])), minSuccessful(500)) { 
+            (records: List[Input.GoodRecord]) => 
+                val indexedRecords = NonnegativeInt.indexed(records)
+                val getKey = indexedRecords.map(_.swap).toMap.apply.andThen(Input.getGroupingKey)
+                val observed = inputRecordsToOutputRecords(indexedRecords)
+                observed.filter{ r => getKey(r.inputIndex1) === getKey(r.inputIndex2) } shouldEqual observed
         }
     }
 
