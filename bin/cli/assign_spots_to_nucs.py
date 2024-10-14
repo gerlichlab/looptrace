@@ -76,14 +76,14 @@ def filter_rois_in_nucs(
     rois_shifted = new_rois.copy()
     shifts = []
     for _, row in rois_shifted.iterrows():
-        curr_pos_name = row["position"]
-        raw_nuc_drift_match = nuc_drifts[nuc_drifts["position"] == curr_pos_name]
+        curr_pos_name = row["fieldOfView"]
+        raw_nuc_drift_match = nuc_drifts[nuc_drifts["fieldOfView"] == curr_pos_name]
         if not isinstance(raw_nuc_drift_match, pd.DataFrame):
-            raise TypeError(f"Nuclear drift for position {curr_pos_name} is not a data frame, but {type(raw_nuc_drift_match).__name__}")
+            raise TypeError(f"Nuclear drift for FOV {curr_pos_name} is not a data frame, but {type(raw_nuc_drift_match).__name__}")
         if not raw_nuc_drift_match.shape[0] == 1:
-            raise DimensionalityError(f"Nuclear drift for position {curr_pos_name} is not exactly 1 row, but {raw_nuc_drift_match.shape[0]} rows!")
+            raise DimensionalityError(f"Nuclear drift for FOV {curr_pos_name} is not exactly 1 row, but {raw_nuc_drift_match.shape[0]} rows!")
         drift_target = raw_nuc_drift_match[["zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels"]].to_numpy()
-        drift_roi = spot_drifts[(spot_drifts["position"] == curr_pos_name) & (spot_drifts["timepoint"] == row["timepoint"])][["zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels"]].to_numpy()
+        drift_roi = spot_drifts[(spot_drifts["fieldOfView"] == curr_pos_name) & (spot_drifts["timepoint"] == row["timepoint"])][["zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels"]].to_numpy()
         shift = drift_target - drift_roi
         shifts.append(shift[0])
     shifts = pd.DataFrame(shifts, columns=["z", "y", "x"])
@@ -110,26 +110,26 @@ def workflow(
         )
     N = NucDetector(H)
 
-    def query_table_for_pos(table: pd.DataFrame) -> Callable[[str], pd.DataFrame]:
-        return (lambda pos: table.query('position == @pos'))
+    def query_table_for_fov(table: pd.DataFrame) -> Callable[[str], pd.DataFrame]:
+        return (lambda fov: table.query('fieldOfView == @fov'))
 
     logger.info(f"Reading coarse-drift file for nuclei: {N.drift_correction_file__coarse}")
     drift_table_nuclei = read_table_pandas(N.drift_correction_file__coarse)
-    get_nuc_drifts: Callable[[str], pd.DataFrame] = query_table_for_pos(drift_table_nuclei)
+    get_nuc_drifts: Callable[[str], pd.DataFrame] = query_table_for_fov(drift_table_nuclei)
     
     logger.info(f"Reading coarse-drift file for spots: {H.drift_correction_file__coarse}")
     drift_table_spots = read_table_pandas(H.drift_correction_file__coarse)
-    get_spot_drifts = query_table_for_pos(drift_table_spots)
+    get_spot_drifts = query_table_for_fov(drift_table_spots)
     
     rois_table = read_table_pandas(H.proximity_accepted_spots_file_path)
-    get_rois = query_table_for_pos(rois_table)
+    get_rois = query_table_for_fov(rois_table)
 
     logger.info("Assigning spots to nuclei labels...")
     all_rois = []
     for i, pos in tqdm.tqdm(enumerate(H.image_lists[H.spot_input_name])):
         rois = get_rois(pos)
         if len(rois) == 0:
-            logger.warning(f"No ROIs for position: {pos}")
+            logger.warning(f"No ROIs for FOV: {pos}")
             continue
 
         nuc_drifts: pd.DataFrame = get_nuc_drifts(pos)
@@ -138,10 +138,10 @@ def workflow(
         filter_kwargs = {"nuc_drifts": nuc_drifts, "spot_drifts": spot_drifts}
         # TODO: this array indexing is sensitive to whether the mask and class images have the dummy time and channel dimensions or not.
         # See: https://github.com/gerlichlab/looptrace/issues/247
-        logger.info(f"Assigning nuclei labels for sports from position: {pos}")
+        logger.info(f"Assigning nuclei labels for spots from FOV: {pos}")
         rois = filter_rois_in_nucs(rois, nuc_label_img=N.mask_images[i].compute(), new_col=NUC_LABEL_COL, **filter_kwargs)
         if N.class_images is not None:
-            logger.info(f"Assigning nuclei classes for spots from position: {pos}")
+            logger.info(f"Assigning nuclei classes for spots from FOV: {pos}")
             rois = filter_rois_in_nucs(rois, nuc_label_img=N.class_images[i].compute(), new_col="nuc_class", **filter_kwargs)
         all_rois.append(rois.copy())
     
@@ -149,7 +149,7 @@ def workflow(
     if len(all_rois) == 0:
         logger.warning(f"No ROIs! Cannot write nuclei-labeled spots file: {outfile}")
     else:
-        all_rois = pd.concat(all_rois).sort_values(["position", "timepoint"])
+        all_rois = pd.concat(all_rois).sort_values(["fieldOfView", "timepoint"])
         logger.info(f"Writing nuclei-labeled spots file: {outfile}")
         all_rois.to_csv(outfile, index=False)
         logger.info(f"Writing nuclei-filtered spots file: {H.nuclei_filtered_spots_file_path}")

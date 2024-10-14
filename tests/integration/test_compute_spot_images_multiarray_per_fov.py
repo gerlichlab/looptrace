@@ -84,7 +84,7 @@ def gen_legal_input(
     # Create the Numpy array "filename" for each spot extraction 1 per eligible locus time, per regional spot.
     fn_keys = [
         RoiOrderingSpecification.FilenameKey(
-            position=get_name_for_raw_zero_based_fov(fov),
+            field_of_view=get_name_for_raw_zero_based_fov(fov),
             roi_id=tid.get,
             ref_timepoint=rt,
         ) 

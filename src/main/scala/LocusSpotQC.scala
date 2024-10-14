@@ -109,7 +109,7 @@ object LocusSpotQC:
         
         /** Create a [[ujson.Obj]] representation of the given spot identifier, mapping each of its field names to simplified value. */
         private[LocusSpotQC] def toJsonObject(spotId: SpotIdentifier): ujson.Obj = ujson.Obj(
-            "position" -> spotId.fieldOfView.asJson,
+            FieldOfViewColumnName.value -> spotId.fieldOfView.asJson,
             "regionId" -> spotId.regionId.get.asJson,
             "traceId" -> spotId.traceId.get.asJson,
             "locusId" -> spotId.locusId.get.asJson,

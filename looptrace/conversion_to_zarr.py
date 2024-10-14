@@ -20,10 +20,10 @@ from looptrace.integer_naming import get_fov_name_short
 
 
 def workflow(n_pos: int, input_folders: Iterable[Path], output_folder: Path) -> None:
-    for pos_id in tqdm.tqdm(range(int(n_pos))):
+    for fov_index in tqdm.tqdm(range(int(n_pos))):
         imgs = []
         for f in input_folders:
-            folder_imgs, _, folder_metadata = nd2io.stack_nd2_to_dask(f, position_id=pos_id)
+            folder_imgs, _, folder_metadata = nd2io.stack_nd2_to_dask(f, fov_index=fov_index)
             imgs.append(folder_imgs[0])
         imgs = da.concatenate(imgs, axis=0)
         print(folder_metadata)
@@ -34,7 +34,7 @@ def workflow(n_pos: int, input_folders: Iterable[Path], output_folder: Path) -> 
         z = image_io.create_zarr_store(
             path=output_folder,
             name = os.path.basename(output_folder), 
-            pos_name = get_fov_name_short(pos_id) + ".zarr",
+            fov_name = get_fov_name_short(fov_index) + ".zarr",
             shape = imgs.shape, 
             dtype = np.uint16,  
             chunks = (1, 1, 1, imgs.shape[-2], imgs.shape[-1]),

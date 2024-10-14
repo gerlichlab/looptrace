@@ -576,7 +576,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
             ev.contramap(_.identifier)
     end NapariSortable
     
-    /** Status of a point to display in napari, based on QC results and its position within the spot image timepoint */
+    /** Status of a point to display in napari, based on QC results and its position within the particular spot image timepoint image */
     enum PointDisplayType:
         /** Point that has fulfilled all QC criteria */
         case QCPass

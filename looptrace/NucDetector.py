@@ -137,14 +137,14 @@ class NucDetector:
         Returns
         -------
         list of da.core.Array
-            A list of dask arrays, each corresponding to an image stack for a particular FOV / position
+            A list of dask arrays, each corresponding to an image stack for a particular FOV
 
         Raises
         ------
         looptrace.MissingImagesError
             If the underlying image handler lacks the key for the nuclei images
         looptrace.ArrayDimensionalityError
-            If the number of position names doesn't match the number of image stacks, or
+            If the number of FOV names doesn't match the number of image stacks, or
             if any of the image stacks isn't 4-dimensional (1 for channel, and 1 each for (z, y, x))
         """
         try:
@@ -156,7 +156,7 @@ class NucDetector:
         except KeyError as e:
             raise MissingImagesError(f"No images available ({self._input_name}) as raw input for nuclei segmentation!") from e
         if len(imgs) != len(self.fov_list):
-            raise ArrayDimensionalityError(f"{len(imgs)} images and {len(self.fov_list)} positions; these should be equal!")
+            raise ArrayDimensionalityError(f"{len(imgs)} images and {len(self.fov_list)} FOVs; these should be equal!")
         exp_shape_len = 4 # (ch, z, y, x) -- no time dimension since only 1 timepoint's imaged for nuclei.
         bad_images = {p: i.shape for p, i in zip(self.fov_list, imgs) if len(i.shape) != exp_shape_len}
         if bad_images:
@@ -232,10 +232,10 @@ class NucDetector:
     def _input_name(self) -> str:
         return self.config["nuc_input_name"]
 
-    def iterate_over_pairs_of_position_and_mask_image(self) -> Iterable[Tuple[str, np.ndarray]]:
+    def iterate_over_pairs_of_fov_and_mask_image(self) -> Iterable[Tuple[str, np.ndarray]]:
         return zip(self.fov_list, self.mask_images, strict=True)
 
-    def iterate_over_pairs_of_position_and_segmentation_image(self) -> Iterable[Tuple[str, np.ndarray]]:
+    def iterate_over_pairs_of_fov_and_segmentation_image(self) -> Iterable[Tuple[str, np.ndarray]]:
         return zip(self.fov_list, self.images_for_segmentation, strict=True)
 
     @property
@@ -261,17 +261,17 @@ class NucDetector:
         
         arr_to_numpy = lambda a: a if isinstance(a, np.ndarray) else a.compute()
         name_img_pairs = [
-            (pos_name, arr_to_numpy(prep(self.input_images[i][self.channel]))) 
-            for i, pos_name in tqdm.tqdm(enumerate(self.fov_list))
+            (fov_name, arr_to_numpy(prep(self.input_images[i][self.channel]))) 
+            for i, fov_name in tqdm.tqdm(enumerate(self.fov_list))
         ]
         print("Generating and saving nuclei images...")
         if self.do_in_3d:
-            for pos_name, subimg in tqdm.tqdm(name_img_pairs):
-                image_io.single_position_to_zarr(
+            for fov_name, subimg in tqdm.tqdm(name_img_pairs):
+                image_io.single_fov_to_zarr(
                     images=subimg, 
                     path=self.nuclear_segmentation_images_path, 
                     name=self.SEGMENTATION_IMAGES_KEY, 
-                    pos_name=pos_name, 
+                    fov_name=fov_name, 
                     axes=axes, 
                     dtype=np.uint16, 
                     chunk_split=(1,1),
@@ -299,7 +299,7 @@ class NucDetector:
             raise Exception(f"Unknown segmentation method: {self.segmentation_method}")
     
     def segment_nuclei_threshold(self) -> Path:
-        for pos, img in self.iterate_over_pairs_of_position_and_segmentation_image():
+        for fov, img in self.iterate_over_pairs_of_fov_and_segmentation_image():
             # TODO: need to make this accord with the structure of saved images in segment_nuclei_cellpose.
             # TODO: need to handle whether nuclei images can have more than 1 timepoint (nontrivial time dimension).
             # See: https://github.com/gerlichlab/looptrace/issues/243
@@ -314,11 +314,11 @@ class NucDetector:
             # See: https://github.com/gerlichlab/looptrace/issues/245
             bit_depth: image_io.PixelArrayBitDepth = image_io.PixelArrayBitDepth.unsafe_for_array(mask)
             logging.info(f"Saving nuclear masks with bit depth: {bit_depth}")
-            image_io.single_position_to_zarr(
+            image_io.single_fov_to_zarr(
                 images=mask, 
                 path=self.nuclear_masks_path, 
                 name=self.MASKS_KEY, 
-                pos_name=pos, 
+                fov_name=fov, 
                 axes=("z","y","x"), 
                 dtype=bit_depth.value, 
                 chunk_split=(1,1),
@@ -350,7 +350,7 @@ class NucDetector:
         print("Extracting nuclei images...")
         name_img_pairs: list[tuple[str, np.ndarray]] = [
             (fov_name, np.array(scale_down_img(img))) 
-            for fov_name, img in tqdm.tqdm(self.iterate_over_pairs_of_position_and_segmentation_image())
+            for fov_name, img in tqdm.tqdm(self.iterate_over_pairs_of_fov_and_segmentation_image())
         ]
 
         print(f"Running nuclear segmentation using CellPose and diameter {diameter}.")

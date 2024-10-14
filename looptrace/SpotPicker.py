@@ -249,11 +249,11 @@ def detect_spots_multiple(
             )
     else:
         subframes = []
-        for pos, img in tqdm.tqdm(fov_img_pairs):
+        for fov, img in tqdm.tqdm(fov_img_pairs):
             for spec in tqdm.tqdm(timepoint_specs):
                 for ch in channels:
                     spots = build_spot_prop_table(
-                        img=img, position=pos, channel=ch, timepoint_spec=spec, detection_parameters=spot_detection_parameters
+                        img=img, field_of_view=fov, channel=ch, timepoint_spec=spec, detection_parameters=spot_detection_parameters
                         )
                     print(f"Spot count: {len(spots)}")
                     subframes.append(spots)
@@ -412,9 +412,9 @@ class SpotPicker:
             yield SingleTimepointDetectionSpec(timepoint=t, threshold=self.spot_threshold[i])
 
     def iter_fov_img_pairs(self) -> Iterable[Tuple[str, np.ndarray]]:
-        """Iterate over pairs of position (FOV) name, and corresponding 5-tensor (t, c, z, y, x) of images."""
-        for i, pos in enumerate(self.fov_list):
-            yield pos, self.images[i]
+        """Iterate over pairs of FOV name, and corresponding 5-tensor (t, c, z, y, x) of images."""
+        for i, fov in enumerate(self.fov_list):
+            yield fov, self.images[i]
 
     def _iter_timepoints(self) -> Iterable[tuple[int, int]]:
         for i, t in enumerate(self._spot_times):
@@ -431,16 +431,6 @@ class SpotPicker:
     @property
     def path_to_detected_spot_images_folder(self) -> Path:
         return Path(self.image_handler.analysis_path) / "detected_spot_images"
-
-    def path_to_detected_spot_image_file(self, position: int, time: int, channel: int) -> Path:
-        """Get the path to the detected spot image file for given FOV (position), timepoint (hybridisation round), and imaging channel."""
-        fn = get_name_for_detected_spot_image_file(
-            fn_prefix=self.analysis_filename_prefix, 
-            position=position, 
-            time=time, 
-            channel=channel,
-            )
-        return self.path_to_detected_spot_images_folder / fn
 
     @property
     def fov_list(self) -> List[str]:
@@ -535,16 +525,16 @@ class SpotPicker:
         except KeyError as e:
             raise MissingRoisTableException(key_rois_table) from e
         
-        get_pos_idx = lambda pos: self.image_handler.image_lists[self.input_name].index(pos)
+        get_fov_idx = lambda fov: self.image_handler.image_lists[self.input_name].index(fov)
         get_locus_timepoints = None if not self.image_handler.locus_grouping else self.image_handler.get_locus_timepoints_for_regional_timepoint
-        get_zyx = lambda pos_idx, ch: self.images[pos_idx][0, ch].shape[-3:]
-        def get_dc_table(pos_idx: int):
-            dc_pos_name = self.image_handler.image_lists[self.config['reg_input_moving']][pos_idx] # not unused; used for table query
-            return self.image_handler.spots_fine_drift_correction_table.query('position == @dc_pos_name')
+        get_zyx = lambda fov_idx, ch: self.images[fov_idx][0, ch].shape[-3:]
+        def get_dc_table(fov_idx: int):
+            dc_fov_name = self.image_handler.image_lists[self.config["reg_input_moving"]][fov_idx] # not unused; used for table query
+            return self.image_handler.spots_fine_drift_correction_table.query('fieldOfView == @dc_fov_name')
 
         self.all_rois = build_locus_spot_data_extraction_table(
             rois_table=rois_table,
-            get_pos_idx=get_pos_idx,
+            get_fov_idx=get_fov_idx,
             get_dc_table=get_dc_table,
             get_locus_timepoints=get_locus_timepoints,
             get_zyx=get_zyx,
@@ -559,17 +549,17 @@ class SpotPicker:
         self.image_handler.load_tables()
         return outfile
 
-    def write_single_fov_data(self, pos_group_name: str, pos_group_data: pd.DataFrame) -> SkipReasonsMapping:
+    def _write_single_fov_data(self, fov_group_name: str, fov_group_data: pd.DataFrame) -> SkipReasonsMapping:
         """
         Write all timepoints' 3D image arrays (1 for each hybridisation round) for each (region, trace ID) pair in the FOV.
 
         Parameters
         ----------
-        pos_group_name : str
-            The name of the position (FOV) to which the given data corresponds
-        pos_group_data : pd.DataFrame
+        fov_group_name : str
+            The name of the field of view to which the given data corresponds
+        fov_group_data : pd.DataFrame
             The data from the all-ROIs (_dc_rois.csv) file (1 row per hybridisation for each regional spot, all FOVs) 
-            for a particular FOV / position
+            for a particular fieldOfView
         
         Returns
         -------
@@ -579,7 +569,7 @@ class SpotPicker:
         get_num_timepoints: Callable[[int], int]
         if not self.image_handler.locus_grouping:
             print("No locus grouping is present, so all timepoints will be used.")
-            total_num_times = len(pos_group_data.timepoint.unique())
+            total_num_times = len(fov_group_data.timepoint.unique())
             get_num_timepoints = lambda _: total_num_times
         else:
             num_loc_times_by_reg_time_raw = {rt.get: len(lts) for rt, lts in self.image_handler.locus_grouping.items()}
@@ -589,10 +579,10 @@ class SpotPicker:
 
         num_timepoints_processed: dict[str, int] = {}
         skip_spot_image_reasons = defaultdict(lambda: defaultdict(dict))
-        pos_index = self.image_handler.image_lists[self.input_name].index(pos_group_name)
-        for timepoint, timepoint_group in tqdm.tqdm(pos_group_data.groupby("timepoint")):
+        fov_index = self.image_handler.image_lists[self.input_name].index(fov_group_name)
+        for timepoint, timepoint_group in tqdm.tqdm(fov_group_data.groupby("timepoint")):
             for ch, ch_group in timepoint_group.groupby("spotChannel"):
-                image_stack = np.array(self.images[pos_index][int(timepoint), int(ch)])
+                image_stack = np.array(self.images[fov_index][int(timepoint), int(ch)])
                 for _, roi in ch_group.iterrows():
                     fn_key = RoiOrderingSpecification.FilenameKey.from_roi(roi)
                     roi_img, error = extract_single_roi_img_inmem(
@@ -652,9 +642,9 @@ class SpotPicker:
             os.mkdir(self.spot_background_path)
 
         skip_spot_image_reasons = OrderedDict()
-        for pos, pos_group in tqdm.tqdm(rois.groupby("position")):
-            skip_reasons = self.write_single_fov_data(pos_group_name=pos, pos_group_data=pos_group)
-            skip_spot_image_reasons[pos] = skip_reasons
+        for fov, fov_group in tqdm.tqdm(rois.groupby("fieldOfView")):
+            skip_reasons = self._write_single_fov_data(fov_group_name=fov, fov_group_data=fov_group)
+            skip_spot_image_reasons[fov] = skip_reasons
         
         print(f"Writing spot image extraction skip reasons file: {self.extraction_skip_reasons_json_file}")
         with open(self.extraction_skip_reasons_json_file, 'w') as fh:
@@ -666,16 +656,16 @@ class SpotPicker:
         # Use this simplified function if the images that the spots are gathered from are already coarsely drift corrected!
         print('Generating single spot image stacks from coarsely drift corrected images.')
         rois = self.spot_image_volume_extraction_table
-        for pos, group in tqdm.tqdm(rois.groupby("position")):
-            pos_index = self.image_handler.image_lists[self.input_name].index(pos)
-            full_image = np.array(self.images[pos_index])
+        for fov, group in tqdm.tqdm(rois.groupby("fieldOfView")):
+            fov_index = self.image_handler.image_lists[self.input_name].index(fov)
+            full_image = np.array(self.images[fov_index])
             for roi in group.to_dict('records'):
                 spot_stack = full_image[:, 
                                 roi["spotChannel"], 
                                 roi["zMin"]:roi["zMax"], 
                                 roi["yMin"]:roi["yMax"],
                                 roi["xMin"]:roi["xMax"]].copy()
-                fn = pos+'_'+str(roi["timepoint"])+'_'+str(roi['roi_id_pos']).zfill(4)
+                fn = fov + '_' + str(roi["timepoint"]) + '_' + str(roi['roi_id_pos']).zfill(4)
                 arr_out = os.path.join(self.spot_images_path, fn + ".npy")
                 np.save(arr_out, spot_stack)
         return self.spot_images_path
@@ -684,7 +674,7 @@ class SpotPicker:
 def build_locus_spot_data_extraction_table(
     rois_table: pd.DataFrame, 
     *, 
-    get_pos_idx: Callable[[str], int], 
+    get_fov_idx: Callable[[str], int], 
     get_dc_table: Callable[[int], pd.DataFrame], 
     get_locus_timepoints: Optional[Callable[[TimepointFrom0], set[TimepointFrom0]]],
     get_zyx: Callable[[int, int], tuple[int, int, int]], # Provide FOV index + channel, get (Z, Y, X).
@@ -716,14 +706,14 @@ def build_locus_spot_data_extraction_table(
         else:
             is_background_time = lambda t: t == background_timepoint
         
-        pos = roi["position"]
-        pos_index = get_pos_idx(pos)
-        sel_dc = get_dc_table(pos_index)
+        fov = roi["fieldOfView"]
+        fov_index = get_fov_idx(fov)
+        sel_dc = get_dc_table(fov_index)
         ch = roi["spotChannel"]
         ref_offset = sel_dc.query('timepoint == @ref_timepoint')
         # TODO: here we can update to iterate over channels for doing multi-channel extraction.
         # https://github.com/gerlichlab/looptrace/issues/138
-        Z, Y, X = get_zyx(pos_index, ch)
+        Z, Y, X = get_zyx(fov_index, ch)
         for _, dc_row in sel_dc.iterrows():
             timepoint: int = dc_row["timepoint"]
             if not isinstance(timepoint, int):
@@ -747,14 +737,14 @@ def build_locus_spot_data_extraction_table(
                 )
 
             # roi.name is the index value.
-            all_rois.append([pos, idx, roi.name, timepoint, ref_timepoint, ch, 
+            all_rois.append([fov, idx, roi.name, timepoint, ref_timepoint, ch, 
                             z_min, z_max, y_min, y_max, x_min, x_max, 
                             pad_z_min, pad_z_max, pad_y_min, pad_y_max, pad_x_min, pad_x_max,
                             z_drift_coarse, y_drift_coarse, x_drift_coarse, 
                             dc_row["zDriftFinePixels"], dc_row["yDriftFinePixels"], dc_row["xDriftFinePixels"]])
 
     return pd.DataFrame(all_rois, columns=[
-        "position", "roi_number", "roi_id", "timepoint", "ref_timepoint", "spotChannel", 
+        "fieldOfView", "roi_number", "roi_id", "timepoint", "ref_timepoint", "spotChannel", 
         "zMin", "zMax", "yMin", "yMax", "xMin", "xMax",
         "pad_z_min", "pad_z_max", "pad_y_min", "pad_y_max", "pad_x_min", "pad_x_max", 
         "zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels",
@@ -836,50 +826,6 @@ def roi_center_to_bbox(rois: pd.DataFrame, roi_size: RoiImageSize):
     rois["xMin"] = rois["xc"] - halved.x
     rois["xMax"] = rois["xc"] + halved.x
     return rois
-
-
-def get_name_for_detected_spot_image_file(*, fn_prefix: str, position: int, time: int, channel: int, filetype: str = "png") -> Path:
-    """
-    Return the path to the detected spot images file for the given (FOV, time, channel) triplet.
-
-    Each value must be in [0, 999] since each represents the value of an entity which should be nonnegative, 
-    and each will be represented by 3 base-10 digits.
-
-    Parameters
-    ----------
-    fn_prefix : str
-        Prefix for the filename, e.g. name of experiment; use empty string to have no prefix
-    position : int
-        Imaging field of view (0-based index)
-    time : int
-        Imaging timepoint (0-based index)
-    channel : int
-        Imaging channel
-    filetype : str
-        Name of extension (without prefix dot) to save as
-
-    Raises
-    ------
-    TypeError: if position is given as a value other than integer
-    ValueError: if any value is negative or too big to be represented by 3 base-10 digits
-
-    Returns
-    -------
-    Path: path to the detected spot images file for the given (FOV, time, channel) triplet.
-    """
-    num_digits = 3
-    keyed_values = [("P", position), ("T", time), ("C", channel)]
-    too_big = [(k, v) for k, v in keyed_values if v > int(pow(10, num_digits)) - 1] # Check that we have enough digits to represent number.
-    if too_big:
-        raise ValueError(f"{len(too_big)} values cannot be represented with {num_digits} digits: {too_big}")
-    negatives = [(k, v) for k, v in keyed_values if v < 0] # Check that each value is nonnegative.
-    if negatives:
-        raise ValueError(f"{len(negatives)} values representing nonnegative fields are negative: {negatives}")
-    if not isinstance(position, int):
-        raise TypeError(f"For detected spot image file path, position should be integer, not {type(position).__name__}: {position}")
-    fn_chunks = [pre + str(n).zfill(3) for pre, n in keyed_values]
-    fn_base = "_".join([fn_prefix] + fn_chunks if fn_prefix else fn_chunks)
-    return f"{fn_base}.regional_spots.{filetype}"
 
 
 _down_to_int = lambda x: int(floor(x))

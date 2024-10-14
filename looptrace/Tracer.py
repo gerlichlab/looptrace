@@ -118,7 +118,7 @@ class Tracer:
         return self.finalise_suffix(self.image_handler.spot_fits_file)
 
     def trace_all_rois(self) -> Path:
-        """Fits 3D gaussian to previously detected ROIs across positions and timepoints"""
+        """Fits 3D gaussian to previously detected ROIs across fields of view and timepoints"""
         spot_fits = find_trace_fits(
             fit_func_spec=self.fit_func_spec,
             # TODO: fix this brittle / fragile / incredibly error-prone thing; #84
@@ -502,10 +502,10 @@ def compute_spot_images_multiarray_per_fov(
 
     result: list[tuple[str, np.ndarray]] = []
 
-    for pos, pos_group in itertools.groupby(keyed, lambda k_: k_[0].field_of_view):
-        logging.info("Computing spot image arrays stack for position '%s'...", pos)
+    for fov, fov_group in itertools.groupby(keyed, lambda k_: k_[0].field_of_view):
+        logging.info("Computing spot image arrays stack for FOV '%s'...", fov)
         current_stack: list[np.ndarray] = []
-        for filename_key, filename in sorted(pos_group, key=lambda fk_fn: (fk_fn[0].ref_timepoint, fk_fn[0].roi_id)):
+        for filename_key, filename in sorted(fov_group, key=lambda fk_fn: (fk_fn[0].ref_timepoint, fk_fn[0].roi_id)):
             pixel_array = get_pixel_array(filename)
             reg_time: TimepointFrom0 = TimepointFrom0(filename_key.ref_timepoint)
             obs_num_times: int = pixel_array.shape[0]
@@ -540,7 +540,7 @@ def compute_spot_images_multiarray_per_fov(
                 )
             tempstack.append(img)
         
-        result.append(((pos, np.stack(tempstack))))
+        result.append(((fov, np.stack(tempstack))))
         
     return result
 

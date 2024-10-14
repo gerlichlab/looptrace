@@ -214,13 +214,13 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
             if repeats.isEmpty then keyed.asRight
             else { 
                 val simpleReps = repeats.toList.map{ (k, lineNums) => k -> lineNums.toList.sorted }
-                s"${simpleReps.length} repeated (pos, time) pairs: ${simpleReps}".asLeft
+                s"${simpleReps.length} repeated (FOV, time) pairs: ${simpleReps}".asLeft
             }
 
         // TODO: need to bring in the CsvRowDecoder[DriftRecord, String] instance
         val readKeyedDrifts: IO[Either[String, Map[DriftKey, DriftRecord]]] = 
             given CsvRowDecoder[FieldOfViewLike, String] = 
-                getCsvRowDecoderForSingleton(ColumnName[FieldOfViewLike]("position"))
+                getCsvRowDecoderForSingleton(ColumnName[FieldOfViewLike]("fieldOfView"))
             given CsvRowDecoder[ImagingTimepoint, String] = 
                 getCsvRowDecoderForSingleton(TimepointColumnName)
             readCsvToCaseClasses[DriftRecord](driftFile).map(keyDrifts)

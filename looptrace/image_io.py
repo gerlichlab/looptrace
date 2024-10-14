@@ -115,15 +115,16 @@ def multi_ome_zarr_to_dask(folder: str, remove_unused_dims: bool = True):
 
 
 def multipos_nd2_to_dask(folder: str):
-    '''The function takes a folder path and returns a list of dask arrays and a 
-    list of image folders by reading multiple nd2 images each with multiple positions in a single folder.
+    """
+    The function takes a folder path and returns a list of dask arrays and a 
+    list of image folders by reading multiple nd2 images each with multiple FOVs in a single folder.
 
     Args:
         folder (str): Input folder path
 
     Returns:
         list: list of dask arrays of the images
-    '''
+    """
 
     import nd2
     image_files = sorted([p.path for p in os.scandir(folder) if p.name.endswith('.nd2')])
@@ -139,7 +140,7 @@ def multipos_nd2_to_dask(folder: str):
     return out
 
 
-def parse_positions_from_text(s: str) -> List[str]:
+def parse_fields_of_view_from_text(s: str) -> List[str]:
     return re.findall(POSITION_EXTRACTION_REGEX, s)
 
 
@@ -147,12 +148,12 @@ def parse_times_from_text(s: str) -> List[str]:
     return re.findall(TIME_EXTRACTION_REGEX, s)
 
 
-def single_position_to_zarr(
+def single_fov_to_zarr(
     *, 
-    images: np.ndarray or list, 
+    images: np.ndarray | list, 
     path: Union[str, Path],
     name: str, 
-    pos_name: str, 
+    fov_name: str, 
     dtype: Type, 
     axes = ('t','c',"z","y","x"), 
     chunk_axes = ("y", "x"), 
@@ -160,9 +161,9 @@ def single_position_to_zarr(
     metadata: dict = None,
     compressor: Optional[numcodecs.abc.Codec] = None,
     ):
-    '''
-    Function to write a single position image with optional amount of additional dimensions to zarr.
-    '''
+    """
+    Function to write a single FOV image with optional amount of additional dimensions to zarr.
+    """
     def single_image_to_zarr(z: zarr.DirectoryStore, idx: str, img: np.ndarray):
         '''Small helper function.
 
@@ -173,7 +174,7 @@ def single_position_to_zarr(
         '''
         z[idx] = img
     
-    store = zarr.DirectoryStore(os.path.join(path, pos_name if pos_name.endswith(".zarr") else pos_name + ".zarr"))
+    store = zarr.DirectoryStore(os.path.join(path, fov_name if fov_name.endswith(".zarr") else fov_name + ".zarr"))
     root = zarr.group(store=store, overwrite=True)
 
     size = {}
@@ -183,7 +184,7 @@ def single_position_to_zarr(
     # Namely, different readers may not like the fact that the shape and chunks don't match underlying data.
     # This can happen when one or more dimensions collapses down flat, to a trivial single dimension.
     # See: https://github.com/gerlichlab/looptrace/issues/245
-    default_axes = ('t','c',"z","y","x")
+    default_axes = ("t", "c", "z", "y", "x")
     try:
         print(f"Building metdata for image with shape {images.shape}")
     except AttributeError:
@@ -212,7 +213,7 @@ def single_position_to_zarr(
     root.attrs["multiscale"] = {
         "multiscales": [{
             "version": "0.3", 
-            "name": name + "_" + pos_name, 
+            "name": name + "_" + fov_name, 
             "datasets": [{"path": "0"}],
             "axes": ["t","c","z","y","x"],
         }]
@@ -305,12 +306,12 @@ def images_to_ome_zarr(
     bit_depth: PixelArrayBitDepth = PixelArrayBitDepth.get_unique_bit_depth((img for _, img in name_image_pairs))
     logging.info(f"Will save OME ZARR with bit depth: {bit_depth}")
 
-    for pos_name, pos_img in name_image_pairs:
-        single_position_to_zarr(
-            images=pos_img, 
+    for fov_name, fov_img in name_image_pairs:
+        single_fov_to_zarr(
+            images=fov_img, 
             path=path, 
             name=data_name, 
-            pos_name=pos_name, 
+            fov_name=fov_name, 
             dtype=bit_depth.value, 
             axes=axes, 
             chunk_axes=chunk_axes, 
@@ -323,17 +324,17 @@ def images_to_ome_zarr(
 
 def create_zarr_store(  path: Union[str, Path],
                         name: str, 
-                        pos_name: str,
+                        fov_name: str,
                         shape: tuple, 
                         dtype: str,  
                         chunks: tuple,   
                         metadata: Optional[dict] = None,
                         voxel_size: list = [1, 1, 1]):
-    store = zarr.NestedDirectoryStore(os.path.join(path, pos_name))
+    store = zarr.NestedDirectoryStore(os.path.join(path, fov_name))
     root = zarr.group(store=store, overwrite=True)
 
     root.attrs["multiscales"] = [{"version": "0.4", 
-                                    "name": name + "_" + pos_name, 
+                                    "name": name + "_" + fov_name, 
                                     "datasets": [{"path": "0",                     
                                                     "coordinateTransformations": [{"type": "scale",
                                                                                     "scale": [1.0, 1.0] + voxel_size}]},],
@@ -420,7 +421,7 @@ def all_matching_files_in_subfolders(path, template):
 def group_filelist(input_list, re_phrase):
     """
     Takes a list of strings (typically filepaths) and groups them according
-    to a given element given by its position after splitting the string at split_char.
+    to a given element given by its FOV after splitting the string at split_char.
     E.g.for '..._WXXXX_PXXXX_TXXXX.ext' format this will by split_char='_' and element = -3.
     Returns a list of the , and 
     """

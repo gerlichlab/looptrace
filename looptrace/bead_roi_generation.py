@@ -111,7 +111,7 @@ def iterate_over_pos_time_images(image_array: List[np.ndarray], channel: Optiona
 
 def generate_all_bead_rois_from_getter(
     get_3d_stack: Callable[[int, int],  np.ndarray], 
-    iter_position: Iterable[int], 
+    iter_fov: Iterable[int], 
     iter_timepoint: Iterable[int], 
     output_folder: Union[str, Path, ExtantFolder], 
     params: "BeadRoiParameters", 
@@ -120,8 +120,8 @@ def generate_all_bead_rois_from_getter(
     
     output_folder: Path = simplify_path(output_folder)
 
-    def get_outfile(pos_idx: int, timepoint_idx: int) -> Path:
-        fn: str = bead_rois_filename(pos_idx=pos_idx, timepoint=timepoint_idx, purpose=None)
+    def get_outfile(fov_idx: int, timepoint_idx: int) -> Path:
+        fn: str = bead_rois_filename(fov_idx=fov_idx, timepoint=timepoint_idx, purpose=None)
         return output_folder / fn
     
     def proc1(img: np.ndarray, outfile: Path) -> Tuple[Path, pd.DataFrame]:
@@ -131,8 +131,8 @@ def generate_all_bead_rois_from_getter(
         return outfile, rois
     
     return Parallel(**joblib_kwargs)(
-        delayed(proc1)(img=get_3d_stack(pos_idx, timepoint), outfile=get_outfile(pos_idx=pos_idx, timepoint_idx=timepoint)) 
-        for pos_idx in tqdm.tqdm(iter_position) for timepoint in tqdm.tqdm(iter_timepoint)
+        delayed(proc1)(img=get_3d_stack(fov_idx, timepoint), outfile=get_outfile(fov_idx=fov_idx, timepoint_idx=timepoint)) 
+        for fov_idx in tqdm.tqdm(iter_fov) for timepoint in tqdm.tqdm(iter_timepoint)
         )
 
 

@@ -41,7 +41,7 @@ def workflow(
     
     return generate_all_bead_rois_from_getter(
         get_3d_stack=get_image_stack, 
-        iter_position=range(len(D.images_moving)), 
+        iter_fov=range(len(D.images_moving)), 
         iter_timepoint=timepoint_range, 
         output_folder=output_folder,
         params=D.bead_roi_parameters,

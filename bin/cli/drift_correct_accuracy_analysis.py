@@ -144,16 +144,16 @@ def process_single_FOV_single_reference_timepoint(
     Parameters
     ----------
     reference_image_stack_definition : Sequence of np.ndarray
-        The full collection of imaging data; nasmely, a list-/array-like indexed by position/FOV, in which each element is a 
+        The full collection of imaging data; nasmely, a list-/array-like indexed by FOV, in which each element is a 
         five-dimensional array itself (t, c, z, y, x) -- that is, a stack (z) of 2D images (y, x) for each imaging channel (c) 
         for each hybridisation round / timepoint (t). In other words, each array in this collection represents an entire 
-        field of view / "position", with many timepoints (hybridisation rounds)--and potentially multiple imaging channels--of 
+        field of view, with many timepoints (hybridisation rounds)--and potentially multiple imaging channels--of 
         data represented therein.
     drift_table : pd.DataFrame
         The table of precomputed drift correction information; namely, the drift correction values whose accuracy / efficacy 
         is being assessed by this program
     reference_fov : int
-        The index of the position/FOV in which to compute the drift correction accuracy in this particular function call. 
+        The index of the FOV in which to compute the drift correction accuracy in this particular function call. 
         The expectation would be that this function may be called multiple times, computing these data for different 
         timepoints also within this FOV, and perhaps in other FOVs as well.
     bead_detection_params : BeadDetectionParameters
@@ -178,7 +178,7 @@ def process_single_FOV_single_reference_timepoint(
     timepoints = [t for t in range(T) if (fov_idx, t) not in skips]
     
     # Get the bead ROIs for the current combo of FOV and timepoint.
-    roi_centers = image_handler.read_bead_rois_file_accuracy(pos_idx=fov_idx, timepoint=bead_detection_params.reference_timepoint)
+    roi_centers = image_handler.read_bead_rois_file_accuracy(fov_idx=fov_idx, timepoint=bead_detection_params.reference_timepoint)
     if len(roi_centers) != image_handler.num_bead_rois_for_drift_correction_accuracy:
         warnings.warn(RuntimeWarning(f"Fewer ROIs available ({len(roi_centers)}) than requested ({image_handler.num_bead_rois_for_drift_correction_accuracy}) for FOV {fov_idx}"))
 
@@ -186,7 +186,7 @@ def process_single_FOV_single_reference_timepoint(
     
     # TODO: this requires that the drift table be ordered such that the FOVs are as expected; need flexibility.
     pos = drift_table.fieldOfView.unique()[fov_idx]
-    print(f"Inferred position (for reference FOV index {fov_idx}): {pos}")
+    print(f"Inferred FOV (for reference FOV index {fov_idx}): {pos}")
     curr_fov_drift_subtable = drift_table[drift_table.fieldOfView == pos]
 
     # TODO: could type-refine the argument values to these parameters (which should be nonnegative).
@@ -299,7 +299,7 @@ def workflow(
     drift_correction_table_file : gertils.ExtantFile, optional
         Path to the table of drift correction values; if unspecified, this can be inferred
     reference_fov : int, optional
-        Index (0-based) of position/field-of-view to use; if unspecified, use all FOVs
+        Index (0-based) of FOV to use; if unspecified, use all FOVs
         
     Returns
     -------

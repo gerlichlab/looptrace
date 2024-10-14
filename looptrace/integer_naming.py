@@ -89,12 +89,12 @@ def _get_short_name(*, semantic: "NameableSemantic", i: int, namer: "IndexToNatu
 
 
 def get_fov_name_short(i: int, *, namer: IndexToNaturalNumberText = _DEFAULT_NAMER) -> str:
-    """Get the position-like (field of view) name for the given index."""
+    """Get the field of view name for the given index."""
     return _get_short_name(semantic=NameableSemantic.Point, i=i, namer=namer)
 
 
 def get_fov_names_N(num_names: int, namer: IndexToNaturalNumberText = _DEFAULT_NAMER) -> List[str]:
-    """Get the position-like (field of view) name for the first n indices."""
+    """Get the field of view name for the first n indices."""
     _typecheck(num_names, ctx="Number of names")
     if num_names < 0:
         raise ValueError(f"Number of names is negative: {num_names}")

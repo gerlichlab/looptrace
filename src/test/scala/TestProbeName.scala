@@ -7,7 +7,7 @@ import org.scalatest.matchers.should
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
-/** Tests for position index wrapper type */
+/** Tests for probe name wrapper type */
 class TestProbeName extends AnyFunSuite, ScalaCheckPropertyChecks, RefinementWrapperSuite, should.Matchers:
     override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
     

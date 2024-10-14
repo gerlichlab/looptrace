@@ -164,7 +164,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                 }
                 alt.map(a => { (_: List[String]).updated(idx, a.show_) })
             }
-            // NB: Skipping bad position and region b/c so long as they're String-ly typed, there's no way to generate a bad value.
+            // NB: Skipping bad FOV and region b/c so long as they're String-ly typed, there's no way to generate a bad value.
             Gen.oneOf(Input.XCoordinateColumn, Input.YCoordinateColumn, Input.ZCoordinateColumn).flatMap(genMutate(_, Gen.alphaStr))
         }
         

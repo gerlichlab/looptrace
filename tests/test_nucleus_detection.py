@@ -87,7 +87,7 @@ def test_accessing_certain_attrs__is_defined_iff_certain_3d_status(dummy_rounds_
 def test_fov_names_images_list_relationship(dummy_rounds_config, complete_config_data, tmp_path):
     input_key = complete_config_data["nuc_input_name"]
     N = get_nuc_detector(rounds_config=dummy_rounds_config, conf_data=complete_config_data, conf_file=tmp_path / "conf.yaml")
-    # Initially, the input images don't exist, and so there are no position names.
+    # Initially, the input images don't exist, and so there are no FOV names.
     with pytest.raises(MissingImagesError):
         N.input_images
     with pytest.raises(AttributeError) as err_ctx:
@@ -100,13 +100,13 @@ def test_fov_names_images_list_relationship(dummy_rounds_config, complete_config
     N.image_handler.image_lists[input_key] = []
     assert N.input_images == []
     assert N.fov_list == []
-    # If position names list length differs from image list length, that's bad!
+    # If FOV names list length differs from image list length, that's bad!
     pos_names = ["P0001.zarr", "P0002.zarr"]
     N.image_handler.image_lists[input_key] = pos_names
     assert N.fov_list == pos_names
     with pytest.raises(ArrayDimensionalityError) as err_ctx:
         N.input_images
-    assert str(err_ctx.value) == f"0 images and {len(pos_names)} positions; these should be equal!"
+    assert str(err_ctx.value) == f"0 images and {len(pos_names)} FOV(s); these should be equal!"
 
 
 @pytest.mark.parametrize(

@@ -1,8 +1,8 @@
-"""Tests for parsing position (field of view) information from filename/path"""
+"""Tests for parsing field of view information from filename/path"""
 
 from hypothesis import given, strategies as st
 import pytest
-from looptrace.image_io import POSITION_EXTRACTION_REGEX, TIME_EXTRACTION_REGEX, parse_positions_from_text, parse_times_from_text
+from looptrace.image_io import POSITION_EXTRACTION_REGEX, TIME_EXTRACTION_REGEX, parse_fields_of_view_from_text, parse_times_from_text
 
 __author__ = "Vince Reuter"
 
@@ -11,7 +11,7 @@ __author__ = "Vince Reuter"
     ["parse", "filename", "expected"], 
     [pytest.param(parse, fn, exp, id=f"({parse.__name__}, {fn}, {exp})") for parse, fn, exp in 
         [
-            (parse_positions_from_text, fn, exp) for fn, exp in [
+            (parse_fields_of_view_from_text, fn, exp) for fn, exp in [
                 ("", []), 
                 ("Does_Not_Contain_Keyword.nd2", []),
                 ("My_Cool_File_T001_Point001.nd2", ["Point001"]),
@@ -57,7 +57,7 @@ def test_accuracy(parse, filename, expected):
 @st.composite
 def good_regex_parse_pair(draw):
     pattern, parse = draw(st.sampled_from([
-        (POSITION_EXTRACTION_REGEX, parse_positions_from_text), 
+        (POSITION_EXTRACTION_REGEX, parse_fields_of_view_from_text), 
         (TIME_EXTRACTION_REGEX, parse_times_from_text),
         ]))
     filename = draw(st.from_regex(pattern))
@@ -67,7 +67,7 @@ def good_regex_parse_pair(draw):
 @st.composite
 def bad_regex_parse_pair(draw):
     pattern, parse = draw(st.sampled_from([
-        (TIME_EXTRACTION_REGEX, parse_positions_from_text), 
+        (TIME_EXTRACTION_REGEX, parse_fields_of_view_from_text), 
         (POSITION_EXTRACTION_REGEX, parse_times_from_text),
         ]))
     filename = draw(st.from_regex(pattern))
@@ -79,7 +79,7 @@ def bad_regex_parse_pair(draw):
     st.one_of(
         bad_regex_parse_pair(),
         st.tuples(
-            st.sampled_from((parse_positions_from_text, parse_times_from_text)),
+            st.sampled_from((parse_fields_of_view_from_text, parse_times_from_text)),
             st.text().filter(lambda fn: "Point" not in fn and "Time" not in fn)
         ),
     ).map(lambda parse_fn_pair: parse_fn_pair + (False, ))

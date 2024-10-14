@@ -12,6 +12,10 @@ import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.{
+    FieldOfViewColumnName, 
+    TimepointColumnName, 
+}
 import at.ac.oeaw.imba.gerlich.gerlib.json.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.json.syntax.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
@@ -33,9 +37,9 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
 
     /* Type aliases */
     type RawRecord = Array[String]
-    type PosTimePair = (PositionIndex, ImagingTimepoint)
-    type KeyedProblem = (PosTimePair, RoisSplit.Problem)
-    type InitFile = (PosTimePair, os.Path)
+    type FovTimePair = (PositionIndex, ImagingTimepoint)
+    type KeyedProblem = (FovTimePair, RoisSplit.Problem)
+    type InitFile = (FovTimePair, os.Path)
     type IndexedRoi = FiducialBeadRoi | SelectedRoi
     type JsonWriter[*] = upickle.default.Writer[*]
 
@@ -110,11 +114,11 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
         }
         /* Function definitions based on parsed config and CLI input */
         // Shifting ROIs cannot be empty.
-        val writeRoisForShifting = (pt: PosTimePair, rois: NonEmptySet[RoiForShifting]) =>
-            writeRois(rois.toSortedSet, getOutputFilepath(outfolder)(pt._1, pt._2, Purpose.Shifting))
+        val writeRoisForShifting = (fovTime: FovTimePair, rois: NonEmptySet[RoiForShifting]) =>
+            writeRois(rois.toSortedSet, getOutputFilepath(outfolder)(fovTime._1, fovTime._2, Purpose.Shifting))
         // Accuracy ROIs could be empty.
-        val writeRoisForAccuracy = (pt: PosTimePair, rois: Set[RoiForAccuracy]) => 
-            writeRois(rois, getOutputFilepath(outfolder)(pt._1, pt._2, Purpose.Accuracy))
+        val writeRoisForAccuracy = (fovTime: FovTimePair, rois: Set[RoiForAccuracy]) => 
+            writeRois(rois, getOutputFilepath(outfolder)(fovTime._1, fovTime._2, Purpose.Accuracy))
         
         // Here, actually do the partition.
         val (bads, goods): (List[(InitFile, RoisSplit.Failure)], List[(InitFile, RoisSplit.HasPartition)]) = 
@@ -147,7 +151,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
                     problemsToPropagate
                 case _ => 
                     // Here we have all parse errors or mixed error types and can't combine them.
-                    throw new Exception(s"${bads.size} (position, timepoint) pairs with problems.\n${bads}")
+                    throw new Exception(s"${bads.size} (FOV, timepoint) pairs with problems.\n${bads}")
             }
         } else { List.empty[KeyedProblem] }
         // NB: since possibly multiple problems per (pos, timepoint) pair (e.g., too few shifting and too few accuracy), 
@@ -162,7 +166,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
                     case problematic: RoisSplit.Problematic => problematic.problems.toList.map(pt -> _)
                     case _ => List()
                 }
-            }.sortBy(_._1)(Order[PosTimePair].toOrdering)
+            }.sortBy(_._1)(Order[FovTimePair].toOrdering)
         if (bads.isEmpty && problems.isEmpty) then logger.info("No warnings from bead ROIs partitioning, nice!")
         else {
             val warningsFile = outfolder / "roi_partition_warnings.json"
@@ -292,44 +296,44 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
     /******************************/
 
     /**
-      * Write a mapping, from position and time pair to value, to JSON.
+      * Write a mapping, from FOV and time pair to value, to JSON.
       *
       * @param vKey The key to use for the {@code V} element in each object
-      * @param ptToV The mapping of data to write
+      * @param timeByFov The mapping of data to write
       * @param writeV How to write each {@code V} element as JSON
       * @return A JSON array of object corresponding to each element of the map
       */
-    def posTimeMapToJson[V](vKey: String, ptToV: Map[(PositionIndex, ImagingTimepoint), V])(using writeV: (V) => ujson.Value): ujson.Value = {
+    def posTimeMapToJson[V](vKey: String, timeByFov: Map[(PositionIndex, ImagingTimepoint), V])(using writeV: (V) => ujson.Value): ujson.Value = {
         val proc1 = (pt: (PositionIndex, ImagingTimepoint), v: V) => ujson.Obj(
-            "position" -> pt._1.get.asJson,
-            "timepoint" -> pt._2.asJson,
+            FieldOfViewColumnName.value -> pt._1.get.asJson,
+            TimepointColumnName.value -> pt._2.asJson,
             vKey -> writeV(v)
         )
-        ptToV.toList.map(proc1.tupled)
+        timeByFov.toList.map(proc1.tupled)
     }
     
     /** Write, to JSON, a pair of (FOV, image time) and a case of too-few-ROIs for shifting for drift correction. */
     private[looptrace] def readWriterForKeyedTooFewProblem: ReadWriter[KeyedProblem] = {
         import JsonMappable.*
-        import PosTimePair.given
+        import FovTimePair.given
         import UJsonHelpers.UPickleCatsInstances.given
         readwriter[ujson.Value].bimap(
             (pair, problem) => JsonMappable
                 .combineSafely(List(pair.toJsonMap, problem.toJsonMap))
                 .fold(reps => throw RepeatedKeysException(reps), identity), 
             json => 
-                val pNel = Try{ PositionIndex.unsafe(json("position").int) }.toValidatedNel
-                val fNel = Try{ ImagingTimepoint.unsafe(json(PosTimePair.timeKey).int) }.toValidatedNel
+                val fovNel = Try{ PositionIndex.unsafe(json(FieldOfViewColumnName.value).int) }.toValidatedNel
+                val timeNel = Try{ ImagingTimepoint.unsafe(json(FovTimePair.timeKey).int) }.toValidatedNel
                 val reqdNel = Try{ PositiveInt.unsafe(json("requested").int) }.toValidatedNel
                 val realNel = Try{ NonnegativeInt.unsafe(json("realized").int) }.toValidatedNel
                 val purposeNel = Try{ read[Purpose](json("purpose")) }.toValidatedNel
-                (pNel, fNel, reqdNel, realNel, purposeNel).mapN(
-                    (p, f, requested, realized, purpose) => 
+                (fovNel, timeNel, reqdNel, realNel, purposeNel).mapN(
+                    (fov, time, requested, realized, purpose) => 
                         val problem = purpose match {
                             case Purpose.Shifting => RoisSplit.Problem.shifting(requested, realized)
                             case Purpose.Accuracy => RoisSplit.Problem.accuracy(requested, realized)
                         }
-                        (p -> f) -> problem
+                        (fov -> time) -> problem
                 ) match {
                     case Validated.Invalid(errs) => 
                         val msg = f"${errs.size} error(s) reading pair of ((pos, time), too-few-ROIs): ${errs.map(_.getMessage)}"
@@ -359,12 +363,12 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
     end ShiftingCount
     
     /** Tools for working with a fundamental grouping entity -- pair of FOV and imaging timepoint */
-    object PosTimePair:
+    object FovTimePair:
         private[PartitionIndexedDriftCorrectionBeadRois] val timeKey = "time"
-        given jsonMappableForPosTimePair: JsonMappable[PosTimePair] with
+        given jsonMappableForFovTimePair: JsonMappable[FovTimePair] with
             override def toJsonMap = (pos, time) => 
-                Map("position" -> pos.get.asJson, timeKey -> time.asJson)
-    end PosTimePair
+                Map(FieldOfViewColumnName.value -> pos.get.asJson, timeKey -> time.asJson)
+    end FovTimePair
 
     /** Type for when something gois wrong parsing a bead ROIs file */
     sealed trait RoisFileParseError extends Throwable
@@ -502,7 +506,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
                 require(accuracy.forall(_._2 > 1), s"Cannot allege that a 'repeat' occurs fewer than two times: ${accuracy.filter(_._2 < 2)}")
         end Partition
 
-        final case class TooFewShiftingException(errors: NonEmptyList[(PosTimePair, TooFewShifting)]) 
+        final case class TooFewShiftingException(errors: NonEmptyList[(FovTimePair, TooFewShifting)]) 
             extends Exception(s"${errors.length} (FOV, time) pairs with insufficient ROIs for drift correction: $errors")
     end RoisSplit
     

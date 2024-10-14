@@ -250,11 +250,11 @@ def prep_nuclear_masks_data(rounds_config: ExtantFile, params_config: ExtantFile
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     N = NucDetector(H)
     result: Dict[int, Path] = {}
-    for pos, img in N.iterate_over_pairs_of_position_and_mask_image():
-        logging.info(f"Computing nuclear mask centroids for position: {pos}")
+    for fov, img in N.iterate_over_pairs_of_fov_and_mask_image():
+        logging.info(f"Computing nuclear mask centroids for FOV: {fov}")
         table = extract_labeled_centroids(img)
-        logging.info(f"Finished nuclear mask centroids for position: {pos}")
-        cleaned_pos_name: str = pos.removesuffix(".zarr")
+        logging.info(f"Finished nuclear mask centroids for FOV: {fov}")
+        cleaned_pos_name: str = fov.removesuffix(".zarr")
         fp: Path = \
             parse_semantic_and_value(cleaned_pos_name, namer=IndexToNaturalNumberText.TenThousand)\
                 .map_error(lambda msg: f"Failed to parse semantic and value from text ({cleaned_pos_name}): {msg}")\
@@ -262,13 +262,13 @@ def prep_nuclear_masks_data(rounds_config: ExtantFile, params_config: ExtantFile
                     lambda sem_val: 
                         Result.Ok(H.nuclear_masks_visualisation_data_path / f"{cleaned_pos_name}.nuclear_masks.csv") 
                         if sem_val[0] == NameableSemantic.Point else 
-                        Result.Error(f"Parsed not point/position, but {sem_val[0]} from position name {cleaned_pos_name}")
+                        Result.Error(f"Parsed not point/FOV, but {sem_val[0]} from FOV name {cleaned_pos_name}")
                 )\
                 .default_with(raise_error)
         logging.info(f"Writing data file for nuclei visualisation to file: {fp}")
         fp.parent.mkdir(exist_ok=True)
         table.to_csv(fp)
-        result[pos] = fp
+        result[fov] = fp
     return result
 
 

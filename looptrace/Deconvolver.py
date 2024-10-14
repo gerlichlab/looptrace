@@ -176,8 +176,8 @@ class Deconvolver:
             print("Deconvolution iterations set to 0, doing nothing")
             return
 
-        positions = self.fov_list
-        print(f"Will deconvolve {positions} field of views: {positions}")
+        fields_of_view = self.fov_list
+        print(f"Will deconvolve {len(fields_of_view)} field(s) of view: {fields_of_view}")
 
         num_gpus_avail = count_tensorflow_gpus()
         if num_gpus_avail is None or num_gpus_avail == 0:
@@ -220,18 +220,18 @@ class Deconvolver:
 
         array_paths = []
         
-        for pos in tqdm.tqdm(positions):
-            print(f"Deconvolving position: {pos}")
-            pos_index = self.fov_names.index(pos)
-            pos_img = self.image_handler.images[self.input_name][pos_index]
+        for fov in tqdm.tqdm(fields_of_view):
+            print(f"Deconvolving FOV: {fov}")
+            fov_index = self.fov_names.index(fov)
+            fov_img = self.image_handler.images[self.input_name][fov_index]
             z = create_zarr_store(path=self.output_path,
                     name = self.output_name, 
-                    pos_name = pos if pos.endswith(".zarr") else pos + ".zarr",
-                    shape = (pos_img.shape[0], len(decon_ch) + len(non_decon_ch),) + pos_img.shape[-3:], 
+                    fov_name = fov if fov.endswith(".zarr") else fov + ".zarr",
+                    shape = (fov_img.shape[0], len(decon_ch) + len(non_decon_ch),) + fov_img.shape[-3:], 
                     dtype = np.uint16, 
-                    chunks = (1, 1, 1, pos_img.shape[-2], pos_img.shape[-1]))
+                    chunks = (1, 1, 1, fov_img.shape[-2], fov_img.shape[-1]))
 
-            for i, t_img_full in tqdm.tqdm(enumerate(pos_img)):
+            for i, t_img_full in tqdm.tqdm(enumerate(fov_img)):
                 print(f"Processing image {i}")
                 for ch in decon_ch:
                     t_img = np.array(t_img_full[ch])
@@ -257,7 +257,7 @@ class Deconvolver:
                 for ch in non_decon_ch:
                     z[i, ch] = np.array(t_img_full[ch])
 
-            print(f"Completed position: {pos}")
+            print(f"Completed FOV: {fov}")
             
             array_paths.append(z.store.path)
 

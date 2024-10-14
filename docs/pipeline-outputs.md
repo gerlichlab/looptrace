@@ -7,7 +7,7 @@ If you're not familiar with these, please refere to the [relevant section](./pip
 
 * `zarr_conversion`: writes to the images folder, a subfolder with ZARR versions of the input images, defined by the `zarr_conversions` section of the [parameters configuration file](./parameters-configuration-file.md).
 * `nuclei_detection`: produces the nuclear masks subfolder stored in the images folder
-* `nuclei_drift_correction`: produces `*_nuclei_drift_correction_coarse.csv`, storing shifts for nuclei relative to the reference timepoint in the experiment. This is stored in the analysis folder and used for adjusting the positions of the nuclear masks when filtering FISH spots for filtration in nuclei.
+* `nuclei_drift_correction`: produces `*_nuclei_drift_correction_coarse.csv`, storing shifts for nuclei relative to the reference timepoint in the experiment. This is stored in the analysis folder and used for adjusting the FOVs of the nuclear masks when filtering FISH spots for filtration in nuclei.
 In general, you should not nead to look at this.
 * `drift_correction__coarse`: produces something like `*_zarr_drift_correction_coarse.csv` (or similar), which is the coarse-grained shift of each imaging timepoint relative to a reference timepoint (defined in the [parameters configuration file](./parameters-configuration-file.md)). 
 In general, you should not nead to look at this. 

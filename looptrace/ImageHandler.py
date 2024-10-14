@@ -41,7 +41,7 @@ PathFilter = Callable[[Union[os.DirEntry, Path]], bool]
 @doc(
     summary="Store the parameters which uniquely specify the name of a file for fiducial bead ROIs.",
     parameters=dict(
-        fov="0-based index of position / field of view",
+        fov="0-based index of field of view",
         timepoint="0-based index of timepoint in imaging sequence",
         purpose="What the ROIs will be used for; set to null if these are generic ROIs",
     ),
@@ -110,8 +110,8 @@ class BeadRoisFilenameSpecification:
         return cls.from_filename(fp.name)
 
 
-def bead_rois_filename(pos_idx: int, timepoint: int, purpose: Optional[str]) -> str:
-    return BeadRoisFilenameSpecification(fov=pos_idx, timepoint=timepoint, purpose=purpose).get_filename
+def bead_rois_filename(fov_idx: int, timepoint: int, purpose: Optional[str]) -> str:
+    return BeadRoisFilenameSpecification(fov=fov_idx, timepoint=timepoint, purpose=purpose).get_filename
 
 
 def _read_bead_rois_file(fp: ExtantFile) -> np.ndarray[int]:
@@ -175,17 +175,17 @@ class ImageHandler:
     def bead_rois_path(self) -> Path:
         return Path(self.analysis_path) / "bead_rois"
 
-    def get_bead_rois_file(self, pos_idx: int, timepoint: int, purpose: Optional[str]) -> ExtantFile:
-        filename = bead_rois_filename(pos_idx=pos_idx, timepoint=timepoint, purpose=purpose)
+    def get_bead_rois_file(self, fov_idx: int, timepoint: int, purpose: Optional[str]) -> ExtantFile:
+        filename = bead_rois_filename(fov_idx=fov_idx, timepoint=timepoint, purpose=purpose)
         folder = self.bead_rois_path if purpose is None else self.bead_rois_path / purpose
         return ExtantFile(folder / filename)
 
-    def read_bead_rois_file_accuracy(self, pos_idx: int, timepoint: int) -> np.ndarray[np.ndarray]:
-        fp = self.get_bead_rois_file(pos_idx=pos_idx, timepoint=timepoint, purpose="accuracy").path
+    def read_bead_rois_file_accuracy(self, fov_idx: int, timepoint: int) -> np.ndarray[np.ndarray]:
+        fp = self.get_bead_rois_file(fov_idx=fov_idx, timepoint=timepoint, purpose="accuracy").path
         return _read_bead_rois_file(fp)
 
-    def read_bead_rois_file_shifting(self, pos_idx: int, timepoint: int) -> ExtantFile:
-        fp = self.get_bead_rois_file(pos_idx=pos_idx, timepoint=timepoint, purpose="shifting").path
+    def read_bead_rois_file_shifting(self, fov_idx: int, timepoint: int) -> ExtantFile:
+        fp = self.get_bead_rois_file(fov_idx=fov_idx, timepoint=timepoint, purpose="shifting").path
         return _read_bead_rois_file(fp)
     
     @property
@@ -200,7 +200,7 @@ class ImageHandler:
             return set()
         with open(fp.path, 'r') as fh:
             data = json.load(fh)
-        return {(obj["position"], obj["time"]) for obj in data}
+        return {(obj["fieldOfView"], obj["time"]) for obj in data}
 
     @property
     def decon_input_name(self) -> str:
@@ -527,7 +527,7 @@ def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[
                 from .image_io import multi_ome_zarr_to_dask
                 parse = multi_ome_zarr_to_dask
             arrays, pos_names = parse(images_folder)
-            # Now parsed, sort the parallel collections by the position names, then store them.
+            # Now parsed, sort the parallel collections by the FOV names, then store them.
             try:
                 arrays, pos_names = zip(*sorted(zip(arrays, pos_names), key=itemgetter(1)))
             except ValueError:

@@ -46,13 +46,13 @@ def workflow(*, output_folder: Path, spots_files: Iterable[Path]) -> dict[str, l
     for fp in spots_files:
         logging.info("Reading spots file: %s", fp)
         spots_table = pd.read_csv(fp, index_col=0)
-        for position, subtable in spots_table.groupby("position"):
-            position = position.rstrip(".zarr")
-            target = output_folder / position / f"{position}__{fp.name}"
+        for fov, subtable in spots_table.groupby("fieldOfView"):
+            fov = fov.rstrip(".zarr")
+            target = output_folder / fov / f"{fov}__{fp.name}"
             target.parent.mkdir(exist_ok=True, parents=True)
-            logging.info("Writing data for FOV %s: %s", position, target)
+            logging.info("Writing data for FOV %s: %s", fov, target)
             subtable.reset_index(drop=True).to_csv(target)
-            outputs.setdefault(position, []).append(target)
+            outputs.setdefault(fov, []).append(target)
     return outputs
 
 

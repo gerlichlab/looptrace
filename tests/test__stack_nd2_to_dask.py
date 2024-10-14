@@ -52,17 +52,17 @@ def test_no_usable_images_raises_expected_error(tmp_path, filenames):
     ]])
 @pytest.mark.parametrize("time_pos_flip", [False, True])
 @hyp.given(
-    position_pair=uniq_non_neg_int_pair, 
+    fov_pair=uniq_non_neg_int_pair, 
     time_pair=uniq_non_neg_int_pair, 
     seq_num=st.integers(min_value=0),
     )
 @hyp.settings(suppress_health_check=(hyp.HealthCheck.function_scoped_fixture, ))
-def test_key_image_file_names_by_point_and_time__is_accurate(tmp_path, position_pair, time_pair, seq_num, time_pos_flip, finalise_inputs):
-    p1, p2 = position_pair
-    t1, t2 = time_pair
+def test_key_image_file_names_by_point_and_time__is_accurate(tmp_path, fov_pair, time_pair, seq_num, time_pos_flip, finalise_inputs):
+    fov1, fov2 = fov_pair
+    time1, time2 = time_pair
     args = []
     expected = defaultdict(dict)
-    for i, (t, p) in enumerate(zip([f"Time000{t}" for t in [t1, t1, t2, t2]], [f"Point00{p}" for p in [p1, p2, p1, p2]])):
+    for i, (t, p) in enumerate(zip([f"Time000{t}" for t in [time1, time1, time2, time2]], [f"Point00{p}" for p in [fov1, fov2, fov1, fov2]])):
         extra = {"t": p, "p": t} if time_pos_flip else {"t": t, "p": p}
         arg = finalise_inputs(tmp_path, "{i}__{t}_{p}_ChannelFar Red,Red_Seq{sn}.nd2".format(**{**extra, **{"i": i, "sn": seq_num}}))
         expected[p][t] = str(arg)
@@ -89,7 +89,7 @@ def test_key_image_file_names_by_point_and_time__is_accurate(tmp_path, position_
     # Avoid shrinking here since size range is narrow, so shrinking will yield little benefit and be slow.
     phases=tuple(p for p in hyp.Phase if p != hyp.Phase.shrink)
     )
-def test_key_image_file_names_by_point_and_time__non_unique_position_time_pairs_causes_expected_error(
+def test_key_image_file_names_by_point_and_time__non_unique_fov_time_pairs_causes_expected_error(
     tmp_path_factory, seq_num, time_pos_pairs, time_pos_flip, finalise_prepare_testfunc_choosearg_tuple,
     ):
     finalise_args, prepare_folder, testfunc, choosearg = finalise_prepare_testfunc_choosearg_tuple
@@ -102,38 +102,38 @@ def test_key_image_file_names_by_point_and_time__non_unique_position_time_pairs_
     tmp_path = tmp_path_factory.mktemp("experiment")
     arg = choosearg(tmp_path, [finalise_args(tmp_path, fn) for fn in filenames])
     prepare_folder(tmp_path, filenames)
-    with pytest.raises(PositionTimeFilenameKeyError):
+    with pytest.raises(FieldOfViewTimeFilenameKeyError):
         testfunc(arg)
 
 
 @pytest.mark.parametrize("time_pos_flip", [False, True])
 @hyp.given(
-    position_pair=uniq_non_neg_int_pair, 
+    fov_pair=uniq_non_neg_int_pair, 
     time_pair=uniq_non_neg_int_pair, 
     seq_num=st.integers(min_value=0),
-    pos_id_choice=st.integers(min_value=4)
+    fov_index_choice=st.integers(min_value=4)
     )
 @hyp.settings(
     # Avoid shrinking here since size range is narrow, so shrinking will yield little benefit and be slow.
     phases=tuple(p for p in hyp.Phase if p != hyp.Phase.shrink)
     )
-def test_bad_position_id__causes_expected_error(
-    tmp_path_factory, position_pair, time_pair, time_pos_flip, seq_num, pos_id_choice
+def test_bad_fov_id__causes_expected_error(
+    tmp_path_factory, fov_pair, time_pair, time_pos_flip, seq_num, fov_index_choice
     ):
-    p1, p2 = position_pair
-    t1, t2 = time_pair
+    fov1, fov2 = fov_pair
+    time1, time2 = time_pair
     filenames = [
         "{i}__Time000{t}_Point000{p}_ChannelFar Red,Red_Seq{sn}.nd2".format(
             **{**({"t": p, "p": t} if time_pos_flip else {"t": t, "p": p}), **{"i": i, "sn": seq_num}}
             )
-        for i, (t, p) in enumerate(zip([t1, t1, t2, t2], [p1, p2, p1, p2]))
+        for i, (t, p) in enumerate(zip([time1, time1, time2, time2], [fov1, fov2, fov1, fov2]))
         ]
     tmp_path = tmp_path_factory.mktemp("experiment")
     for fn in filenames:
         (tmp_path / fn).touch()
     with pytest.raises(IndexError) as err_ctx:
-        stack_nd2_to_dask(tmp_path, position_id=pos_id_choice)
-    exp_msg = f"{1 if p1 == p2 else 2} position name(s) available, but tried to select index {pos_id_choice}"
+        stack_nd2_to_dask(tmp_path, fov_index=fov_index_choice)
+    exp_msg = f"{1 if fov1 == fov2 else 2} FOV name(s) available, but tried to select index {fov_index_choice}"
     assert str(err_ctx.value) == exp_msg
 
 
@@ -149,13 +149,13 @@ pfx_ext_and_exp_use = st.one_of(
 
 @hyp.given(input_params=st.lists(
     elements=st.tuples(
-        non_neg_ints_pair, # (time, position)
+        non_neg_ints_pair, # (time, FOV)
         st.integers(min_value=0), # seq_num
         pfx_ext_and_exp_use,
         ),
     min_size=8, 
     max_size=16,
-    unique_by=lambda t: t[0] # unique (time, position) pair for each filename-to-be
+    unique_by=lambda t: t[0] # unique (time, FOV) pair for each filename-to-be
     ).filter(lambda params: any(par[2][2] is True for par in params))
 )
 @hyp.settings(
@@ -165,9 +165,9 @@ pfx_ext_and_exp_use = st.one_of(
 def test_underscore_prefixed_and_or_non_nd2_files_are_skipped_and_good_ones_have_correct_fov_names(
     tmp_path_factory, input_params,
     ):
-    """Result for list of position names must match expectation and correctly exclude the expect files to skip."""
+    """Result for list of FOV names must match expectation and correctly exclude the expect files to skip."""
     template = "{i}__Time000{t}_{p_pre}{p}_ChannelFar Red,Red_Seq{sn}.{ext}"
-    unique_positions = set()
+    unique_fields_of_view = set()
     exp_num_use = 0
     tmp_path = tmp_path_factory.mktemp("experiment")
     for i, ((t, p), seq_num, (pfx, ext, exp_use)) in enumerate(input_params):
@@ -175,7 +175,7 @@ def test_underscore_prefixed_and_or_non_nd2_files_are_skipped_and_good_ones_have
         (tmp_path / fn).touch()
         if exp_use:
             exp_num_use += 1
-            unique_positions.add(p)
+            unique_fields_of_view.add(p)
     # Patch the metadata parser to be a no-op, the ND2 reader to be context manager-like, 
     # and dask call to be identity.
     with mock.patch("looptrace.nd2io.parse_nd2_metadata"), \
@@ -184,7 +184,7 @@ def test_underscore_prefixed_and_or_non_nd2_files_are_skipped_and_good_ones_have
         mock.patch("looptrace.nd2io.da.moveaxis", side_effect=lambda _1, _2, _3: mock.Mock(shape=None)):
         _, obs_pos_names, _ = stack_nd2_to_dask(tmp_path)
     assert len(mock_nd2_read.call_args_list) == exp_num_use
-    assert obs_pos_names == get_fov_names_N(len(unique_positions))
+    assert obs_pos_names == get_fov_names_N(len(unique_fields_of_view))
 
 
 @pytest.mark.parametrize(
@@ -206,12 +206,12 @@ def test_underscore_prefixed_and_or_non_nd2_files_are_skipped_and_good_ones_have
     )
 @hyp.given(input_params=st.lists(
     elements=st.tuples(
-        non_neg_ints_pair, # (time, position)
+        non_neg_ints_pair, # (time, FOV)
         st.integers(min_value=0), # seq_num
         ),
     min_size=4, 
     max_size=4,
-    # unique position pair for each filename-to-be, so that pos_stack indexing isn't OOB
+    # unique FOV pair for each filename-to-be, so that pos_stack indexing isn't OOB
     unique_by=lambda t: t[0][1],
     )
 )

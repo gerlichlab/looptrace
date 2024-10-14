@@ -18,10 +18,10 @@ def workflow(rounds_config: ExtantFile, params_config: ExtantFile, images_folder
         )
     D = Drifter(image_handler=H)
     rois_path = H.bead_rois_path
-    n_pos = D.num_positions
+    n_pos = D.num_fov
     n_time = H.num_timepoints
     script = os.path.join(os.path.dirname(__file__), "analyse_detected_bead_rois.R")
-    cmd_to_run = f"Rscript {script} -i {rois_path} -o {os.path.dirname(rois_path)} --num-positions {n_pos} --num-rounds {n_time}"
+    cmd_to_run = f"Rscript {script} -i {rois_path} -o {os.path.dirname(rois_path)} --num-fov {n_pos} --num-rounds {n_time}"
     print("Running command: ", cmd_to_run)
     subprocess.check_call(cmd_to_run.split(" "))
 

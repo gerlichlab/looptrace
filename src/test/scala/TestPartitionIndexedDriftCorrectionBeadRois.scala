@@ -296,7 +296,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     test("Input discovery works as expected for mixed folder contents.") {
         enum FolderChoice:
             case Root, GoodSubfolder, BadSubfolder
-        def setup(root: os.Path, pt1: PosTimePair, pt2: PosTimePair, fc: FolderChoice): (os.Path, Set[InitFile]) = {
+        def setup(root: os.Path, pt1: FovTimePair, pt2: FovTimePair, fc: FolderChoice): (os.Path, Set[InitFile]) = {
             import FolderChoice.*
             val subGood = root / "sub1"
             val subBad = root / "sub2"
@@ -431,16 +431,16 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => PositionIndex.unsafe(p) -> ImagingTimepoint.unsafe(t))
-        type PosTimeRois = (PosTimePair, List[FiducialBeadRoi])
-        def genDetected(ptPairs: List[PosTimePair])(lo: Int, hi: Int): Gen[List[PosTimeRois]] = 
+        type PosTimeRois = (FovTimePair, List[FiducialBeadRoi])
+        def genDetected(ptPairs: List[FovTimePair])(lo: Int, hi: Int): Gen[List[PosTimeRois]] = 
             ptPairs.traverse{ pt => genUsableRois(lo, hi).map(pt -> _) }
         val maxReqShifting = 2 * ShiftingCount.AbsoluteMinimumShifting
         def genArgs: Gen[(List[PosTimeRois], ShiftingCount, List[PosTimeRois])] = for {
             nTooFewShift <- Gen.choose(1, posTimePairs.length)
-            (tooFewPosTimePairs, enoughPosTimePairs) = posTimePairs.splitAt(nTooFewShift)
-            tooFew <- genDetected(tooFewPosTimePairs)(ShiftingCount.AbsoluteMinimumShifting + 1, maxReqShifting - 1)
+            (tooFewFovTimePairs, enoughFovTimePairs) = posTimePairs.splitAt(nTooFewShift)
+            tooFew <- genDetected(tooFewFovTimePairs)(ShiftingCount.AbsoluteMinimumShifting + 1, maxReqShifting - 1)
             numReqShifting <- Gen.choose(tooFew.map(_._2.length).max + 1, maxReqShifting).map(ShiftingCount.unsafe)
-            enough <- genDetected(enoughPosTimePairs)(maxReqShifting, 2 * maxReqShifting)
+            enough <- genDetected(enoughFovTimePairs)(maxReqShifting, 2 * maxReqShifting)
         } yield (tooFew, numReqShifting, enough)
         forAll (genArgs, arbitrary[PositiveInt].suchThat(_ < PositiveInt(1e15.toInt))) { // some huge value, but not so big to cause overflow
             case ((tooFew, reqShifting, enough), reqAccuracy) =>
@@ -484,7 +484,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => PositionIndex.unsafe(p) -> ImagingTimepoint.unsafe(t))
         val maxReqShifting = 2 * ShiftingCount.AbsoluteMinimumShifting
-        def genArgs: Gen[(ShiftingCount, PositiveInt, List[(PosTimePair, List[FiducialBeadRoi])])] = for {
+        def genArgs: Gen[(ShiftingCount, PositiveInt, List[(FovTimePair, List[FiducialBeadRoi])])] = for {
             numReqShifting <- Gen.choose(ShiftingCount.AbsoluteMinimumShifting, maxReqShifting).map(ShiftingCount.unsafe)
             numReqAccuracy <- Gen.choose(1, 100).map(PositiveInt.unsafe)
             numReq = numReqShifting + numReqAccuracy
@@ -536,7 +536,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => PositionIndex.unsafe(p) -> ImagingTimepoint.unsafe(t))
         def genDetected(lo: Int, hi: Int) = 
-            (_: List[PosTimePair]).traverse{ pt => genMixedUsabilityRoisEachSize(lo, hi).map(pt -> _) }
+            (_: List[FovTimePair]).traverse{ pt => genMixedUsabilityRoisEachSize(lo, hi).map(pt -> _) }
         def genArgs = for {
             numTooFew <- Gen.choose(1, posTimePairs.length)
             numReqShifting <- Gen.choose(ShiftingCount.AbsoluteMinimumShifting, 50).map(ShiftingCount.unsafe)
@@ -560,7 +560,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
                 given readerForKeyedProblem: Reader[KeyedProblem] = readWriterForKeyedTooFewProblem
                 val obsWarnSevere = readJsonFile[List[KeyedProblem]](badWarningsFile)
                 obsWarnSevere.length shouldEqual tooFew.length
-                given ord: Ordering[PosTimePair] = summon[Order[PosTimePair]].toOrdering
+                given ord: Ordering[FovTimePair] = summon[Order[FovTimePair]].toOrdering
                 obsWarnSevere.map(_._1).sorted shouldEqual tooFew.map(_._1).sorted // Ignore original ordering.
             }
         }
@@ -574,7 +574,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
         def genDetected(lo: Int, hi: Int) = 
             // Make all ROIs usable so that the math about how many will be realized (used) is easier; 
             // in particular, we don't want that math dependent on counting the number of usable vs. unusable ROIs.
-            (_: List[PosTimePair]).traverse{ pt => genUsableRois(lo, hi).map(pt -> _) }
+            (_: List[FovTimePair]).traverse{ pt => genUsableRois(lo, hi).map(pt -> _) }
         def genArgs = for {
             numTooFewReqShifting <- Gen.oneOf(Gen.const(0), Gen.choose(1, posTimePairs.length))
             numTooFewReqAccuracy <- Gen.oneOf(Gen.const(0), Gen.choose(posTimePairs.length - numTooFewReqShifting, posTimePairs.length))
@@ -619,7 +619,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
                         obsWarnAccuracy.length shouldEqual (tooFewShifting.length + tooFewAccuracy.length)
                         /* Check the actual problems. */
                         obsWarnShifting.toMap shouldEqual expWarnShifting.toMap
-                        def collapseKeyedProblems: List[KeyedProblem] => Map[PosTimePair, NonEmptySet[RoisSplit.Problem]] = {
+                        def collapseKeyedProblems: List[KeyedProblem] => Map[FovTimePair, NonEmptySet[RoisSplit.Problem]] = {
                             import at.ac.oeaw.imba.gerlich.looptrace.collections.*
                             given orderForPurpose: Order[Purpose] = Order.by{
                                 case Purpose.Shifting => 0
@@ -796,7 +796,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
         def setUsable: FiducialBeadRoi = roi.copy(failCode = RoiFailCode.success)
 
     /** Generate a pair of pairs of nonnegative integers such that the first pair isn't the same as the second. */
-    def genDistinctNonnegativePairs: Gen[(PosTimePair, PosTimePair)] = 
+    def genDistinctNonnegativePairs: Gen[(FovTimePair, FovTimePair)] = 
         Gen.zip(arbitrary[(NonnegativeInt, NonnegativeInt)], arbitrary[(NonnegativeInt, NonnegativeInt)])
             .suchThat{ case (p1, p2) => p1 =!= p2 }
             .map { case ((p1, f1), (p2, f2)) => (PositionIndex(p1) -> ImagingTimepoint(f1), PositionIndex(p2) -> ImagingTimepoint(f2)) }

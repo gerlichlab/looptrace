@@ -34,13 +34,13 @@ from looptrace.wrappers import phase_xcor
 
 
 TIMEPOINT_COLUMN = "timepoint"
-POSITION_COLUMN = "position"
+FOV_COLUMN = "fieldOfView"
 CoarseDriftTableRow = Tuple[int, str, NumberLike, NumberLike, NumberLike]
 Z_PX_COARSE = "zDriftCoarsePixels"
 Y_PX_COARSE = "yDriftCoarsePixels"
 X_PX_COARSE = "xDriftCoarsePixels"
 COARSE_DRIFT_COLUMNS = [Z_PX_COARSE, Y_PX_COARSE, X_PX_COARSE]
-COARSE_DRIFT_TABLE_COLUMNS = [TIMEPOINT_COLUMN, POSITION_COLUMN] + COARSE_DRIFT_COLUMNS
+COARSE_DRIFT_TABLE_COLUMNS = [TIMEPOINT_COLUMN, FOV_COLUMN] + COARSE_DRIFT_COLUMNS
 FullDriftTableRow = Tuple[int, str, NumberLike, NumberLike, NumberLike, NumberLike, NumberLike, NumberLike]
 FULL_DRIFT_TABLE_COLUMNS = COARSE_DRIFT_TABLE_COLUMNS + ["zDriftFinePixels", "yDriftFinePixels", "xDriftFinePixels"]
 DUMMY_SHIFT = [0, 0, 0]
@@ -180,7 +180,7 @@ def generate_drift_function_arguments__coarse_drift_only(
     Parameters
     ----------
     full_fov_list : list of str
-        Names of all known positions / fields of view
+        Names of all known fields of view
     fov_list : Iterable of str
         Names over which to iterate
     reference_images : list of np.ndarray
@@ -198,33 +198,35 @@ def generate_drift_function_arguments__coarse_drift_only(
     nuclei_mode : bool
         Whether the arguments are being generated for nuclei, changing expected dimensionality of moving images
     stop_after : int, default infinite
-        Point (position) after which to stop the generation
+        FOV index after which to stop the generation
     
     Returns
     -------
     Iterable of (str, int, np.ndarray, np.ndarray)
-        Bundle of position (FOV), timepoint, reference image, and shifted image
+        Bundle of FOV, timepoint, reference image, and shifted image
 
     Raises
     ------
     ArrayLikeLengthMismatchError
-        If the full list of positions doesn't match in length to the list of reference images, 
-        or if the full list of positions doesn't match in length to the list of moving images
+        If the full list of FOVs doesn't match in length to the list of reference images, 
+        or if the full list of FOVs doesn't match in length to the list of moving images
     """
     if len(full_fov_list) != len(reference_images) or len(full_fov_list) != len(moving_images):
-        raise ArrayLikeLengthMismatchError(f"Full pos: {len(full_fov_list)}, ref imgs: {len(reference_images)}, mov imgs: {len(moving_images)}")
-    for i, pos in takewhile(lambda i_and_p: i_and_p[0] <= stop_after, map(lambda p: (full_fov_list.index(p), p), fov_list)):
-        print(f'Running coarse drift correction for position: {pos}.')
+        raise ArrayLikeLengthMismatchError(
+            f"Full FOV list: {len(full_fov_list)}, ref imgs count: {len(reference_images)}, mov imgs count: {len(moving_images)}"
+        )
+    for i, fov in takewhile(lambda i_and_p: i_and_p[0] <= stop_after, map(lambda p: (full_fov_list.index(p), p), fov_list)):
+        print(f'Running coarse drift correction for FOV: {fov}.')
         t_img = np.array(reference_images[i][reference_timepoint, reference_channel, ::downsampling, ::downsampling, ::downsampling])
         mov_img = moving_images[i]
         if nuclei_mode:
             o_img = np.array(mov_img[moving_channel, ::downsampling, ::downsampling, ::downsampling])
-            yield pos, 0, t_img, o_img
+            yield fov, 0, t_img, o_img
         else:
             for t in tqdm.tqdm(range(mov_img.shape[0])):
                 o_img = np.array(mov_img[t, moving_channel, ::downsampling, ::downsampling, ::downsampling])
-                yield pos, t, t_img, o_img
-        print(f"Finished drift correction for position: {pos}")
+                yield fov, t, t_img, o_img
+        print(f"Finished drift correction for FOV: {fov}")
 
 
 @dataclasses.dataclass
@@ -251,12 +253,12 @@ def coarse_correction_workflow(
     """The workflow for the initial (and sometimes only), coarse, drift correction."""
     D = Drifter(image_handler=ImageHandler(rounds_config, params_config, images_folder))
     try:
-        pos_halt_point = D.config["dc_pos_limit"]
+        fov_halt_point = D.config["dc_fov_limit"]
     except KeyError:
-        pos_halt_point = sys.maxsize
+        fov_halt_point = sys.maxsize
         update_outfile = lambda fp: fp
     else:
-        update_outfile = lambda fp: fp.with_suffix(f".halt_after_{pos_halt_point}.csv")
+        update_outfile = lambda fp: fp.with_suffix(f".halt_after_{fov_halt_point}.csv")
     all_args = generate_drift_function_arguments__coarse_drift_only(
         full_fov_list=D.full_fov_list, 
         fov_list=D.fov_list, 
@@ -267,7 +269,7 @@ def coarse_correction_workflow(
         moving_channel=D.moving_channel, 
         downsampling=D.downsampling,
         nuclei_mode=False,
-        stop_after=pos_halt_point,
+        stop_after=fov_halt_point,
     )
     print("Computing coarse drifts...")
     n_jobs = max(1, os.cpu_count() // 2) if n_jobs is None else n_jobs
@@ -299,11 +301,12 @@ def fine_correction_workflow(rounds_config: ExtantFile, params_config: ExtantFil
     return outfile
 
 
-def iter_coarse_drifts_by_position(filepath: Union[str, Path, ExtantFile]) -> Iterable[Tuple[str, pd.DataFrame]]:
+def iter_coarse_drifts_by_field_of_view(filepath: Union[str, Path, ExtantFile]) -> Iterable[Tuple[str, pd.DataFrame]]:
     print(f"Reading coarse drift table: {filepath}")
     coarse_table = read_table_pandas(filepath)
-    coarse_table = coarse_table.sort_values([POSITION_COLUMN, TIMEPOINT_COLUMN]) # Sort so that grouping by position then timepoint doesn't alter order.
-    return coarse_table.groupby(POSITION_COLUMN)
+    # Sort so that grouping by FOV then timepoint doesn't alter order.
+    coarse_table = coarse_table.sort_values([FOV_COLUMN, TIMEPOINT_COLUMN])
+    return coarse_table.groupby(FOV_COLUMN)
 
 
 def _get_timepoint_and_coarse(row) -> Tuple[int, Tuple[int, int, int]]:
@@ -325,87 +328,87 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
     """
     roi_px = drifter.bead_roi_px
     beads_exp_shape = (drifter.num_bead_rois_for_drift_correction, 3)
-    pos_time_problems = drifter.image_handler.fov_timepoint_pairs_with_severe_problems
-    for position, position_group in iter_coarse_drifts_by_position(filepath=drifter.dc_file_path__coarse):
-        pos_idx = drifter.full_fov_list.index(position)
-        if not drifter.overwrite and drifter.checkpoint_filepath(pos_idx=pos_idx).is_file():
-            print(f"Fine DC checkpoint exists, skipping FOV: {pos_idx}")
+    fov_time_problems = drifter.image_handler.fov_timepoint_pairs_with_severe_problems
+    for fov, fov_group in iter_coarse_drifts_by_field_of_view(filepath=drifter.dc_file_path__coarse):
+        fov_idx = drifter.full_fov_list.index(fov)
+        if not drifter.overwrite and drifter.checkpoint_filepath(fov_idx=fov_idx).is_file():
+            print(f"Fine DC checkpoint exists, skipping FOV: {fov_idx}")
             continue
-        print(f"Running fine drift correction for position {position} (index {pos_idx})")
-        ref_img = drifter.get_reference_image(pos_idx)
-        get_no_partition_message = lambda t: f"No bead ROIs partition for (pos={pos_idx}, timepoint={t})"
+        print(f"Running fine drift correction for FOV {fov} (index {fov_idx})")
+        ref_img = drifter.get_reference_image(fov_idx)
+        get_no_partition_message = lambda t: f"No bead ROIs partition for (fov={fov_idx}, timepoint={t})"
         
-        bead_rois = drifter.image_handler.read_bead_rois_file_shifting(pos_idx=pos_idx, timepoint=drifter.reference_timepoint)
+        bead_rois = drifter.image_handler.read_bead_rois_file_shifting(fov_idx=fov_idx, timepoint=drifter.reference_timepoint)
         
         if bead_rois.shape != beads_exp_shape:
-            msg_base = f"Unexpected bead ROIs shape for reference (pos={pos_idx}, timepoint={drifter.reference_timepoint})! ({bead_rois.shape}), expecting {beads_exp_shape}"
+            msg_base = f"Unexpected bead ROIs shape for reference (fov={fov_idx}, timepoint={drifter.reference_timepoint})! ({bead_rois.shape}), expecting {beads_exp_shape}"
             if len(bead_rois.shape) == 2 and bead_rois.shape[1] == beads_exp_shape[1]:
                 print(f"WARNING: {msg_base}")
             else:
                 raise Exception(msg_base)
         
-        curr_position_rows = []
+        curr_fov_rows = []
         if drifter.method_name == Methods.FIT_NAME.value:
             print("Computing reference bead fits")
             ref_bead_subimgs = Parallel(n_jobs=-1, prefer='threads')(delayed(extract_single_bead)(pt, ref_img, bead_roi_px=roi_px) for pt in tqdm.tqdm(bead_rois))
             ref_bead_fits = Parallel(n_jobs=-1, prefer='threads')(delayed(fit_bead_coordinates)(rbi) for rbi in tqdm.tqdm(ref_bead_subimgs))
             print("Iterating over timepoints/hybridisations")
             # Exactly 1 row per FOV per timepoint; here, we iterate over timepoints for current FOV.
-            for _, row in position_group.iterrows():
+            for _, row in fov_group.iterrows():
                 # This should be unique now in timepoint, since we're iterating within a single FOV.
                 timepoint, coarse = _get_timepoint_and_coarse(row)
                 print(f"Current timepoint: {timepoint}")
                 
                 # Use current (FOV, time) pair if and only if it has a beads partition defined.
                 try:
-                    _ = drifter.image_handler.get_bead_rois_file(pos_idx=pos_idx, timepoint=timepoint, purpose="shifting")
+                    _ = drifter.image_handler.get_bead_rois_file(fov_idx=fov_idx, timepoint=timepoint, purpose="shifting")
                 except PathWrapperException: # arises iff the file doesn't exist for current (FOV, time), because ExtantFile wrapping fails
                     print(f"WARNING: {get_no_partition_message(timepoint)}")
-                    assert (pos_idx, timepoint) in pos_time_problems, \
-                        f"No bead ROIs for fine DC for (FOV={pos_idx}, time={timepoint}), but no evidence of a problem there"
+                    assert (fov_idx, timepoint) in fov_time_problems, \
+                        f"No bead ROIs for fine DC for (FOV={fov_idx}, time={timepoint}), but no evidence of a problem there"
                     fine = (0.0, 0.0, 0.0)
                 else:
-                    mov_img = drifter.get_moving_image(pos_idx=pos_idx, timepoint_idx=timepoint)
-                    print(f"Computing fine drifts: ({position}, {timepoint})")
+                    mov_img = drifter.get_moving_image(fov_idx=fov_idx, timepoint_idx=timepoint)
+                    print(f"Computing fine drifts: ({fov}, {timepoint})")
                     mov_bead_subimgs = Parallel(n_jobs=-1, prefer='threads')(delayed(extract_single_bead)(pt, mov_img, bead_roi_px=roi_px, drift_coarse=coarse) for pt in tqdm.tqdm(bead_rois))
                     mov_bead_fits = Parallel(n_jobs=-1, prefer='threads')(delayed(fit_bead_coordinates)(mbi) for mbi in tqdm.tqdm(mov_bead_subimgs))
                     fine_drifts = [subtract_point_fits(ref, mov) for ref, mov in zip(ref_bead_fits, mov_bead_fits)]
                     fine = finalise_fine_drift(fine_drifts)
-                curr_position_rows.append((timepoint, position) + coarse + fine)
+                curr_fov_rows.append((timepoint, fov) + coarse + fine)
         elif drifter.method_name == Methods.CROSS_CORRELATION_NAME.value:
             print("Extracting reference bead images")
             ref_bead_subimgs = [extract_single_bead(point, ref_img, bead_roi_px=roi_px) for point in bead_rois]
             print("Iterating over timepoints/hybridisations")
-            for _, row in position_group.iterrows():
+            for _, row in fov_group.iterrows():
                 # This should be unique now in timepoint, since we're iterating within a single FOV.
                 timepoint, coarse = _get_timepoint_and_coarse(row)
                 print(f"Current timepoint: {timepoint}")
                 
                 # Use current (FOV, time) pair if and only if it has a beads partition defined.
                 try:
-                    _ = drifter.image_handler.get_bead_rois_file(pos_idx=pos_idx, timepoint=timepoint, purpose="shifting")
+                    _ = drifter.image_handler.get_bead_rois_file(fov_idx=fov_idx, timepoint=timepoint, purpose="shifting")
                 except PathWrapperException: # Current (FOV, time) pair doesn't have a beads partition defined.
                     print(f"WARNING: {get_no_partition_message(timepoint)}")
-                    assert (pos_idx, timepoint) in pos_time_problems, \
-                        f"No bead ROIs for fine DC for (FOV={pos_idx}, time={timepoint}), but no evidence of a problem there"
+                    assert (fov_idx, timepoint) in fov_time_problems, \
+                        f"No bead ROIs for fine DC for (FOV={fov_idx}, time={timepoint}), but no evidence of a problem there"
                     fine = (0.0, 0.0, 0.0)
                 else:
-                    mov_img = drifter.get_moving_image(pos_idx=pos_idx, timepoint_idx=timepoint)
-                    print(f"Computing fine drifts: ({position}, {timepoint})")
+                    mov_img = drifter.get_moving_image(fov_idx=fov_idx, timepoint_idx=timepoint)
+                    print(f"Computing fine drifts: ({fov}, {timepoint})")
                     fine_drifts = Parallel(n_jobs=-1, prefer='threads')(
                         delayed(lambda point, ref_bead_img: correlate_single_bead(ref_bead_img, extract_single_bead(point, mov_img, bead_roi_px=roi_px, drift_coarse=coarse), 100))(*args)
                         for args in tqdm.tqdm(zip(bead_rois, ref_bead_subimgs))
                         )
                     fine = finalise_fine_drift(fine_drifts)
-                curr_position_rows.append((timepoint, position) + coarse + fine)
+                curr_fov_rows.append((timepoint, fov) + coarse + fine)
         else:
             raise Exception(f"Unknown drift correction method: {drifter.method_name}")
         
         drifter.fine_correction_subfolder.mkdir(exist_ok=True)
-        curr_position_temp = drifter.fine_correction_tempfile(pos_idx=pos_idx)
-        print(f"Writing drift correction tempfile for FOV {pos_idx}: {curr_position_temp}")
-        pd.DataFrame(curr_position_rows).to_csv(curr_position_temp, index=False)
-        checkpoint_file = drifter.fine_correction_subfolder / f"{pos_idx}.checkpoint"
+        curr_fov_temp = drifter.fine_correction_tempfile(fov_idx=fov_idx)
+        print(f"Writing drift correction tempfile for FOV {fov_idx}: {curr_fov_temp}")
+        pd.DataFrame(curr_fov_rows).to_csv(curr_fov_temp, index=False)
+        checkpoint_file = drifter.fine_correction_subfolder / f"{fov_idx}.checkpoint"
         print(f"Touching checkpoint: {checkpoint_file}")
         with open(checkpoint_file, 'w'): # Just create the empty file.
             pass
@@ -451,11 +454,11 @@ class Drifter():
             )
 
     @staticmethod
-    def _checkpoint_filename(pos_idx: int) -> str:
-        return f"{pos_idx}.checkpoint"
+    def _checkpoint_filename(fov_idx: int) -> str:
+        return f"{fov_idx}.checkpoint"
 
-    def checkpoint_filepath(self, pos_idx: int) -> Path:
-        return self.fine_correction_subfolder / self._checkpoint_filename(pos_idx)
+    def checkpoint_filepath(self, fov_idx: int) -> Path:
+        return self.fine_correction_subfolder / self._checkpoint_filename(fov_idx)
 
     @property
     def dc_file_path__coarse(self) -> Path:
@@ -473,8 +476,8 @@ class Drifter():
     def fine_correction_subfolder(self) -> Path:
         return Path(self.image_handler.analysis_path) / "fine_drift_temp"
 
-    def fine_correction_tempfile(self, pos_idx: int) -> Path:
-        return self.fine_correction_subfolder / f"{pos_idx}.dc_fine.tmp.csv"
+    def fine_correction_tempfile(self, fov_idx: int) -> Path:
+        return self.fine_correction_subfolder / f"{fov_idx}.dc_fine.tmp.csv"
 
     @property
     def full_fov_list(self) -> List[str]:
@@ -505,7 +508,7 @@ class Drifter():
         return self.image_handler.num_bead_rois_for_drift_correction
 
     @property
-    def num_positions(self) -> int:
+    def num_fov(self) -> int:
         return len(self.full_fov_list)
 
     @property
@@ -534,24 +537,24 @@ class Drifter():
     def reference_timepoint(self) -> int:
         return self.image_handler.drift_correction_reference_timepoint
 
-    def get_moving_image(self, pos_idx: int, timepoint_idx: int) -> np.ndarray:
-        return np.array(self.images_moving[pos_idx][timepoint_idx, self.moving_channel])
+    def get_moving_image(self, fov_idx: int, timepoint_idx: int) -> np.ndarray:
+        return np.array(self.images_moving[fov_idx][timepoint_idx, self.moving_channel])
 
-    def get_reference_image(self, pos_idx: int) -> np.ndarray:
-        return np.array(self.images_template[pos_idx][self.reference_timepoint, self.reference_channel])
+    def get_reference_image(self, fov_idx: int) -> np.ndarray:
+        return np.array(self.images_template[fov_idx][self.reference_timepoint, self.reference_channel])
 
-    def gen_dc_images(self, pos):
+    def gen_dc_images(self, fov):
         '''
         Makes internal coursly drift corrected images based on precalculated drift
         correction (see Drifter class for details).
         '''
         n_t = self.images[0].shape[0]
-        pos_index = self.fov_list.index(pos)
-        pos_img = []
+        fov_index = self.fov_list.index(fov)
+        fov_img = []
         for t in range(n_t):
-            shift = tuple(self.drift_table.query('position == @pos').iloc[t][["zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels"]])
-            pos_img.append(da.roll(self.images[pos_index][t], shift = shift, axis = (1,2,3)))
-        self.dc_images = da.stack(pos_img)
+            shift = tuple(self.drift_table.query('fieldOfView == @fov').iloc[t][["zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels"]])
+            fov_img.append(da.roll(self.images[fov_index][t], shift = shift, axis = (1,2,3)))
+        self.dc_images = da.stack(fov_img)
 
         print('DC images generated.')
 
@@ -568,15 +571,15 @@ class Drifter():
             os.mkdir(self.maxz_dc_folder)
         '''
 
-        for pos in tqdm.tqdm(self.fov_list):
-            pos_index = self.full_fov_list.index(pos)
-            pos_img = self.images_moving[pos_index]
-            proj_img = da.max(pos_img, axis=2)
+        for fov in tqdm.tqdm(self.fov_list):
+            fov_index = self.full_fov_list.index(fov)
+            fov_img = self.images_moving[fov_index]
+            proj_img = da.max(fov_img, axis=2)
             zarr_out_path = os.path.join(self.image_handler.image_save_path, self.image_handler.reg_input_moving + '_max_proj_dc')
             z = image_io.create_zarr_store(
                 path=zarr_out_path,
                 name = self.image_handler.reg_input_moving + '_max_proj_dc', 
-                pos_name = pos,
+                fov_name = fov,
                 shape = proj_img.shape, 
                 dtype = np.uint16,  
                 chunks = (1,1,proj_img.shape[-2], proj_img.shape[-1]),
@@ -585,7 +588,7 @@ class Drifter():
             n_t = proj_img.shape[0]
             
             for t in tqdm.tqdm(range(n_t)):
-                shift = self.image_handler.tables[self.image_handler.reg_input_moving + '_drift_correction'].query('position == @pos').iloc[t][["yDriftCoarsePixels", "xDriftCoarsePixels", 'yDriftFinePixels', 'xDriftFinePixels']]
+                shift = self.image_handler.tables[self.image_handler.reg_input_moving + '_drift_correction'].query('fieldOfView == @fov').iloc[t][["yDriftCoarsePixels", "xDriftCoarsePixels", 'yDriftFinePixels', 'xDriftFinePixels']]
                 shift = (shift[0]+shift[2], shift[1]+shift[3])
                 z[t] = ndi.shift(proj_img[t].compute(), shift=(0,)+shift, order = 2)
         
@@ -604,23 +607,23 @@ class Drifter():
             os.mkdir(self.maxz_dc_folder)
         '''
 
-        for pos in tqdm.tqdm(self.fov_list):
-            pos_index = self.image_handler.image_lists['seq_images'].index(pos)
-            pos_img = self.images[pos_index]
-            #proj_img = da.max(pos_img, axis=2)
+        for fov in tqdm.tqdm(self.fov_list):
+            fov_index = self.image_handler.image_lists["seq_images"].index(fov)
+            fov_img = self.images[fov_index]
+            #proj_img = da.max(fov_img, axis=2)
             zarr_out_path = os.path.join(self.image_handler.image_save_path, self.image_handler.reg_input_moving + '_coarse_dc')
             z = image_io.create_zarr_store(path=zarr_out_path,
                                             name = self.image_handler.reg_input_moving + '_dc_images', 
-                                            pos_name = pos,
-                                            shape = pos_img.shape, 
+                                            fov_name = fov,
+                                            shape = fov_img.shape, 
                                             dtype = np.uint16,  
-                                            chunks = (1,1,1,pos_img.shape[-2], pos_img.shape[-1]))
+                                            chunks = (1,1,1,fov_img.shape[-2], fov_img.shape[-1]))
 
-            n_t = pos_img.shape[0]
+            n_t = fov_img.shape[0]
             
             for t in tqdm.tqdm(range(n_t)):
-                shift = self.image_handler.tables[self.image_handler.reg_input_moving + '_drift_correction'].query('position == @pos').iloc[t][["zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels"]]
+                shift = self.image_handler.tables[self.image_handler.reg_input_moving + '_drift_correction'].query('fieldOfView == @fov').iloc[t][["zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels"]]
                 shift = (shift[0], shift[1], shift[2])
-                z[t] = ndi.shift(pos_img[t].compute(), shift=(0,)+shift, order = 0)
+                z[t] = ndi.shift(fov_img[t].compute(), shift=(0,)+shift, order = 0)
         
-        print('DC images generated.')
+        print("Drift-corrected images generated.")

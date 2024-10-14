@@ -30,8 +30,8 @@ addProbeNames <- function(spots_table, probe_names) {
 
 # Create the heatmap for the given counts data (1 count per (FOV, time) pair).
 buildCountsHeatmap <- function(spots_table) {
-    counts_table <- spots_table[, .(count = .N), by = list(position, timepoint_name)]
-    ggplot(counts_table, aes(x = timepoint_name, y = position, fill = count)) + 
+    counts_table <- spots_table[, .(count = .N), by = list(fieldOfView, timepoint_name)]
+    ggplot(counts_table, aes(x = timepoint_name, y = fieldOfView, fill = count)) + 
         geom_tile() + 
         xlab("probe") + 
         theme_bw()

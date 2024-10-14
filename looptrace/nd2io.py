@@ -11,14 +11,14 @@ import dask.array as da
 import nd2
 import tqdm
 
-from looptrace.image_io import parse_positions_from_text, parse_times_from_text
+from looptrace.image_io import parse_fields_of_view_from_text, parse_times_from_text
 from looptrace.integer_naming import get_fov_names_N
 
 __author__ = "Vince Reuter"
 __all__ = [
     "EmptyImagesError", 
     "Nd2FileError", 
-    "PositionTimeFilenameKeyError", 
+    "FieldOfViewTimeFilenameKeyError", 
     "key_image_file_names_by_point_and_time", 
     "parse_nd2_metadata", 
     "stack_nd2_to_dask",
@@ -33,8 +33,8 @@ class Nd2FileError(Exception):
     """Exception subtype for when there's a problem reading a ND2 file"""
 
 
-class PositionTimeFilenameKeyError(Exception):
-    """Exception subtype for when position and time are identical for multiple images in same subfolder"""
+class FieldOfViewTimeFilenameKeyError(Exception):
+    """Exception subtype for when FOV and time are identical for multiple images in same subfolder"""
 
 
 def key_image_file_names_by_point_and_time(image_files: Iterable[Union[str, Path]]) -> Mapping[str, Mapping[str, str]]:
@@ -43,7 +43,7 @@ def key_image_file_names_by_point_and_time(image_files: Iterable[Union[str, Path
     collisions = defaultdict(list)
     for f in image_files:
         fn = f if isinstance(f, str) else str(f)
-        pos_hits = parse_positions_from_text(fn)
+        pos_hits = parse_fields_of_view_from_text(fn)
         time_hits = parse_times_from_text(fn)
         if len(time_hits) != 1 or len(pos_hits) != 1:
             bad_names[fn] = (pos_hits, time_hits)
@@ -54,8 +54,8 @@ def key_image_file_names_by_point_and_time(image_files: Iterable[Union[str, Path
             continue
         keyed[k] = fn
     if bad_names or collisions:
-        raise PositionTimeFilenameKeyError(
-            f"Cannot uniquely key images on (position, time). bad_names = {bad_names}. collisions = {collisions}"
+        raise FieldOfViewTimeFilenameKeyError(
+            f"Cannot uniquely key images on (FOV, time). bad_names = {bad_names}. collisions = {collisions}"
             )
     result = defaultdict(dict)
     for (p, t), f in keyed.items():
@@ -86,30 +86,31 @@ def parse_nd2_metadata(image_file: str) -> Mapping[str, Any]:
     return metadata
 
 
-def stack_nd2_to_dask(folder: str, position_id: int = None):
-    '''The function takes a folder path and returns a list of dask arrays and a 
-    list of image folders by reading multiple nd2 images where each represents a 3D stack (split by position and time) in a single folder.
+def stack_nd2_to_dask(folder: str, fov_index: Optional[int] = None):
+    """
+    The function takes a folder path and returns a list of dask arrays and a 
+    list of image folders by reading multiple nd2 images where each represents a 3D stack (split by FOV and time) in a single folder.
     Extracts some useful metadata from the first file in the folder.
     Args:
         folder (str): Input folder path
 
     Returns:
         list: list of dask arrays of the images
-        list: names of positions
+        list: names of fields of view
         dict: metadata dictionary
-    '''
+    """
     image_files = sorted([p.path for p in os.scandir(folder) if (p.name.endswith('.nd2') and not p.name.startswith('_'))])
     
     keyed_images_folders = key_image_file_names_by_point_and_time(image_files)
     pos_names = get_fov_names_N(len(keyed_images_folders))
 
-    if position_id is not None:
+    if fov_index is not None:
         # Allow caller to specify single FOV to use, and select it here.
         try:
-            keyed_images_folders = dict([list(sorted(keyed_images_folders.items(), key=itemgetter(0)))[position_id]])
-            pos_names = [pos_names[position_id]]
+            keyed_images_folders = dict([list(sorted(keyed_images_folders.items(), key=itemgetter(0)))[fov_index]])
+            pos_names = [pos_names[fov_index]]
         except IndexError as e:
-            raise IndexError(f"{len(pos_names)} position name(s) available, but tried to select index {position_id}") from e
+            raise IndexError(f"{len(pos_names)} FOV name(s) available, but tried to select index {fov_index}") from e
 
     try:
         sample_file = next(itertools.chain(*[by_time.values() for by_time in keyed_images_folders.values()]))
