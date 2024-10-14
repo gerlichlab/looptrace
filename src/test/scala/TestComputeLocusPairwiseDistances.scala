@@ -159,7 +159,10 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
                 }
                 alt.map(a => { (_: List[String]).updated(idx, a.show) })
             }
-            def genBadPosition: Gen[Mutate] = genMutate(Input.FieldOfViewColumn, Gen.oneOf(Gen.alphaStr, arbitrary[Double]))
+            def genBadPosition: Gen[Mutate] = 
+                given Show[Int | Double] = Show.show(_.toString)
+                // PositionName (for field of view) must not be numeric.
+                genMutate(Input.FieldOfViewColumn, Gen.oneOf(arbitrary[Int], arbitrary[Double]))
             def genBadTrace: Gen[Mutate] = genMutate(Input.TraceIdColumn, Gen.oneOf(Gen.alphaStr, arbitrary[Double]))
             // NB: Skipping bad region b/c so long as it's String-ly typed, there's no way to generate a bad value.
             def genBadLocus: Gen[Mutate] = genMutate(Input.LocusSpecificBarcodeTimepointColumn, Gen.oneOf(Gen.alphaStr, arbitrary[Double]))
@@ -185,7 +188,14 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
                 writeMinimalInputCsv(infile, AllRequiredColumns :: textRecords.toList)
                 os.isFile(infile) shouldBe true
                 val error = intercept[Input.BadRecordsException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
-                error.records.map(_.lineNumber) shouldEqual expBadRows
+                val obsBadRows = error.records.map(_.lineNumber)
+                val missingBadRows: Set[Int] = expBadRows.toList.toSet -- obsBadRows.toList.toSet
+                val extraBadRows: Set[Int] = obsBadRows.toList.toSet -- expBadRows.toList.toSet
+                if missingBadRows.nonEmpty
+                then fail(s"${missingBadRows.size} row(s) expected bad but not: ${textRecords.zipWithIndex.filter((_, i) => missingBadRows.contains(i))}")
+                else if extraBadRows.nonEmpty
+                then fail(s"${extraBadRows.size} row(s) unexpectedly bad: ${textRecords.zipWithIndex.filter((_, i) => extraBadRows.contains(i))}")
+                else succeed
             }
         }
     }
@@ -264,10 +274,13 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
             ((0, 1, 2), (0, 0, 2), (0, 2, 2), (0, 3, 2)) -> List(), // All equal on 1st and 3rd elements, but not 2nd
             ((0, 1, 2), (1, 1, 2), (0, 2, 2), (2, 2, 2)) -> List(), // Mixed similarities
         )*)
+
+        val fovIndexToName: Int => PositionName = z => PositionName.unsafe(s"P000${z}.zarr")
+
         forAll (inputTable) { case ((k1, k2, k3, k4), simplifiedExpectation) => 
             val records = NonnegativeInt.indexed(List(k1 -> pt1, k2 -> pt2, k3 -> pt3, k4 -> pt4)).map{ 
                 case (((pos, tid, reg), pt), i) => Input.GoodRecord(
-                    PositionName.unsafe(s"P000${pos}.zarr"), 
+                    fovIndexToName(pos),
                     TraceId(NonnegativeInt.unsafe(tid)), 
                     RegionId.unsafe(reg), 
                     LocusId.unsafe(i), 
@@ -280,7 +293,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
                 r.distance.get
             }.toList
             val expectation = simplifiedExpectation.map{ case ((pos, tid, reg, t1, t2), d) => 
-                (FieldOfView.unsafeLift(pos), TraceId.unsafe(tid), RegionId.unsafe(reg), LocusId.unsafe(t1), LocusId.unsafe(t2)) -> 
+                (fovIndexToName(pos), TraceId.unsafe(tid), RegionId.unsafe(reg), LocusId.unsafe(t1), LocusId.unsafe(t2)) -> 
                 NonnegativeReal.unsafe(d)
             }.toList
             // We're indifferent to the order of output records for this test, so check size then convert to maps.
