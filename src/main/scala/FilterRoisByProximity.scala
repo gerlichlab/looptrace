@@ -6,6 +6,7 @@ import cats.*
 import cats.data.*
 import cats.effect.IO
 import cats.effect.unsafe.IORuntime
+import cats.effect.unsafe.implicits.global // needed for cats.effect.IORuntime
 import cats.syntax.all.*
 import fs2.Stream
 import fs2.data.csv.*
@@ -259,6 +260,8 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
                 logger.info(s"Wrote unidentifiable ROIs to file: ${unidentifiablesFile}")
                 logger.info(s"Wrote unidentifiable ROIs to file: ${unidentifiablesFile}")
         )
+
+        program.unsafeRunSync()
 
         logger.info("Done!")
     }
