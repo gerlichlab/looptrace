@@ -246,7 +246,7 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
                     .through(writeCaseClassesToCsv(fileForKeepers))
                     .compile
                     .drain
-                (writeDiscards, writeKeepers).mapN{ (_, _) => fileForDiscards -> fileForKeepers }
+                List(writeDiscards, writeKeepers).sequence.map(_ => fileForDiscards -> fileForKeepers)
 
         val program: IO[Unit] = for {
             rois <- readRois
