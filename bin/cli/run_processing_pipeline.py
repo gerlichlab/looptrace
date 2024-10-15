@@ -89,7 +89,7 @@ def run_spot_proximity_filtration(rounds_config: ExtantFile, params_config: Exta
         "--configuration",
         str(rounds_config.path),
         "--spotsFile",
-        str(H.post_merge_spots_file_path),
+        str(H.spot_merge_results_file),
         "--driftFile", 
         str(H.drift_correction_file__fine),
         "--fileForDiscards",

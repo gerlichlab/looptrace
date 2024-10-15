@@ -132,8 +132,21 @@ object MergeRois extends StrictLogging:
                 logger.info(s"Will read ROIs from file: ${opts.inputFile}")
                 val prog: IO[Unit] = for {
                     rois <- readCsvToCaseClasses[MergerAssessedRoi](opts.inputFile)
-                    (errors, individuals, contributors, merged) = mergeRois(unsafeTakeMaxBoxSize)(rois)
-
+                    (individuals, contributors, merged) = 
+                        mergeRois(unsafeTakeMaxBoxSize)(rois) match {
+                            case (Nil, singletons, contribs, mergers) => 
+                                // No errors, so just keep the other collections.
+                                (singletons, contribs, mergers)
+                            case (es@(e1 :: _), _, _, _) => 
+                                // Nonempty errors, so throw exception.
+                                throw new Exception(
+                                    s"${es.length} error records trying to merge ROIs. First one: ${e1}"
+                                )
+                        }
+                    contributorsFile <- writeUnusable(contributors)
+                    _ <- IO{ logger.info(s"Wrote merge contributors file: ${contributorsFile}") }
+                    resultRoisFile <- writeUsable(individuals, merged)
+                    _ <- IO{ logger.info(s"Wrote post-merge file: ${resultRoisFile}") }
                 } yield ()
                 prog.unsafeRunSync()
                 logger.info("Done!")
