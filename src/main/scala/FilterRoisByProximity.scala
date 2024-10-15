@@ -246,7 +246,10 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
                     .through(writeCaseClassesToCsv(fileForKeepers))
                     .compile
                     .drain
-                List(writeDiscards, writeKeepers).sequence.map(_ => fileForDiscards -> fileForKeepers)
+                for {
+                    _ <- writeDiscards
+                    _ <- writeKeepers
+                } yield (fileForDiscards, fileForKeepers)
 
         val program: IO[Unit] = for {
             rois <- readRois
@@ -258,7 +261,7 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
             errors => throw new Exception(s"${errors.length} error(s). First one: ${errors.head}"), // TODO: throw error.
             (unidentifiablesFile, wellSeparatedsFile) => 
                 logger.info(s"Wrote unidentifiable ROIs to file: ${unidentifiablesFile}")
-                logger.info(s"Wrote unidentifiable ROIs to file: ${unidentifiablesFile}")
+                logger.info(s"Wrote well-separated ROIs to file: ${wellSeparatedsFile}")
         )
 
         program.unsafeRunSync()
