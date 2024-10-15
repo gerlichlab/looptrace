@@ -255,14 +255,16 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
             rois <- readRois
             maybeDrifts <- readKeyedDrifts.map(_.leftMap(msg => new Exception(msg)))
             shiftedRois = maybeDrifts.flatMap(keyedDrifts => applyDrifts(keyedDrifts)(rois)).leftMap(NonEmptyList.one)
-            siftedRois = shiftedRois.map(assessForMutualExclusion(proximityFilterStrategy))
-            maybePaths <- siftedRois.traverse(writeOutputs.tupled)
-        } yield maybePaths.fold(
-            errors => throw new Exception(s"${errors.length} error(s). First one: ${errors.head}"), // TODO: throw error.
-            (unidentifiablesFile, wellSeparatedsFile) => 
-                logger.info(s"Wrote unidentifiable ROIs to file: ${unidentifiablesFile}")
-                logger.info(s"Wrote well-separated ROIs to file: ${wellSeparatedsFile}")
-        )
+            (unidentifiablesFile, wellSeparatedsFile) <- 
+                shiftedRois.map(assessForMutualExclusion(proximityFilterStrategy)) match {
+                    case Left(errors) => 
+                        throw new Exception(s"${errors.length} error(s). First one: ${errors.head}")
+                    case Right((unidentifiables, postMergers)) => 
+                        writeOutputs(unidentifiables, postMergers)
+            }
+            _ <- IO{ logger.info(s"Wrote unidentifiable ROIs to file: ${unidentifiablesFile}") }
+            _ <- IO{ logger.info(s"Wrote well-separated ROIs to file: ${wellSeparatedsFile}") }
+        } yield ()
 
         program.unsafeRunSync()
 
