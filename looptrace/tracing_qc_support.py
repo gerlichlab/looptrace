@@ -6,8 +6,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from looptrace import read_table_pandas
-
 
 REGION_KEY_COLUMNS = ["fieldOfView", "traceId", "ref_timepoint"]
 
@@ -33,7 +31,7 @@ def read_traces_and_apply_timepoint_names(traces_file: Path, timepoint_names: It
     timepoint_names: list[str] = list(timepoint_names)
     print(f"{len(timepoint_names)} timepoint names: {', '.join(timepoint_names)}")
     print(f"Reading traces: {traces_file}")
-    traces = read_table_pandas(traces_file)
+    traces = pd.read_csv(traces_file, index_col=False)
     timepoints = traces["timepoint"]
     print(f"Applying timepoint names to traces...")
     traces["timepoint_name"] = timepoints.apply(lambda t: timepoint_names[t])

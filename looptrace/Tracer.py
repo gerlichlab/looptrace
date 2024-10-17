@@ -86,7 +86,8 @@ class Tracer:
     @property
     def all_rois(self) -> pd.DataFrame:
         # will be concatenated horizontally with fits; idempotent if already effectively unindexed
-        return self.image_handler.tables[self.image_handler.spot_input_name + "_dc_rois"].reset_index(drop=True)
+        return pd.read_csv(self.image_handler.drift_corrected_all_timepoints_rois_file, index_col=False)
+        #return self.image_handler.tables[self.image_handler.spot_input_name + "_dc_rois"].reset_index(drop=True)
 
     @property
     def drift_table(self) -> pd.DataFrame:
@@ -144,7 +145,7 @@ class Tracer:
 
     def write_traces_file(self) -> str:
         logging.info("Reading spot fits file: %s", self.spot_fits_file)
-        spot_fits = pd.read_csv(self.spot_fits_file, index_col=0)
+        spot_fits = pd.read_csv(self.spot_fits_file, index_col=False)
         
         rois_table = self.all_rois
         if self._background_wrapper is None:
