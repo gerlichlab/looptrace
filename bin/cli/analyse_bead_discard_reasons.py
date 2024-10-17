@@ -63,18 +63,18 @@ def workflow(*, root_folder: Path, output_folder: Path, reference_timepoint: Opt
         spec = None if not f.is_file() else BeadRoisFilenameSpecification.from_filepath(f)
         if spec in data_by_spec:
             raise RuntimeError(f"Bead ROIs filename spec parsed multiple times from filepaths in folder {root_folder}: {spec}")
-        if spec is not None:
-            assert spec.purpose is None, f"Non-null purpose for bead ROIs spec: {spec.purpose}"
-            logging.debug("Parsing bead ROIs file %s (%s)...", f, str(spec))
-            data = pd.read_csv(f, index_col=0)
-            total_roi_count += data.shape[0]
-            data[FAIL_CODE_COLUMN_NAME] = data[FAIL_CODE_COLUMN_NAME].fillna("")
-            data_by_spec[spec] = get_count_by_fail_code_and_get_max_min_intensity(
-                data, 
-                min_record_count=AbsoluteMinimumShifting,
-            )
-        else:
+        if spec is None:
             logging.debug("Bead ROIs filename spec not parsed from filepath %s, ignoring", f)
+            continue
+        assert spec.purpose is None, f"Non-null purpose for bead ROIs spec: {spec.purpose}"
+        logging.debug("Parsing bead ROIs file %s (%s)...", f, str(spec))
+        data = pd.read_csv(f, index_col=0)
+        total_roi_count += data.shape[0]
+        data[FAIL_CODE_COLUMN_NAME] = data[FAIL_CODE_COLUMN_NAME].fillna("")
+        data_by_spec[spec] = get_count_by_fail_code_and_get_max_min_intensity(
+            data, 
+            min_record_count=AbsoluteMinimumShifting,
+        )
     logging.info("Read %d bead ROI files...", len(data_by_spec))
     
     # Aggregate the individual data
