@@ -20,9 +20,9 @@ trait DriftCsvInstances:
         decInt.map(DriftComponent.coarse)
 
     given cellDecoderForFineComponent[A <: EuclideanAxis: [A] =>> NotGiven[A =:= EuclideanAxis]](
-        using decInt: CellDecoder[Int]
+        using decDecimal: CellDecoder[Double]
     ): CellDecoder[FineDriftComponent[A]] = 
-        decInt.map(DriftComponent.fine)
+        decDecimal.map(DriftComponent.fine)
     
     given csvRowDecoderForCoarseDrift(using CellDecoder[Int]): CsvRowDecoder[CoarseDrift, String] with
         override def apply(row: RowF[Some, String]): DecoderResult[CoarseDrift] = 
