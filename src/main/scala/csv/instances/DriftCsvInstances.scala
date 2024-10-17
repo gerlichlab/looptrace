@@ -3,6 +3,7 @@ package instances
 
 import scala.util.NotGiven
 import cats.syntax.all.*
+import mouse.boolean.*
 import fs2.data.csv.*
 
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.EuclideanAxis
@@ -14,10 +15,20 @@ import at.ac.oeaw.imba.gerlich.looptrace.drift.*
 trait DriftCsvInstances:
     private trait Buildable
 
-    given cellDecoderForCoarseComponent[A <: EuclideanAxis: [A] =>> NotGiven[A =:= EuclideanAxis]](
-        using decInt: CellDecoder[Int]
+    given cellDecoderForCoarseComponent[A <: EuclideanAxis: [A] =>> NotGiven[A =:= EuclideanAxis]](using 
+        decInt: CellDecoder[Int], 
+        decDecimal: CellDecoder[Double],
     ): CellDecoder[CoarseDriftComponent[A]] = 
-        decInt.map(DriftComponent.coarse)
+        val decimalIsInt = (x: Double) => x.floor.toInt === x.ceil.toInt
+        val decimalIntDecoder: CellDecoder[Int] = new:
+            override def apply(cell: String): DecoderResult[Int] = 
+                decDecimal(cell) >>= { (x: Double) => 
+                    decimalIsInt(x).either(
+                        DecoderError(s"Unable to decode '$cell' as integer"), 
+                        x.toInt
+                    ) 
+                }
+        decInt.orElse(decimalIntDecoder).map(DriftComponent.coarse)
 
     given cellDecoderForFineComponent[A <: EuclideanAxis: [A] =>> NotGiven[A =:= EuclideanAxis]](
         using decDecimal: CellDecoder[Double]
