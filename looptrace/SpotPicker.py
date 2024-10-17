@@ -515,16 +515,11 @@ class SpotPicker:
 
         spotfile = self.image_handler.nuclei_filtered_spots_file_path if self.spot_in_nuc \
             else self.image_handler.proximity_accepted_spots_file_path
-        key_rois_table, _ = os.path.splitext(spotfile.name)
-        key_rois_table = key_rois_table\
-            .removeprefix(self.analysis_filename_prefix)\
-            .removeprefix(os.path.expanduser(os.path.expandvars(self.analysis_filename_prefix)))
-        
-        try:
-            rois_table = self.image_handler.tables[key_rois_table]
-        except KeyError as e:
-            raise MissingRoisTableException(key_rois_table) from e
-        
+
+        print(f"Reading spots table: {spotfile}")
+        # Set index_col=False so that first column (fieldOfView) doesn't become index.
+        rois_table: pd.DataFrame = pd.read_csv(spotfile, index_col=False)
+
         get_fov_idx = lambda fov: self.image_handler.image_lists[self.input_name].index(fov)
         get_locus_timepoints = None if not self.image_handler.locus_grouping else self.image_handler.get_locus_timepoints_for_regional_timepoint
         get_zyx = lambda fov_idx, ch: self.images[fov_idx][0, ch].shape[-3:]
@@ -628,7 +623,8 @@ class SpotPicker:
 
     @property
     def spot_image_volume_extraction_table(self) -> pd.DataFrame:
-        return self.image_handler.tables[self.input_name + '_dc_rois']
+        return pd.read_csv(self.image_handler.drift_corrected_all_timepoints_rois_file, index_col=False)
+        #return self.image_handler.tables[self.input_name + '_dc_rois']
 
     def gen_roi_imgs_inmem(self) -> str:
         # Load full stacks into memory to extract spots.
