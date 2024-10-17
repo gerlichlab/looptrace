@@ -127,7 +127,7 @@ def generate_all_bead_rois_from_getter(
     def proc1(img: np.ndarray, outfile: Path) -> Tuple[Path, pd.DataFrame]:
         rois = params.compute_labeled_regions(img=img)
         print(f"Writing ROIs: {outfile}")
-        rois.to_csv(outfile)
+        rois.to_csv(outfile) # This call generates each bead_rois__<FOV>_<TIME>.csv file.
         return outfile, rois
     
     return Parallel(**joblib_kwargs)(

@@ -33,6 +33,7 @@ REGIONAL_TIME_7 = 35
 REGIONAL_TIME_8 = 36
 
 
+# NB: here we have the first column name empty, so read with an ordinary pd.read_csv() call (without index_col=False).
 REGIONAL_SPOT_LINES = f""",fieldOfView,timepoint,spotChannel,zc,yc,xc,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax
 0,{FOV_NAME},{REGIONAL_TIME_1},0,18.177805530982404,445.45646697850475,607.9657421380375,160.33961681087763,12.177805530982404,24.177805530982404,433.45646697850475,457.45646697850475,595.9657421380375,619.9657421380375
 1,{FOV_NAME},{REGIONAL_TIME_1},0,17.83959674876146,1006.0753359579252,306.5263466292306,160.1254275940707,11.839596748761458,23.83959674876146,994.0753359579252,1018.0753359579252,294.5263466292306,318.5263466292306
@@ -56,6 +57,7 @@ REGIONAL_SPOT_LINES = f""",fieldOfView,timepoint,spotChannel,zc,yc,xc,intensityM
 """.splitlines(keepends=True)
 
 
+# NB: here we have the first column name empty, so read with an ordinary pd.read_csv() call (without index_col=False).
 DRIFT_CORRECTION_LINES = f""",timepoint,fieldOfView,zDriftCoarsePixels,yDriftCoarsePixels,xDriftCoarsePixels,zDriftFinePixels,yDriftFinePixels,xDriftFinePixels
 0,0,{FOV_NAME},0.0,6.0,-8.0,-0.5830231542670684,-0.531531046456028,0.8461834758622996
 1,1,{FOV_NAME},0.0,6.0,-2.0,-0.3410879696406834,-0.4880472193110993,-0.106246765430774
@@ -171,6 +173,7 @@ def test_only_region_timepoints_and_their_locus_timepoints_have_records_in_spot_
     # First, construct the drift correction table...
     drift_file = tmp_path / "drift.csv"
     with drift_file.open(mode="w") as fh:
+        # NB: here we have the first column name empty, so read with an ordinary pd.read_csv() call (without index_col=False).
         for drift_line in DRIFT_CORRECTION_LINES:
             fh.write(drift_line)
     drift_table: pd.DataFrame = pd.read_csv(drift_file, index_col=0)
@@ -180,6 +183,7 @@ def test_only_region_timepoints_and_their_locus_timepoints_have_records_in_spot_
     # ...then, construct the regional spots table...
     rois_file = tmp_path / "rois.csv"
     with rois_file.open(mode="w") as fh:
+        # NB: here we have the first column name empty, so read with an ordinary pd.read_csv() call (without index_col=False).
         for roi_line in REGIONAL_SPOT_LINES:
             fh.write(roi_line)
     rois_table: pd.DataFrame = pd.read_csv(rois_file, index_col=0)
