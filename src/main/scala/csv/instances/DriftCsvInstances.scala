@@ -58,7 +58,7 @@ trait DriftCsvInstances:
             val fovNel = parseFromRow[FieldOfViewLike]("Error(s) reading field of view from CSV row")(row)
             val timeNel = parseFromRow[ImagingTimepoint]("Error(s) reading timepoint from CSV row")(row)
             val coarseDriftNel = parseFromRow[CoarseDrift]("Error(s) reading coarse drift from CSV row")(row)
-            val fineDriftNel = parseFromRow[FineDrift]("Error(s) reading coarse drift from CSV row")(row)
+            val fineDriftNel = parseFromRow[FineDrift]("Error(s) reading fine drift from CSV row")(row)
             (fovNel, timeNel, coarseDriftNel, fineDriftNel).mapN{ (fov, time, coarseDrift, fineDrift) =>  
                 DriftRecord(fov, time, coarseDrift, fineDrift)
             }
