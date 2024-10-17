@@ -41,7 +41,7 @@ object ColumnNames:
         ColumnName("tooCloseRois")
 
     private def coarseDriftColumnName[A <: EuclideanAxis](a: A): ColumnName[CoarseDriftComponent[A]] = 
-        val coarseDriftColumnSuffix: String = "CoarseDriftPixels"
+        val coarseDriftColumnSuffix: String = "DriftCoarsePixels"
         ColumnName(a match {
             case EuclideanAxis.X => "x" ++ coarseDriftColumnSuffix
             case EuclideanAxis.Y => "y" ++ coarseDriftColumnSuffix
@@ -49,7 +49,7 @@ object ColumnNames:
         })
 
     def fineDriftColumnName[A <: EuclideanAxis](a: A): ColumnName[FineDriftComponent[A]] = 
-        val fineDriftColumnSuffix: String = "FineDriftPixels"
+        val fineDriftColumnSuffix: String = "DriftFinePixels"
         ColumnName(a match {
             case EuclideanAxis.X => "x" ++ fineDriftColumnSuffix
             case EuclideanAxis.Y => "y" ++ fineDriftColumnSuffix
