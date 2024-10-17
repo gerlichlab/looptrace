@@ -50,7 +50,6 @@ import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
 import at.ac.oeaw.imba.gerlich.looptrace.collections.*
 import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.{
-    MergeRoisColumnName,
     RoiIndexColumnName,
 }
 import at.ac.oeaw.imba.gerlich.looptrace.csv.getCsvRowDecoderForImagingChannel
@@ -59,7 +58,6 @@ import at.ac.oeaw.imba.gerlich.looptrace.drift.*
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.roi.{
     AdmitsRoiIndex,
-    DetectedSpotRoi,
     MergedRoiRecord,
 }
 import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.{
