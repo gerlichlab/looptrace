@@ -20,19 +20,14 @@ private[looptrace] final case class MergedRoiRecord(
 /** Helpers for working with merged ROI records */
 private[looptrace] object MergedRoiRecord:
     /** Alternate constructor based on adding an index and contributor indices to a detected spot ROI */
-    def apply(index: RoiIndex, roi: DetectedSpotRoi, contributors: NonEmptySet[RoiIndex]): MergedRoiRecord = 
+    def apply(spot: IndexedDetectedSpot, contributors: NonEmptySet[RoiIndex]): MergedRoiRecord = 
         new MergedRoiRecord(
-            index, 
-            roi.context, 
-            roi.centroid, 
-            roi.box, 
+            spot.index, 
+            spot.context, 
+            spot.centroid, 
+            spot.box, 
             contributors
         )
-
-    /** Alternate constructor based on adding merge contributor indices to the indexed spot ROI */
-    def apply(idxRoi: IndexedDetectedSpot, contributors: NonEmptySet[RoiIndex]): MergedRoiRecord = 
-        val (idx, roi) = idxRoi
-        apply(idx, roi, contributors)
 
     given AdmitsRoiIndex[MergedRoiRecord] = AdmitsRoiIndex.instance(_.index)
 

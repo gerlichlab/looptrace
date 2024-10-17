@@ -7,7 +7,7 @@ import org.scalacheck.{ Arbitrary, Gen }
 import org.scalacheck.Arbitrary.arbitrary
 
 import at.ac.oeaw.imba.gerlich.gerlib.cell.NuclearDesignation
-import at.ac.oeaw.imba.gerlich.gerlib.geometry.{BoundingBox, EuclideanDistance}
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.{BoundingBox, Centroid, EuclideanDistance}
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
@@ -84,8 +84,11 @@ trait LooptraceSuite extends GenericSuite, GeometricInstances, ImagingInstances,
 
     given arbitraryForIndexedDetectedSpot(using 
         arbIndex: Arbitrary[RoiIndex],
-        arbRoi: Arbitrary[DetectedSpotRoi],
-    ): Arbitrary[IndexedDetectedSpot] = (arbIndex, arbRoi).tupled
+        arbContext: Arbitrary[ImagingContext], 
+        arbCentroid: Arbitrary[Centroid[Double]], 
+        arbBox: Arbitrary[BB], 
+    ): Arbitrary[IndexedDetectedSpot] = 
+        (arbIndex, arbContext, arbCentroid, arbBox).mapN(IndexedDetectedSpot.apply)
 
     // TODO: use this to reconstruct proximity-based filtration tests.
     given arbitraryForPostMergeRoi(using 

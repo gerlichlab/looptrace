@@ -13,34 +13,33 @@ import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingContext
 import at.ac.oewa.imba.gerlich.looptrace.RowIndexAdmission
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
+import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.IndexedDetectedSpot
+import at.ac.oeaw.imba.gerlich.looptrace.space.BoundingBox
 
 /** A ROI already assessed for nuclear attribution and proximity to other ROIs */
 final case class MergerAssessedRoi private(
-    index: RoiIndex, 
-    roi: DetectedSpotRoi, 
+    spot: IndexedDetectedSpot, 
     mergeNeighbors: Set[RoiIndex],
 ):
-    def centroid: Centroid[Double] = roi.centroid
-    def context: ImagingContext = roi.context
+    def box: BoundingBox = spot.box
+    def centroid: Centroid[Double] = spot.centroid
+    def context: ImagingContext = spot.context
+    def index: RoiIndex = spot.index
 
 /** Tools for working with ROIs already assessed for nuclear attribution and proximity to other ROIs */
 object MergerAssessedRoi:
 
     def build(
-        index: RoiIndex, 
-        roi: DetectedSpotRoi, 
+        spot: IndexedDetectedSpot, 
         merge: Set[RoiIndex],
     ): Either[String, MergerAssessedRoi] = 
-        merge.excludes(index).either(
-            s"An ROI cannot be merged with itself (index ${index.show_})",
-            singleton(index, roi).copy(mergeNeighbors = merge)
+        merge.excludes(spot.index).either(
+            s"An ROI cannot be merged with itself (index ${spot.index.show_})",
+            singleton(spot).copy(mergeNeighbors = merge)
         )
 
-    def singleton(
-        index: RoiIndex, 
-        roi: DetectedSpotRoi, 
-    ): MergerAssessedRoi = 
-        new MergerAssessedRoi(index, roi, Set())
+    def singleton(spot: IndexedDetectedSpot): MergerAssessedRoi = 
+        new MergerAssessedRoi(spot, Set())
 
     given RowIndexAdmission[MergerAssessedRoi, Id] = 
         RowIndexAdmission.intoIdentity(_.index.get)

@@ -24,6 +24,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.geometry.BoundingBox
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.Centroid
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.SpotChannelColumnName
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{
     getCsvRowEncoderForProduct2,
     readCsvToCaseClasses, 
@@ -38,11 +39,13 @@ import at.ac.oeaw.imba.gerlich.gerlib.roi.DetectedSpot
 import at.ac.oeaw.imba.gerlich.gerlib.roi.measurement.{ Area, MeanIntensity }
 import at.ac.oeaw.imba.gerlich.gerlib.testing.instances.all.given
 
+import at.ac.oeaw.imba.gerlich.looptrace.csv.getCsvRowDecoderForImagingChannel
 import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.roi.{
     DetectedSpotRoi,
     MergerAssessedRoi,
 }
+import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.IndexedDetectedSpot
 import at.ac.oeaw.imba.gerlich.looptrace.space.{BoundingBox as BB, *}
 
 /**
@@ -190,7 +193,14 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
                 val xBounds = XCoordinate(859.9833511648726) -> XCoordinate(883.9833511648726)
                 val yBounds = YCoordinate(219.9874778925304) -> YCoordinate(243.9874778925304)
                 val zBounds = ZCoordinate(-2.092371012467521) -> ZCoordinate(9.90762898753248)
-                val spot = DetectedSpot(
+                val box = BoundingBox(
+                    BoundingBox.Interval.unsafeFromTuple(xBounds), 
+                    BoundingBox.Interval.unsafeFromTuple(yBounds), 
+                    BoundingBox.Interval.unsafeFromTuple(zBounds),
+                )
+                
+                val spot = IndexedDetectedSpot(
+                    RoiIndex(0), 
                     ImagingContext(
                         pos,
                         ImagingTimepoint(79),
@@ -203,18 +213,13 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
                             ZCoordinate(3.907628987532479),
                         ), 
                     ),
-                    Area(240.00390423),
-                    MeanIntensity(118.26726920593931),
-                )
-                val box = BoundingBox(
-                    BoundingBox.Interval.unsafeFromTuple(xBounds), 
-                    BoundingBox.Interval.unsafeFromTuple(yBounds), 
-                    BoundingBox.Interval.unsafeFromTuple(zBounds),
+                    box,
+                    // Area(240.00390423),
+                    // MeanIntensity(118.26726920593931),
                 )
                 MergerAssessedRoi.build(
-                    RoiIndex(0), 
-                    DetectedSpotRoi(spot, box), 
-                    merge = Set(10).map(RoiIndex.unsafe),
+                    spot,
+                    Set(10).map(RoiIndex.unsafe),
                 )
                 .fold(errors => throw new Exception(s"${errors.length} error(s) building ROI example."), identity)
             }
@@ -223,7 +228,13 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
                 val xBounds = XCoordinate(1348.0069098862991) -> XCoordinate(1372.0069098862991)
                 val yBounds = YCoordinate(12.042015416774795) -> YCoordinate(36.042015416774795)
                 val zBounds = ZCoordinate(11.994259347453493) -> ZCoordinate(23.994259347453493)
-                val spot = DetectedSpot(
+                val box = BoundingBox(
+                    BoundingBox.Interval.unsafeFromTuple(xBounds), 
+                    BoundingBox.Interval.unsafeFromTuple(yBounds), 
+                    BoundingBox.Interval.unsafeFromTuple(zBounds),
+                )
+                val spot = IndexedDetectedSpot(
+                    RoiIndex(1), 
                     ImagingContext(
                         pos,
                         ImagingTimepoint(80),
@@ -236,18 +247,13 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
                             ZCoordinate(17.994259347453493),
                         ), 
                     ),
-                    Area(213.58943029032),
-                    MeanIntensity(117.13946884917321),
-                )
-                val box = BoundingBox(
-                    BoundingBox.Interval.unsafeFromTuple(xBounds), 
-                    BoundingBox.Interval.unsafeFromTuple(yBounds), 
-                    BoundingBox.Interval.unsafeFromTuple(zBounds),
+                    box, 
+                    // Area(213.58943029032),
+                    // MeanIntensity(117.13946884917321),
                 )
                 MergerAssessedRoi.build(
-                    RoiIndex(1), 
-                    DetectedSpotRoi(spot, box), 
-                    merge = Set(7, 8).map(RoiIndex.unsafe),
+                    spot,
+                    Set(7, 8).map(RoiIndex.unsafe),
                 ).fold(errors => throw new Exception(s"${errors.length} error(s) building ROI example."), identity)
             }
 
@@ -255,9 +261,11 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
         }
         
         withTempFile(linesToWrite, Delimiter.CommaSeparator){ roisFile =>
-            val observedRecords: List[MergerAssessedRoi] = unsafeRead(roisFile)
+            val observedRecords: List[MergerAssessedRoi] = 
+                given CsvRowDecoder[ImagingChannel, String] = getCsvRowDecoderForImagingChannel(SpotChannelColumnName)
+                unsafeRead(roisFile)
             observedRecords.length shouldEqual expectedRecords.length // quick, simplifying check
-            observedRecords.map(_.roi.spot) shouldEqual expectedRecords.map(_.roi.spot)
+            observedRecords.map(_.spot) shouldEqual expectedRecords.map(_.spot)
             observedRecords shouldEqual expectedRecords // full check
         }
     }
@@ -270,17 +278,19 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
                 forMergeRaw <- Gen.listOf(Arbitrary.arbitrary[RoiIndex])
             } yield (idx, forMergeRaw.toSet - idx)
 
-        given arbRoi(using Arbitrary[RoiIndex], Arbitrary[DetectedSpotRoi]): Arbitrary[MergerAssessedRoi] = 
+        given arbRoi(using Arbitrary[RoiIndex], Arbitrary[IndexedDetectedSpot]): Arbitrary[MergerAssessedRoi] = 
             Arbitrary{
                 for {
-                    roi <- Arbitrary.arbitrary[DetectedSpotRoi]
+                    roi <- Arbitrary.arbitrary[IndexedDetectedSpot]
                     (index, forMerge) <- genRoiIndexAndMergeIndices
                 } yield MergerAssessedRoi
-                    .build(index, roi, forMerge)
+                    .build(roi.copy(index = index), forMerge)
                     .fold(errors => throw new Exception(s"ROI build error(s): $errors"), identity)
             }
 
         forAll { (inputRecords: NonEmptyList[MergerAssessedRoi]) => 
+            given CsvRowDecoder[ImagingChannel, String] = getCsvRowDecoderForImagingChannel(SpotChannelColumnName)
+            given CsvRowEncoder[ImagingChannel, String] = SpotChannelColumnName.toNamedEncoder
             withTempFile(Delimiter.CommaSeparator){ roisFile =>
                 /* First, write the records to CSV */
                 val sink: Pipe[IO, MergerAssessedRoi, Nothing] = 
@@ -320,7 +330,10 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
             val fileData = header ++ (if newline then "\n" else "")
             withTempFile(fileData, Delimiter.CommaSeparator) { roisFile => 
                 val expected = List.empty[MergerAssessedRoi]
-                val observed = unsafeRead[MergerAssessedRoi](roisFile)
+                val observed = 
+                    given CsvRowDecoder[ImagingChannel, String] = 
+                        getCsvRowDecoderForImagingChannel(SpotChannelColumnName)
+                    unsafeRead[MergerAssessedRoi](roisFile)
                 observed shouldEqual expected
             }
         }
@@ -332,6 +345,9 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
             0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,
             """.toLines
         
+        given CsvRowDecoder[ImagingChannel, String] = 
+            getCsvRowDecoderForImagingChannel(SpotChannelColumnName)
+
         withTempFile(initData, Delimiter.CommaSeparator) { roisFile => 
             assertThrows[DecoderError]{ unsafeRead[MergerAssessedRoi](roisFile) }
         }
@@ -344,6 +360,9 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
             0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726
             """.toLines,
         )
+
+        given CsvRowDecoder[ImagingChannel, String] = 
+            getCsvRowDecoderForImagingChannel(SpotChannelColumnName)
 
         forAll (Table(("initData"), datas*)) { initData => 
             withTempFile(initData, Delimiter.CommaSeparator) { roisFile => 

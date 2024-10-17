@@ -9,15 +9,18 @@ import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.{ DistanceThreshold, PiecewiseDistance }
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.{ ImagingChannel, ImagingContext }
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeReal
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{ 
     getCsvRowDecoderForTuple2, 
     readCsvToCaseClasses, 
     writeCaseClassesToCsv, 
 }
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.SpotChannelColumnName
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.given
 
 import at.ac.oeaw.imba.gerlich.looptrace.cli.scoptReaders.given
+import at.ac.oeaw.imba.gerlich.looptrace.csv.getCsvRowDecoderForImagingChannel
 import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.roi.{ DetectedSpotRoi, MergerAssessedRoi }
@@ -84,12 +87,12 @@ object DetermineRoiMerge extends StrictLogging:
                 import cats.effect.unsafe.implicits.global // needed for cats.effect.IORuntime
                 import fs2.data.text.utf8.* // for CharLikeChunks typeclass instances
 
-                given CsvRowDecoder[IndexedDetectedSpot, String] = 
-                    getCsvRowDecoderForTuple2[RoiIndex, DetectedSpotRoi, String]
+                given CsvRowEncoder[ImagingChannel, String] = SpotChannelColumnName.toNamedEncoder
 
                 /* Build up the program. */
                 val read: os.Path => IO[List[IndexedDetectedSpot]] = 
                     infile => 
+                        given CsvRowDecoder[ImagingChannel, String] = getCsvRowDecoderForImagingChannel(SpotChannelColumnName)
                         logger.info(s"Reading from: ${opts.inputFile}")
                         readCsvToCaseClasses[IndexedDetectedSpot](infile) // TODO: adapt the Decoder to grab the index.
                 val write: os.Path => (List[MergerAssessedRoi] => IO[Unit]) = 

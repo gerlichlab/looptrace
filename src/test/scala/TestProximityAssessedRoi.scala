@@ -17,6 +17,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.roi.{
     DetectedSpotRoi,
     MergerAssessedRoi,
 }
+import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.IndexedDetectedSpot
 
 /** Tests for the correctness of the main smart constructor of [[at.ac.oeaw.imba.gerlich.looptrace.MergerAssessedRoi]]. */
 class TestMergerAssessedRoi extends AnyFunSuite, LooptraceSuite, ScalaCheckPropertyChecks, should.Matchers:
@@ -33,9 +34,9 @@ class TestMergerAssessedRoi extends AnyFunSuite, LooptraceSuite, ScalaCheckPrope
         // ROI indices "too close together" remains respected.
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny
 
-        forAll { (indexAndMerge: (RoiIndex, Set[RoiIndex]), roi: DetectedSpotRoi) => 
+        forAll { (indexAndMerge: (RoiIndex, Set[RoiIndex]), spot: IndexedDetectedSpot) => 
             val (index, forMerge) = indexAndMerge
-            MergerAssessedRoi.build(index, roi, forMerge) match {
+            MergerAssessedRoi.build(spot.copy(index = index), forMerge) match {
                 case Left(messages) => 
                     fail(s"Expected ROI build success, but it failed with message(s): $messages")
                 case Right(roi) => roi.mergeNeighbors shouldEqual forMerge
@@ -56,9 +57,9 @@ class TestMergerAssessedRoi extends AnyFunSuite, LooptraceSuite, ScalaCheckPrope
         // ROI indices "too close together" remains respected.
         given noShrink[A]: Shrink[A] = Shrink.shrinkAny
 
-        forAll { (indexAndMerge: (RoiIndex, Set[RoiIndex]), roi: DetectedSpotRoi) => 
+        forAll { (indexAndMerge: (RoiIndex, Set[RoiIndex]), spot: IndexedDetectedSpot) => 
             val (index, forMerge) = indexAndMerge
-            MergerAssessedRoi.build(index, roi, forMerge) match {
+            MergerAssessedRoi.build(spot.copy(index = index), forMerge) match {
                 case Left(errMsg) => errMsg.contains("An ROI cannot be merged with itself") shouldBe true
                 case Right(_) => fail("Expected the ROI build to fail but it succeeded")
             }

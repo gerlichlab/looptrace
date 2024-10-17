@@ -46,35 +46,33 @@ object MergeAndSplitRoiTools:
 
         given AdmitsRoiIndex[PostMergeRoi] with
             override def getRoiIndex = (_: PostMergeRoi) match {
-                case (i: RoiIndex, _: DetectedSpotRoi) => i
+                case roi: IndexedDetectedSpot => roi.index
                 case roi: MergedRoiRecord => roi.index
             }
 
         /** Regardless of sepecific ROI subtype, get the center point and the bounding box. */
         def getCenterAndBox = (_: PostMergeRoi) match {
             case roi: MergedRoiRecord => roi.centroid -> roi.box
-            case (_, roi: DetectedSpotRoi) => roi.centroid -> roi.box
+            case roi: IndexedDetectedSpot => roi.centroid -> roi.box
         }
     end PostMergeRoi
 
     def assessForMerge(minDist: DistanceThreshold)(rois: List[IndexedDetectedSpot]): EitherNel[String, List[MergerAssessedRoi]] = 
         import ProximityComparable.proximal
-        given proxComp: ProximityComparable[DetectedSpotRoi] = 
+        given proxComp: ProximityComparable[IndexedDetectedSpot] = 
             DistanceThreshold.defineProximityPointwise(minDist)(_.centroid.asPoint)
         val lookup: Map[RoiIndex, Set[RoiIndex]] = 
-            rois.groupBy(_._2.context) // Only merge ROIs from the same context (FOV, time, channel).
+            rois.groupBy(_.context) // Only merge ROIs from the same context (FOV, time, channel).
                 .values
                 .flatMap(_.combinations(2).flatMap{
-                    case (i1, roi1) :: (i2, roi2) :: Nil => 
-                        (roi1 `proximal` roi2).option{ Map(i1 -> Set(i2), i2 -> Set(i1)) }
+                    case r1 :: r2 :: Nil => 
+                        (r1 `proximal` r2).option{ Map(r1.index -> Set(r2.index), r2.index -> Set(r1.index)) }
                     case notPair => throw new Exception(s"Got ${notPair.length} element(s) when taking pairs!")
                 })
                 .toList
                 .combineAll
         val (errors, records) = Alternative[List].separate(
-            rois.map{ (i, roi) => 
-                MergerAssessedRoi.build(i, roi, lookup.getOrElse(i, Set.empty))
-            }
+            rois.map{ r => MergerAssessedRoi.build(r, lookup.getOrElse(r.index, Set.empty)) }
         )
         errors.toNel.toLeft(records)
     
@@ -196,7 +194,8 @@ object MergeAndSplitRoiTools:
                             considerOneMerge(pool, buildNewBox)(currIndex, r) match {
                                 case None => 
                                     // no merge action; simply eliminate the empty mergePartners collection
-                                    (accErr, (r.index, r.roi) :: accSkip, accMerge) -> currIndex
+                                    val idxSpot = IndexedDetectedSpot(r.index, r.context, r.centroid, r.box)
+                                    (accErr, idxSpot :: accSkip, accMerge) -> currIndex
                                 case Some(Left(errors)) => 
                                     // error case
                                     ((curr, errors) :: accErr, accSkip, accMerge) -> currIndex
@@ -216,7 +215,7 @@ object MergeAndSplitRoiTools:
                             contribIndex, 
                             original.context, 
                             original.centroid, 
-                            original.roi.box,
+                            original.box,
                             mergedIndex, 
                         )
                     }
@@ -245,7 +244,7 @@ object MergeAndSplitRoiTools:
                     )
                     .map{ ctx => 
                         val newCenter: Point3D = partners.map(_.centroid.asPoint).centroid
-                        val newBox: BoundingBox = buildNewBox(newCenter, partners.map(_.roi.box))
+                        val newBox: BoundingBox = buildNewBox(newCenter, partners.map(_.box))
                         MergedRoiRecord(
                             potentialNewIndex, 
                             ctx, 
@@ -260,15 +259,16 @@ object MergeAndSplitRoiTools:
 
     private type MergeError = ((MergerAssessedRoi, NonnegativeInt), ErrorMessages)
     
-    private[looptrace] type IndexedDetectedSpot = (RoiIndex, DetectedSpotRoi)
+    final case class IndexedDetectedSpot(
+        index: RoiIndex, 
+        context: ImagingContext, 
+        centroid: Centroid[Double],
+        box: BoundingBox, 
+    )
 
     private[looptrace] object IndexedDetectedSpot:
-        given AdmitsRoiIndex[IndexedDetectedSpot] = AdmitsRoiIndex.instance(_._1)
-
-        given admitsImagingContextForIndexedDetectedSpot(
-            using forSpot: AdmitsImagingContext[DetectedSpotRoi]
-        ): AdmitsImagingContext[IndexedDetectedSpot] = 
-            forSpot.contramap(_._2)
+        given AdmitsRoiIndex[IndexedDetectedSpot] = AdmitsRoiIndex.instance(_.index)
+        given AdmitsImagingContext[IndexedDetectedSpot] = AdmitsImagingContext.instance(_.context)
     end IndexedDetectedSpot
 
     private type MergeResult = (

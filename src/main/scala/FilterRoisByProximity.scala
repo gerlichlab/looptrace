@@ -39,7 +39,6 @@ import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.{
     SpotChannelColumnName,
-    TimepointColumnName
 }
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
@@ -54,6 +53,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.{
     MergeRoisColumnName,
     RoiIndexColumnName,
 }
+import at.ac.oeaw.imba.gerlich.looptrace.csv.getCsvRowDecoderForImagingChannel
 import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.drift.*
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
@@ -196,6 +196,7 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
         
         // The first program in the chain: read in the ROIs, a possible mix  of singletons and merged records.
         val readRois: IO[List[PostMergeRoi]] = 
+            given CsvRowDecoder[ImagingChannel, String] = getCsvRowDecoderForImagingChannel(SpotChannelColumnName)
             readCsvToCaseClasses[PostMergeRoi](spotsFile)
 
         val keyDrifts: List[DriftRecord] => Either[String, Map[DriftKey, DriftRecord]] = drifts => 
@@ -220,10 +221,6 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
 
         // TODO: need to bring in the CsvRowDecoder[DriftRecord, String] instance
         val readKeyedDrifts: IO[Either[String, Map[DriftKey, DriftRecord]]] = 
-            given CsvRowDecoder[FieldOfViewLike, String] = 
-                getCsvRowDecoderForSingleton(ColumnName[FieldOfViewLike]("fieldOfView"))
-            given CsvRowDecoder[ImagingTimepoint, String] = 
-                getCsvRowDecoderForSingleton(TimepointColumnName)
             readCsvToCaseClasses[DriftRecord](driftFile).map(keyDrifts)
 
         given Eq[FieldOfViewLike] with
@@ -294,8 +291,8 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
         val newCenter = Centroid.fromPoint(Movement.addDrift(drift.total)(center.asPoint))
         val newBox = Movement.addDrift(drift.total)(box)
         roi match {
-            case (idx, DetectedSpotRoi(spot, _)) => idx -> DetectedSpotRoi(spot.copy(centroid = newCenter), newBox)
-            case rec: MergedRoiRecord => rec.copy(centroid = newCenter, box = newBox)
+            case r: IndexedDetectedSpot => r.copy(centroid = newCenter, box = newBox)
+            case r: MergedRoiRecord => r.copy(centroid = newCenter, box = newBox)
         }
     }
 

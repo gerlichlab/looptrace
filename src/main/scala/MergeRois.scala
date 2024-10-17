@@ -5,7 +5,7 @@ import cats.data.NonEmptyList
 import cats.effect.IO
 import cats.syntax.all.*
 import fs2.Stream
-import fs2.data.csv.CsvRowEncoder
+import fs2.data.csv.{ CsvRowDecoder, CsvRowEncoder }
 import mouse.boolean.*
 import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
@@ -22,6 +22,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.SpotChannelColumnName
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 
+import at.ac.oeaw.imba.gerlich.looptrace.csv.getCsvRowDecoderForImagingChannel
 import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.cli.scoptReaders.given
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
@@ -131,7 +132,10 @@ object MergeRois extends StrictLogging:
 
                 logger.info(s"Will read ROIs from file: ${opts.inputFile}")
                 val prog: IO[Unit] = for {
-                    rois <- readCsvToCaseClasses[MergerAssessedRoi](opts.inputFile)
+                    rois <- {
+                        given CsvRowDecoder[ImagingChannel, String] = getCsvRowDecoderForImagingChannel(SpotChannelColumnName)
+                        readCsvToCaseClasses[MergerAssessedRoi](opts.inputFile)
+                    }
                     (individuals, contributors, merged) = 
                         mergeRois(unsafeTakeMaxBoxSize)(rois) match {
                             case (Nil, singletons, contribs, mergers) => 
