@@ -36,8 +36,8 @@ def workflow(
     timepoint_range = timepoint_range or range(H.num_rounds)
 
     # Function to get (z, y, x) (stack of 2D images) for a particular FOV and imaging round.
-    def get_image_stack(pos_idx: int, timepoint_idx: int) -> np.ndarray:
-        return D.get_moving_image(pos_idx=pos_idx, timepoint_idx=timepoint_idx)
+    def get_image_stack(fov_idx: int, timepoint_idx: int) -> np.ndarray:
+        return D.get_moving_image(fov_idx=fov_idx, timepoint_idx=timepoint_idx)
     
     return generate_all_bead_rois_from_getter(
         get_3d_stack=get_image_stack, 
