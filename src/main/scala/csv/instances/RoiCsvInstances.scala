@@ -176,11 +176,12 @@ trait RoiCsvInstances:
         encBox: CsvRowEncoder[BoundingBox, Header],
     ): CsvRowEncoder[MergeContributorRoi, Header] = new:
         override def apply(elem: MergeContributorRoi): RowF[Some, Header] = 
-            val originalIndexRow: NamedRow = ColumnNames.RoiIndexColumnName.write(elem.index)
+            val idRow: NamedRow = ColumnNames.RoiIndexColumnName.write(elem.index)
             val contextRow: NamedRow = encContext(elem.context)
             val centroidRow: NamedRow = encCentroid(elem.centroid)
             val boxRow: NamedRow = encBox(elem.box)
-            originalIndexRow |+| contextRow |+| centroidRow |+| boxRow
+            val mergeIndexRow: NamedRow = ColumnNames.MergedIndexColumnName.write(elem.mergeIndex)
+            idRow |+| contextRow |+| centroidRow |+| boxRow |+| mergeIndexRow
 
     def parseFromRow[A](messagePrefix: String)(using dec: CsvRowDecoder[A, Header]): RowF[Some, Header] => ValidatedNel[String, A] = 
         row => dec(row)
