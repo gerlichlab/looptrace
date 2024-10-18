@@ -19,7 +19,6 @@ __all__ = [
     "DimensionalityError",
     "MissingImagesError",
     "RoiImageSize",
-    "read_table_pandas",
     ]
 
 
@@ -42,22 +41,6 @@ class RoiImageSize:
 
     def div_by(self, m: int) -> "RoiImageSize":
         return RoiImageSize(z=self.z // m, y=self.y // m, x=self.x // m)
-
-
-def read_table_pandas(f: Union[str, Path]) -> pd.DataFrame:
-    """Read a pandas table from CSV, passing the argument indicating index is the first column.
-
-    Parameters
-    ----------
-    f : str or Path
-        The path to the file to parse
-    
-    Returns
-    -------
-    pd.DataFrame
-        Table parsed from the given file
-    """
-    return pd.read_csv(f, index_col=0)
 
 
 class LooptraceException(BaseException):

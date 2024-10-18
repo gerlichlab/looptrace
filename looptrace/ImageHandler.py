@@ -22,7 +22,7 @@ import yaml
 from gertils import ExtantFile
 from gertils.types import TimepointFrom0
 
-from looptrace import ZARR_CONVERSIONS_KEY, RoiImageSize, read_table_pandas
+from looptrace import ZARR_CONVERSIONS_KEY, RoiImageSize
 from looptrace.configuration import get_minimum_regional_spot_separation
 from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, FilePathLike, FolderPathLike, get_analysis_path, simplify_path
 from looptrace.image_io import ignore_path, NPZ_wrapper
@@ -454,7 +454,7 @@ class ImageHandler:
     def load_tables(self):
         # TODO: the CSV parse needs to depend on whether the first column really is the index or not.
         # See: https://github.com/gerlichlab/looptrace/issues/261
-        parsers = {".csv": read_table_pandas, ".pkl": pd.read_pickle}
+        parsers = {".csv": pd.read_csv, ".pkl": pd.read_pickle}
         try:
             table_files = os.scandir(self.analysis_path)
         except FileNotFoundError:

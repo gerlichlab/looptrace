@@ -9,7 +9,6 @@ import pandas as pd
 import tqdm
 
 from gertils import ExtantFile, ExtantFolder
-from looptrace import DimensionalityError, read_table_pandas
 from looptrace.ImageHandler import ImageHandler
 from looptrace.NucDetector import NucDetector
 
@@ -114,14 +113,14 @@ def workflow(
         return (lambda fov: table.query('fieldOfView == @fov'))
 
     logger.info(f"Reading coarse-drift file for nuclei: {N.drift_correction_file__coarse}")
-    drift_table_nuclei = read_table_pandas(N.drift_correction_file__coarse)
+    drift_table_nuclei = pd.read_csv(N.drift_correction_file__coarse, index_col=False)
     get_nuc_drifts: Callable[[str], pd.DataFrame] = query_table_for_fov(drift_table_nuclei)
     
     logger.info(f"Reading coarse-drift file for spots: {H.drift_correction_file__coarse}")
-    drift_table_spots = read_table_pandas(H.drift_correction_file__coarse)
+    drift_table_spots = pd.read_csv(H.drift_correction_file__coarse, index_col=False)
     get_spot_drifts = query_table_for_fov(drift_table_spots)
     
-    rois_table = read_table_pandas(H.proximity_accepted_spots_file_path)
+    rois_table = pd.read_csv(H.proximity_accepted_spots_file_path, index_col=False)
     get_rois = query_table_for_fov(rois_table)
 
     logger.info("Assigning spots to nuclei labels...")

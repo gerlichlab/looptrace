@@ -25,7 +25,6 @@ import tqdm
 
 from gertils import ExtantFile, ExtantFolder, PathWrapperException
 
-from looptrace import image_io, read_table_pandas
 from looptrace.ImageHandler import ImageHandler
 from looptrace.bead_roi_generation import BeadRoiParameters, extract_single_bead
 from looptrace.gaussfit import fitSymmetricGaussian3D
@@ -282,7 +281,7 @@ def coarse_correction_workflow(
     except ValueError: # most likely if element count of one or more rows doesn't match column count
         print(f"Example record (below):\n{records[0]}")
         raise
-    outfile = update_outfile(D.dc_file_path__coarse)
+    outfile = update_outfile(D.image_handler.drift_correction_file__coarse)
     print(f"Writing coarse drifts: {outfile}")
     coarse_drifts.to_csv(outfile, index=False)
     return outfile
@@ -295,7 +294,7 @@ def fine_correction_workflow(rounds_config: ExtantFile, params_config: ExtantFil
     compute_fine_drifts(D)
     all_drifts = D.read_all_fine_drifts() # Read each per-FOV file, aggregating to single table
     all_drifts.columns = FULL_DRIFT_TABLE_COLUMNS
-    outfile = D.dc_file_path__fine
+    outfile = D.image_handler.drift_correction_file__fine
     print(f"Writing fine drifts: {outfile}")
     all_drifts.to_csv(outfile, index=False) # Write the single full drift correction table.
     return outfile
@@ -303,7 +302,7 @@ def fine_correction_workflow(rounds_config: ExtantFile, params_config: ExtantFil
 
 def iter_coarse_drifts_by_field_of_view(filepath: Union[str, Path, ExtantFile]) -> Iterable[Tuple[str, pd.DataFrame]]:
     print(f"Reading coarse drift table: {filepath}")
-    coarse_table = read_table_pandas(filepath)
+    coarse_table = pd.read_csv(filepath, index_col=False)
     # Sort so that grouping by FOV then timepoint doesn't alter order.
     coarse_table = coarse_table.sort_values([FOV_COLUMN, TIMEPOINT_COLUMN])
     return coarse_table.groupby(FOV_COLUMN)
@@ -329,7 +328,7 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
     roi_px = drifter.bead_roi_px
     beads_exp_shape = (drifter.num_bead_rois_for_drift_correction, 3)
     fov_time_problems = drifter.image_handler.fov_timepoint_pairs_with_severe_problems
-    for fov, fov_group in iter_coarse_drifts_by_field_of_view(filepath=drifter.dc_file_path__coarse):
+    for fov, fov_group in iter_coarse_drifts_by_field_of_view(filepath=drifter.image_handler.drift_correction_file__coarse):
         fov_idx = drifter.full_fov_list.index(fov)
         if not drifter.overwrite and drifter.checkpoint_filepath(fov_idx=fov_idx).is_file():
             print(f"Fine DC checkpoint exists, skipping FOV: {fov_idx}")
@@ -407,6 +406,7 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
         drifter.fine_correction_subfolder.mkdir(exist_ok=True)
         curr_fov_temp = drifter.fine_correction_tempfile(fov_idx=fov_idx)
         print(f"Writing drift correction tempfile for FOV {fov_idx}: {curr_fov_temp}")
+        # NB: setting index=False here
         pd.DataFrame(curr_fov_rows).to_csv(curr_fov_temp, index=False)
         checkpoint_file = drifter.fine_correction_subfolder / f"{fov_idx}.checkpoint"
         print(f"Touching checkpoint: {checkpoint_file}")
@@ -459,14 +459,6 @@ class Drifter():
 
     def checkpoint_filepath(self, fov_idx: int) -> Path:
         return self.fine_correction_subfolder / self._checkpoint_filename(fov_idx)
-
-    @property
-    def dc_file_path__coarse(self) -> Path:
-        return self.image_handler.drift_correction_file__coarse
-
-    @property
-    def dc_file_path__fine(self) -> Path:
-        return self.image_handler.drift_correction_file__fine
 
     @property
     def downsampling(self) -> int:
@@ -527,7 +519,8 @@ class Drifter():
         ]
         files = sorted(files, key=lambda fp: int(fp.name.split(".")[0]))
         print(f"Reading {len(files)} fine drift correction file(s):\n" + "\n".join(p.name for p in files))
-        return pd.concat((read_table_pandas(fp) for fp in files), axis=0, ignore_index=True)
+        # NB: setting index_col=False here; see .compute_fine_drifts for how these are written.
+        return pd.concat((pd.read_csv(fp, index_col=False) for fp in files), axis=0, ignore_index=True)
 
     @property
     def reference_channel(self) -> int:

@@ -17,9 +17,8 @@ import tqdm
 
 from gertils import ExtantFile, ExtantFolder
 
-from looptrace import image_io, read_table_pandas, SIGNAL_NOISE_RATIO_NAME
+from looptrace import image_io, SIGNAL_NOISE_RATIO_NAME
 from looptrace.configuration import read_parameters_configuration_file
-from looptrace.Drifter import Drifter
 from looptrace.ImageHandler import ImageHandler
 from looptrace.bead_roi_generation import extract_single_bead
 from looptrace.filepaths import get_analysis_path
@@ -312,7 +311,7 @@ def workflow(
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     if drift_correction_table_file is None:
         print("Determining drift correction table path...")
-        drift_correction_table_file = Drifter(H).dc_file_path__fine
+        drift_correction_table_file = H.drift_correction_file__fine
     elif isinstance(drift_correction_table_file, ExtantFile):
         drift_correction_table_file = drift_correction_table_file.path
     if not os.path.isfile(drift_correction_table_file):
@@ -363,7 +362,7 @@ def workflow(
     
     # Read the table of precomputed drift correction values.
     print(f"Reading drift correction table: {drift_correction_table_file}")
-    drift_table = read_table_pandas(drift_correction_table_file)
+    drift_table = pd.read_csv(drift_correction_table_file, index_col=False)
 
     # Subsample beads and compute remaining distance from reference point, even after drift correction.
     # Whether this is done in just a single FOV or across all FOVs is determined by the command-line specification.

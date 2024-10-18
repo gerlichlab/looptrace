@@ -11,7 +11,6 @@ if TYPE_CHECKING:
 from pandas.testing import assert_frame_equal
 import pytest
 
-from looptrace import read_table_pandas
 from looptrace.SpotPicker import detect_spots_dog, detect_spots_int
 from looptrace.image_processing_functions import Z_CENTER_COLNAME, Y_CENTER_COLNAME, X_CENTER_COLNAME
 
@@ -67,7 +66,7 @@ def get_data_file_path(fn: str, *, in_or_out: InOrOut) -> Path:
 def read_expected_output_table(fn: str) -> "pd.DataFrame":
     """Read an expected output table as a DataFrame."""
     fp = get_data_file_path(fn, in_or_out=InOrOut.OUTPUT)
-    return read_table_pandas(fp)
+    return pd.read_csv(fp)
 
 
 def read_input_data(fn: str) -> "npt.NDArray[Union[np.int8, np.int16]]":
