@@ -7,6 +7,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.geometry.*
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.PositionName
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnName
 import at.ac.oeaw.imba.gerlich.looptrace.drift.*
+import at.ac.oeaw.imba.gerlich.looptrace.collections.AtLeast2
 
 /** Collection of names of critical columns from which to parse data */
 object ColumnNames:
@@ -15,7 +16,8 @@ object ColumnNames:
     val MergeRoisColumnName: ColumnName[Set[RoiIndex]] = ColumnName(mergeContributorsName)
 
     /** Distinguished from [[MergedRoisColumnName]] by static guarantee of nonemptiness */
-    val MergeContributorsColumnName: ColumnName[NonEmptySet[RoiIndex]] = ColumnName(mergeContributorsName)
+    val MergeContributorsColumnName: ColumnName[AtLeast2[Set, RoiIndex]] = 
+        ColumnName(mergeContributorsName)
 
     val RoiIndexColumnName: ColumnName[RoiIndex] = ColumnName("index")
 

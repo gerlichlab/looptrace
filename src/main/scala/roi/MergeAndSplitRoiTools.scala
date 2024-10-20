@@ -4,6 +4,9 @@ package roi
 import cats.*
 import cats.data.{ EitherNel, NonEmptyList, NonEmptyMap, NonEmptySet, ValidatedNel }
 import cats.syntax.all.*
+import io.github.iltotore.iron.{ refineUnsafe } 
+import io.github.iltotore.iron.constraint.collection.MinLength
+import io.github.iltotore.iron.constraint.collection.given
 import mouse.boolean.*
 
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.{ Centroid, DistanceThreshold, PiecewiseDistance, ProximityComparable }
@@ -15,6 +18,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
+import at.ac.oeaw.imba.gerlich.looptrace.collections.AtLeast2
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ BoundingBox, Point3D }
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.NontrivialProximityFilter
@@ -30,6 +34,15 @@ import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 object MergeAndSplitRoiTools:
     private[looptrace] type PostMergeRoi = IndexedDetectedSpot | MergedRoiRecord
     import PostMergeRoi.*
+
+    type RoiMergeBag = AtLeast2[Set, RoiIndex]
+
+    object RoiMergeBag:
+        extension (bag: RoiMergeBag)
+            def toList: List[RoiIndex] = bag.toList
+        def fromMergedRecord(r: MergedRoiRecord): RoiMergeBag = 
+            (r.contributors + r.index).refineUnsafe[MinLength[2]]
+    end RoiMergeBag
 
     /** Facilitate access to the components of a ROI's imaging context. */
     object PostMergeRoi:
@@ -187,24 +200,30 @@ object MergeAndSplitRoiTools:
                 val pool = rois.map{ r => r.index -> r }.toMap
                 given Ordering[RoiIndex] = summon[Order[RoiIndex]].toOrdering
                 val initNewIndex = incrementIndex(rois.map(_.index).max)
-                val ((allErrored, allSkipped, allMerged), _) = 
-                    rois.foldRight(((List.empty[MergeError], List.empty[IndexedDetectedSpot], List.empty[MergedRoiRecord]), initNewIndex)){
-                        case (r, ((accErr, accSkip, accMerge), currentMergeIndex)) => 
+                val ((allErrored, allSkipped, allMerged), _, _) = 
+                    rois.foldRight(((List.empty[MergeError], List.empty[IndexedDetectedSpot], List.empty[MergedRoiRecord]), Set.empty[RoiMergeBag], initNewIndex)){
+                        case (r, ((accErr, accSkip, accMerge), alreadyMerged, currentMergeIndex)) => 
                             considerOneMerge(pool, buildNewBox)(currentMergeIndex, r) match {
                                 case None => 
                                     // no merge action; simply eliminate the empty mergePartners collection
                                     val idxSpot = IndexedDetectedSpot(r.index, r.context, r.centroid, r.box)
-                                    (accErr, idxSpot :: accSkip, accMerge) -> currentMergeIndex
+                                    ((accErr, idxSpot :: accSkip, accMerge), alreadyMerged, currentMergeIndex)
                                 case Some(Left(errors)) => 
                                     // error case
-                                    ((r, errors) :: accErr, accSkip, accMerge) -> currentMergeIndex
+                                    (((r, errors) :: accErr, accSkip, accMerge), alreadyMerged, currentMergeIndex)
                                 case Some(Right(rec)) =>
                                     // merge action
-                                    (accErr, accSkip, rec :: accMerge) -> incrementIndex(currentMergeIndex)
+                                    val indicesMerging = RoiMergeBag.fromMergedRecord(rec)
+                                    if alreadyMerged `contains` indicesMerging
+                                    then ((accErr, accSkip, rec :: accMerge), alreadyMerged, currentMergeIndex)
+                                    else ((accErr, accSkip, rec :: accMerge), alreadyMerged + indicesMerging, incrementIndex(currentMergeIndex))
                         }
                     }
                 val allContrib: List[MergeContributorRoi] = allMerged
-                    .flatMap{ roi => roi.contributors.toList.map(_ -> roi.index) }
+                    .flatMap{ roi => 
+                        import RoiMergeBag.toList
+                        roi.contributors.toList.map(_ -> roi.index) 
+                    }
                     .map{ (contribIndex, mergedIndex) => 
                         val original = pool.getOrElse(
                             contribIndex, 
@@ -234,22 +253,25 @@ object MergeAndSplitRoiTools:
                     .toValidatedNel
             }
             .toEither
-            .flatMap{ partners => 
-                val contexts = partners.map(_.context).toNes
+            .flatMap{ others => 
+                import AtLeast2.*
+                val partners = AtLeast2(roi, others) // Add the ROI itself to its merge partners.
+                val contexts = partners.map(_.context)
                 (contexts.size === 1)
                     .validatedNel(
                         s"${contexts.size} unique imaging context (not just 1) in ROI group to merge", 
                         partners.head.context
                     )
                     .map{ ctx => 
-                        val newCenter: Point3D = partners.map(_.centroid.asPoint).centroid
-                        val newBox: BoundingBox = buildNewBox(newCenter, partners.map(_.box))
+                        val newCenter: Point3D = 
+                            partners.map(_.centroid.asPoint).toNel.get.centroid
+                        val newBox: BoundingBox = buildNewBox(newCenter, partners.map(_.box).toNel.get)
                         MergedRoiRecord(
                             potentialNewIndex, 
                             ctx, 
                             Centroid.fromPoint(newCenter), 
                             newBox, 
-                            partners.map(_.index).toNes,
+                            (partners.map(_.index).toList.toSet).refineUnsafe[MinLength[2]],
                         )
                     }
                     .toEither

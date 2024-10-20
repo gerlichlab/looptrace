@@ -5,6 +5,8 @@ import cats.*
 import cats.data.*
 import cats.syntax.all.*
 import fs2.data.csv.*
+import io.github.iltotore.iron.Constraint
+import io.github.iltotore.iron.constraint.collection.MinLength
 import mouse.boolean.*
 
 import at.ac.oeaw.imba.gerlich.gerlib.cell.NuclearDesignation
@@ -35,6 +37,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.{
 }
 import at.ac.oeaw.imba.gerlich.looptrace.space.BoundingBox
 import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.RoiIndexColumnName
+import at.ac.oeaw.imba.gerlich.looptrace.collections.AtLeast2
 
 /** Typeclass instances related to CSV, for ROI-related data types */
 trait RoiCsvInstances:
@@ -215,16 +218,21 @@ trait RoiCsvInstances:
                 val boxNel = decBox(row)
                     .leftMap(e => s"Problem parsing bounding box: ${e.getMessage}")
                     .toValidatedNel
-                val contributorsNel = ColumnNames.MergeContributorsColumnName.from(row)
+                val contributorsNel = 
+                    ColumnNames.MergeContributorsColumnName.from(row)
                 (indexNel, contextNel, centroidNel, boxNel, contributorsNel)
                     .mapN(MergedRoiRecord.apply)
                     .toEither
                     .leftMap{ messages => DecoderError(s"${messages.length} error(s) decoding merged ROI record: ${messages.mkString_("; ")}") }
 
-    private given cellEncoderForNonemptyRoiBag(
-        using encBag: CellEncoder[Set[RoiIndex]]
-    ): CellEncoder[NonEmptySet[RoiIndex]] = 
-        encBag.contramap((_: NonEmptySet[RoiIndex]).toSortedSet)
+    private inline given cellDecoderForAtLeast2[C[*], X](using 
+        decCX: CellDecoder[C[X]], 
+        inline constraint: Constraint[C[X], MinLength[2]],
+    ): CellDecoder[AtLeast2[C, X]] = 
+        decCX.emap{ AtLeast2.either(_).leftMap(msg => DecoderError(msg)) }
+
+    private given cellEncoderForAtLeast2[C[*], X](using enc: CellEncoder[C[X]]): CellEncoder[AtLeast2[C, X]] = new:
+        override def apply(cell: AtLeast2[C, X]): String = enc(cell) // Overcome the type invariance of CellEncoder[*]
 
     given csvRowEncoderForMergedRoiRecord(using 
         encIndex: CellEncoder[RoiIndex], 
@@ -232,14 +240,12 @@ trait RoiCsvInstances:
         encCentroid: CellEncoder[Double],
         encRoiBag: CellEncoder[Set[RoiIndex]],
     ): CsvRowEncoder[MergedRoiRecord, Header] = 
-        val encContribs: CsvRowEncoder[NonEmptySet[RoiIndex], Header] = 
-            getCsvRowEncoderForSingleton(ColumnNames.MergeContributorsColumnName)
         new:
             override def apply(elem: MergedRoiRecord): RowF[Some, Header] = 
                 val idxRow: NamedRow = ColumnNames.RoiIndexColumnName.write(elem.index)
                 val ctxRow: NamedRow = encContext(elem.context)
                 val centroidRow: NamedRow = summon[CsvRowEncoder[Centroid[Double], Header]](elem.centroid)
-                val contribsRow: NamedRow = encContribs(elem.contributors)
+                val contribsRow: NamedRow = ColumnNames.MergeContributorsColumnName.write(elem.contributors)
                 idxRow |+| ctxRow |+| centroidRow |+| contribsRow
 
     given csvRowEncoderForUnidentifiableRoi(using
@@ -250,7 +256,7 @@ trait RoiCsvInstances:
         encRoiBag: CellEncoder[Set[RoiIndex]],
     ): CsvRowEncoder[UnidentifiableRoi, Header] = 
         val encTooClose: CsvRowEncoder[NonEmptySet[RoiIndex], Header] = 
-            getCsvRowEncoderForSingleton(ColumnNames.TooCloseRoisColumnName)
+            getCsvRowEncoderForSingleton(ColumnNames.TooCloseRoisColumnName)(using encRoiBag.contramap(_.toSortedSet))
         new:
             override def apply(elem: UnidentifiableRoi): RowF[Some, Header] = 
                 val idxRow: NamedRow = ColumnNames.RoiIndexColumnName.write(elem.index)
@@ -273,10 +279,12 @@ trait RoiCsvInstances:
                 (spotNel, contributorsNel)
                     .tupled
                     .toEither
-                    .map{ (spot, contributors) => 
-                        contributors.toNonEmptySet.fold(spot){ 
-                            contribs => MergedRoiRecord(spot, contribs) 
-                        }
+                    .flatMap{ (spot, contributors) => 
+                        if contributors.size === 0 then spot.asRight
+                        else AtLeast2.either(contributors).bimap(
+                            NonEmptyList.one, 
+                            MergedRoiRecord(spot, _)
+                        )
                     }
                     .leftMap{ messages => 
                         DecoderError(s"${messages.length} error(s) decoding ROI: ${messages.mkString_("; ")}") 
@@ -299,7 +307,7 @@ trait RoiCsvInstances:
                 val (centroid, box) = PostMergeRoi.getCenterAndBox(elem)
                 val contribs: Set[RoiIndex] = elem match {
                     case _: IndexedDetectedSpot => Set()
-                    case merged: MergedRoiRecord => merged.contributors.toSortedSet
+                    case merged: MergedRoiRecord => merged.contributors
                 }
                 val mergeRoisRow: NamedRow = ColumnNames.MergeRoisColumnName.write(contribs)
                 idxRow |+| ctxRow |+| encCentroid(centroid) |+| encBox(box) |+| mergeRoisRow
