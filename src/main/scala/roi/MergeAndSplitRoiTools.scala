@@ -183,25 +183,24 @@ object MergeAndSplitRoiTools:
         rois match {
             case Nil => (List(), List(), List(), List())
             case _ => 
-                val indexed = NonnegativeInt.indexed(rois)
                 def incrementIndex: RoiIndex => RoiIndex = i => RoiIndex.unsafe(i.get + 1)
-                val pool = indexed.map{ (r, i) => RoiIndex(i) -> r }.toMap
+                val pool = rois.map{ r => r.index -> r }.toMap
                 given Ordering[RoiIndex] = summon[Order[RoiIndex]].toOrdering
                 val initNewIndex = incrementIndex(rois.map(_.index).max)
                 val ((allErrored, allSkipped, allMerged), _) = 
-                    indexed.foldRight(((List.empty[MergeError], List.empty[IndexedDetectedSpot], List.empty[MergedRoiRecord]), initNewIndex)){
-                        case (curr@(r, i), ((accErr, accSkip, accMerge), currIndex)) => 
-                            considerOneMerge(pool, buildNewBox)(currIndex, r) match {
+                    rois.foldRight(((List.empty[MergeError], List.empty[IndexedDetectedSpot], List.empty[MergedRoiRecord]), initNewIndex)){
+                        case (r, ((accErr, accSkip, accMerge), currentMergeIndex)) => 
+                            considerOneMerge(pool, buildNewBox)(currentMergeIndex, r) match {
                                 case None => 
                                     // no merge action; simply eliminate the empty mergePartners collection
                                     val idxSpot = IndexedDetectedSpot(r.index, r.context, r.centroid, r.box)
-                                    (accErr, idxSpot :: accSkip, accMerge) -> currIndex
+                                    (accErr, idxSpot :: accSkip, accMerge) -> currentMergeIndex
                                 case Some(Left(errors)) => 
                                     // error case
-                                    ((curr, errors) :: accErr, accSkip, accMerge) -> currIndex
+                                    ((r, errors) :: accErr, accSkip, accMerge) -> currentMergeIndex
                                 case Some(Right(rec)) =>
                                     // merge action
-                                    (accErr, accSkip, rec :: accMerge) -> incrementIndex(currIndex)
+                                    (accErr, accSkip, rec :: accMerge) -> incrementIndex(currentMergeIndex)
                         }
                     }
                 val allContrib: List[MergeContributorRoi] = allMerged
@@ -257,7 +256,7 @@ object MergeAndSplitRoiTools:
             }
         )
 
-    private type MergeError = ((MergerAssessedRoi, NonnegativeInt), ErrorMessages)
+    private type MergeError = (MergerAssessedRoi, ErrorMessages)
     
     final case class IndexedDetectedSpot(
         index: RoiIndex, 
