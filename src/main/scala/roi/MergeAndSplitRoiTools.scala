@@ -4,7 +4,7 @@ package roi
 import cats.*
 import cats.data.{ EitherNel, NonEmptyList, NonEmptyMap, NonEmptySet, ValidatedNel }
 import cats.syntax.all.*
-import io.github.iltotore.iron.{ refineUnsafe } 
+import io.github.iltotore.iron.{ :|, refineUnsafe } 
 import io.github.iltotore.iron.constraint.collection.MinLength
 import io.github.iltotore.iron.constraint.collection.given
 import mouse.boolean.*
@@ -253,27 +253,23 @@ object MergeAndSplitRoiTools:
             }
             .toEither
             .flatMap{ others => 
-                import AtLeast2.*
-                val partners = AtLeast2(roi, others) // Add the ROI itself to its merge partners.
-                val contexts = partners.map(_.context)
-                (contexts.size === 1)
-                    .validatedNel(
-                        s"${contexts.size} unique imaging context (not just 1) in ROI group to merge", 
+                for {
+                    partners <- AtLeast2.either((roi :: others).toList).leftMap(NonEmptyList.one)
+                    contexts = partners.map(_.context).toSet
+                    ctx <- (contexts.size === 1).either(
+                        NonEmptyList.one(s"${contexts.size} unique imaging context (not just 1) in ROI group to merge"), 
                         partners.head.context
                     )
-                    .map{ ctx => 
-                        val newCenter: Point3D = 
-                            partners.map(_.centroid.asPoint).toNel.get.centroid
-                        val newBox: BoundingBox = buildNewBox(newCenter, partners.map(_.box).toNel.get)
-                        MergedRoiRecord(
-                            potentialNewIndex, 
-                            ctx, 
-                            Centroid.fromPoint(newCenter), 
-                            newBox, 
-                            (partners.map(_.index).toList.toSet).refineUnsafe[MinLength[2]],
-                        )
-                    }
-                    .toEither
+                    newCenter: Point3D = 
+                        partners.map(_.centroid.asPoint).toNel.get.centroid
+                    newBox: BoundingBox = buildNewBox(newCenter, partners.map(_.box).toNel.get)
+                } yield MergedRoiRecord(
+                    potentialNewIndex, 
+                    ctx, 
+                    Centroid.fromPoint(newCenter), 
+                    newBox, 
+                    (partners.map(_.index).toList.toSet).refineUnsafe[MinLength[2]],
+                )
             }
         )
 

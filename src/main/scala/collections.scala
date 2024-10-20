@@ -26,12 +26,14 @@ package object collections:
     object AtLeast2:
         def apply[X](x: X, xs: NonEmptyList[X]): AtLeast2[List, X] = 
             (x :: xs).toList.refineUnsafe[MinLength[2]]
+        
         inline def either[C[*], X](xs: C[X])(using inline: Constraint[C[X], MinLength[2]]): Either[String, AtLeast2[C, X]] = 
             xs.refineEither[MinLength[2]]
+        
         extension [X](xs: AtLeast2[Set, X])
             infix def +(x: X): AtLeast2[Set, X] = 
                 (xs + x).refineUnsafe[MinLength[2]]
-        
+
         private type AtLeast2FixedC[C[*]] = [X] =>> AtLeast2[C, X]
         
         given functorForAtLeast2[C[*]: Functor]: Functor[AtLeast2FixedC[C]] with
