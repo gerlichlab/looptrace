@@ -34,6 +34,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.roi.*
 import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.{
     IndexedDetectedSpot,
     PostMergeRoi,
+    RoiMergeBag,
 }
 import at.ac.oeaw.imba.gerlich.looptrace.space.BoundingBox
 import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.RoiIndexColumnName
@@ -73,9 +74,6 @@ trait RoiCsvInstances:
     
     given cellEncoderForRoiBag(using encOne: CellEncoder[RoiIndex]): CellEncoder[Set[RoiIndex]] = new:
         override def apply(cell: Set[RoiIndex]): String = cell.map(encOne.apply).mkString(roiIndexDelimiter)
-
-    summon[CsvRowDecoder[DetectedSpot[Double], Header]]
-    summon[CsvRowDecoder[BoundingBox, Header]]
 
     given csvRowDecoderForDetectedSpotRoi(using 
         CsvRowDecoder[DetectedSpot[Double], Header],
@@ -135,7 +133,7 @@ trait RoiCsvInstances:
     ): CsvRowDecoder[MergerAssessedRoi, Header] = 
         given CsvRowDecoder[Set[RoiIndex], Header] with
             override def apply(row: RowF[Some, Header]): DecoderResult[Set[RoiIndex]] = 
-                ColumnNames.MergeRoisColumnName.from(row)
+                ColumnNames.MergeContributorsColumnNameForAssessedRecord.from(row)
                     .leftMap{ errorMessages => 
                         val context = s"problem(s) decoding merge indices from CSV row ($row)"
                         DecoderError(s"${errorMessages.length} $context: ${errorMessages.mkString_("; ")}")
@@ -151,22 +149,29 @@ trait RoiCsvInstances:
     ): CsvRowEncoder[MergerAssessedRoi, Header] = 
         given CsvRowEncoder[Set[RoiIndex], Header] with
             override def apply(elem: Set[RoiIndex]): RowF[Some, Header] = 
-                ColumnNames.MergeRoisColumnName.write(elem)
+                ColumnNames.MergeContributorsColumnNameForAssessedRecord.write(elem)
         getCsvRowEncoderForProduct2(_.spot, _.mergeNeighbors)
 
     given csvRowDecoderForMergeContributorRoi(using 
-        decIndex: CsvRowDecoder[RoiIndex, Header], 
+        decIndex: CellDecoder[RoiIndex],
         decRoi: CsvRowDecoder[DetectedSpotRoi, Header], 
     ): CsvRowDecoder[MergeContributorRoi, Header] = new:
         override def apply(row: RowF[Some, Header]): DecoderResult[MergeContributorRoi] = 
             val indexNel: ValidatedNel[String, RoiIndex] = ColumnNames.RoiIndexColumnName.from(row)
             val roiNel: ValidatedNel[String, DetectedSpotRoi] = parseDetectedSpotRoi(row)
-            val mergeIndexNel: ValidatedNel[String, RoiIndex] = ColumnNames.MergedIndexColumnName.from(row)
-            (indexNel, roiNel, mergeIndexNel)
+            val mergeIndicesNel: ValidatedNel[String, NonEmptySet[RoiIndex]] = 
+                given CellDecoder[NonEmptySet[RoiIndex]] = 
+                    given Ordering[RoiIndex] = summon[Order[RoiIndex]].toOrdering
+                    summon[CellDecoder[Set[RoiIndex]]]
+                        .emap(_.toNonEmptySet.toRight(
+                            DecoderError("Empty ROI set for outputs of a merge contributor")
+                        ))
+                ColumnNames.MergeOutputsColumnName.from(row)
+            (indexNel, roiNel, mergeIndicesNel)
                 .tupled
                 .toEither
-                .flatMap{ (index, roi, mergeIndex) => 
-                    MergeContributorRoi.apply(index, roi, mergeIndex).leftMap(NonEmptyList.one)
+                .flatMap{ (index, roi, mergeIndices) => 
+                    MergeContributorRoi.apply(index, roi, mergeIndices).leftMap(NonEmptyList.one)
                 }
                 .leftMap{ messages => 
                     DecoderError(s"${messages.length} error(s) decoding merge contributor ROI: ${messages.mkString_("; ")}") 
@@ -183,8 +188,9 @@ trait RoiCsvInstances:
             val contextRow: NamedRow = encContext(elem.context)
             val centroidRow: NamedRow = encCentroid(elem.centroid)
             val boxRow: NamedRow = encBox(elem.box)
-            val mergeIndexRow: NamedRow = ColumnNames.MergedIndexColumnName.write(elem.mergeIndex)
-            idRow |+| contextRow |+| centroidRow |+| boxRow |+| mergeIndexRow
+            val mergeIndicesRow: NamedRow = 
+                ColumnNames.MergeOutputsColumnName.write(elem.mergeIndices)(using CellEncoder[Set[RoiIndex]].contramap(_.toSortedSet))
+            idRow |+| contextRow |+| centroidRow |+| boxRow |+| mergeIndicesRow
 
     def parseFromRow[A](messagePrefix: String)(using dec: CsvRowDecoder[A, Header]): RowF[Some, Header] => ValidatedNel[String, A] = 
         row => dec(row)
@@ -219,7 +225,7 @@ trait RoiCsvInstances:
                     .leftMap(e => s"Problem parsing bounding box: ${e.getMessage}")
                     .toValidatedNel
                 val contributorsNel = 
-                    ColumnNames.MergeContributorsColumnName.from(row)
+                    ColumnNames.MergeContributorsColumnNameForMergedRecord.from(row)
                 (indexNel, contextNel, centroidNel, boxNel, contributorsNel)
                     .mapN(MergedRoiRecord.apply)
                     .toEither
@@ -245,7 +251,7 @@ trait RoiCsvInstances:
                 val idxRow: NamedRow = ColumnNames.RoiIndexColumnName.write(elem.index)
                 val ctxRow: NamedRow = encContext(elem.context)
                 val centroidRow: NamedRow = summon[CsvRowEncoder[Centroid[Double], Header]](elem.centroid)
-                val contribsRow: NamedRow = ColumnNames.MergeContributorsColumnName.write(elem.contributors)
+                val contribsRow: NamedRow = ColumnNames.MergeContributorsColumnNameForMergedRecord.write(elem.contributors)
                 idxRow |+| ctxRow |+| centroidRow |+| contribsRow
 
     given csvRowEncoderForUnidentifiableRoi(using
@@ -275,7 +281,7 @@ trait RoiCsvInstances:
         new:
             override def apply(row: RowF[Some, String]): DecoderResult[PostMergeRoi] = 
                 val spotNel = parseFromRow[IndexedDetectedSpot]("Error(s) decoding ROI")(row)
-                val contributorsNel = ColumnNames.MergeRoisColumnName.from(row)
+                val contributorsNel = ColumnNames.MergeContributorsColumnNameForAssessedRecord.from(row)
                 (spotNel, contributorsNel)
                     .tupled
                     .toEither
@@ -309,6 +315,6 @@ trait RoiCsvInstances:
                     case _: IndexedDetectedSpot => Set()
                     case merged: MergedRoiRecord => merged.contributors
                 }
-                val mergeRoisRow: NamedRow = ColumnNames.MergeRoisColumnName.write(contribs)
+                val mergeRoisRow: NamedRow = ColumnNames.MergeContributorsColumnNameForAssessedRecord.write(contribs)
                 idxRow |+| ctxRow |+| encCentroid(centroid) |+| encBox(box) |+| mergeRoisRow
 end RoiCsvInstances

@@ -40,8 +40,6 @@ object MergeAndSplitRoiTools:
     object RoiMergeBag:
         extension (bag: RoiMergeBag)
             def toList: List[RoiIndex] = bag.toList
-        def fromMergedRecord(r: MergedRoiRecord): RoiMergeBag = 
-            (r.contributors + r.index).refineUnsafe[MinLength[2]]
     end RoiMergeBag
 
     /** Facilitate access to the components of a ROI's imaging context. */
@@ -213,18 +211,20 @@ object MergeAndSplitRoiTools:
                                     (((r, errors) :: accErr, accSkip, accMerge), alreadyMerged, currentMergeIndex)
                                 case Some(Right(rec)) =>
                                     // merge action
-                                    val indicesMerging = RoiMergeBag.fromMergedRecord(rec)
-                                    if alreadyMerged `contains` indicesMerging
-                                    then ((accErr, accSkip, rec :: accMerge), alreadyMerged, currentMergeIndex)
-                                    else ((accErr, accSkip, rec :: accMerge), alreadyMerged + indicesMerging, incrementIndex(currentMergeIndex))
+                                    if alreadyMerged `contains` rec.contributors
+                                    then ((accErr, accSkip, accMerge), alreadyMerged, currentMergeIndex)
+                                    else ((accErr, accSkip, rec :: accMerge), alreadyMerged + rec.contributors, incrementIndex(currentMergeIndex))
                         }
                     }
                 val allContrib: List[MergeContributorRoi] = allMerged
-                    .flatMap{ roi => 
-                        import RoiMergeBag.toList
-                        roi.contributors.toList.map(_ -> roi.index) 
+                    .foldRight(Map.empty[RoiIndex, NonEmptySet[RoiIndex]]){ (roi, mergedIndicesByContribIndex) => 
+                        roi.contributors.foldRight(mergedIndicesByContribIndex){ (i, acc) => 
+                            acc + (i -> acc.get(i).fold(NonEmptySet.one(roi.index))(_.add(roi.index)))
+                        }
                     }
-                    .map{ (contribIndex, mergedIndex) => 
+                    .toList
+                    .sortBy(_._1)
+                    .map{ (contribIndex, mergeIndices) => 
                         val original = pool.getOrElse(
                             contribIndex, 
                             throw new Exception(s"Cannot find original ROI for alleged contributor index ${contribIndex.show_}")
@@ -234,10 +234,9 @@ object MergeAndSplitRoiTools:
                             original.context, 
                             original.centroid, 
                             original.box,
-                            mergedIndex, 
+                            mergeIndices, 
                         )
                     }
-                    .sortBy(_.index)
                 (allErrored, allSkipped, allContrib, allMerged)                
         }
     
