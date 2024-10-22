@@ -190,7 +190,22 @@ object MergeAndSplitRoiTools:
             case strat: NontrivialProximityFilter => assessForMutualExclusion(strat)(rois)
         }
 
-    def mergeRois(buildNewBox: (Point3D, NonEmptyList[BoundingBox]) => BoundingBox)(rois: List[MergerAssessedRoi]): MergeResult = 
+    /**
+     * Generate the merge contributors, merge results, and singleton ROIs from the collection of merge-determined ROIs.
+     * 
+     * @param buildNewBox How to construct a new bounding box for a merge result, given the coordinate for the new center and 
+     *     the collection of bounding boxes of the ROIs which contributed to the merge result; this collection is useful, for 
+     *     example, to determine the minimum or maximum box size, or perhaps something like the greatest extent encompassed 
+     *     by the union of the boxes around the ROIs contributing to the merge
+     * @param rois The collection of ROIs for which merge partners(s) (or not) have been determined
+     * @return A list of any errors which occurred, a list of singleton ROIs, a list of merge inputs, and a list of merge outputs
+     */
+    def mergeRois(buildNewBox: (Point3D, NonEmptyList[BoundingBox]) => BoundingBox)(rois: List[MergerAssessedRoi]): (
+        List[MergeError], // errors
+        List[IndexedDetectedSpot], // non-participants in merge
+        List[MergeContributorRoi], // contributors to merge
+        List[MergedRoiRecord], // merge outputs
+    ) = 
         rois match {
             case Nil => (List(), List(), List(), List())
             case _ => 
@@ -287,10 +302,4 @@ object MergeAndSplitRoiTools:
         given AdmitsImagingContext[IndexedDetectedSpot] = AdmitsImagingContext.instance(_.context)
     end IndexedDetectedSpot
 
-    private type MergeResult = (
-        List[MergeError], // errors
-        List[IndexedDetectedSpot], // non-participants in merge
-        List[MergeContributorRoi], // contributors to merge
-        List[MergedRoiRecord], // merge outputs
-    )
 end MergeAndSplitRoiTools
