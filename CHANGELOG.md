@@ -4,14 +4,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [v0.10.0] - 2024-10-22
 
 ### Added
 * "Merge" ROIs which come from spots detected from the same regional barcode imaging timepoint, by defining a new ROI around the midpoint of the line segment between their centroids. See [Issue 279](https://github.com/gerlichlab/looptrace/issues/285)
 
 ### Changed
 * Swapped the order of the proximity-based filtration and the through-nuclei filtration; the filtration through nuclei now happens first.
-* Bumped up to Scala 3.5.0.
+* Bumped up to Scala 3.5.1.
 
 ## [v0.9.1] - 2024-07-29
 
