@@ -398,7 +398,7 @@ def fit_single_roi(
     if not np.any(roi_img) or any(d < 3 for d in roi_img.shape): # Check if empty or too small for fitting.
         fit = [-1] * len(ROI_FIT_COLUMNS)
     else:
-        center = 'max' if mask is None \
+        center = "max" if mask is None \
             else list(np.unravel_index(np.argmax(roi_img * (mask/np.max(mask))**2, axis=None), roi_img.shape))
         fit = list(fit_func_spec.function(roi_img, sigma=1, center=center)[0])
     return np.array(fit + [len_z, len_y, len_x])
@@ -407,9 +407,9 @@ def fit_single_roi(
 def apply_fine_scale_drift_correction(traces: pd.DataFrame) -> pd.DataFrame:
     """Shift pixel coordinates by the amount of fine-scale drift correction."""
     try:
-        traces['z_px_dc'] = traces['z_px'] + traces['zDriftFinePixels']
-        traces['y_px_dc'] = traces['y_px'] + traces['yDriftFinePixels']
-        traces['x_px_dc'] = traces['x_px'] + traces['xDriftFinePixels']
+        traces["z_px_dc"] = traces["z_px"] + traces["zDriftFinePixels"]
+        traces["y_px_dc"] = traces["y_px"] + traces["yDriftFinePixels"]
+        traces["x_px_dc"] = traces["x_px"] + traces["xDriftFinePixels"]
     except KeyError as e:
         logging.exception(f"Error ({e}) during application of drift correction. Available columns in traces table: {', '.join(map(str, traces.columns))}")
         raise
