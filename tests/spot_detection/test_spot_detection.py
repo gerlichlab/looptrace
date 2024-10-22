@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Union
 import numpy as np
 if TYPE_CHECKING:
     import numpy.typing as npt
-    import pandas as pd
+import pandas as pd
 from pandas.testing import assert_frame_equal
 import pytest
 
