@@ -8,6 +8,7 @@ import io.github.iltotore.iron.{ :|, refineUnsafe }
 import io.github.iltotore.iron.constraint.collection.MinLength
 import io.github.iltotore.iron.constraint.collection.given
 import mouse.boolean.*
+import com.typesafe.scalalogging.LazyLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.{ Centroid, DistanceThreshold, PiecewiseDistance, ProximityComparable }
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
@@ -31,7 +32,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.ProximityFil
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 
 /** Tools for merging ROIs */
-object MergeAndSplitRoiTools:
+object MergeAndSplitRoiTools extends LazyLogging:
     private[looptrace] type PostMergeRoi = IndexedDetectedSpot | MergedRoiRecord
     import PostMergeRoi.*
 
@@ -213,6 +214,7 @@ object MergeAndSplitRoiTools:
                 val pool = rois.map{ r => r.index -> r }.toMap
                 given Ordering[RoiIndex] = summon[Order[RoiIndex]].toOrdering
                 val initNewIndex = incrementIndex(rois.map(_.index).max)
+                logger.debug(s"Initial / first eligible index to use for merge result ROIs: ${initNewIndex.show_}")
                 val ((allErrored, allSkipped, allMerged), _, _) = 
                     rois.foldRight(((List.empty[MergeError], List.empty[IndexedDetectedSpot], List.empty[MergedRoiRecord]), Set.empty[RoiMergeBag], initNewIndex)){
                         case (r, ((accErr, accSkip, accMerge), alreadyMerged, currentMergeIndex)) => 
@@ -225,10 +227,15 @@ object MergeAndSplitRoiTools:
                                     // error case
                                     (((r, errors) :: accErr, accSkip, accMerge), alreadyMerged, currentMergeIndex)
                                 case Some(Right(rec)) =>
-                                    // merge action
+                                    // merge case
+                                    val mergeText = rec.contributors.toList.sorted.map(_.show_).mkString(";")
                                     if alreadyMerged `contains` rec.contributors
-                                    then ((accErr, accSkip, accMerge), alreadyMerged, currentMergeIndex)
-                                    else ((accErr, accSkip, rec :: accMerge), alreadyMerged + rec.contributors, incrementIndex(currentMergeIndex))
+                                    then
+                                        logger.debug(s"Skipping, already merged: $mergeText") 
+                                        ((accErr, accSkip, accMerge), alreadyMerged, currentMergeIndex)
+                                    else 
+                                        logger.debug(s"Merging $mergeText --> ${rec.index.show_}")
+                                        ((accErr, accSkip, rec :: accMerge), alreadyMerged + rec.contributors, incrementIndex(rec.index))
                         }
                     }
                 val allContrib: List[MergeContributorRoi] = allMerged
