@@ -4,12 +4,12 @@ package roi
 import cats.*
 import cats.data.{ EitherNel, NonEmptyList, NonEmptyMap, NonEmptySet, ValidatedNel }
 import cats.syntax.all.*
-import io.github.iltotore.iron.{ :|, refineUnsafe } 
-import io.github.iltotore.iron.constraint.collection.MinLength
 import io.github.iltotore.iron.constraint.collection.given
 import mouse.boolean.*
 import com.typesafe.scalalogging.LazyLogging
 
+import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2
+import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2.syntax.*
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.{ Centroid, DistanceThreshold, PiecewiseDistance, ProximityComparable }
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.syntax.*
@@ -19,7 +19,6 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
-import at.ac.oeaw.imba.gerlich.looptrace.collections.AtLeast2
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ BoundingBox, Point3D }
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.NontrivialProximityFilter
@@ -37,11 +36,6 @@ object MergeAndSplitRoiTools extends LazyLogging:
     import PostMergeRoi.*
 
     type RoiMergeBag = AtLeast2[Set, RoiIndex]
-
-    object RoiMergeBag:
-        extension (bag: RoiMergeBag)
-            def toList: List[RoiIndex] = bag.toList
-    end RoiMergeBag
 
     /** Facilitate access to the components of a ROI's imaging context. */
     object PostMergeRoi:
@@ -240,7 +234,7 @@ object MergeAndSplitRoiTools extends LazyLogging:
                     }
                 val allContrib: List[MergeContributorRoi] = allMerged
                     .foldRight(Map.empty[RoiIndex, NonEmptySet[RoiIndex]]){ (roi, mergedIndicesByContribIndex) => 
-                        roi.contributors.foldRight(mergedIndicesByContribIndex){ (i, acc) => 
+                        roi.contributors.toSet.foldRight(mergedIndicesByContribIndex){ (i, acc) => 
                             acc + (i -> acc.get(i).fold(NonEmptySet.one(roi.index))(_.add(roi.index)))
                         }
                     }
@@ -283,14 +277,14 @@ object MergeAndSplitRoiTools extends LazyLogging:
                         partners.head.context
                     )
                     newCenter: Point3D = 
-                        partners.map(_.centroid.asPoint).toNel.get.centroid
-                    newBox: BoundingBox = buildNewBox(newCenter, partners.map(_.box).toNel.get)
+                        partners.map(_.centroid.asPoint).toNel.centroid
+                    newBox: BoundingBox = buildNewBox(newCenter, partners.map(_.box).toNel)
                 } yield MergedRoiRecord(
                     potentialNewIndex, 
                     ctx, 
                     Centroid.fromPoint(newCenter), 
                     newBox, 
-                    (partners.map(_.index).toList.toSet).refineUnsafe[MinLength[2]],
+                    AtLeast2.unsafe(partners.map(_.index).toList.toSet),
                 )
             }
         )
