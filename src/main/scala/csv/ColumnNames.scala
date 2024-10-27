@@ -3,10 +3,10 @@ package csv
 
 import cats.data.NonEmptySet
 
+import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.*
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.PositionName
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnName
-import at.ac.oeaw.imba.gerlich.looptrace.collections.AtLeast2
 import at.ac.oeaw.imba.gerlich.looptrace.drift.*
 
 /** Collection of names of critical columns from which to parse data */

@@ -10,10 +10,13 @@ import io.github.iltotore.iron.constraint.collection.MinLength
 import mouse.boolean.*
 
 import at.ac.oeaw.imba.gerlich.gerlib.cell.NuclearDesignation
+import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2
+import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2.syntax.*
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.Centroid
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{
     ColumnNameLike, 
+    IntraCellDelimiter,
     NamedRow,
     getCsvRowDecoderForProduct2, 
     getCsvRowDecoderForSingleton,
@@ -38,7 +41,6 @@ import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.{
 }
 import at.ac.oeaw.imba.gerlich.looptrace.space.BoundingBox
 import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.RoiIndexColumnName
-import at.ac.oeaw.imba.gerlich.looptrace.collections.AtLeast2
 
 /** Typeclass instances related to CSV, for ROI-related data types */
 trait RoiCsvInstances:
@@ -237,9 +239,6 @@ trait RoiCsvInstances:
     ): CellDecoder[AtLeast2[C, X]] = 
         decCX.emap{ AtLeast2.either(_).leftMap(msg => DecoderError(msg)) }
 
-    private given cellEncoderForAtLeast2[C[*], X](using enc: CellEncoder[C[X]]): CellEncoder[AtLeast2[C, X]] = new:
-        override def apply(cell: AtLeast2[C, X]): String = enc(cell) // Overcome the type invariance of CellEncoder[*]
-
     given csvRowEncoderForMergedRoiRecord(using 
         encIndex: CellEncoder[RoiIndex], 
         encContext: CsvRowEncoder[ImagingContext, Header],
@@ -251,7 +250,9 @@ trait RoiCsvInstances:
                 val idxRow: NamedRow = ColumnNames.RoiIndexColumnName.write(elem.index)
                 val ctxRow: NamedRow = encContext(elem.context)
                 val centroidRow: NamedRow = summon[CsvRowEncoder[Centroid[Double], Header]](elem.centroid)
-                val contribsRow: NamedRow = ColumnNames.MergeContributorsColumnNameForMergedRecord.write(elem.contributors)
+                val contribsRow: NamedRow = 
+                    given IntraCellDelimiter[RoiIndex] = IntraCellDelimiter(roiIndexDelimiter)
+                    ColumnNames.MergeContributorsColumnNameForMergedRecord.write(elem.contributors)
                 idxRow |+| ctxRow |+| centroidRow |+| contribsRow
 
     given csvRowEncoderForUnidentifiableRoi(using
@@ -313,7 +314,7 @@ trait RoiCsvInstances:
                 val (centroid, box) = PostMergeRoi.getCenterAndBox(elem)
                 val contribs: Set[RoiIndex] = elem match {
                     case _: IndexedDetectedSpot => Set()
-                    case merged: MergedRoiRecord => merged.contributors
+                    case merged: MergedRoiRecord => merged.contributors.toSet
                 }
                 val mergeRoisRow: NamedRow = ColumnNames.MergeContributorsColumnNameForAssessedRecord.write(contribs)
                 idxRow |+| ctxRow |+| encCentroid(centroid) |+| encBox(box) |+| mergeRoisRow
