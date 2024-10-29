@@ -26,7 +26,7 @@ object Dependencies {
     /** Build ModuleID for a com.lihaoyi JSON-related project. */
     object HaoyiJson {
         def getModuleId(name: String): ModuleID = "com.lihaoyi" %% name % latestVersion
-        private def latestVersion = "4.0.0"
+        private def latestVersion = "4.0.2"
     }
 
     object PureConfig {
