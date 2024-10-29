@@ -8,9 +8,11 @@ import cats.data.{ NonEmptyList, NonEmptyMap, NonEmptySet, Validated, ValidatedN
 import cats.data.Validated.{ Invalid, Valid }
 import cats.syntax.all.*
 import mouse.boolean.*
+import ujson.IncompleteParseException
 import upickle.default.*
 import com.typesafe.scalalogging.LazyLogging
 
+import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.{ DistanceThreshold, PiecewiseDistance }
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.imagingTimepoint.given
@@ -21,6 +23,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.LocusGroup
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.{ readJsonFile, safeReadAs }
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.EuclideanDistance
 
 /** Typical looptrace declaration/configuration of imaging rounds and how to use them */
 final case class ImagingRoundsConfiguration private(
@@ -386,6 +389,125 @@ object ImagingRoundsConfiguration extends LazyLogging:
         minSpotSeparation: NonnegativeReal, 
         grouping: NonEmptyList[NonEmptySet[ImagingTimepoint]],
         ) extends NontrivialProximityFilter with SelectiveProximityFilter
+
+    /** How to filter/discard ROIs on the basis of occurrence in proximity to other group members */
+    enum RoiPartnersRequirementType:
+        /** Don't require proximity of any group member at all. */
+        case Lackadaisical
+        /** Require proximity of 'at least one' group member (i.e., logical OR). */
+        case Disjunctive
+        /** Require proximity of 'all' group members (i.e., logical AND). */
+        case Conjunctive
+
+    /** A grouping of elements {@code E} to consider for proximity relative to some distance threshold */
+    final case class ProximityGroup[T <: DistanceThreshold, E](
+        distanceThreshold: T, 
+        members: AtLeast2[Set, E]
+    )
+
+    /** Helpers for working with the proximity group data type */
+    object ProximityGroup:
+        /** The key for the proximity-defining distance threshold value */
+        private[ImagingRoundsConfiguration] val thresholdKey = "distanceThreshold"
+        
+        private[ImagingRoundsConfiguration] val requirementTypeKey = "requirementType"
+
+        /** The key which maps to the individual elements/members which comprise the group */
+        private[ImagingRoundsConfiguration] val membersKey = "groupMembers"
+        
+        /**
+         * Get a [[upickle.default.Reader]] instance for a [[ProximityGroup]] with group members of type {@code A}.
+         * 
+         * @tparam A The type of individual group members
+         * @tparam T The [[at.ac.oeaw.imba.gerlich.gerlib.geometry.DistanceThreshold]] subtype
+         * @param parseA How to read a single group member value from a JSON value
+         * @param parseThreshold How to parse the proximity-defining distance threshold
+         * @return A [[upickle.default.Reader]] instance with which to parse proximity groups from JSON
+         */
+        def getJsonReader[T <: DistanceThreshold, A](
+            parseThreshold: ujson.Value => Either[String, T],
+            parseA: ujson.Value => Either[String, A],
+        ): Reader[ProximityGroup[T, A]] = 
+            summon[Reader[Map[String, ujson.Value]]].map{ kvPairs =>
+                val thresholdNel = kvPairs.get(thresholdKey)
+                    .toRight(s"Missing key ($thresholdKey) in JSON for proximity group distance threshold")
+                    .flatMap(parseThreshold)
+                    .toValidatedNel
+                val membersNel: ValidatedNel[String, AtLeast2[Set, A]] = kvPairs.get(membersKey)
+                    .toRight(s"Missing key ($membersKey) in JSON for proximity group members")
+                    .flatMap{ v => v.arrOpt.toRight(s"Value for $membersKey isn't an array: $v").map(_.toList) }
+                    .flatMap(_.parTraverse(parseA))
+                    .flatMap{ vs => 
+                        vs.groupBy(identity).view.mapValues(_.size).toList.filter(_._2 > 1) match {
+                            case Nil => vs.toSet.asRight
+                            case repeats => s"${repeats.size} repeated values; counts: ${repeats}".asLeft
+                        }
+                    }
+                    .flatMap(AtLeast2.either)
+                    .toValidatedNel
+                (thresholdNel, membersNel).mapN(ProximityGroup.apply).fold(
+                    errorMessages => 
+                        throw IncompleteParseException(
+                            s"${errorMessages.size} error(s) parsing proximity group: ${errorMessages.mkString_("; ")}"
+                        ), 
+                    identity
+                )
+            }
+    end ProximityGroup
+
+    /** How to redefine trace IDs and filter ROIs on the basis of proximity to one another */
+    final case class TraceIdDefinitionAndFiltrationRule(
+        mergeGroup: ProximityGroup[EuclideanDistance.Threshold, RegionId],
+        requirement: RoiPartnersRequirementType, 
+    )
+
+    /** Helpers for working with the data type for trace ID definition and filtration */
+    object TraceIdDefinitionAndFiltrationRulesSet:
+        private def parseThreshold: ujson.Value => Either[String, EuclideanDistance.Threshold] = v =>
+            v.numOpt
+                .toRight(s"Value to decoder as a distance threshold ins't a number: $v")
+                .flatMap(NonnegativeReal.either)
+                .map(EuclideanDistance.Threshold.apply)
+
+        private case class PartialJsonDigest(
+            maybeThreshold: Option[EuclideanDistance.Threshold], 
+            maybeRequirement: Option[RoiPartnersRequirementType],
+        ):
+            def buildRule(kvPairs: Map[String, ujson.Value]): ValidatedNel[String, TraceIdDefinitionAndFiltrationRule] = 
+                val thresholdNel = (kvPairs.get(ProximityGroup.thresholdKey) match {
+                    case Some(v) => parseThreshold(v) // If the key's there, unconditionally use the parse result.
+                    case None => maybeThreshold.toRight("No distance threshold with which to define proximity")
+                }).toValidatedNel
+                val requirementTypeNel = (kvPairs.get(ProximityGroup.requirementTypeKey) match {
+                    case Some(v) => 
+                        Try{ RoiPartnersRequirementType.valueOf(v.str) }
+                            .toEither
+                            .leftMap{ e => s"Cannot parse requirement type for trace ID filter rule (value: $v): ${e.getMessage}" }
+                    case None => maybeRequirement.toRight("No requirement type with which to define trace ID filter rule")
+                }).toValidatedNel
+                val membersNel = 
+                    import RegionId.given
+                    import at.ac.oeaw.imba.gerlich.gerlib.json.instances.collections.given
+                    import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2.syntax.*
+                    kvPairs.get(ProximityGroup.membersKey)
+                        .toRight(s"Missing key (${ProximityGroup.membersKey}) in JSON for proximity group members")
+                        .flatMap(UJsonHelpers.safeReadAs[AtLeast2[List, RegionId]])
+                        .flatMap{ vs =>
+                            val uniques = vs.toList.toSet
+                            (uniques.size === vs.size).either(
+                                s"${uniques.size} unique value(s), but ${vs.size} total",
+                                AtLeast2.unsafe(uniques)
+                            )
+                        }
+                        .toValidatedNel
+                (thresholdNel, requirementTypeNel, membersNel).mapN{
+                    (threshold, requirementType, members) => 
+                        TraceIdDefinitionAndFiltrationRule(
+                            ProximityGroup(threshold, members),
+                            requirementType,
+                        )
+                }
+    end TraceIdDefinitionAndFiltrationRulesSet
 
     /** Check list of items for nonemptiness. */
     private def liftToNel[A](as: List[A], context: Option[String] = None): Either[String, NonEmptyList[A]] = 

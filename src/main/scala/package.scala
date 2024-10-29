@@ -9,6 +9,7 @@ import cats.syntax.all.*
 import mouse.boolean.*
 import scopt.Read
 
+import upickle.default.{ Reader as JsonReader }
 import io.github.iltotore.iron.:|
 import io.github.iltotore.iron.constraint.char.*
 
@@ -16,6 +17,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.imaging.{ ImagingTimepoint, PositionName }
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given // Order, Show
 import at.ac.oewa.imba.gerlich.looptrace.RowIndexAdmission
+import at.ac.oeaw.imba.gerlich.looptrace.syntax.json.*
 
 /** Chromatin fiber tracing with FISH probes */
 package object looptrace {
@@ -75,15 +77,35 @@ package object looptrace {
 
     object RegionId:
         def fromInt = NonnegativeInt.either.fmap(_.map(fromNonnegative))
+        
         def fromNonnegative = RegionId.apply `compose` ImagingTimepoint.apply
+        
         def unsafe = fromNonnegative `compose` NonnegativeInt.unsafe
+
+        given JsonReader[RegionId] = 
+            upickle.default.reader[ujson.Value].map(
+                _.safeInt.leftMap(_.getMessage).flatMap(fromInt) match {
+                    case Left(msg) => throw ujson.IncompleteParseException(msg)
+                    case Right(regId) => regId
+                }
+            )
     end RegionId
 
     final case class RoiIndex(get: NonnegativeInt) derives Order
     
     object RoiIndex:
         def fromInt = NonnegativeInt.either.fmap(_.map(RoiIndex.apply))
+        
         def unsafe = NonnegativeInt.unsafe.andThen(RoiIndex.apply)
+        
+        given JsonReader[RoiIndex] = 
+            upickle.default.reader[ujson.Value].map(
+                _.safeInt.leftMap(_.getMessage).flatMap(fromInt) match {
+                    case Left(msg) => throw ujson.IncompleteParseException(msg)
+                    case Right(roiIdx) => roiIdx
+                }
+            )
+        
         given RowIndexAdmission[RoiIndex, Id] with
             override def getRowIndex: RoiIndex => Id[NonnegativeInt] = _.get
     end RoiIndex
