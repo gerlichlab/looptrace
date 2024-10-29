@@ -7,7 +7,8 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 ## [Unreleased]
 
 ### Changed
-* Scala is now 3.5.2.
+* Scala is now version 3.5.2.
+* `sbt` is now version 1.10.4.
 * Moved the `AtLeast2[C[*], E]` data type to `gerlib`, to be released with version 0.3 of that library.
 
 ## [v0.10.1] - 2024-11-11
