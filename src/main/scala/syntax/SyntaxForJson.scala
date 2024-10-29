@@ -3,6 +3,7 @@ package syntax
 
 import scala.util.Try
 
+/** Extra syntax on JSON-related values */
 trait SyntaxForJson:
     extension (v: ujson.Value)
         def int: Int = tryToInt(v.num).fold(msg => throw new ujson.Value.InvalidData(v, msg), identity)
