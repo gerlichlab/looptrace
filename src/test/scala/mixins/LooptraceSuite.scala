@@ -1,10 +1,12 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
-import scala.util.NotGiven
+import scala.util.{ NotGiven, Try }
 import cats.*
 import cats.syntax.all.*
 import org.scalacheck.{ Arbitrary, Gen }
 import org.scalacheck.Arbitrary.arbitrary
+
+import com.github.tototoshi.csv.*
 
 import at.ac.oeaw.imba.gerlich.gerlib.cell.NuclearDesignation
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.{BoundingBox, Centroid, EuclideanDistance}
@@ -101,5 +103,19 @@ trait LooptraceSuite extends GenericSuite, GeometricInstances, ImagingInstances,
      * Other definitions
      ***********************/
     protected def genNonNegReal(limit: NonnegativeReal): Gen[NonnegativeReal] = Gen.choose(0.0, limit).map(NonnegativeReal.unsafe)
+    
     protected def genPosReal(limit: PositiveReal): Gen[PositiveReal] = Gen.choose(0.0, limit).suchThat(_ > 0).map(PositiveReal.unsafe)
+
+
+    /**
+      * Read given file as CSV with header, and handle resource safety.
+      *
+      * @param f The path to the file to read as CSV
+      * @return Either a [[scala.util.Left]]-wrapped exception or a [[scala.util.Right]]-wrapped pair of columns and list of row records
+      */
+    protected def safeReadAllWithOrderedHeaders(f: os.Path): Either[Throwable, (List[String], List[Map[String, String]])] = for {
+        reader <- Try{ CSVReader.open(f.toIO) }.toEither
+        result <- Try{ reader.allWithOrderedHeaders() }.toEither
+        _ = reader.close()
+    } yield result
 end LooptraceSuite

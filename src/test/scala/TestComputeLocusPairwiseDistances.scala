@@ -28,7 +28,6 @@ import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.* // for .show_ syntax
 import at.ac.oeaw.imba.gerlich.gerlib.testing.instances.all.given
 
 import at.ac.oeaw.imba.gerlich.looptrace.ComputeLocusPairwiseDistances.*
-import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.safeReadAllWithOrderedHeaders
 import at.ac.oeaw.imba.gerlich.looptrace.collections.*
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
