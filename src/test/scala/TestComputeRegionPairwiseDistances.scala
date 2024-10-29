@@ -29,7 +29,6 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.ComputeRegionPairwiseDistances.*
-import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.safeReadAllWithOrderedHeaders
 import at.ac.oeaw.imba.gerlich.looptrace.collections.*
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
@@ -351,6 +350,13 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
     test("(FOV, region ID) is NOT a key!") {
         import io.github.iltotore.iron.autoRefine
 
+        // nCk, i.e. number of ways to choose k indistinguishable objects from n
+        def choose(n: Int)(k: Int): Int = 
+            require(n >= 0 && n <= 10, s"n not in [0, 10] for nCk: $n")
+            require(k <= n, s"Cannot choose more items than available: $k > $n")
+            val factorial = (z: Int) => (1 to z).product
+            factorial(n) / (factorial(k) * factorial(n - k))
+
         /* To encourage collisions, narrow the choices for grouping components. */
         given arbPosition: Arbitrary[PositionName] = Gen.const(PositionName("P0002.zarr")).toArbitrary
         given arbRegion: Arbitrary[RegionId] = Gen.oneOf(40, 41, 42).map(RegionId.unsafe).toArbitrary
@@ -361,13 +367,8 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                 case i: Input.GoodRecord => i.fieldOfView
                 case o: OutputRecord => o.fieldOfView
             }
-            val expGroupSizes = records.groupBy(getKey).view.mapValues(g => g.size `choose` 2).toMap
-            val obsGroupSizes = 
-                inputRecordsToOutputRecords(NonnegativeInt.indexed(records), None, ToNanometersIdentity)
-                    .groupBy(getKey)
-                    .view
-                    .mapValues(_.size)
-                    .toMap
+            val expGroupSizes = records.groupBy(getKey).view.mapValues{ g => choose(g.size)(2) }.toMap
+            val obsGroupSizes = inputRecordsToOutputRecords(NonnegativeInt.indexed(records)).groupBy(getKey).view.mapValues(_.size).toMap
             obsGroupSizes shouldEqual expGroupSizes
         }
     }
@@ -378,20 +379,6 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
         arbRegion: Arbitrary[RegionId], 
         arbPoint: Arbitrary[Point3D], 
     ): Arbitrary[Input.GoodRecord] = (arbPos, arbRegion, arbPoint).mapN(Input.GoodRecord.apply)
-
-    // nCk, i.e. number of ways to choose k indistinguishable objects from n
-    extension (n: Int)
-        infix private def choose(k: Int): Int = 
-            require(n >= 0 && n <= 10, s"n not in [0, 10] for nCk: $n")
-            require(k <= n, s"Cannot choose more items than available: $k > $n")
-            factorial(n) / (factorial(k) * factorial(n - k))
-
-    private def factorial(n: Int): Int = 
-        require(n >= 0 && n <= 10, s"Factorial arg not in [0, 10]: $n")
-        (1 to n).product
-
-    private def expectedHeader: List[String] = 
-        List(FieldOfViewColumnName.value, "region1", "region2", "distance", "inputIndex1", "inputIndex2")
 
     /** Convert a sequence of text fields into a single line (CSV), including newline. */
     private def textFieldsToLine = Delimiter.CommaSeparator.join(_: List[String]) ++ "\n"

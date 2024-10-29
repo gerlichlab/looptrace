@@ -70,7 +70,6 @@ lazy val root = (project in file("."))
       os, 
       pureconfigCore,
       pureconfigGeneric,
-      scalaCsv,
       scopt,
       squants,
       uPickle,
@@ -80,6 +79,7 @@ lazy val root = (project in file("."))
       Seq( // only for tests
         gerlibTesting,
         ironScalacheck,
+        scalaCsv,
         scalacheck, 
         scalactic, 
         scalatest, 

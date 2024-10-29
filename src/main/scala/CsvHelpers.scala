@@ -2,7 +2,9 @@ package at.ac.oeaw.imba.gerlich.looptrace
 
 import scala.util.Try
 import cats.syntax.all.*
-import com.github.tototoshi.csv.*
+import mouse.boolean.*
+
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
 /** Helpers for working with CSV files and data */
 object CsvHelpers:
