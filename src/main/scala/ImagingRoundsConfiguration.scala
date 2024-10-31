@@ -4,7 +4,7 @@ import scala.collection.immutable.SortedSet
 import scala.language.adhocExtensions // to extend ujson.Value.InvalidData
 import scala.util.Try
 import cats.*
-import cats.data.{ NonEmptyList, NonEmptyMap, NonEmptySet, Validated, ValidatedNel }
+import cats.data.{ EitherNel, NonEmptyList, NonEmptyMap, NonEmptySet, Validated, ValidatedNel }
 import cats.data.Validated.{ Invalid, Valid }
 import cats.syntax.all.*
 import mouse.boolean.*
@@ -399,6 +399,9 @@ object ImagingRoundsConfiguration extends LazyLogging:
         /** Require proximity of 'all' group members (i.e., logical AND). */
         case Conjunctive
 
+    object RoiPartnersRequirementType:
+        def parse(s: String): Option[RoiPartnersRequirementType] = Try{ valueOf(s) }.toOption
+
     /** A grouping of elements {@code E} to consider for proximity relative to some distance threshold */
     final case class ProximityGroup[T <: DistanceThreshold, E](
         distanceThreshold: T, 
@@ -413,8 +416,11 @@ object ImagingRoundsConfiguration extends LazyLogging:
         private[ImagingRoundsConfiguration] val requirementTypeKey = "requirementType"
 
         /** The key which maps to the individual elements/members which comprise the group */
-        private[ImagingRoundsConfiguration] val membersKey = "groupMembers"
+        private[ImagingRoundsConfiguration] val membersKey = "members"
         
+        /** The key which maps to the collection of groups */
+        private[ImagingRoundsConfiguration] val groupsKey = "groups"
+
         /**
          * Get a [[upickle.default.Reader]] instance for a [[ProximityGroup]] with group members of type {@code A}.
          * 
@@ -463,50 +469,69 @@ object ImagingRoundsConfiguration extends LazyLogging:
 
     /** Helpers for working with the data type for trace ID definition and filtration */
     object TraceIdDefinitionAndFiltrationRulesSet:
+        def fromJson(json: ujson.Value): EitherNel[String, NonEmptyList[TraceIdDefinitionAndFiltrationRule]] = 
+            Try{ read[Map[String, ujson.Value]](json) }
+                .toEither
+                .leftMap(e => NonEmptyList.one(s"Cannot read JSON as key-value pairs: ${e.getMessage}"))
+                .flatMap{ kvPairs => 
+                    val maybeThresholdNel = kvPairs.get(ProximityGroup.membersKey) match {
+                        case None => None.validNel[String]
+                        case Some(v) => UJsonHelpers.safeReadAs[Double](v)
+                            .flatMap(NonnegativeReal.either)
+                            .map(d => EuclideanDistance.Threshold(d).some)
+                            .toValidatedNel
+                    }
+                    val maybeRequirementTypeNel = kvPairs.get(ProximityGroup.requirementTypeKey) match {
+                        case None => None.validNel[String]
+                        case Some(v) => UJsonHelpers.safeReadAs[String](v)
+                            .flatMap{ s => 
+                                RoiPartnersRequirementType.parse(s) match {
+                                    case None => s"Can't parse value for '${ProximityGroup.requirementTypeKey}': $s".asLeft
+                                    case Some(reqType) => reqType.some.asRight
+                                }
+                            }
+                            .toValidatedNel
+                    }
+                    (maybeThresholdNel, maybeRequirementTypeNel)
+                        .tupled
+                        .toEither
+                        .flatMap{ (maybeThreshold, maybeRequirementType) => 
+                            kvPairs.get(ProximityGroup.groupsKey)
+                                .toRight(s"Misssing key for groups: ${ProximityGroup.groupsKey}")
+                                .flatMap(_.arrOpt.toRight(s"Can't parse groups (from '${ProximityGroup.groupsKey}') as array-like"))
+                                .flatMap(_.toList.toNel.toRight(s"Groups (from '${ProximityGroup.groupsKey}') is empty"))
+                                .leftMap(NonEmptyList.one)
+                                .flatMap(_.nonEmptyTraverse(v => parseGroupMembersSimple(v).leftMap(NonEmptyList.one)))
+                                .flatMap(groups => (maybeThreshold, maybeRequirementType) match {
+                                    case (Some(threshold), Some(reqType)) => 
+                                        groups.map{ g => TraceIdDefinitionAndFiltrationRule(
+                                            ProximityGroup(threshold, g), 
+                                            reqType,
+                                            )
+                                        }.asRight
+                                    case _ => NonEmptyList.one("Missing threshold and/or requirement type").asLeft
+                                })
+                        }
+                }
+        
         private def parseThreshold: ujson.Value => Either[String, EuclideanDistance.Threshold] = v =>
             v.numOpt
                 .toRight(s"Value to decoder as a distance threshold ins't a number: $v")
                 .flatMap(NonnegativeReal.either)
                 .map(EuclideanDistance.Threshold.apply)
 
-        private case class PartialJsonDigest(
-            maybeThreshold: Option[EuclideanDistance.Threshold], 
-            maybeRequirement: Option[RoiPartnersRequirementType],
-        ):
-            def buildRule(kvPairs: Map[String, ujson.Value]): ValidatedNel[String, TraceIdDefinitionAndFiltrationRule] = 
-                val thresholdNel = (kvPairs.get(ProximityGroup.thresholdKey) match {
-                    case Some(v) => parseThreshold(v) // If the key's there, unconditionally use the parse result.
-                    case None => maybeThreshold.toRight("No distance threshold with which to define proximity")
-                }).toValidatedNel
-                val requirementTypeNel = (kvPairs.get(ProximityGroup.requirementTypeKey) match {
-                    case Some(v) => 
-                        Try{ RoiPartnersRequirementType.valueOf(v.str) }
-                            .toEither
-                            .leftMap{ e => s"Cannot parse requirement type for trace ID filter rule (value: $v): ${e.getMessage}" }
-                    case None => maybeRequirement.toRight("No requirement type with which to define trace ID filter rule")
-                }).toValidatedNel
-                val membersNel = 
-                    import RegionId.given
-                    import at.ac.oeaw.imba.gerlich.gerlib.json.instances.collections.given
-                    import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2.syntax.*
-                    kvPairs.get(ProximityGroup.membersKey)
-                        .toRight(s"Missing key (${ProximityGroup.membersKey}) in JSON for proximity group members")
-                        .flatMap(UJsonHelpers.safeReadAs[AtLeast2[List, RegionId]])
-                        .flatMap{ vs =>
-                            val uniques = vs.toList.toSet
-                            (uniques.size === vs.size).either(
-                                s"${uniques.size} unique value(s), but ${vs.size} total",
-                                AtLeast2.unsafe(uniques)
-                            )
-                        }
-                        .toValidatedNel
-                (thresholdNel, requirementTypeNel, membersNel).mapN{
-                    (threshold, requirementType, members) => 
-                        TraceIdDefinitionAndFiltrationRule(
-                            ProximityGroup(threshold, members),
-                            requirementType,
-                        )
-                }
+        // Use this to parse the actual collection of RegionId values.
+        private def parseGroupMembersSimple(json: ujson.Value): Either[String, AtLeast2[Set, RegionId]] = 
+            import RegionId.given
+            import at.ac.oeaw.imba.gerlich.gerlib.json.instances.collections.given
+            import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2.syntax.*
+            UJsonHelpers.safeReadAs[AtLeast2[List, RegionId]](json).flatMap{ vs =>
+                val uniques = vs.toList.toSet
+                (uniques.size === vs.size).either(
+                    s"${uniques.size} unique value(s), but ${vs.size} total",
+                    AtLeast2.unsafe(uniques)
+                )
+            }
     end TraceIdDefinitionAndFiltrationRulesSet
 
     /** Check list of items for nonemptiness. */
