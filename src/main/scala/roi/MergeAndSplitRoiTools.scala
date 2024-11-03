@@ -240,7 +240,7 @@ object MergeAndSplitRoiTools extends LazyLogging:
                     }
                     .toList
                     .sortBy(_._1)
-                    .map{ (contribIndex, mergeIndices) => 
+                    .map{ (contribIndex, mergeOutputs) => 
                         val original = pool.getOrElse(
                             contribIndex, 
                             throw new Exception(s"Cannot find original ROI for alleged contributor index ${contribIndex.show_}")
@@ -250,7 +250,7 @@ object MergeAndSplitRoiTools extends LazyLogging:
                             original.context, 
                             original.centroid, 
                             original.box,
-                            mergeIndices, 
+                            mergeOutputs, 
                         )
                     }
                 (allErrored, allSkipped, allContrib, allMerged)                
