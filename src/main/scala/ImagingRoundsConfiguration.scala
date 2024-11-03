@@ -112,6 +112,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
       * @param locusGrouping How each locus is associated with a region
       * @param proximityFilterStrategy How to filter regional spots based on proximity
       * @param tracingExclusions Timepoints to exclude from tracing analysis
+      * @param maybeMergeRules How to merge ROIs from different timepoints
       * @param checkLocusTimepointCovering Whether to validate that the union of the locusGrouping section values covers all locus imaging timepoints
       * @return Either a [[scala.util.Left]]-wrapped nonempty list of error messages, or a [[scala.util.Right]]-wrapped built instance
       */
@@ -120,6 +121,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
         locusGrouping: Set[LocusGroup], 
         proximityFilterStrategy: ProximityFilterStrategy, 
         tracingExclusions: Set[ImagingTimepoint], 
+        maybeMergeRules: Option[NonEmptyList[TraceIdDefinitionAndFiltrationRule]],
         checkLocusTimepointCovering: Boolean,
     ): ErrMsgsOr[ImagingRoundsConfiguration] = {
         val knownTimes = sequence.allTimepoints
@@ -157,6 +159,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
             if nonRegional.isEmpty then ().validNel 
             else s"${nonRegional.size} timepoint(s) as keys in locus grouping that aren't regional.".invalidNel
         }
+        val uniqueRegionalTimes = sequence.regionRounds.map(_.time).toList.toSet
         val (proximityGroupingSubsetNel, proximityGroupingSupersetNel) = proximityFilterStrategy match {
             case (UniversalProximityPermission | UniversalProximityProhibition(_)) => 
                 // In the trivial case, we have no more validation work to do.
@@ -164,13 +167,27 @@ object ImagingRoundsConfiguration extends LazyLogging:
             case s: (SelectiveProximityPermission | SelectiveProximityProhibition) => 
                 // In the nontrivial case, check for set equivalance of timepoints b/w imaging sequence and grouping.
                 val uniqueGroupedTimes = s.grouping.reduce(_ ++ _).toList.toSet
-                val uniqueRegionalTimes = sequence.regionRounds.map(_.time).toList.toSet
                 val subsetNel = checkTimesSubset(uniqueRegionalTimes)(uniqueGroupedTimes, "proximity filter's grouping (rel. to regionals in imaging sequence)")
                 val supersetNel = checkTimesSubset(uniqueGroupedTimes)(uniqueRegionalTimes, "regionals in imaging sequence (rel. to proximity filter strategy)")
                 (subsetNel, supersetNel)
         }
-        (tracingSubsetNel, locusTimeSubsetNel, locusTimeSupersetNel, locusGroupTimesAreRegionTimesNel, proximityGroupingSubsetNel, proximityGroupingSupersetNel)
+        val idsToMergeAreAllRegionalNel = maybeMergeRules match {
+            case None => ().validNel
+            case Some(rules) => 
+                import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2.syntax.toSet
+                (rules.reduceMap(_.mergeGroup.members.toSet) -- uniqueRegionalTimes)
+                    .toList
+                    .sorted
+                    .toNel
+                    .toLeft(())
+                    .leftMap(nonRegionalTimesInRules => 
+                        s"${nonRegionalTimesInRules.size} non-regional times in merge rules: ${nonRegionalTimesInRules.toList.sorted.map(_.show_).mkString(", ")}"
+                    )
+                    .toValidatedNel
+        }
+        (tracingSubsetNel, locusTimeSubsetNel, locusTimeSupersetNel, locusGroupTimesAreRegionTimesNel, proximityGroupingSubsetNel, proximityGroupingSupersetNel, idsToMergeAreAllRegionalNel)
             .tupled
+            // We ignore the acutal values (Unit) because this was just to accumulate errors.
             .map(_ => ImagingRoundsConfiguration(sequence, locusGrouping, proximityFilterStrategy, tracingExclusions))
             .toEither
     }
@@ -294,14 +311,22 @@ object ImagingRoundsConfiguration extends LazyLogging:
                     .map(_.toSet)
                     .toValidatedNel
             }
+        val maybeMergeRulesNel: ValidatedNel[String, Option[NonEmptyList[TraceIdDefinitionAndFiltrationRule]]] = 
+            data.get(TraceIdDefinitionAndFiltrationRulesSet.groupsKey) match {
+                case None => Validated.Valid(None)
+                case Some(value) => TraceIdDefinitionAndFiltrationRulesSet.fromJson(value) match {
+                    case Left(messages) => ???
+                    case Right(rules) => Validated.Valid(rules.some)
+                }
+            }
         val checkLocusTimepointCoveringNel: ValidatedNel[String, Boolean] = 
             data.get("checkLocusTimepointCovering") match {
                 case None | Some(ujson.Null) => Validated.Valid(true)
                 case Some(json) => safeReadAs[Boolean](json).toValidatedNel
             }
-        (roundsNel, crudeLocusGroupingNel, proximityFilterStrategyNel, tracingExclusionsNel, checkLocusTimepointCoveringNel).tupled.toEither.flatMap{ 
-            case (sequence, crudeLocusGroups, proximityFilterStrategy, exclusions, checkLocusTimepointCovering) =>
-                build(sequence, crudeLocusGroups, proximityFilterStrategy, exclusions, checkLocusTimepointCovering)
+        (roundsNel, crudeLocusGroupingNel, proximityFilterStrategyNel, tracingExclusionsNel, maybeMergeRulesNel, checkLocusTimepointCoveringNel).tupled.toEither.flatMap{ 
+            case (sequence, crudeLocusGroups, proximityFilterStrategy, exclusions, maybeMergeRules, checkLocusTimepointCovering) =>
+                build(sequence, crudeLocusGroups, proximityFilterStrategy, exclusions, maybeMergeRules, checkLocusTimepointCovering)
         }
     }
 
@@ -315,9 +340,20 @@ object ImagingRoundsConfiguration extends LazyLogging:
         locusGrouping: Set[LocusGroup], 
         proximityFilterStrategy: ProximityFilterStrategy, 
         tracingExclusions: Set[ImagingTimepoint],
+        maybeMergeRules: Option[NonEmptyList[TraceIdDefinitionAndFiltrationRule]],
         checkLocusTimepointCoveringNel: Boolean,
-        ): ImagingRoundsConfiguration = 
-        build(sequence, locusGrouping, proximityFilterStrategy, tracingExclusions, checkLocusTimepointCoveringNel).fold(messages => throw new BuildError.FromPure(messages), identity)
+    ): ImagingRoundsConfiguration = 
+        build(
+            sequence, 
+            locusGrouping, 
+            proximityFilterStrategy, 
+            tracingExclusions, 
+            maybeMergeRules, 
+            checkLocusTimepointCoveringNel,
+        ).fold(
+            messages => throw new BuildError.FromPure(messages), 
+            identity,
+        )
 
     /**
       * Build a configuration instance from JSON data on disk.
@@ -417,72 +453,35 @@ object ImagingRoundsConfiguration extends LazyLogging:
 
         /** The key which maps to the individual elements/members which comprise the group */
         private[ImagingRoundsConfiguration] val membersKey = "members"
-        
-        /** The key which maps to the collection of groups */
-        private[ImagingRoundsConfiguration] val groupsKey = "groups"
-
-        /**
-         * Get a [[upickle.default.Reader]] instance for a [[ProximityGroup]] with group members of type {@code A}.
-         * 
-         * @tparam A The type of individual group members
-         * @tparam T The [[at.ac.oeaw.imba.gerlich.gerlib.geometry.DistanceThreshold]] subtype
-         * @param parseA How to read a single group member value from a JSON value
-         * @param parseThreshold How to parse the proximity-defining distance threshold
-         * @return A [[upickle.default.Reader]] instance with which to parse proximity groups from JSON
-         */
-        def getJsonReader[T <: DistanceThreshold, A](
-            parseThreshold: ujson.Value => Either[String, T],
-            parseA: ujson.Value => Either[String, A],
-        ): Reader[ProximityGroup[T, A]] = 
-            summon[Reader[Map[String, ujson.Value]]].map{ kvPairs =>
-                val thresholdNel = kvPairs.get(thresholdKey)
-                    .toRight(s"Missing key ($thresholdKey) in JSON for proximity group distance threshold")
-                    .flatMap(parseThreshold)
-                    .toValidatedNel
-                val membersNel: ValidatedNel[String, AtLeast2[Set, A]] = kvPairs.get(membersKey)
-                    .toRight(s"Missing key ($membersKey) in JSON for proximity group members")
-                    .flatMap{ v => v.arrOpt.toRight(s"Value for $membersKey isn't an array: $v").map(_.toList) }
-                    .flatMap(_.parTraverse(parseA))
-                    .flatMap{ vs => 
-                        vs.groupBy(identity).view.mapValues(_.size).toList.filter(_._2 > 1) match {
-                            case Nil => vs.toSet.asRight
-                            case repeats => s"${repeats.size} repeated values; counts: ${repeats}".asLeft
-                        }
-                    }
-                    .flatMap(AtLeast2.either)
-                    .toValidatedNel
-                (thresholdNel, membersNel).mapN(ProximityGroup.apply).fold(
-                    errorMessages => 
-                        throw IncompleteParseException(
-                            s"${errorMessages.size} error(s) parsing proximity group: ${errorMessages.mkString_("; ")}"
-                        ), 
-                    identity
-                )
-            }
     end ProximityGroup
 
     /** How to redefine trace IDs and filter ROIs on the basis of proximity to one another */
     final case class TraceIdDefinitionAndFiltrationRule(
-        mergeGroup: ProximityGroup[EuclideanDistance.Threshold, RegionId],
+        mergeGroup: ProximityGroup[EuclideanDistance.Threshold, ImagingTimepoint],
         requirement: RoiPartnersRequirementType, 
     )
 
     /** Helpers for working with the data type for trace ID definition and filtration */
     object TraceIdDefinitionAndFiltrationRulesSet:
-        def fromJson(json: ujson.Value): EitherNel[String, NonEmptyList[TraceIdDefinitionAndFiltrationRule]] = 
+        /** The key which maps to the collection of groups */
+        private[ImagingRoundsConfiguration] val groupsKey = "groups"
+
+        def fromJson(json: ujson.Readable): EitherNel[String, NonEmptyList[TraceIdDefinitionAndFiltrationRule]] = 
             Try{ read[Map[String, ujson.Value]](json) }
                 .toEither
                 .leftMap(e => NonEmptyList.one(s"Cannot read JSON as key-value pairs: ${e.getMessage}"))
                 .flatMap{ kvPairs => 
-                    val maybeThresholdNel = kvPairs.get(ProximityGroup.membersKey) match {
-                        case None => None.validNel[String]
+                    val maybeThresholdNel = kvPairs.get(ProximityGroup.thresholdKey) match {
+                        case None => 
+                            None.validNel[String]
                         case Some(v) => UJsonHelpers.safeReadAs[Double](v)
                             .flatMap(NonnegativeReal.either)
                             .map(d => EuclideanDistance.Threshold(d).some)
                             .toValidatedNel
                     }
                     val maybeRequirementTypeNel = kvPairs.get(ProximityGroup.requirementTypeKey) match {
-                        case None => None.validNel[String]
+                        case None => 
+                            None.validNel[String]
                         case Some(v) => UJsonHelpers.safeReadAs[String](v)
                             .flatMap{ s => 
                                 RoiPartnersRequirementType.parse(s) match {
@@ -496,21 +495,37 @@ object ImagingRoundsConfiguration extends LazyLogging:
                         .tupled
                         .toEither
                         .flatMap{ (maybeThreshold, maybeRequirementType) => 
-                            kvPairs.get(ProximityGroup.groupsKey)
-                                .toRight(s"Misssing key for groups: ${ProximityGroup.groupsKey}")
-                                .flatMap(_.arrOpt.toRight(s"Can't parse groups (from '${ProximityGroup.groupsKey}') as array-like"))
-                                .flatMap(_.toList.toNel.toRight(s"Groups (from '${ProximityGroup.groupsKey}') is empty"))
+                            kvPairs.get(groupsKey)
+                                .toRight(s"Missing key for groups: $groupsKey")
+                                .flatMap(_.arrOpt.toRight(s"Can't parse groups (from '$groupsKey') as array-like"))
+                                .flatMap(_.toList.toNel.toRight(s"Groups (from '$groupsKey') is empty"))
                                 .leftMap(NonEmptyList.one)
                                 .flatMap(_.nonEmptyTraverse(v => parseGroupMembersSimple(v).leftMap(NonEmptyList.one)))
                                 .flatMap(groups => (maybeThreshold, maybeRequirementType) match {
+                                    case (None, None) => NonEmptyList.one("Missing threshold and requirement type for ROI merge").asLeft
+                                    case (Some(threshold), None) => NonEmptyList.one("Missing requirement type for ROI merge").asLeft
+                                    case (None, Some(reqType)) => NonEmptyList.one("Missing threshold for ROI merge").asLeft
                                     case (Some(threshold), Some(reqType)) => 
                                         groups.map{ g => TraceIdDefinitionAndFiltrationRule(
                                             ProximityGroup(threshold, g), 
                                             reqType,
                                             )
                                         }.asRight
-                                    case _ => NonEmptyList.one("Missing threshold and/or requirement type").asLeft
                                 })
+                                .flatMap{ rules => 
+                                    import AtLeast2.syntax.toList
+                                    rules.toList
+                                        .flatMap(_.mergeGroup.members.toList)
+                                        .groupBy(identity)
+                                        .view
+                                        .mapValues(_.size)
+                                        .toList
+                                        .filter(_._2 > 1) match {
+                                            case Nil => rules.asRight
+                                            case repeats => 
+                                                NonEmptyList.one(s"${repeats.size} repeated item(s) in merge rules: ${repeats}").asLeft 
+                                        }
+                                }
                         }
                 }
         
@@ -520,12 +535,12 @@ object ImagingRoundsConfiguration extends LazyLogging:
                 .flatMap(NonnegativeReal.either)
                 .map(EuclideanDistance.Threshold.apply)
 
-        // Use this to parse the actual collection of RegionId values.
-        private def parseGroupMembersSimple(json: ujson.Value): Either[String, AtLeast2[Set, RegionId]] = 
-            import RegionId.given
-            import at.ac.oeaw.imba.gerlich.gerlib.json.instances.collections.given
+        // Use this to parse the actual collection of ImagingTimepoint values.
+        private def parseGroupMembersSimple(json: ujson.Value): Either[String, AtLeast2[Set, ImagingTimepoint]] = 
             import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2.syntax.*
-            UJsonHelpers.safeReadAs[AtLeast2[List, RegionId]](json).flatMap{ vs =>
+            import at.ac.oeaw.imba.gerlich.gerlib.json.instances.collections.given
+            given Reader[ImagingTimepoint] = reader[ujson.Value].map(_.int).map(ImagingTimepoint.unsafeLift)
+            UJsonHelpers.safeReadAs[AtLeast2[List, ImagingTimepoint]](json).flatMap{ vs =>
                 val uniques = vs.toList.toSet
                 (uniques.size === vs.size).either(
                     s"${uniques.size} unique value(s), but ${vs.size} total",
