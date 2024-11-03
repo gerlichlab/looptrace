@@ -157,7 +157,7 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, ScalaCheckPropertyChecks
                 val seq = defaultRoundsConfig.sequence
                 val loc = defaultRoundsConfig.locusGrouping
                 val proxFilt = defaultRoundsConfig.proximityFilterStrategy
-                ImagingRoundsConfiguration.unsafe(seq, loc, proxFilt, exclusions.map(ImagingTimepoint.unsafe).toSet, true)
+                ImagingRoundsConfiguration.unsafe(seq, loc, proxFilt, exclusions.map(ImagingTimepoint.unsafe).toSet, None, true)
             }
             withTempDirectory{ (tempdir: os.Path) => 
                 // Perform the pretest and get the expected result paths.
