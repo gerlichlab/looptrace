@@ -161,7 +161,7 @@ trait RoiCsvInstances:
         override def apply(row: RowF[Some, Header]): DecoderResult[MergeContributorRoi] = 
             val indexNel: ValidatedNel[String, RoiIndex] = ColumnNames.RoiIndexColumnName.from(row)
             val roiNel: ValidatedNel[String, DetectedSpotRoi] = parseDetectedSpotRoi(row)
-            val mergeIndicesNel: ValidatedNel[String, NonEmptySet[RoiIndex]] = 
+            val mergeOutputsNel: ValidatedNel[String, NonEmptySet[RoiIndex]] = 
                 given CellDecoder[NonEmptySet[RoiIndex]] = 
                     given Ordering[RoiIndex] = summon[Order[RoiIndex]].toOrdering
                     summon[CellDecoder[Set[RoiIndex]]]
@@ -169,11 +169,11 @@ trait RoiCsvInstances:
                             DecoderError("Empty ROI set for outputs of a merge contributor")
                         ))
                 ColumnNames.MergeOutputsColumnName.from(row)
-            (indexNel, roiNel, mergeIndicesNel)
+            (indexNel, roiNel, mergeOutputsNel)
                 .tupled
                 .toEither
-                .flatMap{ (index, roi, mergeIndices) => 
-                    MergeContributorRoi.apply(index, roi, mergeIndices).leftMap(NonEmptyList.one)
+                .flatMap{ (index, roi, mergeOutputs) => 
+                    MergeContributorRoi.apply(index, roi, mergeOutputs).leftMap(NonEmptyList.one)
                 }
                 .leftMap{ messages => 
                     DecoderError(s"${messages.length} error(s) decoding merge contributor ROI: ${messages.mkString_("; ")}") 
@@ -190,9 +190,9 @@ trait RoiCsvInstances:
             val contextRow: NamedRow = encContext(elem.context)
             val centroidRow: NamedRow = encCentroid(elem.centroid)
             val boxRow: NamedRow = encBox(elem.box)
-            val mergeIndicesRow: NamedRow = 
-                ColumnNames.MergeOutputsColumnName.write(elem.mergeIndices)(using CellEncoder[Set[RoiIndex]].contramap(_.toSortedSet))
-            idRow |+| contextRow |+| centroidRow |+| boxRow |+| mergeIndicesRow
+            val mergeOutputsRow: NamedRow = 
+                ColumnNames.MergeOutputsColumnName.write(elem.mergeOutputs)(using CellEncoder[Set[RoiIndex]].contramap(_.toSortedSet))
+            idRow |+| contextRow |+| centroidRow |+| boxRow |+| mergeOutputsRow
 
     def parseFromRow[A](messagePrefix: String)(using dec: CsvRowDecoder[A, Header]): RowF[Some, Header] => ValidatedNel[String, A] = 
         row => dec(row)

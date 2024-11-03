@@ -11,13 +11,15 @@ import at.ac.oeaw.imba.gerlich.looptrace.drift.*
 
 /** Collection of names of critical columns from which to parse data */
 object ColumnNames:
+    /** Each merge input is associated with at least one merge output. */
     val MergeOutputsColumnName: ColumnName[NonEmptySet[RoiIndex]] = 
-        ColumnName("mergeIndices")
+        ColumnName("mergeOutputs")
 
+    /** The associated collection may be empty (nothing to merge with). */
     val MergeContributorsColumnNameForAssessedRecord: ColumnName[Set[RoiIndex]] = 
         ColumnName(mergeContributorsName)
 
-    /** Distinguished from [[MergedRoisColumnName]] by static guarantee of nonemptiness */
+    /** Distinguished from [[MergedRoisColumnName]] by static guarantee of at least 2 members */
     val MergeContributorsColumnNameForMergedRecord: ColumnName[AtLeast2[Set, RoiIndex]] = 
         ColumnName(mergeContributorsName)
 
@@ -62,5 +64,5 @@ object ColumnNames:
             case EuclideanAxis.Z => "z" ++ fineDriftColumnSuffix
         })
 
-    private def mergeContributorsName: String = "mergeRois"
+    private def mergeContributorsName: String = "mergePartners"
 end ColumnNames

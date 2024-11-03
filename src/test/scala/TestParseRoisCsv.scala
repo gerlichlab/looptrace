@@ -181,7 +181,7 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
 
     test("Small MergerAssessedRoi example parses correctly.") {
         val linesToWrite = """
-            index,fieldOfView,timepoint,spotChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,mergeRois
+            index,fieldOfView,timepoint,spotChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,mergePartners
             0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,10
             1,P0001.zarr,80,2,17.994259347453493,24.042015416774795,1360.0069098862991,213.58943029032,117.13946884917321,11.994259347453493,23.994259347453493,12.042015416774795,36.042015416774795,1348.0069098862991,1372.0069098862991,7;8
             """.toLines
@@ -321,7 +321,7 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
 
     test("Header-only file gives empty list of results for MergerAssessedRoi.") {
         val headers = List(
-            "index,fieldOfView,timepoint,spotChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,mergeRois",
+            "index,fieldOfView,timepoint,spotChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,mergePartners",
         )
         val newlines = List(false, true)
         val grid = headers.flatMap(h => newlines.map(p => h -> p))
@@ -341,7 +341,7 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
 
     test("MergerAssessedRoi cannot be parsed from pandas-style no-name index column.") {
         val initData = """
-            ,fieldOfView,timepoint,spotChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,mergeRois
+            ,fieldOfView,timepoint,spotChannel,zc,yc,xc,area,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax,mergePartners
             0,P0001.zarr,79,0,3.907628987532479,231.9874778925304,871.9833511648726,240.00390423,118.26726920593931,-2.092371012467521,9.90762898753248,219.9874778925304,243.9874778925304,859.9833511648726,883.9833511648726,
             """.toLines
         
