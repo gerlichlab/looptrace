@@ -435,9 +435,6 @@ object ImagingRoundsConfiguration extends LazyLogging:
         /** Require proximity of 'all' group members (i.e., logical AND). */
         case Conjunctive
 
-    object RoiPartnersRequirementType:
-        def parse(s: String): Option[RoiPartnersRequirementType] = Try{ valueOf(s) }.toOption
-
     /** A grouping of elements {@code E} to consider for proximity relative to some distance threshold */
     final case class ProximityGroup[T <: DistanceThreshold, E](
         distanceThreshold: T, 
@@ -483,11 +480,13 @@ object ImagingRoundsConfiguration extends LazyLogging:
                         case None => 
                             None.validNel[String]
                         case Some(v) => UJsonHelpers.safeReadAs[String](v)
-                            .flatMap{ s => 
-                                RoiPartnersRequirementType.parse(s) match {
-                                    case None => s"Can't parse value for '${ProximityGroup.requirementTypeKey}': $s".asLeft
-                                    case Some(reqType) => reqType.some.asRight
+                            .flatMap{ s => Try{ 
+                                    RoiPartnersRequirementType.valueOf(s) 
                                 }
+                                .fold(
+                                    Function.const{ s"Can't parse value for '${ProximityGroup.requirementTypeKey}': $s".asLeft },
+                                    _.some.asRight,
+                                )
                             }
                             .toValidatedNel
                     }
