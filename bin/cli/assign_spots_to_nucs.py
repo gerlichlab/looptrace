@@ -141,6 +141,7 @@ def workflow(
         logger.info(f"Assigning nuclei labels for spots from FOV: {pos}")
         rois = _filter_rois_in_nucs(rois, nuc_label_img=N.mask_images[i].compute(), new_col=NUC_LABEL_COL, **filter_kwargs)
         if N.class_images is not None:
+            raise NotImplementedError("Nuclear classification isn't supported.")
             logger.info(f"Assigning nuclei classes for spots from FOV: {pos}")
             rois = _filter_rois_in_nucs(rois, nuc_label_img=N.class_images[i].compute(), new_col="nuc_class", **filter_kwargs)
         all_rois.append(rois.copy())
