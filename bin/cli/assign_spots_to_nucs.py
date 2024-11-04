@@ -22,7 +22,7 @@ logger = logging.getLogger()
 NUC_LABEL_COL = "nucleusNumber"
 
 
-def filter_rois_in_nucs(
+def _filter_rois_in_nucs(
     rois: pd.DataFrame, 
     nuc_label_img: np.ndarray, 
     new_col: str, 
@@ -139,19 +139,18 @@ def workflow(
         # TODO: this array indexing is sensitive to whether the mask and class images have the dummy time and channel dimensions or not.
         # See: https://github.com/gerlichlab/looptrace/issues/247
         logger.info(f"Assigning nuclei labels for spots from FOV: {pos}")
-        rois = filter_rois_in_nucs(rois, nuc_label_img=N.mask_images[i].compute(), new_col=NUC_LABEL_COL, **filter_kwargs)
+        rois = _filter_rois_in_nucs(rois, nuc_label_img=N.mask_images[i].compute(), new_col=NUC_LABEL_COL, **filter_kwargs)
         if N.class_images is not None:
             logger.info(f"Assigning nuclei classes for spots from FOV: {pos}")
-            rois = filter_rois_in_nucs(rois, nuc_label_img=N.class_images[i].compute(), new_col="nuc_class", **filter_kwargs)
+            rois = _filter_rois_in_nucs(rois, nuc_label_img=N.class_images[i].compute(), new_col="nuc_class", **filter_kwargs)
         all_rois.append(rois.copy())
     
-    outfile = H.nuclei_labeled_spots_file_path
     if len(all_rois) == 0:
-        logger.warning(f"No ROIs! Cannot write nuclei-labeled spots file: {outfile}")
+        logger.warning(f"No ROIs! Cannot write nuclei-labeled spots file")
     else:
         all_rois = pd.concat(all_rois).sort_values(["fieldOfView", "timepoint"])
-        logger.info(f"Writing nuclei-labeled spots file: {outfile}")
-        all_rois.to_csv(outfile, index=False)
+        logger.info(f"Writing nuclei-labeled spots file: {H.nuclei_labeled_spots_file_path}")
+        all_rois.to_csv(H.nuclei_labeled_spots_file_path, index=False)
         logger.info(f"Writing nuclei-filtered spots file: {H.nuclei_filtered_spots_file_path}")
         all_rois[all_rois[NUC_LABEL_COL] != 0].to_csv(H.nuclei_filtered_spots_file_path, index=False)
 
