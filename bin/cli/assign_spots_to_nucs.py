@@ -9,6 +9,7 @@ import pandas as pd
 import tqdm
 
 from gertils import ExtantFile, ExtantFolder
+from looptrace import DimensionalityError
 from looptrace.ImageHandler import ImageHandler
 from looptrace.NucDetector import NucDetector
 
