@@ -43,8 +43,6 @@ object DetermineRoiMerge extends StrictLogging:
     def main(args: Array[String]): Unit = {
         import parserBuilder.*
 
-        given Eq[os.Path] = Eq.by(_.toString)
-
         val parser = OParser.sequence(
             programName(ProgramName), 
             head(ProgramName, BuildInfo.version), 
@@ -68,6 +66,7 @@ object DetermineRoiMerge extends StrictLogging:
                 .action((_, c) => c.copy(overwrite = true))
                 .text("Allow overwriting output file."),
             checkConfig{ c => 
+                given Eq[os.Path] = Eq.fromUniversalEquals
                 if c.inputFile === c.outputFile 
                 then failure(s"Input and output file are the same: ${c.inputFile}")
                 else success
