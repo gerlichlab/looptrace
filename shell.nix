@@ -1,7 +1,7 @@
 {
   pkgs ? import (builtins.fetchGit {
     url = "https://github.com/NixOS/nixpkgs/";
-    ref = "refs/tags/24.05";
+    ref = "release-24.05";
   }) {}, 
   pipeline ? false,
   test ? true,
