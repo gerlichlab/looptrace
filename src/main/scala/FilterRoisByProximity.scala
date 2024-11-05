@@ -217,10 +217,11 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
                 s"${simpleReps.length} repeated (FOV, time) pairs: ${simpleReps}".asLeft
             }
 
-        // TODO: need to bring in the CsvRowDecoder[DriftRecord, String] instance
         val readKeyedDrifts: IO[Either[String, Map[DriftKey, DriftRecord]]] = 
             readCsvToCaseClasses[DriftRecord](driftFile).map(keyDrifts)
 
+        // Account for the fact that field of view may be either text-like or integer-like, 
+        // and it therefore needs a special sort of equality/equivalence test.
         given Eq[FieldOfViewLike] with
             override def eqv(a: FieldOfViewLike, b: FieldOfViewLike): Boolean = (a, b) match {
                 case (fov1: PositionName, fov2: PositionName) => fov1 === fov2
@@ -255,7 +256,25 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
                     case Left(errors) => 
                         throw new Exception(s"${errors.length} error(s). First one: ${errors.head}")
                     case Right((unidentifiables, postMergers)) => 
-                        writeOutputs(unidentifiables, postMergers)
+                        import at.ac.oeaw.imba.gerlich.looptrace.roi.AdmitsRoiIndex.roiIndex // for syntax
+                        // Restore the original (unshifted) coordinates. Issues 353, 355, 356
+                        // And write the output files.
+                        val lookupCenterAndBox: Map[RoiIndex, (Centroid[Double], BoundingBox)] = 
+                            rois.map{ r => r.roiIndex -> PostMergeRoi.getCenterAndBox(r) }.toMap
+                        writeOutputs(
+                            unidentifiables.map{ r => 
+                                val (center, box) = lookupCenterAndBox(r.index)
+                                r.copy(centroid = center, box = box)
+                            }, 
+                            postMergers.map{ r =>
+                                val (center, box) = lookupCenterAndBox(r.roiIndex)
+                                // We need the pattern match to get the correct result subtype.
+                                r match {
+                                    case single: IndexedDetectedSpot => single.copy(centroid = center, box = box)
+                                    case merged: MergedRoiRecord => merged.copy(centroid = center, box = box)
+                                }
+                            },
+                        )
             }
             _ <- IO{ logger.info(s"Wrote unidentifiable ROIs to file: ${unidentifiablesFile}") }
             _ <- IO{ logger.info(s"Wrote well-separated ROIs to file: ${wellSeparatedsFile}") }
