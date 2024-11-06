@@ -1,10 +1,7 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
 import scala.util.NotGiven
-import cats.Order
-import cats.syntax.all.*
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.*
-import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
 
 /** Types and functionality related to image drift */
 package object drift:
@@ -54,6 +51,9 @@ package object drift:
 
     /** Tools for working with drift-related shifts */
     object Movement:
+        import cats.syntax.semigroup.*
+        import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
+
         // Raw coordinate type, based on total drift
         private type C = Double
         
