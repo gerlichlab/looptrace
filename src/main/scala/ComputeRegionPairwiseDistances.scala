@@ -20,7 +20,6 @@ import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
-import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 
 /**
  * Euclidean distances between pairs of regional barcode spots
