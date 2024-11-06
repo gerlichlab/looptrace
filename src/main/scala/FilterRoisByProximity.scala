@@ -313,23 +313,6 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
         }
     }
 
-    /****************************************************************************************************************
-     * Ancillary definitions
-     ****************************************************************************************************************/
-    object Movement:
-        private type Interval[C <: Coordinate] = BBox.Interval[Double, C]
-        def shiftBy(del: TotalDriftComponent[AxisX])(c: XCoordinate): XCoordinate = XCoordinate(del.value) |+| c
-        def shiftBy(del: TotalDriftComponent[AxisY])(c: YCoordinate): YCoordinate = YCoordinate(del.value) |+| c
-        def shiftBy(del: TotalDriftComponent[AxisZ])(c: ZCoordinate): ZCoordinate = ZCoordinate(del.value) |+| c
-        def addDrift(drift: TotalDrift)(pt: Point3D): Point3D = 
-            Point3D(shiftBy(drift.x)(pt.x), shiftBy(drift.y)(pt.y), shiftBy(drift.z)(pt.z))
-        def addDrift(drift: TotalDrift)(box: BoundingBox): BoundingBox = BBox(
-            BBox.Interval(shiftBy(drift.x)(box.sideX.lo), shiftBy(drift.x)(box.sideX.hi)),
-            BBox.Interval(shiftBy(drift.y)(box.sideY.lo), shiftBy(drift.y)(box.sideY.hi)), 
-            BBox.Interval(shiftBy(drift.z)(box.sideZ.lo), shiftBy(drift.z)(box.sideZ.hi)),
-        )
-    end Movement
-
     /* Type aliases */
-    type DriftKey = (FieldOfViewLike, ImagingTimepoint)
+    private type DriftKey = (FieldOfViewLike, ImagingTimepoint)
 end FilterRoisByProximity
