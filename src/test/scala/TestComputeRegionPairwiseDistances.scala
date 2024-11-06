@@ -23,6 +23,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.imaging.{
 }
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.FieldOfViewColumnName
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
@@ -77,7 +78,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                 os.isFile(expOutfile) shouldBe true
                 safeReadAllWithOrderedHeaders(expOutfile) match {
                     case Left(err) => fail(s"Expected successful output file parse but got error: $err")
-                    case Right((header, _)) => header shouldEqual OutputWriter.header
+                    case Right((header, _)) => header shouldEqual expectedHeader
                 }
             }
         }
@@ -213,7 +214,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                 os.isFile(expOutfile) shouldBe true
                 os.read.lines(expOutfile).toList match {
                     case Nil => fail("No lines in output file!")
-                    case h :: _ => (Delimiter.CommaSeparator `split` h) shouldEqual OutputWriter.header
+                    case h :: _ => (Delimiter.CommaSeparator `split` h) shouldEqual expectedHeader
                 }
             }
         }
@@ -301,6 +302,8 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
         require(n >= 0 && n <= 10, s"Factorial arg not in [0, 10]: $n")
         (1 to n).product
 
+    private def expectedHeader: List[String] = 
+        List(FieldOfViewColumnName.value, "region1", "region2", "distance", "inputIndex1", "inputIndex2")
 
     /** Convert a sequence of text fields into a single line (CSV), including newline. */
     private def textFieldsToLine = Delimiter.CommaSeparator.join(_: List[String]) ++ "\n"

@@ -2,24 +2,29 @@ package at.ac.oeaw.imba.gerlich.looptrace
 
 import cats.*
 import cats.data.*
+import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
+import fs2.data.csv.*
 import mouse.boolean.*
 import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.EuclideanDistance
-import at.ac.oeaw.imba.gerlich.gerlib.imaging.PositionName
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.{ ImagingTimepoint, PositionName }
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{ ColumnName, writeCaseClassesToCsv }
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.FieldOfViewColumnName
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
+import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.drift.given
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.NamedRow
 
 /**
  * Euclidean distances between pairs of regional barcode spots
@@ -34,58 +39,87 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
     /** CLI definition */
     final case class CliConfig(
         roisFile: os.Path = null,
+        noDriftCorrection: Boolean = false,
+        maybeDriftFile: Option[os.Path] = None,
         outputFolder: os.Path = null, 
     )
     val cliParseBuilder = OParser.builder[CliConfig]
+
+    given Eq[os.Path] = Eq.fromUniversalEquals
 
     /** Program driver */
     def main(args: Array[String]): Unit = {
         import cliParseBuilder.*
 
+        def noDriftCorrectionOptionName = "noDriftCorrection"
+
         val parser = OParser.sequence(
             programName(ProgramName),
-            // TODO: better naming and versioning
             head(ProgramName, BuildInfo.version),
-            opt[os.Path]('I', "roisFile")
+            opt[os.Path]("roisFile")
                 .required()
                 .action((f, c) => c.copy(roisFile = f))
                 .validate((f: os.Path) => os.isFile(f).either(s"Not an extant file: $f", ())), 
+            opt[os.Path]("driftFile")
+                .action((f, c) => c.copy(maybeDriftFile = f.some))
+                .validate(f => os.isFile(f).either(s"Not an extant file; $f", ()))
+                .text("Path to file with per-FOV, per-timepoint shifts to correct for drift"),
             opt[os.Path]('O', "outputFolder")
                 .required()
                 .action((f, c) =>  c.copy(outputFolder = f))
                 .text("Path to output folder in which to write."),
+            opt[Unit](noDriftCorrectionOptionName)
+                .action((_, c) => c.copy(noDriftCorrection = true))
+                .text("Indicate that no drift correction should be done"),
+            checkConfig{ c => 
+                (c.maybeDriftFile, c.noDriftCorrection) match {
+                    case (None, false) => 
+                        failure(s"No drift correction file was provided, but --$noDriftCorrectionOptionName was NOT used")
+                    case (None, true) => 
+                        success
+                    case (Some(driftFile), false) => 
+                        if driftFile === c.roisFile
+                        then failure(s"Drift file is the same as ROIs file: $driftFile")
+                        else if (driftFile === c.outputFolder)
+                        then failure(s"Drift file is the same as output folder: $driftFile")
+                        else success
+                    case (Some(f), true) => 
+                        failure(s"Drift correction file was provided, but --$noDriftCorrectionOptionName was used")
+                }
+            },
+            checkConfig{ c => 
+                if c.roisFile === c.outputFolder
+                then failure(s"ROIs file is the same as the output folder: ${c.roisFile}")
+                else success
+            }
         )
         OParser.parse(parser, args, CliConfig()) match {
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
-            case Some(opts) => workflow(opts.roisFile, opts.outputFolder).fold(msg => throw new Exception(msg), _ => logger.info("Done!"))
+            case Some(opts) => workflow(opts.roisFile, opts.outputFolder)
         }
     }
 
-    def workflow(inputFile: os.Path, outputFolder: os.Path): Either[String, HeadedFileWriter.DelimitedTextTarget] = {
+    def workflow(inputFile: os.Path, outputFolder: os.Path): Unit = {
         val expOutBaseName = s"${inputFile.last.split("\\.").head}.pairwise_distances__regional"
-        val expectedOutputFile = HeadedFileWriter.DelimitedTextTarget(outputFolder, expOutBaseName, Delimiter.CommaSeparator)
+        val expectedOutputFile = HeadedFileWriter.DelimitedTextTarget(outputFolder, expOutBaseName, Delimiter.CommaSeparator).filepath
         val inputDelimiter = Delimiter.fromPathUnsafe(inputFile)
         
         /* Read input, then throw exception or write output. */
         logger.info(s"Reading input file: ${inputFile}")
-        val observedOutputFile = Input.parseRecords(inputFile).bimap(_.toNel, inputRecordsToOutputRecords) match {
+        Input.parseRecords(inputFile).bimap(_.toNel, inputRecordsToOutputRecords) match {
             case (Some(bads), _) => throw Input.BadRecordsException(bads)
             case (None, outputRecords) => 
                 val recs = outputRecords.toList.sortBy{ r => 
                     (r.fieldOfView, r.region1, r.region2, r.distance)
                 }(summon[Order[(PositionName, RegionId, RegionId, EuclideanDistance)]].toOrdering)
-                logger.info(s"Writing output file: ${expectedOutputFile.filepath}")
-                OutputWriter.writeRecordsToFile(recs, expectedOutputFile)
+                logger.info(s"Writing output file: $expectedOutputFile")
+                fs2.Stream.emits(recs)
+                    .through(writeCaseClassesToCsv(expectedOutputFile))
+                    .compile
+                    .drain
+                    .unsafeRunSync()
+                logger.info("Done!")
         }
-
-        // Facilitate derivation of Eq[HeadedFileWriter[DelimitedTextTarget]].
-        import HeadedFileWriter.DelimitedTextTarget.given
-        given eqForPath: Eq[os.Path] = Eq.by(_.toString)
-        // Check that the observed output path matches the expectation and provide new exception if not.
-        (observedOutputFile === expectedOutputFile).either(
-            s"Observed output filepath (${observedOutputFile}) differs from expectation (${expectedOutputFile})", 
-            observedOutputFile
-            )
     }
 
     def inputRecordsToOutputRecords(inrecs: Iterable[(Input.GoodRecord, NonnegativeInt)]): Iterable[OutputRecord] = {
@@ -186,13 +220,24 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
         inputIndex2: NonnegativeInt
         )
 
-    /** How to write the output records from this program */
-    object OutputWriter extends HeadedFileWriter[OutputRecord]:
-        // These are our names.
-        override def header: List[String] = List(FieldOfViewColumnName.value, "region1", "region2", "distance", "inputIndex1", "inputIndex2")
-        override def toTextFields(r: OutputRecord): List[String] = r match {
-            case OutputRecord(pos, region1, region2, distance, idx1, idx2) => 
-                List(pos.show_, region1.show_, region2.show_, distance.get.toString, idx1.show_, idx2.show_)
-        }
-    end OutputWriter
+    // Helpers for working with output record instances
+    object OutputRecord:
+        import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.given
+        import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.regionId.given
+
+        private given CellEncoder[EuclideanDistance] = summon[CellEncoder[NonnegativeReal]].contramap(_.get)
+
+        given CsvRowEncoder[OutputRecord, String] with
+            override def apply(elem: OutputRecord): RowF[Some, String] = 
+                val fovText: NamedRow = FieldOfViewColumnName.write(elem.fieldOfView)
+                val r1Text: NamedRow = ColumnName[RegionId]("region1").write(elem.region1)
+                val r2Text: NamedRow = ColumnName[RegionId]("region2").write(elem.region2)
+                val distanceText: NamedRow = ColumnName[EuclideanDistance]("distance").write(elem.distance)
+                val i1Text: NamedRow = ColumnName[NonnegativeInt]("inputIndex1").write(elem.inputIndex1)
+                val i2Text: NamedRow = ColumnName[NonnegativeInt]("inputIndex2").write(elem.inputIndex2)
+                fovText |+| r1Text |+| r2Text |+| distanceText |+| i1Text |+| i2Text
+    end OutputRecord
+
+    /* Type aliases */
+    private type DriftKey = (PositionName, ImagingTimepoint)
 end ComputeRegionPairwiseDistances
