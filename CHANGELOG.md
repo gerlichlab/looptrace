@@ -7,7 +7,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 ## [v0.10.1] - 2024-11-07
 
 ### Fixed
-* Fixed the incorrectness of the merged regional spot centers and bounding boxes in the `*_rois.proximity_accepted.nuclei_labeled.csv` and `*_rois.proximity_accepted.nuclei_filtered.csv`. See [Issue 355](https://github.com/gerlichlab/looptrace/issues/355)
+* Fixed the incorrectness of the merged regional spot centers and bounding boxes in the `*_rois.proximity_accepted.nuclei_labeled.csv` and `*_rois.proximity_accepted.nuclei_filtered.csv`. See [Issue 353](https://github.com/gerlichlab/looptrace/issues/353), [Issue 355](https://github.com/gerlichlab/looptrace/issues/355), and [Issue 356](https://github.com/gerlichlab/looptrace/issues/356).
 * Correctly applying drift correction to regional spot coordinates. See [Issue 329](https://github.com/gerlichlab/looptrace/issues/329)
 
 ### Changed
