@@ -123,7 +123,7 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
                 ).filepath
 
                 logger.info(s"Writing output file: $outputFile")
-                cats.effect.IO{ if (!os.exists(outputFolder)) os.makeDir(outputFolder) }
+                cats.effect.IO{ if (!os.exists(outputFolder)) os.makeDir.all(outputFolder) }
                     .flatMap(Function.const{
                         fs2.Stream.emits(outputRecords.toList)
                             .through(writeCaseClassesToCsv(outputFile))

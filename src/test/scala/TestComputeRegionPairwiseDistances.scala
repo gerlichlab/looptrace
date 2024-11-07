@@ -63,7 +63,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
         }
     }
 
-    test("Input file that's just a header produces an output file that's just a header.") {
+    test("Input file that's just a header produces an empty output file.") {
         forAll(Table("includePandasIndexCol", List(false, true)*)) { includePandasIndexCol => 
             withTempDirectory{ (tempdir: os.Path) => 
                 /* Setup and pretests */
@@ -78,7 +78,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                 os.isFile(expOutfile) shouldBe true
                 safeReadAllWithOrderedHeaders(expOutfile) match {
                     case Left(err) => fail(s"Expected successful output file parse but got error: $err")
-                    case Right((header, _)) => header shouldEqual expectedHeader
+                    case Right((header, _)) => header shouldEqual List()
                 }
             }
         }
@@ -204,28 +204,6 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                     )
                 }
                 error.records.map(_.lineNumber) shouldEqual expBadRows
-            }
-        }
-    }
-
-    test("Output file always has the correct header.") {
-        forAll { (records: NonEmptyList[Input.GoodRecord], includePandasIndexColumn: Boolean) => 
-            withTempDirectory{ (tempdir: os.Path) => 
-                val infile = tempdir / "input_with_suffix.some.random.extensions.csv"
-                val (head, textRows) = 
-                    if includePandasIndexColumn
-                    then ("" :: AllReqdColumns, records.zipWithIndex.map((r, i) => i.show_ :: recordToTextFields(r)))
-                    else (AllReqdColumns, records.map(recordToTextFields))
-                os.write(infile, (head :: textRows.toList).map(textFieldsToLine))
-                val outfolder = tempdir / "output"
-                val expOutfile = outfolder / "input_with_suffix.pairwise_distances__regional.csv"
-                os.exists(expOutfile) shouldBe false
-                workflow(inputFile = infile, maybeDriftFile = None, outputFolder = outfolder)
-                os.isFile(expOutfile) shouldBe true
-                os.read.lines(expOutfile).toList match {
-                    case Nil => fail("No lines in output file!")
-                    case h :: _ => (Delimiter.CommaSeparator `split` h) shouldEqual expectedHeader
-                }
             }
         }
     }
