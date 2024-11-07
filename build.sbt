@@ -70,6 +70,7 @@ lazy val root = (project in file("."))
       os, 
       scalaCsv,
       scopt,
+      squants,
       uPickle,
       ) ++ 
       gerlibs ++
