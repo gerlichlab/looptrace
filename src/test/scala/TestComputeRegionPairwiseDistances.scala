@@ -4,6 +4,7 @@ import cats.*
 import cats.data.*
 import cats.syntax.all.*
 import mouse.boolean.*
+import squants.space.Nanometers
 
 import org.scalacheck.{ Arbitrary, Gen, Shrink }
 import org.scalacheck.Arbitrary.arbitrary
@@ -50,6 +51,12 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
         Input.ZCoordinateColumn,
         )
 
+    private def ToNanometersIdentity: Pixels3D = Pixels3D(
+        PixelDefinition.unsafeDefine(Nanometers(1)), 
+        PixelDefinition.unsafeDefine(Nanometers(1)), 
+        PixelDefinition.unsafeDefine(Nanometers(1)), 
+    )
+
     test("Totally empty input file causes expected error.") {
         withTempDirectory{ (tempdir: os.Path) => 
             /* Setup and pretests */
@@ -59,7 +66,14 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
             touchFile(infile)
             os.isDir(outfolder) shouldBe true
             os.isFile(infile) shouldBe true
-            assertThrows[EmptyFileException]{ workflow(inputFile = infile, maybeDriftFile = None, outputFolder = outfolder) }
+            assertThrows[EmptyFileException]{
+                workflow(
+                    inputFile = infile, 
+                    maybeDriftFile = None, 
+                    pixels = ToNanometersIdentity,
+                    outputFolder = outfolder,
+                )
+            }
         }
     }
 
@@ -74,7 +88,12 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                 os.write(infile, Delimiter.CommaSeparator.join(cols) ++ "\n")
                 val expOutfile = outfolder / "input.pairwise_distances__regional.csv"
                 os.exists(expOutfile) shouldBe false
-                workflow(inputFile = infile, maybeDriftFile = None, outputFolder = outfolder)
+                workflow(
+                    inputFile = infile, 
+                    maybeDriftFile = None, 
+                    pixels = ToNanometersIdentity,
+                    outputFolder = outfolder,
+                )
                 os.isFile(expOutfile) shouldBe true
                 safeReadAllWithOrderedHeaders(expOutfile) match {
                     case Left(err) => fail(s"Expected successful output file parse but got error: $err")
@@ -95,7 +114,12 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                     else { (r, _) => recordToTextFields(r) }
                 os.write(infile, records.toList.zipWithIndex.map(toTextFields.tupled `andThen` textFieldsToLine))
                 intercept[IllegalHeaderException]{ 
-                    workflow(inputFile = infile, maybeDriftFile = None, outputFolder = tempdir / "output") 
+                    workflow(
+                        inputFile = infile, 
+                        maybeDriftFile = None, 
+                        pixels = ToNanometersIdentity,
+                        outputFolder = tempdir / "output",
+                    )
                 } match {
                     case IllegalHeaderException(obsHead, missing) => 
                         obsHead shouldEqual toTextFields(records.head, 0)
@@ -139,7 +163,12 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                     f
                 }
                 intercept[IllegalHeaderException]{
-                    workflow(inputFile = infile, maybeDriftFile = None, outputFolder = tempdir / "output") 
+                    workflow(
+                        inputFile = infile, 
+                        maybeDriftFile = None, 
+                        pixels = ToNanometersIdentity,
+                        outputFolder = tempdir / "output",
+                    )
                 } match {
                     case IllegalHeaderException(header, missing) => 
                         header shouldEqual expHead
@@ -201,6 +230,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                     workflow(
                         inputFile = infile, 
                         maybeDriftFile = None,
+                        pixels = ToNanometersIdentity,
                         outputFolder = tempdir / "output",
                     )
                 }
@@ -225,9 +255,23 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
             val rec2 = inputRecords(j)
             val reg1 = RegionId.unsafe(i)
             val reg2 = RegionId.unsafe(j)
-            OutputRecord(pos, reg1, reg2, EuclideanDistance.between(rec1.point, rec2.point), nn1, nn2)
+            OutputRecord(
+                pos, 
+                reg1, 
+                reg2, 
+                LengthInNanometers.unsafeFromSquants(
+                    Nanometers(EuclideanDistance.between(rec1.point, rec2.point).get.toDouble)
+                ), 
+                nn1, 
+                nn2,
+            )
         }
-        val observed = inputRecordsToOutputRecords(NonnegativeInt.indexed(inputRecords), None)
+        val observed = 
+            inputRecordsToOutputRecords(
+                NonnegativeInt.indexed(inputRecords), 
+                None, 
+                ToNanometersIdentity,
+            )
         observed shouldEqual expected
     }
 
@@ -240,8 +284,16 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                     case recs => throw new Exception(s"Got list of ${recs.length} (not 2) when taking pairs!")
                 }
             }
-        forAll (genRecords) { records => 
-            inputRecordsToOutputRecords(NonnegativeInt.indexed(records.toList), None).isEmpty shouldBe true 
+
+        def genScaling: Gen[Pixels3D] = 
+            given Arbitrary[PixelDefinition] = Arbitrary{
+                Gen.posNum[Double].map{ x => PixelDefinition.unsafeDefine(Nanometers(x)) }
+            }
+            arbitrary[(PixelDefinition, PixelDefinition, PixelDefinition)]
+                .map(Pixels3D.apply)
+        
+        forAll (genRecords, genScaling) { (records, pixels) => 
+            inputRecordsToOutputRecords(NonnegativeInt.indexed(records.toList), None, pixels).isEmpty shouldBe true 
         }
     }
 
@@ -250,7 +302,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
             (records: List[Input.GoodRecord]) => 
                 val indexedRecords = NonnegativeInt.indexed(records)
                 val getKey = indexedRecords.map(_.swap).toMap.apply.andThen(Input.getGroupingKey)
-                val observed = inputRecordsToOutputRecords(indexedRecords, None)
+                val observed = inputRecordsToOutputRecords(indexedRecords, None, ToNanometersIdentity)
                 observed.filter{ r => getKey(r.inputIndex1) === getKey(r.inputIndex2) } shouldEqual observed
         }
     }
@@ -264,7 +316,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
         forAll (Gen.choose(5, 50).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord])), minSuccessful(500)) { 
             (records: List[Input.GoodRecord]) => 
                 val indexedRecords = NonnegativeInt.indexed(records)
-                val observed = inputRecordsToOutputRecords(indexedRecords, None).size
+                val observed = inputRecordsToOutputRecords(indexedRecords, None, ToNanometersIdentity).size
                 records.map(_.fieldOfView)
                     .groupBy(identity)
                     .view
@@ -284,13 +336,15 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
             PositionName.unsafe("P0001.zarr"), 
             PositionName.unsafe("P0002.zarr"),
         ) }
+        
         forAll (Gen.choose(5, 50).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord])), minSuccessful(500)) { 
             (records: List[Input.GoodRecord]) => 
                 val indexedRecords = NonnegativeInt.indexed(records)
-                val observed = inputRecordsToOutputRecords(indexedRecords, None)
-                val expected = observed.toList.sortBy{ r => 
-                    (r.fieldOfView, r.region1, r.region2, r.distance)
-                }(using summon[Order[(PositionName, RegionId, RegionId, EuclideanDistance)]].toOrdering)
+                val observed = inputRecordsToOutputRecords(indexedRecords, None, ToNanometersIdentity)
+                val expected = 
+                    observed.toList.sortBy{ r => 
+                        (r.fieldOfView, r.region1, r.region2, r.distance)
+                    }(using summon[Order[(PositionName, RegionId, RegionId, LengthInNanometers)]].toOrdering)
                 observed.toList shouldEqual expected
         }
 
@@ -309,7 +363,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
             }
             val expGroupSizes = records.groupBy(getKey).view.mapValues(g => g.size `choose` 2).toMap
             val obsGroupSizes = 
-                inputRecordsToOutputRecords(NonnegativeInt.indexed(records), None)
+                inputRecordsToOutputRecords(NonnegativeInt.indexed(records), None, ToNanometersIdentity)
                     .groupBy(getKey)
                     .view
                     .mapValues(_.size)
