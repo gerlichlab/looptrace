@@ -245,7 +245,6 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
     }
 
     test("Any output record's original record indices map them back to input records with identical FOV.") {
-        /* To encourage collisions, narrow the choices for grouping components. */
         forAll (Gen.choose(10, 100).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord])), minSuccessful(500)) { 
             (records: List[Input.GoodRecord]) => 
                 val indexedRecords = NonnegativeInt.indexed(records)
@@ -254,6 +253,26 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                 observed.filter{ r => getKey(r.inputIndex1) === getKey(r.inputIndex2) } shouldEqual observed
         }
     }
+
+    test("The number of records is always as expected."):
+        pending
+
+    test("Records are emitted in ascending order according to the composite key: (FOV, region 1, region 2, distance) by function inputRecordsToOutputRecords."):
+        /* To encourage collisions, narrow the choices for grouping components. */
+        given Arbitrary[PositionName] = Arbitrary{ Gen.oneOf(
+            PositionName.unsafe("P0001.zarr"), 
+            PositionName.unsafe("P0002.zarr"),
+        ) }
+        forAll (Gen.choose(5, 50).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord])), minSuccessful(500)) { 
+            (records: List[Input.GoodRecord]) => 
+                val indexedRecords = NonnegativeInt.indexed(records)
+                val getKey = indexedRecords.map(_.swap).toMap.apply.andThen(Input.getGroupingKey)
+                val observed = inputRecordsToOutputRecords(indexedRecords, None)
+                val expected = observed.toList.sortBy{ r => 
+                    (r.fieldOfView, r.region1, r.region2, r.distance)
+                }(using summon[Order[(PositionName, RegionId, RegionId, EuclideanDistance)]].toOrdering)
+                observed.toList shouldEqual expected
+        }
 
     test("(FOV, region ID) is NOT a key!") {
         import io.github.iltotore.iron.autoRefine

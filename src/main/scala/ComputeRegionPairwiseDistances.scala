@@ -150,21 +150,26 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
                         case Some(drift) => Movement.addDrift(drift.total)(roi.point)
                     }
         }
-        inrecs.groupBy((r, _) => Input.getGroupingKey(r)).toList.flatMap{ case (fov, groupedRecords) => 
-            groupedRecords.toList.combinations(2).map{
-                case (r1, i1) :: (r2, i2) :: Nil => 
-                    val d = EuclideanDistance.between(getPoint(r1), getPoint(r2))
-                    OutputRecord(
-                        fieldOfView = fov, 
-                        region1 = r1.region, 
-                        region2 = r2.region, 
-                        distance = d, 
-                        inputIndex1 = i1, 
-                        inputIndex2 = i2,
-                    )
-                case rs => throw new Exception(s"${rs.length} records (not 2) when taking pairs!")
+        inrecs.groupBy((r, _) => Input.getGroupingKey(r))
+            .toList
+            .flatMap{ case (fov, groupedRecords) => 
+                groupedRecords.toList.combinations(2).map{
+                    case (r1, i1) :: (r2, i2) :: Nil => 
+                        val d = EuclideanDistance.between(getPoint(r1), getPoint(r2))
+                        OutputRecord(
+                            fieldOfView = fov, 
+                            region1 = r1.region, 
+                            region2 = r2.region, 
+                            distance = d, 
+                            inputIndex1 = i1, 
+                            inputIndex2 = i2,
+                        )
+                    case rs => throw new Exception(s"${rs.length} records (not 2) when taking pairs!")
+                }
             }
-        }
+            .sortBy{ r => (r.fieldOfView, r.region1, r.region2, r.distance) }(
+                using summon[Order[(PositionName, RegionId, RegionId, EuclideanDistance)]].toOrdering
+            )
 
     object Input:
         /* These come from the *traces.csv file produced at the end of looptrace. */
