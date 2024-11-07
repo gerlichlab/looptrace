@@ -10,21 +10,22 @@ import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.EuclideanDistance
-import at.ac.oeaw.imba.gerlich.gerlib.imaging.{ ImagingTimepoint, PositionName }
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.*
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
-import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{ ColumnName, writeCaseClassesToCsv }
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.FieldOfViewColumnName
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{ ColumnName, NamedRow, readCsvToCaseClasses, writeCaseClassesToCsv }
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
 import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.drift.given
+import at.ac.oeaw.imba.gerlich.looptrace.drift.DriftRecord
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
-import at.ac.oeaw.imba.gerlich.gerlib.io.csv.NamedRow
 
 /**
  * Euclidean distances between pairs of regional barcode spots
@@ -95,26 +96,35 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
         )
         OParser.parse(parser, args, CliConfig()) match {
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
-            case Some(opts) => workflow(opts.roisFile, opts.outputFolder)
+            case Some(opts) => workflow(opts.roisFile, opts.maybeDriftFile, opts.outputFolder)
         }
     }
 
-    def workflow(inputFile: os.Path, outputFolder: os.Path): Unit = {
-        val expOutBaseName = s"${inputFile.last.split("\\.").head}.pairwise_distances__regional"
-        val expectedOutputFile = HeadedFileWriter.DelimitedTextTarget(outputFolder, expOutBaseName, Delimiter.CommaSeparator).filepath
-        val inputDelimiter = Delimiter.fromPathUnsafe(inputFile)
-        
+    def workflow(inputFile: os.Path, maybeDriftFile: Option[os.Path], outputFolder: os.Path): Unit = {        
         /* Read input, then throw exception or write output. */
-        logger.info(s"Reading input file: ${inputFile}")
-        Input.parseRecords(inputFile).bimap(_.toNel, inputRecordsToOutputRecords) match {
-            case (Some(bads), _) => throw Input.BadRecordsException(bads)
-            case (None, outputRecords) => 
-                val recs = outputRecords.toList.sortBy{ r => 
-                    (r.fieldOfView, r.region1, r.region2, r.distance)
-                }(summon[Order[(PositionName, RegionId, RegionId, EuclideanDistance)]].toOrdering)
-                logger.info(s"Writing output file: $expectedOutputFile")
-                fs2.Stream.emits(recs)
-                    .through(writeCaseClassesToCsv(expectedOutputFile))
+        logger.info(s"Reading ROIs file: ${inputFile}")
+        val (badInputs, goodInputs) = Input.parseRecords(inputFile)
+        badInputs.toNel match {
+            case Some(bads) => throw new Input.BadRecordsException(bads)
+            case None => 
+                import fs2.data.text.utf8.byteStreamCharLike
+                import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.imaging.given
+
+                val maybeDrifts = maybeDriftFile.map{ driftFile => 
+                    logger.info(s"Reading drift file: ${driftFile}")
+                    readCsvToCaseClasses[DriftRecord](driftFile).unsafeRunSync()
+                }
+                val outputRecords = inputRecordsToOutputRecords(goodInputs, maybeDrifts)
+                
+                val outputFile = HeadedFileWriter.DelimitedTextTarget(
+                    outputFolder, 
+                    s"${inputFile.last.split("\\.").head}.pairwise_distances__regional",
+                    Delimiter.CommaSeparator,
+                ).filepath
+
+                logger.info(s"Writing output file: $outputFile")
+                fs2.Stream.emits(outputRecords.toList)
+                    .through(writeCaseClassesToCsv(outputFile))
                     .compile
                     .drain
                     .unsafeRunSync()
@@ -122,16 +132,36 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
         }
     }
 
-    def inputRecordsToOutputRecords(inrecs: Iterable[(Input.GoodRecord, NonnegativeInt)]): Iterable[OutputRecord] = {
+    def inputRecordsToOutputRecords(
+        inrecs: Iterable[(Input.GoodRecord, NonnegativeInt)], 
+        maybeDrifts: Option[List[DriftRecord]],
+    ): Iterable[OutputRecord] = 
+        val getPoint: Input.GoodRecord => Point3D = maybeDrifts match {
+            case None => _.point
+            case Some(driftRecords) => 
+                import at.ac.oeaw.imba.gerlich.looptrace.drift.Movement
+                val keyed = driftRecords.map{ d => (d.fieldOfView, d.time) -> d }.toMap
+                (roi: Input.GoodRecord) => 
+                    keyed.get(roi.fieldOfView -> roi.region.get) match {
+                        case None => throw new Exception(s"No drift for input record $roi")
+                        case Some(drift) => Movement.addDrift(drift.total)(roi.point)
+                    }
+        }
         inrecs.groupBy((r, _) => Input.getGroupingKey(r)).toList.flatMap{ case (fov, groupedRecords) => 
             groupedRecords.toList.combinations(2).map{
                 case (r1, i1) :: (r2, i2) :: Nil => 
-                    val d = EuclideanDistance.between(r1.point, r2.point)
-                    OutputRecord(fieldOfView = fov, region1 = r1.region, region2 = r2.region, distance = d, inputIndex1 = i1, inputIndex2 = i2)
+                    val d = EuclideanDistance.between(getPoint(r1), getPoint(r2))
+                    OutputRecord(
+                        fieldOfView = fov, 
+                        region1 = r1.region, 
+                        region2 = r2.region, 
+                        distance = d, 
+                        inputIndex1 = i1, 
+                        inputIndex2 = i2,
+                    )
                 case rs => throw new Exception(s"${rs.length} records (not 2) when taking pairs!")
             }
         }
-    }
 
     object Input:
         /* These come from the *traces.csv file produced at the end of looptrace. */
@@ -222,7 +252,6 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
 
     // Helpers for working with output record instances
     object OutputRecord:
-        import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.given
         import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.regionId.given
 
         private given CellEncoder[EuclideanDistance] = summon[CellEncoder[NonnegativeReal]].contramap(_.get)
@@ -239,5 +268,5 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
     end OutputRecord
 
     /* Type aliases */
-    private type DriftKey = (PositionName, ImagingTimepoint)
+    private type DriftKey = (FieldOfViewLike, ImagingTimepoint)
 end ComputeRegionPairwiseDistances

@@ -59,7 +59,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
             touchFile(infile)
             os.isDir(outfolder) shouldBe true
             os.isFile(infile) shouldBe true
-            assertThrows[EmptyFileException]{ workflow(inputFile = infile, outputFolder = outfolder) }
+            assertThrows[EmptyFileException]{ workflow(inputFile = infile, maybeDriftFile = None, outputFolder = outfolder) }
         }
     }
 
@@ -74,7 +74,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                 os.write(infile, Delimiter.CommaSeparator.join(cols) ++ "\n")
                 val expOutfile = outfolder / "input.pairwise_distances__regional.csv"
                 os.exists(expOutfile) shouldBe false
-                workflow(inputFile = infile, outputFolder = outfolder)
+                workflow(inputFile = infile, maybeDriftFile = None, outputFolder = outfolder)
                 os.isFile(expOutfile) shouldBe true
                 safeReadAllWithOrderedHeaders(expOutfile) match {
                     case Left(err) => fail(s"Expected successful output file parse but got error: $err")
@@ -93,7 +93,9 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                     then { (r, i) => i.show_ :: recordToTextFields(r) }
                     else { (r, _) => recordToTextFields(r) }
                 os.write(infile, records.toList.zipWithIndex.map(toTextFields.tupled `andThen` textFieldsToLine))
-                intercept[IllegalHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") } match {
+                intercept[IllegalHeaderException]{ 
+                    workflow(inputFile = infile, maybeDriftFile = None, outputFolder = tempdir / "output") 
+                } match {
                     case IllegalHeaderException(obsHead, missing) => 
                         obsHead shouldEqual toTextFields(records.head, 0)
                         // Account for the fact that randomly drawn first-row elements could collide with 
@@ -135,7 +137,9 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                     os.write(f, (textFieldsToLine(expHead) :: textRows.map(textFieldsToLine)))
                     f
                 }
-                intercept[IllegalHeaderException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") } match {
+                intercept[IllegalHeaderException]{
+                    workflow(inputFile = infile, maybeDriftFile = None, outputFolder = tempdir / "output") 
+                } match {
                     case IllegalHeaderException(header, missing) => 
                         header shouldEqual expHead
                         (AllReqdColumns.toSet -- expHead.toSet).toNonEmptySet match {
@@ -192,7 +196,13 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                     else (AllReqdColumns, textRecords)
                 os.write(infile, (head :: textRows.toList) map textFieldsToLine)
                 os.isFile(infile) shouldBe true
-                val error = intercept[Input.BadRecordsException]{ workflow(inputFile = infile, outputFolder = tempdir / "output") }
+                val error = intercept[Input.BadRecordsException]{
+                    workflow(
+                        inputFile = infile, 
+                        maybeDriftFile = None,
+                        outputFolder = tempdir / "output",
+                    )
+                }
                 error.records.map(_.lineNumber) shouldEqual expBadRows
             }
         }
@@ -210,7 +220,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                 val outfolder = tempdir / "output"
                 val expOutfile = outfolder / "input_with_suffix.pairwise_distances__regional.csv"
                 os.exists(expOutfile) shouldBe false
-                workflow(inputFile = infile, outputFolder = outfolder)
+                workflow(inputFile = infile, maybeDriftFile = None, outputFolder = outfolder)
                 os.isFile(expOutfile) shouldBe true
                 os.read.lines(expOutfile).toList match {
                     case Nil => fail("No lines in output file!")
@@ -238,7 +248,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
             val reg2 = RegionId.unsafe(j)
             OutputRecord(pos, reg1, reg2, EuclideanDistance.between(rec1.point, rec2.point), nn1, nn2)
         }
-        val observed = inputRecordsToOutputRecords(NonnegativeInt.indexed(inputRecords))
+        val observed = inputRecordsToOutputRecords(NonnegativeInt.indexed(inputRecords), None)
         observed shouldEqual expected
     }
 
@@ -251,7 +261,9 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                     case recs => throw new Exception(s"Got list of ${recs.length} (not 2) when taking pairs!")
                 }
             }
-        forAll (genRecords) { records => inputRecordsToOutputRecords(NonnegativeInt.indexed(records.toList)).isEmpty shouldBe true }
+        forAll (genRecords) { records => 
+            inputRecordsToOutputRecords(NonnegativeInt.indexed(records.toList), None).isEmpty shouldBe true 
+        }
     }
 
     test("Any output record's original record indices map them back to input records with identical FOV.") {
@@ -260,7 +272,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
             (records: List[Input.GoodRecord]) => 
                 val indexedRecords = NonnegativeInt.indexed(records)
                 val getKey = indexedRecords.map(_.swap).toMap.apply.andThen(Input.getGroupingKey)
-                val observed = inputRecordsToOutputRecords(indexedRecords)
+                val observed = inputRecordsToOutputRecords(indexedRecords, None)
                 observed.filter{ r => getKey(r.inputIndex1) === getKey(r.inputIndex2) } shouldEqual observed
         }
     }
@@ -279,7 +291,12 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                 case o: OutputRecord => o.fieldOfView
             }
             val expGroupSizes = records.groupBy(getKey).view.mapValues(g => g.size `choose` 2).toMap
-            val obsGroupSizes = inputRecordsToOutputRecords(NonnegativeInt.indexed(records)).groupBy(getKey).view.mapValues(_.size).toMap
+            val obsGroupSizes = 
+                inputRecordsToOutputRecords(NonnegativeInt.indexed(records), None)
+                    .groupBy(getKey)
+                    .view
+                    .mapValues(_.size)
+                    .toMap
             obsGroupSizes shouldEqual expGroupSizes
         }
     }
