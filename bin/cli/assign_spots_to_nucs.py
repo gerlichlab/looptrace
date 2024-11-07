@@ -50,6 +50,8 @@ def _filter_rois_in_nucs(
     -------
     pd.DataFrame: Updated ROI table, with column indicating if ROI is inside nucleus (or other labeled region)
     """
+
+    # We're only interested here in adding a nucelus (or other region) ID column, so keep all other data.
     new_rois = rois.copy()
     
     def spot_in_nuc(row: Union[pd.Series, dict], nuc_label_img: np.ndarray):
@@ -89,6 +91,7 @@ def _filter_rois_in_nucs(
     shifts = pd.DataFrame(shifts, columns=["z", "y", "x"])
     rois_shifted[["zc", "yc", "xc"]] = rois_shifted[["zc", "yc", "xc"]].to_numpy() - shifts[["z","y","x"]].to_numpy()
 
+    # Store the vector of nucleus IDs in a new column on the original ROI table.
     new_rois.loc[:, new_col] = rois_shifted.apply(spot_in_nuc, nuc_label_img=nuc_label_img, axis=1)
     
     return new_rois
