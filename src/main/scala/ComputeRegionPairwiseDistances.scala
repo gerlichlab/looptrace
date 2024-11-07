@@ -7,6 +7,7 @@ import cats.syntax.all.*
 import fs2.data.csv.*
 import mouse.boolean.*
 import scopt.OParser
+import squants.space.{ Length, LengthUnit, Nanometers }
 import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.EuclideanDistance
@@ -16,15 +17,16 @@ import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.FieldOfViewColumnName
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{ ColumnName, NamedRow, readCsvToCaseClasses, writeCaseClassesToCsv }
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
-import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
 import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.drift.given
-import at.ac.oeaw.imba.gerlich.looptrace.drift.DriftRecord
+import at.ac.oeaw.imba.gerlich.looptrace.drift.{ DriftRecord, Movement }
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
+import at.ac.oeaw.imba.gerlich.looptrace.space.LengthInNanometers.given
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /**
@@ -39,9 +41,10 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
     
     /** CLI definition */
     final case class CliConfig(
-        roisFile: os.Path = null,
-        noDriftCorrection: Boolean = false,
-        maybeDriftFile: Option[os.Path] = None,
+        roisFile: os.Path = null, // required
+        noDriftCorrection: Boolean = false, // required iff no drift file
+        maybeDriftFile: Option[os.Path] = None, // required iff no specification of no drift correction
+        pixels: Pixels3D = null, // required
         outputFolder: os.Path = null, 
     )
     val cliParseBuilder = OParser.builder[CliConfig]
@@ -54,6 +57,18 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
 
         def noDriftCorrectionOptionName = "noDriftCorrection"
 
+        // Use the pureconfig.ConfigReader instance to parse a CLI argument specifying pixel definitions
+        given scopt.Read[Pixels3D] = 
+            import pureconfig.*
+            import at.ac.oeaw.imba.gerlich.looptrace.configuration.instances.all.given
+            scopt.Read.reads{ s => 
+                ConfigSource.string(s)
+                    .load[Pixels3D]
+                    .leftMap(_.prettyPrint)
+                    .leftMap(msg => new IllegalArgumentException(s"Cannot decode pixel scaling: $msg"))
+                    .fold(throw _, identity)
+            }
+
         val parser = OParser.sequence(
             programName(ProgramName),
             head(ProgramName, BuildInfo.version),
@@ -65,6 +80,10 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
                 .action((f, c) => c.copy(maybeDriftFile = f.some))
                 .validate(f => os.isFile(f).either(s"Not an extant file; $f", ()))
                 .text("Path to file with per-FOV, per-timepoint shifts to correct for drift"),
+            opt[Pixels3D]("pixels")
+                .required()
+                .action((ps, c) => c.copy(pixels = ps))
+                .text("How many nanometers per unit in each direction (x, y, z)"),
             opt[os.Path]('O', "outputFolder")
                 .required()
                 .action((f, c) =>  c.copy(outputFolder = f))
@@ -96,11 +115,11 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
         )
         OParser.parse(parser, args, CliConfig()) match {
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
-            case Some(opts) => workflow(opts.roisFile, opts.maybeDriftFile, opts.outputFolder)
+            case Some(opts) => workflow(opts.roisFile, opts.maybeDriftFile, opts.pixels, opts.outputFolder)
         }
     }
 
-    def workflow(inputFile: os.Path, maybeDriftFile: Option[os.Path], outputFolder: os.Path): Unit = {        
+    def workflow(inputFile: os.Path, maybeDriftFile: Option[os.Path], pixels: Pixels3D, outputFolder: os.Path): Unit = {        
         /* Read input, then throw exception or write output. */
         logger.info(s"Reading ROIs file: ${inputFile}")
         val (badInputs, goodInputs) = Input.parseRecords(inputFile)
@@ -114,7 +133,7 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
                     logger.info(s"Reading drift file: ${driftFile}")
                     readCsvToCaseClasses[DriftRecord](driftFile).unsafeRunSync()
                 }
-                val outputRecords = inputRecordsToOutputRecords(goodInputs, maybeDrifts)
+                val outputRecords = inputRecordsToOutputRecords(goodInputs, maybeDrifts, pixels)
                 
                 val outputFile = HeadedFileWriter.DelimitedTextTarget(
                     outputFolder, 
@@ -138,11 +157,11 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
     def inputRecordsToOutputRecords(
         inrecs: Iterable[(Input.GoodRecord, NonnegativeInt)], 
         maybeDrifts: Option[List[DriftRecord]],
+        pixels: Pixels3D,
     ): Iterable[OutputRecord] = 
         val getPoint: Input.GoodRecord => Point3D = maybeDrifts match {
             case None => _.point
             case Some(driftRecords) => 
-                import at.ac.oeaw.imba.gerlich.looptrace.drift.Movement
                 val keyed = driftRecords.map{ d => (d.fieldOfView, d.time) -> d }.toMap
                 (roi: Input.GoodRecord) => 
                     keyed.get(roi.fieldOfView -> roi.region.get) match {
@@ -150,12 +169,22 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
                         case Some(drift) => Movement.addDrift(drift.total)(roi.point)
                     }
         }
+        val computeDistance: (Point3D, Point3D) => LengthInNanometers = (p1, p2) => 
+            // TODO: replace with a reworked version of Euclidean distance.
+            val xDiff = pixels.liftX(p1.x.value - p2.x.value).value
+            val yDiff = pixels.liftY(p1.y.value - p2.y.value).value
+            val zDiff = pixels.liftZ(p1.z.value - p2.z.value).value
+            val d = Nanometers(scala.math.sqrt(xDiff * xDiff + yDiff * yDiff + zDiff * zDiff))
+            LengthInNanometers.unsafeFromSquants(d)
         inrecs.groupBy((r, _) => Input.getGroupingKey(r))
             .toList
             .flatMap{ case (fov, groupedRecords) => 
                 groupedRecords.toList.combinations(2).map{
                     case (r1, i1) :: (r2, i2) :: Nil => 
-                        val d = EuclideanDistance.between(getPoint(r1), getPoint(r2))
+                        val d = 
+                            val p1 = getPoint(r1)
+                            val p2 = getPoint(r2)
+                            computeDistance(p1, p2)
                         OutputRecord(
                             fieldOfView = fov, 
                             region1 = r1.region, 
@@ -168,7 +197,7 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
                 }
             }
             .sortBy{ r => (r.fieldOfView, r.region1, r.region2, r.distance) }(
-                using summon[Order[(PositionName, RegionId, RegionId, EuclideanDistance)]].toOrdering
+                using summon[Order[(PositionName, RegionId, RegionId, LengthInNanometers)]].toOrdering
             )
 
     object Input:
@@ -253,21 +282,25 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
         fieldOfView: PositionName, 
         region1: RegionId, 
         region2: RegionId, 
-        distance: EuclideanDistance, 
+        distance: LengthInNanometers, 
         inputIndex1: NonnegativeInt, 
         inputIndex2: NonnegativeInt
         )
 
     // Helpers for working with output record instances
     object OutputRecord:
+        import at.ac.oeaw.imba.gerlich.gerlib.io.csv.fromSimpleShow // CellEncoder.fromSimpleShow extension
         import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
+
+        given CellEncoder[LengthInNanometers] = CellEncoder.fromSimpleShow[LengthInNanometers]
 
         given CsvRowEncoder[OutputRecord, String] with
             override def apply(elem: OutputRecord): RowF[Some, String] = 
                 val fovText: NamedRow = FieldOfViewColumnName.write(elem.fieldOfView)
                 val r1Text: NamedRow = ColumnName[RegionId]("region1").write(elem.region1)
                 val r2Text: NamedRow = ColumnName[RegionId]("region2").write(elem.region2)
-                val distanceText: NamedRow = ColumnName[EuclideanDistance]("distance").write(elem.distance)
+                val distanceText: NamedRow = 
+                    ColumnName[LengthInNanometers]("distance").write(elem.distance)
                 val i1Text: NamedRow = ColumnName[NonnegativeInt]("inputIndex1").write(elem.inputIndex1)
                 val i2Text: NamedRow = ColumnName[NonnegativeInt]("inputIndex2").write(elem.inputIndex2)
                 fovText |+| r1Text |+| r2Text |+| distanceText |+| i1Text |+| i2Text

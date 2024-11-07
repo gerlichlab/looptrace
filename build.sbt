@@ -68,6 +68,8 @@ lazy val root = (project in file("."))
       ironCats, 
       mouse,
       os, 
+      pureconfigCore,
+      pureconfigGeneric,
       scalaCsv,
       scopt,
       squants,

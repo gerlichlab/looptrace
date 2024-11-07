@@ -29,6 +29,10 @@ object Dependencies {
         private def latestVersion = "4.0.0"
     }
 
+    object PureConfig {
+        def getModuleId(name: String): ModuleID = "com.github.pureconfig" %% s"pureconfig-$name" % "0.17.7"
+    }
+
     /* versions */
     lazy val scalatestVersion = "3.2.18"
     
@@ -56,6 +60,8 @@ object Dependencies {
     lazy val fs2Csv = "org.gnieh" %% "fs2-data-csv" % "1.11.1"
     lazy val fs2IO = "co.fs2" %% "fs2-io" % "3.10.2"
     lazy val os = "com.lihaoyi" %% "os-lib" % "0.10.3"
+    lazy val pureconfigCore = PureConfig.getModuleId("core")
+    lazy val pureconfigGeneric = PureConfig.getModuleId("generic-scala3")
     lazy val scalaCsv = "com.github.tototoshi" %% "scala-csv" % "1.3.10"
     lazy val scopt = "com.github.scopt" %% "scopt" % "4.1.0"
     lazy val uJson = HaoyiJson.getModuleId("ujson")
