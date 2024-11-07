@@ -255,7 +255,27 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
     }
 
     test("The number of records is always as expected."):
-        pending
+        /* To encourage collisions, narrow the choices for grouping components. */
+        given Arbitrary[PositionName] = Arbitrary{ Gen.oneOf(
+            PositionName.unsafe("P0001.zarr"), 
+            PositionName.unsafe("P0002.zarr"),
+        ) }
+        forAll (Gen.choose(5, 50).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord])), minSuccessful(500)) { 
+            (records: List[Input.GoodRecord]) => 
+                val indexedRecords = NonnegativeInt.indexed(records)
+                val observed = inputRecordsToOutputRecords(indexedRecords, None).size
+                records.map(_.fieldOfView)
+                    .groupBy(identity)
+                    .view
+                    .map(_._2.size)
+                    .toList
+                    .toNel match {
+                        case None => fail("No records!")
+                        case Some(fovCounts) => 
+                            val expected = fovCounts.reduceMap{ n => (0.5 * n * (n - 1)).toInt } // Sum (n choose 2) over each n.
+                            observed shouldEqual expected
+                    }
+        }
 
     test("Records are emitted in ascending order according to the composite key: (FOV, region 1, region 2, distance) by function inputRecordsToOutputRecords."):
         /* To encourage collisions, narrow the choices for grouping components. */
@@ -266,7 +286,6 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
         forAll (Gen.choose(5, 50).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord])), minSuccessful(500)) { 
             (records: List[Input.GoodRecord]) => 
                 val indexedRecords = NonnegativeInt.indexed(records)
-                val getKey = indexedRecords.map(_.swap).toMap.apply.andThen(Input.getGroupingKey)
                 val observed = inputRecordsToOutputRecords(indexedRecords, None)
                 val expected = observed.toList.sortBy{ r => 
                     (r.fieldOfView, r.region1, r.region2, r.distance)
