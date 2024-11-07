@@ -45,6 +45,7 @@ object Dependencies {
         "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
     )
     lazy val mouse = "org.typelevel" %% "mouse" % "1.3.2"
+    lazy val squants = "org.typelevel" %% "squants" % "1.8.3"
 
     /* iron */
     lazy val iron = Iron.moduleId
