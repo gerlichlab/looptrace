@@ -12,6 +12,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 
 ### Changed
 * Using `fs2` to write out regional pairwise distance results to CSV
+* Using `fs2` to write out locus pairwise distance results to CSV
 
 ## [v0.10.0] - 2024-10-22
 

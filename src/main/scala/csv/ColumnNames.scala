@@ -44,6 +44,8 @@ object ColumnNames:
     val TooCloseRoisColumnName: ColumnName[NonEmptySet[RoiIndex]] = 
         ColumnName("tooCloseRois")
 
+    val TraceIdColumnName: ColumnName[TraceId] = ColumnName("traceId")
+
     private def coarseDriftColumnName[A <: EuclideanAxis](a: A): ColumnName[CoarseDriftComponent[A]] = 
         val coarseDriftColumnSuffix: String = "DriftCoarsePixels"
         ColumnName(a match {

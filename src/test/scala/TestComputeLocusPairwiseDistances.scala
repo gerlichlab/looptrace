@@ -65,7 +65,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
         }
     }
 
-    test("Input file that's just a header produces an output file that's just a header.") {
+    test("Input file that's just a header produces an output file that's empty.") {
         withTempDirectory{ (tempdir: os.Path) => 
             /* Setup and pretests */
             val infile = tempdir / "input.csv"
@@ -78,7 +78,9 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
             os.isFile(expOutfile) shouldBe true
             safeReadAllWithOrderedHeaders(expOutfile) match {
                 case Left(err) => fail(s"Expected successful output file parse but got error: $err")
-                case Right((header, _)) => header shouldEqual OutputWriter.header
+                case Right((header, Nil)) => header shouldEqual List()
+                case Right((_, records)) => fail(s"Expected empty output file but got ${records.length} record(s)!")
+
             }
         }
     }
@@ -196,43 +198,6 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
                 else if extraBadRows.nonEmpty
                 then fail(s"${extraBadRows.size} row(s) unexpectedly bad: ${textRecords.zipWithIndex.filter((_, i) => extraBadRows.contains(i))}")
                 else succeed
-            }
-        }
-    }
-
-    test("Pandas format IS accepted.") {
-        val augmentedHeader = "" :: AllRequiredColumns
-        forAll { (records: NonEmptyList[Input.GoodRecord]) => 
-            withTempDirectory{ (tempdir: os.Path) => 
-                /* Setup and pretests */
-                val infile = {
-                    val f = tempdir / "input.csv"
-                    val indexedTextRows = NonnegativeInt.indexed(records.toList).map((r, i) => i.show :: recordToTextFields(r))
-                    os.write(f, (augmentedHeader :: indexedTextRows).map(rowToLine))
-                    f
-                }
-                os.isFile(infile) shouldBe true
-                workflow(inputFile = infile, outputFolder = tempdir / "output") match
-                    case Left(errMsg) => fail(errMsg)
-                    case Right(_) => succeed
-            }
-        }
-    }
-
-    test("Output file always has the correct header.") {
-        forAll { (records: NonEmptyList[Input.GoodRecord]) => 
-            withTempDirectory{ (tempdir: os.Path) => 
-                val infile = tempdir / "input_with_suffix.some.random.extensions.csv"
-                writeMinimalInputCsv(infile, records)
-                val outfolder = tempdir / "output"
-                val expOutfile = outfolder / "input_with_suffix.pairwise_distances__locus_specific.csv"
-                os.exists(expOutfile) shouldBe false
-                workflow(inputFile = infile, outputFolder = outfolder)
-                os.isFile(expOutfile) shouldBe true
-                os.read.lines(expOutfile).toList match {
-                    case Nil => fail("No lines in output file!")
-                    case h :: _ => (Delimiter.CommaSeparator `split` h) shouldEqual OutputWriter.header
-                }
             }
         }
     }

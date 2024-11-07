@@ -4,4 +4,4 @@ package csv
 package object instances:
     object all extends AllCsvInstances
 
-    trait AllCsvInstances extends DriftCsvInstances, ImagingCsvInstances, RegionIdInstances, RoiCsvInstances
+    trait AllCsvInstances extends DriftCsvInstances, GeometryInstances, ImagingCsvInstances, LocusIdInstances, RegionIdInstances, RoiCsvInstances, TraceIdInstances

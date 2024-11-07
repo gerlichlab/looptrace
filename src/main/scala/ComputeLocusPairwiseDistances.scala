@@ -2,7 +2,9 @@ package at.ac.oeaw.imba.gerlich.looptrace
 
 import cats.*
 import cats.data.*
+import cats.effect.unsafe.implicits.global // for IORuntime
 import cats.syntax.all.*
+import fs2.data.csv.*
 import mouse.boolean.*
 import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
@@ -14,15 +16,19 @@ import at.ac.oeaw.imba.gerlich.gerlib.imaging.{
 }
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.FieldOfViewColumnName
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{ ColumnName, NamedRow, readCsvToCaseClasses, writeCaseClassesToCsv }
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.* // for .show_ syntax
 
 import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
+import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.TraceIdColumnName
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
+import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.TraceIdColumnName
 
 /**
  * Simple pairwise distances within trace IDs
@@ -60,13 +66,13 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
         )
         OParser.parse(parser, args, CliConfig()) match {
             case None => throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help") // CLI parser gives error message.
-            case Some(opts) => workflow(opts.tracesFile, opts.outputFolder).fold(msg => throw new Exception(msg), _ => logger.info("Done!"))
+            case Some(opts) => workflow(opts.tracesFile, opts.outputFolder)
         }
     }
 
-    def workflow(inputFile: os.Path, outputFolder: os.Path): Either[String, HeadedFileWriter.DelimitedTextTarget] = {
+    def workflow(inputFile: os.Path, outputFolder: os.Path): Unit = {
         val expOutBaseName = s"${inputFile.last.split("\\.").head}.pairwise_distances__locus_specific"
-        val expectedOutputFile = HeadedFileWriter.DelimitedTextTarget(outputFolder, expOutBaseName, Delimiter.CommaSeparator)
+        val outputFile = HeadedFileWriter.DelimitedTextTarget(outputFolder, expOutBaseName, Delimiter.CommaSeparator).filepath
         val inputDelimiter = Delimiter.fromPathUnsafe(inputFile)
         
         /* Read input, then throw exception or write output. */
@@ -77,18 +83,16 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
                 val recs = outputRecords.toList.sortBy{ r => 
                     (r.fieldOfView, r.region, r.trace, r.locus1, r.locus2)
                 }(summon[Order[(PositionName, RegionId, TraceId, LocusId, LocusId)]].toOrdering)
-                logger.info(s"Writing output file: ${expectedOutputFile.filepath}")
-                OutputWriter.writeRecordsToFile(recs, expectedOutputFile)
+                
+                logger.info(s"Writing output file: $outputFile")
+                if (!os.exists(outputFile.parent)){ os.makeDir.all(outputFile.parent) }
+                fs2.Stream.emits(recs)
+                    .through(writeCaseClassesToCsv(outputFile))
+                    .compile
+                    .drain
+                    .unsafeRunSync()
+                logger.info("Done!")
         }
-
-        // Facilitate derivation of Eq[HeadedFileWriter[DelimitedTextTarget]].
-        import HeadedFileWriter.DelimitedTextTarget.given
-        given eqForPath: Eq[os.Path] = Eq.by(_.toString)
-        // Check that the observed output path matches the expectation and provide new exception if not.
-        (observedOutputFile === expectedOutputFile).either(
-            s"Observed output filepath (${observedOutputFile}) differs from expectation (${expectedOutputFile})", 
-            observedOutputFile
-            )
     }
 
     def inputRecordsToOutputRecords(inrecs: Iterable[(Input.GoodRecord, NonnegativeInt)]): Iterable[OutputRecord] = {
@@ -115,7 +119,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
     object Input:
         /* These come from the *traces.csv file produced at the end of looptrace. */
         val FieldOfViewColumn = FieldOfViewColumnName.value
-        val TraceIdColumn = "traceId"
+        val TraceIdColumn = TraceIdColumnName.value
         val RegionalBarcodeTimepointColumn = "ref_timepoint"
         val LocusSpecificBarcodeTimepointColumn = "timepoint"
         val XCoordinateColumn = "x"
@@ -202,31 +206,23 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
         locus2: LocusId, 
         distance: EuclideanDistance, 
         inputIndex1: NonnegativeInt, 
-        inputIndex2: NonnegativeInt
-        )
+        inputIndex2: NonnegativeInt,
+    )
 
-    /** How to write the output records from this program */
-    object OutputWriter extends HeadedFileWriter[OutputRecord]:
-        // These are our names.
-        override def header: List[String] = List(
-            FieldOfViewColumnName.value, 
-            "traceId", 
-            "region", 
-            "locus1", 
-            "locus2", 
-            "distance", 
-            "inputIndex1", 
-            "inputIndex2",
-        )
-        override def toTextFields(r: OutputRecord): List[String] = List(
-            r.fieldOfView.show_, 
-            r.trace.show_, 
-            r.region.show_, 
-            r.locus1.show_, 
-            r.locus2.show_, 
-            r.distance.toString, 
-            r.inputIndex1.show_, 
-            r.inputIndex2.show_, 
-        )
-    end OutputWriter
+    /** Helpers for working with output records */
+    object OutputRecord:
+        import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
+
+        given CsvRowEncoder[OutputRecord, String] with
+            override def apply(elem: OutputRecord): RowF[Some, String] = 
+                val fovText: NamedRow = FieldOfViewColumnName.write(elem.fieldOfView)
+                val traceText: NamedRow = TraceIdColumnName.write(elem.trace)
+                val regText: NamedRow = ColumnName[RegionId]("region").write(elem.region)
+                val loc1Text: NamedRow = ColumnName[LocusId]("locus1").write(elem.locus1)
+                val loc2Text: NamedRow = ColumnName[LocusId]("locus2").write(elem.locus2)
+                val distanceText: NamedRow = ColumnName[EuclideanDistance]("distance").write(elem.distance)
+                val i1Text: NamedRow = ColumnName[NonnegativeInt]("inputIndex1").write(elem.inputIndex1)
+                val i2Text: NamedRow = ColumnName[NonnegativeInt]("inputIndex2").write(elem.inputIndex2)
+                fovText |+| traceText |+| regText |+| loc1Text |+| loc2Text |+| distanceText |+| i1Text |+| i2Text
+    end OutputRecord
 end ComputeLocusPairwiseDistances

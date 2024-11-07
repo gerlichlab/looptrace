@@ -78,7 +78,8 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                 os.isFile(expOutfile) shouldBe true
                 safeReadAllWithOrderedHeaders(expOutfile) match {
                     case Left(err) => fail(s"Expected successful output file parse but got error: $err")
-                    case Right((header, _)) => header shouldEqual List()
+                    case Right((header, Nil)) => header shouldEqual List()
+                    case Right((_, records)) => fail(s"Expected empty output file but got ${records.length} record(s)!")
                 }
             }
         }

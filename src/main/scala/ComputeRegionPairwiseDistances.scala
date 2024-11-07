@@ -260,9 +260,7 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
 
     // Helpers for working with output record instances
     object OutputRecord:
-        import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.regionId.given
-
-        private given CellEncoder[EuclideanDistance] = summon[CellEncoder[NonnegativeReal]].contramap(_.get)
+        import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
 
         given CsvRowEncoder[OutputRecord, String] with
             override def apply(elem: OutputRecord): RowF[Some, String] = 
