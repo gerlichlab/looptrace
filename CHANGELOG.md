@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.10.1] - 2024-11-07
+
+### Fixed
+* Fixed the incorrectness of the merged regional spot centers and bounding boxes in the `*_rois.proximity_accepted.nuclei_labeled.csv` and `*_rois.proximity_accepted.nuclei_filtered.csv`. See [Issue 355](https://github.com/gerlichlab/looptrace/issues/355)
+* Correctly applying drift correction to regional spot coordinates. See [Issue 329](https://github.com/gerlichlab/looptrace/issues/329)
+
+### Changed
+* Using `fs2` to write out regional pairwise distance results to CSV
+
 ## [v0.10.0] - 2024-10-22
 
 ### Added
