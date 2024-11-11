@@ -124,7 +124,8 @@ package object space:
             NonnegativeReal.either((l in Nanometers).value)
                 .leftMap(msg => s"Error converting length ($l) to (nonnegative) nanometers: $msg")
 
-        def unsafeFromSquants(l: Length): LengthInNanometers = fromSquants(l).fold(msg => throw new Exception(msg), identity)
+        def unsafeFromSquants(l: Length): LengthInNanometers = 
+            fromSquants(l).fold(msg => throw new Exception(msg), identity)
 
         given orderForLengthInNanometers: Order[LengthInNanometers] = 
             import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
@@ -180,7 +181,7 @@ package object space:
 
         object syntax:
             extension (pxDef: PixelDefinition)
-                def apply(x: Double): Length = (pxDef: LengthUnit).apply(x)
+                def lift[A: Numeric](a: A): Length = (pxDef: LengthUnit).apply(a)
     end PixelDefinition
 
     /** Rescaling of the units in 3D */
@@ -189,9 +190,10 @@ package object space:
         private val y: PixelDefinition, 
         private val z: PixelDefinition,
     ):
-        def liftX[A: Numeric](a: A): Length = x(a)
-        def liftY[A: Numeric](a: A): Length = y(a)
-        def liftZ[A: Numeric](a: A): Length = z(a)
+        import PixelDefinition.syntax.lift
+        def liftX[A: Numeric](a: A): Length = x.lift(a)
+        def liftY[A: Numeric](a: A): Length = y.lift(a)
+        def liftZ[A: Numeric](a: A): Length = z.lift(a)
     end Pixels3D
 
 end space

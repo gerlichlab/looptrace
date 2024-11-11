@@ -103,11 +103,11 @@ class Tracer:
 
     @property
     def nanometers_per_pixel_xy(self) -> NumberLike:
-        return self.config["xy_nm"]
+        return self.image_handler.nanometers_per_pixel_xy
 
     @property
     def nanometers_per_pixel_z(self) -> NumberLike:
-        return self.config["z_nm"]
+        return self.image_handler.nanometers_per_pixel_z
 
     @property
     def roi_table(self) -> pd.DataFrame:
