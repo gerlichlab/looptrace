@@ -8,7 +8,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 
 ### Changed
 * Scala is now version 3.5.2.
-* `sbt` is now version 1.10.4.
+* `sbt` is now version 1.10.5.
 * `uJson` and `uPickle` are now at version 4.0.2.
 * Moved the `AtLeast2[C[*], E]` data type to `gerlib`, to be released with version 0.3 of that library.
 
