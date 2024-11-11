@@ -368,7 +368,12 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                 case o: OutputRecord => o.fieldOfView
             }
             val expGroupSizes = records.groupBy(getKey).view.mapValues{ g => choose(g.size)(2) }.toMap
-            val obsGroupSizes = inputRecordsToOutputRecords(NonnegativeInt.indexed(records)).groupBy(getKey).view.mapValues(_.size).toMap
+            val obsGroupSizes = 
+                inputRecordsToOutputRecords(NonnegativeInt.indexed(records), None, ToNanometersIdentity)
+                    .groupBy(getKey)
+                    .view
+                    .mapValues(_.size)
+                    .toMap
             obsGroupSizes shouldEqual expGroupSizes
         }
     }

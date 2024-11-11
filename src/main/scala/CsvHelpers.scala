@@ -29,18 +29,6 @@ object CsvHelpers:
         .flatMap{ raw => lift(raw).leftMap(msg => s"Failed to parse value ($raw) from key '$key': $msg") }
         .toValidatedNel
 
-    /**
-      * Read given file as CSV with header, and handle resource safety.
-      *
-      * @param f The path to the file to read as CSV
-      * @return Either a [[scala.util.Left]]-wrapped exception or a [[scala.util.Right]]-wrapped pair of columns and list of row records
-      */
-    def safeReadAllWithOrderedHeaders(f: os.Path): Either[Throwable, (List[String], List[Map[String, String]])] = for {
-        reader <- Try{ CSVReader.open(f.toIO) }.toEither
-        result <- Try{ reader.allWithOrderedHeaders() }.toEither
-        _ = reader.close()
-    } yield result
-
     extension (maybe: Try[String])
       private def continueParse[A](lift: String => Either[String, A]) = (maybe.toEither.leftMap(_.getMessage) >>= lift).toValidatedNel
 end CsvHelpers
