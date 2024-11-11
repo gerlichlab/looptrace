@@ -17,10 +17,12 @@ trait PureConfigLooptraceInstances:
             }
         }
 
-    given configReaderForPixel(using readLengthInNanometers: ConfigReader[LengthInNanometers]): ConfigReader[PixelDefinition] = 
+    given configReaderForPixelDefinition(
+        using readLengthInNanometers: ConfigReader[LengthInNanometers]
+    ): ConfigReader[PixelDefinition] = 
         readLengthInNanometers.emap{ l => 
             PixelDefinition.tryToDefine(l).leftMap{ msg => 
-                CannotConvert(value = l.toString, toType = "looptrace.space.Pixel", because = msg) 
+                CannotConvert(value = l.toString, toType = "looptrace.space.PixelDefinition", because = msg) 
             }
         }
 

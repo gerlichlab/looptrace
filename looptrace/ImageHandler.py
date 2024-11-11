@@ -26,6 +26,7 @@ from looptrace import ZARR_CONVERSIONS_KEY, RoiImageSize
 from looptrace.configuration import get_minimum_regional_spot_separation
 from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, FilePathLike, FolderPathLike, get_analysis_path, simplify_path
 from looptrace.image_io import ignore_path, NPZ_wrapper
+from looptrace.numeric_types import NumberLike
 
 __author__ = "Kai Sandvold Beckwith"
 __credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
@@ -313,6 +314,14 @@ class ImageHandler:
     @property
     def minimum_spot_separation(self) -> Union[int, float]:
         return get_minimum_regional_spot_separation(self.config)
+
+    @property
+    def nanometers_per_pixel_xy(self) -> NumberLike:
+        return self.config["xy_nm"]
+    
+    @property
+    def nanometers_per_pixel_z(self) -> NumberLike:
+        return self.config["z_nm"]
 
     @property
     def nuclear_masks_visualisation_data_path(self) -> Path:

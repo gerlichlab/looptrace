@@ -157,7 +157,7 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
     def inputRecordsToOutputRecords(
         inrecs: Iterable[(Input.GoodRecord, NonnegativeInt)], 
         maybeDrifts: Option[List[DriftRecord]],
-        pixels: Pixels3D,
+        OurPixels: Pixels3D,
     ): Iterable[OutputRecord] = 
         val getPoint: Input.GoodRecord => Point3D = maybeDrifts match {
             case None => _.point
@@ -171,25 +171,22 @@ object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliR
         }
         val computeDistance: (Point3D, Point3D) => LengthInNanometers = (p1, p2) => 
             // TODO: replace with a reworked version of Euclidean distance.
-            val xDiff = pixels.liftX(p1.x.value - p2.x.value).value
-            val yDiff = pixels.liftY(p1.y.value - p2.y.value).value
-            val zDiff = pixels.liftZ(p1.z.value - p2.z.value).value
-            val d = Nanometers(scala.math.sqrt(xDiff * xDiff + yDiff * yDiff + zDiff * zDiff))
+            val MyUnit = Nanometers
+            val xDiff = (OurPixels.liftX(p1.x.value - p2.x.value) in MyUnit).value
+            val yDiff = (OurPixels.liftY(p1.y.value - p2.y.value) in MyUnit).value
+            val zDiff = (OurPixels.liftZ(p1.z.value - p2.z.value) in MyUnit).value
+            val d = MyUnit(scala.math.sqrt(xDiff * xDiff + yDiff * yDiff + zDiff * zDiff))
             LengthInNanometers.unsafeFromSquants(d)
         inrecs.groupBy((r, _) => Input.getGroupingKey(r))
             .toList
             .flatMap{ case (fov, groupedRecords) => 
                 groupedRecords.toList.combinations(2).map{
                     case (r1, i1) :: (r2, i2) :: Nil => 
-                        val d = 
-                            val p1 = getPoint(r1)
-                            val p2 = getPoint(r2)
-                            computeDistance(p1, p2)
                         OutputRecord(
                             fieldOfView = fov, 
                             region1 = r1.region, 
                             region2 = r2.region, 
-                            distance = d, 
+                            distance = computeDistance(getPoint(r1), getPoint(r2)), 
                             inputIndex1 = i1, 
                             inputIndex2 = i2,
                         )

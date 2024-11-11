@@ -224,6 +224,8 @@ def compute_region_pairwise_distances(rounds_config: ExtantFile, params_config: 
         str(H.nuclei_filtered_spots_file_path if H.spot_in_nuc else H.proximity_accepted_spots_file_path),
         "--driftFile", 
         str(H.drift_correction_file__fine),
+        "--pixels",
+        f"{{ x: {H.nanometers_per_pixel_xy} nm, y: {H.nanometers_per_pixel_xy} nm, z: {H.nanometers_per_pixel_z} nm }}",
         "-O", 
         H.analysis_path,
     ]
