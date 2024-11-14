@@ -193,43 +193,42 @@ object MergeAndSplitRoiTools extends LazyLogging:
      *     example, to determine the minimum or maximum box size, or perhaps something like the greatest extent encompassed 
      *     by the union of the boxes around the ROIs contributing to the merge
      * @param rois The collection of ROIs for which merge partners(s) (or not) have been determined
-     * @return A list of any errors which occurred, a list of singleton ROIs, a list of merge inputs, and a list of merge outputs
+     * @return A list of singleton ROIs, a list of merge inputs, and a list of merge outputs
      */
     def mergeRois(buildNewBox: (Point3D, NonEmptyList[BoundingBox]) => BoundingBox)(rois: List[MergerAssessedRoi]): (
-        List[MergeError], // errors
         List[IndexedDetectedSpot], // non-participants in merge
         List[MergeContributorRoi], // contributors to merge
         List[MergedRoiRecord], // merge outputs
     ) = 
         rois match {
-            case Nil => (List(), List(), List(), List())
+            case Nil => (List(), List(), List())
             case _ => 
                 def incrementIndex: RoiIndex => RoiIndex = i => RoiIndex.unsafe(i.get + 1)
                 val pool = rois.map{ r => r.index -> r }.toMap
                 given Ordering[RoiIndex] = summon[Order[RoiIndex]].toOrdering
                 val initNewIndex = incrementIndex(rois.map(_.index).max)
                 logger.debug(s"Initial / first eligible index to use for merge result ROIs: ${initNewIndex.show_}")
-                val ((allErrored, allSkipped, allMerged), _, _) = 
-                    rois.foldRight(((List.empty[MergeError], List.empty[IndexedDetectedSpot], List.empty[MergedRoiRecord]), Set.empty[RoiMergeBag], initNewIndex)){
-                        case (r, ((accErr, accSkip, accMerge), alreadyMerged, currentMergeIndex)) => 
+                val ((allSkipped, allMerged), _, _) = 
+                    rois.foldRight(((List.empty[IndexedDetectedSpot], List.empty[MergedRoiRecord]), Set.empty[RoiMergeBag], initNewIndex)){
+                        case (r, ((accSkip, accMerge), alreadyMerged, currentMergeIndex)) => 
                             considerOneMerge(pool, buildNewBox)(currentMergeIndex, r) match {
                                 case None => 
-                                    // no merge action; simply eliminate the empty mergePartners collection
+                                    // singleton case, no merge action; simply eliminate the empty mergePartners collection.
                                     val idxSpot = IndexedDetectedSpot(r.index, r.context, r.centroid, r.box)
-                                    ((accErr, idxSpot :: accSkip, accMerge), alreadyMerged, currentMergeIndex)
+                                    ((idxSpot :: accSkip, accMerge), alreadyMerged, currentMergeIndex)
                                 case Some(Left(errors)) => 
                                     // error case
-                                    (((r, errors) :: accErr, accSkip, accMerge), alreadyMerged, currentMergeIndex)
+                                    throw new Exception(s"${errors.length} error(s) when considering merge of ROI ($r): ${errors.mkString_("; ")}")
                                 case Some(Right(rec)) =>
                                     // merge case
                                     val mergeText = rec.contributors.toList.sorted.map(_.show_).mkString(";")
                                     if alreadyMerged `contains` rec.contributors
                                     then
                                         logger.debug(s"Skipping, already merged: $mergeText") 
-                                        ((accErr, accSkip, accMerge), alreadyMerged, currentMergeIndex)
+                                        ((accSkip, accMerge), alreadyMerged, currentMergeIndex)
                                     else 
                                         logger.debug(s"Merging $mergeText --> ${rec.index.show_}")
-                                        ((accErr, accSkip, rec :: accMerge), alreadyMerged + rec.contributors, incrementIndex(rec.index))
+                                        ((accSkip, rec :: accMerge), alreadyMerged + rec.contributors, incrementIndex(rec.index))
                         }
                     }
                 val allContrib: List[MergeContributorRoi] = allMerged
@@ -253,7 +252,7 @@ object MergeAndSplitRoiTools extends LazyLogging:
                             mergeOutputs, 
                         )
                     }
-                (allErrored, allSkipped, allContrib, allMerged)                
+                (allSkipped, allContrib, allMerged)                
         }
     
     /** Do the merge for a single ROI record. */
@@ -288,8 +287,6 @@ object MergeAndSplitRoiTools extends LazyLogging:
                 )
             }
         )
-
-    private type MergeError = (MergerAssessedRoi, ErrorMessages)
     
     final case class IndexedDetectedSpot(
         index: RoiIndex, 
