@@ -129,7 +129,7 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
             head(ProgramName, BuildInfo.version), 
             opt[ImagingRoundsConfiguration]("configuration")
                 .required()
-                .action((progConf, cliConf) => cliConf.copy(configuration = progConf))
+                .action((rounds, cliConf) => cliConf.copy(configuration = rounds))
                 .text("Path to file specifying the imaging rounds configuration"),
             opt[os.Path]("spotsFile")
                 .required()
