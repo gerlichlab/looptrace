@@ -225,7 +225,7 @@ object MergeAndSplitRoiTools extends LazyLogging:
                 throw new Exception(
                     s"${repeats.size} case(s) of repeated key in ROI records. Here they are mapped, to collection of pairs of record and record number (0-based): $repeats"
                 )
-            case Right(graph) => // TODO: use graph
+            case Right(graph) => 
                 def incrementIndex: RoiIndex => RoiIndex = i => RoiIndex.unsafe(i.get + 1)
                 val pool = rois.map{ r => r.index -> r }.toMap
                 given Ordering[RoiIndex] = summon[Order[RoiIndex]].toOrdering
@@ -248,8 +248,12 @@ object MergeAndSplitRoiTools extends LazyLogging:
                                 case id1 :: id2 :: rest => 
                                     // merge case
                                     NonEmptyList(id1, id2 :: rest)
-                                        .traverse{ i => pool.get(i).toRight(s"Missing ROI index: ${i.show_}").toEitherNel }
+                                        .traverse{ i => 
+                                            // should never happen, since we create the lookup pool within this function
+                                            pool.get(i).toRight(s"Missing ROI index: ${i.show_}").toEitherNel 
+                                        }
                                         .flatMap{ groupRois => 
+                                            // Define the new center and box, and check that each ROI comes from the same imaging context.
                                             val newCenter: Point3D = groupRois.map(_.centroid.asPoint).centroid
                                             val newBox: BoundingBox = buildNewBox(newCenter, groupRois.map(_.box))
                                             val contexts = groupRois.map(_.context).toList.toSet
@@ -273,7 +277,7 @@ object MergeAndSplitRoiTools extends LazyLogging:
                                             errorOrRecord.leftMap(NonEmptyList.one)
                                         }
                                         .fold(
-                                            errors => ???,
+                                            errors => throw new Exception(s"${errors.size} error(s) merging ROIs: ${errors}"),
                                             mergedRecord => 
                                                 val mergeText = mergedRecord.contributors.toList.sorted.map(_.show_).mkString(";")
                                                 logger.debug(s"Merged $mergeText --> ${mergedRecord.index.show_}")
