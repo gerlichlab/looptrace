@@ -17,19 +17,19 @@ private[looptrace] final case class MergeContributorRoi(
     context: ImagingContext,
     centroid: Centroid[Double],
     box: BoundingBox, 
-    mergeOutputs: NonEmptySet[RoiIndex],
+    mergeOutput: RoiIndex,
 )
 
 object MergeContributorRoi:
-    private[looptrace] def apply(index: RoiIndex, spot: DetectedSpotRoi, mergeOutputs: NonEmptySet[RoiIndex]): Either[String, MergeContributorRoi] = 
-        if mergeOutputs `contains` index
-        then s"Merge contributor ID is among its own merge result IDs: ${index.show_} in ${mergeOutputs}".asLeft
+    private[looptrace] def apply(index: RoiIndex, spot: DetectedSpotRoi, mergeOutput: RoiIndex): Either[String, MergeContributorRoi] = 
+        if index === mergeOutput
+        then s"Merge contributor ID is its own result ID".asLeft
         else MergeContributorRoi(
             index,
             spot.context, 
             spot.centroid, 
             spot.box, 
-            mergeOutputs,
+            mergeOutput,
         ).asRight
 
     given AdmitsRoiIndex[MergeContributorRoi] = AdmitsRoiIndex.instance(_.index)
