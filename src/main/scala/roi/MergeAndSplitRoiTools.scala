@@ -259,7 +259,7 @@ object MergeAndSplitRoiTools extends LazyLogging:
                                             val contexts = groupRois.map(_.context).toList.toSet
                                             val errorOrRecord = for {
                                                 ctx <- (contexts.size === 1).either(
-                                                    s"${contexts.size} unique imaging context (not just 1) in ROI group to merge",
+                                                    s"${contexts.size} unique imaging contexts (not just 1) in ROI group to merge",
                                                     groupRois.head.context
                                                 )
                                                 groupIds <- AtLeast2.either(groupRois.toList.map(_.index).toSet)
@@ -277,7 +277,7 @@ object MergeAndSplitRoiTools extends LazyLogging:
                                             errorOrRecord.leftMap(NonEmptyList.one)
                                         }
                                         .fold(
-                                            errors => throw new Exception(s"${errors.size} error(s) merging ROIs: ${errors}"),
+                                            errors => throw new Exception(s"${errors.size} error(s) when merging ROIs: ${errors}"),
                                             mergedRecord => 
                                                 val mergeText = mergedRecord.contributors.toList.sorted.map(_.show_).mkString(";")
                                                 logger.debug(s"Merged $mergeText --> ${mergedRecord.index.show_}")
