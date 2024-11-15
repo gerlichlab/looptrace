@@ -12,8 +12,8 @@ import at.ac.oeaw.imba.gerlich.looptrace.drift.*
 /** Collection of names of critical columns from which to parse data */
 object ColumnNames:
     /** Each merge input is associated with at least one merge output. */
-    val MergeOutputsColumnName: ColumnName[NonEmptySet[RoiIndex]] = 
-        ColumnName("mergeOutputs")
+    val MergeOutputColumnName: ColumnName[RoiIndex] = 
+        ColumnName("mergeOutput")
 
     /** The associated collection may be empty (nothing to merge with). */
     val MergeContributorsColumnNameForAssessedRecord: ColumnName[Set[RoiIndex]] = 

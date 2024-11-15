@@ -286,34 +286,41 @@ object MergeAndSplitRoiTools extends LazyLogging:
                             }
                         }
                 val allContrib: List[MergeContributorRoi] = getMergeContributorRois(pool, allMerged)
-                (allSkipped, allContrib, allMerged)
+                (allSkipped.sortBy(_.index), allContrib.sortBy(_.index), allMerged.sortBy(_.index))
         }
 
-    private[looptrace] def getMergeContributorRois(
+    // Using the merge results, recover the contributing records.
+    private[MergeAndSplitRoiTools] def getMergeContributorRois(
         mergeInputPool: Map[RoiIndex, MergerAssessedRoi], 
         merged: List[MergedRoiRecord],
     ): List[MergeContributorRoi] = 
-        merged.foldRight(Map.empty[RoiIndex, NonEmptySet[RoiIndex]]){ 
-            (roi, mergedIndicesByContribIndex) => 
-                roi.contributors.toSet.foldRight(mergedIndicesByContribIndex){ (i, acc) => 
-                    acc + (i -> acc.get(i).fold(NonEmptySet.one(roi.index))(_.add(roi.index)))
+        merged.foldRight(Map.empty[RoiIndex, RoiIndex]){ 
+            (roi, mergeIndexByContribIndex) => 
+                roi.contributors.toSet.foldRight(mergeIndexByContribIndex){ 
+                    (i, acc) => acc.get(i) match {
+                        case None => acc + (i -> roi.index)
+                        case Some(prev) => throw new Exception(
+                            s"Index ${i.show_} already contributed to merger ${prev.show_}"
+                        )
+                    }
                 }
-            }
-            .toList
-            .sortBy(_._1)(using summon[Order[RoiIndex]].toOrdering)
-            .map{ (contribIndex, mergeOutputs) => 
-                val original = mergeInputPool.getOrElse(
-                    contribIndex, 
-                    throw new Exception(s"Cannot find original ROI for alleged contributor index ${contribIndex.show_}")
+        }
+        .toList
+        .map{ (contribIndex, mergeOutput) => 
+            val original = mergeInputPool.getOrElse(
+                contribIndex, 
+                throw new Exception(
+                    s"Cannot find original ROI for alleged contributor index ${contribIndex.show_}"
                 )
-                MergeContributorRoi(
-                    contribIndex, 
-                    original.context, 
-                    original.centroid, 
-                    original.box,
-                    mergeOutputs, 
-                )
-            }
+            )
+            MergeContributorRoi(
+                contribIndex, 
+                original.context, 
+                original.centroid, 
+                original.box,
+                mergeOutput, 
+            )
+        }
     
     final case class IndexedDetectedSpot(
         index: RoiIndex, 
