@@ -30,6 +30,16 @@ final case class MergerAssessedRoi private(
 object MergerAssessedRoi:
 
     def build(
+        index: RoiIndex, 
+        context: ImagingContext, 
+        centroid: Centroid[Double], 
+        box: BoundingBox,
+        merge: Set[RoiIndex],
+    ): Either[String, MergerAssessedRoi] = 
+        val spot = IndexedDetectedSpot(index, context, centroid, box)
+        build(spot, merge)
+
+    def build(
         spot: IndexedDetectedSpot, 
         merge: Set[RoiIndex],
     ): Either[String, MergerAssessedRoi] = 
