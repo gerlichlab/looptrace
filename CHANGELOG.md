@@ -6,6 +6,10 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Fixed
+* Ensure that same-timepoint-ROI merge is done in connected-components fashion, rather than simply by pairwise-distance-defined proximity. 
+See [Issue 368](https://github.com/gerlichlab/looptrace/issues/368).
+
 ### Changed
 * Scala is now version 3.5.2.
 * `sbt` is now version 1.10.5.
@@ -16,7 +20,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 
 ### Fixed
 * Fixed the incorrectness of the merged regional spot centers and bounding boxes in the `*_rois.proximity_accepted.nuclei_labeled.csv` and `*_rois.proximity_accepted.nuclei_filtered.csv`. See [Issue 353](https://github.com/gerlichlab/looptrace/issues/353), [Issue 355](https://github.com/gerlichlab/looptrace/issues/355), and [Issue 356](https://github.com/gerlichlab/looptrace/issues/356).
-* Correctly applying drift correction to regional spot coordinates. See [Issue 329](https://github.com/gerlichlab/looptrace/issues/329)
+* Correctly applying drift correction to regional spot coordinates. See [Issue 329](https://github.com/gerlichlab/looptrace/issues/329).
 * Unit of measure for the regional spot pairwise distances is now nanometers, rather than pixels (variably defined) as previously. See [Issue 359](https://github.com/gerlichlab/looptrace/issues/359).
 
 ### Changed

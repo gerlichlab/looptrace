@@ -39,6 +39,7 @@ object Dependencies {
     /* core libraries */
     lazy val catsCore = "org.typelevel" %% "cats-core" % "2.12.0"
     lazy val gerlibs = Seq(
+        "graph",
         "io",
         "imaging",
         "numeric",

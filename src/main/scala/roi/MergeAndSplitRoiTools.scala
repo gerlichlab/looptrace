@@ -1,6 +1,7 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 package roi
 
+import scala.collection.immutable.SortedMap
 import cats.*
 import cats.data.{ EitherNel, NonEmptyList, NonEmptyMap, NonEmptySet, ValidatedNel }
 import cats.syntax.all.*
@@ -13,6 +14,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2.syntax.*
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.{ Centroid, DistanceThreshold, PiecewiseDistance, ProximityComparable }
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.syntax.*
+import at.ac.oeaw.imba.gerlich.gerlib.graph.{ SimplestGraph, buildSimpleGraph }
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingContext
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt
@@ -185,6 +187,23 @@ object MergeAndSplitRoiTools extends LazyLogging:
             case strat: NontrivialProximityFilter => assessForMutualExclusion(strat)(rois)
         }
 
+    /** Wrap the simple graph builder to account for the (bad) possibility of duplicate records by key. */
+    def buildGraph[Key: Order, Record](
+        getKey: Record => Key, 
+        getNeighbors: Record => Set[Key],
+    ): List[Record] => Either[NonEmptyMap[Key, List[(Record, Int)]], SimplestGraph[Key]] = records => 
+        given Ordering[Key] = summon[Order[Key]].toOrdering
+        val (bads, goods) = records.zipWithIndex.foldRight(SortedMap.empty[Key, List[(Record, Int)]] -> Map.empty[Key, Set[Key]]){
+            case (pair@(rec, i), (bads, goods)) => 
+                val k = getKey(rec)
+                if goods contains k 
+                then (bads + (k -> (pair :: bads.getOrElse(k, List.empty))), goods)
+                else (bads, goods + (k -> getNeighbors(rec)))
+        }
+        NonEmptyMap.fromMap(bads)
+            .toLeft(goods)
+            .map{ adj => buildSimpleGraph(adj.toList) }
+
     /**
      * Generate the merge contributors, merge results, and singleton ROIs from the collection of merge-determined ROIs.
      * 
@@ -200,93 +219,97 @@ object MergeAndSplitRoiTools extends LazyLogging:
         List[MergeContributorRoi], // contributors to merge
         List[MergedRoiRecord], // merge outputs
     ) = 
-        rois match {
-            case Nil => (List(), List(), List())
-            case _ => 
+        if rois.isEmpty then (List(), List(), List()) 
+        else buildGraph((_: MergerAssessedRoi).index, (_: MergerAssessedRoi).mergeNeighbors)(rois) match {
+            case Left(repeats) => 
+                throw new Exception(
+                    s"${repeats.size} case(s) of repeated key in ROI records. Here they are mapped, to collection of pairs of record and record number (0-based): $repeats"
+                )
+            case Right(graph) => // TODO: use graph
                 def incrementIndex: RoiIndex => RoiIndex = i => RoiIndex.unsafe(i.get + 1)
                 val pool = rois.map{ r => r.index -> r }.toMap
                 given Ordering[RoiIndex] = summon[Order[RoiIndex]].toOrdering
                 val initNewIndex = incrementIndex(rois.map(_.index).max)
                 logger.debug(s"Initial / first eligible index to use for merge result ROIs: ${initNewIndex.show_}")
-                val ((allSkipped, allMerged), _, _) = 
-                    rois.foldRight(((List.empty[IndexedDetectedSpot], List.empty[MergedRoiRecord]), Set.empty[RoiMergeBag], initNewIndex)){
-                        case (r, ((accSkip, accMerge), alreadyMerged, currentMergeIndex)) => 
-                            considerOneMerge(pool, buildNewBox)(currentMergeIndex, r) match {
-                                case None => 
-                                    // singleton case, no merge action; simply eliminate the empty mergePartners collection.
-                                    val idxSpot = IndexedDetectedSpot(r.index, r.context, r.centroid, r.box)
-                                    ((idxSpot :: accSkip, accMerge), alreadyMerged, currentMergeIndex)
-                                case Some(Left(errors)) => 
+                val (allSkipped, allMerged, _) = 
+                    graph.strongComponentTraverser().foldLeft((List.empty[IndexedDetectedSpot], List.empty[MergedRoiRecord], initNewIndex)){
+                        case ((accSingle, accMerged, currentMergeIndex), component) => 
+                            component.nodes.map(_.outer).toList match {
+                                case Nil => 
                                     // error case
-                                    throw new Exception(s"${errors.length} error(s) when considering merge of ROI ($r): ${errors.mkString_("; ")}")
-                                case Some(Right(rec)) =>
+                                    throw new Exception("Empty graph component!")
+                                case id :: Nil => 
+                                    pool.get(id)
+                                        .map{ r => 
+                                            val idxSpot = IndexedDetectedSpot(r.index, r.context, r.centroid, r.box)
+                                            (idxSpot :: accSingle, accMerged, currentMergeIndex)
+                                        }
+                                        .getOrElse{ throw new Exception(s"Failed to look up ROI for singleton ID: ${id.show_}") }
+                                case id1 :: id2 :: rest => 
                                     // merge case
-                                    val mergeText = rec.contributors.toList.sorted.map(_.show_).mkString(";")
-                                    if alreadyMerged `contains` rec.contributors
-                                    then
-                                        logger.debug(s"Skipping, already merged: $mergeText") 
-                                        ((accSkip, accMerge), alreadyMerged, currentMergeIndex)
-                                    else 
-                                        logger.debug(s"Merging $mergeText --> ${rec.index.show_}")
-                                        ((accSkip, rec :: accMerge), alreadyMerged + rec.contributors, incrementIndex(rec.index))
+                                    NonEmptyList(id1, id2 :: rest)
+                                        .traverse{ i => pool.get(i).toRight(s"Missing ROI index: ${i.show_}").toEitherNel }
+                                        .flatMap{ groupRois => 
+                                            val newCenter: Point3D = groupRois.map(_.centroid.asPoint).centroid
+                                            val newBox: BoundingBox = buildNewBox(newCenter, groupRois.map(_.box))
+                                            val contexts = groupRois.map(_.context).toList.toSet
+                                            val errorOrRecord = for {
+                                                ctx <- (contexts.size === 1).either(
+                                                    s"${contexts.size} unique imaging context (not just 1) in ROI group to merge",
+                                                    groupRois.head.context
+                                                )
+                                                groupIds <- AtLeast2.either(groupRois.toList.map(_.index).toSet)
+                                                _ <- 
+                                                    if pool contains currentMergeIndex 
+                                                    then s"Cannot use ${currentMergeIndex.show_} as merge record index; it's already used".asLeft
+                                                    else ().asRight
+                                            } yield MergedRoiRecord(
+                                                currentMergeIndex, 
+                                                ctx, 
+                                                Centroid.fromPoint(newCenter), 
+                                                newBox, 
+                                                groupIds,
+                                            )
+                                            errorOrRecord.leftMap(NonEmptyList.one)
+                                        }
+                                        .fold(
+                                            errors => ???,
+                                            mergedRecord => 
+                                                val mergeText = mergedRecord.contributors.toList.sorted.map(_.show_).mkString(";")
+                                                logger.debug(s"Merged $mergeText --> ${mergedRecord.index.show_}")
+                                                ((accSingle, mergedRecord :: accMerged, incrementIndex(mergedRecord.index)))
+                                        )
+                            }
                         }
-                    }
-                val allContrib: List[MergeContributorRoi] = allMerged
-                    .foldRight(Map.empty[RoiIndex, NonEmptySet[RoiIndex]]){ (roi, mergedIndicesByContribIndex) => 
-                        roi.contributors.toSet.foldRight(mergedIndicesByContribIndex){ (i, acc) => 
-                            acc + (i -> acc.get(i).fold(NonEmptySet.one(roi.index))(_.add(roi.index)))
-                        }
-                    }
-                    .toList
-                    .sortBy(_._1)
-                    .map{ (contribIndex, mergeOutputs) => 
-                        val original = pool.getOrElse(
-                            contribIndex, 
-                            throw new Exception(s"Cannot find original ROI for alleged contributor index ${contribIndex.show_}")
-                        )
-                        MergeContributorRoi(
-                            contribIndex, 
-                            original.context, 
-                            original.centroid, 
-                            original.box,
-                            mergeOutputs, 
-                        )
-                    }
-                (allSkipped, allContrib, allMerged)                
+                val allContrib: List[MergeContributorRoi] = getMergeContributorRois(pool, allMerged)
+                (allSkipped, allContrib, allMerged)
         }
-    
-    /** Do the merge for a single ROI record. */
-    private[looptrace] def considerOneMerge(
-        pool: Map[RoiIndex, MergerAssessedRoi], 
-        buildNewBox: (Point3D, NonEmptyList[BoundingBox]) => BoundingBox,
-    )(potentialNewIndex: RoiIndex, roi: MergerAssessedRoi): Option[Either[NonEmptyList[String], MergedRoiRecord]] = 
-        roi.mergeNeighbors.toList.toNel.map(
-            _.traverse{ i => 
-                pool.get(i)
-                    .toRight(s"Missing ROI index: ${i.get}")
-                    .toValidatedNel
+
+    private[looptrace] def getMergeContributorRois(
+        mergeInputPool: Map[RoiIndex, MergerAssessedRoi], 
+        merged: List[MergedRoiRecord],
+    ): List[MergeContributorRoi] = 
+        merged.foldRight(Map.empty[RoiIndex, NonEmptySet[RoiIndex]]){ 
+            (roi, mergedIndicesByContribIndex) => 
+                roi.contributors.toSet.foldRight(mergedIndicesByContribIndex){ (i, acc) => 
+                    acc + (i -> acc.get(i).fold(NonEmptySet.one(roi.index))(_.add(roi.index)))
+                }
             }
-            .toEither
-            .flatMap{ others => 
-                for {
-                    partners <- AtLeast2.either((roi :: others).toList).leftMap(NonEmptyList.one)
-                    contexts = partners.map(_.context).toSet
-                    ctx <- (contexts.size === 1).either(
-                        NonEmptyList.one(s"${contexts.size} unique imaging context (not just 1) in ROI group to merge"), 
-                        partners.head.context
-                    )
-                    newCenter: Point3D = 
-                        partners.map(_.centroid.asPoint).toNel.centroid
-                    newBox: BoundingBox = buildNewBox(newCenter, partners.map(_.box).toNel)
-                } yield MergedRoiRecord(
-                    potentialNewIndex, 
-                    ctx, 
-                    Centroid.fromPoint(newCenter), 
-                    newBox, 
-                    AtLeast2.unsafe(partners.map(_.index).toList.toSet),
+            .toList
+            .sortBy(_._1)(using summon[Order[RoiIndex]].toOrdering)
+            .map{ (contribIndex, mergeOutputs) => 
+                val original = mergeInputPool.getOrElse(
+                    contribIndex, 
+                    throw new Exception(s"Cannot find original ROI for alleged contributor index ${contribIndex.show_}")
+                )
+                MergeContributorRoi(
+                    contribIndex, 
+                    original.context, 
+                    original.centroid, 
+                    original.box,
+                    mergeOutputs, 
                 )
             }
-        )
     
     final case class IndexedDetectedSpot(
         index: RoiIndex, 
