@@ -30,6 +30,7 @@ final case class ImagingRoundsConfiguration private(
     sequence: ImagingSequence, 
     locusGrouping: Set[ImagingRoundsConfiguration.LocusGroup], // should be empty iff there are no locus rounds in the sequence
     proximityFilterStrategy: ImagingRoundsConfiguration.ProximityFilterStrategy,
+    maybeMergeRulesForTracing: Option[NonEmptyList[ImagingRoundsConfiguration.TraceIdDefinitionAndFiltrationRule]],
     // TODO: We could, by default, skip regional and blank imaging rounds (but do use repeats).
     tracingExclusions: Set[ImagingTimepoint], // Timepoints of imaging rounds to not use for tracing
 ):
@@ -185,10 +186,18 @@ object ImagingRoundsConfiguration extends LazyLogging:
                     )
                     .toValidatedNel
         }
-        (tracingSubsetNel, locusTimeSubsetNel, locusTimeSupersetNel, locusGroupTimesAreRegionTimesNel, proximityGroupingSubsetNel, proximityGroupingSupersetNel, idsToMergeAreAllRegionalNel)
+        (
+            tracingSubsetNel, 
+            locusTimeSubsetNel, 
+            locusTimeSupersetNel, 
+            locusGroupTimesAreRegionTimesNel, 
+            proximityGroupingSubsetNel, 
+            proximityGroupingSupersetNel, 
+            idsToMergeAreAllRegionalNel,
+        )
             .tupled
             // We ignore the acutal values (Unit) because this was just to accumulate errors.
-            .map(_ => ImagingRoundsConfiguration(sequence, locusGrouping, proximityFilterStrategy, tracingExclusions))
+            .map(_ => ImagingRoundsConfiguration(sequence, locusGrouping, proximityFilterStrategy, maybeMergeRules, tracingExclusions))
             .toEither
     }
 
