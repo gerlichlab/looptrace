@@ -187,8 +187,20 @@ object MergeAndSplitRoiTools extends LazyLogging:
             case strat: NontrivialProximityFilter => assessForMutualExclusion(strat)(rois)
         }
 
-    /** Wrap the simple graph builder to account for the (bad) possibility of duplicate records by key. */
-    def buildGraph[Key: Order, Record](
+    /** 
+     * Wrap the simple graph builder to account for the (bad) possibility of duplicate records by key.
+     * 
+     * NB: The resulting function expected elements in the input list to be unique according to the 
+     * given {@code getKey} function.
+     * 
+     * @tparam Key The type by which to identify / "point to" a record
+     * @tparam Record The type of record to store (via key) in a graph structure
+     * @param getKey How to simply and uniquely identify a record
+     * @param getNeighbors How to get the records to which a record should be connected (via edge)
+     * @return A function which takes a collection of records and stores them by key, and their 
+     *     relations, in a graph structure
+     */
+    private def buildGraph[Key: Order, Record](
         getKey: Record => Key, 
         getNeighbors: Record => Set[Key],
     ): List[Record] => Either[NonEmptyMap[Key, List[(Record, Int)]], SimplestGraph[Key]] = records => 
