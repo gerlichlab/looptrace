@@ -195,6 +195,22 @@ def annotate_traces(rounds_config: ExtantFile, params_config: ExtantFile, images
     return T.write_traces_file()
 
 
+def assign_trace_ids(rounds_config: ExtantFile, params_config: ExtantFile) -> Path:
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config)
+    cmd_parts = [
+        "java", 
+        "-cp",
+        str(LOOPTRACE_JAR_PATH),
+        f"{LOOPTRACE_JAVA_PACKAGE}.AssignTraceIds",
+        "--roundsConfig",
+        str(rounds_config.path),
+        "-O", 
+        H.spots_for_voxels_definition_file,
+    ]
+    logging.info(f"Running distance computation command: {' '.join(cmd_parts)}")
+    return subprocess.check_call(cmd_parts)
+
+
 def compute_locus_pairwise_distances(rounds_config: ExtantFile, params_config: ExtantFile) -> None:
     """Run the locus pairwise distances computation program."""
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config)
@@ -221,7 +237,7 @@ def compute_region_pairwise_distances(rounds_config: ExtantFile, params_config: 
         str(LOOPTRACE_JAR_PATH),
         f"{LOOPTRACE_JAVA_PACKAGE}.ComputeRegionPairwiseDistances",
         "--roisFile",
-        str(H.nuclei_filtered_spots_file_path if H.spot_in_nuc else H.proximity_accepted_spots_file_path),
+        str(H.spots_for_voxels_definition_file),
         "--driftFile", 
         str(H.drift_correction_file__fine),
         "--pixels",

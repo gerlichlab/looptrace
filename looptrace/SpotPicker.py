@@ -467,10 +467,6 @@ class SpotPicker:
     @property
     def spot_images_zipfile(self):
         return get_spot_images_zipfile(self.image_handler.image_save_path, is_background=False)
-
-    @property
-    def spot_in_nuc(self) -> bool:
-        return self.image_handler.spot_in_nuc
     
     @property
     def spot_threshold(self) -> list[int]:
@@ -513,8 +509,7 @@ class SpotPicker:
         #Precalculate all ROIs for extracting spot images, based on identified ROIs and precalculated drifts between timepoints.
         print("Generating list of all ROIs for tracing...")
 
-        spotfile = self.image_handler.nuclei_filtered_spots_file_path if self.spot_in_nuc \
-            else self.image_handler.proximity_accepted_spots_file_path
+        spotfile = self.image_handler.spots_for_voxels_definition_file
 
         print(f"Reading spots table: {spotfile}")
         # Set index_col=False so that first column (fieldOfView) doesn't become index.
