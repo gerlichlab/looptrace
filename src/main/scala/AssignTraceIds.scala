@@ -111,7 +111,6 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
             }
 
     private def computeNeighborsGraph(rules: NonEmptyList[TraceIdDefinitionAndFiltrationRule])(records: List[InputRecord]): SimplestGraph[RoiIndex] = 
-        import ProximityComparable.proximal
         val lookupProximity: Map[(ImagingTimepoint, ImagingTimepoint), ProximityComparable[InputRecord]] = 
             definePairwiseDistanceThresholds(rules)
                 .view
@@ -119,14 +118,22 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                 .toMap
         val edgeEndpoints: Set[(RoiIndex, RoiIndex)] = 
             records.groupBy(r => r.context.fieldOfView -> r.context.channel) // Only merge ROIs from the same context (FOV, channel).
-                .values
-                .flatMap(_.combinations(2).flatMap{
-                    case r1 :: r2 :: Nil => 
-                        given ProximityComparable[InputRecord] = lookupProximity(r1.context.timepoint -> r2.context.timepoint)
-                        (r1 `proximal` r2).option{ r1.index -> r2.index }
-                    case notPair => throw new Exception(s"Got ${notPair.length} element(s) when taking pairs!")
+                .values // Once records are properly grouped by context, we no longer care about those context keys.
+                .flatMap(
+                    // We do our pairwise calculations only within each group, but then flatten to collect all results.
+                    _.combinations(2).flatMap{  // flatMap here b/c of optionality of output from each record
+                        case r1 :: r2 :: Nil =>
+                            lookupProximity
+                                // First, these records' timepoints may not have been in the rules set and 
+                                // may therefore need to be tested for proximity.
+                                .get(r1.context.timepoint -> r2.context.timepoint)
+                                // Emit a pair of edge endpoints iff these records are proximal.
+                                .flatMap(_.proximal(r1, r2).option(r1.index -> r2.index))
+                        case notPair => 
+                            throw new Exception(s"Got ${notPair.length} element(s) when taking pairs!")
                 })
                 .toSet
+        // Ensure each record gets a node, and add the discovered edges.
         buildSimpleGraph(records.map(_.index).toSet, edgeEndpoints)
     
     private def sieveRecords(rules: NonEmptyList[TraceIdDefinitionAndFiltrationRule])(records: List[InputRecord]): (List[InputRecord], List[(InputRecord, TraceId)]) = 
