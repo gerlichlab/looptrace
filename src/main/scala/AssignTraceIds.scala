@@ -138,7 +138,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                             lookupProximity
                                 // First, these records' timepoints may not have been in the rules set and 
                                 // may therefore need to be tested for proximity.
-                                .get(r1.context.timepoint -> r2.context.timepoint)
+                                .get(r1.timepoint -> r2.timepoint)
                                 // Emit a pair of edge endpoints iff these records are proximal.
                                 .flatMap(_.proximal(r1, r2).option(r1.index -> r2.index))
                         case notPair => 
@@ -159,7 +159,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
         
         maybeRecords.toNel.map{ records => 
             val lookupRecord: NonEmptyMap[RoiIndex, InputRecord] = records.map(r => r.index -> r).toNem
-            val lookupStringency: TimepointExpectationLookup = 
+            val lookupRule: TimepointExpectationLookup = 
                 // Provide a way to get the expected group members and requirement stringency for a given timepoint.
                 given orderForKeyValuePairs[V]: Order[(ImagingTimepoint, V)] = Order.by(_._1)
                 given semigroup: Semigroup[TimepointExpectationLookup] = 
@@ -196,14 +196,18 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                             val newRecs: List[(InputRecord, TraceId, Option[NonEmptySet[RoiIndex]])] = 
                                 AtLeast2.either(recGroup.map(_.index).toList.toSet).fold(
                                     Function.const{ // singleton
-                                        if discardIfNotInGroupOfInterest then List()
-                                        else List((recGroup.head, currId, None))
+                                        given Eq[RoiPartnersRequirementType] = Eq.fromUniversalEquals
+                                        val useRecord = lookupRule
+                                            .apply(recGroup.head.timepoint)
+                                            .fold(!discardIfNotInGroupOfInterest)(_.requirement === RoiPartnersRequirementType.Lackadaisical)
+                                        if useRecord then List((recGroup.head, currId, None))
+                                        else List()
                                     }, 
                                     multiIds => 
                                         val useGroup: Boolean = 
                                             recGroup // at least two ROIs in group/component
                                                 .toList
-                                                .flatMap{ r => lookupStringency.apply(r.context.timepoint) }
+                                                .flatMap{ r => lookupRule.apply(r.timepoint) }
                                                 .toNel
                                                 .fold(!discardIfNotInGroupOfInterest){ rules => 
                                                     given Eq[TraceIdDefinitionAndFiltrationRule] = Eq.fromUniversalEquals
@@ -215,12 +219,14 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                                                     else
                                                         val rule = rules.head
                                                         val expectedTimes = rule.mergeGroup.members.toSet
-                                                        val observedTimes = recGroup.map(_.context.timepoint).toList.toSet
+                                                        val observedTimes = recGroup.map(_.timepoint).toList.toSet
                                                         rule.requirement match {
                                                             case RoiPartnersRequirementType.Conjunctive => 
                                                                 observedTimes === expectedTimes
-                                                            case RoiPartnersRequirementType.Disjunctive => ???
+                                                            case RoiPartnersRequirementType.Disjunctive => 
                                                                 observedTimes subsetOf expectedTimes
+                                                            case RoiPartnersRequirementType.Lackadaisical => 
+                                                                true
                                                         }
                                                 }
                                         if useGroup 
@@ -257,7 +263,8 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
         box: BoundingBox, 
         maybeMergeInputs: Set[RoiIndex],  // may be empty, as the input collection is possibly a mix of singletons and merge results
         maybeNucleusNumber: Option[NucleusNumber], // allow the program to operate on non-nuclei-filtered ROIs.
-    )
+    ):
+        final def timepoint: ImagingTimepoint = context.timepoint
 
     /** Helpers for working with this program's input records */
     object InputRecord:

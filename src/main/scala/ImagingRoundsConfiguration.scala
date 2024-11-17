@@ -449,6 +449,8 @@ object ImagingRoundsConfiguration extends LazyLogging:
         case Disjunctive
         /** Require proximity of 'all' group members (i.e., logical AND). */
         case Conjunctive
+        /** Group ROIs for tracing if they're proximal, but do 'not' discard singletons from the groups. */
+        case Lackadaisical
 
     /** A grouping of elements {@code E} to consider for proximity relative to some distance threshold */
     final case class ProximityGroup[T <: DistanceThreshold, E](
