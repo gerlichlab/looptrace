@@ -12,6 +12,7 @@ import scopt.*
 import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.cell.NucleusNumber
+import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.{ Centroid, DistanceThreshold, ProximityComparable }
 import at.ac.oeaw.imba.gerlich.gerlib.graph.{
     SimplestGraph,
@@ -23,8 +24,12 @@ import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.SpotChannelColumnName
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.readCsvToCaseClasses
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
-import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.TraceIdDefinitionAndFiltrationRule
+import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.{
+    RoiPartnersRequirementType,
+    TraceIdDefinitionAndFiltrationRule,
+}
 import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
 import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.{
     MergeContributorsColumnNameForAssessedRecord,
@@ -35,6 +40,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.IndexedDetectedSpot
 import at.ac.oeaw.imba.gerlich.looptrace.space.BoundingBox
+import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.ProximityGroup
 
 /** Assign trace IDs to regional spots, considering the potential to group some together for downstream analytical purposes. */
 object AssignTraceIds extends ScoptCliReaders, StrictLogging:
@@ -87,7 +93,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
     private def definePairwiseDistanceThresholds(
         rules: NonEmptyList[TraceIdDefinitionAndFiltrationRule],
     ): Map[(ImagingTimepoint, ImagingTimepoint), DistanceThreshold] = 
-        import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2.syntax.toList
+        import AtLeast2.syntax.toList
         rules.map(_.mergeGroup)
             .map{ g =>
                 g.members
@@ -110,18 +116,24 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                 }
             }
 
-    private def computeNeighborsGraph(rules: NonEmptyList[TraceIdDefinitionAndFiltrationRule])(records: List[InputRecord]): SimplestGraph[RoiIndex] = 
+    private def computeNeighborsGraph(rules: NonEmptyList[TraceIdDefinitionAndFiltrationRule])(records: NonEmptyList[InputRecord]): SimplestGraph[RoiIndex] = 
         val lookupProximity: Map[(ImagingTimepoint, ImagingTimepoint), ProximityComparable[InputRecord]] = 
             definePairwiseDistanceThresholds(rules)
                 .view
                 .mapValues{ dt => DistanceThreshold.defineProximityPointwise(dt)((_: InputRecord).centroid.asPoint) }
                 .toMap
         val edgeEndpoints: Set[(RoiIndex, RoiIndex)] = 
+            given Order[FieldOfViewLike] with
+                override def compare(x: FieldOfViewLike, y: FieldOfViewLike): Int = (x, y) match {
+                    case (fov1: FieldOfView, fov2: FieldOfView) => fov1 compare fov2
+                    case (pos1: PositionName, pos2: PositionName) => pos1 compare pos2
+                    case _ => throw new Exception(s"Cannot compare $x to $y")
+                }
             records.groupBy(r => r.context.fieldOfView -> r.context.channel) // Only merge ROIs from the same context (FOV, channel).
                 .values // Once records are properly grouped by context, we no longer care about those context keys.
                 .flatMap(
                     // We do our pairwise calculations only within each group, but then flatten to collect all results.
-                    _.combinations(2).flatMap{  // flatMap here b/c of optionality of output from each record
+                    _.toList.combinations(2).flatMap{  // flatMap here b/c of optionality of output from each record
                         case r1 :: r2 :: Nil =>
                             lookupProximity
                                 // First, these records' timepoints may not have been in the rules set and 
@@ -134,12 +146,98 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                 })
                 .toSet
         // Ensure each record gets a node, and add the discovered edges.
-        buildSimpleGraph(records.map(_.index).toSet, edgeEndpoints)
-    
-    private def sieveRecords(rules: NonEmptyList[TraceIdDefinitionAndFiltrationRule])(records: List[InputRecord]): (List[InputRecord], List[(InputRecord, TraceId)]) = 
-        val graph = computeNeighborsGraph(rules)(records)
-        // TODO: implementation.
-        ???
+        buildSimpleGraph(records.map(_.index).toList.toSet, edgeEndpoints)
+
+    private def labelRecords(
+        rules: NonEmptyList[TraceIdDefinitionAndFiltrationRule], 
+        discardIfNotInGroupOfInterest: Boolean,
+    )(maybeRecords: List[InputRecord]): Option[NonEmptyList[(InputRecord, TraceId, Option[NonEmptySet[RoiIndex]])]] = 
+        /* Necessary imports and type aliases */
+        import AtLeast2.syntax.{ remove, toNes, toSet }
+        import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given // SimpleShow instances for domain types
+        type TimepointExpectationLookup = NonEmptyMap[ImagingTimepoint, TraceIdDefinitionAndFiltrationRule]
+        
+        maybeRecords.toNel.map{ records => 
+            val lookupRecord: NonEmptyMap[RoiIndex, InputRecord] = records.map(r => r.index -> r).toNem
+            val lookupStringency: TimepointExpectationLookup = 
+                // Provide a way to get the expected group members and requirement stringency for a given timepoint.
+                given orderForKeyValuePairs[V]: Order[(ImagingTimepoint, V)] = Order.by(_._1)
+                given semigroup: Semigroup[TimepointExpectationLookup] = 
+                    Semigroup.instance{ (x, y) => 
+                        val collisions = x.keys & y.keys
+                        if collisions.isEmpty then x ++ y
+                        else throw new Exception(s"${collisions.size} key collision(s) between lookups to combine: $collisions")
+                    }
+                rules.reduceMap{ r => r.mergeGroup.members.toNes.map(_ -> r).toNonEmptyList.toNem }
+            val initTraceId = 
+                // Start trace IDs with 1 more than max ROI ID/index.
+                TraceId.unsafe(NonnegativeInt(1) + records.foldLeft(records.head.index){ (i, r) => i max r.index }.get)
+            val traceIdsOffLimits = 
+                // Don't use any ROI index/ID as a trace ID.
+                records.map(_.index.get).map(TraceId.unsafe).toNes
+            computeNeighborsGraph(rules)(records)
+                .strongComponentTraverser()
+                .map(_.nodes.map(_.outer) // Get ROI IDs.
+                    .toList.toNel // each component as a nonempty list
+                    .getOrElse{ throw new Exception("Empty component!") }) // protected against by definition of component
+                .toList.toNel // We want a nonempty list of components to accumulate errors
+                .getOrElse{ throw new Exception("No components!") } //  protected against by initial .toNel call on input ROIs
+                .traverse(_.traverse{ i => lookupRecord.apply(i).toValidNel(i) })
+                .fold(
+                    badIds => 
+                        // guarded against by construction of the lookup from records input
+                        throw new Exception(s"${badIds.length} ROI IDs couldn't be looked up! Here's one: ${badIds.head.show_}"),
+                    _.toList.foldRight(initTraceId -> List.empty[(InputRecord, TraceId, Option[NonEmptySet[RoiIndex]])]){ 
+                        case (recGroup, (currId, acc)) => 
+                            if (traceIdsOffLimits contains currId) {
+                                // guarded against by starting with max ROI index and always incrementing the currId
+                                throw new Exception(s"Trace ID is already a ROI index and can't be used: ${currId.show_}")
+                            }
+                            val newRecs: List[(InputRecord, TraceId, Option[NonEmptySet[RoiIndex]])] = 
+                                AtLeast2.either(recGroup.map(_.index).toList.toSet).fold(
+                                    Function.const{ // singleton
+                                        if discardIfNotInGroupOfInterest then List()
+                                        else List((recGroup.head, currId, None))
+                                    }, 
+                                    multiIds => 
+                                        val useGroup: Boolean = 
+                                            recGroup // at least two ROIs in group/component
+                                                .toList
+                                                .flatMap{ r => lookupStringency.apply(r.context.timepoint) }
+                                                .toNel
+                                                .fold(!discardIfNotInGroupOfInterest){ rules => 
+                                                    given Eq[TraceIdDefinitionAndFiltrationRule] = Eq.fromUniversalEquals
+                                                    val nUniqueRules = rules.toList.toSet.size
+                                                    if nUniqueRules =!= 1
+                                                    then throw new Exception(
+                                                        s"$nUniqueRules unique merge rules (not 1) for single group!"
+                                                    )
+                                                    else
+                                                        val rule = rules.head
+                                                        val expectedTimes = rule.mergeGroup.members.toSet
+                                                        val observedTimes = recGroup.map(_.context.timepoint).toList.toSet
+                                                        rule.requirement match {
+                                                            case RoiPartnersRequirementType.Conjunctive => 
+                                                                observedTimes === expectedTimes
+                                                            case RoiPartnersRequirementType.Disjunctive => ???
+                                                                observedTimes subsetOf expectedTimes
+                                                        }
+                                                }
+                                        if useGroup 
+                                        then recGroup.toList.map(rec => (rec, currId, multiIds.remove(rec.index).some))
+                                        else List()
+                                )
+                            val newTid = TraceId.unsafe(NonnegativeInt(1) + currId.get)
+                            (newTid, newRecs ::: acc)
+                    }
+                )
+                ._2
+                .toNel
+                .getOrElse{
+                    // guarded against by checking for empty input up front
+                    throw new Exception("Wound up with empty results despite nonempty input!")
+                }
+        }
 
     def workflow(roundsConfig: ImagingRoundsConfiguration, roisFile: os.Path, outputFile: os.Path): Unit = {
         val readRois: IO[List[InputRecord]] = 
