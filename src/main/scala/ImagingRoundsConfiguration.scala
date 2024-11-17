@@ -30,7 +30,7 @@ final case class ImagingRoundsConfiguration private(
     sequence: ImagingSequence, 
     locusGrouping: Set[ImagingRoundsConfiguration.LocusGroup], // should be empty iff there are no locus rounds in the sequence
     proximityFilterStrategy: ImagingRoundsConfiguration.ProximityFilterStrategy,
-    maybeMergeRulesForTracing: Option[NonEmptyList[ImagingRoundsConfiguration.TraceIdDefinitionAndFiltrationRule]],
+    private val maybeMergeRulesForTracing: Option[(NonEmptyList[ImagingRoundsConfiguration.TraceIdDefinitionAndFiltrationRule], Boolean)],
     // TODO: We could, by default, skip regional and blank imaging rounds (but do use repeats).
     tracingExclusions: Set[ImagingTimepoint], // Timepoints of imaging rounds to not use for tracing
 ):
@@ -38,7 +38,12 @@ final case class ImagingRoundsConfiguration private(
     
     /** Simply take the rounds from the contained imagingRounds sequence. */
     final def allRounds: NonEmptyList[ImagingRound] = sequence.allRounds
+        
+    final def mergeRules: Option[NonEmptyList[ImagingRoundsConfiguration.TraceIdDefinitionAndFiltrationRule]] = 
+        maybeMergeRulesForTracing.map(_._1)
     
+    final def discardRoisNotInGroupsOfInterest: Boolean = maybeMergeRulesForTracing.fold(false)(_._2)
+
     /** The number of imaging rounds is the length of the imagingRounds sequence. */
     final def numberOfRounds: Int = sequence.length
     
@@ -122,7 +127,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
         locusGrouping: Set[LocusGroup], 
         proximityFilterStrategy: ProximityFilterStrategy, 
         tracingExclusions: Set[ImagingTimepoint], 
-        maybeMergeRules: Option[NonEmptyList[TraceIdDefinitionAndFiltrationRule]],
+        maybeMergeRules: Option[(NonEmptyList[TraceIdDefinitionAndFiltrationRule], Boolean)],
         checkLocusTimepointCovering: Boolean,
     ): ErrMsgsOr[ImagingRoundsConfiguration] = {
         val knownTimes = sequence.allTimepoints
@@ -174,7 +179,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
         }
         val idsToMergeAreAllRegionalNel = maybeMergeRules match {
             case None => ().validNel
-            case Some(rules) => 
+            case Some((rules, _)) => 
                 import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2.syntax.toSet
                 (rules.reduceMap(_.mergeGroup.members.toSet) -- uniqueRegionalTimes)
                     .toList
@@ -320,23 +325,26 @@ object ImagingRoundsConfiguration extends LazyLogging:
                     .map(_.toSet)
                     .toValidatedNel
             }
-        val maybeMergeRulesNel: ValidatedNel[String, Option[NonEmptyList[TraceIdDefinitionAndFiltrationRule]]] = 
-            data.get(TraceIdDefinitionAndFiltrationRulesSet.groupsKey) match {
-                case None => Validated.Valid(None)
-                case Some(value) => TraceIdDefinitionAndFiltrationRulesSet.fromJson(value) match {
-                    case Left(messages) => ???
-                    case Right(rules) => Validated.Valid(rules.some)
-                }
+        val maybeMergeRulesNel: ValidatedNel[String, Option[(NonEmptyList[TraceIdDefinitionAndFiltrationRule], Boolean)]] = 
+            val sectionKey = "mergeRulesForTracing"
+            data.get(sectionKey) match {
+                case None | Some(ujson.Null) => 
+                    logger.debug(s"No section '$sectionKey', ignoring")
+                    Validated.Valid(None)
+                case Some(jsonData) => 
+                    TraceIdDefinitionAndFiltrationRulesSet.fromJson(jsonData).toValidated.map(_.some)
             }
         val checkLocusTimepointCoveringNel: ValidatedNel[String, Boolean] = 
             data.get("checkLocusTimepointCovering") match {
                 case None | Some(ujson.Null) => Validated.Valid(true)
                 case Some(json) => safeReadAs[Boolean](json).toValidatedNel
             }
-        (roundsNel, crudeLocusGroupingNel, proximityFilterStrategyNel, tracingExclusionsNel, maybeMergeRulesNel, checkLocusTimepointCoveringNel).tupled.toEither.flatMap{ 
-            case (sequence, crudeLocusGroups, proximityFilterStrategy, exclusions, maybeMergeRules, checkLocusTimepointCovering) =>
+        (roundsNel, crudeLocusGroupingNel, proximityFilterStrategyNel, tracingExclusionsNel, maybeMergeRulesNel, checkLocusTimepointCoveringNel)
+            .tupled
+            .toEither
+            .flatMap{ case (sequence, crudeLocusGroups, proximityFilterStrategy, exclusions, maybeMergeRules, checkLocusTimepointCovering) =>
                 build(sequence, crudeLocusGroups, proximityFilterStrategy, exclusions, maybeMergeRules, checkLocusTimepointCovering)
-        }
+            }
     }
 
     /**
@@ -349,7 +357,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
         locusGrouping: Set[LocusGroup], 
         proximityFilterStrategy: ProximityFilterStrategy, 
         tracingExclusions: Set[ImagingTimepoint],
-        maybeMergeRules: Option[NonEmptyList[TraceIdDefinitionAndFiltrationRule]],
+        maybeMergeRules: Option[(NonEmptyList[TraceIdDefinitionAndFiltrationRule], Boolean)],
         checkLocusTimepointCoveringNel: Boolean,
     ): ImagingRoundsConfiguration = 
         build(
@@ -437,8 +445,6 @@ object ImagingRoundsConfiguration extends LazyLogging:
 
     /** How to filter/discard ROIs on the basis of occurrence in proximity to other group members */
     enum RoiPartnersRequirementType:
-        /** Don't require proximity of any group member at all. */
-        case Lackadaisical
         /** Require proximity of 'at least one' group member (i.e., logical OR). */
         case Disjunctive
         /** Require proximity of 'all' group members (i.e., logical AND). */
@@ -456,9 +462,6 @@ object ImagingRoundsConfiguration extends LazyLogging:
         private[ImagingRoundsConfiguration] val thresholdKey = "distanceThreshold"
         
         private[ImagingRoundsConfiguration] val requirementTypeKey = "requirementType"
-
-        /** The key which maps to the individual elements/members which comprise the group */
-        private[ImagingRoundsConfiguration] val membersKey = "members"
     end ProximityGroup
 
     /** How to redefine trace IDs and filter ROIs on the basis of proximity to one another */
@@ -470,13 +473,18 @@ object ImagingRoundsConfiguration extends LazyLogging:
     /** Helpers for working with the data type for trace ID definition and filtration */
     object TraceIdDefinitionAndFiltrationRulesSet:
         /** The key which maps to the collection of groups */
-        private[ImagingRoundsConfiguration] val groupsKey = "groups"
+        private val groupsKey = "groups"
+        private val strictnessKey = "discardRoisNotInGroupsOfInterest"
 
-        def fromJson(json: ujson.Readable): EitherNel[String, NonEmptyList[TraceIdDefinitionAndFiltrationRule]] = 
+        def fromJson(json: ujson.Readable): EitherNel[String, (NonEmptyList[TraceIdDefinitionAndFiltrationRule], Boolean)] = 
             Try{ read[Map[String, ujson.Value]](json) }
                 .toEither
                 .leftMap(e => NonEmptyList.one(s"Cannot read JSON as key-value pairs: ${e.getMessage}"))
                 .flatMap{ kvPairs => 
+                    val filtrationStrictnessNel = kvPairs.get(strictnessKey) match {
+                        case None | Some(ujson.Null) => s"Missing key: '$strictnessKey'".invalidNel
+                        case Some(v) => UJsonHelpers.safeReadAs[Boolean](v).toValidatedNel
+                    }
                     val maybeThresholdNel = kvPairs.get(ProximityGroup.thresholdKey) match {
                         case None => 
                             None.validNel[String]
@@ -499,10 +507,10 @@ object ImagingRoundsConfiguration extends LazyLogging:
                             }
                             .toValidatedNel
                     }
-                    (maybeThresholdNel, maybeRequirementTypeNel)
+                    (filtrationStrictnessNel, maybeThresholdNel, maybeRequirementTypeNel)
                         .tupled
                         .toEither
-                        .flatMap{ (maybeThreshold, maybeRequirementType) => 
+                        .flatMap{ (strictness, maybeThreshold, maybeRequirementType) => 
                             kvPairs.get(groupsKey)
                                 .toRight(s"Missing key for groups: $groupsKey")
                                 .flatMap(_.arrOpt.toRight(s"Can't parse groups (from '$groupsKey') as array-like"))
@@ -534,6 +542,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
                                                 NonEmptyList.one(s"${repeats.size} repeated item(s) in merge rules: ${repeats}").asLeft 
                                         }
                                 }
+                                .map(_ -> strictness)
                         }
                 }
         

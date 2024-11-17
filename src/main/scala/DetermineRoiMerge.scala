@@ -91,9 +91,10 @@ object DetermineRoiMerge extends StrictLogging:
                 /* Build up the program. */
                 val read: os.Path => IO[List[IndexedDetectedSpot]] = 
                     infile => 
-                        given CsvRowDecoder[ImagingChannel, String] = getCsvRowDecoderForImagingChannel(SpotChannelColumnName)
+                        given CsvRowDecoder[ImagingChannel, String] = 
+                            getCsvRowDecoderForImagingChannel(SpotChannelColumnName)
                         logger.info(s"Reading from: ${opts.inputFile}")
-                        readCsvToCaseClasses[IndexedDetectedSpot](infile) // TODO: adapt the Decoder to grab the index.
+                        readCsvToCaseClasses[IndexedDetectedSpot](infile)
                 val write: os.Path => (List[MergerAssessedRoi] => IO[Unit]) = 
                     outfile => {
                         logger.info(s"Writing: ${outfile}")

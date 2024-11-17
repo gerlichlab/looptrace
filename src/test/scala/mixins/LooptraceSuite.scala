@@ -92,7 +92,6 @@ trait LooptraceSuite extends GenericSuite, GeometricInstances, ImagingInstances,
     ): Arbitrary[IndexedDetectedSpot] = 
         (arbIndex, arbContext, arbCentroid, arbBox).mapN(IndexedDetectedSpot.apply)
 
-    // TODO: use this to reconstruct proximity-based filtration tests.
     given arbitraryForPostMergeRoi(using 
         Arbitrary[IndexedDetectedSpot], 
         Arbitrary[MergedRoiRecord],
