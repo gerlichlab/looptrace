@@ -155,13 +155,8 @@ object MergeRois extends StrictLogging:
             dimensions => 
                 given Semigroup[BBox.Dimensions] with
                     override def combine(a: BBox.Dimensions, b: BBox.Dimensions): BBox.Dimensions = 
-                        BBox.Dimensions((a.x, b.x).max, (a.y, b.y).max, (a.z, b.z).max)
+                        BBox.Dimensions(a.x max b.x, a.y max b.y, a.z max b.z)
                 val maxDim = dimensions.reduce
                 BBox.around(center)(maxDim)
         )
-
-    extension [A](t: (A, A))
-        // Take the max element of a pair.
-        private def max(using Order[A]): A = if t._1 > t._2 then t._1 else t._2
-
 end MergeRois
