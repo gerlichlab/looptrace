@@ -202,9 +202,11 @@ def assign_trace_ids(rounds_config: ExtantFile, params_config: ExtantFile) -> Pa
         "-cp",
         str(LOOPTRACE_JAR_PATH),
         f"{LOOPTRACE_JAVA_PACKAGE}.AssignTraceIds",
-        "--roundsConfig",
+        "--configuration",
         str(rounds_config.path),
-        "-O", 
+        "--roisFile",
+        str(H.nuclei_filtered_spots_file_path if H.spot_in_nuc else H.proximity_accepted_spots_file_path),
+        "--outputFile", 
         H.spots_for_voxels_definition_file,
     ]
     logging.info(f"Running distance computation command: {' '.join(cmd_parts)}")
@@ -456,6 +458,11 @@ class LooptracePipeline(pypiper.Pipeline):
                 func=run_spot_nucleus_filtration, 
                 f_kwargs=rounds_params_images, # images are needed since H.image_lists is iterated in workflow.
             ), 
+            pypiper.Stage(
+                name="trace_id_assignment",
+                func=assign_trace_ids,
+                f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config},
+            ),
             pypiper.Stage(
                 name="regional_spots_visualisation_data_prep", 
                 func=run_regional_spot_viewing_prep, 
