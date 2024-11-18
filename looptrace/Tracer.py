@@ -263,7 +263,7 @@ def finalise_traces(*, rois: pd.DataFrame, fits: pd.DataFrame, z_nm: NumberLike,
     traces = apply_pixels_to_nanometers(traces, z_nm_per_px=z_nm, xy_nm_per_px=xy_nm)
     traces = traces.sort_values(RoiOrderingSpecification.row_order_columns())
     # Finally, rename columns and yield the result.
-    traces.rename(columns={"roi_id": "traceId"}, inplace=True)
+    traces.rename(columns={"roiId": "traceId"}, inplace=True)
     return traces
 
 
@@ -506,7 +506,7 @@ def compute_spot_images_multiarray_per_fov(
     for fov, fov_group in itertools.groupby(keyed, lambda k_: k_[0].field_of_view):
         logging.info("Computing spot image arrays stack for FOV '%s'...", fov)
         current_stack: list[np.ndarray] = []
-        for filename_key, filename in sorted(fov_group, key=lambda fk_fn: (fk_fn[0].ref_timepoint, fk_fn[0].roi_id)):
+        for filename_key, filename in sorted(fov_group, key=lambda fk_fn: (fk_fn[0].ref_timepoint, fk_fn[0].roiId)):
             pixel_array = get_pixel_array(filename)
             reg_time: TimepointFrom0 = TimepointFrom0(filename_key.ref_timepoint)
             obs_num_times: int = pixel_array.shape[0]

@@ -84,16 +84,16 @@ class RoiOrderingSpecification:
     @dataclasses.dataclass(frozen=True, kw_only=True)
     class FilenameKey:
         field_of_view: str
-        roi_id: int
+        roiId: int
         ref_timepoint: int
         
         @classmethod
         def from_roi(cls, roi: Union[pd.Series, Mapping[str, Any]]) -> "FilenameKey":
-            return cls(field_of_view=roi["fieldOfView"], roi_id=roi["roi_id"], ref_timepoint=roi["ref_timepoint"])
+            return cls(field_of_view=roi["fieldOfView"], roiId=roi["roiId"], ref_timepoint=roi["ref_timepoint"])
 
         @property
         def file_name_base(self) -> str:
-            return "_".join([self.field_of_view, str(self.roi_id).zfill(5), str(self.ref_timepoint)])
+            return "_".join([self.field_of_view, str(self.roiId).zfill(5), str(self.ref_timepoint)])
 
         @property
         def name_roi_file(self) -> str:
@@ -101,11 +101,11 @@ class RoiOrderingSpecification:
         
         @property
         def to_tuple(self) -> Tuple[str, int, int]:
-            return self.field_of_view, self.roi_id, self.ref_timepoint
+            return self.field_of_view, self.roiId, self.ref_timepoint
 
     @staticmethod
     def row_order_columns() -> List[str]:
-        return ["fieldOfView", "roi_id", "ref_timepoint", "timepoint"]
+        return ["fieldOfView", "roiId", "ref_timepoint", "timepoint"]
     
     @classmethod
     def get_file_sort_key(cls, file_key: str) -> FilenameKey:
@@ -114,7 +114,7 @@ class RoiOrderingSpecification:
         except ValueError:
             print(f"Failed to get key for file key: {file_key}")
             raise
-        return cls.FilenameKey(field_of_view=fov, roi_id=int(roi), ref_timepoint=int(ref))
+        return cls.FilenameKey(field_of_view=fov, roiId=int(roi), ref_timepoint=int(ref))
 
 
 def finalise_single_spot_props_table(spot_props: pd.DataFrame, field_of_view: str, timepoint: int, channel: int) -> pd.DataFrame:
@@ -585,7 +585,7 @@ class SpotPicker:
                         raise ArrayDimensionalityError(f"Got not 3, but {len(roi_img.shape)} dimension(s) for ROI image: {roi_img.shape}. fn_key: {fn_key}")
                     roi_img = roi_img.astype(SPOT_IMAGE_PIXEL_VALUE_TYPE)
                     if error is not None:
-                        skip_spot_image_reasons[fn_key.ref_timepoint][fn_key.roi_id][timepoint] = str(error)
+                        skip_spot_image_reasons[fn_key.ref_timepoint][fn_key.roiId][timepoint] = str(error)
                     if timepoint == self.image_handler.background_subtraction_timepoint:
                         n_timepoints = 1
                         array_file_dir = self.spot_background_path
@@ -717,7 +717,7 @@ def build_locus_spot_data_extraction_table(
                             dc_row["zDriftFinePixels"], dc_row["yDriftFinePixels"], dc_row["xDriftFinePixels"]])
 
     return pd.DataFrame(all_rois, columns=[
-        "fieldOfView", "roi_id", "timepoint", "ref_timepoint", "spotChannel", 
+        "fieldOfView", "roiId", "timepoint", "ref_timepoint", "spotChannel", 
         "zMin", "zMax", "yMin", "yMax", "xMin", "xMax",
         "pad_z_min", "pad_z_max", "pad_y_min", "pad_y_max", "pad_x_min", "pad_x_max", 
         "zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels",
