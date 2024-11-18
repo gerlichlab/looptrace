@@ -207,7 +207,7 @@ def assign_trace_ids(rounds_config: ExtantFile, params_config: ExtantFile) -> Pa
         "--roisFile",
         str(H.nuclei_filtered_spots_file_path if H.spot_in_nuc else H.proximity_accepted_spots_file_path),
         "--outputFile", 
-        H.spots_for_voxels_definition_file,
+        str(H.spots_for_voxels_definition_file),
     ]
     logging.info(f"Running distance computation command: {' '.join(cmd_parts)}")
     return subprocess.check_call(cmd_parts)
