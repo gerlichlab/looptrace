@@ -334,7 +334,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
         centroid: Centroid[Double], 
         box: BoundingBox, 
         maybeMergeInputs: Set[RoiIndex],  // may be empty, as the input collection is possibly a mix of singletons and merge results
-        maybeNucleusNumber: Option[NucleusNumber], // allow the program to operate on non-nuclei-filtered ROIs.
+        maybeNucleusNumber: Option[NucleusNumber], // Allow the program to operate on non-nuclei-filtered ROIs.
     ):
         final def timepoint: ImagingTimepoint = context.timepoint
 
@@ -354,13 +354,11 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                     MergeContributorsColumnNameForAssessedRecord.from(row)
                 val nucNel: ValidatedNel[String, Option[NucleusNumber]] = 
                     val key = NucleusDesignationColumnName.value
-                    row.apply(key)
-                        .toRight(s"Missing header/field '$key'")
-                        .flatMap{
-                            case "" => None.asRight
-                            case s => NucleusNumber.parse(s).map(_.some)
-                        }
-                        .toValidatedNel
+                    row.apply(key) match {
+                        // Allow the program to operate on non-nuclei-filtered ROIs.
+                        case None | Some("") => Option.empty.validNel
+                        case Some(s) => NucleusNumber.parse(s).map(_.some).toValidatedNel
+                    }
                 (spotNel, mergeInputsNel, nucNel)
                     .mapN{ (spot, maybeMergeIndices, maybeNucNum) => 
                         InputRecord(spot.index, spot.context, spot.centroid, spot.box, maybeMergeIndices, maybeNucNum)
