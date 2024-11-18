@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from enum import Enum
 from operator import itemgetter
+from pathlib import Path
 from typing import Optional
 
 from gertils.types import TimepointFrom0
@@ -176,7 +177,7 @@ def test_only_region_timepoints_and_their_locus_timepoints_have_records_in_spot_
         # NB: here we have the first column name empty, so read with an ordinary pd.read_csv() call (without index_col=False).
         for drift_line in DRIFT_CORRECTION_LINES:
             fh.write(drift_line)
-    drift_table: pd.DataFrame = pd.read_csv(drift_file, index_col=0)
+    drift_table: pd.DataFrame = _read_drift_file(drift_file)
     # Subtract 1 to account for header.
     assert drift_table.shape[0] == len(DRIFT_CORRECTION_LINES) - 1, f"{drift_table.shape[0]} row(s) in DC table, from {len(DRIFT_CORRECTION_LINES)} record line(s); these should match."
 
@@ -186,7 +187,7 @@ def test_only_region_timepoints_and_their_locus_timepoints_have_records_in_spot_
         # NB: here we have the first column name empty, so read with an ordinary pd.read_csv() call (without index_col=False).
         for roi_line in REGIONAL_SPOT_LINES:
             fh.write(roi_line)
-    rois_table: pd.DataFrame = pd.read_csv(rois_file, index_col=False)
+    rois_table: pd.DataFrame = _read_rois_file(rois_file)
 
     # ...then, check that downstream assumption of exactly 1 FOV in each data table is valid.
     assert rois_table["fieldOfView"].nunique() == 1, f"Expected just 1 unique FOV in ROIs table, but got {rois_table.fieldOfView.nunique()}"
@@ -236,3 +237,54 @@ def test_only_region_timepoints_and_their_locus_timepoints_have_records_in_spot_
 
     assert len(obs_reg_time_loc_time_pairs) == len(exp_reg_time_loc_time_pairs)
     assert obs_reg_time_loc_time_pairs == exp_reg_time_loc_time_pairs
+
+
+def test_index_is_faithfully_propagated_as_roiId_issue_371(tmp_path):
+    # NB: here we have the first column name empty, so read with an ordinary pd.read_csv() call (without index_col=False).
+    regional_spot_lines = f"""index,fieldOfView,timepoint,spotChannel,zc,yc,xc,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax
+    3,{FOV_NAME},{REGIONAL_TIME_1},0,18.177805530982404,445.45646697850475,607.9657421380375,160.33961681087763,12.177805530982404,24.177805530982404,433.45646697850475,457.45646697850475,595.9657421380375,619.9657421380375
+    5,{FOV_NAME},{REGIONAL_TIME_1},0,17.83959674876146,1006.0753359579252,306.5263466292306,160.1254275940707,11.839596748761458,23.83959674876146,994.0753359579252,1018.0753359579252,294.5263466292306,318.5263466292306
+    10,{FOV_NAME},{REGIONAL_TIME_2},0,17.70877472362621,1040.482813665982,290.6567022086824,163.12094117647058,11.70877472362621,23.70877472362621,1028.482813665982,1052.482813665982,278.6567022086824,302.6567022086824
+    """.splitlines(keepends=True)
+    
+    # First, construct the drift correction table...
+    drift_file = tmp_path / "drift.csv"
+    with drift_file.open(mode="w") as fh:
+        # NB: here we have the first column name empty, so read with an ordinary pd.read_csv() call (without index_col=False).
+        for drift_line in DRIFT_CORRECTION_LINES:
+            fh.write(drift_line)
+    drift_table: pd.DataFrame = _read_drift_file(drift_file)
+    # Subtract 1 to account for header.
+    assert drift_table.shape[0] == len(DRIFT_CORRECTION_LINES) - 1, f"{drift_table.shape[0]} row(s) in DC table, from {len(DRIFT_CORRECTION_LINES)} record line(s); these should match."
+
+    # ...then, construct the regional spots table...
+    rois_file = tmp_path / "rois.csv"
+    with rois_file.open(mode="w") as fh:
+        # NB: here we have the first column name empty, so read with an ordinary pd.read_csv() call (without index_col=False).
+        for roi_line in regional_spot_lines:
+            fh.write(roi_line)
+    rois_table: pd.DataFrame = _read_rois_file(rois_file)
+
+    # ...then, check that downstream assumption of exactly 1 FOV in each data table is valid.
+    assert rois_table["fieldOfView"].nunique() == 1, f"Expected just 1 unique FOV in ROIs table, but got {rois_table.fieldOfView.nunique()}"
+    assert drift_table["fieldOfView"].nunique() == 1, f"Expected just 1 unique FOV in drift table, but got {drift_table.fieldOfView.nunique()}"
+
+    spot_extraction_table: pd.DataFrame = build_locus_spot_data_extraction_table(
+        rois_table=rois_table,
+        get_fov_idx=lambda _: 0,
+        get_dc_table=lambda _: drift_table[drift_table["fieldOfView"] == FOV_NAME], # There's only 1 FOV, so return the whole table, always.
+        get_locus_timepoints=None,
+        get_zyx=lambda _1, _2: (BoxSideLengths.Z.value, BoxSideLengths.Y.value, BoxSideLengths.X.value)
+    )
+
+    obs_ids = list(spot_extraction_table["roiId"].unique())
+    exp_ids = list(sorted(rois_table["index"].values))
+    assert obs_ids == exp_ids
+
+
+def _read_drift_file(fp: Path) -> pd.DataFrame:
+    return pd.read_csv(fp, index_col=0) # Fix index_col based on format of drift lines.
+
+
+def _read_rois_file(fp: Path) -> pd.DataFrame:
+    return pd.read_csv(fp, index_col=False) # Fix index_col based on format of ROI lines.
