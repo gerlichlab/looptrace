@@ -14,13 +14,16 @@ See [Issue 279](https://github.com/gerlichlab/looptrace/issues/279).
 * Ensure that same-timepoint-ROI merge is done in connected-components fashion, rather than simply by pairwise-distance-defined proximity. 
 See [Issue 368](https://github.com/gerlichlab/looptrace/issues/368).
 * Make ROI IDs downstream of regional spot filtration correctly map back to the original spots. 
-See [Issue 371](https://github.com/gerlichlab/looptrace/issues/371).
+See [Issue 372](https://github.com/gerlichlab/looptrace/issues/372).
 
 ### Changed
 * Scala is now version 3.5.2.
 * `sbt` is now version 1.10.5.
 * `uJson` and `uPickle` are now at version 4.0.2.
 * Moved the `AtLeast2[C[*], E]` data type to `gerlib`, to be released with version 0.3 of that library.
+* Changed `region1` and `region2` to (isomorphic) `timepoint1` and `timepoint2`, respectively, in output file for regional spot pairwise distances
+* Changed `inputIndex1` and `inputIndex2` to `roiId1` and `roiId2`, respectively, in output file for regional spot pairwise distances. 
+These now point back to specific regional spots directly (by ID number), rather than simple line number/index. See [Issue 362](https://github.com/gerlichlab/looptrace/issues/362).
 
 ## [v0.10.1] - 2024-11-11
 
