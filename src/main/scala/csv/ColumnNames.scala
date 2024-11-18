@@ -48,6 +48,8 @@ object ColumnNames:
 
     val TraceIdColumnName: ColumnName[TraceId] = ColumnName("traceId")
 
+    val TracePartnersColumName: ColumnName[Set[RoiIndex]] = ColumnName("tracePartners")
+
     private def coarseDriftColumnName[A <: EuclideanAxis](a: A): ColumnName[CoarseDriftComponent[A]] = 
         val coarseDriftColumnSuffix: String = "DriftCoarsePixels"
         ColumnName(a match {
