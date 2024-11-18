@@ -643,24 +643,6 @@ class SpotPicker:
 
         return self.spot_images_path
 
-    def gen_roi_imgs_inmem_coarsedc(self) -> str:
-        # Use this simplified function if the images that the spots are gathered from are already coarsely drift corrected!
-        print('Generating single spot image stacks from coarsely drift corrected images.')
-        rois = self.spot_image_volume_extraction_table
-        for fov, group in tqdm.tqdm(rois.groupby("fieldOfView")):
-            fov_index = self.image_handler.image_lists[self.input_name].index(fov)
-            full_image = np.array(self.images[fov_index])
-            for roi in group.to_dict('records'):
-                spot_stack = full_image[:, 
-                                roi["spotChannel"], 
-                                roi["zMin"]:roi["zMax"], 
-                                roi["yMin"]:roi["yMax"],
-                                roi["xMin"]:roi["xMax"]].copy()
-                fn = fov + '_' + str(roi["timepoint"]) + '_' + str(roi['roi_id_pos']).zfill(4)
-                arr_out = os.path.join(self.spot_images_path, fn + ".npy")
-                np.save(arr_out, spot_stack)
-        return self.spot_images_path
-
 
 def build_locus_spot_data_extraction_table(
     rois_table: pd.DataFrame, 
