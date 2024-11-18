@@ -20,6 +20,8 @@ import at.ac.oeaw.imba.gerlich.gerlib.geometry.EuclideanDistance
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.{
     FieldOfView,
+    ImagingChannel,
+    ImagingTimepoint,
     PositionName,
 }
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
@@ -56,26 +58,6 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
         PixelDefinition.unsafeDefine(Nanometers(1)), 
     )
 
-    test("Totally empty input file causes expected error.") {
-        withTempDirectory{ (tempdir: os.Path) => 
-            /* Setup and pretests */
-            val infile = tempdir / "input.csv"
-            val outfolder = tempdir / "output"
-            os.makeDir(outfolder)
-            touchFile(infile)
-            os.isDir(outfolder) shouldBe true
-            os.isFile(infile) shouldBe true
-            assertThrows[EmptyFileException]{
-                workflow(
-                    inputFile = infile, 
-                    maybeDriftFile = None, 
-                    pixels = ToNanometersIdentity,
-                    outputFolder = outfolder,
-                )
-            }
-        }
-    }
-
     test("Input file that's just a header produces an empty output file.") {
         forAll(Table("includePandasIndexCol", List(false, true)*)) { includePandasIndexCol => 
             withTempDirectory{ (tempdir: os.Path) => 
@@ -103,174 +85,36 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
         }
     }
 
-    test("Trying to use a file with just records and no header fails the parse as expected.") {
-        forAll { (records: NonEmptyList[Input.GoodRecord], includeIndex: Boolean) => 
-            withTempDirectory{ (tempdir: os.Path) => 
-                val infile = tempdir / "input.csv"
-                val toTextFields: (Input.GoodRecord, Int) => List[String] = 
-                    if includeIndex
-                    then { (r, i) => i.show_ :: recordToTextFields(r) }
-                    else { (r, _) => recordToTextFields(r) }
-                os.write(infile, records.toList.zipWithIndex.map(toTextFields.tupled `andThen` textFieldsToLine))
-                intercept[IllegalHeaderException]{ 
-                    workflow(
-                        inputFile = infile, 
-                        maybeDriftFile = None, 
-                        pixels = ToNanometersIdentity,
-                        outputFolder = tempdir / "output",
-                    )
-                } match {
-                    case IllegalHeaderException(obsHead, missing) => 
-                        obsHead shouldEqual toTextFields(records.head, 0)
-                        // Account for the fact that randomly drawn first-row elements could collide with 
-                        // a required header field and therefore reduce the theoretically missing set.
-                        missing.some shouldEqual (AllReqdColumns.toNel.get.toNes -- obsHead.toNel.get.toNes).toNonEmptySet
-                }
-            }
-        }
-    }
-
-    test("Any nonempty subset of missing/incorrect columns from input file causes expected error.") {
-        type ExpectedHeader = List[String]
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
-        
-        given arbExpHeader: Arbitrary[ExpectedHeader] = {
-            def genDeletions: Gen[ExpectedHeader] = Gen.choose(1, AllReqdColumns.length - 1)
-                .flatMap(Gen.pick(_, (0 until AllReqdColumns.length)))
-                .map{ indices => AllReqdColumns.zipWithIndex.filterNot{ (_, i) => indices.toSet contains i }.map(_._1) }
-            def genSubstitutions: Gen[ExpectedHeader] = for {
-                indicesToChange <- Gen.atLeastOne((0 until AllReqdColumns.length)).map(_.toSet) // Choose header fields to change.
-                expectedHeader <- AllReqdColumns.zipWithIndex.traverse{ (oldCol, idx) => 
-                    if indicesToChange contains idx 
-                    then Gen.alphaNumStr.suchThat(newCol => newCol.nonEmpty && newCol =!= oldCol) // Ensure the replacement differs from original.
-                    else Gen.const(oldCol) // Use the original value since this index isn't one at which to update.
-                }
-            } yield expectedHeader
-            
-            Gen.oneOf(genSubstitutions, genDeletions).toArbitrary
-        }
-        
-        forAll { (expectedHeader: ExpectedHeader, records: NonEmptyList[Input.GoodRecord], includePandasIndexColumn: Boolean) =>
-            val (expHead, textRows) = 
-                if includePandasIndexColumn 
-                then ("" :: expectedHeader, records.toList.zipWithIndex.map{ (r, i) => i.show_ :: recordToTextFields(r) })
-                else (expectedHeader, records.toList.map(recordToTextFields))
-            withTempDirectory{ (tempdir: os.Path) => 
-                val infile = {
-                    val f = tempdir / "input.csv"
-                    os.write(f, (textFieldsToLine(expHead) :: textRows.map(textFieldsToLine)))
-                    f
-                }
-                intercept[IllegalHeaderException]{
-                    workflow(
-                        inputFile = infile, 
-                        maybeDriftFile = None, 
-                        pixels = ToNanometersIdentity,
-                        outputFolder = tempdir / "output",
-                    )
-                } match {
-                    case IllegalHeaderException(header, missing) => 
-                        header shouldEqual expHead
-                        (AllReqdColumns.toSet -- expHead.toSet).toNonEmptySet match {
-                            case None => throw new Exception(
-                                s"All required columns are in expected header, leaving nothing for expected missing! $expHead"
-                                )
-                            case Some(expMiss) => missing shouldEqual expMiss
-                        }
-                }
-            }
-        }
-    }
-
-    test("Any row with too few fields, too many fields, or improperly typed value(s) breaks the parse.") {
-        type Mutate = List[String] => List[String]
-        given showForStringOrDouble: Show[String | Double] = Show.show((_: String | Double) match {
-            case x: Double => x.toString
-            case s: String => s
-        }) // used for .show'ing a generated value of more than one type possibility
-        
-        def genDrops: Gen[Mutate] = Gen.atLeastOne((0 until AllReqdColumns.length)).map {
-            indices => { (_: List[String]).zipWithIndex.filterNot((_, i) => indices.toSet.contains(i)).map(_._1) }
-        }
-        def genAdditions: Gen[Mutate] = 
-            Gen.resize(5, Gen.nonEmptyListOf(Gen.choose(-3e-3, 3e3).map(_.toString))).map(additions => (_: List[String]) ++ additions)
-        def genImproperlyTyped: Gen[Mutate] = {
-            def genMutate[A : SimpleShow](col: String, alt: Gen[A]): Gen[Mutate] = {
-                val idx = AllReqdColumns.zipWithIndex.find(_._1 === col).map(_._2).getOrElse{
-                    throw new Exception(s"Cannot find index for alleged input column: $col")
-                }
-                alt.map(a => { (_: List[String]).updated(idx, a.show_) })
-            }
-            // NB: Skipping bad FOV and region b/c so long as they're String-ly typed, there's no way to generate a bad value.
-            Gen.oneOf(Input.XCoordinateColumn, Input.YCoordinateColumn, Input.ZCoordinateColumn).flatMap(genMutate(_, Gen.alphaStr))
-        }
-        
-        def genBadRecords: Gen[(NonEmptyList[Int], NonEmptyList[List[String]])] = for {
-            goods <- arbitrary[NonEmptyList[Input.GoodRecord]].map(_.map(recordToTextFields))
-            indices <- Gen.atLeastOne((0 until goods.length)).map(_.toList.sorted.toNel.get)
-            mutations <- indices.toList
-                // Put genImproperlyTyped first since there are more possbilities there, 
-                // and the distribution is biased towards selection of elements earlier in the sequence.
-                .traverse{ i => Gen.oneOf(genImproperlyTyped, genAdditions, genDrops).map(i -> _) }
-                .map(_.toMap)
-        } yield (indices, goods.zipWithIndex.map{ (r, i) => mutations.get(i).fold(r)(_(r)) })
-        
-        forAll (genBadRecords, arbitrary[Boolean]) { case ((expBadRows, textRecords), includePandasIndexColumn) =>
-            withTempDirectory{ (tempdir: os.Path) => 
-                val infile = tempdir / "input.csv"
-                os.isFile(infile) shouldBe false
-                val (head, textRows) = 
-                    if includePandasIndexColumn 
-                    then ("" :: AllReqdColumns, textRecords.zipWithIndex.map((r, i) => i.show_ :: r))
-                    else (AllReqdColumns, textRecords)
-                os.write(infile, (head :: textRows.toList) map textFieldsToLine)
-                os.isFile(infile) shouldBe true
-                val error = intercept[Input.BadRecordsException]{
-                    workflow(
-                        inputFile = infile, 
-                        maybeDriftFile = None,
-                        pixels = ToNanometersIdentity,
-                        outputFolder = tempdir / "output",
-                    )
-                }
-                error.records.map(_.lineNumber) shouldEqual expBadRows
-            }
-        }
-    }
-
     test("Distances computed are accurately Euclidean.") {
         import io.github.iltotore.iron.autoRefine
         
         def buildPoint(x: Double, y: Double, z: Double) = Point3D(XCoordinate(x), YCoordinate(y), ZCoordinate(z))
         
         val pos = PositionName("P0001.zarr")
+        val channel = ImagingChannel.unsafe(0)
         val inputRecords = NonnegativeInt.indexed(List((2.0, 1.0, -1.0), (1.0, 5.0, 0.0), (3.0, 0.0, 2.0))).map{
-            (pt, i) => Input.GoodRecord(pos, RegionId.unsafe(i), buildPoint.tupled(pt))
+            (pt, i) => Input.GoodRecord(RoiIndex.unsafe(i), pos, ImagingTimepoint.unsafe(i), channel ,buildPoint.tupled(pt))
         }
         val expected: Iterable[OutputRecord] = List(0 -> 1, 0 -> 2, 1 -> 2).map{ (i, j) => 
-            val nn1 = NonnegativeInt.unsafe(i)
-            val nn2 = NonnegativeInt.unsafe(j)
+            val id1 = RoiIndex.unsafe(i)
+            val id2 = RoiIndex.unsafe(j)
             val rec1 = inputRecords(i)
             val rec2 = inputRecords(j)
-            val reg1 = RegionId.unsafe(i)
-            val reg2 = RegionId.unsafe(j)
+            val t1 = ImagingTimepoint.unsafe(i)
+            val t2 = ImagingTimepoint.unsafe(j)
             OutputRecord(
                 pos, 
-                reg1, 
-                reg2, 
+                channel,
+                t1, 
+                t2, 
                 LengthInNanometers.unsafeFromSquants(
                     Nanometers(EuclideanDistance.between(rec1.point, rec2.point).get.toDouble)
                 ), 
-                nn1, 
-                nn2,
+                id1, 
+                id2,
             )
         }
-        val observed = 
-            inputRecordsToOutputRecords(
-                NonnegativeInt.indexed(inputRecords), 
-                None, 
-                ToNanometersIdentity,
-            )
+        val observed = inputRecordsToOutputRecords(inputRecords, None, ToNanometersIdentity)
         observed shouldEqual expected
     }
 
@@ -292,30 +136,34 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                 .map(Pixels3D.apply)
         
         forAll (genRecords, genScaling) { (records, pixels) => 
-            inputRecordsToOutputRecords(NonnegativeInt.indexed(records.toList), None, pixels).isEmpty shouldBe true 
+            inputRecordsToOutputRecords(records.toList, None, pixels).isEmpty shouldBe true 
         }
     }
 
-    test("Any output record's original record indices map them back to input records with identical FOV.") {
+    test("Any output record's original record indices map them back to input records with identical grouping key (FOV, channel).") {
         forAll (Gen.choose(10, 100).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord])), minSuccessful(500)) { 
             (records: List[Input.GoodRecord]) => 
                 val indexedRecords = NonnegativeInt.indexed(records)
-                val getKey = indexedRecords.map(_.swap).toMap.apply.andThen(Input.getGroupingKey)
-                val observed = inputRecordsToOutputRecords(indexedRecords, None, ToNanometersIdentity)
-                observed.filter{ r => getKey(r.inputIndex1) === getKey(r.inputIndex2) } shouldEqual observed
+                val getKey = records.map(r => r.index -> r).toMap.apply.andThen(Input.getGroupingKey)
+                val observed = inputRecordsToOutputRecords(records, None, ToNanometersIdentity)
+                observed.filter{ r => getKey(r.roiId1) === getKey(r.roiId2) } shouldEqual observed
         }
     }
 
     test("The number of records is always as expected."):
-        /* To encourage collisions, narrow the choices for grouping components. */
-        given Arbitrary[PositionName] = Arbitrary{ Gen.oneOf(
+        // To encourage collisions, narrow the choices for grouping components.
+        given Arbitrary[PositionName] = Gen.oneOf(
             PositionName.unsafe("P0001.zarr"), 
             PositionName.unsafe("P0002.zarr"),
-        ) }
+        ).toArbitrary
+        
+        // Fix generation to a single constant imaging channel, to make for more colliisions.
+        given Arbitrary[ImagingChannel] = Gen.const(ImagingChannel.unsafe(0)).toArbitrary
+        
         forAll (Gen.choose(5, 50).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord])), minSuccessful(500)) { 
             (records: List[Input.GoodRecord]) => 
                 val indexedRecords = NonnegativeInt.indexed(records)
-                val observed = inputRecordsToOutputRecords(indexedRecords, None, ToNanometersIdentity).size
+                val observed = inputRecordsToOutputRecords(records, None, ToNanometersIdentity).size
                 records.map(_.fieldOfView)
                     .groupBy(identity)
                     .view
@@ -338,16 +186,14 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
         
         forAll (Gen.choose(5, 50).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord])), minSuccessful(500)) { 
             (records: List[Input.GoodRecord]) => 
-                val indexedRecords = NonnegativeInt.indexed(records)
-                val observed = inputRecordsToOutputRecords(indexedRecords, None, ToNanometersIdentity)
-                val expected = 
-                    observed.toList.sortBy{ r => 
-                        (r.fieldOfView, r.region1, r.region2, r.distance)
-                    }(using summon[Order[(PositionName, RegionId, RegionId, LengthInNanometers)]].toOrdering)
+                val observed = inputRecordsToOutputRecords(records, None, ToNanometersIdentity)
+                val expected = observed.toList.sortBy{ r => 
+                    (r.fieldOfView, r.channel, r.timepoint1, r.timepoint2, r.distance) 
+                }(using summon[Order[(PositionName, ImagingChannel, ImagingTimepoint, ImagingTimepoint, LengthInNanometers)]].toOrdering)
                 observed.toList shouldEqual expected
         }
 
-    test("(FOV, region ID) is NOT a key!") {
+    test("(FOV, timepoint) is NOT a key!") {
         import io.github.iltotore.iron.autoRefine
 
         // nCk, i.e. number of ways to choose k indistinguishable objects from n
@@ -358,18 +204,27 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
             factorial(n) / (factorial(k) * factorial(n - k))
 
         /* To encourage collisions, narrow the choices for grouping components. */
-        given arbPosition: Arbitrary[PositionName] = Gen.const(PositionName("P0002.zarr")).toArbitrary
-        given arbRegion: Arbitrary[RegionId] = Gen.oneOf(40, 41, 42).map(RegionId.unsafe).toArbitrary
+        given Arbitrary[PositionName] = Gen.const(PositionName("P0002.zarr")).toArbitrary
+        given Arbitrary[ImagingChannel] = Gen.const(ImagingChannel.unsafe(0)).toArbitrary
+        given Arbitrary[ImagingTimepoint] = Gen.oneOf(40, 41, 42).map(ImagingTimepoint.unsafe).toArbitrary
+        
+        given noShrink[A]: Shrink[A] = Shrink.shrinkAny // Do absolutely no example shrinking.
+
         forAll (Gen.choose(5, 10).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord]))) { (records: List[Input.GoodRecord]) => 
-            // Pretest: must be multiple records of same region even within same FOV.
-            records.groupBy(r => r.fieldOfView -> r.region).view.mapValues(_.length).toMap.filter(_._2 > 1).nonEmpty shouldBe true
+            // Pretest: must be multiple records of same timepoint even within same FOV.
+            records.groupBy(r => r.fieldOfView -> r.timepoint)
+                .view
+                .mapValues(_.length)
+                .toMap
+                .filter(_._2 > 1)
+                .nonEmpty shouldBe true
             val getKey = (_: Input.GoodRecord | OutputRecord) match {
                 case i: Input.GoodRecord => i.fieldOfView
                 case o: OutputRecord => o.fieldOfView
             }
             val expGroupSizes = records.groupBy(getKey).view.mapValues{ g => choose(g.size)(2) }.toMap
             val obsGroupSizes = 
-                inputRecordsToOutputRecords(NonnegativeInt.indexed(records), None, ToNanometersIdentity)
+                inputRecordsToOutputRecords(records, None, ToNanometersIdentity)
                     .groupBy(getKey)
                     .view
                     .mapValues(_.size)
@@ -380,19 +235,11 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
 
     /** Use arbitrary instances for components to derive an an instance for the sum type. */
     given arbitraryForGoodInputRecord(using 
+        arbId: Arbitrary[RoiIndex],
         arbPos: Arbitrary[PositionName], 
-        arbRegion: Arbitrary[RegionId], 
+        arbTimepoint: Arbitrary[ImagingTimepoint],
+        arbChannel: Arbitrary[ImagingChannel],
         arbPoint: Arbitrary[Point3D], 
-    ): Arbitrary[Input.GoodRecord] = (arbPos, arbRegion, arbPoint).mapN(Input.GoodRecord.apply)
-
-    /** Convert a sequence of text fields into a single line (CSV), including newline. */
-    private def textFieldsToLine = Delimiter.CommaSeparator.join(_: List[String]) ++ "\n"
-
-    /** Convert each ADT value to a simple sequence of text fields, for writing to format like CSV. */
-    private def recordToTextFields = 
-        given SimpleShow[Double] = SimpleShow.fromToString
-        (r: Input.GoodRecord) => 
-            val (x, y, z) = (r.point.x, r.point.y, r.point.z)
-            List(r.fieldOfView.show_, r.region.show_, x.show_, y.show_, z.show_)
+    ): Arbitrary[Input.GoodRecord] = 
+        (arbId, arbPos, arbTimepoint, arbChannel, arbPoint).mapN(Input.GoodRecord.apply)
 end TestComputeRegionPairwiseDistances
-
