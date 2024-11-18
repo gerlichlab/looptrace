@@ -34,7 +34,7 @@ REGIONAL_TIME_8 = 36
 
 
 # NB: here we have the first column name empty, so read with an ordinary pd.read_csv() call (without index_col=False).
-REGIONAL_SPOT_LINES = f""",fieldOfView,timepoint,spotChannel,zc,yc,xc,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax
+REGIONAL_SPOT_LINES = f"""index,fieldOfView,timepoint,spotChannel,zc,yc,xc,intensityMean,zMin,zMax,yMin,yMax,xMin,xMax
 0,{FOV_NAME},{REGIONAL_TIME_1},0,18.177805530982404,445.45646697850475,607.9657421380375,160.33961681087763,12.177805530982404,24.177805530982404,433.45646697850475,457.45646697850475,595.9657421380375,619.9657421380375
 1,{FOV_NAME},{REGIONAL_TIME_1},0,17.83959674876146,1006.0753359579252,306.5263466292306,160.1254275940707,11.839596748761458,23.83959674876146,994.0753359579252,1018.0753359579252,294.5263466292306,318.5263466292306
 2,{FOV_NAME},{REGIONAL_TIME_2},0,17.70877472362621,1040.482813665982,290.6567022086824,163.12094117647058,11.70877472362621,23.70877472362621,1028.482813665982,1052.482813665982,278.6567022086824,302.6567022086824
@@ -186,7 +186,7 @@ def test_only_region_timepoints_and_their_locus_timepoints_have_records_in_spot_
         # NB: here we have the first column name empty, so read with an ordinary pd.read_csv() call (without index_col=False).
         for roi_line in REGIONAL_SPOT_LINES:
             fh.write(roi_line)
-    rois_table: pd.DataFrame = pd.read_csv(rois_file, index_col=0)
+    rois_table: pd.DataFrame = pd.read_csv(rois_file, index_col=False)
 
     # ...then, check that downstream assumption of exactly 1 FOV in each data table is valid.
     assert rois_table["fieldOfView"].nunique() == 1, f"Expected just 1 unique FOV in ROIs table, but got {rois_table.fieldOfView.nunique()}"
