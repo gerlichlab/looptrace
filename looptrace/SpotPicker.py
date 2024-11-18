@@ -616,16 +616,10 @@ class SpotPicker:
                     num_timepoints_processed[fp] = f_id + 1
         return skip_spot_image_reasons
 
-    @property
-    def spot_image_volume_extraction_table(self) -> pd.DataFrame:
-        return pd.read_csv(self.image_handler.drift_corrected_all_timepoints_rois_file, index_col=False)
-        #return self.image_handler.tables[self.input_name + '_dc_rois']
-
     def gen_roi_imgs_inmem(self) -> str:
-        # Load full stacks into memory to extract spots.
-        # Not the most elegant, but depending on the chunking of the original data it is often more performant than loading subsegments.
-
-        rois = self.spot_image_volume_extraction_table
+        rois_file: Path = self.image_handler.drift_corrected_all_timepoints_rois_file
+        logger.info(f"Reading ROIs file: {rois_file}")
+        rois = pd.read_csv(rois_file, index_col=False)
 
         if not os.path.isdir(self.spot_images_path):
             os.mkdir(self.spot_images_path)
