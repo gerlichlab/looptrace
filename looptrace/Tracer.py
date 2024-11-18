@@ -262,8 +262,6 @@ def finalise_traces(*, rois: pd.DataFrame, fits: pd.DataFrame, z_nm: NumberLike,
     traces = apply_fine_scale_drift_correction(traces)
     traces = apply_pixels_to_nanometers(traces, z_nm_per_px=z_nm, xy_nm_per_px=xy_nm)
     traces = traces.sort_values(RoiOrderingSpecification.row_order_columns())
-    # Finally, rename columns and yield the result.
-    traces.rename(columns={"roiId": "traceId"}, inplace=True)
     return traces
 
 
