@@ -23,5 +23,5 @@ def test_mask_fits():
 
 
 @pytest.mark.skip("not yet implemented")
-def test_trace_id_corresponds_to_roi_id():
+def test_trace_id_corresponds_to_roiId():
     pass

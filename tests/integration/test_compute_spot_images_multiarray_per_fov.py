@@ -85,7 +85,7 @@ def gen_legal_input(
     fn_keys = [
         RoiOrderingSpecification.FilenameKey(
             field_of_view=get_name_for_raw_zero_based_fov(fov),
-            roi_id=tid.get,
+            roiId=tid.get,
             ref_timepoint=rt,
         ) 
         for (fov, rt), tid in zip(fov_rt_pairs, trace_ids, strict=True)
@@ -125,7 +125,7 @@ def gen_legal_input(
         (k, draw(hyp_npy.arrays(dtype=SPOT_IMAGE_PIXEL_VALUE_TYPE, shape=(nt + 1, *spot_image_dims)))) 
         for k, nt in [
             (k, num_loc_times_by_reg_time[TimepointFrom0(k.ref_timepoint)]) 
-            for k in sorted(fn_keys, key=lambda k: (k.field_of_view, k.roi_id, k.ref_timepoint))
+            for k in sorted(fn_keys, key=lambda k: (k.field_of_view, k.roiId, k.ref_timepoint))
         ]
     ]
     if not allow_empty_spots:
