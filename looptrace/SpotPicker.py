@@ -728,14 +728,14 @@ def build_locus_spot_data_extraction_table(
                 )
 
             # roi.name is the index value.
-            all_rois.append([fov, idx, roi.name, timepoint, ref_timepoint, ch, 
+            all_rois.append([fov, roi.name, timepoint, ref_timepoint, ch, 
                             z_min, z_max, y_min, y_max, x_min, x_max, 
                             pad_z_min, pad_z_max, pad_y_min, pad_y_max, pad_x_min, pad_x_max,
                             z_drift_coarse, y_drift_coarse, x_drift_coarse, 
                             dc_row["zDriftFinePixels"], dc_row["yDriftFinePixels"], dc_row["xDriftFinePixels"]])
 
     return pd.DataFrame(all_rois, columns=[
-        "fieldOfView", "roi_number", "roi_id", "timepoint", "ref_timepoint", "spotChannel", 
+        "fieldOfView", "roi_id", "timepoint", "ref_timepoint", "spotChannel", 
         "zMin", "zMax", "yMin", "yMax", "xMin", "xMax",
         "pad_z_min", "pad_z_max", "pad_y_min", "pad_y_max", "pad_x_min", "pad_x_max", 
         "zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels",
