@@ -236,8 +236,3 @@ def test_only_region_timepoints_and_their_locus_timepoints_have_records_in_spot_
 
     assert len(obs_reg_time_loc_time_pairs) == len(exp_reg_time_loc_time_pairs)
     assert obs_reg_time_loc_time_pairs == exp_reg_time_loc_time_pairs
-
-
-@pytest.mark.skip("not yet implemented")
-def test_spot_table_construction_stores_line_number_as_roi_number_and_row_index_as_roi_id():
-    pass

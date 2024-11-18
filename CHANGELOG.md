@@ -6,9 +6,15 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Added
+* "Merger" of ROIs from different timepoints, such that structures which should be analyzed together spatially but whose components are targeted and imaged at different timepoints are properly grouped. 
+See [Issue 279](https://github.com/gerlichlab/looptrace/issues/279).
+
 ### Fixed
 * Ensure that same-timepoint-ROI merge is done in connected-components fashion, rather than simply by pairwise-distance-defined proximity. 
 See [Issue 368](https://github.com/gerlichlab/looptrace/issues/368).
+* Make ROI IDs downstream of regional spot filtration correctly map back to the original spots. 
+See [Issue 371](https://github.com/gerlichlab/looptrace/issues/371).
 
 ### Changed
 * Scala is now version 3.5.2.
@@ -27,6 +33,9 @@ See [Issue 368](https://github.com/gerlichlab/looptrace/issues/368).
 * Using `fs2` to write out regional pairwise distance results to CSV
 * Using `fs2` to write out locus pairwise distance results to CSV
 
+### Known Issues
+* ROI IDs starting from the spot table extraction step will most likely not correctly map back to the detected spot, probably predating the 0.10.x line. See [Issue 371](https://github.com/gerlichlab/looptrace/issues/371).
+
 ## [v0.10.0] - 2024-10-22
 
 ### Added
@@ -35,6 +44,9 @@ See [Issue 368](https://github.com/gerlichlab/looptrace/issues/368).
 ### Changed
 * Swapped the order of the proximity-based filtration and the through-nuclei filtration; the filtration through nuclei now happens first.
 * Bumped up to Scala 3.5.1.
+
+### Known Issues
+* ROI IDs starting from the spot table extraction step will most likely not correctly map back to the detected spot, probably predating the 0.10.x line. See [Issue 371](https://github.com/gerlichlab/looptrace/issues/371).
 
 ## [v0.9.1] - 2024-07-29
 
