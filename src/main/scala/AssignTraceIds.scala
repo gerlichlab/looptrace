@@ -12,7 +12,7 @@ import squants.space.{ Length, Nanometers }
 
 import com.typesafe.scalalogging.StrictLogging
 
-import at.ac.oeaw.imba.gerlich.gerlib.cell.NucleusNumber
+import at.ac.oeaw.imba.gerlich.gerlib.cell.NuclearDesignation
 import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.{ Centroid, DistanceThreshold, EuclideanDistance, ProximityComparable }
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.PiecewiseDistance.ConjunctiveThreshold
@@ -34,6 +34,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
+
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.{
     RoiPartnersRequirementType,
     TraceIdDefinitionAndFiltrationRule,
@@ -51,7 +52,6 @@ import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.IndexedDetectedSpot
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ BoundingBox, Pixels3D }
-import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.ProximityGroup
 
 /** Assign trace IDs to regional spots, considering the potential to group some together for downstream analytical purposes. */
 object AssignTraceIds extends ScoptCliReaders, StrictLogging:
@@ -339,6 +339,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
             encContext: CsvRowEncoder[ImagingContext, String],
             encCentroid: CsvRowEncoder[Centroid[Double], String],
             encBox: CsvRowEncoder[BoundingBox, String], 
+            encNuc: CellEncoder[NuclearDesignation],
             encTid: CellEncoder[TraceId],
         ): CsvRowEncoder[OutputRecord, String] with
             override def apply(elem: OutputRecord): RowF[Some, String] = 
@@ -350,10 +351,15 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                 val tidRow = TraceIdColumnName.write(tid)
                 val partnersRow = 
                     TracePartnersColumName.write(maybePartners.fold(Set())(_.toSortedSet.toSet))
-                val nucRow = RowF(
-                    values = NonEmptyList.one(inrec.maybeNucleusNumber.fold("")(_.get.show_)), 
-                    headers = Some(NonEmptyList.one(NucleusDesignationColumnName.value)),
-                )
+                val nucRow = 
+                    elem._1.maybeNucleusDesignation match {
+                        case None => RowF(
+                            values = NonEmptyList.one(""), 
+                            headers = Some(NonEmptyList.one(NucleusDesignationColumnName.value)),
+                        )
+                        case Some(nuclearDesignation) => 
+                            NucleusDesignationColumnName.write(nuclearDesignation)
+                    }
                 idRow |+| ctxRow |+| centerRow |+| boxRow |+| nucRow |+| tidRow |+| partnersRow
     end OutputRecord
 
@@ -363,7 +369,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
         centroid: Centroid[Double], 
         box: BoundingBox, 
         maybeMergeInputs: Set[RoiIndex],  // may be empty, as the input collection is possibly a mix of singletons and merge results
-        maybeNucleusNumber: Option[NucleusNumber], // Allow the program to operate on non-nuclei-filtered ROIs.
+        maybeNucleusDesignation: Option[NuclearDesignation], // Allow the program to operate on non-nuclei-filtered ROIs.
     ):
         final def timepoint: ImagingTimepoint = context.timepoint
 
@@ -374,23 +380,26 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
             decContext: CsvRowDecoder[ImagingContext, String], 
             decCentroid: CsvRowDecoder[Centroid[Double], String],
             decBox: CsvRowDecoder[BoundingBox, String],
+            decNuclus: CellDecoder[NuclearDesignation],
         ): CsvRowDecoder[InputRecord, String] = new:
             override def apply(row: RowF[Some, String]): DecoderResult[InputRecord] = 
                 val spotNel = summon[CsvRowDecoder[IndexedDetectedSpot, String]](row)
-                    .leftMap(e => e.getMessage)
+                    .leftMap(e => s"Cannot decode spot from row ($row): ${e.getMessage}")
                     .toValidatedNel
-                val mergeInputsNel: ValidatedNel[String, Set[RoiIndex]] = 
+                val mergeInputsNel = 
                     MergeContributorsColumnNameForAssessedRecord.from(row)
-                val nucNel: ValidatedNel[String, Option[NucleusNumber]] = 
+                val nucNel = 
                     val key = NucleusDesignationColumnName.value
                     row.apply(key) match {
                         // Allow the program to operate on non-nuclei-filtered ROIs.
                         case None | Some("") => Option.empty.validNel
-                        case Some(s) => NucleusNumber.parse(s).map(_.some).toValidatedNel
+                        case Some(s) => decNuclus(s)
+                            .bimap(e => s"Cannot decode spot from row ($row): ${e.getMessage}", _.some)
+                            .toValidatedNel
                     }
                 (spotNel, mergeInputsNel, nucNel)
-                    .mapN{ (spot, maybeMergeIndices, maybeNucNum) => 
-                        InputRecord(spot.index, spot.context, spot.centroid, spot.box, maybeMergeIndices, maybeNucNum)
+                    .mapN{ (spot, maybeMergeIndices, maybeNucleus) => 
+                        InputRecord(spot.index, spot.context, spot.centroid, spot.box, maybeMergeIndices, maybeNucleus)
                     }
                     .toEither
                     .leftMap{ messages => 

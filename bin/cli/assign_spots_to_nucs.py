@@ -155,8 +155,6 @@ def workflow(
         all_rois = pd.concat(all_rois).sort_values(["fieldOfView", "timepoint"])
         logger.info(f"Writing nuclei-labeled spots file: {H.nuclei_labeled_spots_file_path}")
         all_rois.to_csv(H.nuclei_labeled_spots_file_path, index=False)
-        logger.info(f"Writing nuclei-filtered spots file: {H.nuclei_filtered_spots_file_path}")
-        all_rois[all_rois[NUC_LABEL_COL] != 0].to_csv(H.nuclei_filtered_spots_file_path, index=False)
 
     logger.info("Done!")
 
