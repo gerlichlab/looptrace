@@ -66,18 +66,6 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
 
         def noDriftCorrectionOptionName = "noDriftCorrection"
 
-        // Use the pureconfig.ConfigReader instance to parse a CLI argument specifying pixel definitions
-        given scopt.Read[Pixels3D] = 
-            import pureconfig.*
-            import at.ac.oeaw.imba.gerlich.looptrace.configuration.instances.all.given
-            scopt.Read.reads{ s => 
-                ConfigSource.string(s)
-                    .load[Pixels3D]
-                    .leftMap(_.prettyPrint)
-                    .leftMap(msg => new IllegalArgumentException(s"Cannot decode pixel scaling: $msg"))
-                    .fold(throw _, identity)
-            }
-
         val parser = OParser.sequence(
             programName(ProgramName),
             head(ProgramName, BuildInfo.version),
