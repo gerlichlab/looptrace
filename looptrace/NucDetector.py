@@ -17,7 +17,7 @@ import dask.array as da
 import numpy as np
 import pandas as pd
 from scipy import ndimage as ndi
-from skimage.segmentation import expand_labels, find_boundaries, relabel_sequential
+from skimage.segmentation import expand_labels, relabel_sequential
 from skimage.transform import rescale
 from skimage.morphology import remove_small_objects, label as morph_label
 import tqdm
