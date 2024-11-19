@@ -39,6 +39,7 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
         def genGroup(using arbTime: Arbitrary[ImagingTimepoint]): Gen[AtLeast2[Set, ImagingTimepoint]] =
             Gen.choose(2, 10)
                 .flatMap(n => Gen.containerOfN[Set, ImagingTimepoint](n, arbTime.arbitrary))
+                .suchThat(_.size >= 2)
                 .map{ g => 
                     AtLeast2.either(g).fold(
                         msg => throw new Exception(s"Error building group for test: $msg"),
