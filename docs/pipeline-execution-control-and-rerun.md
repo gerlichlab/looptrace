@@ -62,8 +62,9 @@ Below are the sequential pipeline stage names.
 * spot_merge_determination
 * spot_merge_execution
 * spot_proximity_filtration
-* spot_nucleus_filtration
+* spot_nucleus_assignment
 * trace_id_assignment
+* spot_nuclei_filtration
 * regional_spots_visualisation_data_prep
 * spot_counts_visualisation__regional
 * spot_bounding

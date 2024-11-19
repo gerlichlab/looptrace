@@ -403,6 +403,10 @@ class ImageHandler:
         return RoiImageSize(z=z, y=y, x=x)
 
     @property
+    def rois_with_trace_ids_file(self) -> Path:
+        return self.raw_spots_file.with_suffix(".with_trace_ids.csv")
+
+    @property
     def spot_in_nuc(self) -> bool:
         return self.config.get("spot_in_nuc", False)
 
@@ -436,7 +440,7 @@ class ImageHandler:
     @property
     def spots_for_voxels_definition_file(self) -> Path:
         """Path to the file to use for defining the voxels for tracing"""
-        return self.raw_spots_file.with_suffix(".for_voxels_definition.csv")
+        return self.nuclei_filtered_spots_file_path if self.spot_in_nuc else self.rois_with_trace_ids_file
 
     @property
     def traces_path(self) -> Path:

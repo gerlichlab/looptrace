@@ -9,11 +9,12 @@ import shutil
 import subprocess
 import sys
 from typing import *
-import yaml
 
 from expression import Result
 from gertils import ExtantFile, ExtantFolder
+import pandas as pd
 import pypiper
+import yaml
 
 from looptrace import *
 from looptrace.Drifter import coarse_correction_workflow, fine_correction_workflow as run_fine_drift_correction
@@ -33,7 +34,7 @@ from analyse_detected_bead_rois import workflow as run_all_bead_roi_detection_an
 from decon import workflow as run_deconvolution
 from drift_correct_accuracy_analysis import workflow as run_drift_correction_analysis, run_visualisation as run_drift_correction_accuracy_visualisation
 from detect_spots import workflow as run_spot_detection
-from assign_spots_to_nucs import workflow as run_spot_nucleus_filtration
+from assign_spots_to_nucs import NUC_LABEL_COL, workflow as run_spot_nucleus_assignment
 from partition_regional_spots_by_field_of_view import workflow as prep_regional_spots_visualisation
 from extract_spots_table import workflow as run_spot_bounding
 from extract_spots import workflow as run_spot_extraction
@@ -207,9 +208,9 @@ def assign_trace_ids(rounds_config: ExtantFile, params_config: ExtantFile) -> Pa
         "--pixels",
         build_pixels_config(H),
         "--roisFile",
-        str(H.nuclei_filtered_spots_file_path if H.spot_in_nuc else H.proximity_accepted_spots_file_path),
+        str(H.nuclei_labeled_spots_file_path if H.spot_in_nuc else H.proximity_accepted_spots_file_path),
         "--outputFile", 
-        str(H.spots_for_voxels_definition_file),
+        str(H.rois_with_trace_ids_file),
     ]
     logging.info(f"Running distance computation command: {' '.join(cmd_parts)}")
     return subprocess.check_call(cmd_parts)
@@ -414,6 +415,22 @@ def run_spot_merge_execution(rounds_config: ExtantFile, params_config: ExtantFil
     subprocess.check_call(cmd_parts)
 
 
+def filter_spots_for_nuclei(rounds_config: ExtantFile, params_config: ExtantFile) -> None:
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config)
+    if not H.spot_in_nuc:
+        logging.info("spot_in_nuc is False, nothing to do, skipping nuclei-based filtration")
+        return
+    rois_file: Path = H.rois_with_trace_ids_file
+    logging.info(f"Reading ROIs file for filtration: {rois_file}")
+    rois: pd.DataFrame = pd.read_csv(rois_file, index_col=False)
+    logging.debug(f"Initial ROI count: {rois.shape[0]}")
+    rois = rois[rois[NUC_LABEL_COL] != 0]
+    logging.debug(f"ROIs remaining after filtration for nuclei: {rois.shape[0]}")
+    logging.debug(f"Writing ROIs: {H.nuclei_filtered_spots_file_path}")
+    rois.to_csv(H.nuclei_filtered_spots_file_path, index=False)
+    logging.info("Done with nuclei-based spot filtration")
+
+
 class LooptracePipeline(pypiper.Pipeline):
     """Main looptrace processing pipeline"""
 
@@ -460,25 +477,30 @@ class LooptracePipeline(pypiper.Pipeline):
             pypiper.Stage(name="spot_merge_execution", func=run_spot_merge_execution, f_kwargs=rounds_params),
             pypiper.Stage(name="spot_proximity_filtration", func=run_spot_proximity_filtration, f_kwargs=rounds_params_images),
             pypiper.Stage(
-                name="spot_nucleus_filtration", 
-                func=run_spot_nucleus_filtration, 
+                name="spot_nucleus_assignment", 
+                func=run_spot_nucleus_assignment, 
                 f_kwargs=rounds_params_images, # images are needed since H.image_lists is iterated in workflow.
             ), 
             pypiper.Stage(
                 name="trace_id_assignment",
                 func=assign_trace_ids,
-                f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config},
+                f_kwargs=rounds_params,
+            ),
+            pypiper.Stage(
+                name="spot_nuclei_filtration", 
+                func=filter_spots_for_nuclei,
+                f_kwargs=rounds_params,
             ),
             pypiper.Stage(
                 name="regional_spots_visualisation_data_prep", 
                 func=run_regional_spot_viewing_prep, 
-                f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config},
+                f_kwargs=rounds_params,
                 nofail=True,
             ),
             pypiper.Stage(
                 name="spot_counts_visualisation__regional", 
                 func=plot_spot_counts, 
-                f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config, "spot_type": SpotType.REGIONAL},
+                f_kwargs={**rounds_params, "spot_type": SpotType.REGIONAL},
             ), 
             # computes pad_x_min, etc.; writes *_dc_rois.csv (much bigger, since regional spots x timepoints)
             pypiper.Stage(name="spot_bounding", func=run_spot_bounding, f_kwargs=rounds_params_images),
@@ -500,20 +522,28 @@ class LooptracePipeline(pypiper.Pipeline):
             pypiper.Stage(
                 name="spot_counts_visualisation__locus_specific", 
                 func=plot_spot_counts, 
-                f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config, "spot_type": SpotType.LOCUS_SPECIFIC},
+                f_kwargs={**rounds_params, "spot_type": SpotType.LOCUS_SPECIFIC},
             ), 
             pypiper.Stage(
                 name="pairwise_distances__locus_specific", 
                 func=compute_locus_pairwise_distances, 
-                f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config},
+                f_kwargs=rounds_params,
             ),
             pypiper.Stage(
                 name="pairwise_distances__regional", 
                 func=compute_region_pairwise_distances, 
-                f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config},
+                f_kwargs=rounds_params,
             ),
-            pypiper.Stage(name="locus_specific_spots_visualisation_data_prep", func=prep_locus_specific_spots_visualisation, f_kwargs=rounds_params_images),
-            pypiper.Stage(name="locus_spot_viewing_prep", func=run_locus_spot_viewing_prep, f_kwargs={"rounds_config": self.rounds_config, "params_config": self.params_config}),
+            pypiper.Stage(
+                name="locus_specific_spots_visualisation_data_prep", 
+                func=prep_locus_specific_spots_visualisation, 
+                f_kwargs=rounds_params_images,
+            ),
+            pypiper.Stage(
+                name="locus_spot_viewing_prep", 
+                func=run_locus_spot_viewing_prep, 
+                f_kwargs=rounds_params,
+            ),
         ]
 
 
