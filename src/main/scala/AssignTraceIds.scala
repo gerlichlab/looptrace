@@ -8,12 +8,14 @@ import cats.syntax.all.*
 import fs2.data.csv.*
 import mouse.boolean.*
 import scopt.*
+import squants.space.{ Length, Nanometers }
 
 import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.cell.NucleusNumber
 import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2
-import at.ac.oeaw.imba.gerlich.gerlib.geometry.{ Centroid, DistanceThreshold, ProximityComparable }
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.{ Centroid, DistanceThreshold, EuclideanDistance, ProximityComparable }
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.PiecewiseDistance.ConjunctiveThreshold
 import at.ac.oeaw.imba.gerlich.gerlib.graph.{
     SimplestGraph,
     buildSimpleGraph,
@@ -48,9 +50,8 @@ import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.IndexedDetectedSpot
-import at.ac.oeaw.imba.gerlich.looptrace.space.BoundingBox
+import at.ac.oeaw.imba.gerlich.looptrace.space.{ BoundingBox, Pixels3D }
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.ProximityGroup
-import at.ac.oeaw.imba.gerlich.gerlib.cell.NuclearDesignation
 
 /** Assign trace IDs to regional spots, considering the potential to group some together for downstream analytical purposes. */
 object AssignTraceIds extends ScoptCliReaders, StrictLogging:
@@ -59,6 +60,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
     final case class CliConfig(
         roundsConfig: ImagingRoundsConfiguration = null, // unconditionally required
         roisFile: os.Path = null, // unconditionally required
+        pixels: Pixels3D = null, // required,
         outputFile: os.Path = null, // unconditionally required
     )
 
@@ -81,6 +83,10 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                 .action((f, c) => c.copy(roisFile = f))
                 .validate(f => os.isFile(f).either(s"Alleged ROIs file path isn't an extant file: $f", ()))
                 .text("Path to the file with the ROIs for which to define trace IDs"),
+            opt[Pixels3D]("pixels")
+                .required()
+                .action((ps, c) => c.copy(pixels = ps))
+                .text("How many nanometers per unit in each direction (x, y, z)"),
             opt[os.Path]('O', "outputFile")
                 .required()
                 .action((f, c) => c.copy(outputFile = f)), 
@@ -95,6 +101,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
             case Some(opts) => workflow(
                 roundsConfig = opts.roundsConfig, 
                 roisFile = opts.roisFile, 
+                pixels = opts.pixels,
                 outputFile = opts.outputFile,
             )
         }
@@ -131,11 +138,32 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                 }
             }
 
-    private def computeNeighborsGraph(rules: NonEmptyList[TraceIdDefinitionAndFiltrationRule])(records: NonEmptyList[InputRecord]): SimplestGraph[RoiIndex] = 
+    private def computeNeighborsGraph(
+        rules: NonEmptyList[TraceIdDefinitionAndFiltrationRule],
+        pixels: Pixels3D,
+    )(records: NonEmptyList[InputRecord]): SimplestGraph[RoiIndex] = 
         val lookupProximity: Map[(ImagingTimepoint, ImagingTimepoint), ProximityComparable[InputRecord]] = 
             definePairwiseDistanceThresholds(rules)
                 .view
-                .mapValues{ dt => DistanceThreshold.defineProximityPointwise(dt)((_: InputRecord).centroid.asPoint) }
+                .mapValues{
+                    case EuclideanDistance.Threshold(dt) => 
+                        import at.ac.oeaw.imba.gerlich.looptrace.syntax.bifunctor.mapBoth
+                        val thresholdSquared = scala.math.pow(dt.toDouble, 2)
+                        new ProximityComparable[InputRecord]:
+                            override def proximal: (InputRecord, InputRecord) => Boolean = (r1, r2) => 
+                                val (p1, p2) = (r1, r2).mapBoth(_.centroid.asPoint)
+                                val delX = pixels.liftX(p1.x.value - p2.x.value)
+                                val delY = pixels.liftY(p1.y.value - p2.y.value)
+                                val delZ = pixels.liftZ(p1.z.value - p2.z.value)
+                                val distanceSquared = List(delX, delY, delZ).foldLeft(0.0){ 
+                                    (sumSqs, pxDiff) => 
+                                        val diff = (pxDiff in Nanometers).value
+                                        sumSqs + scala.math.pow(diff, 2) 
+                                }
+                                distanceSquared < thresholdSquared
+                    case ConjunctiveThreshold(_) => 
+                        throw new Exception("For trace ID assignment, only Euclidean distance threshold is supported.")
+                }
                 .toMap
         val edgeEndpoints: Set[(RoiIndex, RoiIndex)] = 
             given Order[FieldOfViewLike] with
@@ -171,6 +199,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
     private def labelRecords(
         rules: NonEmptyList[TraceIdDefinitionAndFiltrationRule], 
         discardIfNotInGroupOfInterest: Boolean,
+        pixels: Pixels3D,
     )(records: NonEmptyList[InputRecord]): NonEmptyList[OutputRecord] = 
         /* Necessary imports and type aliases */
         import AtLeast2.syntax.{ remove, toNes, toSet }
@@ -191,7 +220,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
         val traceIdsOffLimits = 
             // Don't use any ROI index/ID as a trace ID.
             records.map(_.index.get).map(TraceId.unsafe).toNes
-        computeNeighborsGraph(rules)(records)
+        computeNeighborsGraph(rules, pixels)(records)
             .strongComponentTraverser()
             .map(_.nodes.map(_.outer) // Get ROI IDs.
                 .toList.toNel // each component as a nonempty list
@@ -257,7 +286,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                 throw new Exception("Wound up with empty results despite nonempty input!")
             }
 
-    def workflow(roundsConfig: ImagingRoundsConfiguration, roisFile: os.Path, outputFile: os.Path): Unit = {
+    def workflow(roundsConfig: ImagingRoundsConfiguration, roisFile: os.Path, pixels: Pixels3D, outputFile: os.Path): Unit = {
         import InputRecord.given
         import fs2.data.text.utf8.*
         given CsvRowDecoder[ImagingChannel, String] = 
@@ -280,7 +309,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                                 (r, newTid, None)
                             }.some
                         case Some(rules) => 
-                            labelRecords(rules, roundsConfig.discardRoisNotInGroupsOfInterest)(records).some
+                            labelRecords(rules, roundsConfig.discardRoisNotInGroupsOfInterest, pixels)(records).some
                     }
             })
             .flatMap(_ match {

@@ -204,6 +204,8 @@ def assign_trace_ids(rounds_config: ExtantFile, params_config: ExtantFile) -> Pa
         f"{LOOPTRACE_JAVA_PACKAGE}.AssignTraceIds",
         "--configuration",
         str(rounds_config.path),
+        "--pixels",
+        build_pixels_config(H),
         "--roisFile",
         str(H.nuclei_filtered_spots_file_path if H.spot_in_nuc else H.proximity_accepted_spots_file_path),
         "--outputFile", 
@@ -243,12 +245,16 @@ def compute_region_pairwise_distances(rounds_config: ExtantFile, params_config: 
         "--driftFile", 
         str(H.drift_correction_file__fine),
         "--pixels",
-        f"{{ x: {H.nanometers_per_pixel_xy} nm, y: {H.nanometers_per_pixel_xy} nm, z: {H.nanometers_per_pixel_z} nm }}",
+        build_pixels_config(H),
         "-O", 
         H.analysis_path,
     ]
     logging.info(f"Running distance computation command: {' '.join(cmd_parts)}")
     return subprocess.check_call(cmd_parts)
+
+
+def build_pixels_config(H: ImageHandler) -> str:
+    return f"{{ x: {H.nanometers_per_pixel_xy} nm, y: {H.nanometers_per_pixel_xy} nm, z: {H.nanometers_per_pixel_z} nm }}"
 
 
 def drift_correct_nuclei(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> Path:
