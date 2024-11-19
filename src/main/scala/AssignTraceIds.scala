@@ -321,7 +321,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                         SpotChannelColumnName.toNamedEncoder
                     logger.info(s"Writing output file: $outputFile")
                     fs2.Stream
-                        .emits(records.toList)
+                        .emits(records.sortBy(_._1.index).toList)
                         .through(writeCaseClassesToCsv[OutputRecord](outputFile))
                         .compile
                         .drain
