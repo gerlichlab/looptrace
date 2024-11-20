@@ -196,7 +196,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
         val maxRoiId = roiIds.toList.max(using summon[Order[RoiIndex]].toOrdering)
         TraceId.unsafe(NonnegativeInt(1) + maxRoiId.get)
 
-    private def labelRecords(
+    private[looptrace] def labelRecordsWithTraceId(
         rules: NonEmptyList[TraceIdDefinitionAndFiltrationRule], 
         discardIfNotInGroupOfInterest: Boolean,
         pixels: Pixels3D,
@@ -309,7 +309,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                                 (r, newTid, None)
                             }.some
                         case Some(rules) => 
-                            labelRecords(rules, roundsConfig.discardRoisNotInGroupsOfInterest, pixels)(records).some
+                            labelRecordsWithTraceId(rules, roundsConfig.discardRoisNotInGroupsOfInterest, pixels)(records).some
                     }
             })
             .flatMap(_ match {
