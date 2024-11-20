@@ -348,9 +348,8 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                 val ctxRow = encContext(inrec.context)
                 val centerRow = encCentroid(inrec.centroid)
                 val boxRow = encBox(inrec.box)
-                val tidRow = TraceIdColumnName.write(tid)
-                val partnersRow = 
-                    TracePartnersColumName.write(maybePartners.fold(Set())(_.toSortedSet.toSet))
+                val mergeInputsRow = 
+                    MergeContributorsColumnNameForAssessedRecord.write(elem._1.maybeMergeInputs)
                 val nucRow = 
                     elem._1.maybeNucleusDesignation match {
                         case None => RowF(
@@ -360,7 +359,10 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                         case Some(nuclearDesignation) => 
                             NucleusDesignationColumnName.write(nuclearDesignation)
                     }
-                idRow |+| ctxRow |+| centerRow |+| boxRow |+| nucRow |+| tidRow |+| partnersRow
+                val tidRow = TraceIdColumnName.write(tid)
+                val tracePartnersRow = 
+                    TracePartnersColumName.write(maybePartners.fold(Set())(_.toSortedSet.toSet))
+                idRow |+| ctxRow |+| centerRow |+| boxRow |+| mergeInputsRow |+| nucRow |+| tidRow |+| tracePartnersRow
     end OutputRecord
 
     final case class InputRecord(
