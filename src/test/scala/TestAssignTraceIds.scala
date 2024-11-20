@@ -27,4 +27,10 @@ class TestAssignTraceIds extends AnyFunSuite, LooptraceSuite, ScalaCheckProperty
     
     test("Absence of nucleus column is unproblematic."):
         pending
+
+    test("Trace partnership is an equivalence relation: symmetry"):
+        pending
+
+    test("Trace partnership is an equivalence relation: transitivity"):
+        pending
 end TestAssignTraceIds
