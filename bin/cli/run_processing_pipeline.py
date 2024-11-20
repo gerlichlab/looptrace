@@ -328,7 +328,7 @@ def run_regional_spot_viewing_prep(rounds_config: ExtantFile, params_config: Ext
         spots_files=[
             H.spot_merge_contributors_file, 
             H.proximity_rejected_spots_file_path, 
-            H.nuclei_labeled_spots_file_path,
+            H.rois_with_trace_ids_file,
         ],
     )
 
