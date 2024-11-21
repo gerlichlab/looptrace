@@ -1022,7 +1022,7 @@ files = [
 
 [[package]]
 name = "gertils"
-version = "0.5.0"
+version = "0.5.1"
 description = "General computing utilities for data processing and analysis in the Gerlich group at IMBA"
 optional = false
 python-versions = ">=3.10.0,<3.13"
@@ -1038,8 +1038,8 @@ zarr = "^2.4.12"
 [package.source]
 type = "git"
 url = "https://github.com/gerlichlab/gertils"
-reference = "v0.5.0"
-resolved_reference = "bc4ed95275f2a36b95fce34e37e35f352dfdedc4"
+reference = "v0.5.1"
+resolved_reference = "95d6d63ac7ffd26414bf7d2e1b5b327e030158cf"
 
 [[package]]
 name = "google-pasta"
@@ -1811,7 +1811,7 @@ setuptools = "*"
 
 [[package]]
 name = "looptrace-loci-vis"
-version = "0.2.1"
+version = "0.2.2"
 description = "This project facilitates viewing, in `napari`, locus-specific spots from `looptrace`."
 optional = true
 python-versions = "<3.13,>=3.10"
@@ -1819,7 +1819,7 @@ files = []
 develop = false
 
 [package.dependencies]
-gertils = {git = "https://github.com/gerlichlab/gertils", rev = "v0.5.0"}
+gertils = {git = "https://github.com/gerlichlab/gertils", rev = "v0.5.1"}
 napari = [
     {version = ">=0.4.19", markers = "sys_platform == \"darwin\""},
     {version = ">=0.4.19", extras = ["all"], markers = "sys_platform != \"darwin\""},
@@ -1838,12 +1838,12 @@ testsuite = ["npe2", "pytest (>=7.1.0)", "pytest-cov (>=5.0.0)", "typer"]
 [package.source]
 type = "git"
 url = "https://github.com/gerlichlab/looptrace-loci-vis"
-reference = "v0.2.1"
-resolved_reference = "f2e51ff01e11732d1ac5acee40cd31cda68a4ad2"
+reference = "v0.2.2"
+resolved_reference = "0bf5abb3ebc02a327908e9aa200446f1b6a6b21c"
 
 [[package]]
 name = "looptrace-regionals-vis"
-version = "0.3.1"
+version = "0.3.2"
 description = "This project facilitates viewing, in `napari`, locus-specific spots from `looptrace`."
 optional = true
 python-versions = "<3.13,>=3.10"
@@ -1851,7 +1851,7 @@ files = []
 develop = false
 
 [package.dependencies]
-gertils = {git = "https://github.com/gerlichlab/gertils", rev = "v0.5.0"}
+gertils = {git = "https://github.com/gerlichlab/gertils", rev = "v0.5.1"}
 napari = [
     {version = ">=0.4.19", markers = "sys_platform == \"darwin\""},
     {version = ">=0.4.19", extras = ["all"], markers = "sys_platform != \"darwin\""},
@@ -1871,8 +1871,8 @@ testsuite = ["hypothesis (>=6.92.1)", "npe2", "pytest (>=7.1.0)", "typer"]
 [package.source]
 type = "git"
 url = "https://github.com/gerlichlab/looptrace-regionals-vis"
-reference = "v0.3.1"
-resolved_reference = "ae9a8b632a9eaf069938f62efab23480bf20746e"
+reference = "v0.3.2"
+resolved_reference = "4c7f59d43426cb5c798d4b7a51e833063b233e2f"
 
 [[package]]
 name = "magicgui"
@@ -2436,7 +2436,7 @@ testing = ["jsonschema", "magicgui", "napari-plugin-engine", "napari-svg (==0.1.
 
 [[package]]
 name = "nuclei-vis-napari"
-version = "0.1.3"
+version = "0.1.4"
 description = "This project facilitates viewing nuclei and nuclear masks."
 optional = true
 python-versions = "<3.13,>=3.10"
@@ -2444,7 +2444,7 @@ files = []
 develop = false
 
 [package.dependencies]
-gertils = {git = "https://github.com/gerlichlab/gertils", rev = "v0.5.0"}
+gertils = {git = "https://github.com/gerlichlab/gertils", rev = "v0.5.1"}
 napari = [
     {version = ">=0.4.19", markers = "sys_platform == \"darwin\""},
     {version = ">=0.4.19", extras = ["all"], markers = "sys_platform != \"darwin\""},
@@ -2464,8 +2464,8 @@ testsuite = ["hypothesis[numpy]", "npe2", "pytest (>=7.1.0)", "typer"]
 [package.source]
 type = "git"
 url = "https://github.com/gerlichlab/nuclei-vis-napari"
-reference = "v0.1.3"
-resolved_reference = "ee8f6cd79c6da93aad8c20421712f00861e08556"
+reference = "v0.1.4"
+resolved_reference = "9fa6c12ab0ef205311fd557aa634100333205af6"
 
 [[package]]
 name = "numba"
@@ -5374,4 +5374,4 @@ test = ["hypothesis", "more-itertools", "pytest", "pytest-skip-slow"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.11, < 3.12"
-content-hash = "edc85478b8eda484e3ef2e9e4490e7ae61955165726870611b36af6d082f8252"
+content-hash = "889458374ac2a3ee2c214865284659309a37dd7020360cf039c54a3e74b6efb0"
