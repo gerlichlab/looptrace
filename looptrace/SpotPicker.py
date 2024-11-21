@@ -31,7 +31,6 @@ import spotfishing
 from spotfishing_looptrace import DifferenceOfGaussiansSpecificationForLooptrace, ORIGINAL_LOOPTRACE_DOG_SPECIFICATION
 
 from looptrace import ArrayDimensionalityError, RoiImageSize, image_processing_functions as ip
-from looptrace.exceptions import MissingRoisTableException
 from looptrace.filepaths import SPOT_BACKGROUND_SUBFOLDER, SPOT_IMAGES_SUBFOLDER, simplify_path
 from looptrace.numeric_types import NumberLike
 
@@ -43,6 +42,7 @@ DETECTION_METHOD_KEY = "detection_method"
 DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC = "dog"
 NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION = ".nuclei_labeled"
 NUCLEI_LABELED_SPOTS_FILE_EXTENSION = NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION + ".csv"
+SPOT_CHANNEL_COLUMN_NAME = "spotChannel"
 SPOT_IMAGE_PIXEL_VALUE_TYPE = np.uint16
 
 logger = logging.getLogger()
@@ -141,7 +141,7 @@ def finalise_single_spot_props_table(spot_props: pd.DataFrame, field_of_view: st
         A table annotated with the fields for context (field of view, hybridisation timepoint / round, and imaging channel)
     """
     old_cols = list(spot_props.columns)
-    new_cols = ["fieldOfView", "timepoint", "spotChannel"]
+    new_cols = ["fieldOfView", "timepoint", SPOT_CHANNEL_COLUMN_NAME]
     spot_props[new_cols] = [field_of_view, timepoint, channel]
     return spot_props[new_cols + old_cols]
 
@@ -571,7 +571,7 @@ class SpotPicker:
         skip_spot_image_reasons = defaultdict(lambda: defaultdict(dict))
         fov_index = self.image_handler.image_lists[self.input_name].index(fov_group_name)
         for timepoint, timepoint_group in tqdm.tqdm(fov_group_data.groupby("timepoint")):
-            for ch, ch_group in timepoint_group.groupby("spotChannel"):
+            for ch, ch_group in timepoint_group.groupby(SPOT_CHANNEL_COLUMN_NAME):
                 image_stack = np.array(self.images[fov_index][int(timepoint), int(ch)])
                 for _, roi in ch_group.iterrows():
                     fn_key = RoiOrderingSpecification.FilenameKey.from_roi(roi)
@@ -676,7 +676,7 @@ def build_locus_spot_data_extraction_table(
         fov = roi["fieldOfView"]
         fov_index = get_fov_idx(fov)
         sel_dc = get_dc_table(fov_index)
-        ch = roi["spotChannel"]
+        ch = roi[SPOT_CHANNEL_COLUMN_NAME]
         ref_offset = sel_dc.query('timepoint == @ref_timepoint')
         # TODO: here we can update to iterate over channels for doing multi-channel extraction.
         # https://github.com/gerlichlab/looptrace/issues/138
@@ -711,7 +711,7 @@ def build_locus_spot_data_extraction_table(
                             dc_row["zDriftFinePixels"], dc_row["yDriftFinePixels"], dc_row["xDriftFinePixels"]])
 
     return pd.DataFrame(all_rois, columns=[
-        "fieldOfView", "roiId", "timepoint", "ref_timepoint", "spotChannel", 
+        "fieldOfView", "roiId", "timepoint", "ref_timepoint", SPOT_CHANNEL_COLUMN_NAME, 
         "zMin", "zMax", "yMin", "yMax", "xMin", "xMax",
         "pad_z_min", "pad_z_max", "pad_y_min", "pad_y_max", "pad_x_min", "pad_x_max", 
         "zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels",
