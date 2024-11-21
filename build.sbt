@@ -8,7 +8,7 @@ val primaryJavaVersion = "11"
 val primaryOs = "ubuntu-latest"
 val isPrimaryOsAndPrimaryJavaTest = s"runner.os == '$primaryOs' && runner.java-version == '$primaryJavaVersion'"
 ThisBuild / scalaVersion     := "3.5.2"
-ThisBuild / version          := "0.11-SNAPSHOT"
+ThisBuild / version          := "0.11.0"
 ThisBuild / organization     := orgName
 ThisBuild / organizationName := "Gerlich Group, IMBA, OEAW"
 
