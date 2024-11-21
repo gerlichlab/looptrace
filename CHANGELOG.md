@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v0.11.0] - 2024-11-21
 
 ### Added
 * "Merger" of ROIs from different timepoints, such that structures which should be analyzed together spatially but whose components are targeted and imaged at different timepoints are properly grouped. 
@@ -20,10 +20,15 @@ See [Issue 372](https://github.com/gerlichlab/looptrace/issues/372).
 * Scala is now version 3.5.2.
 * `sbt` is now version 1.10.5.
 * `uJson` and `uPickle` are now at version 4.0.2.
+* License is now Apache 2.0, due to our use of `iron` and `gerlib`.
 * Moved the `AtLeast2[C[*], E]` data type to `gerlib`, to be released with version 0.3 of that library.
 * Changed `region1` and `region2` to (isomorphic) `timepoint1` and `timepoint2`, respectively, in output file for regional spot pairwise distances
 * Changed `inputIndex1` and `inputIndex2` to `roiId1` and `roiId2`, respectively, in output file for regional spot pairwise distances. 
 These now point back to specific regional spots directly (by ID number), rather than simple line number/index. See [Issue 362](https://github.com/gerlichlab/looptrace/issues/362).
+* Now depending on updated plugin versions for visualisation:
+    * v0.1.3 of the nuclei visualisation plugin
+    * v0.3.1 of the regional spots visualisation plugin
+    * v0.2.1 of the locus spots visualisation plugin
 
 ## [v0.10.1] - 2024-11-11
 

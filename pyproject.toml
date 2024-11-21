@@ -25,21 +25,21 @@ cellpose = { version = "v2.2.2", optional = true }
 dask = "^2023.5.1"
 expression = "^5.0.2"
 flowdec = { version = "^1.1.0", optional = true }
-gertils = { git = "https://github.com/gerlichlab/gertils", tag = "v0.4.4" }
+gertils = { git = "https://github.com/gerlichlab/gertils", tag = "v0.5.0" }
 hypothesis = { version = "^6.92.1", extras = ["numpy"], optional = true }
 joblib = "^1.3.1"
-looptrace-loci-vis = { git = "https://github.com/gerlichlab/looptrace-loci-vis", tag = "v0.2.0", optional = true }
-looptrace-regionals-vis = { git = "https://github.com/gerlichlab/looptrace-regionals-vis", tag = "v0.3.0", optional = true }
+looptrace-loci-vis = { git = "https://github.com/gerlichlab/looptrace-loci-vis", tag = "v0.2.1", optional = true }
+looptrace-regionals-vis = { git = "https://github.com/gerlichlab/looptrace-regionals-vis", tag = "v0.3.1", optional = true }
 matplotlib = { version = "^3.7.0", optional = true }
 more-itertools = { version = "^10.2.0", optional = true }
 #napari = { version = "^0.4.19", extras = ["all", "pyqt"], optional = true } # most computers
 napari = { version = "^0.4.19", optional = true } # newer Macs (M1, M2)
 nd2 = "^0.5.3"
-nuclei-vis-napari = { git = "https://github.com/gerlichlab/nuclei-vis-napari", tag = "v0.1.2", optional = true }
+nuclei-vis-napari = { git = "https://github.com/gerlichlab/nuclei-vis-napari", tag = "v0.1.3", optional = true }
 numba = { version = "^0.57.0", optional = true }
 numcodecs = "^0.11.0"
 numpy = ">= 1.24.2, < 1.25"
-numpydoc_decorator = { git = "https://github.com/vreuter/numpydoc_decorator", tag = "v2.2.1" }
+numpydoc_decorator = "^2.2.1"
 pandas = "^1.5.3"
 piper = { version = "^0.14.2", optional = true }
 pyqt6 = { version = "^6.5.0", optional = true }
@@ -49,7 +49,7 @@ pyyaml = "^6.0"
 scipy = "^1.10.1"
 scikit-image = "^0.20.0"
 seaborn = { version = "^0.12.0", optional = true }
-spotfishing = { git = "https://github.com/gerlichlab/spotfishing", tag = "v0.2.0" }
+spotfishing = { git = "https://github.com/gerlichlab/spotfishing", tag = "v0.2.1" }
 tensorflow = { version = "^2.16.1", optional = true }
 tqdm = "^4.65.0"
 zarr = "2.17.2"
