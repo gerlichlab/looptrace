@@ -1728,7 +1728,7 @@ resolved_reference = "71f4b2bd365fa4639026d9f1e4e825f4d2674bb4"
 
 [[package]]
 name = "looptrace-regionals-vis"
-version = "0.2.0"
+version = "0.3"
 description = "This project facilitates viewing, in `napari`, locus-specific spots from `looptrace`."
 optional = true
 python-versions = "<3.12,>=3.10"
@@ -1756,8 +1756,8 @@ testsuite = ["hypothesis (>=6.92.1)", "npe2", "pytest (>=7.1.0)", "typer"]
 [package.source]
 type = "git"
 url = "https://github.com/gerlichlab/looptrace-regionals-vis"
-reference = "v0.2.0"
-resolved_reference = "8d7851830b434c5d0de12cfb789e5d0ac9a7e0f5"
+reference = "v0.3.0"
+resolved_reference = "5c87fb163e51f38771185a7702d45caa405f9f82"
 
 [[package]]
 name = "magicgui"
@@ -5139,4 +5139,4 @@ test = ["hypothesis", "more-itertools", "pytest", "pytest-skip-slow"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.11, < 3.12"
-content-hash = "a3508e1e11e5b8b4d4db35c9cb3b7a22bfb036f68acb53391df690dc9863eb14"
+content-hash = "e8529c12f32e6b5ad45bf676bfbf8deabdeb15bdea66a333d2a57c7a749d9c94"
