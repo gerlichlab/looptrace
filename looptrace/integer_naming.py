@@ -9,6 +9,8 @@ from typing import *
 
 from expression import Failure, Option, Result, Success
 
+from .utilities import find_first_option
+
 __author__ = "Vince Reuter"
 __credits__ = ["Vince Reuter"]
 
@@ -78,10 +80,7 @@ class NameableSemantic(Enum):
 
     @classmethod
     def _fetch_first(cls, p: Callable[["NameableSemantic"], bool]) -> Option["NameableSemantic"]:
-        for m in cls:
-            if p(m):
-                return Option.Some(m)
-        return Option.Nothing()
+        return find_first_option(p)(cls)
 
 
 def _get_short_name(*, semantic: "NameableSemantic", i: int, namer: "IndexToNaturalNumberText") -> str:
