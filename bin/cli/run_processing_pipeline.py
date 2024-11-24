@@ -10,7 +10,7 @@ import subprocess
 import sys
 from typing import *
 
-from expression import Result
+from expression import Option, Result
 from gertils import ExtantFile, ExtantFolder
 import pandas as pd
 import pypiper
@@ -41,6 +41,7 @@ from extract_spots import workflow as run_spot_extraction
 from zip_spot_image_files_for_tracing import workflow as run_spot_zipping
 from tracing import workflow as run_chromatin_tracing
 from locus_spot_visualisation_data_preparation import workflow as get_locus_spot_data_file_src_dst_pairs
+from run_processing_pipeline import workflow as signal_analysis_workflow
 
 
 DECON_STAGE_NAME = "deconvolution"
@@ -434,10 +435,19 @@ def filter_spots_for_nuclei(rounds_config: ExtantFile, params_config: ExtantFile
 class LooptracePipeline(pypiper.Pipeline):
     """Main looptrace processing pipeline"""
 
-    def __init__(self, rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder, output_folder: ExtantFolder, **pl_mgr_kwargs: Any) -> None:
+    def __init__(
+            self, 
+            rounds_config: ExtantFile, 
+            params_config: ExtantFile, 
+            images_folder: ExtantFolder, 
+            output_folder: ExtantFolder, 
+            signal_config: Option[ExtantFile],
+            **pl_mgr_kwargs: Any,
+        ) -> None:
         self.rounds_config = rounds_config
         self.params_config = params_config
         self.images_folder = images_folder
+        self.signal_config = signal_config
         super(LooptracePipeline, self).__init__(name=PIPE_NAME, outfolder=str(output_folder.path), **pl_mgr_kwargs)
 
     def stages(self) -> list[pypiper.Stage]:
@@ -544,6 +554,11 @@ class LooptracePipeline(pypiper.Pipeline):
                 func=run_locus_spot_viewing_prep, 
                 f_kwargs=rounds_params,
             ),
+            pypiper.Stage(
+                name="cross_channel_signal_analysis",
+                func=signal_analysis_workflow,
+                f_kwargs={**rounds_params, "maybe_signal_config": self.signal_config},
+            ),
         ]
 
 
@@ -553,6 +568,7 @@ def parse_cli(args: Iterable[str]) -> argparse.Namespace:
     parser.add_argument("--params-config", type=ExtantFile.from_string, required=True, help="Path to the parameters configuration file")
     parser.add_argument("-I", "--images-folder", type=ExtantFolder.from_string, required=True, help="Path to the root folder with imaging data to process")
     parser.add_argument("--pypiper-folder", type=ExtantFolder.from_string, required=True, help="Path to folder for pypiper output")
+    parser.add_argument("--signal-config", type=ExtantFile.from_string, help="Path to signal analysis config file, if using that feature")
     parser.add_argument(NO_TEE_LOGS_OPTNAME, action="store_true", help="Do not tee logging output from pypiper manager")
     parser = pypiper.add_pypiper_args(
         parser, 
@@ -566,6 +582,7 @@ def init(opts: argparse.Namespace) -> LooptracePipeline:
     kwargs = {
         "rounds_config": opts.rounds_config, 
         "params_config": opts.params_config, 
+        "signal_config": Option.of_obj(opts.signal_config),
         "images_folder": opts.images_folder, 
         "output_folder": opts.pypiper_folder,
         }
