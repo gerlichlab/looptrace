@@ -25,6 +25,7 @@ import tqdm
 
 from gertils import ExtantFile, ExtantFolder, PathWrapperException
 
+from looptrace import FIELD_OF_VIEW_COLUMN
 from looptrace.ImageHandler import ImageHandler
 from looptrace.bead_roi_generation import BeadRoiParameters, extract_single_bead
 from looptrace.gaussfit import fitSymmetricGaussian3D
@@ -33,13 +34,12 @@ from looptrace.wrappers import phase_xcor
 
 
 TIMEPOINT_COLUMN = "timepoint"
-FOV_COLUMN = "fieldOfView"
 CoarseDriftTableRow = Tuple[int, str, NumberLike, NumberLike, NumberLike]
 Z_PX_COARSE = "zDriftCoarsePixels"
 Y_PX_COARSE = "yDriftCoarsePixels"
 X_PX_COARSE = "xDriftCoarsePixels"
 COARSE_DRIFT_COLUMNS = [Z_PX_COARSE, Y_PX_COARSE, X_PX_COARSE]
-COARSE_DRIFT_TABLE_COLUMNS = [TIMEPOINT_COLUMN, FOV_COLUMN] + COARSE_DRIFT_COLUMNS
+COARSE_DRIFT_TABLE_COLUMNS = [TIMEPOINT_COLUMN, FIELD_OF_VIEW_COLUMN] + COARSE_DRIFT_COLUMNS
 FullDriftTableRow = Tuple[int, str, NumberLike, NumberLike, NumberLike, NumberLike, NumberLike, NumberLike]
 FULL_DRIFT_TABLE_COLUMNS = COARSE_DRIFT_TABLE_COLUMNS + ["zDriftFinePixels", "yDriftFinePixels", "xDriftFinePixels"]
 DUMMY_SHIFT = [0, 0, 0]
@@ -304,8 +304,8 @@ def iter_coarse_drifts_by_field_of_view(filepath: Union[str, Path, ExtantFile]) 
     print(f"Reading coarse drift table: {filepath}")
     coarse_table = pd.read_csv(filepath, index_col=False)
     # Sort so that grouping by FOV then timepoint doesn't alter order.
-    coarse_table = coarse_table.sort_values([FOV_COLUMN, TIMEPOINT_COLUMN])
-    return coarse_table.groupby(FOV_COLUMN)
+    coarse_table = coarse_table.sort_values([FIELD_OF_VIEW_COLUMN, TIMEPOINT_COLUMN])
+    return coarse_table.groupby(FIELD_OF_VIEW_COLUMN)
 
 
 def _get_timepoint_and_coarse(row) -> Tuple[int, Tuple[int, int, int]]:

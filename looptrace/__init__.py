@@ -26,6 +26,7 @@ __all__ = [
 LOOPTRACE_JAR_PATH = importlib.resources.files(__name__).joinpath("looptrace-assembly-0.11.0.jar")
 LOOPTRACE_JAVA_PACKAGE = "at.ac.oeaw.imba.gerlich.looptrace"
 
+FIELD_OF_VIEW_COLUMN = "fieldOfView"
 MAX_DISTANCE_SPOT_FROM_REGION_NAME = "max_dist"
 SIGMA_XY_MAX_NAME = "sigma_xy_max"
 SIGMA_Z_MAX_NAME = "sigma_z_max"

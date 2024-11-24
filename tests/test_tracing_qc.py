@@ -3,6 +3,7 @@
 import pytest
 import pandas as pd
 
+from looptrace import FIELD_OF_VIEW_COLUMN
 from looptrace.tracing_qc_support import REGION_KEY_COLUMNS, compute_ref_timepoint_spatial_information
 
 
@@ -103,7 +104,7 @@ def test_all_reference_timepoint_data_points_have_zero_distance(traces_table, re
     traces_table = _apply_reference_distances(traces_table)
     # Assertion applies only where timepoint is reference timepoint, and we parametrize in each reference timepoint.
     subtab = traces_table[(traces_table.timepoint == traces_table.ref_timepoint) & (traces_table.ref_timepoint == reference_timepoint)]
-    print(subtab[["fieldOfView", "traceId", "timepoint", "ref_timepoint", "ref_dist"]]) # for debugging if failing
+    print(subtab[[FIELD_OF_VIEW_COLUMN, "traceId", "timepoint", "ref_timepoint", "ref_dist"]]) # for debugging if failing
     assert not subtab.empty and (subtab[REF_DIST_COL] == 0).all()
 
 

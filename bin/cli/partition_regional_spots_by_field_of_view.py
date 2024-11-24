@@ -8,6 +8,8 @@ import sys
 
 import pandas as pd
 
+from looptrace import FIELD_OF_VIEW_COLUMN
+
 
 def parse_cmdl(cmdl: list[str]) -> argparse.Namespace:
     """Define and parse the command-line interface."""
@@ -46,7 +48,7 @@ def workflow(*, output_folder: Path, spots_files: Iterable[Path]) -> dict[str, l
     for fp in spots_files:
         logging.info("Reading spots file: %s", fp)
         spots_table = pd.read_csv(fp, index_col=False)
-        for fov, subtable in spots_table.groupby("fieldOfView"):
+        for fov, subtable in spots_table.groupby(FIELD_OF_VIEW_COLUMN):
             fov = fov.rstrip(".zarr")
             target = output_folder / fov / f"{fov}__{fp.name}"
             target.parent.mkdir(exist_ok=True, parents=True)
