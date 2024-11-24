@@ -22,7 +22,7 @@ import yaml
 from gertils import ExtantFile
 from gertils.types import TimepointFrom0
 
-from looptrace import ZARR_CONVERSIONS_KEY, RoiImageSize
+from looptrace import FIELD_OF_VIEW_COLUMN, ZARR_CONVERSIONS_KEY, RoiImageSize
 from looptrace.configuration import get_minimum_regional_spot_separation
 from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, FilePathLike, FolderPathLike, get_analysis_path, simplify_path
 from looptrace.image_io import ignore_path, NPZ_wrapper
@@ -201,7 +201,7 @@ class ImageHandler:
             return set()
         with open(fp.path, 'r') as fh:
             data = json.load(fh)
-        return {(obj["fieldOfView"], obj["time"]) for obj in data}
+        return {(obj[FIELD_OF_VIEW_COLUMN], obj["time"]) for obj in data}
 
     @property
     def decon_input_name(self) -> str:
@@ -250,20 +250,6 @@ class ImageHandler:
     @property
     def drift_correction_reference_images(self) -> Sequence[np.ndarray]:
         return self.images[self.reg_input_template]
-
-    @property
-    def timepoint_names(self) -> List[str]:
-        """The sequence of names corresponding to the imaging rounds used in the experiment"""
-        names = []
-        for round in self.iter_imaging_rounds():
-            try:
-                names.append(round["name"])
-            except KeyError:
-                probe = round["probe"]
-                rep = round.get("repeat")
-                n = probe + ("" if rep is None else f"_repeat{rep}")
-                names.append(n)
-        return names
 
     def get_dc_filepath(self, prefix: str, suffix: str) -> Path:
         return Path(self.out_path(prefix + "_drift_correction" + suffix))
@@ -441,6 +427,20 @@ class ImageHandler:
     def spots_for_voxels_definition_file(self) -> Path:
         """Path to the file to use for defining the voxels for tracing"""
         return self.nuclei_filtered_spots_file_path if self.spot_in_nuc else self.rois_with_trace_ids_file
+
+    @property
+    def timepoint_names(self) -> List[str]:
+        """The sequence of names corresponding to the imaging rounds used in the experiment"""
+        names = []
+        for round in self.iter_imaging_rounds():
+            try:
+                names.append(round["name"])
+            except KeyError:
+                probe = round["probe"]
+                rep = round.get("repeat")
+                n = probe + ("" if rep is None else f"_repeat{rep}")
+                names.append(n)
+        return names
 
     @property
     def traces_path(self) -> Path:

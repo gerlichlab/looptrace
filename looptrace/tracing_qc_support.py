@@ -6,8 +6,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from looptrace import FIELD_OF_VIEW_COLUMN
 
-REGION_KEY_COLUMNS = ["fieldOfView", "traceId", "ref_timepoint"]
+
+REGION_KEY_COLUMNS = [FIELD_OF_VIEW_COLUMN, "traceId", "ref_timepoint"]
 
 
 def apply_timepoint_names_and_spatial_information(traces_file: Path, timepoint_names: Iterable[str]) -> pd.DataFrame:

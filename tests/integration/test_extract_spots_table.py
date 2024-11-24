@@ -11,8 +11,8 @@ import hypothesis as hyp
 from hypothesis import strategies as st
 import more_itertools as more_itools
 import pandas as pd
-import pytest
 
+from looptrace import FIELD_OF_VIEW_COLUMN
 from looptrace.SpotPicker import build_locus_spot_data_extraction_table
 
 
@@ -190,8 +190,8 @@ def test_only_region_timepoints_and_their_locus_timepoints_have_records_in_spot_
     rois_table: pd.DataFrame = _read_rois_file(rois_file)
 
     # ...then, check that downstream assumption of exactly 1 FOV in each data table is valid.
-    assert rois_table["fieldOfView"].nunique() == 1, f"Expected just 1 unique FOV in ROIs table, but got {rois_table.fieldOfView.nunique()}"
-    assert drift_table["fieldOfView"].nunique() == 1, f"Expected just 1 unique FOV in drift table, but got {drift_table.fieldOfView.nunique()}"
+    assert rois_table[FIELD_OF_VIEW_COLUMN].nunique() == 1, f"Expected just 1 unique FOV in ROIs table, but got {rois_table.fieldOfView.nunique()}"
+    assert drift_table[FIELD_OF_VIEW_COLUMN].nunique() == 1, f"Expected just 1 unique FOV in drift table, but got {drift_table.fieldOfView.nunique()}"
 
     exp_region_times: set[int]
     exp_reg_time_loc_time_pairs: list[(int, int)]
@@ -222,7 +222,7 @@ def test_only_region_timepoints_and_their_locus_timepoints_have_records_in_spot_
     spot_extraction_table: pd.DataFrame = build_locus_spot_data_extraction_table(
         rois_table=rois_table,
         get_fov_idx=lambda _: 0,
-        get_dc_table=lambda _: drift_table[drift_table["fieldOfView"] == FOV_NAME], # There's only 1 FOV, so return the whole table, always.
+        get_dc_table=lambda _: drift_table[drift_table[FIELD_OF_VIEW_COLUMN] == FOV_NAME], # There's only 1 FOV, so return the whole table, always.
         get_locus_timepoints=get_locus_timepoints,
         get_zyx=lambda _1, _2: (BoxSideLengths.Z.value, BoxSideLengths.Y.value, BoxSideLengths.X.value)
     )
@@ -266,13 +266,13 @@ def test_index_is_faithfully_propagated_as_roiId_issue_371(tmp_path):
     rois_table: pd.DataFrame = _read_rois_file(rois_file)
 
     # ...then, check that downstream assumption of exactly 1 FOV in each data table is valid.
-    assert rois_table["fieldOfView"].nunique() == 1, f"Expected just 1 unique FOV in ROIs table, but got {rois_table.fieldOfView.nunique()}"
-    assert drift_table["fieldOfView"].nunique() == 1, f"Expected just 1 unique FOV in drift table, but got {drift_table.fieldOfView.nunique()}"
+    assert rois_table[FIELD_OF_VIEW_COLUMN].nunique() == 1, f"Expected just 1 unique FOV in ROIs table, but got {rois_table.fieldOfView.nunique()}"
+    assert drift_table[FIELD_OF_VIEW_COLUMN].nunique() == 1, f"Expected just 1 unique FOV in drift table, but got {drift_table.fieldOfView.nunique()}"
 
     spot_extraction_table: pd.DataFrame = build_locus_spot_data_extraction_table(
         rois_table=rois_table,
         get_fov_idx=lambda _: 0,
-        get_dc_table=lambda _: drift_table[drift_table["fieldOfView"] == FOV_NAME], # There's only 1 FOV, so return the whole table, always.
+        get_dc_table=lambda _: drift_table[drift_table[FIELD_OF_VIEW_COLUMN] == FOV_NAME], # There's only 1 FOV, so return the whole table, always.
         get_locus_timepoints=None,
         get_zyx=lambda _1, _2: (BoxSideLengths.Z.value, BoxSideLengths.Y.value, BoxSideLengths.X.value)
     )

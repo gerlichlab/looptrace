@@ -10,6 +10,7 @@ import tqdm
 
 from gertils import ExtantFile, ExtantFolder
 from looptrace import DimensionalityError
+from looptrace import FIELD_OF_VIEW_COLUMN
 from looptrace.ImageHandler import ImageHandler
 from looptrace.NucDetector import NucDetector
 
@@ -78,14 +79,14 @@ def _filter_rois_in_nucs(
     rois_shifted = new_rois.copy()
     shifts = []
     for _, row in rois_shifted.iterrows():
-        curr_pos_name = row["fieldOfView"]
-        raw_nuc_drift_match = nuc_drifts[nuc_drifts["fieldOfView"] == curr_pos_name]
+        curr_pos_name = row[FIELD_OF_VIEW_COLUMN]
+        raw_nuc_drift_match = nuc_drifts[nuc_drifts[FIELD_OF_VIEW_COLUMN] == curr_pos_name]
         if not isinstance(raw_nuc_drift_match, pd.DataFrame):
             raise TypeError(f"Nuclear drift for FOV {curr_pos_name} is not a data frame, but {type(raw_nuc_drift_match).__name__}")
         if not raw_nuc_drift_match.shape[0] == 1:
             raise DimensionalityError(f"Nuclear drift for FOV {curr_pos_name} is not exactly 1 row, but {raw_nuc_drift_match.shape[0]} rows!")
         drift_target = raw_nuc_drift_match[["zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels"]].to_numpy()
-        drift_roi = spot_drifts[(spot_drifts["fieldOfView"] == curr_pos_name) & (spot_drifts["timepoint"] == row["timepoint"])][["zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels"]].to_numpy()
+        drift_roi = spot_drifts[(spot_drifts[FIELD_OF_VIEW_COLUMN] == curr_pos_name) & (spot_drifts["timepoint"] == row["timepoint"])][["zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels"]].to_numpy()
         shift = drift_target - drift_roi
         shifts.append(shift[0])
     shifts = pd.DataFrame(shifts, columns=["z", "y", "x"])
@@ -152,7 +153,7 @@ def workflow(
     if len(all_rois) == 0:
         logger.warning(f"No ROIs! Cannot write nuclei-labeled spots file")
     else:
-        all_rois = pd.concat(all_rois).sort_values(["fieldOfView", "timepoint"])
+        all_rois = pd.concat(all_rois).sort_values([FIELD_OF_VIEW_COLUMN, "timepoint"])
         logger.info(f"Writing nuclei-labeled spots file: {H.nuclei_labeled_spots_file_path}")
         all_rois.to_csv(H.nuclei_labeled_spots_file_path, index=False)
 

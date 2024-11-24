@@ -13,7 +13,7 @@ import dataclasses
 from enum import Enum
 import json
 import logging
-from math import ceil, floor, pow
+from math import ceil, floor
 import os
 from pathlib import Path
 from typing import *
@@ -30,7 +30,7 @@ from gertils.types import TimepointFrom0
 import spotfishing
 from spotfishing_looptrace import DifferenceOfGaussiansSpecificationForLooptrace, ORIGINAL_LOOPTRACE_DOG_SPECIFICATION
 
-from looptrace import ArrayDimensionalityError, RoiImageSize, image_processing_functions as ip
+from looptrace import FIELD_OF_VIEW_COLUMN, ArrayDimensionalityError, RoiImageSize, image_processing_functions as ip
 from looptrace.filepaths import SPOT_BACKGROUND_SUBFOLDER, SPOT_IMAGES_SUBFOLDER, simplify_path
 from looptrace.numeric_types import NumberLike
 
@@ -89,7 +89,7 @@ class RoiOrderingSpecification:
         
         @classmethod
         def from_roi(cls, roi: Union[pd.Series, Mapping[str, Any]]) -> "FilenameKey":
-            return cls(field_of_view=roi["fieldOfView"], roiId=roi["roiId"], ref_timepoint=roi["ref_timepoint"])
+            return cls(field_of_view=roi[FIELD_OF_VIEW_COLUMN], roiId=roi["roiId"], ref_timepoint=roi["ref_timepoint"])
 
         @property
         def file_name_base(self) -> str:
@@ -105,7 +105,7 @@ class RoiOrderingSpecification:
 
     @staticmethod
     def row_order_columns() -> List[str]:
-        return ["fieldOfView", "roiId", "ref_timepoint", "timepoint"]
+        return [FIELD_OF_VIEW_COLUMN, "roiId", "ref_timepoint", "timepoint"]
     
     @classmethod
     def get_file_sort_key(cls, file_key: str) -> FilenameKey:
@@ -141,7 +141,7 @@ def finalise_single_spot_props_table(spot_props: pd.DataFrame, field_of_view: st
         A table annotated with the fields for context (field of view, hybridisation timepoint / round, and imaging channel)
     """
     old_cols = list(spot_props.columns)
-    new_cols = ["fieldOfView", "timepoint", SPOT_CHANNEL_COLUMN_NAME]
+    new_cols = [FIELD_OF_VIEW_COLUMN, "timepoint", SPOT_CHANNEL_COLUMN_NAME]
     spot_props[new_cols] = [field_of_view, timepoint, channel]
     return spot_props[new_cols + old_cols]
 
@@ -627,7 +627,7 @@ class SpotPicker:
             os.mkdir(self.spot_background_path)
 
         skip_spot_image_reasons = OrderedDict()
-        for fov, fov_group in tqdm.tqdm(rois.groupby("fieldOfView")):
+        for fov, fov_group in tqdm.tqdm(rois.groupby(FIELD_OF_VIEW_COLUMN)):
             skip_reasons = self._write_single_fov_data(fov_group_name=fov, fov_group_data=fov_group)
             skip_spot_image_reasons[fov] = skip_reasons
         
@@ -673,7 +673,7 @@ def build_locus_spot_data_extraction_table(
         else:
             is_background_time = lambda t: t == background_timepoint
         
-        fov = roi["fieldOfView"]
+        fov = roi[FIELD_OF_VIEW_COLUMN]
         fov_index = get_fov_idx(fov)
         sel_dc = get_dc_table(fov_index)
         ch = roi[SPOT_CHANNEL_COLUMN_NAME]
@@ -711,7 +711,7 @@ def build_locus_spot_data_extraction_table(
                             dc_row["zDriftFinePixels"], dc_row["yDriftFinePixels"], dc_row["xDriftFinePixels"]])
 
     return pd.DataFrame(all_rois, columns=[
-        "fieldOfView", "roiId", "timepoint", "ref_timepoint", SPOT_CHANNEL_COLUMN_NAME, 
+        FIELD_OF_VIEW_COLUMN, "roiId", "timepoint", "ref_timepoint", SPOT_CHANNEL_COLUMN_NAME, 
         "zMin", "zMax", "yMin", "yMax", "xMin", "xMax",
         "pad_z_min", "pad_z_max", "pad_y_min", "pad_y_max", "pad_x_min", "pad_x_max", 
         "zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels",
