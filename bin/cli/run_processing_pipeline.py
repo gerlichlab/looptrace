@@ -41,7 +41,7 @@ from extract_spots import workflow as run_spot_extraction
 from zip_spot_image_files_for_tracing import workflow as run_spot_zipping
 from tracing import workflow as run_chromatin_tracing
 from locus_spot_visualisation_data_preparation import workflow as get_locus_spot_data_file_src_dst_pairs
-from run_processing_pipeline import workflow as signal_analysis_workflow
+from run_signal_analysis import workflow as signal_analysis_workflow
 
 
 DECON_STAGE_NAME = "deconvolution"
