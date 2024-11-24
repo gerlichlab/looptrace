@@ -134,7 +134,7 @@ def workflow(*, rounds_config: ExtantFile, params_config: ExtantFile, maybe_sign
                 raise TypeError(f"Parsed signal config data (from {conf_path}) is {type(conf_data).__name__}")
             match traverse_through_either(AnalyticalSpecification.from_mapping)(conf_data):
                 case result.Result(tag="error", error=messages):
-                    raise Exception(f"Failed to parse analytical specifications (from {conf_path}): {messages}")
+                    raise Exception(f"Failed to parse analytical specifications (from {conf_path}): {'; '.join(seq.concat(messages))}")
                 case result.Result(tag="ok", ok=analysis_specs):
                     H = ImageHandler(rounds_config=rounds_config, params_config=params_config)
                     S = SpotPicker(H)
