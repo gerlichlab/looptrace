@@ -557,7 +557,7 @@ class LooptracePipeline(pypiper.Pipeline):
             pypiper.Stage(
                 name="cross_channel_signal_analysis",
                 func=signal_analysis_workflow,
-                f_kwargs={**rounds_params, "maybe_signal_config": self.signal_config},
+                f_kwargs={**rounds_params_images, "maybe_signal_config": self.signal_config},
             ),
         ]
 
