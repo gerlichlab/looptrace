@@ -14,7 +14,7 @@ from typing import Callable, Iterable, Mapping, TypeAlias, TypeVar
 from expression import Option, Result, compose, curry_flip, snd
 from expression.collections import Seq, seq
 from expression.core import option, result
-from gertils import ExtantFile, compute_pixel_statistics
+from gertils import ExtantFile, ExtantFolder, compute_pixel_statistics
 from gertils.geometry import ImagePoint3D
 from gertils.types import ImagingChannel
 import pandas as pd
@@ -48,6 +48,12 @@ def _parse_cmdl(cmdl: list[str]) -> argparse.Namespace:
         required=True, 
         type=ExtantFile.from_string,
         help="Path to the looptrace parameters configuration file",
+    )
+    parser.add_argument( # needed to build an ImageHandler with actual image files.
+        "--images-folder", 
+        required=True,
+        type=ExtantFolder.from_string,
+        help="Path to an experiment's images folder",
     )
     parser.add_argument(
         "--signal-config",
@@ -120,7 +126,13 @@ class AnalyticalSpecification:
                 )))
 
 
-def workflow(*, rounds_config: ExtantFile, params_config: ExtantFile, maybe_signal_config: Option[ExtantFile]) -> None:
+def workflow(
+    *, 
+    rounds_config: ExtantFile, 
+    params_config: ExtantFile, 
+    images_folder: ExtantFolder, 
+    maybe_signal_config: Option[ExtantFile],
+) -> None:
     match maybe_signal_config:
         case option.Option(tag="none", none=_):
             logging.info("No signal config file, skipping cross-channel signal analysis")
@@ -136,7 +148,7 @@ def workflow(*, rounds_config: ExtantFile, params_config: ExtantFile, maybe_sign
                 case result.Result(tag="error", error=messages):
                     raise Exception(f"Failed to parse analytical specifications (from {conf_path}): {messages}")
                 case result.Result(tag="ok", ok=analysis_specs):
-                    H = ImageHandler(rounds_config=rounds_config, params_config=params_config)
+                    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
                     S = SpotPicker(H)
 
                     spot_drift_file: Path = H.drift_correction_file__coarse
@@ -252,6 +264,7 @@ def main(cmdl: list[str]) -> None:
     workflow(
         rounds_config=opts.rounds_config, 
         params_config=opts.params_config, 
+        images_folder=opts.images_folder,
         maybe_signal_config=Option.of_obj(opts.signal_config),
     )
 
