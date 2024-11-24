@@ -9,7 +9,7 @@ import logging
 from operator import itemgetter
 from pathlib import Path
 import sys
-from typing import TYPE_CHECKING, Iterable, Mapping, TypeAlias, TypeVar
+from typing import Iterable, Mapping, TypeAlias, TypeVar
 
 from expression import Option, Result, compose, snd
 from expression.collections import Seq, seq
@@ -23,6 +23,7 @@ import pandas as pd
 from spotfishing.roi_tools import get_centroid_from_record
 
 from looptrace import FIELD_OF_VIEW_COLUMN
+from looptrace.Drifter import TIMEPOINT_COLUMN, X_PX_COARSE, Y_PX_COARSE, Z_PX_COARSE
 from looptrace.ImageHandler import ImageHandler
 from looptrace.SpotPicker import SpotPicker
 from looptrace.utilities import find_first_option, get_either, wrap_exception, wrap_error_message
@@ -120,24 +121,6 @@ class AnalyticalSpecification:
                 )))
 
 
-# TODO: refactor with https://github.com/gerlichlab/gertils/issues/32
-def run_cross_channel_signal_analysis(
-    *, 
-    img: npt.ArrayLike,
-    roi_diameter: int,
-    channels: Iterable[ImagingChannel],
-    points: Iterable[ImagePoint3D], 
-) -> Iterable[dict[str, PixelStatValue]]:
-    for pt in points:
-        yield compute_pixel_statistics(
-            img=img,
-            pt=pt,
-            channels=channels, 
-            diameter=roi_diameter,
-            channel_column=SIGNAL_CHANNEL_COLUMN,
-        )
-
-
 def workflow(*, rounds_config: ExtantFile, params_config: ExtantFile, maybe_signal_config: Option[ExtantFile]) -> None:
     match maybe_signal_config:
         case option.Option(tag="none", none=_):
@@ -159,6 +142,15 @@ def workflow(*, rounds_config: ExtantFile, params_config: ExtantFile, maybe_sign
             H = ImageHandler(rounds_config=rounds_config, params_config=params_config)
             S = SpotPicker(H)
 
+            spot_drift_file: Path = H.drift_correction_file__coarse
+            logging.info("Reading nuclei drift file: %s", spot_drift_file)
+            all_spot_drifts: pd.DataFrame = pd.read_csv(spot_drift_file, index_col=False)
+
+            nuclei_drift_file: Path = H.nuclei_coarse_drift_correction_file
+            logging.info("Reading nuclei drift file: %s", nuclei_drift_file)
+            all_nuclei_drifts: pd.DataFrame = pd.read_csv(nuclei_drift_file, index_col=False)
+
+            # TODO: discard regional spot timepoints from the bigger collection: https://github.com/gerlichlab/looptrace/issues/376
             for spec in analysis_specs:
                 # Get the ROIs of this type.
                 roi_type: RoiType = spec.roi_type
@@ -168,15 +160,26 @@ def workflow(*, rounds_config: ExtantFile, params_config: ExtantFile, maybe_sign
                 
                 # Build up the records for this ROI type, for all FOVs.
                 by_raw_channel: Mapping[int, list[dict]] = defaultdict
+                # TODO: refactor with https://github.com/gerlichlab/gertils/issues/32
                 for fov, img in S.iter_fov_img_pairs():
                     logging.info(f"Analysing signal for FOV: {fov}")
+                    nuc_drift_curr_fov: pd.DataFrame = all_nuclei_drifts[all_nuclei_drifts[FIELD_OF_VIEW_COLUMN] == fov]
+                    logging.debug(f"Shape of nuclei drifts ({type(nuc_drift_curr_fov).__name__}): {nuc_drift_curr_fov.shape}")
+                    spot_drifts_curr_fov: pd.DataFrame = all_spot_drifts[all_spot_drifts[FIELD_OF_VIEW_COLUMN] == fov]
+                    logging.debug(f"Shape of spot drifts ({type(spot_drifts_curr_fov).__name__}): {spot_drifts_curr_fov.shape}")
                     rois: pd.DataFrame = all_rois[all_rois[FIELD_OF_VIEW_COLUMN] == fov]
                     logging.debug("ROI count: %d", rois.shape[0])
                     for _, r in rois.iterrows():
-                        pt: ImagePoint3D = get_centroid_from_record(r)
+                        spot_drift = spot_drifts_curr_fov[spot_drifts_curr_fov[TIMEPOINT_COLUMN] == r[TIMEPOINT_COLUMN]]
+                        pt0: ImagePoint3D = get_centroid_from_record(r)
+                        dc_pt: ImagePoint3D = ImagePoint3D(
+                            z=pt0.z - nuc_drift_curr_fov[Z_PX_COARSE] + spot_drift[Z_PX_COARSE], 
+                            y=pt0.y - nuc_drift_curr_fov[Y_PX_COARSE] + spot_drift[Y_PX_COARSE], 
+                            x=pt0.x - nuc_drift_curr_fov[X_PX_COARSE] + spot_drift[X_PX_COARSE], 
+                        )
                         for stats in compute_pixel_statistics(
                             img=img,
-                            pt=pt,
+                            pt=dc_pt,
                             channels=spec.channels, 
                             diameter=spec.roi_diameter,
                             channel_column=SIGNAL_CHANNEL_COLUMN,

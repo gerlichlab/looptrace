@@ -319,6 +319,10 @@ class ImageHandler:
         return self.config["nuc_channel"]
 
     @property
+    def nuclei_coarse_drift_correction_file(self) -> Path:
+        return self.get_dc_filepath(prefix="nuclei", suffix="_coarse.csv")
+
+    @property
     def nuclei_filtered_spots_file_path(self) -> Path:
         return self.proximity_accepted_spots_file_path.with_suffix(".nuclei_filtered.csv")
 
