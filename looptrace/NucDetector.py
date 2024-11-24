@@ -99,7 +99,7 @@ class NucDetector:
     @property
     def drift_correction_file__coarse(self) -> Path:
         """Path to the file with coarse drift correction information for nuclei"""
-        return self.image_handler.get_dc_filepath(prefix="nuclei", suffix="_coarse.csv")
+        return self.image_handler.nuclei_coarse_drift_correction_file
 
     @property
     def drift_correction_file__full(self) -> Path:
