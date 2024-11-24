@@ -18,8 +18,7 @@ from gertils import ExtantFile, compute_pixel_statistics
 from gertils.geometry import ImagePoint3D
 from gertils.pixel_value_statistics import Numeric as PixelStatValue
 from gertils.types import ImagingChannel
-if TYPE_CHECKING:
-    import numpy.typing as npt
+import numpy.typing as npt
 import pandas as pd
 from spotfishing.roi_tools import get_centroid_from_record
 
