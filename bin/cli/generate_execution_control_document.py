@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 from typing import *
 
+from expression import Option
 from gertils import ExtantFile, ExtantFolder
 
 __author__ = "Vince Reuter"
@@ -78,6 +79,7 @@ def main(cmdl):
     temporary_pipeline = LooptracePipeline(
         rounds_config=ExtantFile(Path.cwd() / "shell.nix"), # dummy, just to get ExtantFile 
         params_config=ExtantFile(Path.cwd() / "shell.nix"), # dummy, just to get ExtantFile
+        signal_config=Option.Nothing(),
         images_folder=ExtantFolder(Path.cwd()),
         output_folder=ExtantFolder(Path.cwd()), 
     )
