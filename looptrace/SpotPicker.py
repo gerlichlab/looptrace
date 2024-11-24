@@ -650,7 +650,7 @@ def build_locus_spot_data_extraction_table(
     
     all_rois = []
 
-    for idx, (_, roi) in tqdm.tqdm(enumerate(rois_table.iterrows()), total=len(rois_table)):
+    for _, roi in tqdm.tqdm(rois_table.iterrows(), total=len(rois_table)):
         ref_timepoint: int = roi["timepoint"]
         if not isinstance(ref_timepoint, int):
             raise TypeError(f"Non-integer ({type(ref_timepoint).__name__}) timepoint: {ref_timepoint}")
