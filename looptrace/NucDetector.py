@@ -239,6 +239,10 @@ class NucDetector:
     def iterate_over_pairs_of_fov_and_segmentation_image(self) -> Iterable[Tuple[str, np.ndarray]]:
         return zip(self.fov_list, self.images_for_segmentation, strict=True)
 
+    def iterate_over_pairs_of_fov_name_and_original_image(self) -> Iterable[Tuple[str, da.Array]]:
+        for i, fov_name in enumerate(self.fov_list):
+            yield fov_name, self.input_images[i]
+
     @property
     def nuclear_segmentation_images_path(self) -> Path:
         return self._get_img_save_path(self.SEGMENTATION_IMAGES_KEY)
