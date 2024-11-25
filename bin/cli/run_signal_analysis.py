@@ -189,20 +189,24 @@ def workflow(
                                 timepoint: RawTimepoint = r[TIMEPOINT_COLUMN]
                                 spot_drift: DriftRecord = all_spot_drifts[(fov, timepoint)]
                                 pt0: ImagePoint3D = get_centroid_from_record(r)
-                                dc_pt: ImagePoint3D = ImagePoint3D(
-                                    z=pt0.z - nuc_drift.z + spot_drift.z, 
-                                    y=pt0.y - nuc_drift.y + spot_drift.y, 
-                                    x=pt0.x - nuc_drift.x + spot_drift.x, 
-                                )
-                                for stats in compute_pixel_statistics(
-                                    img=img,
-                                    pt=dc_pt,
-                                    channels=spec.channels, 
-                                    diameter=spec.roi_diameter,
-                                    channel_column=SIGNAL_CHANNEL_COLUMN,
-                                ):
-                                    ch: int = stats[SIGNAL_CHANNEL_COLUMN]
-                                    by_raw_channel[ch].append({**r.to_dict(), **stats})
+                                try:
+                                    dc_pt: ImagePoint3D = ImagePoint3D(
+                                        z=pt0.z - nuc_drift.z + spot_drift.z, 
+                                        y=pt0.y - nuc_drift.y + spot_drift.y, 
+                                        x=pt0.x - nuc_drift.x + spot_drift.x, 
+                                    )
+                                except ValueError as e:
+                                    logging.error(f"Can't compute shifted center for original center {pt0}: {e}")
+                                else:
+                                    for stats in compute_pixel_statistics(
+                                        img=img,
+                                        pt=dc_pt,
+                                        channels=spec.channels, 
+                                        diameter=spec.roi_diameter,
+                                        channel_column=SIGNAL_CHANNEL_COLUMN,
+                                    ):
+                                        ch: int = stats[SIGNAL_CHANNEL_COLUMN]
+                                        by_raw_channel[ch].append({**r.to_dict(), **stats})
                         
                         # Write the output file for this ROI type, across all FOVs.
                         for raw_channel, records in sorted(by_raw_channel.items(), key=itemgetter(0)):
