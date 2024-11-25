@@ -184,15 +184,11 @@ def workflow(
                             logging.info(f"Analysing signal for FOV: {fov}")
                             nuc_drift: DriftRecord = all_nuclei_drifts[fov]
                             rois: pd.DataFrame = all_rois[all_rois[FIELD_OF_VIEW_COLUMN] == fov]
-                            logging.debug("ROI count: %d", rois.shape[0])
-                            print("ROI count: {rois.shape[0]}") # DEBUG
+                            logging.info("ROI count: %d", rois.shape[0])
                             for _, r in rois.iterrows():
                                 timepoint: RawTimepoint = r[TIMEPOINT_COLUMN]
-                                print(f"img dim: {img.shape}") # DEBUG
                                 spot_drift: DriftRecord = all_spot_drifts[(fov, timepoint)]
-                                print(f"Spot drift ({type(spot_drift).__name__}): {spot_drift}") # DEBUG
                                 pt0: ImagePoint3D = get_centroid_from_record(r)
-                                print(f"Point: {pt0}") # DEBUG
                                 dc_pt: ImagePoint3D = ImagePoint3D(
                                     z=pt0.z - nuc_drift.z + spot_drift.z, 
                                     y=pt0.y - nuc_drift.y + spot_drift.y, 
