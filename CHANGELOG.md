@@ -4,11 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v0.11.0] - 2024-11-21
+## [v0.11.0] - 2024-11-25
 
 ### Added
 * "Merger" of ROIs from different timepoints, such that structures which should be analyzed together spatially but whose components are targeted and imaged at different timepoints are properly grouped. 
 See [Issue 279](https://github.com/gerlichlab/looptrace/issues/279).
+* Cross-channel signal analysis extraction. See [Issue 337](https://github.com/gerlichlab/looptrace/issues/337).
 
 ### Fixed
 * Ensure that same-timepoint-ROI merge is done in connected-components fashion, rather than simply by pairwise-distance-defined proximity. 
