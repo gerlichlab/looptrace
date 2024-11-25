@@ -23,7 +23,7 @@ from spotfishing.roi_tools import get_centroid_from_record
 from looptrace import FIELD_OF_VIEW_COLUMN
 from looptrace.Drifter import TIMEPOINT_COLUMN, X_PX_COARSE, Y_PX_COARSE, Z_PX_COARSE
 from looptrace.ImageHandler import ImageHandler
-from looptrace.SpotPicker import SpotPicker
+from looptrace.NucDetector import NucDetector
 from looptrace.utilities import find_first_option, get_either, wrap_exception, wrap_error_message
 
 FieldOfViewName: TypeAlias = str
@@ -153,7 +153,7 @@ def workflow(
                     raise Exception(f"Failed to parse analytical specifications (from {conf_path}): {messages}")
                 case result.Result(tag="ok", ok=analysis_specs):
                     H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
-                    S = SpotPicker(H)
+                    N = NucDetector(H)
 
                     spot_drift_file: Path = H.drift_correction_file__coarse
                     logging.info("Reading nuclei drift file: %s", spot_drift_file)
@@ -179,7 +179,8 @@ def workflow(
                         # Build up the records for this ROI type, for all FOVs.
                         by_raw_channel: Mapping[int, list[dict]] = defaultdict
                         # TODO: refactor with https://github.com/gerlichlab/gertils/issues/32
-                        for fov, image_stack in S.iter_fov_img_pairs():
+                        for fov, raw_img in N.iterate_over_pairs_of_fov_name_and_original_image():
+                            img = raw_img.compute()
                             logging.info(f"Analysing signal for FOV: {fov}")
                             nuc_drift: DriftRecord = all_nuclei_drifts[fov]
                             rois: pd.DataFrame = all_rois[all_rois[FIELD_OF_VIEW_COLUMN] == fov]
@@ -187,7 +188,6 @@ def workflow(
                             print("ROI count: {rois.shape[0]}") # DEBUG
                             for _, r in rois.iterrows():
                                 timepoint: RawTimepoint = r[TIMEPOINT_COLUMN]
-                                img = image_stack[timepoint]
                                 print(f"img dim: {img.shape}") # DEBUG
                                 spot_drift: DriftRecord = all_spot_drifts[(fov, timepoint)]
                                 print(f"Spot drift ({type(spot_drift).__name__}): {spot_drift}") # DEBUG
