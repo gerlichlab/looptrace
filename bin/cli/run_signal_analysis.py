@@ -177,7 +177,7 @@ def workflow(
                         all_rois: pd.DataFrame = pd.read_csv(rois_file, index_col=False)
                         
                         # Build up the records for this ROI type, for all FOVs.
-                        by_raw_channel: Mapping[int, list[dict]] = defaultdict
+                        by_raw_channel: Mapping[int, list[dict]] = defaultdict(list)
                         # TODO: refactor with https://github.com/gerlichlab/gertils/issues/32
                         for fov, raw_img in N.iterate_over_pairs_of_fov_name_and_original_image():
                             img = raw_img.compute()
