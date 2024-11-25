@@ -198,6 +198,8 @@ def workflow(
                                 except ValueError as e:
                                     logging.error(f"Can't compute shifted center for original center {pt0}: {e}")
                                 else:
+                                    # TODO: need to be robust to bounding box with negative coordinate(s)
+                                    # TODO: https://github.com/gerlichlab/gertils/issues/34
                                     for stats in compute_pixel_statistics(
                                         img=img,
                                         pt=dc_pt,
