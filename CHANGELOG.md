@@ -9,6 +9,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 ### Changed
 * Single space instead of semicolon as _intra_-field, _inter_-value delimiter for columns like `tracePartners` which can be multivalued, as [semicolons are more problematic for Excel](https://github.com/gerlichlab/looptrace/issues/381).
 * Updated documentation to reflect the changes for the v0.11 line of `looptrace` releases.
+* Also makes the reasons for discarding locus-specific spots use single-space as intra-field, inter-value delimiter rather than semicolon.
 
 ## [v0.11.0] - 2024-11-25
 
