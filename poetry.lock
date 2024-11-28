@@ -1838,8 +1838,8 @@ testsuite = ["npe2", "pytest (>=7.1.0)", "pytest-cov (>=5.0.0)", "typer"]
 [package.source]
 type = "git"
 url = "https://github.com/gerlichlab/looptrace-loci-vis"
-reference = "v0.2.2"
-resolved_reference = "9808fe0612be6b1054ddf84e28963750ba2f46cf"
+reference = "v0.2.3"
+resolved_reference = "7e9777a1c4925f61dbf13b49322e87ed68c645a9"
 
 [[package]]
 name = "looptrace-regionals-vis"
@@ -1871,8 +1871,8 @@ testsuite = ["hypothesis (>=6.92.1)", "npe2", "pytest (>=7.1.0)", "typer"]
 [package.source]
 type = "git"
 url = "https://github.com/gerlichlab/looptrace-regionals-vis"
-reference = "v0.3.2"
-resolved_reference = "889bd29f288dbe76025e1078dab34d3829635fc9"
+reference = "v0.4.0"
+resolved_reference = "928ec013be9196728bc63d3700c8829e5167367c"
 
 [[package]]
 name = "magicgui"
@@ -5375,4 +5375,4 @@ test = ["hypothesis", "more-itertools", "pytest", "pytest-skip-slow"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.11, < 3.12"
-content-hash = "86937cab7a851b83c25d34a2bc4f0682b86ad074d109a4d1cba127d7f2086003"
+content-hash = "76f76bd306d26d0aecdeef8bf2156f39d4a78d7fdf976a531e7b3cce76a39d5c"

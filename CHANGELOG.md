@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.11.1] - 2024-11-28
+
+### Changed
+* Single space instead of semicolon as _intra_-field, _inter_-value delimiter for columns like `tracePartners` which can be multivalued, as [semicolons are more problematic for Excel](https://github.com/gerlichlab/looptrace/issues/381).
+* Updated documentation to reflect the changes for the v0.11 line of `looptrace` releases.
+
 ## [v0.11.0] - 2024-11-25
 
 ### Added
