@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.11.2] - 2024-11-28
+
+### Changed
+* Fix for a critical bug in which distances between pairs of locus spots from different regional timepoints which have been merged into the same trace ID would not be computed. See [Issue 390](https://github.com/gerlichlab/looptrace/issues/390).
+
 ## [v0.11.1] - 2024-11-28
 
 ### Changed

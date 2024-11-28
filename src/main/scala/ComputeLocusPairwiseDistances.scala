@@ -81,8 +81,8 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
             case (Some(bads), _) => throw Input.BadRecordsException(bads)
             case (None, outputRecords) => 
                 val recs = outputRecords.toList.sortBy{ r => 
-                    (r.fieldOfView, r.region, r.trace, r.locus1, r.locus2)
-                }(summon[Order[(PositionName, RegionId, TraceId, LocusId, LocusId)]].toOrdering)
+                    (r.fieldOfView, r.region1, r.region2, r.trace, r.locus1, r.locus2)
+                }(summon[Order[(PositionName, RegionId, RegionId, TraceId, LocusId, LocusId)]].toOrdering)
                 
                 logger.info(s"Writing output file: $outputFile")
                 if (!os.exists(outputFile.parent)){ os.makeDir.all(outputFile.parent) }
@@ -97,20 +97,28 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
 
     def inputRecordsToOutputRecords(inrecs: Iterable[(Input.GoodRecord, NonnegativeInt)]): Iterable[OutputRecord] = {
         inrecs.groupBy((r, _) => Input.getGroupingKey(r)).toList.flatMap{ 
-            case ((fov, tid, reg), groupedRecords) => 
+            case (tid, groupedRecords) => 
                 groupedRecords.toList.combinations(2).flatMap{
-                    case (r1, i1) :: (r2, i2) :: Nil => (r1.locus =!= r2.locus).option(
-                        OutputRecord(
-                            fieldOfView = fov,
-                            trace = tid,
-                            region = reg,
-                            locus1 = r1.locus, 
-                            locus2 = r2.locus,
-                            distance = EuclideanDistance.between(r1.point, r2.point), 
-                            inputIndex1 = i1, 
-                            inputIndex2 = i2
-                            )
-                    )
+                    case (r1, i1) :: (r2, i2) :: Nil => 
+                        val fov = (r1.fieldOfView === r2.fieldOfView)
+                            // Get the FOV for this pair of records, asserting that it's the same for each.
+                            .option(r1.fieldOfView)
+                            .getOrElse{ throw new Exception(
+                                s"FOV differs (${r1.fieldOfView} vs. ${r2.fieldOfView}) for pair of records (${i1.show_} and ${i2.show_}) from trace ID ${tid.show_}"
+                            ) }
+                        (r1.locus =!= r2.locus).option{ // Don't compute distance between a record and itself.
+                            OutputRecord(
+                                fieldOfView = fov,
+                                trace = tid,
+                                region1 = r1.region,
+                                region2 = r2.region,
+                                locus1 = r1.locus, 
+                                locus2 = r2.locus,
+                                distance = EuclideanDistance.between(r1.point, r2.point), 
+                                inputIndex1 = i1, 
+                                inputIndex2 = i2
+                                )
+                        }
                     case rs => throw new Exception(s"${rs.length} records (not 2) when taking pairs!")
                 }
         }
@@ -164,7 +172,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
         }
 
         /** How records must be grouped for consideration of between which pairs to compute distance */
-        def getGroupingKey(r: GoodRecord) = (r.fieldOfView, r.trace, r.region)
+        def getGroupingKey = (_: GoodRecord).trace
         
         /**
          * Wrapper around data representing a successfully parsed record from the input file
@@ -201,7 +209,8 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
     final case class OutputRecord(
         fieldOfView: PositionName, 
         trace: TraceId, 
-        region: RegionId, 
+        region1: RegionId, 
+        region2: RegionId,
         locus1: LocusId, 
         locus2: LocusId, 
         distance: EuclideanDistance, 
@@ -217,12 +226,13 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
             override def apply(elem: OutputRecord): RowF[Some, String] = 
                 val fovText: NamedRow = FieldOfViewColumnName.write(elem.fieldOfView)
                 val traceText: NamedRow = TraceIdColumnName.write(elem.trace)
-                val regText: NamedRow = ColumnName[RegionId]("region").write(elem.region)
+                val reg1Text: NamedRow = ColumnName[RegionId]("region1").write(elem.region1)
+                val reg2Text: NamedRow = ColumnName[RegionId]("region2").write(elem.region2)
                 val loc1Text: NamedRow = ColumnName[LocusId]("locus1").write(elem.locus1)
                 val loc2Text: NamedRow = ColumnName[LocusId]("locus2").write(elem.locus2)
                 val distanceText: NamedRow = ColumnName[EuclideanDistance]("distance").write(elem.distance)
                 val i1Text: NamedRow = ColumnName[NonnegativeInt]("inputIndex1").write(elem.inputIndex1)
                 val i2Text: NamedRow = ColumnName[NonnegativeInt]("inputIndex2").write(elem.inputIndex2)
-                fovText |+| traceText |+| regText |+| loc1Text |+| loc2Text |+| distanceText |+| i1Text |+| i2Text
+                fovText |+| traceText |+| reg1Text |+| reg2Text |+| loc1Text |+| loc2Text |+| distanceText |+| i1Text |+| i2Text
     end OutputRecord
 end ComputeLocusPairwiseDistances

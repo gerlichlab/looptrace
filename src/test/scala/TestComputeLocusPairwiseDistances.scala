@@ -216,56 +216,17 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
         val expected: Iterable[OutputRecord] = List(0 -> 1, 0 -> 2, 1 -> 2).map{ (i, j) => 
             val (idx1, loc1) = rawAndTime(i)
             val (idx2, loc2) = rawAndTime(j)
-            OutputRecord(pos, tid, reg, loc1, loc2, getExpEuclDist(i, j), idx1, idx2)
+            OutputRecord(pos, tid, reg, reg, loc1, loc2, getExpEuclDist(i, j), idx1, idx2)
         }
         val observed = inputRecordsToOutputRecords(NonnegativeInt.indexed(inputRecords))
         observed shouldEqual expected
     }
-    
-    test("Partitioning and completeness: (FOV, trace, region) defines an equivalence relation on the set of output records.") {
-        def buildPoint(x: Double, y: Double, z: Double) = Point3D(XCoordinate(x), YCoordinate(y), ZCoordinate(z))
-        val pt1 = buildPoint(-1.0, 2.0, 0.0)
-        val pt2 = buildPoint(1.0, 5.0, 4.0)
-        val pt3 = buildPoint(3.0, 4.0, 6.0)
-        val pt4 = buildPoint(-2.0, -3.0, 1.0)
-        val inputTable = Table(("groupingKeys", "simplifiedExpectation"), List(
-            ((1, 1, 1), (2, 1, 1), (2, 1, 2), (1, 1, 1)) -> List((1, 1, 1, 0, 3) -> math.sqrt(27)), 
-            ((2, 1, 1), (2, 1, 1), (2, 1, 2), (2, 1, 2)) -> List((2, 1, 1, 0, 1) -> math.sqrt(29), (2, 1, 2, 2, 3) -> math.sqrt(99)), 
-            ((2, 1, 1), (2, 1, 2), (2, 1, 1), (2, 1, 2)) -> List((2, 1, 1, 0, 2) -> math.sqrt(56), (2, 1, 2, 1, 3) -> math.sqrt(82)), 
-            ((3, 1, 2), (0, 4, 5), (3, 1, 2), (3, 1, 2)) -> List((3, 1, 2, 0, 2) -> math.sqrt(56), (3, 1, 2, 0, 3) -> math.sqrt(27), (3, 1, 2, 2, 3) -> math.sqrt(99)), 
-            ((3, 1, 2), (3, 1, 0), (3, 1, 3), (3, 1, 1)) -> List(), // All equal on 1st 2 elements, but not 3rd
-            ((0, 1, 2), (3, 1, 2), (1, 1, 2), (2, 1, 2)) -> List(), // All equal on 2nd 2 elements, but not 1st
-            ((0, 1, 2), (0, 0, 2), (0, 2, 2), (0, 3, 2)) -> List(), // All equal on 1st and 3rd elements, but not 2nd
-            ((0, 1, 2), (1, 1, 2), (0, 2, 2), (2, 2, 2)) -> List(), // Mixed similarities
-        )*)
 
-        val fovIndexToName: Int => PositionName = z => PositionName.unsafe(s"P000${z}.zarr")
+    test("Trace ID is unique globally for an experiment: records with the same trace ID but different fields of view (FOVs) causes expected error."):
+        pending
 
-        forAll (inputTable) { case ((k1, k2, k3, k4), simplifiedExpectation) => 
-            val records = NonnegativeInt.indexed(List(k1 -> pt1, k2 -> pt2, k3 -> pt3, k4 -> pt4)).map{ 
-                case (((pos, tid, reg), pt), i) => Input.GoodRecord(
-                    fovIndexToName(pos),
-                    TraceId(NonnegativeInt.unsafe(tid)), 
-                    RegionId.unsafe(reg), 
-                    LocusId.unsafe(i), 
-                    pt,
-                    )
-            }
-            val observation = inputRecordsToOutputRecords(NonnegativeInt.indexed(records))
-            val simplifiedObservation = observation.map{ r => 
-                (r.fieldOfView, r.trace, r.region, r.locus1, r.locus2) -> 
-                r.distance.get
-            }.toList
-            val expectation = simplifiedExpectation.map{ case ((pos, tid, reg, t1, t2), d) => 
-                (fovIndexToName(pos), TraceId.unsafe(tid), RegionId.unsafe(reg), LocusId.unsafe(t1), LocusId.unsafe(t2)) -> 
-                NonnegativeReal.unsafe(d)
-            }.toList
-            // We're indifferent to the order of output records for this test, so check size then convert to maps.
-            simplifiedObservation.length shouldEqual expectation.length
-            simplifiedObservation.groupBy(_._1).view.mapValues(_.length).toMap shouldEqual expectation.groupBy(_._1).view.mapValues(_.length).toMap
-            simplifiedObservation.groupBy(_._1).view.mapValues(_.toSet).toMap shouldEqual expectation.groupBy(_._1).view.mapValues(_.toSet).toMap
-        }
-    }
+    test("Trace ID is the grouping key; records with different region ID but the same trace ID still have distance between them computed. Issue #390."):
+        pending
 
     test("Unexpected header error can't be created with the empty missing columns or with an unnecessary column.") {
         assertTypeError{ "IllegalHeaderException(List(), List())" }
@@ -286,8 +247,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
 
     test("Any output record's original record indices map them back to input records with identical grouping elements.") {
         /* To encourage collisions, narrow the choices for grouping components. */
-        given arbPos: Arbitrary[FieldOfView] = Gen.oneOf(0, 1).map(FieldOfView.unsafeLift).toArbitrary
-        given arbTrace: Arbitrary[TraceId] = Gen.oneOf(2, 3).map(NonnegativeInt.unsafe `andThen` TraceId.apply).toArbitrary
+        given arbPosAndTrace: Arbitrary[(PositionName, TraceId)] = genPosTracePairOneOrOther.toArbitrary
         given arbRegion: Arbitrary[RegionId] = Gen.oneOf(40, 41).map(RegionId.unsafe).toArbitrary
         forAll (Gen.choose(10, 100).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord]))) { (records: List[Input.GoodRecord]) => 
             val indexedRecords = NonnegativeInt.indexed(records)
@@ -299,8 +259,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
 
     test("Distance is never computed between records with identically-valued locus-specific timepoints, even if the grouping elements place them together.") {
         /* To encourage collisions, narrow the choices for grouping components. */
-        given arbPos: Arbitrary[FieldOfView] = Gen.oneOf(0, 1).map(FieldOfView.unsafeLift).toArbitrary
-        given arbTrace: Arbitrary[TraceId] = Gen.oneOf(2, 3).map(NonnegativeInt.unsafe `andThen` TraceId.apply).toArbitrary
+        given arbPosAndTrace: Arbitrary[(PositionName, TraceId)] = genPosTracePairOneOrOther.toArbitrary
         given arbRegion: Arbitrary[RegionId] = Gen.oneOf(40, 41).map(RegionId.unsafe).toArbitrary
         given arbTime: Arbitrary[ImagingTimepoint] = Gen.const(ImagingTimepoint(NonnegativeInt(10))).toArbitrary
         
@@ -314,12 +273,18 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
     
     /** Use arbitrary instances for components to derive an an instance for the sum type. */
     given arbitraryForGoodInputRecord(using 
-        arbPos: Arbitrary[PositionName], 
-        arbTrace: Arbitrary[TraceId], 
+        arbPosAndTrace: Arbitrary[(PositionName, TraceId)],
         arbRegion: Arbitrary[RegionId], 
         arbLocus: Arbitrary[LocusId], 
         arbPoint: Arbitrary[Point3D], 
-    ): Arbitrary[Input.GoodRecord] = (arbPos, arbTrace, arbRegion, arbLocus, arbPoint).mapN(Input.GoodRecord.apply)
+    ): Arbitrary[Input.GoodRecord] = 
+        (arbPosAndTrace, arbRegion, arbLocus, arbPoint)
+            .mapN{ case ((pos, trace), reg, loc, pt) => Input.GoodRecord(pos, trace, reg, loc, pt) }
+
+    private def genPosTracePairOneOrOther: Gen[(PositionName, TraceId)] = 
+        val posNames = List("P0001.zarr", "P0002.zarr") map PositionName.unsafe
+        val traceIds = List(2, 3) map TraceId.unsafe
+        Gen.oneOf(posNames zip traceIds)
 
     /** Write the given rows as CSV to the given file. */
     private def writeMinimalInputCsv(f: os.Path, rows: List[List[String]]): Unit = 
