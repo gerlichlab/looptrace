@@ -3772,23 +3772,6 @@ pluggy = ">=0.12,<2.0"
 testing = ["argcomplete", "attrs (>=19.2.0)", "hypothesis (>=3.56)", "mock", "nose", "pygments (>=2.7.2)", "requests", "setuptools", "xmlschema"]
 
 [[package]]
-name = "pytest-skip-slow"
-version = "0.0.5"
-description = "A pytest plugin to skip `@pytest.mark.slow` tests by default."
-optional = true
-python-versions = ">=3.7"
-files = [
-    {file = "pytest-skip-slow-0.0.5.tar.gz", hash = "sha256:655ea5c748c72947e0d302334e7fa8ef99929257a2a2bc928f630ddb5a161d88"},
-    {file = "pytest_skip_slow-0.0.5-py3-none-any.whl", hash = "sha256:e2f6401d6ed0db3be1402622a7b24f7df14f61ebd26feda808a0d45433d4d474"},
-]
-
-[package.dependencies]
-pytest = ">=6.2.0"
-
-[package.extras]
-test = ["tox"]
-
-[[package]]
 name = "python-dateutil"
 version = "2.9.0.post0"
 description = "Extensions to the standard Python datetime module"
@@ -5370,9 +5353,9 @@ new-mac-napari = ["pyqt6"]
 nuclei = ["cellpose"]
 pipeline = ["cellpose", "piper"]
 polymer = ["numba"]
-test = ["hypothesis", "more-itertools", "pytest", "pytest-skip-slow"]
+test = ["hypothesis", "more-itertools", "pytest"]
 
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.11, < 3.12"
-content-hash = "76f76bd306d26d0aecdeef8bf2156f39d4a78d7fdf976a531e7b3cce76a39d5c"
+content-hash = "255d20ee6a6dd27bd781239f9f323da5fc756a24e12b71baade22401cb960cef"
