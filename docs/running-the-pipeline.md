@@ -29,6 +29,12 @@ The path to the configuration file is a required parameter in order to [run the 
 For requirements and suggestions on settings, refer to the separate documentation for the [parameters configuration file](./parameters-configuration-file.md).
 
 
+## _Signal analysis_ configuration file
+This is optional, and if present it tells `looptrace` how to analyze signal from different imaging channels than the one(s) in which spots were detected, in regions defined by those detected spots. 
+This is a JSON file and can be passed with as the argument to the `--signal-config` option when [running the pipeline](#general-workflow). 
+For more about this file format and what's required, refer to the separate documentation for the [signal analysis configuration file](./signal-analysis-configuration-file.md).
+
+
 ## General workflow
 Once you have the [minimal requirements](#minimal-requirements), this will be the typical workflow for running the pipeline:
 1. __Login__ to the machine: something like `ssh username@ask-Vince-or-Chris-for-the-machine-domain`
@@ -41,8 +47,9 @@ Once you have the [minimal requirements](#minimal-requirements), this will be th
 1. __Run pipeline__: Once in the Docker container, run the pipeline, replacing the file and folder names as needed / desired:
     ```shell
     python /looptrace/bin/cli/run_processing_pipeline.py \
-        --rounds-config /home/experiment/looptrace_00XXXX.rounds.json \
-        --params-config /home/experiment/looptrace_00XXXX.params.yaml  \
+        --rounds-config /home/experiment/looptrace_00XXXX__rounds.json \
+        --params-config /home/experiment/looptrace_00XXXX__params.yaml  \
+        --signal-confg /home/experiment/looptrace__00XXXX__signal.json
         --images-folder /home/experiment/images_all \
         --pypiper-folder /home/experiment/pypiper_output
     ```
