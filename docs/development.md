@@ -11,7 +11,7 @@
 This project mixes a few languages, and there are tests exist in Python and in Scala.
 
 ### _Scala tests_
-Scala tests are written primarily with a mix of `ScalaTest` for execution and `ScalaCheck` for random test case generation towards an approximation of universal or qualified quantification of properties to which various components of the code should adhere. These can be run through, e.g. `sbt test` when in the project's development Nix shell.
+Scala tests are written primarily with a mix of `ScalaTest` for execution and `ScalaCheck` for random test case generation towards an approximation of universal or qualified quantification of properties to which various components of the code should adhere. These can be run through, e.g., `sbt test` when in the project's development Nix shell.
 
 ### _Python_ tests
 Python tests are written with [pytest](https://docs.pytest.org/en/7.4.x/contents.html).

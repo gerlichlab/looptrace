@@ -49,7 +49,7 @@ Once you have the [minimal requirements](#minimal-requirements), this will be th
     python /looptrace/bin/cli/run_processing_pipeline.py \
         --rounds-config /home/experiment/looptrace_00XXXX__rounds.json \
         --params-config /home/experiment/looptrace_00XXXX__params.yaml  \
-        --signal-confg /home/experiment/looptrace__00XXXX__signal.json
+        --signal-config /home/experiment/looptrace__00XXXX__signal.json
         --images-folder /home/experiment/images_all \
         --pypiper-folder /home/experiment/pypiper_output
     ```

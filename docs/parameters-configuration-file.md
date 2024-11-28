@@ -24,7 +24,7 @@ Judge in accordance with how many beads you anticipate having per image.
 * `coarse_drift_downsampling` should be set to 2; use 1 for no downsampling.
 * `detection_method` should be set to `dog`, and `spot_threshold` to 15. If using `intensity`, a much higher `spot_threshold` will be needed.
 * `subtract_crosstalk` should be set to `False`, rendering `crosstalk_ch` irrelevant.
-* `pixelSeparationBeneathWhichSpotRoisWillMerge` should be set to a positive value if you want to do mergers of regional barcode spot ROIs which are close together. If you don't wish to do that merger, omit this configuration key. The value will be interpreted as in pixel (and $z$ slice) units, and represents a Euclidean distance.
+* `pixelSeparationBeneathWhichSpotRoisWillMerge` should be set to a positive value if you want to do mergers of regional barcode spot ROIs which are close together. If you don't wish to do that merger, omit this configuration key. The value will be interpreted as being in pixel (and $z$ slice) units, and represents a Euclidean distance.
 * `parallelise_spot_detection` should be set to `False`.
 * `spot_downsample` should be a small integer, often just 2 or even 1 (no downsampling).
 * `spot_in_nuc` should be set to `True`, generally.
