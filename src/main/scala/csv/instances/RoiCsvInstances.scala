@@ -46,7 +46,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.RoiIndexColumnName
 trait RoiCsvInstances:
     private type Header = String
     
-    private def roiIndexDelimiter = ";"
+    private def roiIndexDelimiter = " "
 
     given cellDecoderForRoiIndex(using decRaw: CellDecoder[NonnegativeInt]): CellDecoder[RoiIndex] = 
         decRaw.map(RoiIndex.apply)

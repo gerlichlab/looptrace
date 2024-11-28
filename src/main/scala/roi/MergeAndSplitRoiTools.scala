@@ -291,7 +291,7 @@ object MergeAndSplitRoiTools extends LazyLogging:
                                         .fold(
                                             errors => throw new Exception(s"${errors.size} error(s) when merging ROIs: ${errors}"),
                                             mergedRecord => 
-                                                val mergeText = mergedRecord.contributors.toList.sorted.map(_.show_).mkString(";")
+                                                val mergeText = mergedRecord.contributors.toList.sorted.map(_.show_).mkString(" ")
                                                 logger.debug(s"Merged $mergeText --> ${mergedRecord.index.show_}")
                                                 ((accSingle, mergedRecord :: accMerged, incrementIndex(mergedRecord.index)))
                                         )

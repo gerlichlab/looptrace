@@ -521,7 +521,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                         val updateFields = (fields: List[String], codes: List[LocusSpotQC.FailureReason]) => 
                             if codes.isEmpty 
                             then throw new IllegalArgumentException(s"Empty fail codes for allegedly QC-failed record (FOV $pos)! $fields")
-                            else fields :+ codes.map(_.abbreviation).mkString(";")
+                            else fields :+ codes.map(_.abbreviation).mkString(" ")
                         (PointDisplayType.QCFail, updateFields)
                     }
                 }
