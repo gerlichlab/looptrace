@@ -106,7 +106,10 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
                             .getOrElse{ throw new Exception(
                                 s"FOV differs (${r1.fieldOfView} vs. ${r2.fieldOfView}) for pair of records (${i1.show_} and ${i2.show_}) from trace ID ${tid.show_}"
                             ) }
-                        (r1.locus =!= r2.locus).option{ // Don't compute distance between a record and itself.
+                        (r1.locus =!= r2.locus).option{ 
+                            // Don't compute distance between records with the same locus ID. 
+                            // In the case of a non-aggregate region, this may well be exceptional. 
+                            // In the case of an aggregate region, 
                             OutputRecord(
                                 fieldOfView = fov,
                                 trace = tid,
