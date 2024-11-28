@@ -75,7 +75,7 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
                 .validate((f: os.Path) => os.isFile(f).either(s"Not an extant file: $f", ())), 
             opt[os.Path]("driftFile")
                 .action((f, c) => c.copy(maybeDriftFile = f.some))
-                .validate(f => os.isFile(f).either(s"Not an extant file; $f", ()))
+                .validate(f => os.isFile(f).either(s"Not an extant file: $f", ()))
                 .text("Path to file with per-FOV, per-timepoint shifts to correct for drift"),
             opt[Pixels3D]("pixels")
                 .required()
