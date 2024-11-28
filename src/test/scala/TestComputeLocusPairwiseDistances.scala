@@ -222,11 +222,48 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
         observed shouldEqual expected
     }
 
-    test("Trace ID is unique globally for an experiment: records with the same trace ID but different fields of view (FOVs) causes expected error."):
-        pending
+    test("Trace ID is unique globally for an experiment: records with the same trace ID but different fields of view (FOVs) causes expected error. Issue #390"):
+        given Arbitrary[(PositionName, TraceId)] = Gen.oneOf(
+            // Restrict to relatively few choices of trace ID and position name, to boost collision probability.
+            List(8, 9)
+                .map(TraceId.unsafe)
+                .flatMap{ tid => 
+                    List("P0001.zarr", "P0002.zarr")
+                        .map(PositionName.unsafe)
+                        .map(_ -> tid) 
+                }
+        ).toArbitrary
 
-    test("Trace ID is the grouping key; records with different region ID but the same trace ID still have distance between them computed. Issue #390."):
-        pending
+        forAll { (records: List[Input.GoodRecord]) => 
+            val possiblePrefixes = records.combinations(2).toList.flatMap{ // Check that at least one pair is a case of same trace ID but with different FOv.
+                case r1 :: r2 :: Nil => 
+                    (r1.trace === r2.trace && r1.fieldOfView =!= r2.fieldOfView).option{
+                        s"FOV differs (${r1.fieldOfView} vs. ${r2.fieldOfView}) for pair of records"
+                    }
+                case rs => throw new Exception(s"Got ${rs.length} records when taking pairs!")
+            }
+            whenever(possiblePrefixes.nonEmpty):
+                val obsMsg = intercept[Exception]{ inputRecordsToOutputRecords(NonnegativeInt.indexed(records)) }.getMessage
+                possiblePrefixes.exists(obsMsg.startsWith) shouldBe true
+        }
+
+    test("Trace ID is the grouping key; records with different region ID but the same trace ID still have distance between them computed. Issue #390"):
+        val numCombos2 = (n: Int) => n * (n - 1) / 2
+        // Generate records such that there's at least one which has a different region ID, but all have the same trace ID.
+        // This ensures that the number of output records differs w.r.t. whether or not the computation does or does not pair up records with the same trace ID but different region ID.
+        given Arbitrary[TraceId] = Gen.const(TraceId.unsafe(10)).toArbitrary
+        given Arbitrary[PositionName] = Gen.const(PositionName.unsafe("P0001.zarr")).toArbitrary
+        forAll { (inputRecords: List[Input.GoodRecord]) =>  
+            val outputRecords = inputRecordsToOutputRecords(NonnegativeInt.indexed(inputRecords))
+            val expNumDiscard: Int = // Distance won't be computed between records with the same locus ID within a trace ID.
+                inputRecords.groupBy(_.locus)
+                    .view
+                    .mapValues(_.size)
+                    .values
+                    .map(numCombos2)
+                    .sum
+            outputRecords.size shouldEqual numCombos2(inputRecords.size) - expNumDiscard
+        }
 
     test("Unexpected header error can't be created with the empty missing columns or with an unnecessary column.") {
         assertTypeError{ "IllegalHeaderException(List(), List())" }
