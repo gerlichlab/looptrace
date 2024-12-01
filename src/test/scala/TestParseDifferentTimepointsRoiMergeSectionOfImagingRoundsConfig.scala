@@ -233,7 +233,7 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
                 messages.length shouldEqual 1
             case Right(_) => fail("Expected parse failure but got success")
         }
-    
+
     test("With no groups and no threhsold, no parse"):
         pending
     
