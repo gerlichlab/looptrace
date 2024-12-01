@@ -1,0 +1,28 @@
+{
+    "proximityFilterStrategy": {
+        "semantic": "UniversalProximityPermission"
+    },
+    "mergeRulesForTracing": {
+        "discardRoisNotInGroupsOfInterest": true,
+        "distanceThreshold": 2000,
+        "requirementType": "Conjunctive",
+        "groups": [[0, 7], [8, 9]]
+    },
+    "imagingRounds": [
+        {"time": 0, "name": "pre_image", "isBlank": true},
+        {"time": 1, "probe": "Dp001"},
+        {"time": 2, "probe": "Dp002"},
+        {"time": 3, "probe": "Dp003"},
+        {"time": 4, "probe": "Dp006"},
+        {"time": 5, "probe": "Dp007"},
+        {"time": 6, "probe": "Dp101", "isRegional": true},
+        {"time": 7, "probe": "Dp102", "isRegional": true},
+        {"time": 8, "probe": "Dp103", "isRegional": true},
+        {"time": 9, "probe": "Dp104", "isRegional": true}
+    ],
+    "locusGrouping": {
+        "7": [1, 3], 
+        "8": [2, 4]
+    },
+    "tracingExclusions": [0, 6, 7, 8, 9]
+}

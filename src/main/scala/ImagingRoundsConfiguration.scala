@@ -3,6 +3,7 @@ package at.ac.oeaw.imba.gerlich.looptrace
 import scala.collection.immutable.SortedSet
 import scala.language.adhocExtensions // to extend ujson.Value.InvalidData
 import scala.util.Try
+import scala.util.chaining.*
 import cats.*
 import cats.data.{ EitherNel, NonEmptyList, NonEmptyMap, NonEmptySet, Validated, ValidatedNel }
 import cats.data.Validated.{ Invalid, Valid }
@@ -166,6 +167,8 @@ object ImagingRoundsConfiguration extends LazyLogging:
             else s"${nonRegional.size} timepoint(s) as keys in locus grouping that aren't regional.".invalidNel
         }
         val uniqueRegionalTimes = sequence.regionRounds.map(_.time).toList.toSet
+        
+        /* Every timepoint in a proximity grouping must be a regional (rather than locus-specific) timepoint. */
         val (proximityGroupingSubsetNel, proximityGroupingSupersetNel) = proximityFilterStrategy match {
             case (UniversalProximityPermission | UniversalProximityProhibition(_)) => 
                 // In the trivial case, we have no more validation work to do.
@@ -177,20 +180,69 @@ object ImagingRoundsConfiguration extends LazyLogging:
                 val supersetNel = checkTimesSubset(uniqueGroupedTimes)(uniqueRegionalTimes, "regionals in imaging sequence (rel. to proximity filter strategy)")
                 (subsetNel, supersetNel)
         }
-        val idsToMergeAreAllRegionalNel = maybeMergeRules match {
-            case None => ().validNel
-            case Some((rules, _)) => 
-                import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2.syntax.toSet
-                (rules.reduceMap(_.mergeGroup.members.toSet) -- uniqueRegionalTimes)
-                    .toList
-                    .sorted
-                    .toNel
-                    .toLeft(())
-                    .leftMap(nonRegionalTimesInRules => 
-                        s"${nonRegionalTimesInRules.size} non-regional times in merge rules: ${nonRegionalTimesInRules.toList.sorted.map(_.show_).mkString(", ")}"
-                    )
-                    .toValidatedNel
-        }
+
+        /* Every timepoint ID to merge for tracing must a regional (rather than locus-specific) timepoint. */
+        val (idsToMergeAreAllRegionalNel, noRepeatsInLocusTimeSetsForRegionalTimesToMerge) = 
+            import at.ac.oeaw.imba.gerlich.gerlib.collections.given // SemigroupK[AtLeast2[Set, *]]
+            maybeMergeRules match {
+                case None => (().validNel, ().validNel)
+                case Some((rules, _)) => 
+                    val allAreRegional: ValidatedNel[String, Unit] = 
+                        import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2.syntax.toSet
+                        (rules.map(_.mergeGroup.members).reduceK.toSet -- uniqueRegionalTimes)
+                            .toList
+                            .sorted
+                            .toNel
+                            .toLeft(())
+                            .leftMap(nonRegionalTimesInRules => 
+                                s"${nonRegionalTimesInRules.size} non-regional time(s) in merge rules: ${nonRegionalTimesInRules.toList.sorted.map(_.show_).mkString(", ")}"
+                            )
+                            .toValidatedNel
+                    
+                    val noRepeatsInLocusTimesOfRegionalsToMerge: ValidatedNel[String, Unit] = 
+                        import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2.syntax.toList
+                        
+                        // First, build the lookup of locus times by regional time.
+                        val locusTimesByRegional = locusGrouping
+                            .foldLeft(Map.empty[ImagingTimepoint, NonEmptySet[ImagingTimepoint]]){ (acc, g) => 
+                                val rt = g.regionalTimepoint
+                                val lts = g.locusTimepoints
+                                acc + (rt -> acc.get(rt).fold(lts)(lts ++ _))
+                            }
+                        
+                        // Then, find repeated locus timepoints WITHIN each merge group.
+                        type GroupId = Int
+                        val repeatsByGroup: Map[GroupId, NonEmptyMap[ImagingTimepoint, AtLeast2[Set, ImagingTimepoint]]] = 
+                            def processOneRule = (r: TraceIdDefinitionAndFiltrationRule) => 
+                                r.mergeGroup.members.toList.foldRight(Map.empty[ImagingTimepoint, NonEmptySet[ImagingTimepoint]]){
+                                    (rt, acc) => locusTimesByRegional
+                                        .get(rt)
+                                        .fold(acc)(_
+                                            .toList
+                                            .foldRight(acc){ (lt, m) => 
+                                                m + (lt -> m.get(lt).fold(NonEmptySet.one(rt))(_.add(rt))) 
+                                            }
+                                        )
+                                }
+                            
+                            // Determine if a single rule's inverse mapping from locus timepoints to regional timepoints is problematic.
+                            def getBadResult: Map[ImagingTimepoint, NonEmptySet[ImagingTimepoint]] => Option[NonEmptyMap[ImagingTimepoint, AtLeast2[Set, ImagingTimepoint]]] = _
+                                .view
+                                .mapValues(_.toSortedSet.toSet.pipe(AtLeast2.either).pipe(_.toOption))
+                                .flatMap{ (locTime, maybeRegTimes) => maybeRegTimes.map(locTime -> _) }
+                                .pipe(scala.collection.immutable.SortedMap.from)
+                                .pipe(NonEmptyMap.fromMap)
+                                
+                            rules.zipWithIndex.toList.flatMap{ (r, i) => getBadResult(processOneRule(r)).map(i -> _) }.toMap
+                        
+                        // If no repeats, we're all good; otherwise, make an error message.
+                        if repeatsByGroup.isEmpty 
+                        then ().validNel
+                        else s"Regionals timepoints to merge for tracing map to overlapping locus timepoint sets; here are the repeat(s): $repeatsByGroup".invalidNel
+                    
+                    (allAreRegional, noRepeatsInLocusTimesOfRegionalsToMerge)
+            }
+
         (
             tracingSubsetNel, 
             locusTimeSubsetNel, 
@@ -199,6 +251,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
             proximityGroupingSubsetNel, 
             proximityGroupingSupersetNel, 
             idsToMergeAreAllRegionalNel,
+            noRepeatsInLocusTimeSetsForRegionalTimesToMerge,
         )
             .tupled
             // We ignore the acutal values (Unit) because this was just to accumulate errors.
@@ -207,7 +260,6 @@ object ImagingRoundsConfiguration extends LazyLogging:
     }
 
     private def mkStringTimepoints = (_: List[ImagingTimepoint]).sorted.map(_.show_).mkString(", ")
-    
 
     /**
       * Read the configuration of imaging rounds for the experiment, including regional grouping and 
