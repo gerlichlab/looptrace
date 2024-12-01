@@ -210,26 +210,73 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
             subfolder = "DifferentTimepointRegionalMergeForTracing", 
             filename = "good_example__legitimate_tracing_merge_groups.json",
         )
-        ImagingRoundsConfiguration.fromJsonFile(configFile) match {
-            case Left(errorMessages) => fail(
-                s"${errorMessages.length} error message(s) parsing config file $configFile: ${errorMessages.mkString_("; ")}"
+        val expectedSuccessCases = 
+            val expRules = 
+                val expDistance = 
+                    import io.github.iltotore.iron.autoRefine
+                    EuclideanDistance.Threshold(NonnegativeReal(2000))
+                NonEmptyList.of(Set(6, 7), Set(8, 9))
+                    .map(_.map(ImagingTimepoint.unsafe).pipe(AtLeast2.unsafe))
+                    .map{ g => 
+                        TraceIdDefinitionAndFiltrationRule(
+                            ProximityGroup(expDistance, g), 
+                            RoiPartnersRequirementType.Conjunctive,
+                        ) 
+                    }
+            Table(
+                ("configFileName", "expectedMergeRules"), 
+                ("good_example__legitimate_tracing_merge_groups.json", expRules), 
+                ("good_example__locus_time_overlap_prohibition_for_trace_merge_is_only_within_group.json", expRules),
             )
+        val expectedFilterSetting = true
+        forAll (expectedSuccessCases) { (configFileName, expectedMergeRules) => 
+            val configFile = getResourcePath(
+                subfolder = "DifferentTimepointRegionalMergeForTracing", 
+                filename = configFileName,
+            )
+            checkParseSuccess(configFile, expectedFilterSetting -> expectedMergeRules)
+        }
+
+    test("Any non-regional timepoint listed for tracing merger is an error."):
+        val expectedFailureCases = Table(
+            ("configFileName", "expectedMessage"), 
+            ("bad_example__locus_time_in_tracing_merge_groups.json", "1 non-regional time(s) in merge rules: 5"),
+            ("bad_example__blank_time_in_tracing_merge_groups.json", "1 non-regional time(s) in merge rules: 0"),
+        )
+        forAll (expectedFailureCases) { (configFileName, expectedMessage) => 
+            val configFile = getResourcePath(
+                subfolder = "DifferentTimepointRegionalMergeForTracing", 
+                filename = configFileName,
+            )
+            checkParseFailure(configFile, expectedMessage) // Test exact equality of message and expectation.
+        }
+        
+
+    test("Any overlap of locus timepoint sets for regional timepoints to merge is an error. #384"):
+        val configFile = getResourcePath(
+            subfolder = "DifferentTimepointRegionalMergeForTracing", 
+            filename = "bad_example__overlap_locus_times_for_regional_times_to_merge__384.json",
+        )
+        checkParseFailure(
+            configFile, 
+            "Regionals timepoints to merge for tracing map to overlapping locus timepoint sets",
+            check = (msg: String, exp: String) => msg.startsWith(exp) // Here we just to prefix check.
+        )
+
+    def checkParseSuccess(configFile: os.Path, expectedMergeParseResult: (Boolean, NonEmptyList[TraceIdDefinitionAndFiltrationRule])) = 
+        val (expFilter, expRules) = expectedMergeParseResult
+        ImagingRoundsConfiguration.fromJsonFile(configFile) match {
+            case Left(messages) => 
+                fail(s"${messages.length} error message(s) parsing config file $configFile: ${messages.mkString_("; ")}")
             case Right(conf) => 
                 val discardUngroupedMembersNel = 
-                    if conf.discardRoisNotInGroupsOfInterest 
+                    val obsFilter = conf.discardRoisNotInGroupsOfInterest
+                    if obsFilter === expFilter
                     then ().validNel
-                    else "Expected the discard of ungrouped regional timepoints to be true, but it's false".invalidNel
+                    else s"Expected $expFilter for filter status but got $obsFilter ".invalidNel
                 val mergeRulesNel = conf.mergeRules match {
                     case None => "No merge rules section".invalidNel
                     case Some(obsRules) => 
-                        val expDistance = 
-                            import io.github.iltotore.iron.autoRefine
-                            EuclideanDistance.Threshold(NonnegativeReal(2000))
-                        val expReqType = RoiPartnersRequirementType.Conjunctive
-                        val expRules = 
-                            NonEmptyList.of(Set(6, 7), Set(8, 9))
-                                .map(_.map(ImagingTimepoint.unsafe).pipe(AtLeast2.unsafe))
-                                .map{ g => TraceIdDefinitionAndFiltrationRule(ProximityGroup(expDistance, g), expReqType) }
                         given Eq[TraceIdDefinitionAndFiltrationRule] = Eq.fromUniversalEquals
                         if obsRules === expRules
                         then ().validNel
@@ -241,39 +288,14 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
                 }
         }
 
-    test("Any non-regional timepoint listed for tracing merger is an error."):
-        val failCases = Table(
-            ("configFileName", "expectedMessage"), 
-            ("bad_example__locus_time_in_tracing_merge_groups.json", "1 non-regional time(s) in merge rules: 5"),
-            ("bad_example__blank_time_in_tracing_merge_groups.json", "1 non-regional time(s) in merge rules: 0"),
-        )
-        forAll (failCases) { (configFileName, expectedMessage) => 
-            val configFile = getResourcePath(
-                subfolder = "DifferentTimepointRegionalMergeForTracing", 
-                filename = configFileName,
-            )
-            checkParseError(configFile, expectedMessage) // Test exact equality of message and expectation.
-        }
-        
-
-    test("Any overlap of locus timepoint sets for regional timepoints to merge is an error. #384"):
-        val configFile = getResourcePath(
-            subfolder = "DifferentTimepointRegionalMergeForTracing", 
-            filename = "bad_example__overlap_locus_times_for_regional_times_to_merge__384.json",
-        )
-        checkParseError(
-            configFile, 
-            "Regionals timepoints to merge for tracing map to overlapping locus timepoint sets",
-            check = (msg: String, exp: String) => msg.startsWith(exp) // Here we just to prefix check.
-        )
-
-    def checkParseError(configFile: os.Path, expectedMessage: String, check: (String, String) => Boolean = cats.Eq[String].eqv) = 
+    def checkParseFailure(configFile: os.Path, expectedMessage: String, check: (String, String) => Boolean = cats.Eq[String].eqv) = 
         ImagingRoundsConfiguration.fromJsonFile(configFile) match {
             case Left(messages) => 
                 if messages.count(check(_, expectedMessage)) === 1
                 then succeed
                 else fail(s"No message parse fail message matched query ($expectedMessage); messages: ${messages.mkString_("; ")}")
-            case Right(_) => fail(s"Expected config parse to fail, but it succeeded on file $configFile")
+            case Right(_) => 
+                fail(s"Expected config parse to fail, but it succeeded on file $configFile")
         }
 
     private def getResourcePath(subfolder: String, filename: String): os.Path = 
