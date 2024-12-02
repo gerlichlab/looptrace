@@ -250,7 +250,6 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
             )
             checkParseFailure(configFile, expectedMessage) // Test exact equality of message and expectation.
         }
-        
 
     test("Any overlap of locus timepoint sets for regional timepoints to merge is an error. #384"):
         val configFile = getResourcePath(
@@ -263,7 +262,7 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
             check = (msg: String, exp: String) => msg.startsWith(exp) // Here we just to prefix check.
         )
 
-    def checkParseSuccess(configFile: os.Path, expectedMergeParseResult: (Boolean, NonEmptyList[TraceIdDefinitionAndFiltrationRule])) = 
+    private def checkParseSuccess(configFile: os.Path, expectedMergeParseResult: (Boolean, NonEmptyList[TraceIdDefinitionAndFiltrationRule])) = 
         val (expFilter, expRules) = expectedMergeParseResult
         ImagingRoundsConfiguration.fromJsonFile(configFile) match {
             case Left(messages) => 
@@ -288,7 +287,7 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
                 }
         }
 
-    def checkParseFailure(configFile: os.Path, expectedMessage: String, check: (String, String) => Boolean = cats.Eq[String].eqv) = 
+    private def checkParseFailure(configFile: os.Path, expectedMessage: String, check: (String, String) => Boolean = cats.Eq[String].eqv) = 
         ImagingRoundsConfiguration.fromJsonFile(configFile) match {
             case Left(messages) => 
                 if messages.count(check(_, expectedMessage)) === 1
