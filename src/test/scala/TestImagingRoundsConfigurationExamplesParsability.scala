@@ -21,7 +21,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.{
     RoiPartnersRequirementType,
     SelectiveProximityPermission, 
     SelectiveProximityProhibition, 
-    TraceIdDefinitionAndFiltrationRule,
+    TraceIdDefinitionRule,
     UniversalProximityPermission, 
     UniversalProximityProhibition, 
 }
@@ -218,7 +218,7 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
                 NonEmptyList.of(Set(6, 7), Set(8, 9))
                     .map(_.map(ImagingTimepoint.unsafe).pipe(AtLeast2.unsafe))
                     .map{ g => 
-                        TraceIdDefinitionAndFiltrationRule(
+                        TraceIdDefinitionRule(
                             ProximityGroup(expDistance, g), 
                             RoiPartnersRequirementType.Conjunctive,
                         ) 
@@ -262,7 +262,7 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
             check = (msg: String, exp: String) => msg.startsWith(exp) // Here we just to prefix check.
         )
 
-    private def checkParseSuccess(configFile: os.Path, expectedMergeParseResult: (Boolean, NonEmptyList[TraceIdDefinitionAndFiltrationRule])) = 
+    private def checkParseSuccess(configFile: os.Path, expectedMergeParseResult: (Boolean, NonEmptyList[TraceIdDefinitionRule])) = 
         val (expFilter, expRules) = expectedMergeParseResult
         ImagingRoundsConfiguration.fromJsonFile(configFile) match {
             case Left(messages) => 
@@ -276,7 +276,7 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
                 val mergeRulesNel = conf.mergeRules match {
                     case None => "No merge rules section".invalidNel
                     case Some(obsRules) => 
-                        given Eq[TraceIdDefinitionAndFiltrationRule] = Eq.fromUniversalEquals
+                        given Eq[TraceIdDefinitionRule] = Eq.fromUniversalEquals
                         if obsRules === expRules
                         then ().validNel
                         else f"Observed rules ($obsRules) don't match expected ($expRules)".invalidNel
