@@ -77,6 +77,7 @@ lazy val root = (project in file("."))
       gerlibs ++
       logging ++
       Seq( // only for tests
+        catsLaws,
         gerlibTesting,
         ironScalacheck,
         scalaCsv,

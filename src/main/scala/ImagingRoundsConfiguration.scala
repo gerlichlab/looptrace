@@ -520,6 +520,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
 
     /** How to redefine trace IDs and filter ROIs on the basis of proximity to one another */
     final case class TraceIdDefinitionRule(
+        name: String,
         mergeGroup: ProximityGroup[EuclideanDistance.Threshold, ImagingTimepoint],
         requirement: RoiPartnersRequirementType, 
     )
@@ -567,16 +568,17 @@ object ImagingRoundsConfiguration extends LazyLogging:
                         .flatMap{ (strictness, maybeThreshold, maybeRequirementType) => 
                             kvPairs.get(groupsKey)
                                 .toRight(s"Missing key for groups: $groupsKey")
-                                .flatMap(_.arrOpt.toRight(s"Can't parse groups (from '$groupsKey') as array-like"))
-                                .flatMap(_.toList.toNel.toRight(s"Groups (from '$groupsKey') is empty"))
+                                .flatMap(_.objOpt.toRight(s"Can't parse groups (from '$groupsKey') as map-like"))
+                                .flatMap(_.toList.toNel.toRight(s"Data for groups (from '$groupsKey') is empty"))
                                 .leftMap(NonEmptyList.one)
-                                .flatMap(_.nonEmptyTraverse(v => parseGroupMembersSimple(v).leftMap(NonEmptyList.one)))
+                                .flatMap(_.nonEmptyTraverse{ (k, v) => parseGroupMembersSimple(v).bimap(NonEmptyList.one, k -> _) })
                                 .flatMap(groups => (maybeThreshold, maybeRequirementType) match {
                                     case (None, None) => NonEmptyList.one("Missing threshold and requirement type for ROI merge").asLeft
                                     case (Some(threshold), None) => NonEmptyList.one("Missing requirement type for ROI merge").asLeft
                                     case (None, Some(reqType)) => NonEmptyList.one("Missing threshold for ROI merge").asLeft
                                     case (Some(threshold), Some(reqType)) => 
-                                        groups.map{ g => TraceIdDefinitionRule(
+                                        groups.map{ (k, g) => TraceIdDefinitionRule(
+                                            k,
                                             ProximityGroup(threshold, g), 
                                             reqType,
                                             )

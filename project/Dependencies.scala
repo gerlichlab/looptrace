@@ -2,6 +2,11 @@ import sbt._
 
 /** Dependencies for the project */
 object Dependencies {
+    /** Get a typelevel cats dependency specification. */
+    object Cats {
+        def getModuleId(name: String) = "org.typelevel" %% s"cats-$name" % "2.12.0"
+    }
+
     /** gerlichlab dependency declaration helper */
     object Gerlib {
         def getModuleId(name: String) = groupId %% artifact(name) % version
@@ -37,7 +42,7 @@ object Dependencies {
     lazy val scalatestVersion = "3.2.18"
     
     /* core libraries */
-    lazy val catsCore = "org.typelevel" %% "cats-core" % "2.12.0"
+    lazy val catsCore = Cats.getModuleId("core")
     lazy val gerlibs = Seq(
         "graph",
         "io",
@@ -69,6 +74,7 @@ object Dependencies {
     lazy val uPickle = HaoyiJson.getModuleId("upickle")
 
     /* testing-related dependencies */
+    lazy val catsLaws = Cats.getModuleId("laws")
     lazy val gerlibTesting = Gerlib.getModuleId("testing")
     lazy val scalacheck = "org.scalacheck" %% "scalacheck" % "1.18.0"
     lazy val scalactic = "org.scalactic" %% "scalactic" % scalatestVersion

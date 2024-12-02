@@ -6,7 +6,7 @@
         "discardRoisNotInGroupsOfInterest": true,
         "distanceThreshold": 2000,
         "requirementType": "Conjunctive",
-        "groups": [[6, 7], [8, 9]]
+        "groups": {"A": [6, 7], "B": [8, 9]}
     },
     "imagingRounds": [
         {"time": 0, "name": "pre_image", "isBlank": true},

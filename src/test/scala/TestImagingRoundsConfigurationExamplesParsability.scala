@@ -215,14 +215,16 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
                 val expDistance = 
                     import io.github.iltotore.iron.autoRefine
                     EuclideanDistance.Threshold(NonnegativeReal(2000))
-                NonEmptyList.of(Set(6, 7), Set(8, 9))
-                    .map(_.map(ImagingTimepoint.unsafe).pipe(AtLeast2.unsafe))
-                    .map{ g => 
-                        TraceIdDefinitionRule(
-                            ProximityGroup(expDistance, g), 
-                            RoiPartnersRequirementType.Conjunctive,
-                        ) 
-                    }
+                NonEmptyList.of(
+                    "A" -> MergeBag.unsafe(Set(6, 7)), 
+                    "B" -> MergeBag.unsafe(Set(8, 9)),
+                ).map{ (k, g) => 
+                    TraceIdDefinitionRule(
+                        k,
+                        ProximityGroup(expDistance, g), 
+                        RoiPartnersRequirementType.Conjunctive,
+                    ) 
+                }
             Table(
                 ("configFileName", "expectedMergeRules"), 
                 ("good_example__legitimate_tracing_merge_groups.json", expRules), 
@@ -286,6 +288,9 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
                     case Invalid(messages) => fail(f"${messages.length} failure(s): ${messages.mkString_("; ")}")
                 }
         }
+
+    object MergeBag:
+        def unsafe = (_: Set[Int]).map(ImagingTimepoint.unsafe).pipe(AtLeast2.unsafe)
 
     private def checkParseFailure(configFile: os.Path, expectedMessage: String, check: (String, String) => Boolean = cats.Eq[String].eqv) = 
         ImagingRoundsConfiguration.fromJsonFile(configFile) match {
