@@ -31,7 +31,7 @@ final case class ImagingRoundsConfiguration private(
     sequence: ImagingSequence, 
     locusGrouping: Set[ImagingRoundsConfiguration.LocusGroup], // should be empty iff there are no locus rounds in the sequence
     proximityFilterStrategy: ImagingRoundsConfiguration.ProximityFilterStrategy,
-    private val maybeMergeRulesForTracing: Option[(NonEmptyList[ImagingRoundsConfiguration.TraceIdDefinitionAndFiltrationRule], Boolean)],
+    private val maybeMergeRulesForTracing: Option[(NonEmptyList[ImagingRoundsConfiguration.TraceIdDefinitionRule], Boolean)],
     // TODO: We could, by default, skip regional and blank imaging rounds (but do use repeats).
     tracingExclusions: Set[ImagingTimepoint], // Timepoints of imaging rounds to not use for tracing
 ):
@@ -40,7 +40,7 @@ final case class ImagingRoundsConfiguration private(
     /** Simply take the rounds from the contained imagingRounds sequence. */
     final def allRounds: NonEmptyList[ImagingRound] = sequence.allRounds
         
-    final def mergeRules: Option[NonEmptyList[ImagingRoundsConfiguration.TraceIdDefinitionAndFiltrationRule]] = 
+    final def mergeRules: Option[NonEmptyList[ImagingRoundsConfiguration.TraceIdDefinitionRule]] = 
         maybeMergeRulesForTracing.map(_._1)
     
     final def discardRoisNotInGroupsOfInterest: Boolean = maybeMergeRulesForTracing.fold(false)(_._2)
@@ -128,7 +128,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
         locusGrouping: Set[LocusGroup], 
         proximityFilterStrategy: ProximityFilterStrategy, 
         tracingExclusions: Set[ImagingTimepoint], 
-        maybeMergeRules: Option[(NonEmptyList[TraceIdDefinitionAndFiltrationRule], Boolean)],
+        maybeMergeRules: Option[(NonEmptyList[TraceIdDefinitionRule], Boolean)],
         checkLocusTimepointCovering: Boolean,
     ): ErrMsgsOr[ImagingRoundsConfiguration] = {
         val knownTimes = sequence.allTimepoints
@@ -213,7 +213,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
                         // Then, find repeated locus timepoints WITHIN each merge group.
                         type GroupId = Int
                         val repeatsByGroup: Map[GroupId, NonEmptyMap[ImagingTimepoint, AtLeast2[Set, ImagingTimepoint]]] = 
-                            def processOneRule = (r: TraceIdDefinitionAndFiltrationRule) => 
+                            def processOneRule = (r: TraceIdDefinitionRule) => 
                                 r.mergeGroup.members.toList.foldRight(Map.empty[ImagingTimepoint, NonEmptySet[ImagingTimepoint]]){
                                     (rt, acc) => locusTimesByRegional
                                         .get(rt)
@@ -377,14 +377,14 @@ object ImagingRoundsConfiguration extends LazyLogging:
                     .map(_.toSet)
                     .toValidatedNel
             }
-        val maybeMergeRulesNel: ValidatedNel[String, Option[(NonEmptyList[TraceIdDefinitionAndFiltrationRule], Boolean)]] = 
+        val maybeMergeRulesNel: ValidatedNel[String, Option[(NonEmptyList[TraceIdDefinitionRule], Boolean)]] = 
             val sectionKey = "mergeRulesForTracing"
             data.get(sectionKey) match {
                 case None | Some(ujson.Null) => 
                     logger.debug(s"No section '$sectionKey', ignoring")
                     Validated.Valid(None)
                 case Some(jsonData) => 
-                    TraceIdDefinitionAndFiltrationRulesSet.fromJson(jsonData).toValidated.map(_.some)
+                    TraceIdDefinitionRulesSet.fromJson(jsonData).toValidated.map(_.some)
             }
         val checkLocusTimepointCoveringNel: ValidatedNel[String, Boolean] = 
             data.get("checkLocusTimepointCovering") match {
@@ -409,7 +409,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
         locusGrouping: Set[LocusGroup], 
         proximityFilterStrategy: ProximityFilterStrategy, 
         tracingExclusions: Set[ImagingTimepoint],
-        maybeMergeRules: Option[(NonEmptyList[TraceIdDefinitionAndFiltrationRule], Boolean)],
+        maybeMergeRules: Option[(NonEmptyList[TraceIdDefinitionRule], Boolean)],
         checkLocusTimepointCoveringNel: Boolean,
     ): ImagingRoundsConfiguration = 
         build(
@@ -519,18 +519,18 @@ object ImagingRoundsConfiguration extends LazyLogging:
     end ProximityGroup
 
     /** How to redefine trace IDs and filter ROIs on the basis of proximity to one another */
-    final case class TraceIdDefinitionAndFiltrationRule(
+    final case class TraceIdDefinitionRule(
         mergeGroup: ProximityGroup[EuclideanDistance.Threshold, ImagingTimepoint],
         requirement: RoiPartnersRequirementType, 
     )
 
     /** Helpers for working with the data type for trace ID definition and filtration */
-    object TraceIdDefinitionAndFiltrationRulesSet:
+    object TraceIdDefinitionRulesSet:
         /** The key which maps to the collection of groups */
         private val groupsKey = "groups"
         private val strictnessKey = "discardRoisNotInGroupsOfInterest"
 
-        def fromJson(json: ujson.Readable): EitherNel[String, (NonEmptyList[TraceIdDefinitionAndFiltrationRule], Boolean)] = 
+        def fromJson(json: ujson.Readable): EitherNel[String, (NonEmptyList[TraceIdDefinitionRule], Boolean)] = 
             Try{ read[Map[String, ujson.Value]](json) }
                 .toEither
                 .leftMap(e => NonEmptyList.one(s"Cannot read JSON as key-value pairs: ${e.getMessage}"))
@@ -576,7 +576,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
                                     case (Some(threshold), None) => NonEmptyList.one("Missing requirement type for ROI merge").asLeft
                                     case (None, Some(reqType)) => NonEmptyList.one("Missing threshold for ROI merge").asLeft
                                     case (Some(threshold), Some(reqType)) => 
-                                        groups.map{ g => TraceIdDefinitionAndFiltrationRule(
+                                        groups.map{ g => TraceIdDefinitionRule(
                                             ProximityGroup(threshold, g), 
                                             reqType,
                                             )
@@ -618,7 +618,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
                     AtLeast2.unsafe(uniques)
                 )
             }
-    end TraceIdDefinitionAndFiltrationRulesSet
+    end TraceIdDefinitionRulesSet
 
     /** Check list of items for nonemptiness. */
     private def liftToNel[A](as: List[A], context: Option[String] = None): Either[String, NonEmptyList[A]] = 

@@ -17,9 +17,9 @@ import at.ac.oeaw.imba.gerlich.gerlib.testing.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.{
     ProximityGroup,
     RoiPartnersRequirementType,
-    TraceIdDefinitionAndFiltrationRulesSet,
+    TraceIdDefinitionRulesSet,
 }
-import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.TraceIdDefinitionAndFiltrationRule
+import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.TraceIdDefinitionRule
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeReal
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 
@@ -67,23 +67,23 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
         forAll: (threshold: EuclideanDistance.Threshold, requirement: RoiPartnersRequirementType, groups: NonEmptyList[AtLeast2[Set, ImagingTimepoint]], strict: Boolean) => 
             val groupsJson = groups.map(ids => "[" ++ ids.toList.map(_.show_).mkString(", ") ++ "]").mkString_(", ")
             val json = s"""{"discardRoisNotInGroupsOfInterest": $strict, "distanceThreshold": ${threshold.get.show_}, "requirementType": "${requirement}", "groups": [${groupsJson}]}"""
-            TraceIdDefinitionAndFiltrationRulesSet.fromJson(json) match {
+            TraceIdDefinitionRulesSet.fromJson(json) match {
                 case Left(messages) => 
                     fail(s"${messages.length} error(s) decoding JSON: ${messages.mkString_("; ")}" ++ "\n" ++ json)
                 case Right(parsedResult) => 
-                    val expGroups = groups.map{ g => TraceIdDefinitionAndFiltrationRule(ProximityGroup(threshold, g), requirement) }
+                    val expGroups = groups.map{ g => TraceIdDefinitionRule(ProximityGroup(threshold, g), requirement) }
                     parsedResult shouldEqual (expGroups, strict)
             }
     
     test("Simple single-group example parses as expected"):
         val strict = true
         val json = s"""{"discardRoisNotInGroupsOfInterest": $strict, "distanceThreshold": 5, "requirementType": "Conjunctive", "groups": [[9, 10]]}"""
-        TraceIdDefinitionAndFiltrationRulesSet.fromJson(json) match {
+        TraceIdDefinitionRulesSet.fromJson(json) match {
             case Left(messages) => 
                 fail(s"${messages.length} error(s) decoding JSON: ${messages.mkString_("; ")}" ++ "\n" ++ json)
             case Right(parsedResult) => 
                 import io.github.iltotore.iron.autoRefine
-                val expectation = TraceIdDefinitionAndFiltrationRule(
+                val expectation = TraceIdDefinitionRule(
                     ProximityGroup(
                         EuclideanDistance.Threshold(5: NonnegativeReal), 
                         AtLeast2.unsafe(Set(9, 10).map(ImagingTimepoint.unsafeLift))
@@ -99,15 +99,15 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
             EuclideanDistance.Threshold(5: NonnegativeReal)
         val strict = true
         val json = s"""{"discardRoisNotInGroupsOfInterest": $strict, "distanceThreshold": ${threshold.get.show_}, "requirementType": "Conjunctive", "groups": [[1, 0], [9, 10]]}"""
-        TraceIdDefinitionAndFiltrationRulesSet.fromJson(json) match {
+        TraceIdDefinitionRulesSet.fromJson(json) match {
             case Left(messages) => 
                 fail(s"${messages.length} error(s) decoding JSON: ${messages.mkString_("; ")}" ++ "\n" ++ json)
             case Right(parsedResult) => 
-                val exp1 = TraceIdDefinitionAndFiltrationRule(
+                val exp1 = TraceIdDefinitionRule(
                     ProximityGroup(threshold, AtLeast2.unsafe(Set(1, 0).map(ImagingTimepoint.unsafeLift))), 
                     RoiPartnersRequirementType.Conjunctive,
                 )
-                val exp2 = TraceIdDefinitionAndFiltrationRule(
+                val exp2 = TraceIdDefinitionRule(
                     ProximityGroup(threshold, AtLeast2.unsafe(Set(9, 10).map(ImagingTimepoint.unsafeLift))),
                     RoiPartnersRequirementType.Conjunctive,
                 )
@@ -115,7 +115,7 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
         }
 
     test("Without requirement type, no parse"):
-        TraceIdDefinitionAndFiltrationRulesSet.fromJson(
+        TraceIdDefinitionRulesSet.fromJson(
             s"""{"discardRoisNotInGroupsOfInterest": true, "distanceThreshold": 5, "groups": [[9, 10]]}"""
         ) match {
             case Left(messages) => 
@@ -125,7 +125,7 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
         }
     
     test("Without threshold, no parse"):
-        TraceIdDefinitionAndFiltrationRulesSet.fromJson(
+        TraceIdDefinitionRulesSet.fromJson(
             s"""{"discardRoisNotInGroupsOfInterest": true, "requirementType": "Conjunctive", "groups": [[9, 10]]}"""
         ) match {
             case Left(messages) => 
@@ -135,7 +135,7 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
         }
     
     test("Threshold must be nonnegative"):
-        TraceIdDefinitionAndFiltrationRulesSet.fromJson(
+        TraceIdDefinitionRulesSet.fromJson(
             s"""{"discardRoisNotInGroupsOfInterest": true, "distanceThreshold": -1, "requirementType": "Conjunctive", "groups": [[9, 10]]}"""
         ) match {
             case Left(messages) => 
@@ -145,7 +145,7 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
         }
     
     test("Each grouping member must have at least two members"):
-        TraceIdDefinitionAndFiltrationRulesSet.fromJson(
+        TraceIdDefinitionRulesSet.fromJson(
             s"""{"discardRoisNotInGroupsOfInterest": true, "distanceThreshold": 5, "requirementType": "Conjunctive", "groups": [[9, 10], [0]]}"""
         ) match {
             case Left(messages) => 
@@ -155,7 +155,7 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
         }
     
     test("No member may be repeated within a group"):
-        TraceIdDefinitionAndFiltrationRulesSet.fromJson(
+        TraceIdDefinitionRulesSet.fromJson(
             s"""{"discardRoisNotInGroupsOfInterest": true, "distanceThreshold": 5, "requirementType": "Conjunctive", "groups": [[9, 10, 9], [0, 1]]}"""
         ) match {
             case Left(messages) => 
@@ -165,7 +165,7 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
         }
     
     test("No member may be repeated between groups"):
-        TraceIdDefinitionAndFiltrationRulesSet.fromJson(
+        TraceIdDefinitionRulesSet.fromJson(
             s"""{"discardRoisNotInGroupsOfInterest": true, "distanceThreshold": 5, "requirementType": "Conjunctive", "groups": [[9, 10], [0, 9, 1]]}"""
         ) match {
             case Left(messages) => 
@@ -175,7 +175,7 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
         }
     
     test("Requirement type must be one of the fixed values"):
-        TraceIdDefinitionAndFiltrationRulesSet.fromJson(
+        TraceIdDefinitionRulesSet.fromJson(
             s"""{"discardRoisNotInGroupsOfInterest": true, "distanceThreshold": 5, "requirementType": "NotARealValue", "groups": [[9, 10]]}"""
         ) match {
             case Left(messages) => 
@@ -185,7 +185,7 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
         }
     
     test("With neither threshold nor requirement type, no parse"):
-        TraceIdDefinitionAndFiltrationRulesSet.fromJson(
+        TraceIdDefinitionRulesSet.fromJson(
             s"""{"discardRoisNotInGroupsOfInterest": true, "groups": [[9, 10]]}"""
         ) match {
             case Left(messages) => 
@@ -195,7 +195,7 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
         }
     
     test("With no groups, no parse"):
-        TraceIdDefinitionAndFiltrationRulesSet.fromJson(
+        TraceIdDefinitionRulesSet.fromJson(
             s"""{"discardRoisNotInGroupsOfInterest": true, "distanceThreshold": 5, "requirementType": "Conjunctive"}"""
         ) match {
             case Left(messages) => 
@@ -205,7 +205,7 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
         }
 
     test("With empty groups, no parse"):
-        TraceIdDefinitionAndFiltrationRulesSet.fromJson(
+        TraceIdDefinitionRulesSet.fromJson(
             s"""{"discardRoisNotInGroupsOfInterest": true, "distanceThreshold": 5, "requirementType": "Conjunctive", "groups": []}"""
         ) match {
             case Left(messages) => 
@@ -215,7 +215,7 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
         }
 
     test("With null groups, no parse"):
-        TraceIdDefinitionAndFiltrationRulesSet.fromJson(
+        TraceIdDefinitionRulesSet.fromJson(
             s"""{"discardRoisNotInGroupsOfInterest": true, "distanceThreshold": 5, "requirementType": "Conjunctive", "groups": null}"""
         ) match {
             case Left(messages) =>
@@ -225,7 +225,7 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
         }
 
     test("Without specification of discard policy, parse fails"):
-        TraceIdDefinitionAndFiltrationRulesSet.fromJson(
+        TraceIdDefinitionRulesSet.fromJson(
             """{"distanceThreshold": 5, "requirementType": "Conjunctive", "groups": [[9, 10]]}"""
         ) match {
             case Left(messages) =>

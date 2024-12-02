@@ -37,7 +37,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration.{
     RoiPartnersRequirementType,
-    TraceIdDefinitionAndFiltrationRule,
+    TraceIdDefinitionRule,
 }
 import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
 import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.{
@@ -113,7 +113,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
         }
 
     private def definePairwiseDistanceThresholds(
-        rules: NonEmptyList[TraceIdDefinitionAndFiltrationRule],
+        rules: NonEmptyList[TraceIdDefinitionRule],
     ): Map[(ImagingTimepoint, ImagingTimepoint), DistanceThreshold] = 
         import AtLeast2.syntax.toList
         rules.map(_.mergeGroup)
@@ -139,7 +139,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
             }
 
     private def computeNeighborsGraph(
-        rules: NonEmptyList[TraceIdDefinitionAndFiltrationRule],
+        rules: NonEmptyList[TraceIdDefinitionRule],
         pixels: Pixels3D,
     )(records: NonEmptyList[InputRecord]): SimplestGraph[RoiIndex] = 
         val lookupProximity: Map[(ImagingTimepoint, ImagingTimepoint), ProximityComparable[InputRecord]] = 
@@ -197,13 +197,13 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
         TraceId.unsafe(NonnegativeInt(1) + maxRoiId.get)
 
     private[looptrace] def labelRecordsWithTraceId(
-        rules: NonEmptyList[TraceIdDefinitionAndFiltrationRule], 
+        rules: NonEmptyList[TraceIdDefinitionRule], 
         discardIfNotInGroupOfInterest: Boolean,
         pixels: Pixels3D,
     )(records: NonEmptyList[InputRecord]): NonEmptyList[OutputRecord] = 
         /* Necessary imports and type aliases */
         import AtLeast2.syntax.{ remove, toNes, toSet }
-        type TimepointExpectationLookup = NonEmptyMap[ImagingTimepoint, TraceIdDefinitionAndFiltrationRule]
+        type TimepointExpectationLookup = NonEmptyMap[ImagingTimepoint, TraceIdDefinitionRule]
         
         val lookupRecord: NonEmptyMap[RoiIndex, InputRecord] = records.map(r => r.index -> r).toNem
         val lookupRule: TimepointExpectationLookup = 
@@ -252,7 +252,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                                             .flatMap{ r => lookupRule.apply(r.timepoint) }
                                             .toNel
                                             .fold(!discardIfNotInGroupOfInterest){ rules => 
-                                                given Eq[TraceIdDefinitionAndFiltrationRule] = Eq.fromUniversalEquals
+                                                given Eq[TraceIdDefinitionRule] = Eq.fromUniversalEquals
                                                 val nUniqueRules = rules.toList.toSet.size
                                                 if nUniqueRules =!= 1
                                                 then throw new Exception(
