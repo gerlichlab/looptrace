@@ -541,6 +541,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                     val base = List(r.regionTime.show_, r.traceId.show_, r.locusTime.show_, t.show_, timeIndex.show, p.z.show_, p.y.show_, p.x.show_)
                     addFailCodes(base, r.failureReasons)
                 }
+                logger.debug(s"Writing locus points visualisation file: $outfile")
                 os.write(outfile, (header :: outrecs).map(_.mkString(",") ++ "\n").toList)
                 (pos, outfile)
             }
