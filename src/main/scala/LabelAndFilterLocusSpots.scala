@@ -493,11 +493,17 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
         }
     }
 
+    private def stripZarrPrefixFromPositionName(rawPosName: String): String = 
+        // TODO: regex match here on the prefix, then replace the .zarr match.
+        // Cases: no match --> use natural, 1 match --> excise .zarr, > 1 match --> error.
+        ???
+
     private def writePointsForNapari(folder: os.Path)(groupedByPos: List[(PositionName, List[TraceRecordPair])], roundsConfig: ImagingRoundsConfiguration) = {
         import NapariSortKey.given
         import NapariSortKey.*
         val getOutfileAndHeader = (pos: PositionName, qcType: PointDisplayType) => {
-            val fp = folder /  s"${pos.show_}.${qcType.toString.toLowerCase}.csv"
+            val posNameBase = stripZarrPrefixFromPositionName(pos.show_)
+            val fp = folder /  s"$posNameBase.${qcType.toString.toLowerCase}.csv"
             val baseHeader = List("regionTime", "traceId", "locusTime", "traceIndex", "timeIndex", "z", "y", "x")
             val header = qcType match {
                 case PointDisplayType.QCPass => baseHeader
