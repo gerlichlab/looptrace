@@ -9,6 +9,9 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 ### Fixed
 * Make the CSV files for the locus spot files visualisation once again readable by that plugin. See [Issue 398](https://github.com/gerlichlab/looptrace/issues/398).
 
+### Changed
+* Bundle a new version of the regional spots visualisation plugin with the Nix shell, so that the trace IDs is always displayed with each regional spot.
+
 ## [v0.11.2] - 2024-11-28
 
 ### Fixed
