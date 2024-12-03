@@ -4,10 +4,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.12.0] - 2024-12-02
+
+### Added
+* Test for behavior when any timepoint to participate in a merger for tracing is not a regional timepoint
+
+### Changed
+* It's now prohibited to declare merger of regional imaging timepoints for which the locus timepoint sets overlap. 
+See [Issue 384](https://github.com/gerlichlab/looptrace/issues/384).
+* Groups of regional timepoints to "merge" for tracing must now be named, for clear identification and interpretation in downstream analysis. 
+See [Issue 383](https://github.com/gerlichlab/looptrace/issues/383) and [Issue 382](https://github.com/gerlichlab/looptrace/issues/382).
+* It's now prohibited to have multiple instances of the same regional timepoint occur within the same trace. 
+This case can arise if spots from the same regional timepoint occur in sufficiently close proximity to be grouped for tracing but not to be actually merged. 
+In this case, the hypothetical trace is siphoned off separately and not propagated forward in the processing for analysis like the rest of the traces.
+* Sort records in locus pairwise distances file by (after field of view) the name/ID of the tracing structure, then by the locus IDs. 
+This facilitates downstream analysis which group records in a particular way; we anticipate these factors (tracing structure name and locus IDs) as being the most often used for grouping records for downstream analysis.
+
 ## [v0.11.3] - 2024-12-03
 
 ### Fixed
 * Make the CSV files for the locus spot files visualisation once again readable by that plugin. See [Issue 398](https://github.com/gerlichlab/looptrace/issues/398).
+
+## [v0.11.2] - 2024-11-28
 
 ### Changed
 * Bundle a new version of the regional spots visualisation plugin with the Nix shell, so that the trace IDs is always displayed with each regional spot.
