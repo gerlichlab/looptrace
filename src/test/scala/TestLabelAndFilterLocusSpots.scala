@@ -1,6 +1,8 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
 import scala.io.Source
+import cats.data.{ EitherNel, NonEmptyList }
+import cats.syntax.all.*
 import org.scalacheck.{ Gen, Shrink }
 import org.scalactic.Equality
 import org.scalatest.funsuite.AnyFunSuite
@@ -10,13 +12,14 @@ import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import com.github.tototoshi.csv.*
 
-import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.{ ImagingTimepoint, PositionName }
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.LabelAndFilterLocusSpots.{ ParserConfig, QcPassColumn, workflow }
 import at.ac.oeaw.imba.gerlich.looptrace.LocusSpotQC.*
 import at.ac.oeaw.imba.gerlich.looptrace.PathHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
+import org.scalatest.prop.TableFor2
 
 /** Tests for the filtration of the individual supports (single FISH probes) of chromatin fiber traces */
 class TestLabelAndFilterLocusSpots extends AnyFunSuite, ScalaCheckPropertyChecks, GenericSuite, should.Matchers:
@@ -225,6 +228,21 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, ScalaCheckPropertyChecks
                 }
         }
     }
+
+    test("PositionName cleanup works as expected"):
+        import at.ac.oeaw.imba.gerlich.looptrace.LabelAndFilterLocusSpots.stripZarrPrefixFromPositionName as cleanupPositionName
+        val testCases: TableFor2[String, EitherNel[String, String]] = 
+            import io.github.iltotore.iron.autoRefine
+            Table(
+                ("argument", "expectedResult"), 
+                ("P0001.zarr", "P0001".asRight),
+                ("P0002", "P0002".asRight), 
+                ("P00001.zarr", NonEmptyList.one("Unexpected length: 6, not 5").asLeft), 
+                ("P00001", NonEmptyList.one("Unexpected length: 6, not 5").asLeft)
+            )
+        forAll (testCases) { (argument, expectedResult) => 
+            cleanupPositionName(argument) shouldEqual expectedResult
+        }
 
     /* Ancillary functions and types */
     type CsvRows = Iterable[Map[String, String]]

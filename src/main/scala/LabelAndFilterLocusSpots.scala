@@ -3,7 +3,7 @@ package at.ac.oeaw.imba.gerlich.looptrace
 import scala.util.Try
 import upickle.default.*
 import cats.*
-import cats.data.{ NonEmptyList as NEL, ValidatedNel }
+import cats.data.{ EitherNel, NonEmptyList, ValidatedNel }
 import cats.syntax.all.*
 import mouse.boolean.*
 import scopt.OParser
@@ -149,7 +149,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
             distanceToReferenceColumn = "ref_dist"
         )
 
-        final case class ParseError(errorMessages: NEL[String]) extends Exception(s"${errorMessages.size} errors: ${errorMessages}")
+        final case class ParseError(errorMessages: NonEmptyList[String]) extends Exception(s"${errorMessages.size} errors: ${errorMessages}")
     end ParserConfig
 
     val parserBuilder = OParser.builder[CliConfig]
@@ -325,7 +325,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                         parsePixelY, 
                         parsePixelX,
                         ) => { (record: Array[String]) => 
-                            (record.length === header.length).either(NEL.one(s"Record has ${record.length} fields but header has ${header.length}"), ()).flatMap{
+                            (record.length === header.length).either(NonEmptyList.one(s"Record has ${record.length} fields but header has ${header.length}"), ()).flatMap{
                                 Function.const{(
                                     parseFov(record),
                                     parseRegion(record), 
@@ -402,7 +402,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
         basename: String, 
         delimiter: Delimiter,
         overwrite: Boolean = false,
-        ): Unit = {
+    ): Unit = {
         if (!os.isDir(analysisOutfolder)) { os.makeDir.all(analysisOutfolder) }
         if (!os.isDir(pointsOutfolder)) { os.makeDir.all(pointsOutfolder) }
         // Include placeholder for field for label displayability column, which we don't need for CSV writing (only JSON, handled via codec).
@@ -493,25 +493,45 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
         }
     }
 
-    private def stripZarrPrefixFromPositionName(rawPosName: String): String = 
-        // TODO: regex match here on the prefix, then replace the .zarr match.
-        // Cases: no match --> use natural, 1 match --> excise .zarr, > 1 match --> error.
-        ???
+    // Ensure that the .zarr suffix which is sometimes present in the 
+    private[looptrace] def stripZarrPrefixFromPositionName(rawPosName: String): EitherNel[String, String] = 
+        val modified = rawPosName.replaceAll(".zarr", "") // Account for the possibility of the .zarr polluting the true position name.
+        val expPrefix = "P"
+        val hasExpPrefix = 
+            modified.startsWith(expPrefix).validatedNel(s"Missing expected prefix ($expPrefix)", ())
+        val hasExpLength = 
+            val expLength = expPrefix.length + 4 // Expect exactly 4 digits.
+            (modified.length === expLength).validatedNel(s"Unexpected length: ${modified.length}, not $expLength", ())
+        val allDigitsAfterPrefix = 
+            modified.tail
+                .filterNot(_.isDigit)
+                .toList.toNel
+                .toLeft(())
+                .leftMap{ nonDigits => NonEmptyList.one(s"${nonDigits.length} non-digit character after prefix") }
+                .toValidated
+        (hasExpPrefix, hasExpLength, allDigitsAfterPrefix)
+            .tupled
+            .map(_ => modified)
+            .toEither
+
 
     private def writePointsForNapari(folder: os.Path)(groupedByPos: List[(PositionName, List[TraceRecordPair])], roundsConfig: ImagingRoundsConfiguration) = {
         import NapariSortKey.given
         import NapariSortKey.*
-        val getOutfileAndHeader = (pos: PositionName, qcType: PointDisplayType) => {
-            val posNameBase = stripZarrPrefixFromPositionName(pos.show_)
-            val fp = folder /  s"$posNameBase.${qcType.toString.toLowerCase}.csv"
-            val baseHeader = List("regionTime", "traceId", "locusTime", "traceIndex", "timeIndex", "z", "y", "x")
-            val header = qcType match {
-                case PointDisplayType.QCPass => baseHeader
-                case PointDisplayType.QCFail => baseHeader :+ "failCode"
-                case PointDisplayType.Invisible => throw new RuntimeException("Tried to create output file for invisible point type!")
+
+        val getOutfileAndHeader: (PositionName, PointDisplayType) => EitherNel[String, (os.Path, List[String])] = 
+            (pos: PositionName, qcType: PointDisplayType) => {
+                stripZarrPrefixFromPositionName(pos.show_).map{ posNameBase => 
+                    val fp = folder /  s"$posNameBase.${qcType.toString.toLowerCase}.csv"
+                    val baseHeader = List("regionTime", "traceId", "locusTime", "traceIndex", "timeIndex", "z", "y", "x")
+                    val header = qcType match {
+                        case PointDisplayType.QCPass => baseHeader
+                        case PointDisplayType.QCFail => baseHeader :+ "failCode"
+                        case PointDisplayType.Invisible => throw new RuntimeException("Tried to create output file for invisible point type!")
+                    }
+                    fp -> header
+                }
             }
-            fp -> header
-        }
         
         groupedByPos
             .flatMap{ (pos, traceRecordPairs) => traceRecordPairs.toNel.map(pos -> _) }
@@ -532,6 +552,12 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                     }
                 }
                 val (outfile, header) = getOutfileAndHeader(pos, qcType)
+                    .leftMap{ problems => 
+                        new Exception(
+                            s"${problems.length} problem(s) getting header and output file for position name $pos: ${problems.mkString_("; ")}"
+                        )
+                    }
+                    .fold(throw _, identity)
                 val outrecs = traceRecordPairs.map{ (t, r) => 
                     val p = r.centerInPixels                    
                     val timeIndex = (
