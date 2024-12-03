@@ -97,11 +97,6 @@ class Tracer:
         return Path(str(p).replace(".csv", "_beads.csv")) if self._trace_beads else p
 
     @property
-    def locus_spots_visualisation_folder(self) -> Path:
-        """Where to write the locus-specific spot images visualisation data"""
-        return self.image_handler.locus_spots_visualisation_folder
-
-    @property
     def nanometers_per_pixel_xy(self) -> NumberLike:
         return self.image_handler.nanometers_per_pixel_xy
 
@@ -190,7 +185,7 @@ class Tracer:
         _, a0 = name_data_pairs[0]
         return write_jvm_compatible_zarr_store(
             name_data_pairs, 
-            root_path=self.locus_spots_visualisation_folder, 
+            root_path=self.image_handler.locus_spots_visualisation_folder, 
             dtype=a0.dtype, 
             overwrite=overwrite,
         )
