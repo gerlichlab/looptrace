@@ -338,6 +338,7 @@ def run_locus_spot_viewing_prep(rounds_config: ExtantFile, params_config: Extant
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config)
     src_dst_pairs: list[tuple[Path, Path]] = get_locus_spot_data_file_src_dst_pairs(infolder=H.locus_spots_visualisation_folder)
     for src, dst in src_dst_pairs:
+        logging.debug("Moving: %s --> %s", src, dst)
         shutil.move(src, dst)
 
 
