@@ -46,8 +46,12 @@ object ColumnNames:
     val TooCloseRoisColumnName: ColumnName[NonEmptySet[RoiIndex]] = 
         ColumnName("tooCloseRois")
 
+    val TraceGroupColumnName: ColumnName[TraceGroupOptional] = ColumnName("traceGroup")
+
     val TraceIdColumnName: ColumnName[TraceId] = ColumnName("traceId")
 
+    val TracePartnersAreAllPresentColumnName: ColumnName[Option[Boolean]] = ColumnName("hasAllTracePartners")
+    
     val TracePartnersColumName: ColumnName[Set[RoiIndex]] = ColumnName("tracePartners")
 
     private def coarseDriftColumnName[A <: EuclideanAxis](a: A): ColumnName[CoarseDriftComponent[A]] = 

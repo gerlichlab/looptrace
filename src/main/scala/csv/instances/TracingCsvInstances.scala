@@ -6,9 +6,12 @@ import fs2.data.csv.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt
 
 /** CSV-related typeclass instances for trace IDs */
-trait TraceIdInstances:
+trait TracingCsvInstances:
     /** Encode the trace ID by encoding simply the underlying value. */
     given cellEncoderForTraceId(
         using enc: CellEncoder[NonnegativeInt]
     ): CellEncoder[TraceId] = enc.contramap(_.get)
-end TraceIdInstances
+
+    /** Encoder a (possibly empty) trace group ID by the wrapped value, or empty string. */
+    given CellEncoder[TraceGroupOptional] = CellEncoder.instance(_.toOption.fold("")(_.get))
+end TracingCsvInstances

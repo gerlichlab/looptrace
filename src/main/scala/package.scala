@@ -110,6 +110,14 @@ package object looptrace {
             override def getRowIndex: RoiIndex => Id[NonnegativeInt] = _.get
     end RoiIndex
 
+    final case class TraceGroupId(get: String)
+
+    final case class TraceGroupOptional(value: Option[TraceGroupId]):
+        def toOption: Option[TraceGroupId] = value
+
+    object TraceGroupOptional:
+        def empty: TraceGroupOptional = TraceGroupOptional(None)
+
     final case class TraceId(get: NonnegativeInt) derives Order
     
     object TraceId:
