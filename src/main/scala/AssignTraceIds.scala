@@ -1,5 +1,7 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
+import scala.util.NotGiven
+import scala.util.chaining.*
 import cats.*
 import cats.data.*
 import cats.effect.IO
@@ -13,7 +15,7 @@ import squants.space.{ Length, Nanometers }
 import com.typesafe.scalalogging.StrictLogging
 
 import at.ac.oeaw.imba.gerlich.gerlib.cell.NuclearDesignation
-import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2
+import at.ac.oeaw.imba.gerlich.gerlib.collections.{ AtLeast2, lookupBySubset }
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.{ Centroid, DistanceThreshold, EuclideanDistance, ProximityComparable }
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.PiecewiseDistance.ConjunctiveThreshold
 import at.ac.oeaw.imba.gerlich.gerlib.graph.{
@@ -43,7 +45,9 @@ import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
 import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.{
     MergeContributorsColumnNameForAssessedRecord,
     RoiIndexColumnName,
+    TraceGroupColumnName,
     TraceIdColumnName,
+    TracePartnersAreAllPresentColumnName,
     TracePartnersColumName,
 }
 import at.ac.oeaw.imba.gerlich.looptrace.csv.getCsvRowDecoderForImagingChannel
@@ -62,6 +66,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
         roisFile: os.Path = null, // unconditionally required
         pixels: Pixels3D = null, // required,
         outputFile: os.Path = null, // unconditionally required
+        skipsFile: os.Path = null, // unconditionally required
     )
 
     val parserBuilder = OParser.builder[CliConfig]
@@ -89,11 +94,24 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                 .text("How many nanometers per unit in each direction (x, y, z)"),
             opt[os.Path]('O', "outputFile")
                 .required()
-                .action((f, c) => c.copy(outputFile = f)), 
+                .action((f, c) => c.copy(outputFile = f))
+                .text("Path to file to which to write main output"),
+            opt[os.Path]("skipsFile")
+                .required()
+                .action((f, c) => c.copy(skipsFile = f))
+                .text("Path to location to which to write skips"),
             checkConfig{ c => 
                 if c.roisFile =!= c.outputFile then success
                 else failure(s"ROIs file and output file are the same! ${c.roisFile}")
-            }
+            }, 
+            checkConfig{ c =>
+                if c.roisFile =!= c.skipsFile then success
+                else failure(s"ROIs file and skips file are the same! ${c.roisFile}")
+            },
+            checkConfig{ c =>
+                if c.outputFile =!= c.skipsFile then success
+                else failure(s"Output file skips file are the same! ${c.outputFile}")
+            },
         )
 
         OParser.parse(parser, args, CliConfig()) match {
@@ -103,6 +121,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                 roisFile = opts.roisFile, 
                 pixels = opts.pixels,
                 outputFile = opts.outputFile,
+                skipsFile = opts.skipsFile
             )
         }
     }
@@ -180,9 +199,10 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                         case r1 :: r2 :: Nil =>
                             lookupProximity
                                 // First, these records' timepoints may not have been in the rules set and 
-                                // may therefore need to be tested for proximity.
+                                // may therefore not need to be tested for proximity.
                                 .get(r1.timepoint -> r2.timepoint)
-                                // Emit a pair of edge endpoints iff these records are proximal.
+                                // Given that this pair ARE jointly in a merge rule, emit a
+                                // pair of edge endpoints if and only if these records are proximal.
                                 .flatMap(_.proximal(r1, r2).option(r1.index -> r2.index))
                         case notPair => 
                             throw new Exception(s"Got ${notPair.length} element(s) when taking pairs!")
@@ -193,19 +213,21 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
 
     // Start trace IDs with 1 more than max ROI ID/index.
     private def getInitialTraceId(roiIds: NonEmptyList[RoiIndex]): TraceId = 
-        val maxRoiId = roiIds.toList.max(using summon[Order[RoiIndex]].toOrdering)
+        val maxRoiId = roiIds.toList.max(using Order[RoiIndex].toOrdering)
         TraceId.unsafe(NonnegativeInt(1) + maxRoiId.get)
+
+    private type TimepointExpectationLookup = NonEmptyMap[ImagingTimepoint, TraceIdDefinitionRule]
 
     private[looptrace] def labelRecordsWithTraceId(
         rules: NonEmptyList[TraceIdDefinitionRule], 
         discardIfNotInGroupOfInterest: Boolean,
         pixels: Pixels3D,
-    )(records: NonEmptyList[InputRecord]): NonEmptyList[OutputRecord] = 
+    )(records: NonEmptyList[InputRecord]): List[InputRecordFate] = 
         /* Necessary imports and type aliases */
-        import AtLeast2.syntax.{ remove, toNes, toSet }
-        type TimepointExpectationLookup = NonEmptyMap[ImagingTimepoint, TraceIdDefinitionRule]
-        
+        import AtLeast2.syntax.{ toNes, toSet }
+
         val lookupRecord: NonEmptyMap[RoiIndex, InputRecord] = records.map(r => r.index -> r).toNem
+        
         val lookupRule: TimepointExpectationLookup = 
             // Provide a way to get the expected group members and requirement stringency for a given timepoint.
             given orderForKeyValuePairs[V]: Order[(ImagingTimepoint, V)] = Order.by(_._1)
@@ -216,6 +238,27 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                     else throw new Exception(s"${collisions.size} key collision(s) between lookups to combine: $collisions")
                 }
             rules.reduceMap{ r => r.mergeGroup.members.toNes.map(_ -> r).toNonEmptyList.toNem }
+        
+        val lookupTraceGroupId: NonEmptySet[ImagingTimepoint] => Either[AtLeast2[List, (Set[ImagingTimepoint], TraceGroupId)], TraceGroupOptional] = 
+            val traceGroupIdByRegTimeSet: NonEmptyMap[Set[ImagingTimepoint], TraceGroupId] = 
+                val membersNamePairs = rules.map(r => r.mergeGroup.members.toSet -> TraceGroupId(r.name))
+                val (k1, v1) = membersNamePairs.head
+                given Order[Set[ImagingTimepoint]] = Order.by(_.toList)
+                membersNamePairs.tail
+                    .foldLeft(NonEmptyMap.one[Set[ImagingTimepoint], TraceGroupId].tupled(membersNamePairs.head)){ 
+                        case (acc, (members, name)) => acc.apply(members) match {
+                            case None => acc.add(members -> name)
+                            case Some(establishedName) => 
+                                throw new Exception(
+                                    s"Group ($members) with name '$name' already maps to name '$establishedName'"
+                                )
+                        }
+                    }
+            val rawLookup: Set[ImagingTimepoint] => Either[AtLeast2[List, (Set[ImagingTimepoint], TraceGroupId)], Option[TraceGroupId]] = 
+                lookupBySubset(traceGroupIdByRegTimeSet.toSortedMap.toList)
+            // Reduce the input to a "normal" Set, push it through the lookup, and then lift a good result.
+            _.toSortedSet.pipe(rawLookup.map(_.map(TraceGroupOptional.apply)))
+    
         val initTraceId = getInitialTraceId(records.map(_.index))
         val traceIdsOffLimits = 
             // Don't use any ROI index/ID as a trace ID.
@@ -227,68 +270,114 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                 .getOrElse{ throw new Exception("Empty component!") }) // protected against by definition of component
             .toList.toNel // We want a nonempty list of components to accumulate errors
             .getOrElse{ throw new Exception("No components!") } //  protected against by initial .toNel call on input ROIs
+            // Recover the actual records for each component (consisting of IDs), using the lookup table/function.
             .traverse(_.traverse{ i => lookupRecord.apply(i).toValidNel(i) })
             .fold(
                 badIds => 
                     // guarded against by construction of the lookup from records input
                     throw new Exception(s"${badIds.length} ROI IDs couldn't be looked up! Here's one: ${badIds.head.show_}"),
-                _.toList.foldRight(initTraceId -> List.empty[OutputRecord]){ 
-                    case (recGroup, (currId, acc)) => 
-                        checkTraceId(traceIdsOffLimits)(currId)
-                        val newRecs: List[OutputRecord] = 
-                            AtLeast2.either(recGroup.map(_.index).toList.toSet).fold(
-                                Function.const{ // singleton
-                                    given Eq[RoiPartnersRequirementType] = Eq.fromUniversalEquals
-                                    val useRecord = lookupRule
-                                        .apply(recGroup.head.timepoint)
-                                        .fold(!discardIfNotInGroupOfInterest)(_.requirement === RoiPartnersRequirementType.Lackadaisical)
-                                    if useRecord then List((recGroup.head, currId, None))
-                                    else List()
-                                }, 
-                                multiIds => 
-                                    val useGroup: Boolean = 
-                                        recGroup // at least two ROIs in group/component
-                                            .toList
-                                            .flatMap{ r => lookupRule.apply(r.timepoint) }
-                                            .toNel
-                                            .fold(!discardIfNotInGroupOfInterest){ rules => 
-                                                given Eq[TraceIdDefinitionRule] = Eq.fromUniversalEquals
-                                                val nUniqueRules = rules.toList.toSet.size
-                                                if nUniqueRules =!= 1
-                                                then throw new Exception(
-                                                    s"$nUniqueRules unique merge rules (not 1) for single group!"
-                                                )
-                                                else
-                                                    val rule = rules.head
-                                                    val expectedTimes = rule.mergeGroup.members.toSet
-                                                    val observedTimes = recGroup.map(_.timepoint).toList.toSet
-                                                    rule.requirement match {
-                                                        case RoiPartnersRequirementType.Conjunctive => 
-                                                            observedTimes === expectedTimes
-                                                        case RoiPartnersRequirementType.Disjunctive => 
-                                                            observedTimes subsetOf expectedTimes
-                                                        case RoiPartnersRequirementType.Lackadaisical => 
-                                                            true
-                                                    }
-                                            }
-                                    if useGroup 
-                                    then recGroup.toList.map(rec => (rec, currId, multiIds.remove(rec.index).some))
-                                    else List()
-                            )
-                        val newTid = TraceId.unsafe(NonnegativeInt(1) + currId.get)
-                        (newTid, newRecs ::: acc)
-                }
+                _.toList
+                    .foldRight(initTraceId -> List.empty[InputRecordFate]){ 
+                        case (recGroup, (currId, acc)) => 
+                            checkTraceId(traceIdsOffLimits)(currId)
+                            val newRecs: List[InputRecordFate] = 
+                                processOneGroup(discardIfNotInGroupOfInterest, lookupRule, lookupTraceGroupId)(recGroup, currId)
+                            val newTid = 
+                                // Increment the trace ID if and only if any record in the current group is being emitted as output.
+                                if newRecs.forall(_.isLeft) then currId else TraceId.unsafe(NonnegativeInt(1) + currId.get)
+                            (newTid, newRecs ::: acc)
+                    }._2
             )
-            ._2
-            .toNel
-            .getOrElse{
-                // guarded against by checking for empty input up front
-                throw new Exception("Wound up with empty results despite nonempty input!")
-            }
 
-    def workflow(roundsConfig: ImagingRoundsConfiguration, roisFile: os.Path, pixels: Pixels3D, outputFile: os.Path): Unit = {
+    def processOneGroup(
+        discardIfNotInGroupOfInterest: Boolean,
+        lookupRule: TimepointExpectationLookup, 
+        lookupTraceGroupId: NonEmptySet[ImagingTimepoint] => Either[AtLeast2[List, (Set[ImagingTimepoint], TraceGroupId)], TraceGroupOptional],
+    ): (NonEmptyList[InputRecord], TraceId) => List[InputRecordFate] = 
+        import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2.syntax.{ map, remove, size, toNes, toSet }
+        given Eq[RoiPartnersRequirementType] = Eq.fromUniversalEquals
+
+        (recGroup, currId) => 
+            AtLeast2.either(recGroup.map(_.index).toList.toSet).fold(
+                // singleton case
+                Function.const{
+                    val singleInputRecord = recGroup.head
+                    val maybeOutputRecord = lookupRule
+                        // See if this record's timepoint is in one of the merge rules.
+                        .apply(recGroup.head.timepoint)
+                        // Generate an output record if either...
+                        //     a. No rule is found, and we're not discarding records from ungrouped timepoints, OR
+                        //     b. We're allowed to use records from timepoints to merge even if there's no merge to be done. 
+                        .fold(!discardIfNotInGroupOfInterest)(_.requirement === RoiPartnersRequirementType.Lackadaisical)
+                        .option{
+                            val query = NonEmptySet.one(singleInputRecord.timepoint)
+                            lookupTraceGroupId(query).bimap(
+                                multiHit => (singleInputRecord.index, query -> multiHit.map(_._2)),
+                                singleHit => OutputRecord(singleInputRecord, singleHit, currId, None, None)
+                            )
+                        }
+                    List(maybeOutputRecord).flatten
+                }, 
+                // at least two ROIs in group/component
+                multiIds => 
+                    val observedTimes = recGroup.map(_.timepoint).toNes
+                    val (groupHasAllTimepoints, reqType) = recGroup
+                        .toList
+                        .flatMap{ r => lookupRule.apply(r.timepoint) }
+                        .toNel
+                        .map{ rules => 
+                            val nUniqueRules = rules.toList.toSet.size
+                            if (nUniqueRules =!= 1) {
+                                throw new Exception(
+                                    // This would be what would happen if one or more elements (timepoints) "bridge" 
+                                    // the groups, i.e. one or more timepoints is used in more than one merge group, 
+                                    // and a spot from such a timepoint acts as a bridge between what should be 
+                                    // separate, independent connected components.
+                                    s"$nUniqueRules unique merge rules (not just 1) for single group! Timepoints: $observedTimes"
+                                )
+                            } else {
+                                // Check here that either all timepoints for a group are present, 
+                                // or that the requirement type to keep a record is NOT conjunctive.
+                                val rule = rules.head
+                                val expectedTimes = rule.mergeGroup.members.toNes
+                                val extraTimes = observedTimes -- expectedTimes
+                                if (extraTimes.nonEmpty) {
+                                    // This should be protected against by the construction of the neighbors graph; 
+                                    // namely, we only draw an edge between points for which the pair of timepoints 
+                                    // are part of the same group of timepoints to merge.
+                                    throw new Exception(s"Extra time(s) not in merge rule $rule -- $extraTimes")
+                                }
+                                ((expectedTimes -- observedTimes).isEmpty, rule.requirement)
+                            }
+                        }
+                        .getOrElse{ 
+                            // This is protected against by the construction of the neighbors graph; specifically, since we're 
+                            // working here with a nontrivial (multi-member) connected component, each pair of m
+                            throw new Exception(
+                                s"No merge rules found for multi-member group! ROI IDs: ${multiIds}. Timepoints: $observedTimes"
+                            )
+                        }
+                    if groupHasAllTimepoints || reqType =!= RoiPartnersRequirementType.Conjunctive
+                    then 
+                        val emitElem: InputRecord => InputRecordFate = lookupTraceGroupId(observedTimes) match {
+                            case Left(multiHit) => 
+                                (r: InputRecord) => (r.index, observedTimes -> multiHit.map(_._2)).asLeft
+                            case Right(traceGroupIdOpt) => 
+                                (r: InputRecord) => 
+                                    val partners = multiIds.remove(r.index).some
+                                    OutputRecord(r, traceGroupIdOpt, currId, partners, groupHasAllTimepoints.some).asRight
+                        }
+                        recGroup.map(emitElem).toList
+                    else List()
+            )
+
+    private type InputRecordFate = Either[(RoiIndex, (NonEmptySet[ImagingTimepoint], AtLeast2[List, TraceGroupId])), OutputRecord]
+
+    def workflow(roundsConfig: ImagingRoundsConfiguration, roisFile: os.Path, pixels: Pixels3D, outputFile: os.Path, skipsFile: os.Path): Unit = {
         import InputRecord.given
         import fs2.data.text.utf8.*
+        import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2.syntax.toSet
+        
         given CsvRowDecoder[ImagingChannel, String] = 
             getCsvRowDecoderForImagingChannel(SpotChannelColumnName)
         
@@ -297,57 +386,77 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
             .map(_.toNel match {
                 case None => 
                     logger.error(s"No input record parsed from ROIs file ($roisFile)!")
-                    Option.empty[NonEmptyList[OutputRecord]]
+                    List.empty[InputRecordFate]
                 case Some(records) => 
                     roundsConfig.mergeRules match {
                         case None => 
+                            // No merger of ROIs for tracing, so no need to find group ID or partners.
                             val initTraceId = getInitialTraceId(records.map(_.index))
                             val traceIdsOffLimits = records.map(r => TraceId(r.index.get)).toNes
                             records.zipWithIndex.map{ (r, i) => 
                                 val newTid = TraceId.unsafe(NonnegativeInt.unsafe(i) + initTraceId.get)
                                 checkTraceId(traceIdsOffLimits)(newTid)
-                                (r, newTid, None)
-                            }.some
+                                OutputRecord(r, TraceGroupOptional.empty, newTid, None, None).asRight
+                            }.toList
                         case Some(rules) => 
-                            labelRecordsWithTraceId(rules, roundsConfig.discardRoisNotInGroupsOfInterest, pixels)(records).some
+                            labelRecordsWithTraceId(rules, roundsConfig.discardRoisNotInGroupsOfInterest, pixels)(records)
                     }
             })
             .flatMap(_ match {
-                case None => IO{ logger.error("No output to write!") }
-                case Some(records) => 
+                case Nil => IO{ logger.error("No output to write!") }
+                case inputFates => 
                     import OutputRecord.given
                     given CsvRowEncoder[ImagingChannel, String] = 
                         // for derivation of CsvRowEncoder[ImagingContext, String]
                         SpotChannelColumnName.toNamedEncoder
+                    
+                    val (skips, records) = Alternative[List].separate(inputFates)
                     logger.info(s"Writing output file: $outputFile")
                     fs2.Stream
-                        .emits(records.sortBy(_._1.index).toList)
+                        .emits(records.sortBy(_.inputRecord.index)(using Order[RoiIndex].toOrdering).toList)
                         .through(writeCaseClassesToCsv[OutputRecord](outputFile))
                         .compile
                         .drain
+                    // TODO: write skips file
             })
             .unsafeRunSync()
         
         logger.info("Done!")
     }
 
-    private type OutputRecord = (InputRecord, TraceId, Option[NonEmptySet[RoiIndex]])
+    final case class OutputRecord(
+        inputRecord: InputRecord, // NB: this part of the record contains the ACTUAL merge partners (if any).
+        traceGroupId: TraceGroupOptional,
+        traceId: TraceId, 
+        // NB: these are pointer to actual ROIs, not just their timepoints; these are for TRACE merge, NOT ACTUAL merge.
+        maybePartners: Option[NonEmptySet[RoiIndex]], 
+        hasAllPartners: Option[Boolean] // empty if and only if the record's a singlton
+    ):
+        require(
+            (maybePartners.isEmpty && hasAllPartners.isEmpty) || (maybePartners.nonEmpty && hasAllPartners.nonEmpty),
+            s"The hasAllPartners optional and maybePartners optional must either both be empty or both be nonempty; got ${hasAllPartners} and ${maybePartners}"
+        )
+        def index: RoiIndex = inputRecord.index
+        def context: ImagingContext = inputRecord.context
+        def centroid: Centroid[Double] = inputRecord.centroid
+        def box: BoundingBox = inputRecord.box
 
     object OutputRecord:
-        given encOutRec(using 
+        given csvRowEncoderForOutputRecord(using 
             encRoiId: CellEncoder[RoiIndex],
             encContext: CsvRowEncoder[ImagingContext, String],
             encCentroid: CsvRowEncoder[Centroid[Double], String],
             encBox: CsvRowEncoder[BoundingBox, String], 
             encNuc: CellEncoder[NuclearDesignation],
             encTid: CellEncoder[TraceId],
-        ): CsvRowEncoder[OutputRecord, String] with
+            encTraceGroupId: CellEncoder[TraceGroupOptional],
+            encPartnersFlag: CellEncoder[Boolean],
+        ): CsvRowEncoder[OutputRecord, String] = new:
             override def apply(elem: OutputRecord): RowF[Some, String] = 
-                val (inrec, tid, maybePartners) = elem
-                val idRow = RoiIndexColumnName.write(inrec.index)
-                val ctxRow = encContext(inrec.context)
-                val centerRow = encCentroid(inrec.centroid)
-                val boxRow = encBox(inrec.box)
+                val idRow = RoiIndexColumnName.write(elem.index)
+                val ctxRow = encContext(elem.context)
+                val centerRow = encCentroid(elem.centroid)
+                val boxRow = encBox(elem.box)
                 val mergeInputsRow = 
                     MergeContributorsColumnNameForAssessedRecord.write(elem._1.maybeMergeInputs)
                 val nucRow = 
@@ -359,10 +468,15 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                         case Some(nuclearDesignation) => 
                             NucleusDesignationColumnName.write(nuclearDesignation)
                     }
-                val tidRow = TraceIdColumnName.write(tid)
+                val traceGroupRow = TraceGroupColumnName.write(elem.traceGroupId)
+                val tidRow = TraceIdColumnName.write(elem.traceId)
                 val tracePartnersRow = 
-                    TracePartnersColumName.write(maybePartners.fold(Set())(_.toSortedSet.toSet))
-                idRow |+| ctxRow |+| centerRow |+| boxRow |+| mergeInputsRow |+| nucRow |+| tidRow |+| tracePartnersRow
+                    TracePartnersColumName.write(elem.maybePartners.fold(Set())(_.toSortedSet.toSet))
+                val allPartnersFlagRow = 
+                    given CellEncoder[Option[Boolean]] with
+                        override def apply(cell: Option[Boolean]): String = cell.fold("")(encPartnersFlag.apply)
+                    TracePartnersAreAllPresentColumnName.write(elem.hasAllPartners)
+                idRow |+| ctxRow |+| centerRow |+| boxRow |+| mergeInputsRow |+| nucRow |+| traceGroupRow |+| tidRow |+| allPartnersFlagRow |+| tracePartnersRow
     end OutputRecord
 
     final case class InputRecord(
