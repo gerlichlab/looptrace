@@ -520,7 +520,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
 
     /** How to redefine trace IDs and filter ROIs on the basis of proximity to one another */
     final case class TraceIdDefinitionRule(
-        name: String,
+        name: TraceGroupId,
         mergeGroup: ProximityGroup[EuclideanDistance.Threshold, ImagingTimepoint],
         requirement: RoiPartnersRequirementType, 
     )
@@ -577,12 +577,16 @@ object ImagingRoundsConfiguration extends LazyLogging:
                                     case (Some(threshold), None) => NonEmptyList.one("Missing requirement type for ROI merge").asLeft
                                     case (None, Some(reqType)) => NonEmptyList.one("Missing threshold for ROI merge").asLeft
                                     case (Some(threshold), Some(reqType)) => 
-                                        groups.map{ (k, g) => TraceIdDefinitionRule(
-                                            k,
-                                            ProximityGroup(threshold, g), 
-                                            reqType,
+                                        groups.traverse{ (nameCandidate, group) => 
+                                            TraceGroupId.fromString(nameCandidate).bimap(
+                                                NonEmptyList.one, 
+                                                name => TraceIdDefinitionRule(
+                                                    name,
+                                                    ProximityGroup(threshold, group), 
+                                                    reqType,
+                                                )
                                             )
-                                        }.asRight
+                                        }
                                 })
                                 .flatMap{ rules => 
                                     import AtLeast2.syntax.toList

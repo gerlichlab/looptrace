@@ -29,6 +29,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.testing.instances.all.given
 
 import at.ac.oeaw.imba.gerlich.looptrace.ComputeLocusPairwiseDistances.*
 import at.ac.oeaw.imba.gerlich.looptrace.collections.*
+import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.TraceGroupColumnName
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
@@ -43,6 +44,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
     
     val AllRequiredColumns = List(
         Input.FieldOfViewColumn, 
+        TraceGroupColumnName.value,
         Input.TraceIdColumn, 
         Input.LocusSpecificBarcodeTimepointColumn, 
         Input.RegionalBarcodeTimepointColumn, 
@@ -206,17 +208,18 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
         val pos = 
             import io.github.iltotore.iron.autoRefine
             PositionName("P0001.zarr")
+        val traceGroup = TraceGroupOptional.empty
         val tid = TraceId(NonnegativeInt(1))
         val reg = RegionId(ImagingTimepoint(NonnegativeInt(40)))
         val inputRecords = NonnegativeInt.indexed(List((2.0, 1.0, -1.0), (1.0, 5.0, 0.0), (3.0, 0.0, 2.0))).map{
-            (pt, i) => Input.GoodRecord(pos, tid, reg, LocusId(ImagingTimepoint(i)), buildPoint.tupled(pt))
+            (pt, i) => Input.GoodRecord(pos, traceGroup, tid, reg, LocusId(ImagingTimepoint(i)), buildPoint.tupled(pt))
         }
         val getExpEuclDist = (i: Int, j: Int) => EuclideanDistance.between(inputRecords(i).point, inputRecords(j).point)
         def rawAndTime: Int => (NonnegativeInt, LocusId) = n => (n, n).bimap(NonnegativeInt.unsafe, LocusId.unsafe)
         val expected: Iterable[OutputRecord] = List(0 -> 1, 0 -> 2, 1 -> 2).map{ (i, j) => 
             val (idx1, loc1) = rawAndTime(i)
             val (idx2, loc2) = rawAndTime(j)
-            OutputRecord(pos, tid, reg, reg, loc1, loc2, getExpEuclDist(i, j), idx1, idx2)
+            OutputRecord(pos, traceGroup, tid, reg, reg, loc1, loc2, getExpEuclDist(i, j), idx1, idx2)
         }
         val observed = inputRecordsToOutputRecords(NonnegativeInt.indexed(inputRecords))
         observed shouldEqual expected
@@ -238,7 +241,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
             val possiblePrefixes = records.combinations(2).toList.flatMap{ // Check that at least one pair is a case of same trace ID but with different FOv.
                 case r1 :: r2 :: Nil => 
                     (r1.trace === r2.trace && r1.fieldOfView =!= r2.fieldOfView).option{
-                        s"FOV differs (${r1.fieldOfView} vs. ${r2.fieldOfView}) for pair of records"
+                        s"Different FOVs (${r1.fieldOfView} and ${r2.fieldOfView}) for records from the same trace"
                     }
                 case rs => throw new Exception(s"Got ${rs.length} records when taking pairs!")
             }
@@ -308,7 +311,6 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
     /** Treat trace ID generation equivalently to ROI index generation. */
     given arbitraryForTraceId(using arbRoiIdx: Arbitrary[RoiIndex]): Arbitrary[TraceId] = arbRoiIdx.map(TraceId.fromRoiIndex)
     
-    /** Use arbitrary instances for components to derive an an instance for the sum type. */
     given arbitraryForGoodInputRecord(using 
         arbPosAndTrace: Arbitrary[(PositionName, TraceId)],
         arbRegion: Arbitrary[RegionId], 
@@ -316,7 +318,9 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
         arbPoint: Arbitrary[Point3D], 
     ): Arbitrary[Input.GoodRecord] = 
         (arbPosAndTrace, arbRegion, arbLocus, arbPoint)
-            .mapN{ case ((pos, trace), reg, loc, pt) => Input.GoodRecord(pos, trace, reg, loc, pt) }
+            .mapN{ case ((pos, trace), reg, loc, pt) => 
+                Input.GoodRecord(pos, TraceGroupOptional.empty, trace, reg, loc, pt) 
+            }
 
     private def genPosTracePairOneOrOther: Gen[(PositionName, TraceId)] = 
         val posNames = List("P0001.zarr", "P0002.zarr") map PositionName.unsafe
@@ -336,8 +340,10 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
 
     /** Convert each ADT value to a simple sequence of text fields, for writing to format like CSV. */
     private def recordToTextFields = 
+        import at.ac.oeaw.imba.gerlich.gerlib.instances.simpleShow.given // for SimpleShow[String]
+        import at.ac.oeaw.imba.gerlich.looptrace.instances.traceId.given // for SimpleShow[TraceGroupOptional]
         given SimpleShow[Double] = SimpleShow.fromToString
         (r: Input.GoodRecord) => 
             val (x, y, z) = (r.point.x, r.point.y, r.point.z)
-            List(r.fieldOfView.show_, r.trace.show_, r.region.show_, r.locus.show_, x.show_, y.show_, z.show_)
+            List(r.fieldOfView.show_, r.traceGroup.show_, r.trace.show_, r.region.show_, r.locus.show_, x.show_, y.show_, z.show_)
 end TestComputeLocusPairwiseDistances

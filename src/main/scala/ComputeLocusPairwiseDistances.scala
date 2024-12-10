@@ -29,6 +29,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.TraceIdColumnName
+import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.TraceGroupColumnName
 
 /**
  * Simple pairwise distances within trace IDs
@@ -96,22 +97,39 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
     }
 
     def inputRecordsToOutputRecords(inrecs: Iterable[(Input.GoodRecord, NonnegativeInt)]): Iterable[OutputRecord] = {
-        inrecs.groupBy((r, _) => Input.getGroupingKey(r)).toList.flatMap{ 
-            case (tid, groupedRecords) => 
+        inrecs.groupBy{ (r, _) => Input.getGroupingKey(r) }
+            .toList
+            .flatMap{ (tid, groupedRecords) => 
                 groupedRecords.toList.combinations(2).flatMap{
                     case (r1, i1) :: (r2, i2) :: Nil => 
-                        val fov = (r1.fieldOfView === r2.fieldOfView)
-                            // Get the FOV for this pair of records, asserting that it's the same for each.
-                            .option(r1.fieldOfView)
-                            .getOrElse{ throw new Exception(
-                                s"FOV differs (${r1.fieldOfView} vs. ${r2.fieldOfView}) for pair of records (${i1.show_} and ${i2.show_}) from trace ID ${tid.show_}"
-                            ) }
+                        // Get the (common) field of view for this pair of records, asserting that they're the same.
+                        // If they're not the same, then the trace ID (grouping element) is non-unique globally (experiment level), 
+                        // but may instead be only unique e.g. per field of view.
+                        val fov = 
+                            val fov1 = r1.fieldOfView
+                            val fov2 = r2.fieldOfView
+                            if (fov1 =!= fov2) {
+                                throw new Exception(s"Different FOVs ($fov1 and $fov2) for records from the same trace ($tid)! Record 1: $r1, Record 2: $r2")
+                            }
+                            fov1
+                        // Get the trace group for this pair of records, asserting that the trace group 
+                        // must be the same (since they records must come from the same literal trace).
+                        val maybeGroup = 
+                            val tg1 = r1.traceGroup
+                            val tg2 = r2.traceGroup
+                            if (tg1 =!= tg2) {
+                                throw new Exception(
+                                    s"Different trace groups ($tg1 and $tg2) for records from the same trace ($tid) in FOV $fov! Record 1: $r1, Record 2: $r2"
+                                )
+                            }
+                            tg1
                         (r1.locus =!= r2.locus).option{ 
                             // Don't compute distance between records with the same locus ID. 
                             // In the case of a non-aggregate region, this may well be exceptional. 
-                            // In the case of an aggregate region, 
+                            // TODO: https://github.com/gerlichlab/looptrace/issues/392
                             OutputRecord(
                                 fieldOfView = fov,
+                                traceGroup = maybeGroup,
                                 trace = tid,
                                 region1 = r1.region,
                                 region2 = r2.region,
@@ -124,7 +142,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
                         }
                     case rs => throw new Exception(s"${rs.length} records (not 2) when taking pairs!")
                 }
-        }
+            }
     }
 
     object Input:
@@ -153,6 +171,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
 
             /* Component parsers, one for each field of interest from a record. */
             val maybeParseFOV = getParser(FieldOfViewColumn, PositionName.parse)
+            val maybeParseTraceGroup = getParser(TraceGroupColumnName.value, TraceGroupOptional.fromString)
             val maybeParseTrace = getParser(TraceIdColumn, safeParseInt >>> TraceId.fromInt)
             val maybeParseRegion = getParser(RegionalBarcodeTimepointColumn, safeParseInt >>> RegionId.fromInt)
             val maybeParseLocus = getParser(LocusSpecificBarcodeTimepointColumn, safeParseInt >>> LocusId.fromInt)
@@ -160,14 +179,14 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
             val maybeParseY = getParser(YCoordinateColumn, safeParseDouble >> YCoordinate.apply)
             val maybeParseZ = getParser(ZCoordinateColumn, safeParseDouble >> ZCoordinate.apply)
 
-            (maybeParseFOV, maybeParseTrace, maybeParseRegion, maybeParseLocus, maybeParseX, maybeParseY, maybeParseZ).mapN(
-                (parseFOV, parseTrace, parseRegion, parseLocus, parseX, parseY, parseZ) => 
+            (maybeParseFOV, maybeParseTraceGroup, maybeParseTrace, maybeParseRegion, maybeParseLocus, maybeParseX, maybeParseY, maybeParseZ).mapN(
+                (parseFOV, parseTraceGroup, parseTrace, parseRegion, parseLocus, parseX, parseY, parseZ) => 
                     val validateRecordLength = (r: Array[String]) => 
                         (r.size === header.length).either(NonEmptyList.one(s"Header has ${header.length} fields, but line has ${r.size}"), r)
                     Alternative[List].separate(NonnegativeInt.indexed(records).map{ 
                         (r, i) => validateRecordLength(r).flatMap(Function.const{
-                            (parseFOV(r), parseTrace(r), parseRegion(r), parseLocus(r), parseX(r), parseY(r), parseZ(r)).mapN(
-                                (fov, trace, region, locus, x, y, z) => GoodRecord(fov, trace, region, locus, Point3D(x, y, z))
+                            (parseFOV(r), parseTraceGroup(r), parseTrace(r), parseRegion(r), parseLocus(r), parseX(r), parseY(r), parseZ(r)).mapN(
+                                (fov, traceGroup, trace, region, locus, x, y, z) => GoodRecord(fov, traceGroup, trace, region, locus, Point3D(x, y, z))
                             ).toEither
                         }).bimap(msgs => BadInputRecord(i, r.toList, msgs), _ -> i)
                     })
@@ -181,12 +200,20 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
          * Wrapper around data representing a successfully parsed record from the input file
          * 
          * @param fieldOfView The field of view (FOV) in which this spot was detected
+         * @param traceGroup Optionally, an identifier of which type/kind of tracing structure this record's associated with
          * @param trace The identifier of the trace to which this spot belongs
          * @param region The timepoint in which this spot's associated regional barcode was imaged
          * @param time The timepoint in which the (locus-specific) spot was imaged
          * @param point The 3D spatial coordinates of the center of a FISH spot
          */
-        final case class GoodRecord(fieldOfView: PositionName, trace: TraceId, region: RegionId, locus: LocusId, point: Point3D)
+        final case class GoodRecord(
+            fieldOfView: PositionName, 
+            traceGroup: TraceGroupOptional, 
+            trace: TraceId, 
+            region: RegionId, 
+            locus: LocusId, 
+            point: Point3D,
+        )
 
         /**
          * Bundle of data representing a bad record (line) from input file
@@ -211,6 +238,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
     /** Bundler of data which represents a single output record (pairwise distance) */
     final case class OutputRecord(
         fieldOfView: PositionName, 
+        traceGroup: TraceGroupOptional,
         trace: TraceId, 
         region1: RegionId, 
         region2: RegionId,

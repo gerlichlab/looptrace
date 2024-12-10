@@ -24,6 +24,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
+import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.TraceGroupColumnName
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
@@ -88,11 +89,18 @@ object LocusSpotQC:
       * Bundle of data with which to uniquely identify a locus-specific spot in an experiment
       *
       * @param fieldOfView Field of view, 0-based index
+      * @param traceGroup (Optionally) an identifier of the trace group to which this record belongs
       * @param regionId Wrapper around the timepoint at which the spot's associated region was imaged
       * @param traceId 0-based index identifying the trace, ideally uniquely within the experiment but perhaps not
       * @param locusId Wrapper around the timepoint at which the spot was imaged
       */
-    final case class SpotIdentifier(fieldOfView: PositionName, regionId: RegionId, traceId: TraceId, locusId: LocusId)
+    final case class SpotIdentifier(
+        fieldOfView: PositionName, 
+        traceGroup: TraceGroupOptional, 
+        regionId: RegionId, 
+        traceId: TraceId, 
+        locusId: LocusId,
+    )
     
     /** Helpers for working with identifiers of locus-specific spots */
     object SpotIdentifier:
@@ -106,22 +114,26 @@ object LocusSpotQC:
             extends ujson.Value.InvalidData(json, s"Error(s) decoding locus spot identifier: ${messages.mkString_("; ")}")
         
         /** Create a [[ujson.Obj]] representation of the given spot identifier, mapping each of its field names to simplified value. */
-        private[LocusSpotQC] def toJsonObject(spotId: SpotIdentifier): ujson.Obj = ujson.Obj(
-            FieldOfViewColumnName.value -> spotId.fieldOfView.asJson,
-            "regionId" -> spotId.regionId.get.asJson,
-            "traceId" -> spotId.traceId.get.asJson,
-            "locusId" -> spotId.locusId.get.asJson,
-        )
+        private[LocusSpotQC] def toJsonObject(spotId: SpotIdentifier): ujson.Obj = 
+            import TraceGroupOptional.given
+            ujson.Obj(
+                FieldOfViewColumnName.value -> spotId.fieldOfView.asJson,
+                TraceGroupColumnName.value -> spotId.traceGroup.asJson,
+                "regionId" -> spotId.regionId.get.asJson,
+                "traceId" -> spotId.traceId.get.asJson,
+                "locusId" -> spotId.locusId.get.asJson,
+            )
 
         /** A JSON codec which unwraps the components and maps field names to the refined values */
         def rwForSpotIdentifier: ReadWriter[SpotIdentifier] = readwriter[ujson.Value].bimap(
             toJsonObject,
             json => 
                 val fovNel = safeExtractE(FieldOfViewColumnName.value, PositionName.parse)(json)
+                val traceGroupNel = safeExtractE(TraceGroupColumnName.value, TraceGroupOptional.fromString)(json)
                 val regIdNel = safeExtractE("regionId", safeParseInt >>> RegionId.fromInt)(json)
                 val traceIdNel = safeExtractE("traceId", safeParseInt >>> TraceId.fromInt)(json)
                 val locusIdNel = safeExtractE("locusId", safeParseInt >>> LocusId.fromInt)(json)
-                (fovNel, regIdNel, traceIdNel, locusIdNel).mapN(SpotIdentifier.apply) match {
+                (fovNel, traceGroupNel, regIdNel, traceIdNel, locusIdNel).mapN(SpotIdentifier.apply) match {
                     case Invalid(messages) => throw new DecodingError(messages, json)
                     case Valid(spotId) => spotId
                 }

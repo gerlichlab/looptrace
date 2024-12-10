@@ -28,6 +28,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.space.{ Point3D, XCoordinate, YCoordinate, ZCoordinate }
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
+import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.TraceGroupColumnName
 
 /**
   * Label points underlying traces with various QC pass-or-fail values.
@@ -266,6 +267,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
             case header :: records => 
                 val maybeParse: ErrMsgsOr[Array[String] => ErrMsgsOr[(LocusSpotQC.SpotIdentifier, LocusSpotQC.InputRecord)]] = {
                     val maybeParseFov = buildFieldParse(pc.fovColumn, PositionName.parse)(header)
+                    val maybeParseTraceGroup = buildFieldParse(TraceGroupColumnName.value, TraceGroupOptional.fromString)(header)
                     val maybeParseRegion = buildFieldParse(pc.regionColumn, safeParseInt >>> RegionId.fromInt)(header)
                     val maybeParseTraceId = buildFieldParse(pc.traceIdColumn, safeParseInt >>> TraceId.fromInt)(header)
                     val maybeParseTime = buildFieldParse(pc.timeColumn, safeParseInt >>> ImagingTimepoint.fromInt)(header)
@@ -288,6 +290,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                     val maybeParsePixelX = buildFieldParse("x_px", safeParseDouble >> XCoordinate.apply)(header)
                     (
                         maybeParseFov,
+                        maybeParseTraceGroup,
                         maybeParseRegion, 
                         maybeParseTraceId, 
                         maybeParseTime, 
@@ -307,6 +310,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                         maybeParsePixelX,
                     ).mapN((
                         parseFov,
+                        parseTraceGroup,
                         parseRegion, 
                         parseTraceId,
                         parseTime, 
@@ -328,6 +332,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                             (record.length === header.length).either(NonEmptyList.one(s"Record has ${record.length} fields but header has ${header.length}"), ()).flatMap{
                                 Function.const{(
                                     parseFov(record),
+                                    parseTraceGroup(record),
                                     parseRegion(record), 
                                     parseTraceId(record),
                                     parseTime(record),
@@ -345,8 +350,8 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                                     parsePixelZ(record), 
                                     parsePixelY(record), 
                                     parsePixelX(record), 
-                                    ).mapN((fov, rid, tid, time, z, y, x, refDist, a, bg, sigXY, sigZ, boxZ, boxY, boxX, zPix, yPix, xPix) => 
-                                        val uniqId = LocusSpotQC.SpotIdentifier(fov, rid, tid, LocusId(time))
+                                    ).mapN((fov, traceGroup, rid, tid, time, z, y, x, refDist, a, bg, sigXY, sigZ, boxZ, boxY, boxX, zPix, yPix, xPix) => 
+                                        val uniqId = LocusSpotQC.SpotIdentifier(fov, traceGroup, rid, tid, LocusId(time))
                                         val bounds = LocusSpotQC.BoxUpperBounds(boxX, boxY, boxZ)
                                         val physicalCenter = Point3D(x, y, z)
                                         val pixelCenter = Point3D(xPix, yPix, zPix)
