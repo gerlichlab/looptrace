@@ -100,7 +100,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
         inrecs.groupBy{ (r, _) => Input.getGroupingKey(r) }
             .toList
             .flatMap{ (tid, groupedRecords) => 
-                groupedRecords.toList.combinations(2).flatMap{
+                groupedRecords.toList.combinations(2).map{
                     case (r1, i1) :: (r2, i2) :: Nil => 
                         // Get the (common) field of view for this pair of records, asserting that they're the same.
                         // If they're not the same, then the trace ID (grouping element) is non-unique globally (experiment level), 
@@ -123,23 +123,23 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
                                 )
                             }
                             tg1
-                        (r1.locus =!= r2.locus).option{ 
-                            // Don't compute distance between records with the same locus ID. 
-                            // In the case of a non-aggregate region, this may well be exceptional. 
-                            // TODO: https://github.com/gerlichlab/looptrace/issues/392
-                            OutputRecord(
-                                fieldOfView = fov,
-                                traceGroup = maybeGroup,
-                                trace = tid,
-                                region1 = r1.region,
-                                region2 = r2.region,
-                                locus1 = r1.locus, 
-                                locus2 = r2.locus,
-                                distance = EuclideanDistance.between(r1.point, r2.point), 
-                                inputIndex1 = i1, 
-                                inputIndex2 = i2
-                                )
+                        if (r1.locus === r2.locus) {
+                            throw new Exception(
+                                s"Records (from FOV ${fov.show_}) grouped for locus pairwise distance computation have the same locus ID (${r1.locus.show_})! Record 1: $r1. Record 2: $r2"
+                            )
                         }
+                        OutputRecord(
+                            fieldOfView = fov,
+                            traceGroup = maybeGroup,
+                            trace = tid,
+                            region1 = r1.region,
+                            region2 = r2.region,
+                            locus1 = r1.locus, 
+                            locus2 = r2.locus,
+                            distance = EuclideanDistance.between(r1.point, r2.point), 
+                            inputIndex1 = i1, 
+                            inputIndex2 = i2
+                            )
                     case rs => throw new Exception(s"${rs.length} records (not 2) when taking pairs!")
                 }
             }
