@@ -216,11 +216,11 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
                     import io.github.iltotore.iron.autoRefine
                     EuclideanDistance.Threshold(NonnegativeReal(2000))
                 NonEmptyList.of(
-                    "A" -> MergeBag.unsafe(Set(6, 7)), 
-                    "B" -> MergeBag.unsafe(Set(8, 9)),
-                ).map{ (k, g) => 
+                    TraceGroupId.unsafe("A") -> MergeBag.unsafe(Set(6, 7)), 
+                    TraceGroupId.unsafe("B") -> MergeBag.unsafe(Set(8, 9)),
+                ).map{ (groupId, g) => 
                     TraceIdDefinitionRule(
-                        k,
+                        groupId,
                         ProximityGroup(expDistance, g), 
                         RoiPartnersRequirementType.Conjunctive,
                     ) 

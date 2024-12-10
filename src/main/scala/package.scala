@@ -10,10 +10,13 @@ import mouse.boolean.*
 import scopt.Read
 
 import upickle.default.{ Reader as JsonReader }
-import io.github.iltotore.iron.:|
+import io.github.iltotore.iron.{ :|, refineEither }
+import io.github.iltotore.iron.Not
+import io.github.iltotore.iron.constraint.collection.ForAll
 import io.github.iltotore.iron.constraint.char.*
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.{ ImagingTimepoint, PositionName }
+import at.ac.oeaw.imba.gerlich.gerlib.json.JsonValueWriter
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given // Order, Show
 import at.ac.oewa.imba.gerlich.looptrace.RowIndexAdmission
@@ -110,16 +113,70 @@ package object looptrace {
             override def getRowIndex: RoiIndex => Id[NonnegativeInt] = _.get
     end RoiIndex
 
-    final case class TraceGroupId(get: String)
+    private type TraceGroupNameConstraint = Not[ForAll[Whitespace]]
+    
+    private type ValidTraceGroupName = String :| TraceGroupNameConstraint
 
+    object ValidTraceGroupName:
+        def either: String => Either[String, ValidTraceGroupName] = _.refineEither[TraceGroupNameConstraint]
+
+    /** A name for a certain kind tracing structure in a particular experiment */
+    final case class TraceGroupId(get: ValidTraceGroupName)
+
+    /** Helpers for working with identifiers of tracing groups/structures */
+    object TraceGroupId:
+        given orderForTraceGroupId(using Order[String]): Order[TraceGroupId] = 
+            import io.github.iltotore.iron.cats.given
+            Order.by(_.get)
+
+        given JsonValueWriter[TraceGroupId, ujson.Str] with
+            override def apply(i: TraceGroupId): ujson.Str = ujson.Str(i.get)
+        
+        /** The given name is valid if and only if it's nonempty. */
+        def fromString: String => Either[String, TraceGroupId] = 
+            ValidTraceGroupName.either.fmap(_.map(TraceGroupId.apply))
+
+        /** Use the {@code .fromString} implementation, getting the result or throwing an error. */
+        def unsafe: String => TraceGroupId = s => 
+            fromString(s)
+                .leftMap{ msg => new Exception(s"Illegal value ($s) as trace group ID: $msg") }
+                .fold(throw _, identity)
+    end TraceGroupId
+
+    /** A trace group ID which may or may not be present, isomorphic to {@code Option[TraceGroupId]} via wrapping/unwrapping */
     final case class TraceGroupOptional(value: Option[TraceGroupId]):
         def toOption: Option[TraceGroupId] = value
+    end TraceGroupOptional
 
+    /** Helpers for working with optional trace group IDs */
     object TraceGroupOptional:
+        /** Create a single empty optional trace group ID. */
         def empty: TraceGroupOptional = TraceGroupOptional(None)
+        
+        /** Lift a "pure" trace group ID into the context of optionality. */
+        def apply(groupId: TraceGroupId): TraceGroupOptional = new TraceGroupOptional(groupId.some)
 
+        /** If the input's empty, create an empty trace group ID, otherwise use the input. */
+        def fromString: String => Either[String, TraceGroupOptional] = s =>
+            if s.isEmpty then TraceGroupOptional.empty.asRight
+            else TraceGroupId.fromString(s).map(TraceGroupOptional.apply)
+        
+        /** Use normal cats behavior for ordering optionals, with our defined behavior for ordering nonempty trace group IDs. */
+        given orderForTraceGroupOptional(using Order[TraceGroupId]): Order[TraceGroupOptional] = 
+            Order.by(_.toOption)
+
+        /** The JSON representation is {@code ujson.Null} exactly when the optional ID is empty. */
+        given JsonValueWriter[TraceGroupOptional, ujson.Str | ujson.Null.type] with
+            override def apply(groupOpt: TraceGroupOptional): ujson.Str | ujson.Null.type = 
+                import TraceGroupId.given
+                import at.ac.oeaw.imba.gerlich.gerlib.json.syntax.asJson
+                groupOpt.toOption.fold(ujson.Null)(_.asJson)
+    end TraceGroupOptional
+
+    /** Identifier of a particular trace (unique at the level */
     final case class TraceId(get: NonnegativeInt) derives Order
     
+    /** Helpers for working with an identifier of a particular trace */
     object TraceId:
         def fromInt = NonnegativeInt.either.fmap(_.map(TraceId.apply))
         def fromRoiIndex(i: RoiIndex): TraceId = new TraceId(i.get)

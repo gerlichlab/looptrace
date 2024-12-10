@@ -49,7 +49,15 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
                 case Left(messages) => 
                     fail(s"${messages.length} error(s) decoding JSON: ${messages.mkString_("; ")}" ++ "\n" ++ json)
                 case Right(parsedResult) => 
-                    val expGroups = groups.toNel.map{ (k, g) => TraceIdDefinitionRule(k, ProximityGroup(threshold, g), requirement) }
+                    val expGroups = groups
+                        .toNel
+                        .map{ (k, g) => 
+                            TraceIdDefinitionRule(
+                                TraceGroupId.unsafe(k), 
+                                ProximityGroup(threshold, g), 
+                                requirement
+                            )
+                        }
                     parsedResult shouldEqual (expGroups, strict)
             }
 
@@ -62,7 +70,7 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
             case Right(parsedResult) => 
                 import io.github.iltotore.iron.autoRefine
                 val expectation = TraceIdDefinitionRule(
-                    "A",
+                    TraceGroupId.unsafe("A"),
                     ProximityGroup(
                         EuclideanDistance.Threshold(5: NonnegativeReal), 
                         AtLeast2.unsafe(Set(9, 10).map(ImagingTimepoint.unsafeLift))
@@ -83,12 +91,12 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
                 fail(s"${messages.length} error(s) decoding JSON: ${messages.mkString_("; ")}" ++ "\n" ++ json)
             case Right(parsedResult) => 
                 val exp1 = TraceIdDefinitionRule(
-                    "A",
+                    TraceGroupId.unsafe("A"),
                     ProximityGroup(threshold, AtLeast2.unsafe(Set(1, 0).map(ImagingTimepoint.unsafeLift))), 
                     RoiPartnersRequirementType.Conjunctive,
                 )
                 val exp2 = TraceIdDefinitionRule(
-                    "B",
+                    TraceGroupId.unsafe("B"),
                     ProximityGroup(threshold, AtLeast2.unsafe(Set(9, 10).map(ImagingTimepoint.unsafeLift))),
                     RoiPartnersRequirementType.Conjunctive,
                 )
