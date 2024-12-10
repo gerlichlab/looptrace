@@ -68,6 +68,7 @@ def _parse_cmdl(cmdl: list[str]) -> argparse.Namespace:
 
 
 class RoiType(Enum):
+    """Based on ROI type, decide which pool of ROIs (by file path attribute on ImageHandler) to grab."""
     LocusSpecific = "traces_file_qc_filtered"
     Regional = "spots_for_voxels_definition_file"
 
@@ -208,6 +209,7 @@ def workflow(
                                         channel_column=SIGNAL_CHANNEL_COLUMN,
                                     ):
                                         ch: int = stats[SIGNAL_CHANNEL_COLUMN]
+                                        # Add the original record and signal stats to the growing collection for this channel.
                                         by_raw_channel[ch].append({**r.to_dict(), **stats})
                         
                         # Write the output file for this ROI type, across all FOVs.
