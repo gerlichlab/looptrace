@@ -226,6 +226,9 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
         observed shouldEqual expected
     }
 
+    test("Any trace ID with more than one instance of a particular locus ID causes the expected error."):
+        pending
+
     test("Trace ID is unique globally for an experiment: records with the same trace ID but different fields of view (FOVs) causes expected error. Issue #390"):
         given Arbitrary[(PositionName, TraceId)] = Gen.oneOf(
             // Restrict to relatively few choices of trace ID and position name, to boost collision probability.
