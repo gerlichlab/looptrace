@@ -230,18 +230,13 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
         pending
 
     test("Trace ID is unique globally for an experiment: records with the same trace ID but different fields of view (FOVs) causes expected error. Issue #390"):
-        given Arbitrary[(PositionName, TraceId)] = Gen.oneOf(
+        val posNames = List("P0001.zarr", "P0002.zarr").map(PositionName.unsafe)
+        given Arbitrary[(PositionName, TraceId)] = 
             // Restrict to relatively few choices of trace ID and position name, to boost collision probability.
-            List(8, 9)
-                .map(TraceId.unsafe)
-                .flatMap{ tid => 
-                    List("P0001.zarr", "P0002.zarr")
-                        .map(PositionName.unsafe)
-                        .map(_ -> tid) 
-                }
-        ).toArbitrary
+            Gen.oneOf(posNames.map(_ -> TraceId.unsafe(8))).toArbitrary
 
-        forAll { (records: List[Input.GoodRecord]) => 
+        forAll (Gen.resize(10, arbitrary[Inputs]).flatMap(makeTraceUniqueInLoci)) { records => 
+            //for ((r, i) <- records.zipWithIndex) { println(i); println(r) }
             val possiblePrefixes = records.combinations(2).toList.flatMap{ // Check that at least one pair is a case of same trace ID but with different FOv.
                 case r1 :: r2 :: Nil => 
                     (r1.trace === r2.trace && r1.fieldOfView =!= r2.fieldOfView).option{
@@ -249,7 +244,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
                     }
                 case rs => throw new Exception(s"Got ${rs.length} records when taking pairs!")
             }
-            whenever(possiblePrefixes.nonEmpty && recordsSatisfyUniqueLocusPerTraceConstraint(records)):
+            whenever(possiblePrefixes.nonEmpty):
                 val obsMsg = intercept[Exception]{ inputRecordsToOutputRecords(NonnegativeInt.indexed(records)) }.getMessage
                 possiblePrefixes.exists(obsMsg.startsWith) shouldBe true
         }
@@ -260,7 +255,12 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
         // This ensures that the number of output records differs w.r.t. whether or not the computation does or does not pair up records with the same trace ID but different region ID.
         given Arbitrary[TraceId] = Gen.const(TraceId.unsafe(10)).toArbitrary
         given Arbitrary[PositionName] = Gen.const(PositionName.unsafe("P0001.zarr")).toArbitrary
-        forAll { (inputRecords: List[Input.GoodRecord]) =>  
+
+        def genInputs: Gen[Inputs] = 
+            // Here, use a small input size so that the search for unique locus IDs doesn't exhause the max failure count for Gen.setOfN.
+            Gen.resize(10, arbitrary[Inputs].flatMap(makeTraceUniqueInLoci))
+
+        forAll (genInputs) { inputRecords => 
             val outputRecords = inputRecordsToOutputRecords(NonnegativeInt.indexed(inputRecords))
             val expNumDiscard: Int = // Distance won't be computed between records with the same locus ID within a trace ID.
                 inputRecords.groupBy(_.locus)
@@ -293,23 +293,33 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
         /* To encourage collisions, narrow the choices for grouping components. */
         given arbPosAndTrace: Arbitrary[(PositionName, TraceId)] = genPosTracePairOneOrOther.toArbitrary
         given arbRegion: Arbitrary[RegionId] = Gen.oneOf(40, 41).map(RegionId.unsafe).toArbitrary
-        forAll (Gen.choose(10, 100).flatMap(Gen.resize(_, arbitrary[List[Input.GoodRecord]]))) { 
-            (records: List[Input.GoodRecord]) => 
-                val indexedRecords = NonnegativeInt.indexed(records)
-                val getKey = indexedRecords.map(_.swap).toMap.apply.andThen(Input.getGroupingKey)
-                val observed = inputRecordsToOutputRecords(indexedRecords)
-                observed.filter{ r => getKey(r.inputIndex1) === getKey(r.inputIndex2) } shouldEqual observed
+
+        given Arbitrary[Inputs] = getArbitraryForGoodInputRecords(RequestForArbitraryInputs.repeatsForbidden)
+
+        forAll { (records: List[Input.GoodRecord]) => 
+            val indexedRecords = NonnegativeInt.indexed(records)
+            val getKey = indexedRecords.map(_.swap).toMap.apply.andThen(Input.getGroupingKey)
+            val observed = inputRecordsToOutputRecords(indexedRecords)
+            observed.filter{ r => getKey(r.inputIndex1) === getKey(r.inputIndex2) } shouldEqual observed
         }
     }
 
-    test("Distance is never computed between records with identically-valued locus-specific timepoints, even if the grouping elements place them together.") {
+    test("Distance can never be computed between records with identically-valued locus-specific timepoints.") {
         /* To encourage collisions, narrow the choices for grouping components. */
         given arbPosAndTrace: Arbitrary[(PositionName, TraceId)] = genPosTracePairOneOrOther.toArbitrary
         given arbRegion: Arbitrary[RegionId] = Gen.oneOf(40, 41).map(RegionId.unsafe).toArbitrary
         given arbTime: Arbitrary[ImagingTimepoint] = Gen.const(ImagingTimepoint(NonnegativeInt(10))).toArbitrary
         
-        forAll (Gen.choose(10, 100).flatMap(Gen.resize(_, arbitrary[List[Input.GoodRecord]]))) {
-            (records: List[Input.GoodRecord]) => inputRecordsToOutputRecords(NonnegativeInt.indexed(records)).toList shouldEqual List()
+        given Arbitrary[Inputs] = getArbitraryForGoodInputRecords(RequestForArbitraryInputs.RepeatsAllowed)
+
+        forAll { (records: List[Input.GoodRecord]) => 
+            whenever(records
+                .groupBy{ (r: Input.GoodRecord) => r.fieldOfView -> r.trace }
+                .values
+                .exists(trace => !recordsSatisfyUniqueLocusPerTraceConstraint(trace))
+            ):
+                val error = intercept[Exception]{ inputRecordsToOutputRecords(NonnegativeInt.indexed(records)).toList }
+                error.getMessage.contains("grouped for locus pairwise distance computation have the same locus ID") shouldBe true
         }
     }
 
@@ -327,16 +337,54 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
                 Input.GoodRecord(pos, TraceGroupOptional.empty, trace, reg, loc, pt) 
             }
 
-    given arbitraryForGoodInputRecords(using Arbitrary[Input.GoodRecord]): Arbitrary[List[Input.GoodRecord]] = 
-        arbitrary[List[Input.GoodRecord]]
-            .suchThat(recordsSatisfyUniqueLocusPerTraceConstraint)
-            .toArbitrary
+    private type Inputs = List[Input.GoodRecord]
+
+    enum RequestForArbitraryInputs:
+        case RepeatsForbidden(maxFailures: Int = 50) extends RequestForArbitraryInputs
+        case RepeatsAllowed extends RequestForArbitraryInputs
+
+    object RequestForArbitraryInputs:
+        def repeatsForbidden = RequestForArbitraryInputs.RepeatsForbidden()
+
+    def getArbitraryForGoodInputRecords(maxFailures: Int): Arbitrary[Inputs] = 
+        arbitrary[Inputs].flatMap{ records => 
+            val gens: List[Gen[Inputs]] = records
+                .groupBy{ (r: Input.GoodRecord) => r.fieldOfView -> r.trace }
+                .view
+                .values
+                .toList
+                .foldRight(List.empty[Gen[Inputs]]){(traceGroup, acc) => 
+                    val replacement = 
+                        if recordsSatisfyUniqueLocusPerTraceConstraint(traceGroup)
+                        then Gen.const(traceGroup)
+                        else makeTraceUniqueInLoci(traceGroup, maxFailures)
+                    replacement :: acc
+                }
+            gens.sequence
+        }
+        .map(_.foldRight(List.empty[Input.GoodRecord]){ (traceGroup, acc) => traceGroup ::: acc })
+        .toArbitrary
+
+    private def makeTraceUniqueInLoci(records: Inputs): Gen[Inputs] = makeTraceUniqueInLoci(records, 50)
+
+    private def makeTraceUniqueInLoci(records: Inputs, maxFailures: Int)(using Arbitrary[LocusId]): Gen[Inputs] = 
+        import org.scalacheck.ops.* // for Gen.setOfN
+        Gen.setOfN(records.length, maxFailures, arbitrary[LocusId])
+            .map(_.toList.zip(records).map{ (loc, rec) => rec.copy(locus = loc) })
+
+    private def getArbitraryForGoodInputRecords(
+        request: RequestForArbitraryInputs = RequestForArbitraryInputs.repeatsForbidden
+    )(using Arbitrary[Input.GoodRecord]): Arbitrary[Inputs] = 
+        request match {
+            case RequestForArbitraryInputs.RepeatsAllowed => summon[Arbitrary[Inputs]]
+            case RequestForArbitraryInputs.RepeatsForbidden(maxFailures) => getArbitraryForGoodInputRecords(maxFailures)
+        }
 
     private def recordsSatisfyUniqueLocusPerTraceConstraint(records: List[Input.GoodRecord]): Boolean = 
-        records.groupBy(getGroupingKey).view.values.forall(_.combinations(2).forall{
-            case r1 :: r2 :: Nil => !(r1.trace === r2.trace && r1.locus === r2.locus)
+        records.combinations(2).forall{
+            case r1 :: r2 :: Nil => r1.locus =!= r2.locus
             case rs => throw new Exception(s"Got ${rs.length} records when taking combinations of 2!")
-        })
+        }
 
     private def genPosTracePairOneOrOther: Gen[(PositionName, TraceId)] = 
         val posNames = List("P0001.zarr", "P0002.zarr") map PositionName.unsafe

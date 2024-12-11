@@ -82,6 +82,7 @@ lazy val root = (project in file("."))
         ironScalacheck,
         scalaCsv,
         scalacheck, 
+        scalacheckOps,
         scalactic, 
         scalatest, 
         scalatestScalacheck

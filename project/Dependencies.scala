@@ -77,6 +77,7 @@ object Dependencies {
     lazy val catsLaws = Cats.getModuleId("laws")
     lazy val gerlibTesting = Gerlib.getModuleId("testing")
     lazy val scalacheck = "org.scalacheck" %% "scalacheck" % "1.18.0"
+    lazy val scalacheckOps = "com.rallyhealth" %% "scalacheck-ops_1" % "2.12.0"
     lazy val scalactic = "org.scalactic" %% "scalactic" % scalatestVersion
     lazy val scalatest = "org.scalatest" %% "scalatest" % scalatestVersion
     lazy val scalatestScalacheck = "org.scalatestplus" %% "scalacheck-1-17" % "3.2.18.0"
