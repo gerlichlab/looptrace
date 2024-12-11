@@ -320,6 +320,19 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
         }
     }
 
+    test("Record count / number of records is as expected -- locus ID pairs are unordered (equivalent when reflected). Issue #395"):
+        // For this test, fix the randomisation to use a single field of view and a single trace ID.
+        given Arbitrary[(PositionName, TraceId)] = Gen.const(PositionName.unsafe("P0001.zarr") -> TraceId.unsafe(0)).toArbitrary
+        given Arbitrary[Inputs] = arbitrary[Inputs].flatMap(makeTraceUniqueInLoci).toArbitrary
+
+        forAll (Gen.resize(15, arbitrary[Inputs])) { inputs =>  
+            val n = inputs.length
+            val numExp = n * (n - 1) / 2
+            val outputs = inputRecordsToOutputRecords(NonnegativeInt.indexed(inputs))
+            val numObs = outputs.size
+            numObs shouldEqual numExp
+        }
+
     /** Treat trace ID generation equivalently to ROI index generation. */
     given arbitraryForTraceId(using arbRoiIdx: Arbitrary[RoiIndex]): Arbitrary[TraceId] = arbRoiIdx.map(TraceId.fromRoiIndex)
     
