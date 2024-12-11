@@ -81,13 +81,9 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
         val observedOutputFile = Input.parseRecords(inputFile).bimap(_.toNel, inputRecordsToOutputRecords) match {
             case (Some(bads), _) => throw Input.BadRecordsException(bads)
             case (None, outputRecords) => 
-                val recs = outputRecords.toList.sortBy{ r => 
-                    (r.fieldOfView, r.region1, r.region2, r.trace, r.locus1, r.locus2)
-                }(summon[Order[(PositionName, RegionId, RegionId, TraceId, LocusId, LocusId)]].toOrdering)
-                
                 logger.info(s"Writing output file: $outputFile")
                 if (!os.exists(outputFile.parent)){ os.makeDir.all(outputFile.parent) }
-                fs2.Stream.emits(recs)
+                fs2.Stream.emits(outputRecords)
                     .through(writeCaseClassesToCsv(outputFile))
                     .compile
                     .drain
@@ -96,52 +92,60 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
         }
     }
 
-    def inputRecordsToOutputRecords(inrecs: Iterable[(Input.GoodRecord, NonnegativeInt)]): Iterable[OutputRecord] = {
+    def inputRecordsToOutputRecords(inrecs: Iterable[(Input.GoodRecord, NonnegativeInt)]): List[OutputRecord] = {
         inrecs.groupBy{ (r, _) => Input.getGroupingKey(r) }
             .toList
-            .flatMap{ (tid, groupedRecords) => 
-                groupedRecords.toList.combinations(2).map{
-                    case (r1, i1) :: (r2, i2) :: Nil => 
-                        // Get the (common) field of view for this pair of records, asserting that they're the same.
-                        // If they're not the same, then the trace ID (grouping element) is non-unique globally (experiment level), 
-                        // but may instead be only unique e.g. per field of view.
-                        val fov = 
-                            val fov1 = r1.fieldOfView
-                            val fov2 = r2.fieldOfView
-                            if (fov1 =!= fov2) {
-                                throw new Exception(s"Different FOVs ($fov1 and $fov2) for records from the same trace ($tid)! Record 1: $r1, Record 2: $r2")
-                            }
-                            fov1
-                        // Get the trace group for this pair of records, asserting that the trace group 
-                        // must be the same (since they records must come from the same literal trace).
-                        val maybeGroup = 
-                            val tg1 = r1.traceGroup
-                            val tg2 = r2.traceGroup
-                            if (tg1 =!= tg2) {
-                                throw new Exception(
-                                    s"Different trace groups ($tg1 and $tg2) for records from the same trace ($tid) in FOV $fov! Record 1: $r1, Record 2: $r2"
-                                )
-                            }
-                            tg1
-                        if (r1.locus === r2.locus) {
-                            throw new Exception(
-                                s"Records (from FOV ${fov.show_}) grouped for locus pairwise distance computation have the same locus ID (${r1.locus.show_})! Record 1: $r1. Record 2: $r2"
-                            )
-                        }
-                        OutputRecord(
-                            fieldOfView = fov,
-                            traceGroup = maybeGroup,
-                            trace = tid,
-                            region1 = r1.region,
-                            region2 = r2.region,
-                            locus1 = r1.locus, 
-                            locus2 = r2.locus,
-                            distance = EuclideanDistance.between(r1.point, r2.point), 
-                            inputIndex1 = i1, 
-                            inputIndex2 = i2
-                            )
+            .flatMap{ (tid, groupedRecords) => groupedRecords.toList
+                .sortBy(_._1.locus)(Order[LocusId].toOrdering)
+                .combinations(2)
+                .map{
+                    case a :: b :: Nil => if a._1.locus < b._1.locus then (a, b) else (b, a)
                     case rs => throw new Exception(s"${rs.length} records (not 2) when taking pairs!")
                 }
+                .map{ case ((r1, i1), (r2, i2)) => 
+                    // Get the (common) field of view for this pair of records, asserting that they're the same.
+                    // If they're not the same, then the trace ID (grouping element) is non-unique globally (experiment level), 
+                    // but may instead be only unique e.g. per field of view.
+                    val fov = 
+                        val fov1 = r1.fieldOfView
+                        val fov2 = r2.fieldOfView
+                        if (fov1 =!= fov2) {
+                            throw new Exception(s"Different FOVs ($fov1 and $fov2) for records from the same trace ($tid)! Record 1: $r1, Record 2: $r2")
+                        }
+                        fov1
+                    // Get the trace group for this pair of records, asserting that the trace group 
+                    // must be the same (since they records must come from the same literal trace).
+                    val maybeGroup = 
+                        val tg1 = r1.traceGroup
+                        val tg2 = r2.traceGroup
+                        if (tg1 =!= tg2) {
+                            throw new Exception(
+                                s"Different trace groups ($tg1 and $tg2) for records from the same trace ($tid) in FOV $fov! Record 1: $r1, Record 2: $r2"
+                            )
+                        }
+                        tg1
+                    if (r1.locus === r2.locus) {
+                        throw new Exception(
+                            s"Records (from FOV ${fov.show_}) grouped for locus pairwise distance computation have the same locus ID (${r1.locus.show_})! Record 1: $r1. Record 2: $r2"
+                        )
+                    }
+                    OutputRecord(
+                        fieldOfView = fov,
+                        traceGroup = maybeGroup,
+                        trace = tid,
+                        region1 = r1.region,
+                        region2 = r2.region,
+                        locus1 = r1.locus, 
+                        locus2 = r2.locus,
+                        distance = EuclideanDistance.between(r1.point, r2.point), 
+                        inputIndex1 = i1, 
+                        inputIndex2 = i2
+                        )
+                }
+                .toList
+                .sortBy{ r => 
+                    (r.fieldOfView, r.traceGroup, r.locus1, r.locus2, r.trace, r.region1, r.region2)
+                }(summon[Order[(PositionName, TraceGroupOptional, LocusId, LocusId, TraceId, RegionId, RegionId)]].toOrdering)
             }
     }
 
