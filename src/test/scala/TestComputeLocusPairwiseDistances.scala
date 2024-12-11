@@ -333,6 +333,33 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
             numObs shouldEqual numExp
         }
 
+    test("The pairs of locus IDs are as expected; namely, each record has the pair of locus IDs ordered with the lesser one first, and within a trace, these pairs are properly sorted."):
+        // For this test, fix the randomisation to use a single field of view and a single trace ID.
+        given Arbitrary[(PositionName, TraceId)] = Gen.const(PositionName.unsafe("P0001.zarr") -> TraceId.unsafe(0)).toArbitrary
+        given Arbitrary[Inputs] = arbitrary[Inputs].flatMap(makeTraceUniqueInLoci).toArbitrary
+
+        forAll (Gen.resize(15, arbitrary[Inputs])) { inputs => 
+            whenever(inputs.length > 1): // Single or empty will generate empty output
+                /* Validate that the restriction to a single FOV and a single trace ID worked. */
+                inputs.map(_.fieldOfView).toSet.size shouldEqual 1 // This should be handled by the construction of the Arbitrary[(PosName, TraceId)] instance.
+                inputs.map(_.trace).toSet.size shouldEqual 1 // This should be handled by the construction of the Arbitrary[(PosName, TraceId)] instance.
+                inputs.map(_.traceGroup).toSet.size shouldEqual 1 // This should be handled by setting 
+
+                /* Now formulate and verify the actual expectation about the locus IDs. */
+                val locusIds = inputs.map(_.locus)
+                val expected = locusIds.combinations(2).map(_.sorted(Order[LocusId].toOrdering))
+                    .flatMap{
+                        case i1 :: i2 :: Nil => (i1, i2).some
+                        case ids => throw new Exception(s"Got ${ids.length} IDs when taking pairs of 2!")
+                    }
+                    .toList
+                    .sorted(Order[(LocusId, LocusId)].toOrdering)
+                val observed = inputRecordsToOutputRecords(NonnegativeInt.indexed(inputs))
+                    .toList
+                    .map(r => r.locus1 -> r.locus2)
+                expected shouldEqual observed
+        }
+
     /** Treat trace ID generation equivalently to ROI index generation. */
     given arbitraryForTraceId(using arbRoiIdx: Arbitrary[RoiIndex]): Arbitrary[TraceId] = arbRoiIdx.map(TraceId.fromRoiIndex)
     
