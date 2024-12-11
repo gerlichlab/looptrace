@@ -226,9 +226,6 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
         observed shouldEqual expected
     }
 
-    test("Any trace ID with more than one instance of a particular locus ID causes the expected error."):
-        pending
-
     test("Trace ID is unique globally for an experiment: records with the same trace ID but different fields of view (FOVs) causes expected error. Issue #390"):
         val posNames = List("P0001.zarr", "P0002.zarr").map(PositionName.unsafe)
         given Arbitrary[(PositionName, TraceId)] = 
@@ -304,7 +301,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
         }
     }
 
-    test("Distance can never be computed between records with identically-valued locus-specific timepoints.") {
+    test("Any trace ID with more than one instance of a particular locus ID causes the expected error.") {
         /* To encourage collisions, narrow the choices for grouping components. */
         given arbPosAndTrace: Arbitrary[(PositionName, TraceId)] = genPosTracePairOneOrOther.toArbitrary
         given arbRegion: Arbitrary[RegionId] = Gen.oneOf(40, 41).map(RegionId.unsafe).toArbitrary
@@ -314,7 +311,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
 
         forAll { (records: List[Input.GoodRecord]) => 
             whenever(records
-                .groupBy{ (r: Input.GoodRecord) => r.fieldOfView -> r.trace }
+                .groupBy(_.trace)
                 .values
                 .exists(trace => !recordsSatisfyUniqueLocusPerTraceConstraint(trace))
             ):
