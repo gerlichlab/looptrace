@@ -98,7 +98,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                 .required()
                 .action((f, c) => c.copy(outputFile = f))
                 .text("Path to file to which to write main output"),
-            opt[os.Path]("skipsFileBase")
+            opt[os.Path]("skipsFile")
                 .required()
                 .action((f, c) => c.copy(skipsFile = f))
                 .text("Path to location to which to write skips"),
