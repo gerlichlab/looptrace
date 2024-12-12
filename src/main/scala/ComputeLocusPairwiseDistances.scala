@@ -93,13 +93,15 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
     }
 
     def inputRecordsToOutputRecords(inrecs: Iterable[(Input.GoodRecord, NonnegativeInt)]): List[OutputRecord] = {
+        import at.ac.oeaw.imba.gerlich.gerlib.syntax.tuple2.*
+        
         inrecs.groupBy{ (r, _) => Input.getGroupingKey(r) }
             .toList
             .flatMap{ (tid, groupedRecords) => groupedRecords.toList
                 .sortBy(_._1.locus)(Order[LocusId].toOrdering)
                 .combinations(2)
                 .map{
-                    case a :: b :: Nil => if a._1.locus < b._1.locus then (a, b) else (b, a)
+                    case a :: b :: Nil => (a, b).flipBy(_._1.locus)
                     case rs => throw new Exception(s"${rs.length} records (not 2) when taking pairs!")
                 }
                 .map{ case ((r1, i1), (r2, i2)) => 
