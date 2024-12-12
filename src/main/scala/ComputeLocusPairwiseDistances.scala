@@ -145,7 +145,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
                 .toList
                 .sortBy{ r => 
                     (r.fieldOfView, r.traceGroup, r.locus1, r.locus2, r.trace, r.region1, r.region2)
-                }(summon[Order[(PositionName, TraceGroupOptional, LocusId, LocusId, TraceId, RegionId, RegionId)]].toOrdering)
+                }(Order[(PositionName, TraceGroupOptional, LocusId, LocusId, TraceId, RegionId, RegionId)].toOrdering)
             }
     }
 
