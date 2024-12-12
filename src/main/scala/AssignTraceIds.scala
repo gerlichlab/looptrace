@@ -8,6 +8,9 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
 import fs2.data.csv.*
+import io.github.iltotore.iron.:|
+import io.github.iltotore.iron.constraint.collection.*
+import io.github.iltotore.iron.constraint.numeric.Greater
 import mouse.boolean.*
 import scopt.*
 import squants.space.{ Length, Nanometers }
@@ -317,7 +320,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                             lookupTraceGroupId(query) match {
                                 case Left(multiHit) => 
                                     // problem case --> siphon off separately
-                                    (roiId, query -> multiHit.map(_._2)).asLeft
+                                    TraceGroupNameAmbiguity(roiId, query, multiHit.map(_._2)).asLeft
                                 case Right(TraceGroupOptional(None)) => 
                                     val assignment = TraceIdAssignment.UngroupedRecord(roiId, currId)
                                     OutputRecord(singleInputRecord, assignment).asRight
@@ -330,94 +333,145 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                 }, 
                 // at least two ROIs in group/component
                 multiIds => 
-                    val observedTimes = recGroup.map(_.timepoint).toNes
-                    val (groupHasAllTimepoints, reqType) = recGroup
+                    val maybeRepeatedTimepoints = recGroup.groupBy(_.timepoint)
+                        .view
                         .toList
-                        .flatMap{ r => lookupRule.apply(r.timepoint) }
+                        .flatMap{ (t, rs) => 
+                            AtLeast2.either(rs.map(_.index).toList.toSet)
+                                .toOption
+                                .map(t -> _)
+                        }
                         .toNel
-                        .map{ rules => 
-                            val nUniqueRules = rules.toList.toSet.size
-                            if (nUniqueRules =!= 1) {
-                                throw new Exception(
-                                    // This would be what would happen if one or more elements (timepoints) "bridge" 
-                                    // the groups, i.e. one or more timepoints is used in more than one merge group, 
-                                    // and a spot from such a timepoint acts as a bridge between what should be 
-                                    // separate, independent connected components.
-                                    s"$nUniqueRules unique merge rules (not just 1) for single group! Timepoints: $observedTimes"
-                                )
-                            } else {
-                                // Check here that either all timepoints for a group are present, 
-                                // or that the requirement type to keep a record is NOT conjunctive.
-                                val rule = rules.head
-                                val expectedTimes = rule.mergeGroup.members.toNes
-                                val extraTimes = observedTimes -- expectedTimes
-                                if (extraTimes.nonEmpty) {
-                                    // This should be protected against by the construction of the neighbors graph; 
-                                    // namely, we only draw an edge between points for which the pair of timepoints 
-                                    // are part of the same group of timepoints to merge.
-                                    throw new Exception(s"Extra time(s) not in merge rule $rule -- $extraTimes")
+                    maybeRepeatedTimepoints match {
+                        case Some(reps) => 
+                            List(TimepointCollisionWithinTrace(multiIds, reps.toNem).asLeft)
+                        case None => 
+                            val observedTimes = recGroup.map(_.timepoint).toNes
+
+                            val (groupHasAllTimepoints, reqType) = recGroup
+                                .toList
+                                .flatMap{ r => lookupRule.apply(r.timepoint) }
+                                .toNel
+                                .map{ rules => 
+                                    val nUniqueRules = rules.toList.toSet.size
+                                    if (nUniqueRules =!= 1) {
+                                        throw new Exception(
+                                            // This would be what would happen if one or more elements (timepoints) "bridge" 
+                                            // the groups, i.e. one or more timepoints is used in more than one merge group, 
+                                            // and a spot from such a timepoint acts as a bridge between what should be 
+                                            // separate, independent connected components.
+                                            s"$nUniqueRules unique merge rules (not just 1) for single group! Timepoints: $observedTimes"
+                                        )
+                                    } else {
+                                        // Check here that either all timepoints for a group are present, 
+                                        // or that the requirement type to keep a record is NOT conjunctive.
+                                        val rule = rules.head
+                                        val expectedTimes = rule.mergeGroup.members.toNes
+                                        val extraTimes = observedTimes -- expectedTimes
+                                        if (extraTimes.nonEmpty) {
+                                            // This should be protected against by the construction of the neighbors graph; 
+                                            // namely, we only draw an edge between points for which the pair of timepoints 
+                                            // are part of the same group of timepoints to merge.
+                                            throw new Exception(s"Extra time(s) not in merge rule $rule -- $extraTimes")
+                                        }
+                                        ((expectedTimes -- observedTimes).isEmpty, rule.requirement)
+                                    }
                                 }
-                                ((expectedTimes -- observedTimes).isEmpty, rule.requirement)
-                            }
-                        }
-                        .getOrElse{ 
-                            // This is protected against by the construction of the neighbors graph; specifically, since we're 
-                            // working here with a nontrivial (multi-member) connected component, each pair of m
-                            throw new Exception(
-                                s"No merge rules found for multi-member group! ROI IDs: ${multiIds}. Timepoints: $observedTimes"
-                            )
-                        }
-                    if groupHasAllTimepoints || reqType =!= RoiPartnersRequirementType.Conjunctive
-                    then 
-                        val emitElem: InputRecord => InputRecordFate = lookupTraceGroupId(observedTimes) match {
-                            case Left(multiHit) => 
-                                (r: InputRecord) => (r.index, observedTimes -> multiHit.map(_._2)).asLeft
-                            case Right(groupIdOpt) => 
-                                val groupId = groupIdOpt.toOption.getOrElse{
-                                    // TODO: should this be made a valid case?
-                                    throw new Exception(s"No trace group ID found for multi-timepoint group (${})")
+                                .getOrElse{ 
+                                    // This is protected against by the construction of the neighbors graph; specifically, since we're 
+                                    // working here with a nontrivial (multi-member) connected component, each pair of m
+                                    throw new Exception(
+                                        s"No merge rules found for multi-member group! ROI IDs: ${multiIds}. Timepoints: $observedTimes"
+                                    )
                                 }
-                                (r: InputRecord) => 
-                                    val partners = multiIds.remove(r.index)
-                                    val assignment = TraceIdAssignment.GroupedAndMerged(r.index, currId, groupId, partners, groupHasAllTimepoints)
-                                    OutputRecord(r, assignment).asRight
-                        }
-                        recGroup.map(emitElem).toList
-                    else List() // The group lacked all the required regional imaging timepoints, and that's required if we're at this conditional.
+                            if groupHasAllTimepoints || reqType =!= RoiPartnersRequirementType.Conjunctive
+                            then 
+                                val emitElem: InputRecord => InputRecordFate = lookupTraceGroupId(observedTimes) match {
+                                    case Left(multiHit) => 
+                                        (r: InputRecord) => TraceGroupNameAmbiguity(r.index, observedTimes, multiHit.map(_._2)).asLeft
+                                    case Right(groupIdOpt) => 
+                                        val groupId = groupIdOpt.toOption.getOrElse{
+                                            // TODO: should this be made a valid case?
+                                            throw new Exception(s"No trace group ID found for multi-timepoint group (${})")
+                                        }
+                                        (r: InputRecord) => 
+                                            val partners = multiIds.remove(r.index)
+                                            val assignment = TraceIdAssignment.GroupedAndMerged(r.index, currId, groupId, partners, groupHasAllTimepoints)
+                                            OutputRecord(r, assignment).asRight
+                                }
+                                recGroup.map(emitElem).toList
+                            else List() // The group lacked all the required regional imaging timepoints, and that's required if we're at this conditional.
+                    }
             )
 
-    private type RecordFailure = (RoiIndex, (NonEmptySet[ImagingTimepoint], AtLeast2[List, TraceGroupId]))
-    private type InputRecordFate = Either[RecordFailure, OutputRecord]
+    final case class TimepointCollisionWithinTrace(
+        roiIds: AtLeast2[Set, RoiIndex], 
+        repeatedTimesWithinTrace: NonEmptyMap[ImagingTimepoint, AtLeast2[Set, RoiIndex]],
+    )
+
+    final case class TraceGroupNameAmbiguity(
+        roiId: RoiIndex, 
+        timesQuery: NonEmptySet[ImagingTimepoint], 
+        traceGroupIds: AtLeast2[List, TraceGroupId],
+    )
+
+    private type AssignmentNotPossible = TimepointCollisionWithinTrace | TraceGroupNameAmbiguity
+
+    private type InputRecordFate = Either[TimepointCollisionWithinTrace | TraceGroupNameAmbiguity, OutputRecord]
 
     /** Helpers for working with the case of a record being unable to be processed */
     object InputRecordFate:
-        given upickle.default.Writer[RecordFailure] = 
-            import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2.syntax.toList
-            import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
-            import at.ac.oeaw.imba.gerlich.gerlib.json.JsonValueWriter
-            
-            upickle.default.readwriter[ujson.Obj].bimap(
-                { case (roiId, (groupTimes, groupIds)) => 
-                    ujson.Obj(
-                        "roiId" -> roiId.get, 
-                        "groupTimes" -> groupTimes
-                            .toNonEmptyList
-                            .toList
-                            .sorted(using Order[ImagingTimepoint].toOrdering)
-                            .map(_.asJson), 
-                        "groupIds" -> groupIds.toList.map(_.get),
-                    ) 
-                }, 
-                obj => 
-                    // Don't bother implementing this since we don't need it here, and
-                    // we're typing the value of this expression as just a Writer, not a ReadWriter, 
-                    // so we don't need the Reader side of the equation.
-                    ??? 
+        import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2.syntax.toList
+        import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
+        import at.ac.oeaw.imba.gerlich.gerlib.json.JsonValueWriter
+        import at.ac.oeaw.imba.gerlich.gerlib.json.instances.all.given
+
+        given writerForImpossibleAssignment(using 
+            writeCollision: upickle.default.Writer[TimepointCollisionWithinTrace],
+            writeAmbiguous: upickle.default.Writer[TraceGroupNameAmbiguity],
+        ): upickle.default.Writer[AssignmentNotPossible] = 
+            upickle.default.writer[ujson.Obj].comap(toJson)
+
+        private def toJson(impossibility: AssignmentNotPossible): ujson.Obj = impossibility match {
+            case collision: TimepointCollisionWithinTrace => toJson(collision)
+            case ambiguity: TraceGroupNameAmbiguity => toJson(ambiguity)
+        }
+
+        private def toJson(ambiguity: TraceGroupNameAmbiguity): ujson.Obj = 
+            ujson.Obj(
+                "roiId" -> ambiguity.roiId.get, 
+                "groupTimes" -> ambiguity.timesQuery
+                    .toNonEmptyList
+                    .toList
+                    .sorted(using Order[ImagingTimepoint].toOrdering)
+                    .map(_.asJson), 
+                "groupIds" -> ambiguity.traceGroupIds.toList.map(_.get),
+            )
+        
+        private def toJson(collision: TimepointCollisionWithinTrace): ujson.Obj = 
+            ujson.Obj(
+                "roiIds" -> collision.roiIds.toList.map(_.get), 
+                "repeats" -> collision.repeatedTimesWithinTrace
+                    .toSortedMap
+                    .unsorted
+                    .map{ (t, rois) => 
+                        // NB: here we convert the timepoint key to text to comply with JSON.
+                        t.show_ -> rois.toList.map(_.get).sorted(Order[NonnegativeInt].toOrdering) 
+                    }
             )
 
-        /** Print the given failures as a JSON string, using the specified indentation. */
-        def printJsonFails(fails: List[RecordFailure], indent: Int = 2): String = 
-            upickle.default.write(fails, indent = 2)
+        given writerForAmbiguity(using w: upickle.default.Writer[AssignmentNotPossible]): upickle.default.Writer[TraceGroupNameAmbiguity] = 
+            w.narrow
+
+        given writerForCollision(using w: upickle.default.Writer[AssignmentNotPossible]): upickle.default.Writer[TimepointCollisionWithinTrace] = 
+            w.narrow
+
+        given writerForImpossibleAssignments: upickle.default.Writer[List[AssignmentNotPossible]] = 
+            // NB: need more manual derivation than usual, since we're using a union type.
+            // https://github.com/com-lihaoyi/upickle/issues/505
+            // https://github.com/com-lihaoyi/upickle/issues/481
+            upickle.default.writer[ujson.Arr].comap(_.map(toJson))
+    end InputRecordFate
 
     def workflow(roundsConfig: ImagingRoundsConfiguration, roisFile: os.Path, pixels: Pixels3D, outputFile: os.Path, skipsFile: os.Path): Unit = {
         import InputRecord.given
@@ -427,58 +481,62 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
         given CsvRowDecoder[ImagingChannel, String] = 
             getCsvRowDecoderForImagingChannel(SpotChannelColumnName)
         
-        IO{ logger.info(s"Reading ROIs file: $roisFile") }
-            .flatMap{ Function.const(readCsvToCaseClasses[InputRecord](roisFile)) }
-            .map(_.toNel match {
-                case None => 
-                    logger.error(s"No input record parsed from ROIs file ($roisFile)!")
-                    List.empty[InputRecordFate]
-                case Some(records) => 
-                    roundsConfig.mergeRules match {
-                        case None => 
-                            // No merger of ROIs for tracing, so no need to find group ID or partners.
-                            val initTraceId = getInitialTraceId(records.map(_.index))
-                            val traceIdsOffLimits = records.map(r => TraceId(r.index.get)).toNes
-                            records.zipWithIndex.map{ (r, i) => 
-                                val newTid = TraceId.unsafe(NonnegativeInt.unsafe(i) + initTraceId.get)
-                                checkTraceId(traceIdsOffLimits)(newTid)
-                                OutputRecord(r, TraceIdAssignment.UngroupedRecord(r.index, newTid)).asRight
-                            }.toList
-                        case Some(rules) => 
-                            labelRecordsWithTraceId(rules, roundsConfig.discardRoisNotInGroupsOfInterest, pixels)(records)
-                    }
-            })
-            .flatMap(_ match {
-                case Nil => IO{ logger.error("No output to write!") }
-                case inputFates => 
-                    import OutputRecord.given
+        val readRois: IO[List[InputRecord]] = for {
+            _ <- IO{ logger.info(s"Reading ROIs file: $roisFile") }
+            rois <- readCsvToCaseClasses[InputRecord](roisFile)
+        } yield rois
+
+        val assignIds: List[InputRecord] => IO[List[InputRecordFate]] = _.toNel match {
+            case None => 
+                IO{ logger.error(s"No input record parsed from ROIs file ($roisFile)!") }.as(List())
+            case Some(records) => IO.pure{
+                roundsConfig.mergeRules match {
+                    case None => 
+                        // No merger of ROIs for tracing, so no need to find group ID or partners.
+                        val initTraceId = getInitialTraceId(records.map(_.index))
+                        val traceIdsOffLimits = records.map(r => TraceId(r.index.get)).toNes
+                        records.zipWithIndex.map{ (r, i) => 
+                            val newTid = TraceId.unsafe(NonnegativeInt.unsafe(i) + initTraceId.get)
+                            checkTraceId(traceIdsOffLimits)(newTid)
+                            OutputRecord(r, TraceIdAssignment.UngroupedRecord(r.index, newTid)).asRight
+                        }.toList
+                    case Some(rules) => 
+                        labelRecordsWithTraceId(rules, roundsConfig.discardRoisNotInGroupsOfInterest, pixels)(records)
+                }
+            }
+        }
+
+        val writeOutputs: List[InputRecordFate] => IO[List[os.Path]] = _ match {
+            case Nil => IO{ logger.error("No output to write!") }.as(List())
+            case inputFates => 
+                import OutputRecord.given
+                import InputRecordFate.given
+                
+                given CsvRowEncoder[ImagingChannel, String] = 
+                    // for derivation of CsvRowEncoder[ImagingContext, String]
+                    SpotChannelColumnName.toNamedEncoder
+                
+                val (skips, records) = Alternative[List].separate(inputFates)
+                
+                val writeMainOutput: IO[os.Path] = for {
+                    _ <- IO{ logger.info(s"Writing main output file: $outputFile") }
+                    _ <- fs2.Stream
+                        .emits(records.sortBy(_.inputRecord.index)(using Order[RoiIndex].toOrdering).toList)
+                        .through(writeCaseClassesToCsv[OutputRecord](outputFile))
+                        .compile
+                        .drain
+                } yield outputFile
+                
+                val writeSkipsOutput: IO[os.Path] = 
                     import InputRecordFate.given
-                    
-                    given CsvRowEncoder[ImagingChannel, String] = 
-                        // for derivation of CsvRowEncoder[ImagingContext, String]
-                        SpotChannelColumnName.toNamedEncoder
-                    
-                    
-                    val (skips, records) = Alternative[List].separate(inputFates)
-                    
-                    IO{ logger.info(s"Writing main output file: $outputFile") }.flatMap(
-                        Function.const{
-                            fs2.Stream
-                                .emits(records.sortBy(_.inputRecord.index)(using Order[RoiIndex].toOrdering).toList)
-                                .through(writeCaseClassesToCsv[OutputRecord](outputFile))
-                                .compile
-                                .drain
-                        }
-                    )
-                    
-                    IO { logger.info(s"Writing skips file: $skipsFile") }.flatMap(
-                        Function.const{
-                            IO { os.write(skipsFile, upickle.default.write(skips), createFolders = true) }
-                        }
-                    )
-            })
-            .unsafeRunSync()
-        
+                    for {
+                        _ <- IO { logger.info(s"Writing skips file: $skipsFile") }
+                        _ <- IO { os.write(skipsFile, upickle.default.write(skips), createFolders = true) }
+                    } yield skipsFile
+
+                List(writeMainOutput, writeSkipsOutput).sequence
+        }
+   
         logger.info("Done!")
     }
 
