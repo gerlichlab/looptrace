@@ -212,6 +212,8 @@ def assign_trace_ids(rounds_config: ExtantFile, params_config: ExtantFile) -> Pa
         str(H.nuclei_labeled_spots_file_path if H.spot_in_nuc else H.proximity_accepted_spots_file_path),
         "--outputFile", 
         str(H.rois_with_trace_ids_file),
+        "--skipsFile", 
+        str(H.trace_id_assignment_skipped_rois_file),
     ]
     logging.info(f"Running distance computation command: {' '.join(cmd_parts)}")
     return subprocess.check_call(cmd_parts)
