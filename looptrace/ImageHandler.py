@@ -447,6 +447,11 @@ class ImageHandler:
         return names
 
     @property
+    def trace_id_assignment_skipped_rois_file(self) -> Path:
+        """File to write records of ROIs skipped for trace ID assignment (and not, then, present in downstream analysis)"""
+        return self.rois_with_trace_ids_file.with_suffix(".skips.json")
+
+    @property
     def traces_path(self) -> Path:
         # Written by Tracer.py
         return Path(self.out_path("traces.csv"))
