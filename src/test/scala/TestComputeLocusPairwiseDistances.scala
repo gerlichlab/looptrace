@@ -227,23 +227,33 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
     }
 
     test("Trace ID is unique globally for an experiment: records with the same trace ID but different fields of view (FOVs) causes expected error. Issue #390"):
+        import at.ac.oeaw.imba.gerlich.gerlib.syntax.tuple2.*
+        
         val posNames = List("P0001.zarr", "P0002.zarr").map(PositionName.unsafe)
+        
         given Arbitrary[(PositionName, TraceId)] = 
             // Restrict to relatively few choices of trace ID and position name, to boost collision probability.
             Gen.oneOf(posNames.map(_ -> TraceId.unsafe(8))).toArbitrary
 
         forAll (Gen.resize(10, arbitrary[Inputs]).flatMap(makeTraceUniqueInLoci)) { records => 
-            //for ((r, i) <- records.zipWithIndex) { println(i); println(r) }
-            val possiblePrefixes = records.combinations(2).toList.flatMap{ // Check that at least one pair is a case of same trace ID but with different FOv.
-                case r1 :: r2 :: Nil => 
-                    (r1.trace === r2.trace && r1.fieldOfView =!= r2.fieldOfView).option{
-                        s"Different FOVs (${r1.fieldOfView} and ${r2.fieldOfView}) for records from the same trace"
-                    }
-                case rs => throw new Exception(s"Got ${rs.length} records when taking pairs!")
-            }
+            val possiblePrefixes = records.groupBy(getGroupingKey) // NB: This grouping SHOULD be irrelevant since the trace ID is fixed to a constant value.
+                .view
+                .values
+                .flatMap(_.combinations(2).toList.flatMap{ // Check that at least one pair is a case of same trace ID but with different FOv.
+                    case r1 :: r2 :: Nil => 
+                        (r1.trace === r2.trace && r1.fieldOfView =!= r2.fieldOfView).option{
+                            val (fov1, fov2) = (r1, r2).flipBy(_.locus).mapBoth(_.fieldOfView) // The records will have been ordered such that locus1 <= locus2.
+                            s"Different FOVs ($fov1 and $fov2) for records from the same trace (${r1.trace})"
+                        }
+                    case rs => throw new Exception(s"Got ${rs.length} records when taking pairs!")
+                })
+                .toList
             whenever(possiblePrefixes.nonEmpty):
                 val obsMsg = intercept[Exception]{ inputRecordsToOutputRecords(NonnegativeInt.indexed(records)) }.getMessage
-                possiblePrefixes.exists(obsMsg.startsWith) shouldBe true
+                if possiblePrefixes.exists(obsMsg.startsWith) then succeed
+                else
+                    //for (pp <- possiblePrefixes) { println(pp) }; println(obsMsg) 
+                    fail(s"Observed error message: $obsMsg. Possibles: $possiblePrefixes")
         }
 
     test("Trace ID is the grouping key; records with different region ID but the same trace ID still have distance between them computed. Issue #390"):
