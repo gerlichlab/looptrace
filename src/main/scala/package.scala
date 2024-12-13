@@ -12,7 +12,7 @@ import scopt.Read
 import upickle.default.{ Reader as JsonReader }
 import io.github.iltotore.iron.{ :|, refineEither }
 import io.github.iltotore.iron.Not
-import io.github.iltotore.iron.constraint.collection.ForAll
+import io.github.iltotore.iron.constraint.collection.{ Empty, ForAll }
 import io.github.iltotore.iron.constraint.char.*
 
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.{ ImagingTimepoint, PositionName }
@@ -113,7 +113,7 @@ package object looptrace {
             override def getRowIndex: RoiIndex => Id[NonnegativeInt] = _.get
     end RoiIndex
 
-    private type TraceGroupNameConstraint = Not[ForAll[Whitespace]]
+    private type TraceGroupNameConstraint = Not[Empty] & Not[ForAll[Whitespace]]
     
     private type ValidTraceGroupName = String :| TraceGroupNameConstraint
 
