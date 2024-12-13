@@ -24,14 +24,12 @@ from looptrace import FIELD_OF_VIEW_COLUMN
 from looptrace.Drifter import TIMEPOINT_COLUMN, X_PX_COARSE, Y_PX_COARSE, Z_PX_COARSE
 from looptrace.ImageHandler import ImageHandler
 from looptrace.NucDetector import NucDetector
-from looptrace.utilities import find_first_option, get_either, wrap_exception, wrap_error_message
+from looptrace.utilities import find_first_option, get_either, traverse_through_either, wrap_exception, wrap_error_message
 
 FieldOfViewName: TypeAlias = str
 RawTimepoint: TypeAlias = int
 
 _A = TypeVar("_A")
-_B = TypeVar("_B")
-_E = TypeVar("_E")
 _K = TypeVar("_K")
 
 SIGNAL_CHANNEL_COLUMN = "signalChannel"
@@ -220,24 +218,6 @@ def workflow(
                             outfile: Path = Path(H.analysis_path) / fn
                             logging.info("Writing output file: %s", outfile)
                             stats_frame.to_csv(outfile, index=False)
-
-
-@curry_flip(1)
-def traverse_through_either(inputs: Iterable[_A], f: Callable[[_A], Result[_B, _E]]) -> Result[Seq[_B], Seq[_E]]:
-    State: TypeAlias = Result[Seq[_B], Seq[_E]]
-
-    def proc1(acc: State, a: _A) -> State:
-        match acc, f(a):
-            case result.Result(tag="ok", ok=goods), result.Result(tag="ok", ok=b):
-                return Result.Ok(goods.append(Seq.of(b))) # new good result
-            case result.Result(tag="ok", ok=_), result.Result(tag="error", error=err):
-                return Result.Error(Seq.of(err)) # first error
-            case result.Result(tag="error", error=bads), result.Result(tag="ok", ok=_):
-                return Result.Error(bads) # no new error
-            case result.Result(tag="error", error=bads), result.Result(tag="error", error=err):
-                return Result.Error(bads.append(Seq.of(err))) # new error
-
-    return Seq.of_iterable(inputs).fold(proc1, Result.Ok(Seq()))
 
 
 @dataclass(kw_only=True, frozen=True)

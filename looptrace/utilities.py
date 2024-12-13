@@ -1,11 +1,15 @@
 """Very general-purpose utilities"""
 
 import functools
-from typing import Callable, Iterable, Mapping, Optional, ParamSpec, TypeVar
+from typing import Callable, Iterable, Mapping, Optional, ParamSpec, TypeAlias, TypeVar
 from expression import Option, Result, compose, curry_flip
+from expression.collections import Seq
+from expression import result
 from numpydoc_decorator import doc
 
 _A = TypeVar("_A")
+_B = TypeVar("_B")
+_E = TypeVar("_E")
 _K = TypeVar("_K")
 _P = ParamSpec("_P")
 _V = TypeVar("_V")
@@ -53,6 +57,24 @@ def get_either(k: _K, m: Mapping[_K, _V]) -> Result[_V, str]:
 )
 def get_option(k: _K, m: Mapping[_K, _V]) -> Option[_V]:
     return Option.of_obj(m.get(k))
+
+
+@curry_flip(1)
+def traverse_through_either(inputs: Iterable[_A], f: Callable[[_A], Result[_B, _E]]) -> Result[Seq[_B], Seq[_E]]:
+    State: TypeAlias = Result[Seq[_B], Seq[_E]]
+
+    def proc1(acc: State, a: _A) -> State:
+        match acc, f(a):
+            case result.Result(tag="ok", ok=goods), result.Result(tag="ok", ok=b):
+                return Result.Ok(goods.append(Seq.of(b))) # new good result
+            case result.Result(tag="ok", ok=_), result.Result(tag="error", error=err):
+                return Result.Error(Seq.of(err)) # first error
+            case result.Result(tag="error", error=bads), result.Result(tag="ok", ok=_):
+                return Result.Error(bads) # no new error
+            case result.Result(tag="error", error=bads), result.Result(tag="error", error=err):
+                return Result.Error(bads.append(Seq.of(err))) # new error
+
+    return Seq.of_iterable(inputs).fold(proc1, Result.Ok(Seq()))
 
 
 # Courtest of @Hugovdberg in Issues discussion on dbratti/Expression repo
