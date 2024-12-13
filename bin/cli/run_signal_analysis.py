@@ -31,6 +31,7 @@ RawTimepoint: TypeAlias = int
 
 _A = TypeVar("_A")
 _B = TypeVar("_B")
+_E = TypeVar("_E")
 _K = TypeVar("_K")
 
 SIGNAL_CHANNEL_COLUMN = "signalChannel"
@@ -222,8 +223,8 @@ def workflow(
 
 
 @curry_flip(1)
-def traverse_through_either(inputs: Iterable[_A], f: Callable[[_A], Result[_B, str]]) -> Result[Seq[_B], Seq[str]]:
-    State: TypeAlias = Result[Seq[_B], Seq[str]]
+def traverse_through_either(inputs: Iterable[_A], f: Callable[[_A], Result[_B, _E]]) -> Result[Seq[_B], Seq[_E]]:
+    State: TypeAlias = Result[Seq[_B], Seq[_E]]
 
     def proc1(acc: State, a: _A) -> State:
         match acc, f(a):
