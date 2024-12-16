@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.13.0] - 2024-12-16
+
+### Changed
+* `os-lib` is now at version 0.11.3.
+
 ## [v0.12.0] - 2024-12-02
 
 ### Added

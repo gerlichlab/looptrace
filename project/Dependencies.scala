@@ -65,7 +65,7 @@ object Dependencies {
     /* IO-related dependencies */
     lazy val fs2Csv = "org.gnieh" %% "fs2-data-csv" % "1.11.1"
     lazy val fs2IO = "co.fs2" %% "fs2-io" % "3.10.2"
-    lazy val os = "com.lihaoyi" %% "os-lib" % "0.10.3"
+    lazy val os = "com.lihaoyi" %% "os-lib" % "0.11.3"
     lazy val pureconfigCore = PureConfig.getModuleId("core")
     lazy val pureconfigGeneric = PureConfig.getModuleId("generic-scala3")
     lazy val scalaCsv = "com.github.tototoshi" %% "scala-csv" % "1.3.10"
