@@ -1,6 +1,6 @@
 """Tests for the computation of spot image visualisation data"""
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Optional
 from unittest import mock
