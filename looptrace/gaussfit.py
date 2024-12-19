@@ -21,11 +21,6 @@ def fitAFunctionLS(data, params, fn):
     result = params
     errorfunction = lambda p: numpy.ravel(fn(*p)(*numpy.indices(data.shape)) - data)
     result = scipy.optimize.leastsq(errorfunction, params, full_output = 0, maxfev = 200)
-    #err = errorfunction(result)
-    #err = scipy.sum(err * err)
-    #if (success < 1) or (success > 4):
-        #print("Fitting problem!", success, mesg)
-    #    good = False
     return result
 
 
