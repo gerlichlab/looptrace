@@ -7,6 +7,7 @@ from typing import *
 import pandas as pd
 
 __all__ = [
+    "FIELD_OF_VIEW_COLUMN",
     "LOOPTRACE_JAR_PATH", 
     "LOOPTRACE_JAVA_PACKAGE",
     "MAX_DISTANCE_SPOT_FROM_REGION_NAME",
