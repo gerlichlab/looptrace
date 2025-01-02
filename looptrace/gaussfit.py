@@ -58,16 +58,26 @@ def fitAFunctionMLE(data: numpy.ndarray, params: List[NumberLike], fn: callable)
     return [result, good]
 
 
-#
 # Fitting a gaussian, this is almost a verbatim copy of:
 #
 # http://www.scipy.org/Cookbook/FittingData#head-11870c917b101bb0d4b34900a0da1b7deb613bf7
 #
-
-def symmetricGaussian3D(bg, A, center_z, center_y, center_x, sigma_z, sigma_xy):
-    return lambda z,y,x: bg + A*numpy.exp(-((x-center_x)**2/(2*sigma_xy)**2 +
-                                            (y-center_y)**2/(2*sigma_xy)**2 +
-                                            (z-center_z)**2/(2*sigma_z)**2))
+def symmetricGaussian3D(
+    BG: FloatLike, 
+    A: FloatLike, 
+    z_px: FloatLike, 
+    y_px: FloatLike, 
+    x_px: FloatLike, 
+    sigma_z: FloatLike, 
+    sigma_xy: FloatLike,
+):
+    return lambda z,y,x: BG + A * numpy.exp(
+        -(
+            (x-x_px)**2 / (2*sigma_xy)**2 +
+            (y-y_px)**2 / (2*sigma_xy)**2 +
+            (z-z_px)**2 / (2*sigma_z)**2
+        )
+    )
 
 
 def fitSymmetricGaussian3D(data, sigma, center=None):
