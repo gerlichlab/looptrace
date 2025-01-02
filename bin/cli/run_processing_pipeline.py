@@ -528,8 +528,8 @@ class LooptracePipeline(pypiper.Pipeline):
                 func=run_spot_zipping, 
                 f_kwargs={"params_config": self.params_config, "images_folder": self.images_folder, "is_background": True},
             ),
-            pypiper.Stage(name="tracing", func=run_chromatin_tracing, f_kwargs=rounds_params_images),
-            pypiper.Stage(name="trace_annotation", func=annotate_traces, f_kwargs=rounds_params_images),
+            pypiper.Stage(name="tracing", func=run_chromatin_tracing, f_kwargs=rounds_params_images), # Compute the 3D fits.
+            pypiper.Stage(name="trace_annotation", func=annotate_traces, f_kwargs=rounds_params_images), # Put the 3D with each detected spot.
             pypiper.Stage(name="spot_region_distances", func=run_timepoint_name_and_distance_application, f_kwargs=rounds_params_images), 
             pypiper.Stage(name=TRACING_QC_STAGE_NAME, func=qc_locus_spots_and_prep_points, f_kwargs=rounds_params_images),
             pypiper.Stage(
