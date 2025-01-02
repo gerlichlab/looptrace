@@ -105,6 +105,7 @@ class RoiOrderingSpecification:
 
     @staticmethod
     def row_order_columns() -> List[str]:
+        """What's used to sort the rows of the all-voxel-specifications file, and the traces file."""
         return [FIELD_OF_VIEW_COLUMN, "roiId", "ref_timepoint", "timepoint"]
     
     @classmethod
@@ -590,6 +591,7 @@ class SpotPicker:
                     roi_img = roi_img.astype(SPOT_IMAGE_PIXEL_VALUE_TYPE)
                     if error is not None:
                         skip_spot_image_reasons[fn_key.ref_timepoint][fn_key.roiId][timepoint] = str(error)
+                    # Determine where to write output and how many timepoints are associated with the current regional spot.
                     if timepoint == self.image_handler.background_subtraction_timepoint:
                         n_timepoints = 1
                         array_file_dir = self.spot_background_path
@@ -600,7 +602,7 @@ class SpotPicker:
                     try:
                         f_id = num_timepoints_processed[fp]
                     except KeyError:
-                        # New data stack (from new regional spot)
+                        # New data stack (for this new regional spot)
                         f_id = 0
                         arr = open_memmap(fp, mode='w+', dtype=roi_img.dtype, shape=(n_timepoints, ) + roi_img.shape)
                     else:
@@ -616,8 +618,8 @@ class SpotPicker:
                         print(f"Current locus time: {timepoint}")
                         print(f"Current ROI: {roi}")
                         raise
-                    arr.flush()
-                    num_timepoints_processed[fp] = f_id + 1
+                    arr.flush() # Update what's on disk with what's in memory.
+                    num_timepoints_processed[fp] = f_id + 1 # Increment the number of timepoints which have been processed for the current key.
         return skip_spot_image_reasons
 
     def gen_roi_imgs_inmem(self) -> str:
