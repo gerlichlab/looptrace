@@ -24,7 +24,7 @@ from looptrace import FIELD_OF_VIEW_COLUMN
 from looptrace.Drifter import TIMEPOINT_COLUMN, X_PX_COARSE, Y_PX_COARSE, Z_PX_COARSE
 from looptrace.ImageHandler import ImageHandler
 from looptrace.NucDetector import NucDetector
-from looptrace.utilities import find_first_option, get_either, traverse_through_either, wrap_exception, wrap_error_message
+from looptrace.utilities import find_first_option, get_either, list_from_object, traverse_through_either, wrap_exception, wrap_error_message
 
 FieldOfViewName: TypeAlias = str
 RawTimepoint: TypeAlias = int
@@ -115,7 +115,7 @@ class AnalyticalSpecification:
                 .map_error(lambda msg: Seq.of(msg))
         maybe_channels: Result[set[ImagingChannel], Seq[str]] = \
             get_either(data)("channels") \
-                .bind(_list_from_object) \
+                .bind(list_from_object) \
                 .map_error(Seq.of) \
                 .bind(_parse_imaging_channels) \
                 .bind(lambda channels: _ensure_unique(channels).map_error(Seq.of))
@@ -260,9 +260,9 @@ def _ensure_unique(items: Iterable[_A]) -> Result[set[_A], str]:
 
 
 def _parse_imaging_channels(channels: object) -> Result[list[ImagingChannel], Seq[str]]:
-    return _list_from_object(channels) \
+    return list_from_object(channels) \
         .map_error(lambda msg: Seq.of(msg)) \
-        .bind(traverse_through_either(_unsafe_parse_imaging_channel)) \
+        .bind(traverse_through_either(parse_imaging_channel)) \
         .map(lambda seq: seq.to_list())
 
 
@@ -274,15 +274,10 @@ def _parse_roi_diameter(obj: object) -> Result[int, str]:
             return Result.Error(f"ROI diameter must be integer, not {type(obj).__name__} ({obj})")
 
 
-@wrap_error_message("Getting list from object")
-@wrap_exception(TypeError)
-def _list_from_object(obj: object) -> Result[list[object], str]:
-    return list(obj)
-
 
 @wrap_error_message("ImagingChannel from object")
 @wrap_exception((TypeError, ValueError))
-def _unsafe_parse_imaging_channel(obj: object) -> Result[ImagingChannel, str]:
+def parse_imaging_channel(obj: object) -> Result[ImagingChannel, str]:
     return ImagingChannel(obj)
 
 
