@@ -541,9 +541,9 @@ def compute_spot_images_multiarray_per_fov(
 
 def backfill_array(array: np.ndarray, *, num_places: int) -> np.ndarray:
     if not isinstance(num_places, int):
-        raise TypeError(f"Number of places to backfill must be int; got {type(num_places).__name__}")
+        raise TypeError(f"Number of places to backfill the array must be int; got {type(num_places).__name__}")
     if num_places < 0:
-        raise ValueError(f"Number of places to backfill must be nonnegative; got {num_places}")
+        raise ValueError(f"Number of places to backfill the array must be nonnegative; got {num_places}")
     pad_width = [(0, num_places)] + ([(0, 0)] * max(0, len(array.shape) - 1))
     return np.pad(array, pad_width=pad_width, mode="constant", constant_values=0)
 
