@@ -42,7 +42,7 @@ def get_name_for_raw_zero_based_fov(fov: int) -> str:
     return get_fov_name_short(fov) + ".zarr"
 
 
-BuildInput = tuple[Iterable[RoiOrderingSpecification.FilenameKey], LocusGroupingData]
+BuildInput = tuple[Iterable[RoiOrderingSpecification], LocusGroupingData]
 
 
 @st.composite
@@ -83,7 +83,7 @@ def gen_legal_input(
     
     # Create the Numpy array "filename" for each spot extraction 1 per eligible locus time, per regional spot.
     fn_keys = [
-        RoiOrderingSpecification.FilenameKey(
+        RoiOrderingSpecification(
             field_of_view=get_name_for_raw_zero_based_fov(fov),
             roiId=tid.get,
             ref_timepoint=rt,
@@ -260,7 +260,7 @@ def test_regional_time_with_data_but_absent_from_nonempty_locus_grouping__causes
     assert str(error_context.value).startswith("No expected locus time count for regional time")
 
 
-def get_locus_time_count_by_reg_time(fnkey_image_pairs: Iterable[tuple[RoiOrderingSpecification.FilenameKey, np.ndarray]]) -> dict[TimepointFrom0, int]:
+def get_locus_time_count_by_reg_time(fnkey_image_pairs: Iterable[tuple[RoiOrderingSpecification, np.ndarray]]) -> dict[TimepointFrom0, int]:
     """Get the number of timepoints from each image volume array, keying by regional timepoint and ensuring consensus among spots for each regional timepoint."""
     result: dict[TimepointFrom0, int] = {}
     for key, img in fnkey_image_pairs:
@@ -276,7 +276,7 @@ def get_locus_time_count_by_reg_time(fnkey_image_pairs: Iterable[tuple[RoiOrderi
     return result
 
 
-def mock_npz_wrapper(*, temp_folder: Path, fnkey_image_pairs: Iterable[tuple[RoiOrderingSpecification.FilenameKey, np.ndarray]]):
+def mock_npz_wrapper(*, temp_folder: Path, fnkey_image_pairs: Iterable[tuple[RoiOrderingSpecification, np.ndarray]]):
     """Create a mocked version of the looptrace.image_io.NPZ_wrapper class, used to iterate over the locus spot images."""
     npz_wrapper = mock.Mock()
     npz_wrapper.npz = {k.file_name_base: img for k, img in fnkey_image_pairs}
