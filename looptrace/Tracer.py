@@ -256,7 +256,7 @@ def finalise_traces(*, rois: pd.DataFrame, fits: pd.DataFrame, z_nm: NumberLike,
     #Then, apply fine scale drift to fits, and map pixels to physcial units.
     traces = apply_fine_scale_drift_correction(traces)
     traces = apply_pixels_to_nanometers(traces, z_nm_per_px=z_nm, xy_nm_per_px=xy_nm)
-    traces = traces.sort_values(RoiOrderingSpecification.row_order_columns())
+    traces = traces.sort_values(get_locus_spot_row_order_columns())
     return traces
 
 
@@ -548,8 +548,8 @@ def backfill_array(array: np.ndarray, *, num_places: int) -> np.ndarray:
     return np.pad(array, pad_width=pad_width, mode="constant", constant_values=0)
 
 
-def _prep_npz_to_zarr(npz: Union[str, Path, NPZ_wrapper]) -> Tuple[NPZ_wrapper, Iterable[Tuple[RoiOrderingSpecification.FilenameKey, str]]]:
+def _prep_npz_to_zarr(npz: Union[str, Path, NPZ_wrapper]) -> Tuple[NPZ_wrapper, Iterable[Tuple[RoiOrderingSpecification, str]]]:
     if isinstance(npz, (str, Path)):
         npz = NPZ_wrapper(npz)
-    keyed = sorted(map(lambda fn: (RoiOrderingSpecification.get_file_sort_key(fn), fn), npz.files), key=lambda k_: k_[0].to_tuple)
+    keyed = sorted(map(lambda fn: (RoiOrderingSpecification.from_file_name_base(fn), fn), npz.files), key=lambda k_: k_[0].to_tuple)
     return npz, keyed

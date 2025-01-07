@@ -42,6 +42,7 @@ DETECTION_METHOD_KEY = "detection_method"
 DIFFERENCE_OF_GAUSSIANS_CONFIG_VALUE_SPEC = "dog"
 NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION = ".nuclei_labeled"
 NUCLEI_LABELED_SPOTS_FILE_EXTENSION = NUCLEI_LABELED_SPOTS_FILE_SUBEXTENSION + ".csv"
+NUMBER_OF_DIGITS_FOR_ROI_ID = 5
 SPOT_CHANNEL_COLUMN_NAME = "spotChannel"
 SPOT_IMAGE_PIXEL_VALUE_TYPE = np.uint16
 
@@ -71,51 +72,84 @@ def detect_spots_int(input_image, *, threshold: NumberLike, expand_px: Optional[
     return spotfishing.detect_spots_int(input_image, spot_threshold=threshold, expand_px=expand_px)
 
 
+@dataclasses.dataclass(frozen=True, kw_only=True)
 class RoiOrderingSpecification:
     """
-    Bundle of column/field names to match sorting of rows to sorting of filenames.
+    Bundle of the essential provenance related to a particular stack of voxels.
+
+    More specifically, we extract, for each detected regional spot / ROI, a voxel for each of a 
+    number of timepoints from the course of the imaging experiment. For when these voxels stacks 
+    are then used for tracing and for locus spot visualisation, we need to know these things:
+    1. Field of view
+    2. Trace ID
+    3. ROI ID
+    4. Regional/reference timepoint (i.e., in which timepoint the spot was produced/detected)
     
-    In particular, the table of all ROIs (from regional spots, and that region per hybridisation round) 
-    should be sorted so that iteration over sorted filenames corresponding to each regional spot will yield 
-    an iteration to match row-by-row. This is important for fitting functional forms to the 
-    individual spots, as fit parameters must match rows from the all-ROIs table.
+    These data items can also be used to sort CSV-like records of locus spots, from which these 
+    data may be extracted, as well as the voxels themseleves (e.g., when merging ROIs  for tracing, 
+    and needing to put the voxels into a structure by aggregate trace ID for the visualisation).
+
+    These data components also function as a key on which to join trace fits (i.e., parameters of 
+    a 3D Gaussian) to the original locus spot ROI record, with things like bounding box information.
     """
 
-    @dataclasses.dataclass(frozen=True, kw_only=True)
-    class FilenameKey:
-        field_of_view: str
-        roiId: int
-        ref_timepoint: int
+    field_of_view: str
+    traceId: int
+    roiId: int
+    ref_timepoint: int
         
-        @classmethod
-        def from_roi(cls, roi: Union[pd.Series, Mapping[str, Any]]) -> "FilenameKey":
-            return cls(field_of_view=roi[FIELD_OF_VIEW_COLUMN], roiId=roi["roiId"], ref_timepoint=roi["ref_timepoint"])
-
-        @property
-        def file_name_base(self) -> str:
-            return "_".join([self.field_of_view, str(self.roiId).zfill(5), str(self.ref_timepoint)])
-
-        @property
-        def name_roi_file(self) -> str:
-            return self.file_name_base + ".npy"
-        
-        @property
-        def to_tuple(self) -> Tuple[str, int, int]:
-            return self.field_of_view, self.roiId, self.ref_timepoint
+    @classmethod
+    def from_roi(cls, roi: Union[pd.Series, Mapping[str, Any]]) -> "RoiOrderingSpecification":
+        return cls(
+            field_of_view=roi[FIELD_OF_VIEW_COLUMN], 
+            traceId=roi["traceId"],
+            roiId=roi["roiId"], 
+            ref_timepoint=roi["ref_timepoint"],
+        )
 
     @staticmethod
-    def row_order_columns() -> List[str]:
-        """What's used to sort the rows of the all-voxel-specifications file, and the traces file."""
-        return [FIELD_OF_VIEW_COLUMN, "roiId", "ref_timepoint", "timepoint"]
+    def _get_key_delimiter() -> str:
+        return "_"
+
+    @property
+    def file_name_base(self) -> str:
+        return self._get_key_delimiter().join([
+            self.field_of_view, 
+            str(self.traceId),
+            str(self.roiId).zfill(NUMBER_OF_DIGITS_FOR_ROI_ID), 
+            str(self.ref_timepoint),
+        ])
     
     @classmethod
-    def get_file_sort_key(cls, file_key: str) -> FilenameKey:
+    def from_file_name_base(cls, file_key: str) -> "RoiOrderingSpecification":
         try:
-            fov, roi, ref = file_key.split("_")
+            fov, trace, roi, ref = file_key.split(cls._get_key_delimiter())
         except ValueError:
             print(f"Failed to get key for file key: {file_key}")
             raise
-        return cls.FilenameKey(field_of_view=fov, roiId=int(roi), ref_timepoint=int(ref))
+        return cls(
+            field_of_view=fov, 
+            traceId=int(trace),
+            roiId=int(roi), 
+            ref_timepoint=int(ref),
+        )
+
+    @property
+    def name_roi_file(self) -> str:
+        return self.file_name_base + ".npy"
+    
+    @staticmethod
+    def row_order_columns() -> list[str]:
+        """What's used to sort the rows of the all-voxel-specifications file, and the traces file."""
+        return [FIELD_OF_VIEW_COLUMN, "traceId", "roiId", "ref_timepoint"]
+    
+    @property
+    def to_tuple(self) -> Tuple[str, int, int, int]:
+        return dataclasses.astuple(self)
+
+
+def get_locus_spot_row_order_columns() -> list[str]:
+    return RoiOrderingSpecification.row_order_columns() + ["timepoint"]
 
 
 def finalise_single_spot_props_table(spot_props: pd.DataFrame, field_of_view: str, timepoint: int, channel: int) -> pd.DataFrame:
@@ -535,7 +569,7 @@ class SpotPicker:
             get_zyx=get_zyx,
             background_timepoint=self.image_handler.background_subtraction_timepoint,
         )
-        self.all_rois = self.all_rois.sort_values(RoiOrderingSpecification.row_order_columns()).reset_index(drop=True)
+        self.all_rois = self.all_rois.sort_values(get_locus_spot_row_order_columns()).reset_index(drop=True)
         
         print(self.all_rois)
         outfile = self.image_handler.drift_corrected_all_timepoints_rois_file
@@ -579,7 +613,7 @@ class SpotPicker:
             for ch, ch_group in timepoint_group.groupby(SPOT_CHANNEL_COLUMN_NAME):
                 image_stack = np.array(self.images[fov_index][int(timepoint), int(ch)])
                 for _, roi in ch_group.iterrows():
-                    fn_key = RoiOrderingSpecification.FilenameKey.from_roi(roi)
+                    fn_key = RoiOrderingSpecification.from_roi(roi)
                     roi_img, error = extract_single_roi_img_inmem(
                         single_roi=roi, 
                         image_stack=image_stack, 
