@@ -49,10 +49,6 @@ import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
 import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.{
     MergeContributorsColumnNameForAssessedRecord,
     RoiIndexColumnName,
-    TraceGroupColumnName,
-    TraceIdColumnName,
-    TracePartnersAreAllPresentColumnName,
-    TracePartnersColumName,
 }
 import at.ac.oeaw.imba.gerlich.looptrace.csv.getCsvRowDecoderForImagingChannel
 import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
