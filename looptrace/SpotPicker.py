@@ -82,10 +82,10 @@ class VoxelStackSpecification:
     number of timepoints from the course of the imaging experiment. For when these voxels stacks 
     are then used for tracing and for locus spot visualisation, we need to know these things:
     1. Field of view
-    2. Trace group ID (if applicable, i.e. merging ROIs into a bigger tracing structure)
-    3. Trace ID
-    4. ROI ID
-    5. Regional/reference timepoint (i.e., in which timepoint the spot was produced/detected)
+    2. ROI ID
+    3. Regional/reference timepoint (i.e., in which timepoint the spot was produced/detected)
+    4. Trace group ID (if applicable, i.e. merging ROIs into a bigger tracing structure)
+    5. Trace ID
     
     These data items can also be used to sort CSV-like records of locus spots, from which these 
     data may be extracted, as well as the voxels themseleves (e.g., when merging ROIs  for tracing, 
@@ -101,44 +101,44 @@ class VoxelStackSpecification:
     """
 
     field_of_view: str
-    traceGroup: Option[str]
-    traceId: int
     roiId: int
     ref_timepoint: int
+    traceGroup: Option[str]
+    traceId: int
 
     @property
     def file_name_base(self) -> str:
         return self._get_key_delimiter().join([
             self.field_of_view, 
-            self.traceGroup.default_value(""),
-            str(self.traceId),
             str(self.roiId).zfill(NUMBER_OF_DIGITS_FOR_ROI_ID), 
             str(self.ref_timepoint),
+            self.traceGroup.default_value(""),
+            str(self.traceId),
         ])
 
     @classmethod
     def from_roi(cls, roi: Union[pd.Series, Mapping[str, Any]]) -> "VoxelStackSpecification":
         return cls(
             field_of_view=roi[FIELD_OF_VIEW_COLUMN], 
-            traceGroup=cls._build_trace_group(roi["traceGroup"]),
-            traceId=roi["traceId"],
             roiId=roi["roiId"], 
             ref_timepoint=roi["ref_timepoint"],
+            traceGroup=cls._build_trace_group(roi["traceGroup"]),
+            traceId=roi["traceId"],
         )
     
     @classmethod
     def from_file_name_base(cls, file_key: str) -> "VoxelStackSpecification":
         try:
-            fov, raw_trace_group, trace, roi, ref = file_key.split(cls._get_key_delimiter())
+            fov, roi, ref, raw_trace_group, trace = file_key.split(cls._get_key_delimiter())
         except ValueError:
             print(f"Failed to get key for file key: {file_key}")
             raise
         return cls(
             field_of_view=fov, 
-            traceId=int(trace),
-            traceGroup=cls._build_trace_group(raw_trace_group),
             roiId=int(roi), 
             ref_timepoint=int(ref),
+            traceGroup=cls._build_trace_group(raw_trace_group),
+            traceId=int(trace),
         )
 
     @property
@@ -149,7 +149,7 @@ class VoxelStackSpecification:
     def row_order_columns() -> list[str]:
         """What's used to sort the rows of the all-voxel-specifications file, and the traces file."""
         # NB: we don't include the trace group ID here, as it's entirely determined by the ID. 
-        return [FIELD_OF_VIEW_COLUMN, "traceId", "roiId", "ref_timepoint"]
+        return [FIELD_OF_VIEW_COLUMN, "roiId", "ref_timepoint", "traceId"]
     
     @property
     def to_tuple(self) -> Tuple[str, int, int, int]:
