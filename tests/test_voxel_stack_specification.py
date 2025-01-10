@@ -39,26 +39,26 @@ def gen_trace_id() -> SearchStrategy[int]:
 def gen_voxel_stack_specification() -> SearchStrategy[VoxelStackSpecification]:
     return st.tuples(
         gen_string_with_no_delimiter(),
-        gen_trace_group(),
-        gen_trace_id(), 
         gen_roi_id(),
         gen_regional_timepoint(),
+        gen_trace_group(),
+        gen_trace_id(), 
     ).map(lambda args: VoxelStackSpecification(
         field_of_view=args[0], 
-        traceGroup=args[1],
-        traceId=args[2], 
-        roiId=args[3], 
-        ref_timepoint=args[4],
+        roiId=args[1], 
+        ref_timepoint=args[2],
+        traceGroup=args[3],
+        traceId=args[4], 
     ))
 
 
 def gen_file_name_base() -> SearchStrategy[str]:
     return st.tuples(
         gen_string_with_no_delimiter(), 
-        gen_trace_group().map(lambda opt: opt.default_value("")),
-        gen_trace_id().map(str), 
         gen_roi_id().map(lambda tid: str(tid).zfill(NUMBER_OF_DIGITS_FOR_ROI_ID)), 
         gen_regional_timepoint().map(str),
+        gen_trace_group().map(lambda opt: opt.default_value("")),
+        gen_trace_id().map(str), 
     ).map(lambda components: DELIMITER.join(components))
 
 
