@@ -23,13 +23,11 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.nonnegativeInt.given
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.* // for .show_ syntax
 
 import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
-import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.TraceIdColumnName
+import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.{ TraceGroupColumnName, TraceIdColumnName }
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.internal.BuildInfo
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
-import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.TraceIdColumnName
-import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.TraceGroupColumnName
 
 /**
  * Simple pairwise distances within trace IDs
@@ -262,7 +260,8 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
         given CsvRowEncoder[OutputRecord, String] with
             override def apply(elem: OutputRecord): RowF[Some, String] = 
                 val fovText: NamedRow = FieldOfViewColumnName.write(elem.fieldOfView)
-                val traceText: NamedRow = TraceIdColumnName.write(elem.trace)
+                val traceGroupText: NamedRow = TraceGroupColumnName.write(elem.traceGroup)
+                val traceIdText: NamedRow = TraceIdColumnName.write(elem.trace)
                 val reg1Text: NamedRow = ColumnName[RegionId]("region1").write(elem.region1)
                 val reg2Text: NamedRow = ColumnName[RegionId]("region2").write(elem.region2)
                 val loc1Text: NamedRow = ColumnName[LocusId]("locus1").write(elem.locus1)
@@ -270,6 +269,6 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
                 val distanceText: NamedRow = ColumnName[EuclideanDistance]("distance").write(elem.distance)
                 val i1Text: NamedRow = ColumnName[NonnegativeInt]("inputIndex1").write(elem.inputIndex1)
                 val i2Text: NamedRow = ColumnName[NonnegativeInt]("inputIndex2").write(elem.inputIndex2)
-                fovText |+| traceText |+| reg1Text |+| reg2Text |+| loc1Text |+| loc2Text |+| distanceText |+| i1Text |+| i2Text
+                fovText |+| traceGroupText |+| traceIdText |+| reg1Text |+| reg2Text |+| loc1Text |+| loc2Text |+| distanceText |+| i1Text |+| i2Text
     end OutputRecord
 end ComputeLocusPairwiseDistances
