@@ -145,7 +145,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
                 .toList
                 .sortBy{ r => 
                     (r.fieldOfView, r.traceGroup, r.locus1, r.locus2, r.trace, r.region1, r.region2)
-                }(Order[(PositionName, TraceGroupOptional, LocusId, LocusId, TraceId, RegionId, RegionId)].toOrdering)
+                }(Order[(PositionName, TraceGroupMaybe, LocusId, LocusId, TraceId, RegionId, RegionId)].toOrdering)
             }
     }
 
@@ -175,7 +175,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
 
             /* Component parsers, one for each field of interest from a record. */
             val maybeParseFOV = getParser(FieldOfViewColumn, PositionName.parse)
-            val maybeParseTraceGroup = getParser(TraceGroupColumnName.value, TraceGroupOptional.fromString)
+            val maybeParseTraceGroup = getParser(TraceGroupColumnName.value, TraceGroupMaybe.fromString)
             val maybeParseTrace = getParser(TraceIdColumn, safeParseInt >>> TraceId.fromInt)
             val maybeParseRegion = getParser(RegionalBarcodeTimepointColumn, safeParseInt >>> RegionId.fromInt)
             val maybeParseLocus = getParser(LocusSpecificBarcodeTimepointColumn, safeParseInt >>> LocusId.fromInt)
@@ -212,7 +212,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
          */
         final case class GoodRecord(
             fieldOfView: PositionName, 
-            traceGroup: TraceGroupOptional, 
+            traceGroup: TraceGroupMaybe, 
             trace: TraceId, 
             region: RegionId, 
             locus: LocusId, 
@@ -242,7 +242,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
     /** Bundler of data which represents a single output record (pairwise distance) */
     final case class OutputRecord(
         fieldOfView: PositionName, 
-        traceGroup: TraceGroupOptional,
+        traceGroup: TraceGroupMaybe,
         trace: TraceId, 
         region1: RegionId, 
         region2: RegionId,

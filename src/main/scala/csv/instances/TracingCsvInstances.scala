@@ -20,13 +20,20 @@ import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
 
 /** CSV-related typeclass instances for trace IDs */
 trait TracingCsvInstances:
+    given CellDecoderForTraceGroupMaybe: CellDecoder[TraceGroupMaybe] = 
+        CellDecoder.instance{ s => 
+            TraceGroupMaybe.fromString(s).leftMap{ msg => new DecoderError(msg) }
+        }
+
     /** Encode the trace ID by encoding simply the underlying value. */
     given cellEncoderForTraceId(
         using enc: CellEncoder[NonnegativeInt]
     ): CellEncoder[TraceId] = enc.contramap(_.get)
 
     /** Encoder a (possibly empty) trace group ID by the wrapped value, or empty string. */
-    given CellEncoder[TraceGroupOptional] = CellEncoder.instance(_.toOption.fold("")(_.get))
+    given CellEncoder[TraceGroupMaybe] = 
+        import TraceGroupMaybe.toOption
+        CellEncoder.instance(_.toOption.fold("")(_.get))
 
     /** This is useful for when this encoder is being used where the record's ROI ID is 'NOT' being written separately.
      */
@@ -56,7 +63,7 @@ trait TracingCsvInstances:
       */
     def getCsvRowEncoderForTraceIdAssignment(includeRoiId: Boolean)(using 
         encRoiId: CellEncoder[RoiIndex],
-        encTraceGroupId: CellEncoder[TraceGroupOptional],
+        encTraceGroupId: CellEncoder[TraceGroupMaybe],
         encTraceId: CellEncoder[TraceId], 
         encBool: CellEncoder[Boolean],
     ): CsvRowEncoder[TraceIdAssignment, String] = new:
@@ -74,7 +81,7 @@ trait TracingCsvInstances:
             }
             given cellEncoderOptional[A: CellEncoder]: CellEncoder[Option[A]] = new:
                 override def apply(cell: Option[A]): String = cell.fold("")(CellEncoder[A].apply)
-            val groupIdRow: NamedRow = TraceGroupColumnName.write(TraceGroupOptional(groupIdOpt))
+            val groupIdRow: NamedRow = TraceGroupColumnName.write(TraceGroupMaybe(groupIdOpt))
             val partnersRow: NamedRow = TracePartnersColumName.write(partnersOpt.fold(Set())(_.toSortedSet))
             val hasAllPartnersRow: NamedRow = TracePartnersAreAllPresentColumnName.write(hasAllPartnersOpt)
             val baseFields = NonEmptyList.of(traceIdRow, groupIdRow, partnersRow, hasAllPartnersRow)

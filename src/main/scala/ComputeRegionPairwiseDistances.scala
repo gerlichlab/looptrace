@@ -37,6 +37,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.space.LengthInNanometers.given
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 import at.ac.oeaw.imba.gerlich.looptrace.csv.getCsvRowDecoderForImagingChannel
+import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.TraceGroupColumnName
 
 /**
  * Euclidean distances between pairs of regional barcode spots
@@ -119,7 +120,7 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
     def workflow(inputFile: os.Path, maybeDriftFile: Option[os.Path], pixels: Pixels3D, outputFolder: os.Path): Unit = {
         import Input.GoodRecord.given
 
-        given CsvRowDecoder[ImagingChannel, String] = 
+        given RowDec[ImagingChannel] = 
             getCsvRowDecoderForImagingChannel(SpotChannelColumnName)
 
         /* Read input, then throw exception or write output. */
@@ -192,6 +193,8 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
                             distance = computeDistance(getPoint(r1), getPoint(r2)), 
                             roiId1 = r1.index, 
                             roiId2 = r2.index,
+                            groupId1 = r1.traceGroup,
+                            groupId2 = r2.traceGroup
                         )
                     case rs => throw new Exception(s"${rs.length} records (not 2) when taking pairs!")
                 }
@@ -199,6 +202,8 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
             .sortBy{ r => (r.fieldOfView, r.channel, r.timepoint1, r.timepoint2, r.distance) }(using 
                 summon[Order[(PositionName, ImagingChannel, ImagingTimepoint, ImagingTimepoint, LengthInNanometers)]].toOrdering
             )
+
+    private type RowDec[A] = CsvRowDecoder[A, String]
 
     object Input:
         /** How records must be grouped for consideration of between which pairs to compute distance */
@@ -212,6 +217,7 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
          * @param timepoint The timepoint in which this spot was imaged
          * @param channel The image channel in which the spot was detected
          * @param point The 3D spatial coordinates of the center of a FISH spot
+         * @param traceGroup Optionally, the trace group/structure in which this ROI participates
          */
         private[looptrace] final case class GoodRecord(
             index: RoiIndex, 
@@ -219,16 +225,18 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
             timepoint: ImagingTimepoint, 
             channel: ImagingChannel, 
             point: Point3D,
+            traceGroup: TraceGroupMaybe,
         )
 
         private[looptrace] object GoodRecord:
             given csvDecoderForGoodRecord(using 
-                decId: CsvRowDecoder[RoiIndex, String],
+                decId: RowDec[RoiIndex],
                 decPos: CellDecoder[PositionName], 
-                decTime: CsvRowDecoder[ImagingTimepoint, String], 
-                decChannel: CsvRowDecoder[ImagingChannel, String], 
-                decPoint: CsvRowDecoder[Centroid[Double], String],
-            ): CsvRowDecoder[GoodRecord, String] = new:
+                decTime: RowDec[ImagingTimepoint], 
+                decChannel: RowDec[ImagingChannel], 
+                decPoint: RowDec[Centroid[Double]],
+                decTraceGroup: CellDecoder[TraceGroupMaybe],
+            ): RowDec[GoodRecord] = new:
                 override def apply(row: RowF[Some, String]): DecoderResult[GoodRecord] = 
                     val idNel = decId(row)
                         .leftMap{ e => s"Cannot decode ROI ID from row ($row): ${e.getMessage}" }
@@ -244,7 +252,8 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
                         .map(_.asPoint)
                         .leftMap{ e => s"Cannot decode 3D point from row ($row): ${e.getMessage}" }
                         .toValidatedNel
-                    (idNel, posNel, timeNel, channelNel, pointNel)
+                    val traceGroupNel = TraceGroupColumnName.from(row)
+                    (idNel, posNel, timeNel, channelNel, pointNel, traceGroupNel)
                         .mapN(GoodRecord.apply)
                         .leftMap{ messages => 
                             DecoderError(s"${messages.length} error(s) decoding input record: ${messages.mkString_("; ")}")
@@ -280,7 +289,9 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
         timepoint2: ImagingTimepoint, 
         distance: LengthInNanometers, 
         roiId1: RoiIndex, 
-        roiId2: RoiIndex
+        roiId2: RoiIndex,
+        groupId1: TraceGroupMaybe, 
+        groupId2: TraceGroupMaybe,
         )
 
     // Helpers for working with output record instances
@@ -299,7 +310,9 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
                     ColumnName[LengthInNanometers]("distance").write(elem.distance)
                 val i1Text: NamedRow = ColumnName[RoiIndex]("roiId1").write(elem.roiId1)
                 val i2Text: NamedRow = ColumnName[RoiIndex]("roiId2").write(elem.roiId2)
-                fovText |+| channelText |+| r1Text |+| r2Text |+| distanceText |+| i1Text |+| i2Text
+                val g1Text: NamedRow = TraceGroupColumnName.write(elem.groupId1)
+                val g2Text: NamedRow = TraceGroupColumnName.write(elem.groupId2)
+                fovText |+| channelText |+| r1Text |+| r2Text |+| distanceText |+| i1Text |+| i2Text |+| g1Text |+| g2Text
     end OutputRecord
 
     /* Type aliases */

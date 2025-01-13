@@ -209,7 +209,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
         val pos = 
             import io.github.iltotore.iron.autoRefine
             PositionName("P0001.zarr")
-        val traceGroup = TraceGroupOptional.empty
+        val traceGroup = TraceGroupMaybe.empty
         val tid = TraceId(NonnegativeInt(1))
         val reg = RegionId(ImagingTimepoint(NonnegativeInt(40)))
         val inputRecords = NonnegativeInt.indexed(List((2.0, 1.0, -1.0), (1.0, 5.0, 0.0), (3.0, 0.0, 2.0))).map{
@@ -381,7 +381,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
     ): Arbitrary[Input.GoodRecord] = 
         (arbPosAndTrace, arbRegion, arbLocus, arbPoint)
             .mapN{ case ((pos, trace), reg, loc, pt) => 
-                Input.GoodRecord(pos, TraceGroupOptional.empty, trace, reg, loc, pt) 
+                Input.GoodRecord(pos, TraceGroupMaybe.empty, trace, reg, loc, pt) 
             }
 
     private type Inputs = List[Input.GoodRecord]
@@ -452,7 +452,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
     /** Convert each ADT value to a simple sequence of text fields, for writing to format like CSV. */
     private def recordToTextFields = 
         import at.ac.oeaw.imba.gerlich.gerlib.instances.simpleShow.given // for SimpleShow[String]
-        import at.ac.oeaw.imba.gerlich.looptrace.instances.traceId.given // for SimpleShow[TraceGroupOptional]
+        import at.ac.oeaw.imba.gerlich.looptrace.instances.traceId.given // for SimpleShow[TraceGroupMaybe]
         given SimpleShow[Double] = SimpleShow.fromToString
         (r: Input.GoodRecord) => 
             val (x, y, z) = (r.point.x, r.point.y, r.point.z)

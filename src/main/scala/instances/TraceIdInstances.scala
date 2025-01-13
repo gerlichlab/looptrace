@@ -10,6 +10,6 @@ trait TraceIdInstances:
     given simpleShowForTraceId(using ev: SimpleShow[NonnegativeInt]): SimpleShow[TraceId] = 
         ev.contramap(_.get)
     
-    given simpleShowForTraceGroupId(using ev: SimpleShow[String]): SimpleShow[TraceGroupOptional] = 
+    given simpleShowForTraceGroupId(using ev: SimpleShow[String]): SimpleShow[TraceGroupMaybe] = 
         ev.contramap(_.toOption.fold("")(_.get))
 end TraceIdInstances
