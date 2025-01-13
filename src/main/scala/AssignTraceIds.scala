@@ -243,7 +243,6 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
         val lookupTraceGroupId: NonEmptySet[ImagingTimepoint] => Either[AtLeast2[List, (Set[ImagingTimepoint], TraceGroupId)], TraceGroupMaybe] = 
             val traceGroupIdByRegTimeSet: NonEmptyMap[Set[ImagingTimepoint], TraceGroupId] = 
                 val membersNamePairs = rules.map(r => r.mergeGroup.members.toSet -> r.name)
-                val (k1, v1) = membersNamePairs.head
                 given Order[Set[ImagingTimepoint]] = Order.by(_.toList)
                 membersNamePairs.tail
                     .foldLeft(NonEmptyMap.one[Set[ImagingTimepoint], TraceGroupId].tupled(membersNamePairs.head)){ 
