@@ -54,7 +54,6 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.{BoundingBox as BB, *}
 class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, ScalaCheckPropertyChecks:
 
     type HeaderField = String
-    type RawCoordinate = Double
 
     test("Small detected spot ROI example parses correctly.") {
         val linesToWrite = 

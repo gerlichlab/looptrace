@@ -201,13 +201,6 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
             )
 
     object Input:
-        /* These come from the *traces.csv file produced at the end of looptrace. */
-        val FieldOfViewColumn = FieldOfViewColumnName.value
-        val RegionalBarcodeTimepointColumn = "timepoint"
-        val XCoordinateColumn = "xc"
-        val YCoordinateColumn = "yc"
-        val ZCoordinateColumn = "zc"
-
         /** How records must be grouped for consideration of between which pairs to compute distance */
         private[looptrace] def getGroupingKey = (r: GoodRecord) => r.fieldOfView -> r.channel
         

@@ -22,6 +22,8 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 package object space:
 
     private type Wrapped = Double
+    private[looptrace] type RawCoordinate = Wrapped
+
 
     type Coordinate = geometry.Coordinate[Wrapped]
 

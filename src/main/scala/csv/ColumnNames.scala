@@ -8,6 +8,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.geometry.*
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.PositionName
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnName
 import at.ac.oeaw.imba.gerlich.looptrace.drift.*
+import at.ac.oeaw.imba.gerlich.looptrace.space.RawCoordinate
 
 /** Collection of names of critical columns from which to parse data */
 object ColumnNames:

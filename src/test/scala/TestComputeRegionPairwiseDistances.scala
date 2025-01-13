@@ -26,7 +26,12 @@ import at.ac.oeaw.imba.gerlich.gerlib.imaging.{
 }
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.instances.all.given
-import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.FieldOfViewColumnName
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.{
+    FieldOfViewColumnName, 
+    zCenterColumnName, 
+    yCenterColumnName, 
+    xCenterColumnName,
+}
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
@@ -47,9 +52,9 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
     val AllReqdColumns = List(
         Input.FieldOfViewColumn, 
         Input.RegionalBarcodeTimepointColumn, 
-        Input.XCoordinateColumn, 
-        Input.YCoordinateColumn, 
-        Input.ZCoordinateColumn,
+        xCenterColumnName[RawCoordinate].value,
+        yCenterColumnName[RawCoordinate].value,
+        zCenterColumnName[RawCoordinate].value,
         )
 
     private def ToNanometersIdentity: Pixels3D = Pixels3D(
