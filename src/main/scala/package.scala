@@ -143,35 +143,33 @@ package object looptrace {
                 .fold(throw _, identity)
     end TraceGroupId
 
-    /** A trace group ID which may or may not be present, isomorphic to {@code Option[TraceGroupId]} via wrapping/unwrapping */
-    final case class TraceGroupOptional(value: Option[TraceGroupId]):
-        def toOption: Option[TraceGroupId] = value
-    end TraceGroupOptional
+    /** A trace group ID which may or may not be present, isomorphic to {@code Option[TraceGroupId]} */
+    opaque type TraceGroupMaybe = Option[TraceGroupId]
 
     /** Helpers for working with optional trace group IDs */
-    object TraceGroupOptional:
-        /** Create a single empty optional trace group ID. */
-        def empty: TraceGroupOptional = TraceGroupOptional(None)
+    object TraceGroupMaybe:
+        def apply(tg: Option[TraceGroupId]): TraceGroupMaybe = tg
         
-        /** Lift a "pure" trace group ID into the context of optionality. */
-        def apply(groupId: TraceGroupId): TraceGroupOptional = new TraceGroupOptional(groupId.some)
+        def apply(tg: TraceGroupId): TraceGroupMaybe = tg.some
+        
+        def empty: TraceGroupMaybe = Option.empty
+        
+        def fromString: String => Either[String, TraceGroupMaybe] = s => 
+            if s.isEmpty then empty.asRight
+            else TraceGroupId.fromString(s).map(apply)
 
-        /** If the input's empty, create an empty trace group ID, otherwise use the input. */
-        def fromString: String => Either[String, TraceGroupOptional] = s =>
-            if s.isEmpty then TraceGroupOptional.empty.asRight
-            else TraceGroupId.fromString(s).map(TraceGroupOptional.apply)
-        
-        /** Use normal cats behavior for ordering optionals, with our defined behavior for ordering nonempty trace group IDs. */
-        given orderForTraceGroupOptional(using Order[TraceGroupId]): Order[TraceGroupOptional] = 
-            Order.by(_.toOption)
+        given orderForTraceGroupMaybe(using Order[TraceGroupId]): Order[TraceGroupMaybe] = Order.by(_.toOption)
 
         /** The JSON representation is {@code ujson.Null} exactly when the optional ID is empty. */
-        given JsonValueWriter[TraceGroupOptional, ujson.Str | ujson.Null.type] with
-            override def apply(groupOpt: TraceGroupOptional): ujson.Str | ujson.Null.type = 
+        given JsonValueWriter[TraceGroupMaybe, ujson.Str | ujson.Null.type] with
+            override def apply(groupOpt: TraceGroupMaybe): ujson.Str | ujson.Null.type = 
                 import TraceGroupId.given
                 import at.ac.oeaw.imba.gerlich.gerlib.json.syntax.asJson
                 groupOpt.toOption.fold(ujson.Null)(_.asJson)
-    end TraceGroupOptional
+
+        extension (tg: TraceGroupMaybe)
+            def toOption: Option[TraceGroupId] = tg
+    end TraceGroupMaybe
 
     /** Identifier of a particular trace (unique at the level */
     final case class TraceId(get: NonnegativeInt) derives Order

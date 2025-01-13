@@ -240,7 +240,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                 }
             rules.reduceMap{ r => r.mergeGroup.members.toNes.map(_ -> r).toNonEmptyList.toNem }
         
-        val lookupTraceGroupId: NonEmptySet[ImagingTimepoint] => Either[AtLeast2[List, (Set[ImagingTimepoint], TraceGroupId)], TraceGroupOptional] = 
+        val lookupTraceGroupId: NonEmptySet[ImagingTimepoint] => Either[AtLeast2[List, (Set[ImagingTimepoint], TraceGroupId)], TraceGroupMaybe] = 
             val traceGroupIdByRegTimeSet: NonEmptyMap[Set[ImagingTimepoint], TraceGroupId] = 
                 val membersNamePairs = rules.map(r => r.mergeGroup.members.toSet -> r.name)
                 val (k1, v1) = membersNamePairs.head
@@ -258,7 +258,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
             val rawLookup: Set[ImagingTimepoint] => Either[AtLeast2[List, (Set[ImagingTimepoint], TraceGroupId)], Option[TraceGroupId]] = 
                 lookupBySubset(traceGroupIdByRegTimeSet.toSortedMap.toList)
             // Reduce the input to a "normal" Set, push it through the lookup, and then lift a good result.
-            _.toSortedSet.pipe(rawLookup.map(_.map(TraceGroupOptional.apply)))
+            _.toSortedSet.pipe(rawLookup.map(_.map(TraceGroupMaybe.apply)))
     
         val initTraceId = getInitialTraceId(records.map(_.index))
         val traceIdsOffLimits = 
@@ -293,7 +293,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
     def processOneGroup(
         discardIfNotInGroupOfInterest: Boolean,
         lookupRule: TimepointExpectationLookup, 
-        lookupTraceGroupId: NonEmptySet[ImagingTimepoint] => Either[AtLeast2[List, (Set[ImagingTimepoint], TraceGroupId)], TraceGroupOptional],
+        lookupTraceGroupId: NonEmptySet[ImagingTimepoint] => Either[AtLeast2[List, (Set[ImagingTimepoint], TraceGroupId)], TraceGroupMaybe],
     ): (NonEmptyList[InputRecord], TraceId) => List[InputRecordFate] = 
         import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2.syntax.{ map, remove, size, toNes, toSet }
         given Eq[RoiPartnersRequirementType] = Eq.fromUniversalEquals
@@ -317,12 +317,14 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                                 case Left(multiHit) => 
                                     // problem case --> siphon off separately
                                     TraceGroupNameAmbiguity(roiId, query, multiHit.map(_._2)).asLeft
-                                case Right(TraceGroupOptional(None)) => 
-                                    val assignment = TraceIdAssignment.UngroupedRecord(roiId, currId)
-                                    OutputRecord(singleInputRecord, assignment).asRight
-                                case Right(TraceGroupOptional(Some(groupId))) => 
-                                    val assignment = TraceIdAssignment.GroupedAndUnmerged(roiId, currId, groupId)
-                                    OutputRecord(singleInputRecord, assignment).asRight
+                                case Right(traceGroupMaybe) => traceGroupMaybe.toOption match {
+                                    case None => 
+                                        val assignment = TraceIdAssignment.UngroupedRecord(roiId, currId)
+                                        OutputRecord(singleInputRecord, assignment).asRight
+                                    case Some(groupId) => 
+                                        val assignment = TraceIdAssignment.GroupedAndUnmerged(roiId, currId, groupId)
+                                        OutputRecord(singleInputRecord, assignment).asRight
+                                }
                             }
                         }
                     List(maybeOutputRecord).flatten
@@ -553,7 +555,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
             encBox: CsvRowEncoder[BoundingBox, String], 
             encNuc: CellEncoder[NuclearDesignation],
             encTid: CellEncoder[TraceId],
-            encTraceGroupId: CellEncoder[TraceGroupOptional],
+            encTraceGroupId: CellEncoder[TraceGroupMaybe],
             encPartnersFlag: CellEncoder[Boolean],
         ): CsvRowEncoder[OutputRecord, String] = new:
             override def apply(elem: OutputRecord): RowF[Some, String] = 

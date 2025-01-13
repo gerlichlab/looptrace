@@ -47,7 +47,7 @@ object ColumnNames:
     val TooCloseRoisColumnName: ColumnName[NonEmptySet[RoiIndex]] = 
         ColumnName("tooCloseRois")
 
-    val TraceGroupColumnName: ColumnName[TraceGroupOptional] = ColumnName("traceGroup")
+    val TraceGroupColumnName: ColumnName[TraceGroupMaybe] = ColumnName("traceGroup")
 
     val TraceIdColumnName: ColumnName[TraceId] = ColumnName("traceId")
 

@@ -267,7 +267,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
             case header :: records => 
                 val maybeParse: ErrMsgsOr[Array[String] => ErrMsgsOr[(LocusSpotQC.SpotIdentifier, LocusSpotQC.InputRecord)]] = {
                     val maybeParseFov = buildFieldParse(pc.fovColumn, PositionName.parse)(header)
-                    val maybeParseTraceGroup = buildFieldParse(TraceGroupColumnName.value, TraceGroupOptional.fromString)(header)
+                    val maybeParseTraceGroup = buildFieldParse(TraceGroupColumnName.value, TraceGroupMaybe.fromString)(header)
                     val maybeParseRegion = buildFieldParse(pc.regionColumn, safeParseInt >>> RegionId.fromInt)(header)
                     val maybeParseTraceId = buildFieldParse(pc.traceIdColumn, safeParseInt >>> TraceId.fromInt)(header)
                     val maybeParseTime = buildFieldParse(pc.timeColumn, safeParseInt >>> ImagingTimepoint.fromInt)(header)

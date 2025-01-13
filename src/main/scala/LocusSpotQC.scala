@@ -96,7 +96,7 @@ object LocusSpotQC:
       */
     final case class SpotIdentifier(
         fieldOfView: PositionName, 
-        traceGroup: TraceGroupOptional, 
+        traceGroup: TraceGroupMaybe, 
         regionId: RegionId, 
         traceId: TraceId, 
         locusId: LocusId,
@@ -115,7 +115,7 @@ object LocusSpotQC:
         
         /** Create a [[ujson.Obj]] representation of the given spot identifier, mapping each of its field names to simplified value. */
         private[LocusSpotQC] def toJsonObject(spotId: SpotIdentifier): ujson.Obj = 
-            import TraceGroupOptional.given
+            import TraceGroupMaybe.given
             ujson.Obj(
                 FieldOfViewColumnName.value -> spotId.fieldOfView.asJson,
                 TraceGroupColumnName.value -> spotId.traceGroup.asJson,
@@ -129,7 +129,7 @@ object LocusSpotQC:
             toJsonObject,
             json => 
                 val fovNel = safeExtractE(FieldOfViewColumnName.value, PositionName.parse)(json)
-                val traceGroupNel = safeExtractE(TraceGroupColumnName.value, TraceGroupOptional.fromString)(json)
+                val traceGroupNel = safeExtractE(TraceGroupColumnName.value, TraceGroupMaybe.fromString)(json)
                 val regIdNel = safeExtractE("regionId", safeParseInt >>> RegionId.fromInt)(json)
                 val traceIdNel = safeExtractE("traceId", safeParseInt >>> TraceId.fromInt)(json)
                 val locusIdNel = safeExtractE("locusId", safeParseInt >>> LocusId.fromInt)(json)
