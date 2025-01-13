@@ -132,6 +132,23 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
             throw new Exception(s"Trace ID is already a ROI index and can't be used: ${tid.show_}")
         }
 
+    /**
+     * Define a lookup table for the distance threshold which defines points' pairwise proximity.
+     * 
+     * Specifically, use the merge groups declared in the given rules, to map pairs of imaging 
+     * timepoints to a distance value. After this mapping's constructed, it will contain all 
+     * pairs of imaging timepoints (including their reflection, so that lookup won't be 
+     * sensitive to the permutation of the timepoints in a query tuple) it its set of keys, 
+     * with each key mapped to a distance between centroids, beneath which a pair of points 
+     * which comes from the mapped timepoint pair will be considered sufficiently proximal 
+     * to "merge" into the same tracing structure.
+     * 
+     * @param rules A configuration's section pertaining to how to merge detected spot ROIs 
+     *     for tracing a larger structure
+     * @return A mapping from pair of imaging timepoints to a distance threshold value, in 
+     *     which the value represents the maximal distance by which points from the given timepoints 
+     *     may be separated and still be considered sufficiently proximal to merge for tracing
+     */
     private def definePairwiseDistanceThresholds(
         rules: NonEmptyList[TraceIdDefinitionRule],
     ): Map[(ImagingTimepoint, ImagingTimepoint), DistanceThreshold] = 
@@ -158,6 +175,18 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                 }
             }
 
+    /**
+     * Build up the (unweighted, undirected) graph structure in which ROIs are connected iff they're sufficiently proximal.
+     * 
+     * @param rules The groups of timepoints and distance thresholds which define pairwise proximity of points 
+     *     (i.e., the regional FISH spots)
+     * @param pixels A definition of the physical units (e.g., nanometers) corresponding to the image units (pixels) 
+     *     in each dimension of an image
+     * @param records The ROIs from which to build the graph (i.e., the nodes, or vertex set)
+     * @return A graph structure with just the ROI index/IDs as node values, with edges representing an instance of 
+     *     satisfaction of the proximity criterion according to the distance threshold corresponding to the pair 
+     *     of imaging timepoints from whence the ROIs originated
+     */
     private def computeNeighborsGraph(
         rules: NonEmptyList[TraceIdDefinitionRule],
         pixels: Pixels3D,
@@ -198,6 +227,10 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                     // We do our pairwise calculations only within each group, but then flatten to collect all results.
                     _.toList.combinations(2).flatMap{  // flatMap here b/c of optionality of output from each record
                         case r1 :: r2 :: Nil =>
+                            // Here, by only getting back a distance threshold value for pairs of timepoints 
+                            // which were in the set of merge rules for tracing, we ensure that edges in 
+                            // the graph are never between ROIs which just happen to be close together but 
+                            // which weren't part of the declared structure for tracing.
                             lookupProximity
                                 // First, these records' timepoints may not have been in the rules set and 
                                 // may therefore not need to be tested for proximity.
