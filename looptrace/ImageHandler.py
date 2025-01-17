@@ -495,7 +495,7 @@ class ImageHandler:
             try:
                 tn = os.path.splitext(fp.name)[0].split(self.analysis_filename_prefix)[1]
             except IndexError:
-                logger.warning(f"Cannot parse table name from filename: {fp.name}")
+                logger.debug(f"Cannot parse table name from filename: {fp.name}")
                 continue
             fp = fp.path
             if ignore_path(fp):
@@ -504,7 +504,7 @@ class ImageHandler:
             try:
                 parse = parsers[os.path.splitext(fp)[1]]
             except KeyError:
-                logger.warning(f"Cannot load as table: {fp}")
+                logger.debug(f"Cannot load as table: {fp}")
                 continue
             logger.info(f"Loading table '{tn}': {fp}")
             self.tables[tn] = parse(fp)
