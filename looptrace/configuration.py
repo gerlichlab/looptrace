@@ -17,8 +17,8 @@ __all__ = [
     ]
 
 
-KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS = "pixelSeparationBeneathWhichSpotRoisWillMerge" # to avoid merger
-MINIMUM_SPOT_SEPARATION_KEY = "minimumPixelLikeSeparation" # to avoid filtration
+KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS = "pixelSeparationBeneathWhichSpotRoisWillMerge"
+MINIMUM_SPOT_SEPARATION_KEY = "minimumPixelLikeSeparation"
 SEMANTIC_KEY = "semantic"
 
 
