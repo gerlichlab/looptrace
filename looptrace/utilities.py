@@ -2,11 +2,15 @@
 
 from collections import Counter
 import functools
+import logging
+from os import PathLike
+from pathlib import Path
 from typing import Callable, Iterable, Mapping, Optional, ParamSpec, TypeAlias, TypeVar
 from expression import Option, Result, compose, curry_flip, snd
 from expression.collections import Seq
 from expression import result
 from numpydoc_decorator import doc
+import pandas as pd
 
 _A = TypeVar("_A")
 _B = TypeVar("_B")
@@ -16,6 +20,8 @@ _P = ParamSpec("_P")
 _V = TypeVar("_V")
 
 _Exception = TypeVar("_Exception", bound=Exception)
+
+CsvReadable: TypeAlias = str | Path | PathLike[str]
 
 
 # Courtesy of @Hugovdberg in Issues discussion on dbratti/Expression repo
@@ -111,6 +117,14 @@ def get_option(k: _K, m: Mapping[_K, _V]) -> Option[_V]:
 @wrap_exception(TypeError)
 def list_from_object(obj: object) -> Result[list[object], str]:
     return list(obj)
+
+
+def read_csv_maybe_empty(f: CsvReadable) -> pd.DataFrame:
+    try:
+        return pd.read_csv(f)
+    except pd.errors.EmptyDataError:
+        logging.info("Empty CSV read target: %s", f)
+        return pd.DataFrame()
 
 
 @curry_flip(1)
