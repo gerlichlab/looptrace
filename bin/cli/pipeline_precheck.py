@@ -106,6 +106,8 @@ def find_config_file_errors(rounds_config: ExtantFile, params_config: ExtantFile
     dc_method = Drifter.get_method_name(parameters)
     if dc_method and not Drifter.Methods.is_valid_name(dc_method):
         errors.append(ConfigurationValueError(f"Invalid drift correction method ({dc_method}); choose from: {', '.join(Drifter.Methods.values())}"))
+    if "reg_ref_frame" in parameters:
+        errors.append(ConfigurationValueError(f"The key for the timepoint as reference for drift correction has changed from reg_ref_frame to reg_ref_timepoint; update your config."))
     
     # Spot detection
     try:
