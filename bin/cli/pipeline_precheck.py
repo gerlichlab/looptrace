@@ -135,7 +135,7 @@ def find_config_file_errors(rounds_config: ExtantFile, params_config: ExtantFile
     try:
         min_pixels_to_avoid_spot_merge = parameters[KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS]
     except KeyError:
-        pass # no problem, spot merge won't be done
+        errors.append(ConfigurationValueError(f"Missing key ('{KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS}') for minimal ROI separation to avoid merge"))
     else:
         if not isinstance(min_pixels_to_avoid_spot_merge, int):
             errors.append(ConfigurationValueError(
