@@ -4,17 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v0.13.0] - 2024-12-16
-
-### Changed
-* `os-lib` is now at version 0.11.3.
-
-## [v0.12.0] - 2024-12-02
+## [v0.12.0] - Unreleased
 
 ### Added
 * Test for behavior when any timepoint to participate in a merger for tracing is not a regional timepoint
 
 ### Changed
+* `os-lib` is now at version 0.11.3.
 * It's now prohibited to declare merger of regional imaging timepoints for which the locus timepoint sets overlap. 
 See [Issue 384](https://github.com/gerlichlab/looptrace/issues/384).
 * Groups of regional timepoints to "merge" for tracing must now be named, for clear identification and interpretation in downstream analysis. 
