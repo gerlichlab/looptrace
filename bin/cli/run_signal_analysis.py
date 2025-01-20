@@ -163,11 +163,12 @@ def workflow(
                     logging.info("Reading nuclei drift file: %s", nuclei_drift_file)
                     all_nuclei_drifts: Mapping[FieldOfViewName, DriftRecord] = read_signal_drifts_file(nuclei_drift_file)
 
-                    # TODO: discard regional spot timepoints from the bigger collection: https://github.com/gerlichlab/looptrace/issues/376
                     for spec in analysis_specs:
                         # Get the ROIs of this type.
                         roi_type: RoiType = spec.roi_type
                         if roi_type == RoiType.LocusSpecific:
+                            # TODO: implement
+                            # TODO: discard regional spot timepoints from the bigger collection: https://github.com/gerlichlab/looptrace/issues/376
                             # TODO: will need to account for pixels vs. nanometers
                             # TODO: will need to account for different headers (e.g., z_px and z rather than zc, yc, etc.)
                             logging.error("Cross-channel analysis for locus-specific spots isn't yet supported, skipping!")
