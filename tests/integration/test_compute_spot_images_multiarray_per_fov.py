@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional
 from unittest import mock
 
+from expression import Option
 from gertils.types import TimepointFrom0, TraceIdFrom0
 import hypothesis as hyp
 from hypothesis import strategies as st
@@ -15,9 +16,10 @@ import pytest
 
 from looptrace import ArrayDimensionalityError
 from looptrace.ImageHandler import LocusGroupingData
-from looptrace.SpotPicker import SPOT_IMAGE_PIXEL_VALUE_TYPE, VoxelStackSpecification
-from looptrace.Tracer import compute_spot_images_multiarray_per_fov
+from looptrace.SpotPicker import SPOT_IMAGE_PIXEL_VALUE_TYPE
+from looptrace.Tracer import compute_locus_spot_voxel_stacks_for_visualisation
 from looptrace.integer_naming import IndexToNaturalNumberText, get_fov_name_short
+from looptrace.voxel_stack import VoxelStackSpecification
 
 
 DEFAULT_MIN_NUM_PASSING = 500 # 5x the hypothesis default to ensure we really explore the search space
@@ -85,8 +87,10 @@ def gen_legal_input(
     fn_keys = [
         VoxelStackSpecification(
             field_of_view=get_name_for_raw_zero_based_fov(fov),
-            roiId=tid.get,
+            roiId=tid.get, # For simplicity, just take the ROI ID as the trace ID.
             ref_timepoint=rt,
+            traceGroup=Option.Nothing(),
+            traceId=tid.get,
         ) 
         for (fov, rt), tid in zip(fov_rt_pairs, trace_ids, strict=True)
     ]
@@ -158,9 +162,14 @@ def test_fields_of_view__are_correct_and_in_order(tmp_path, fnkey_image_pairs_an
     """The FOVs should be correctly parsed and sorted from the stack of extracted spot image volume files."""
     fnkey_image_pairs, locus_grouping = fnkey_image_pairs_and_locus_grouping
     npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
-    kwargs = {"locus_grouping": locus_grouping} if locus_grouping else {"num_timepoints": max(img.shape[0] for _, img in fnkey_image_pairs)}
-    result = compute_spot_images_multiarray_per_fov(npz=npz_wrapper, bg_npz=None, **kwargs)
-    obs = [fov_name for fov_name, _ in result]
+    kwargs = {"locus_grouping": locus_grouping} if locus_grouping else {}
+    result, _ = compute_locus_spot_voxel_stacks_for_visualisation(
+        npz=npz_wrapper, bg_npz=None, 
+        num_timepoints=max(img.shape[0] for _, img in fnkey_image_pairs), 
+        potential_trace_metadata=None, 
+        **kwargs,
+    )
+    obs = [key.field_of_view for key, _ in result]
     exp = list(sorted(set(k.field_of_view for k, _ in fnkey_image_pairs)))
     assert obs == exp
 
@@ -193,10 +202,16 @@ def test_spot_images_finish_by_all_having_the_max_number_of_timepoints(tmp_path,
 
     # Mock the input and make the call under test.
     npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
-    kwargs = {"locus_grouping": locus_grouping} if locus_grouping else {"num_timepoints": max(img.shape[0] for _, img in fnkey_image_pairs)}
-    result: list[tuple[str, np.ndarray]] = compute_spot_images_multiarray_per_fov(npz=npz_wrapper, bg_npz=None, **kwargs)
+    kwargs = {"locus_grouping": locus_grouping} if locus_grouping else {}
+    result, _ = compute_locus_spot_voxel_stacks_for_visualisation(
+        npz=npz_wrapper, 
+        bg_npz=None, 
+        num_timepoints=max(img.shape[0] for _, img in fnkey_image_pairs),
+        potential_trace_metadata=None,
+        **kwargs,
+    )
     
-    # Check that 
+    # Validate.
     try:
         next(iter(result))
     except StopIteration:
@@ -231,8 +246,14 @@ def test_unexpected_timepoint_count_for_spot_image_volume__causes_expected_error
     fnkey_image_pairs, locus_grouping = fnkey_image_pairs_and_locus_grouping
     npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
     with pytest.raises(ArrayDimensionalityError) as error_context:
-        compute_spot_images_multiarray_per_fov(npz=npz_wrapper, bg_npz=None, locus_grouping=locus_grouping)
-    assert str(error_context.value).startswith("Locus times count doesn't match expectation")
+        compute_locus_spot_voxel_stacks_for_visualisation(
+            npz=npz_wrapper, 
+            bg_npz=None, 
+            num_timepoints=max(img.shape[0] for _, img in fnkey_image_pairs), 
+            potential_trace_metadata=None, 
+            locus_grouping=locus_grouping,
+        )
+    assert str(error_context.value).startswith("Timepoint count doesn't match expectation")
 
 
 @st.composite
@@ -256,7 +277,13 @@ def test_regional_time_with_data_but_absent_from_nonempty_locus_grouping__causes
     fnkey_image_pairs, locus_grouping = fnkey_image_pairs_and_locus_grouping
     npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
     with pytest.raises(RuntimeError) as error_context:
-        compute_spot_images_multiarray_per_fov(npz=npz_wrapper, bg_npz=None, locus_grouping=locus_grouping)
+        compute_locus_spot_voxel_stacks_for_visualisation(
+            npz=npz_wrapper, 
+            bg_npz=None, 
+            num_timepoints=max(img.shape[0] for _, img in fnkey_image_pairs), 
+            potential_trace_metadata=None, 
+            locus_grouping=locus_grouping,
+        )
     assert str(error_context.value).startswith("No expected locus time count for regional time")
 
 

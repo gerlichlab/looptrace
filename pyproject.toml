@@ -20,6 +20,7 @@ classifiers = [
 [tool.poetry.dependencies]
 # These are the main runtime dependencies.
 python = ">= 3.11, < 3.12"
+attrs = "^24.3.0"
 cellpose = { version = "v2.2.2", optional = true }
 dask = "^2023.5.1"
 expression = "^5.0.2"

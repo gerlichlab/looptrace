@@ -36,8 +36,9 @@ __all__ = ["ImageHandler", "read_images"]
 
 logger = logging.getLogger()
 
-LocusGroupingData = dict[TimepointFrom0, set[TimepointFrom0]]
-PathFilter = Callable[[Union[os.DirEntry, Path]], bool]
+Times: TypeAlias = set[TimepointFrom0]
+LocusGroupingData: TypeAlias = dict[TimepointFrom0, Times]
+PathFilter: TypeAlias = Callable[[Union[os.DirEntry, Path]], bool]
 
 
 @doc(
@@ -255,7 +256,7 @@ class ImageHandler:
     def get_dc_filepath(self, prefix: str, suffix: str) -> Path:
         return Path(self.out_path(prefix + "_drift_correction" + suffix))
 
-    def get_locus_timepoints_for_regional_timepoint(self, regional_timepoint: TimepointFrom0) -> set[TimepointFrom0]:
+    def get_locus_timepoints_for_regional_timepoint(self, regional_timepoint: TimepointFrom0) -> Times:
         if not isinstance(regional_timepoint, TimepointFrom0):
             raise TypeError(f"Illegal type ({type(regional_timepoint).__name__}) for regional timepoint for which to lookup locus timepoints!")
         grouping: Optional[LocusGroupingData] = self.locus_grouping
@@ -283,7 +284,7 @@ class ImageHandler:
             logging.warning("Did not find locus grouping section key ('%s') in config data", section_key)
         else:
             for reg_time, locus_times in data.items():
-                curr: set[TimepointFrom0] = {TimepointFrom0(t) for t in locus_times}
+                curr: Times = {TimepointFrom0(t) for t in locus_times}
                 if len(curr) != len(locus_times):
                     raise ValueError(f"Repetition is present in locus times for regional time {reg_time}: {locus_times}")
                 try:
@@ -446,6 +447,10 @@ class ImageHandler:
                 n = probe + ("" if rep is None else f"_repeat{rep}")
                 names.append(n)
         return names
+
+    @property
+    def trace_group_metadata_file(self) -> Path:
+        return Path(self.analysis_path) / "trace_group_metadata.json"
 
     @property
     def trace_id_assignment_skipped_rois_file(self) -> Path:

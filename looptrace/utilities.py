@@ -87,6 +87,10 @@ def find_first_option(items: Iterable[_A], predicate: Callable[[_A], bool]) -> O
     return Option.Nothing()
 
 
+def find_counts_of_repeats(items: Iterable[_A]) -> Iterable[tuple[_A, int]]:
+    return filter(compose(snd, lambda n: n > 1), Counter(items).items())
+
+
 @curry_flip(1)
 @doc(
     summary="Lookup keys but with expression.Result API",

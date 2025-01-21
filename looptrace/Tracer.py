@@ -9,10 +9,15 @@ EMBL Heidelberg
 
 import dataclasses
 import itertools
+import json
 import logging
+from operator import itemgetter
 from pathlib import Path
 from typing import *
 
+import attrs
+from expression import Option, Result, compose, fst, option, result, snd
+from expression.collections import Seq, seq
 from joblib import Parallel, delayed
 import numpy as np
 import pandas as pd
@@ -24,19 +29,27 @@ from gertils.types import TimepointFrom0
 from numpydoc_decorator import doc
 
 from looptrace import *
-from looptrace.ImageHandler import ImageHandler, LocusGroupingData
-from looptrace.SpotPicker import SPOT_IMAGE_PIXEL_VALUE_TYPE, RoiOrderingSpecification, get_spot_images_zipfile
-from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
+
+from looptrace.ImageHandler import ImageHandler, LocusGroupingData, Times
+from looptrace.SpotPicker import get_locus_spot_row_order_columns, get_spot_images_zipfile
+from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE, symmetricGaussian3D
 from looptrace.image_io import NPZ_wrapper, write_jvm_compatible_zarr_store
-from looptrace.numeric_types import NumberLike
+from looptrace.numeric_types import FloatLike, NumberLike
+from looptrace.trace_metadata import LocusSpotViewingKey, LocusSpotViewingReindexingDetermination, PotentialTraceMetadata, TraceGroupName, trace_group_option_to_string
 from looptrace.tracing_qc_support import apply_timepoint_names_and_spatial_information
+from looptrace.utilities import traverse_through_either
+from looptrace.voxel_stack import VoxelStackSpecification
 
 BOX_Z_COL = "spot_box_z"
 BOX_Y_COL = "spot_box_y"
 BOX_X_COL = "spot_box_x"
+FIT_COLUMNS = list(symmetricGaussian3D.__annotations__.keys())
 IMG_SIDE_LEN_COLS = [BOX_Z_COL, BOX_Y_COL, BOX_X_COL]
-ROI_FIT_COLUMNS = ["BG", "A", "z_px", "y_px", "x_px", "sigma_z", "sigma_xy"]
 MASK_FITS_ERROR_MESSAGE = "Masking fits for tracing currently isn't supported!"
+
+FitResult: TypeAlias = Result["FitValues", str]
+FitValues: TypeAlias = list[FloatLike]
+VoxelProcessingError: TypeAlias = ArrayDimensionalityError | TypeError | ValueError
 
 
 @dataclasses.dataclass
@@ -105,6 +118,10 @@ class Tracer:
         return self.image_handler.nanometers_per_pixel_z
 
     @property
+    def potential_trace_metadata(self) -> PotentialTraceMetadata:
+        pass
+
+    @property
     def roi_table(self) -> pd.DataFrame:
         return self.image_handler.tables[self.image_handler.spot_input_name + ("_bead_rois" if self._trace_beads else "_rois")]
 
@@ -117,8 +134,6 @@ class Tracer:
         """Fits 3D gaussian to previously detected ROIs across fields of view and timepoints"""
         spot_fits = find_trace_fits(
             fit_func_spec=self.fit_func_spec,
-            # TODO: fix this brittle / fragile / incredibly error-prone thing; #84
-            # TODO: in essence, we need a better mapping between these images and the ordering of the index of the ROIs table.
             filenames=self._iter_filenames(),
             image_data=self._images_wrapper, 
             background_data=self._background_wrapper, 
@@ -165,30 +180,37 @@ class Tracer:
 
         return self.traces_path
 
-    def write_all_spot_images_to_one_per_fov_zarr(self, overwrite: bool = False) -> list[Path]:
-        name_data_pairs: list[tuple[str, np.ndarray]] = (
-            compute_spot_images_multiarray_per_fov(
-                self._images_wrapper, 
-                bg_npz=self._background_wrapper,
-                locus_grouping=self.image_handler.locus_grouping,
-            )
-            if self.image_handler.locus_grouping else 
-            compute_spot_images_multiarray_per_fov(
-                self._images_wrapper, 
-                bg_npz=self._background_wrapper,
-                num_timepoints=sum(1 for _ in self.image_handler.iter_imaging_rounds()),
-            )
-        )
-        assert isinstance(name_data_pairs, list), f"Result of computation of per-FOV spot images arrays isn't list, but {type(name_data_pairs).__name__}"
+    def write_all_spot_images_to_viewable_stacks(self, *, metadata: Optional[PotentialTraceMetadata], overwrite: bool = False) -> list[Path]:
+        args = (self._images_wrapper, )
+        kwargs = {
+            "bg_npz": self._background_wrapper, 
+            "num_timepoints": sum(1 for _ in self.image_handler.iter_imaging_rounds()), 
+            "potential_trace_metadata": metadata,
+        }
+        if self.image_handler.locus_grouping:
+            # This will be used to determine the max numbers of timepoints.
+            kwargs["locus_grouping"] = self.image_handler.locus_grouping
+        key_data_pairs, trace_group_metadata = compute_locus_spot_voxel_stacks_for_visualisation(*args, **kwargs)
+        assert isinstance(key_data_pairs, list), f"Result of computation of per-FOV spot images arrays isn't list, but {type(key_data_pairs).__name__}"
+        name_data_pairs: list[(str, np.ndarray)] = [(fst(pair).to_string, snd(pair)) for pair in key_data_pairs]
         if len(name_data_pairs) == 0:
             return []
-        _, a0 = name_data_pairs[0]
+        _, first_array = name_data_pairs[0]
+        metadata_file: Path = self.image_handler.trace_group_metadata_file
+        logging.info("Writing trace group metadata to file: %s", metadata_file)
+        with metadata_file.open(mode="w") as fh:
+            json.dump(
+                obj={trace_group_option_to_string(k): v.to_json for k, v in trace_group_metadata.items()}, 
+                fp=fh, 
+                indent=2
+            )
         return write_jvm_compatible_zarr_store(
             name_data_pairs, 
             root_path=self.image_handler.locus_spots_visualisation_folder, 
-            dtype=a0.dtype, 
+            dtype=first_array.dtype, 
             overwrite=overwrite,
         )
+
     @property
     def _background_wrapper(self) -> Optional[NPZ_wrapper]:
         bg_time: Optional[int] = self.image_handler.background_subtraction_timepoint
@@ -217,18 +239,19 @@ def _iter_fit_args(
     filenames: Iterable[str],
     image_data: NPZ_wrapper,
     background_data: Optional[NPZ_wrapper],
-) -> Iterable[Tuple[FunctionalForm, np.ndarray]]:
+) -> Iterable[tuple[VoxelStackSpecification, TimepointFrom0, np.ndarray]]:
     get_data: Callable[[str], np.ndarray] = (
         (lambda fn: image_data[fn]) 
         if background_data is None else 
-        # Here we need np.int16 rather than np.uint16 to properly handle negatives.
+        # Here we need signed rather than unsigned integer types to handle negatives.
         (lambda fn: image_data[fn].astype(np.int32) - background_data[fn].astype(np.int32))
     )
     for fn in filenames:
+        stack_key: VoxelStackSpecification = VoxelStackSpecification.from_file_name_base(fn)
         time_stack_of_volumes: np.ndarray = get_data(fn)
         n_times = time_stack_of_volumes.shape[0]
         for t in range(n_times):
-            yield time_stack_of_volumes[t]
+            yield stack_key, TimepointFrom0(t), time_stack_of_volumes[t]
 
 
 def finalise_traces(*, rois: pd.DataFrame, fits: pd.DataFrame, z_nm: NumberLike, xy_nm: NumberLike) -> pd.DataFrame:
@@ -281,12 +304,17 @@ def pair_rois_with_fits(rois: pd.DataFrame, fits: pd.DataFrame) -> pd.DataFrame:
     ValueError
         If the indexes of the frames to combine don't match
     """
-    if rois.shape[0] != fits.shape[0]:
-        raise ValueError(f"ROIs table has {rois.shape[0]} rows, but fits table has {fits.shape[0]}; these should match.")
-    if any(rois.index != fits.index):
-        raise ValueError("Indexes of spots table and fits table don't match!")
-    # TODO: fix this brittle / fragile / incredibly error-prone thing; #84
-    traces = pd.concat([rois, fits], axis=1)
+    num_rois: int = rois.shape[0]
+    num_fits: int = fits.shape[0]
+    if num_rois != num_fits:
+        raise ValueError(f"{num_rois} ROIs, but {num_fits} fits; these should match.")
+    traces = pd.merge(
+        left=rois, 
+        right=fits, 
+        how="inner", 
+        on=get_locus_spot_row_order_columns(),
+        validate="1:1"
+    )
     return traces
 
 
@@ -343,23 +371,109 @@ def find_trace_fits(
                 spot_img = finalise_spot_img(spot_img, single_roi_timecourse)
                 fits.append(fit_single_roi(fit_func_spec=fit_func_spec, roi_img=spot_img, mask=ref_img))
     else:
-        fits = Parallel(n_jobs=cores or -1)(
-            delayed(fit_single_roi)(fit_func_spec=fit_func_spec, roi_img=spot_img) 
-            for spot_img in tqdm(_iter_fit_args(filenames=filenames, image_data=image_data, background_data=background_data))
-        )
+        raw_fits: list[tuple[str, int, int, int, Result[tuple["VoxelSize", FitResult], VoxelProcessingError]]] = \
+            Parallel(n_jobs=cores or -1)(
+                # NB: don't include regional timepoint and trace group here, since they're not necessary 
+                # to uniquely determine row match between the tables to join, and they'll already be present 
+                # in the table to which this fit parameters table under construction will be joined.
+                delayed(lambda key, time, fun, img: (key.field_of_view, key.traceId, key.roiId, time.get, process_voxel(fit_fun_spec=fun, roi_img=img)))(
+                    key=stack_key, 
+                    time=timepoint, 
+                    fun=fit_func_spec, 
+                    img=spot_img,
+                ) 
+                for stack_key, timepoint, spot_img in tqdm(_iter_fit_args(filenames=filenames, image_data=image_data, background_data=background_data))
+            )
     
-    full_cols = ROI_FIT_COLUMNS + IMG_SIDE_LEN_COLS
-    bads = [(i, row) for i, row in enumerate(fits) if len(row) != len(full_cols)]
+    full_cols = [FIELD_OF_VIEW_COLUMN, "traceId", "roiId", "timepoint"] + FIT_COLUMNS + IMG_SIDE_LEN_COLS
+    rows = []
+    for record in raw_fits:
+        fov, trace_id, roi_id, time, outcome = record
+        match outcome:
+            case result.Result(tag="ok", ok=(size, maybe_fit)):
+                parameter_values: FitValues = _merge_useable_voxel_cases(maybe_fit)
+                rows.append([fov, trace_id, roi_id, time] + parameter_values + list(size.to_tuple))
+            case result.Result(tag="error", error=Exception(e)):
+                raise e
+            case unknown:
+                raise Exception(f"Pattern match failed on result of ROI fit: {unknown}")
+    bads = sum(1 for r in rows if len(r) != len(full_cols))
     if bads:
-        raise Exception(f"{len(bads)} row(s) with field count different than column count ({len(full_cols)} == len({full_cols}))")
-    return pd.DataFrame(fits, columns=full_cols)
+        raise Exception(f"{len(bads)} row(s) (of {len(raw_fits)}) with field count different than column count ({len(full_cols)} == len({full_cols}))")
+    return pd.DataFrame(rows, columns=full_cols)
+
+
+def _merge_useable_voxel_cases(fit_result: FitResult) -> FitValues:
+    """Create a vector of parameter fit values, either using the good result (identity), or dummy values."""
+    match fit_result:
+        case result.Result(tag="ok", ok=values):
+            return values
+        case result.Error(tag="error", error=msg):
+            logging.debug(msg)
+            return [-1.0] * len(FIT_COLUMNS)
+
+
+def process_voxel(
+    roi_img: np.ndarray, 
+    fit_fun_spec: FunctionalForm, 
+    mask: Optional[np.ndarray] = None,
+) -> Result[tuple["VoxelSize", FitResult], VoxelProcessingError]:
+    return _get_voxel_size(roi_img).map(
+        lambda size: (
+            size, 
+            fit_single_roi(
+                fit_func_spec=fit_fun_spec, 
+                roi_img=roi_img, 
+                mask=mask
+            ),
+        )
+    )
+
+
+def _is_pos_int(_, attribute: attrs.Attribute, value: Any) -> None:
+    if not isinstance(value, int):
+        raise TypeError(f"Value for attribute {attribute.name} isn't int, but {type(value).__name__}")
+    if value < 1:
+        raise ValueError(f"Value for attribute {attribute.name} isn't positive: {value}")
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class VoxelSize:
+    z = attrs.field(validator=_is_pos_int) # type: int
+    y = attrs.field(validator=_is_pos_int) # type: int
+    x = attrs.field(validator=_is_pos_int) # type: int
+
+    def __post_init__(self) -> None:
+        bad_values = {}
+        for attr, in (f.name for f in dataclasses.fields(self)):
+            value = getattr(self, attr)
+            if not isinstance(value, int):
+                bad_values[attr] = TypeError(f"Alleged '{attr}' attribute for voxel size isn't integer, but {type(value).__name__}")
+            elif value < 1:
+                bad_values[attr] = ValueError(f"Value for 'z' attribute for voxek size isn't positive: {value}")
+        if bad_values:
+            raise Exception(f"{len(bad_values)} problem(s) building voxel size instance: {bad_values}")
+        
+    @property
+    def to_tuple(self) -> tuple[int, int, int]:
+        return attrs.astuple(self)
+
+
+def _get_voxel_size(roi_img: np.ndarray) -> Result["VoxelSize", VoxelProcessingError]:
+    try:
+        len_z, len_y, len_x = roi_img.shape
+    except ValueError as broad_error:
+        narrow_error = ArrayDimensionalityError(f"Expected a 3D ROI image but got an array with shape of length {len(roi_img.shape)}")
+        narrow_error.__cause__ = broad_error
+        return Result.Error(narrow_error)
+    return Result.Ok(VoxelSize(z=len_z, y=len_y, x=len_x))
 
 
 def fit_single_roi(
-        fit_func_spec: FunctionalForm, 
-        roi_img: np.ndarray, 
-        mask: Optional[np.ndarray] = None, 
-        ) -> np.ndarray:
+    fit_func_spec: FunctionalForm, 
+    roi_img: np.ndarray, 
+    mask: Optional[np.ndarray] = None, 
+) -> FitResult:
     """
     Fit a single roi with 3D gaussian (MLE or LS as defined in config).
     
@@ -378,23 +492,18 @@ def fit_single_roi(
 
     Returns
     -------
-    np.ndarray
-        Array-/vector-Like of values representing the optimised parameter values of the function to fit, 
-        and the lengths of the box defining the ROI (z, y, x)
+    Either an Error-wrapped message or an Ok-wrapped list of optimized parameter values
     """
-    try:
-        len_z, len_y, len_x = roi_img.shape
-    except ValueError as e:
-        raise Exception(f"ROI image for tracing isn't 3D: {roi_img.shape}") from e
     if len(roi_img.shape) != fit_func_spec.dimensionality:
         raise ValueError(f"ROI image to trace isn't correct dimensionality ({fit_func_spec.dimensionality}); shape: {roi_img.shape}")
     if not np.any(roi_img) or any(d < 3 for d in roi_img.shape): # Check if empty or too small for fitting.
-        fit = [-1] * len(ROI_FIT_COLUMNS)
-    else:
-        center = "max" if mask is None \
-            else list(np.unravel_index(np.argmax(roi_img * (mask/np.max(mask))**2, axis=None), roi_img.shape))
-        fit = list(fit_func_spec.function(roi_img, sigma=1, center=center)[0])
-    return np.array(fit + [len_z, len_y, len_x])
+        return Result.Error("No element of the ROI image evaluates to true as Boolean (possibly all-zeros?)")
+    if any(d < 3 for d in roi_img.shape):
+        return Result.Error("At least one dimension of the given voxel is too short for fitting")
+    center = "max" if mask is None \
+        else list(np.unravel_index(np.argmax(roi_img * (mask/np.max(mask))**2, axis=None), roi_img.shape))
+    # We take the first element since, regardless of the optimization method at work, the optimized parameters' result is in the first element of the return value.
+    return Result.Ok(list(fit_func_spec.function(roi_img, sigma=1, center=center)[0]))
 
 
 def apply_fine_scale_drift_correction(traces: pd.DataFrame) -> pd.DataFrame:
@@ -421,42 +530,76 @@ def apply_pixels_to_nanometers(traces: pd.DataFrame, z_nm_per_px: float, xy_nm_p
     return traces
 
 
+def explode_voxel_stack(
+    spec: VoxelStackSpecification, 
+    stack: np.ndarray, 
+    locus_times_by_regional_time: Mapping[TimepointFrom0, Times],
+) -> Result[Iterable[tuple[TimepointFrom0, np.ndarray]], str]:
+    def get_locus_times(rt: TimepointFrom0) -> Result[Times, str]:
+        return Option.of_optional(locus_times_by_regional_time.get(rt)).to_result(f"No locus times for regional time: {rt}")
+    num_voxels: int = stack.shape[0]
+    rt: TimepointFrom0 = TimepointFrom0(spec.ref_timepoint)
+    get_locus_times(rt).bind(
+        lambda lts: (
+            zip(sorted(list(lts + rt)), iter(stack)) 
+            if num_voxels == len(lts) + 1 
+            else Result.Error(f"Unexpected voxel count ({num_voxels}) for ROI from regional timepoint with {len(lts)} locus timepoints")
+        )
+    )
+
+
+def explode_voxels_within_trace(
+    specs_and_stacks: list[tuple[VoxelStackSpecification, np.ndarray]], 
+    locus_times_by_regional_time: Mapping[TimepointFrom0, Times],
+) -> Result[Mapping[TimepointFrom0, np.ndarray], Seq[str]]:
+    traverse_through_either(
+        lambda tup: explode_voxel_stack(spec=fst(tup), stack=snd(tup), locus_times_by_regional_time=locus_times_by_regional_time)
+    )(specs_and_stacks)\
+        .map(lambda exploded_substacks: seq.concat(*exploded_substacks))\
+        .map(dict)
+
+
 @doc(
-    summary="Compute a list of multiarrays, grouping and stacking by 'fieldOfView' (FOV).",
+    summary="Compute a list of multiarrays, grouping and stacking by visualisation unit (drag-and-drop for Napari).",
     extended_summary="""
         The expectation is that the data underlying the NPZ input will be a list of 4D arrays, each corresponding to 
         one of the retained (after filtering) regional barcode spots. The 4 dimensions: (time, z, y, x). 
         The time dimension represents the extraction of the bounding box corresponding to the spot ROI, extracting 
         pixel intensity data in each of the pertinent imaging timepoints.
 
-        The expectation is that this data is flattened over the hypothetical FOV, regional barcode, and channel dimensions. 
+        The expectation is that these data have been flattened over the hypothetical FOV, regional barcode, and channel dimensions. 
         That is, the underlying arrays may come from any field of view imaged during the experiment, any channel, and 
         any of the regional barcode imaging timepoints. The names of the underlying arrays in the NPZ must encode 
-        this information (about FOV, regional barcode timepoint, and ROI ID).
+        this information (about FOV, trace group, trace ID, ROI ID, and regional timepoint).
     """,
     parameters=dict(
         npz="Path to the NPZ file containing pixel volume stacks (across timepoints) for each ROI (detected regional spot)",
         bg_npz="Optionally, NPZ-stored data with the background to subtract from each image array",
-        locus_grouping="Mapping from regional timepoint to associated locus timepoints",
         num_timepoints="Number of imaging timepoints in the experiment",
+        potential_trace_metadata="If merging ROIs for tracing, the result of parsing relevant metadata from the rounds config",
+        locus_grouping="Mapping from regional timepoint to associated locus timepoints",
     ),
     raises=dict(
         ArrayDimensionalityError="If spot image volumes from the same regional barcode have different numbers of timepoints",
-        TypeError="If locus_grouping and num_timepoints are provided, or if neither is provided",
     ),
     returns="""
-        List of pairs, where first pair element is the name for the FOV, and the second element is the stacking of all ROI stacks for that FOV, 
-        each ROI stack consisting of a pixel volume for multiple timepoints
+        List of pairs, where first pair element is itself a pair of name of field of view and (option-wrapped) trace group name, 
+        and the second element is the stacking of all ROI stacks for that FOV, each ROI stack consisting of a pixel volume for 
+        multiple timepoints
     """,
 )
-def compute_spot_images_multiarray_per_fov(
+def compute_locus_spot_voxel_stacks_for_visualisation(
     npz: str | Path | NPZ_wrapper, 
     *, 
     bg_npz: Optional[str | Path | NPZ_wrapper],
+    num_timepoints: int,
+    potential_trace_metadata: Optional[PotentialTraceMetadata],
     locus_grouping: Optional[LocusGroupingData] = None, 
-    num_timepoints: Optional[int] = None,
-) -> list[tuple[str, np.ndarray]]:
+) -> tuple[list[tuple[LocusSpotViewingKey, np.ndarray]], Mapping[Option[TraceGroupName], LocusSpotViewingReindexingDetermination]]:
+    
+    # We first get the path, in case we need to message about it, as we'll lose it overwriting the variable.
     full_data_file: str | Path = npz.filepath if isinstance(npz, NPZ_wrapper) else npz
+    
     npz, keyed = _prep_npz_to_zarr(npz)
     if len(npz) == 0:
         logging.warning(f"Empty spot images file! {full_data_file}")
@@ -476,67 +619,118 @@ def compute_spot_images_multiarray_per_fov(
         # from the spot image volume for every timepoint.
         get_pixel_array = lambda fn: npz[fn].astype(np.int32) - bg_npz[fn].astype(np.int32)
 
-    # Facilitate assurance of same number of timepoints for each regional spot, to create non-ragged array.
-    # Compute the max independent of FOV so that if some regional barcode has no spots at all in a particular FOV, 
-    # the renumbering of the timepoints won't be messed up.
-    max_num_times: int
-    if locus_grouping and num_timepoints is not None:
-        raise TypeError("Provided locus_grouping and num_timepoints for spot images arrays computation; provide just one of those!")
-    elif not locus_grouping and num_timepoints is None:
-        raise TypeError("Provided neither nonempty locus_grouping nor num_timepoints for spot images arrays computation; provide exactly one of those!")
-    elif locus_grouping:
-        # +1 to account for the regional timepoint itself
-        max_num_times = 1 + max(len(ts) for ts in locus_grouping.values())
-    elif num_timepoints is not None:
-        max_num_times = num_timepoints
-    else:
-        raise RuntimeError("Should never happen! Did not successfully check all cases of locus_grouping and num_timepoints for spot images arrays construction!")
-
     num_loc_times_by_reg_time: dict[TimepointFrom0, int] = {rt: len(lts) for rt, lts in (locus_grouping or {}).items()}
+    def get_locus_times(t: TimepointFrom0) -> Result[Times, TimepointFrom0]:
+        return Option.of_optional(num_loc_times_by_reg_time.get(t)).to_result(t)
+    
+    arrays: list[tuple[LocusSpotViewingKey, np.ndarray]] = []
+    lookup_maximal_regional_time_locus_times_pairs: Mapping[TraceGroupName, tuple[Mapping[TimepointFrom0, Times], list[TimepointFrom0]]] = {}
+    trace_group_metadata: Mapping[Option[TraceGroupName], LocusSpotViewingReindexingDetermination] = {}
+    sorted_maximal_voxel_times: Optional[list[TimepointFrom0]]
 
-    result: list[tuple[str, np.ndarray]] = []
+    for (fov, trace_group_key), vis_group in itertools.groupby(keyed, compose(fst, lambda voxel_spec: (voxel_spec.field_of_view, voxel_spec.traceGroup))):
+        logging.info("Computing spot image arrays stack for FOV '%s', trace group %s...", fov, trace_group_key)
+        vis_group = list(vis_group) # Avoid iterator exhaustion.
+        current_stack: list[tuple[int, np.ndarray]] = []
+        for trace_id, spec_key_pairs in itertools.groupby(vis_group, compose(fst, lambda voxel_spec: voxel_spec.traceId)): # We'll defer sorting by trace ID.
+            spec_key_pairs = list(spec_key_pairs) # Avoid iterator exhaustion.
+            match trace_group_key:
+                case option.Option(tag="none", none=_):
+                    # Here we are in the case where the current trace ID is not for a larger group/structure of ROIs.
+                    sorted_maximal_voxel_times = None
+                    match spec_key_pairs:
+                        case []:
+                            raise ValueError(f"Somehow, there are no pairs of voxel specification and key for trace ID {trace_id}!")
+                        case [(filename_key, filename)]:
+                            pixel_array = get_pixel_array(filename)
+                            reg_time: TimepointFrom0 = TimepointFrom0(filename_key.ref_timepoint)
+                            obs_num_times: int = pixel_array.shape[0]
+                            exp_num_times: int
+                            if locus_grouping:
+                                # For nonempty locus grouping case, try to validate the time dimension.
+                                try:
+                                    # Add 1 to account for the regional timepoint itself.
+                                    exp_num_times: int = num_loc_times_by_reg_time[reg_time] + 1
+                                except KeyError as e:
+                                    raise RuntimeError(f"No expected locus time count for regional time {reg_time}, despite iterating over spot image file {filename}") from e
+                            else:
+                                exp_num_times: int = num_timepoints
+                            if obs_num_times != exp_num_times:
+                                raise ArrayDimensionalityError(
+                                    f"Timepoint count doesn't match expectation ({obs_num_times} != {exp_num_times}), for regional time {reg_time} from filename {filename} in archive {full_data_file}"
+                                )
+                            current_stack.append((trace_id, pixel_array))
+                        case stacks:
+                            raise ValueError(f"{len(stacks)} voxel stacks (not just 1), but the trace group/structure is null")
+                case option.Option(tag="some", some=trace_group):
+                    maximal_regional_locus_times_pairs: Mapping[TimepointFrom0, Times]
+                    sorted_maximal_voxel_times: list[TimepointFrom0]
+                    try:
+                        maximal_regional_locus_times_pairs, sorted_maximal_voxel_times = lookup_maximal_regional_time_locus_times_pairs[trace_group]
+                    except KeyError:
+                        # This is the non-empty side of the option, so we have the implication that the trace metadata must be non-null
+                        if potential_trace_metadata is None:
+                            raise ValueError(f"Processing data from trace group {trace_group}, but there's no trace metadata to reference")
+                        # Here we have the possibility of a multi-ROI trace, so we're combining voxel stacks which correspond to different ROIs, 
+                        # and which are therefore composed of different timepoints.
+                        # Here we extract the arrays for the relevant voxel stacks, meld them together in appropriate order, and 
+                        # determine how to index the timepoints. We also take care of dimensionality concerns here.
+                        if locus_grouping is None:
+                            raise NotImplementedError("At the moment, merging ROIs for tracing is only supported locus_grouping")
+                        match potential_trace_metadata.get_group_times(trace_group):
+                            case option.Option(tag="none", none=_):
+                                raise ValueError(f"Failed to lookup group times for trace group {trace_group}")
+                            case option.Option(tag="some", some=group_regional_times):
+                                match traverse_through_either(lambda rt: get_locus_times(rt).map(lambda lts: (rt, lts)))(group_regional_times):
+                                    case result.Result(tag="error", error=unfound_regional_times):
+                                        raise ValueError(f"Failed to find locus times for {len(unfound_regional_times)} regional timepoint(s) in trace group {trace_group}: {unfound_regional_times}")
+                                    case result.Result(tag="ok", ok=pairs):
+                                        maximal_regional_locus_times_pairs = dict(pairs.to_list())
+                                        sorted_maximal_voxel_times = list(sorted(seq.concat(*(lts + rt for rt, lts in maximal_regional_locus_times_pairs.items()))))
+                                        lookup_maximal_regional_time_locus_times_pairs[trace_group] = (maximal_regional_locus_times_pairs, sorted_maximal_voxel_times)
+                    
+                    # For each (this) spec...
+                    # 1. Get the locus times (through the regional times)
+                    # 2. Get the voxel stack
+                    # 3. Check that the length of the voxel stack is 1 more than the number of locus timepoints
+                    # Then, interweave the locus (and regional) timepoints for the entire ensemble of voxel stacks.
+                    match explode_voxels_within_trace(
+                        specs_and_stacks=[(spec, get_pixel_array(key)) for spec, key in spec_key_pairs],
+                        locus_times_by_regional_time=maximal_regional_locus_times_pairs
+                    ):
+                        case result.Result(tag="error", error=messages):
+                            msg_pfx = f"{len(messages)} error(s) processing trace {trace_id} (group {trace_group})"
+                            logging.error(msg_pfx)
+                            for msg in messages:
+                                logging.error(msg)
+                            raise RuntimeError(f"{len(messages)} error(s) processing trace {trace_id} (group: {trace_group}): {messages}")
+                        case result.Result(tag="ok", ok=exploded_group):
+                            try:
+                                first_voxel = next(exploded_group.values())
+                            except StopIteration as e:
+                                msg = f"No voxels! Trace = {trace_id} (group: {trace_group})"
+                                logging.error(msg)
+                                raise RuntimeError(msg) from e
+                            voxel_shape: tuple[int, int, int] = first_voxel.shape
+                            voxel_dtype: type = first_voxel.dtype
+                            if len(voxel_shape) != 3:
+                                raise ArrayDimensionalityError(f"For trace {trace_id} (group: {trace_group}), first voxel has not 3 dimensions, but {len(voxel_shape)}")                            
+                            # Stack up the voxels (1 per timepoint in the trace), creating a time dimension. 3D arrays --> single 4D array
+                            current_stack.append((trace_id, np.stack([exploded_group.get(t, np.zeros(shape=voxel_shape, dtype=voxel_dtype)) for t in sorted_maximal_voxel_times])))
+        
+        # Order by trace ID.
+        current_stack.sort(key=fst)
 
-    for fov, fov_group in itertools.groupby(keyed, lambda k_: k_[0].field_of_view):
-        logging.info("Computing spot image arrays stack for FOV '%s'...", fov)
-        current_stack: list[np.ndarray] = []
-        for filename_key, filename in sorted(fov_group, key=lambda fk_fn: (fk_fn[0].ref_timepoint, fk_fn[0].roiId)):
-            pixel_array = get_pixel_array(filename)
-            reg_time: TimepointFrom0 = TimepointFrom0(filename_key.ref_timepoint)
-            obs_num_times: int = pixel_array.shape[0]
-            if locus_grouping:
-                # For nonempty locus grouping case, try to validate the time dimension.
-                num_loc_times: int = num_loc_times_by_reg_time.get(reg_time, 0)
-                if num_loc_times == 0:
-                    raise RuntimeError(f"No expected locus time count for regional time {reg_time}, despite iterating over spot image file {filename}")
-                # Add 1 to account for the regional timepoint itself.
-                exp_num_times: int = 1 + num_loc_times
-            else:
-                exp_num_times: int = num_timepoints
-            if obs_num_times != exp_num_times:
-                raise ArrayDimensionalityError(
-                    f"Locus times count doesn't match expectation: {obs_num_times} != {exp_num_times}, for regional time {reg_time} from filename {filename} in archive {full_data_file}"
-                )
-            current_stack.append(pixel_array)
+        # TODO: store the reindexed the trace IDs, so that we can map mentally back-and-forth when viewing in Napari.
+        # Stack up each trace's voxel stack, creating a 5D array from a list of 4D arrays. The new dimension represents the trace ID.
+        arrays.append((LocusSpotViewingKey(fov, trace_group_key), np.stack([arr for _, arr in current_stack])))
+        trace_group_metadata[trace_group_key] = \
+            LocusSpotViewingReindexingDetermination(
+                timepoints=list(map(TimepointFrom0, range(num_timepoints))) if sorted_maximal_voxel_times is None else sorted_maximal_voxel_times,
+                traces=list(map(fst, current_stack)),
+            )
         
-        # For each regional spot, 1 of 2 things will be true:
-        # This is assured by the logic of the spot extraction table construction, and the fact that a dummy volume is obtained if a real one's not possible.
-        # 1. An image volume will be present from every timepoint in the imaging sequence.
-        # 2. An image volume will be present only from those timepoints to which the regional timepoint was mapped (and the regional timepoint itself).
-        tempstack: list[np.ndarray] = []
-        for img in current_stack:
-            if img.shape[0] < max_num_times:
-                num_to_fill = max_num_times - img.shape[0]
-                logging.debug("Backfilling array of %d timepoints with %d empty timepoints", img.shape[0], num_to_fill)
-                img = backfill_array(img, num_places=num_to_fill)
-            if img.shape[0] != max_num_times:
-                raise ArrayDimensionalityError(
-                    f"Need {max_num_times} timepoints but have {img.shape[0]} for pixel array from file {filename} in archive {full_data_file}"
-                )
-            tempstack.append(img)
-        
-        result.append(((fov, np.stack(tempstack))))
-        
-    return result
+    return arrays, trace_group_metadata
 
 
 def backfill_array(array: np.ndarray, *, num_places: int) -> np.ndarray:
@@ -548,8 +742,11 @@ def backfill_array(array: np.ndarray, *, num_places: int) -> np.ndarray:
     return np.pad(array, pad_width=pad_width, mode="constant", constant_values=0)
 
 
-def _prep_npz_to_zarr(npz: Union[str, Path, NPZ_wrapper]) -> Tuple[NPZ_wrapper, Iterable[Tuple[RoiOrderingSpecification, str]]]:
+def _prep_npz_to_zarr(npz: Union[str, Path, NPZ_wrapper]) -> Tuple[NPZ_wrapper, Iterable[Tuple[VoxelStackSpecification, str]]]:
     if isinstance(npz, (str, Path)):
         npz = NPZ_wrapper(npz)
-    keyed = sorted(map(lambda fn: (RoiOrderingSpecification.from_file_name_base(fn), fn), npz.files), key=lambda k_: k_[0].to_tuple)
+    keyed = sorted(
+        map(lambda fn: (VoxelStackSpecification.from_file_name_base(fn), fn), npz.files), 
+        key=compose(fst, lambda spec: (spec.field_of_view, spec.traceGroup, spec.roiId)),
+    )
     return npz, keyed
