@@ -7,6 +7,7 @@ import org.scalacheck.{ Arbitrary, Gen }
 import org.scalacheck.Arbitrary.arbitrary
 
 import com.github.tototoshi.csv.*
+import io.github.iltotore.iron.scalacheck.all.given // for generation in compliance with ValidTraceGroupName constraint
 
 import at.ac.oeaw.imba.gerlich.gerlib.cell.NuclearDesignation
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.{BoundingBox, Centroid, EuclideanDistance}
@@ -59,7 +60,12 @@ trait LooptraceSuite extends GenericSuite, GeometricInstances, ImagingInstances,
 
     given arbitraryForRoiIndex(using idx: Arbitrary[Int]): Arbitrary[RoiIndex] = 
         Arbitrary{ Gen.choose(0, Int.MaxValue).map(RoiIndex.unsafe) }
-    
+
+    given Arbitrary[TraceGroupId] = summon[Arbitrary[ValidTraceGroupName]].map(TraceGroupId.apply)
+
+    given arbitraryForTraceGroupMaybe(using Arbitrary[TraceGroupId]): Arbitrary[TraceGroupMaybe] = 
+        summon[Arbitrary[Option[TraceGroupId]]].map(TraceGroupMaybe.apply)
+
     given arbitraryForBlankImagingRound(using arbName: Arbitrary[String], arbTime: Arbitrary[ImagingTimepoint]): Arbitrary[BlankImagingRound] = 
         (arbName, arbTime).mapN(BlankImagingRound.apply)
 
