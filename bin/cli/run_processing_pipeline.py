@@ -10,7 +10,7 @@ import subprocess
 import sys
 from typing import *
 
-from expression import Option, Result
+from expression import Option, Result, option, result
 from gertils import ExtantFile, ExtantFolder
 import pandas as pd
 import pypiper
@@ -25,6 +25,7 @@ from looptrace.configuration import KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS
 from looptrace.conversion_to_zarr import one_to_one as run_zarr_production
 from looptrace.image_processing_functions import extract_labeled_centroids
 from looptrace.integer_naming import parse_semantic_and_value, IndexToNaturalNumberText, NameableSemantic
+from looptrace.trace_metadata import PotentialTraceMetadata
 
 from pipeline_precheck import workflow as pretest
 from nuc_label import workflow as run_nuclei_detection
@@ -267,11 +268,36 @@ def drift_correct_nuclei(rounds_config: ExtantFile, params_config: ExtantFile, i
     return N.coarse_drift_correction_workflow()
 
 
-def prep_locus_specific_spots_visualisation(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> List[Path]:
+def prep_locus_specific_spots_visualisation(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> list[Path]:
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     T = Tracer(H)
-    per_fov_zarr = T.write_all_spot_images_to_one_per_fov_zarr()
-    return per_fov_zarr
+    
+    try:
+        raw_config_metadata: Mapping[str, object] = H.config["mergeRulesForTracing"]
+    except KeyError:
+        # This was the original case, before the addition of merger of ROIs to tracing structures.
+        # NB: This does no accounting of structural difference which occurs when there's merger of ROIs for tracing.
+        #     That is, each trace in this case will correspond to exactly one regional timepoint, but 
+        #     each regional timepoint may have a different number of locus-specific timepoints, and therefore 
+        #     when traces are stacked together for a field of view, independent of the regional timepoints, 
+        #     there will quite likely be traces with different numbers of locus-specific timepoints supporting them. 
+        #     The function called here takes care of "smoothing out" any otherwise ragged arrays, by simply filling 
+        #     them from the back with all-0s arrays. Specifically, what's added is an array of all-0s vovels, 
+        #     with the length of this array equal to the difference between the maximum number of timepoints possible 
+        #     for a particular trace (the one whose image stack is having voxels appended), and the maximum number of 
+        #     timepoints possible for ANY trace, regardless of which regional timepoint it's associated with.
+        logging.info("No ROI merger for tracing to account for during preparation of locus spot visualisation")
+        return T.write_all_spot_images_to_viewable_stacks(metadata=None)
+    else:
+        logging.info("Using ROI merge rules for tracing to prep locus spots visualisation")
+        match PotentialTraceMetadata.from_mapping(raw_config_metadata):
+            case result.Result(tag="error", error=problem_messages):
+                logging.error("Failed to parse potential trace metadata!")
+                for msg in problem_messages:
+                    logging.error(msg)
+                raise RuntimeError(f"{len(problem_messages)} error(s) parsing potential trace metadata: {problem_messages}")
+            case result.Result(tag="ok", ok=metadata):
+                T.write_all_spot_images_to_viewable_stacks(metadata=metadata)
 
 
 def prep_nuclear_masks_data(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> Dict[str, Path]:
