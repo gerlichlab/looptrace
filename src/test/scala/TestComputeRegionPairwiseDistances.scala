@@ -28,6 +28,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.{
     FieldOfViewColumnName, 
+    TimepointColumnName, 
     zCenterColumnName, 
     yCenterColumnName, 
     xCenterColumnName,
@@ -50,8 +51,8 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
     override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
     
     val AllReqdColumns = List(
-        Input.FieldOfViewColumn, 
-        Input.RegionalBarcodeTimepointColumn, 
+        FieldOfViewColumnName.value, 
+        TimepointColumnName.value, 
         xCenterColumnName[RawCoordinate].value,
         yCenterColumnName[RawCoordinate].value,
         zCenterColumnName[RawCoordinate].value,
@@ -98,7 +99,14 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
         val pos = PositionName("P0001.zarr")
         val channel = ImagingChannel.unsafe(0)
         val inputRecords = NonnegativeInt.indexed(List((2.0, 1.0, -1.0), (1.0, 5.0, 0.0), (3.0, 0.0, 2.0))).map{
-            (pt, i) => Input.GoodRecord(RoiIndex.unsafe(i), pos, ImagingTimepoint.unsafe(i), channel ,buildPoint.tupled(pt))
+            (pt, i) => Input.GoodRecord(
+                RoiIndex.unsafe(i), 
+                pos, 
+                ImagingTimepoint.unsafe(i), 
+                channel, 
+                buildPoint.tupled(pt),
+                TraceGroupMaybe.empty,
+            )
         }
         val expected: Iterable[OutputRecord] = List(0 -> 1, 0 -> 2, 1 -> 2).map{ (i, j) => 
             val id1 = RoiIndex.unsafe(i)
@@ -117,6 +125,8 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                 ), 
                 id1, 
                 id2,
+                TraceGroupMaybe.empty, 
+                TraceGroupMaybe.empty,
             )
         }
         val observed = inputRecordsToOutputRecords(inputRecords, None, ToNanometersIdentity)
@@ -245,6 +255,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
         arbTimepoint: Arbitrary[ImagingTimepoint],
         arbChannel: Arbitrary[ImagingChannel],
         arbPoint: Arbitrary[Point3D], 
+        arbTraceGroup: Arbitrary[TraceGroupMaybe],
     ): Arbitrary[Input.GoodRecord] = 
-        (arbId, arbPos, arbTimepoint, arbChannel, arbPoint).mapN(Input.GoodRecord.apply)
+        (arbId, arbPos, arbTimepoint, arbChannel, arbPoint, arbTraceGroup).mapN(Input.GoodRecord.apply)
 end TestComputeRegionPairwiseDistances
