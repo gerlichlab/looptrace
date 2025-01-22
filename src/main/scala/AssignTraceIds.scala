@@ -567,6 +567,14 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                 List(writeMainOutput, writeSkipsOutput).sequence
         }
    
+        val prog = for {
+            rois <- readRois
+            fates <- assignIds(rois)
+            outpaths <- writeOutputs(fates)
+            _ <- IO{ logger.info(s"Wrote ${outpaths.length} path(s): ${outpaths mkString ", "}") }
+        } yield ()
+
+        prog.unsafeRunSync()
         logger.info("Done!")
     }
 
