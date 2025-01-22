@@ -7,17 +7,14 @@ EMBL Heidelberg
 """
 
 import argparse
-import copy
-from dataclasses import dataclass
 import json
 from pathlib import Path
 from typing import *
 
 from gertils import ExtantFile, ExtantFolder
 
-from looptrace.configuration import MINIMUM_SPOT_SEPARATION_KEY
 from looptrace.ImageHandler import ImageHandler
-from looptrace.SpotPicker import DetectionMethod, SpotPicker, CROSSTALK_SUBTRACTION_KEY, DETECTION_METHOD_KEY
+from looptrace.SpotPicker import DetectionMethod, SpotPicker
 
 __author__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 
