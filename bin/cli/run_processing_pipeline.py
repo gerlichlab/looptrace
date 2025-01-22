@@ -624,7 +624,8 @@ def init(opts: argparse.Namespace) -> LooptracePipeline:
 
 def main(cmdl):
     opts = parse_cli(cmdl)
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO, force=True)
+    logging.info("Building pipeline")
     pipeline = init(opts)
     logging.info("Running pipeline")
     pipeline.run(start_point=opts.start_point, stop_after=opts.stop_after)
