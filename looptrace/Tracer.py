@@ -312,7 +312,7 @@ def pair_rois_with_fits(rois: pd.DataFrame, fits: pd.DataFrame) -> pd.DataFrame:
         left=rois, 
         right=fits, 
         how="inner", 
-        on=get_locus_spot_row_order_columns(),
+        on=[FIELD_OF_VIEW_COLUMN, "traceId", "roiId", "timepoint"],
         validate="1:1"
     )
     return traces
