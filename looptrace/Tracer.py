@@ -437,7 +437,7 @@ def _is_pos_int(_, attribute: attrs.Attribute, value: Any) -> None:
         raise ValueError(f"Value for attribute {attribute.name} isn't positive: {value}")
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
+@attrs.define(frozen=True, kw_only=True)
 class VoxelSize:
     z = attrs.field(validator=_is_pos_int) # type: int
     y = attrs.field(validator=_is_pos_int) # type: int
