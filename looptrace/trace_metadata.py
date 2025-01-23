@@ -165,7 +165,7 @@ class PotentialTraceMetadata:
         def combine(state: Result[set[TraceGroup], Errors], new_result: Result[TraceGroup, Errors]) -> Result[set[TraceGroup], Errors]:
             match state, new_result:
                 case result.Result(tag="error", error=old_messages), result.Result(tag="error", error=new_messages):
-                    return result.Result(Seq.of_iterable(concat(old_messages, new_messages)))
+                    return Result(Seq.of_iterable(concat(old_messages, new_messages)))
                 case _, _:
                     return state.map2(new_result, lambda groups, new_group: groups + new_group)
 
