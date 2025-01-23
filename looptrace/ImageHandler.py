@@ -284,15 +284,19 @@ class ImageHandler:
             logging.warning("Did not find locus grouping section key ('%s') in config data", section_key)
         else:
             for reg_time, locus_times in data.items():
+                # Put the raw timepoint values into their semantic (and domain-narrowing) wrapper.
                 curr: Times = {TimepointFrom0(t) for t in locus_times}
                 if len(curr) != len(locus_times):
                     raise ValueError(f"Repetition is present in locus times for regional time {reg_time}: {locus_times}")
                 try:
-                    reg_time = int(reg_time)
+                    # The key ("regional timepoint") coming from the JSON parse should be string, but 
+                    # we want a domain-specific type.
+                    reg_time = TimepointFrom0(int(reg_time))
                 except (TypeError, ValueError) as e:
-                    logger.exception(f"Cannot convert alleged regional time {reg_time} (type {type(reg_time).__name__}): {e}")
+                    logger.exception("Cannot lift alleged regional time into its wrapper type; error: %s", e)
                     raise
-                result[TimepointFrom0(reg_time)] = curr
+                else:
+                    result[reg_time] = curr
         return dict(sorted(result.items(), key=itemgetter(0))) if result else None
     
     @property
