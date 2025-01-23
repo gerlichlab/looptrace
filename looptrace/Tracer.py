@@ -137,6 +137,7 @@ class Tracer:
             filenames=self._iter_filenames(),
             image_data=self._images_wrapper, 
             background_data=self._background_wrapper, 
+            locus_grouping=self.image_handler.locus_grouping,
             mask_ref_timepoints=self.roi_table["timepoint"].to_list() if self.image_handler.config.get("mask_fits", False) else None, 
             cores=self.config.get("tracing_cores"),
         )
@@ -238,7 +239,9 @@ class Tracer:
 def _iter_fit_args(
     filenames: Iterable[str],
     image_data: NPZ_wrapper,
+    *,
     background_data: Optional[NPZ_wrapper],
+    locus_grouping: Optional[LocusGroupingData],
 ) -> Iterable[tuple[VoxelStackSpecification, TimepointFrom0, np.ndarray]]:
     get_data: Callable[[str], np.ndarray] = (
         (lambda fn: image_data[fn]) 
@@ -246,12 +249,36 @@ def _iter_fit_args(
         # Here we need signed rather than unsigned integer types to handle negatives.
         (lambda fn: image_data[fn].astype(np.int32) - background_data[fn].astype(np.int32))
     )
+    
+    get_timepoint: Callable[[TimepointFrom0, int], TimepointFrom0]
+    if locus_grouping is None:
+        get_timepoint = lambda _, t: TimepointFrom0(t)
+    else:
+        lookup: Mapping[tuple[TimepointFrom0, int], TimepointFrom0] = {
+            (rt, i): lt 
+            for rt, lts 
+            in locus_grouping.items() 
+            for i, lt in enumerate(sorted({rt, *lts}))
+        }
+        def get_timepoint(regional_time: TimepointFrom0, intra_voxel_stack_index: int) -> TimepointFrom0:
+            try:
+                return lookup[(regional_time, intra_voxel_stack_index)]
+            except KeyError:
+                logging.error(
+                    "Failed to resolve true timepoint for regional time %d, index %d", 
+                    regional_time.get, 
+                    intra_voxel_stack_index,
+                )
+                raise
+    
     for fn in filenames:
         stack_key: VoxelStackSpecification = VoxelStackSpecification.from_file_name_base(fn)
         time_stack_of_volumes: np.ndarray = get_data(fn)
         n_times = time_stack_of_volumes.shape[0]
-        for t in range(n_times):
-            yield stack_key, TimepointFrom0(t), time_stack_of_volumes[t]
+        for i in range(n_times):
+            rt: TimepointFrom0 = TimepointFrom0(stack_key.ref_timepoint)
+            lt: TimepointFrom0 = get_timepoint(rt, i)
+            yield stack_key, lt, time_stack_of_volumes[i]
 
 
 def finalise_traces(*, rois: pd.DataFrame, fits: pd.DataFrame, z_nm: NumberLike, xy_nm: NumberLike) -> pd.DataFrame:
@@ -324,6 +351,7 @@ def find_trace_fits(
     image_data: NPZ_wrapper, 
     *,
     background_data: Optional[NPZ_wrapper], 
+    locus_grouping: Optional[LocusGroupingData],
     mask_ref_timepoints: Optional[List[int]], 
     cores: Optional[int] = None,
 ) -> pd.DataFrame:
@@ -340,6 +368,10 @@ def find_trace_fits(
         Single-spot time stacks in NPZ
     background_data : NPZ_wrapper, optional
         Wrapper around NPZ stack of per-spot background data to subtract, optional
+    locus_grouping : LocusGroupingData
+        The mapping from regional imaging timepoint to collection of locus imaging timepoints, 
+        used to map 0-based index, when stepping through a voxel stack, back to the corresponding 
+        actual timepoint
     mask_ref_timepoints : list of int, optional
         Timepoints to use for masking when fitting, indexed by FOV
     cores : int, optional
@@ -382,7 +414,12 @@ def find_trace_fits(
                     fun=fit_func_spec, 
                     img=spot_img,
                 ) 
-                for stack_key, timepoint, spot_img in tqdm(_iter_fit_args(filenames=filenames, image_data=image_data, background_data=background_data))
+                for stack_key, timepoint, spot_img in tqdm(_iter_fit_args(
+                    filenames=filenames, 
+                    image_data=image_data, 
+                    background_data=background_data,
+                    locus_grouping=locus_grouping,
+                ))
             )
     
     full_cols = [FIELD_OF_VIEW_COLUMN, "traceId", "roiId", "timepoint"] + FIT_COLUMNS + IMG_SIDE_LEN_COLS
