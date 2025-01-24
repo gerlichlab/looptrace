@@ -22,12 +22,12 @@ def tmp_file(tmp_path) -> Path:
 
 def gen_timepoints() -> SearchStrategy[TimepointFrom0]:
     """Generate a collection of timepoints to be wrapped in a reindexing determination."""
-    return st.sets(st.integers(min_value=0).map(TimepointFrom0), min_size=1).map(list)
+    return st.lists(st.integers(min_value=0).map(TimepointFrom0), min_size=1, unique=True)
 
 
 def gen_trace_ids() -> SearchStrategy[list[int]]:
     """Generate a collection of trace IDs to be wrapped in a reindexing determination."""
-    return st.sets(st.integers(min_value=0)).map(list)
+    return st.lists(st.integers(min_value=0), unique=True)
 
 
 def gen_determination() -> SearchStrategy[LocusSpotViewingReindexingDetermination]:
