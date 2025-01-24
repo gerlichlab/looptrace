@@ -578,7 +578,7 @@ def explode_voxel_stack(
     rt: TimepointFrom0 = TimepointFrom0(spec.ref_timepoint)
     get_locus_times(rt).bind(
         lambda lts: (
-            zip(sorted(list(lts + rt)), iter(stack)) 
+            zip(sorted(list({rt, *lts})), iter(stack)) 
             if num_voxels == len(lts) + 1 
             else Result.Error(f"Unexpected voxel count ({num_voxels}) for ROI from regional timepoint with {len(lts)} locus timepoints")
         )
@@ -723,7 +723,7 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
                                         raise ValueError(f"Failed to find locus times for {len(unfound_regional_times)} regional timepoint(s) in trace group {trace_group}: {unfound_regional_times}")
                                     case result.Result(tag="ok", ok=pairs):
                                         maximal_regional_locus_times_pairs = dict(pairs.to_list())
-                                        sorted_maximal_voxel_times = list(sorted(seq.concat(*(lts + rt for rt, lts in maximal_regional_locus_times_pairs.items()))))
+                                        sorted_maximal_voxel_times = list(sorted(seq.concat(*({rt, *lts} for rt, lts in maximal_regional_locus_times_pairs.items()))))
                                         lookup_maximal_regional_time_locus_times_pairs[trace_group] = (maximal_regional_locus_times_pairs, sorted_maximal_voxel_times)
                     
                     # For each (this) spec...
