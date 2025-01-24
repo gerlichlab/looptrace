@@ -589,7 +589,7 @@ def explode_voxels_within_trace(
     specs_and_stacks: list[tuple[VoxelStackSpecification, np.ndarray]], 
     locus_times_by_regional_time: Mapping[TimepointFrom0, Times],
 ) -> Result[Mapping[TimepointFrom0, np.ndarray], Seq[str]]:
-    traverse_through_either(
+    return traverse_through_either(
         lambda tup: explode_voxel_stack(spec=fst(tup), stack=snd(tup), locus_times_by_regional_time=locus_times_by_regional_time)
     )(specs_and_stacks)\
         .map(lambda exploded_substacks: seq.concat(*exploded_substacks))\
