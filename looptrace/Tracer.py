@@ -578,7 +578,7 @@ def explode_voxel_stack(
     rt: TimepointFrom0 = TimepointFrom0(spec.ref_timepoint)
     return get_locus_times(rt).bind(
         lambda lts: (
-            zip(sorted(list({rt, *lts})), iter(stack)) 
+            Result.Ok(zip(sorted(list({rt, *lts})), iter(stack)))
             if num_voxels == len(lts) + 1 
             else Result.Error(f"Unexpected voxel count ({num_voxels}) for ROI from regional timepoint with {len(lts)} locus timepoints")
         )
