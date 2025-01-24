@@ -273,6 +273,7 @@ def write_jvm_compatible_zarr_store(
         root.attrs["metadata"] = metadata
     paths = []
     for name, data in name_data_pairs:
+        logging.info("Creating ZARR dataset: %s", name)
         # Use numcodecs.ZLib() as the compressor to ensure readability by cdm-core / netcdf-Java.
         dataset = root.create_dataset(name=name, compressor=numcodecs.Zlib(), shape=data.shape, dtype=dtype)
         dataset[:] = data
