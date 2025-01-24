@@ -576,7 +576,7 @@ def explode_voxel_stack(
         return Option.of_optional(locus_times_by_regional_time.get(rt)).to_result(f"No locus times for regional time: {rt}")
     num_voxels: int = stack.shape[0]
     rt: TimepointFrom0 = TimepointFrom0(spec.ref_timepoint)
-    get_locus_times(rt).bind(
+    return get_locus_times(rt).bind(
         lambda lts: (
             zip(sorted(list({rt, *lts})), iter(stack)) 
             if num_voxels == len(lts) + 1 
