@@ -78,18 +78,21 @@ def trace_group_option_to_string(maybe_name: Option[TraceGroupName]) -> str:
 
 
 @curry_flip(1)
-def _is_all_of_type(xs: Iterable[_A], t: _T) -> bool:
-    return all(isinstance(x, t) for x in xs)
+def _check_all_of_type(xs: Iterable[_A], t: _T) -> None:
+    for x in tee(xs, 1)[0]:
+        if not isinstance(x, t):
+            raise TypeError(f"First item not of type {t.__name__} is of type {type(x).__name__}")
 
 
-def _is_homogeneous(items: Iterable[_A], t: Optional[_T] = None) -> bool:
-    xs = lambda: tee(items, 1)
+def _check_homogeneous(items: Iterable[_A], t: Optional[_T] = None) -> None:
+    xs = tee(items, 1)[0] # Caution for if input is an iterator.
     if t is None:
         try:
             t = type(next(xs))
         except StopIteration:
-            return True
-    return _is_all_of_type(t)(xs)
+            # Empty collection is trivially homogeneous.
+            return
+    _check_all_of_type(t)(xs)
 
 
 @attrs.define(frozen=True)
@@ -97,8 +100,11 @@ class TraceGroupTimes:
     get = attrs.field(validator=[
         attrs.validators.instance_of(frozenset), 
         attrs.validators.min_len(2),
-        lambda _1, _2, times: _is_homogeneous(times, TimepointFrom0),
+        lambda _1, _2, times: _check_homogeneous(times, TimepointFrom0),
         ]) # type: frozenset[TimepointFrom0]
+
+    def __iter__(self) -> Iterable[TimepointFrom0]:
+        return iter(self.get)
 
     @classmethod
     def from_list(cls, times: list[TimepointFrom0]) -> Result["TraceGroupTimes", str]:
@@ -107,7 +113,7 @@ class TraceGroupTimes:
                 @wrap_error_message("Trace group from times list")
                 @wrap_exception((TypeError, ValueError))
                 def safe_build(ts: list[TimepointFrom0]) -> Result["TraceGroupTimes", str]:
-                    return cls(set(ts))
+                    return cls(frozenset(ts))
                 
                 return safe_build(times)
             case repeated:
@@ -120,25 +126,30 @@ class TraceGroup:
     times = attrs.field(validator=attrs.validators.instance_of(TraceGroupTimes)) # type: TraceGroupTimes
 
 
-@dataclass(frozen=True, kw_only=True)
-class PotentialTraceMetadata:
-    groups: frozenset[TraceGroup]
+def _validate_trace_groups_content(groups: Iterable[TraceGroup]) -> None:
+    repeat_names = list(find_counts_of_repeats(g.name for g in groups))
+    if len(repeat_names) != 0:
+        raise ValueError(f"Repeated name(s) among trace groups; counts: {repeat_names}")
+    repeat_times = list(find_counts_of_repeats(t for g in groups for t in g.times))
+    if len(repeat_times) > 0:
+        raise ValueError(f"Repeated time(s) among trace groups; counts: {repeat_times}")
 
-    def __post_init__(self) -> None:
-        if not isinstance(self.groups, set):
-            raise TypeError(f"Wrapped object for potential trace metadata must be set, not {type(self.groups).__name__}")
-        if len(self.groups) == 0:
-            raise ValueError("Empty trace groups for trace metadata")
-        repeat_names = list(find_counts_of_repeats(g.name for g in self.groups))
-        if len(repeat_names) != 0:
-            raise ValueError(f"Repeated name(s) among trace groups; counts: {repeat_names}")
-        repeat_times = list(find_counts_of_repeats(t for g in self.groups for t in g.times))
-        if len(repeat_times) > 0:
-            raise ValueError(f"Repeated time(s) among trace groups; counts: {repeat_times}")
-        
+
+@attrs.define(frozen=True)
+class PotentialTraceMetadata:
+    groups = attrs.field(validator=[
+        attrs.validators.instance_of(frozenset),
+        attrs.validators.min_len(1),
+        lambda _1, _2, values: _check_homogeneous(values, TraceGroup),
+        lambda _1, _2, values: _validate_trace_groups_content(values),
+    ]) # type: frozenset[TraceGroup]
+    _times_by_group = attrs.field(init=False) # type: Mapping[TraceGroupName, frozenset[TimepointFrom0]]
+    _trace_group_name_by_times = attrs.field(init=False) # type: Mapping[frozenset[TimepointFrom0], TraceGroupName]
+
+    def __attrs_post_init__(self) -> None:
         # Here, finally, we establish the data structures to back our own code's desired queries.
-        self._times_by_group: dict[TraceGroupName, frozenset[TimepointFrom0]] = {g.name: g.times for g in self.groups}
-        self._trace_group_name_by_times: Mapping[frozenset[TimepointFrom0], TraceGroupName] = {}
+        object.__setattr__(self, "_times_by_group", {g.name: g.times for g in self.groups})
+        object.__setattr__(self, "_trace_group_name_by_times", {})
         for g in self.groups:
             ts = g.times
             try:
@@ -148,26 +159,30 @@ class PotentialTraceMetadata:
             else:
                 raise ValueError(f"Already mapped times {ts} to name {name}; tried to re-map to {g.name}")
 
-    def get_group_times(self, group: TraceGroupName) -> Option[set[TimepointFrom0]]:
+    def get_group_times(self, group: TraceGroupName) -> Option[TraceGroupTimes]:
+        if not isinstance(group, TraceGroupName):
+            raise TypeError(f"Query isn't a {TraceGroupName.__name__}, but a {type(group).__name__}")
         return Option.of_optional(self._times_by_group.get(group))
 
     @classmethod
     def from_mapping(cls, m: Mapping[str, object]) -> Result["PotentialTraceMetadata", list[str]]:
         def proc1(key: str, value: object) -> Result[TraceGroup, Errors]:
-            name_result = read_trace_group_name(key)
-            group_result = parse_trace_group_times(value)
-            match name_result, group_result:
+            name_result: Result[TraceGroupName, str] = read_trace_group_name(key)
+            times_result: Result[TraceGroupTimes, str] = parse_trace_group_times(value)
+            match name_result, times_result:
                 case result.Result(tag="error", error=err_name), result.Result(tag="error", error=err_times):
-                    return Result.error(Seq.of(err_name, err_times))
+                    return Result.Error(Seq.of(err_name, err_times))
                 case _, _:
-                    return name_result.map2(group_result, TraceGroup)
+                    return name_result\
+                        .map2(times_result, lambda name, times: TraceGroup(name=name, times=times))\
+                        .map_error(Seq.of)
         
         def combine(state: Result[set[TraceGroup], Errors], new_result: Result[TraceGroup, Errors]) -> Result[set[TraceGroup], Errors]:
             match state, new_result:
                 case result.Result(tag="error", error=old_messages), result.Result(tag="error", error=new_messages):
-                    return Result(Seq.of_iterable(concat(old_messages, new_messages)))
+                    return Result.Error(Seq.of_iterable(concat(old_messages, new_messages)))
                 case _, _:
-                    return state.map2(new_result, lambda groups, new_group: groups + new_group)
+                    return state.map2(new_result, lambda groups, new_group: {new_group, *groups})
 
         def step(acc: Result[set[TraceGroup], Errors], kv: tuple[str, object]) -> Result[set[TraceGroup, Errors]]:
             return combine(state=acc, new_result=proc1(*kv))
@@ -175,13 +190,13 @@ class PotentialTraceMetadata:
         return Seq.of_iterable(m.items())\
             .fold(step, Result.Ok(set()))\
             .map(compose(frozenset, cls))\
-            .map_error(lambda es: es.to_list())
+            .map_error(lambda errors: errors.to_list())
 
 
 def _check_homogeneous_list(t: _T, *, attr_name: str, xs: Any) -> None:
     match xs:
         case list():
-            if not _is_all_of_type(t)(xs):
+            if not _check_all_of_type(t)(xs):
                 raise TypeError(f"Not all values for attribute '{attr_name}' are of type {t.__name__}")
         case _:
             raise TypeError(f"Value for attribute {attr_name} isn't list, but {type(xs).__name__}")
