@@ -658,7 +658,7 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
 
     num_loc_times_by_reg_time: dict[TimepointFrom0, int] = {rt: len(lts) for rt, lts in (locus_grouping or {}).items()}
     def get_locus_times(t: TimepointFrom0) -> Result[Times, TimepointFrom0]:
-        return Option.of_optional(num_loc_times_by_reg_time.get(t)).to_result(t)
+        return Option.of_optional(locus_grouping.get(t)).to_result(t)
     
     arrays: list[tuple[LocusSpotViewingKey, np.ndarray]] = []
     lookup_maximal_regional_time_locus_times_pairs: Mapping[TraceGroupName, tuple[Mapping[TimepointFrom0, Times], list[TimepointFrom0]]] = {}
