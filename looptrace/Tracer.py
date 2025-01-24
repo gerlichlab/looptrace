@@ -748,7 +748,7 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
                             raise RuntimeError(f"{len(messages)} error(s) processing trace {trace_id} (group: {trace_group}): {messages}")
                         case result.Result(tag="ok", ok=exploded_group):
                             try:
-                                first_voxel = next(exploded_group.values())
+                                first_voxel = next(iter(exploded_group.values()))
                             except StopIteration as e:
                                 msg = f"No voxels! Trace = {trace_id} (group: {trace_group})"
                                 logging.error(msg)
