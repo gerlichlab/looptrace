@@ -718,7 +718,7 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
                             case option.Option(tag="none", none=_):
                                 raise ValueError(f"Failed to lookup group times for trace group {trace_group}")
                             case option.Option(tag="some", some=group_regional_times):
-                                match traverse_through_either(lambda rt: get_locus_times(rt).map(lambda lts: (rt, lts)))(group_regional_times):
+                                match traverse_through_either(lambda rt: get_locus_times(rt).map(lambda lts: (rt, lts)))(group_regional_times.get):
                                     case result.Result(tag="error", error=unfound_regional_times):
                                         raise ValueError(f"Failed to find locus times for {len(unfound_regional_times)} regional timepoint(s) in trace group {trace_group}: {unfound_regional_times}")
                                     case result.Result(tag="ok", ok=pairs):
