@@ -723,7 +723,12 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
                                         raise ValueError(f"Failed to find locus times for {len(unfound_regional_times)} regional timepoint(s) in trace group {trace_group}: {unfound_regional_times}")
                                     case result.Result(tag="ok", ok=pairs):
                                         maximal_regional_locus_times_pairs = dict(pairs.to_list())
-                                        sorted_maximal_voxel_times = list(sorted(seq.concat(*({rt, *lts} for rt, lts in maximal_regional_locus_times_pairs.items()))))
+                                        sorted_maximal_voxel_times: list[TimepointFrom0] = []
+                                        for rt, lts in maximal_regional_locus_times_pairs.items():
+                                            if not isinstance(lts, set):
+                                                raise TypeError(f"Collection of locus times isn't set, but {type(lts).__name__}: {lts}")
+                                            sorted_maximal_voxel_times.extend({rt, *lts})
+                                        sorted_maximal_voxel_times = list(sorted(sorted_maximal_voxel_times))
                                         lookup_maximal_regional_time_locus_times_pairs[trace_group] = (maximal_regional_locus_times_pairs, sorted_maximal_voxel_times)
                     
                     # For each (this) spec...
