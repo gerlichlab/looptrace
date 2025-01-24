@@ -290,7 +290,9 @@ def prep_locus_specific_spots_visualisation(rounds_config: ExtantFile, params_co
         return T.write_all_spot_images_to_viewable_stacks(metadata=None)
     else:
         logging.info("Using ROI merge rules for tracing to prep locus spots visualisation")
-        match PotentialTraceMetadata.from_mapping(raw_config_metadata):
+        match Option.of_optional(raw_config_metadata.get("groups"))\
+            .to_result(["Missing groups subsection in tracing merge rules section of imaging rounds config"])\
+            .bind(PotentialTraceMetadata.from_mapping):
             case result.Result(tag="error", error=problem_messages):
                 logging.error("Failed to parse potential trace metadata!")
                 for msg in problem_messages:
