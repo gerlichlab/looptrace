@@ -196,8 +196,7 @@ class PotentialTraceMetadata:
 def _check_homogeneous_list(t: _T, *, attr_name: str, xs: Any) -> None:
     match xs:
         case list():
-            if not _check_all_of_type(t)(xs):
-                raise TypeError(f"Not all values for attribute '{attr_name}' are of type {t.__name__}")
+            _check_all_of_type(t)(xs)
         case _:
             raise TypeError(f"Value for attribute {attr_name} isn't list, but {type(xs).__name__}")
 
