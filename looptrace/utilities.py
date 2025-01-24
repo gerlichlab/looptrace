@@ -145,5 +145,9 @@ def traverse_through_either(inputs: Iterable[_A], f: Callable[[_A], Result[_B, _
                 return Result.Error(bads) # no new error
             case result.Result(tag="error", error=bads), result.Result(tag="error", error=err):
                 return Result.Error(bads.append(Seq.of(err))) # new error
+            case _, app_res:
+                raise RuntimeError(
+                    f"Either state or new element isn't a expression.Result. Got {type(acc).__name__} and {type(app_res).__name__}"
+                )
 
     return Seq.of_iterable(inputs).fold(proc1, Result.Ok(Seq()))
