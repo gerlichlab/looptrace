@@ -323,14 +323,16 @@ def images_to_ome_zarr(
     print("OME ZARR images generated.")
 
 
-def create_zarr_store(  path: Union[str, Path],
-                        name: str, 
-                        fov_name: str,
-                        shape: tuple, 
-                        dtype: str,  
-                        chunks: tuple,   
-                        metadata: Optional[dict] = None,
-                        voxel_size: list = [1, 1, 1]):
+def create_zarr_store(
+    path: Union[str, Path],
+    name: str, 
+    fov_name: str,
+    shape: tuple, 
+    dtype: str,  
+    chunks: tuple,   
+    metadata: Optional[dict] = None,
+    voxel_size: list = [1, 1, 1],
+):
     store = zarr.NestedDirectoryStore(os.path.join(path, fov_name))
     root = zarr.group(store=store, overwrite=True)
 

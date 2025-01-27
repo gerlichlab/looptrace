@@ -224,12 +224,14 @@ class Deconvolver:
             print(f"Deconvolving FOV: {fov}")
             fov_index = self.fov_names.index(fov)
             fov_img = self.image_handler.images[self.input_name][fov_index]
-            z = create_zarr_store(path=self.output_path,
+            z = create_zarr_store(
+                    path = self.output_path,
                     name = self.output_name, 
                     fov_name = fov if fov.endswith(".zarr") else fov + ".zarr",
                     shape = (fov_img.shape[0], len(decon_ch) + len(non_decon_ch),) + fov_img.shape[-3:], 
                     dtype = np.uint16, 
-                    chunks = (1, 1, 1, fov_img.shape[-2], fov_img.shape[-1]))
+                    chunks = (1, 1, 1, fov_img.shape[-2], fov_img.shape[-1]),
+                )
 
             for i, t_img_full in tqdm.tqdm(enumerate(fov_img)):
                 print(f"Processing image {i}")

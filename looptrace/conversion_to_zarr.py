@@ -32,15 +32,15 @@ def workflow(n_pos: int, input_folders: Iterable[Path], output_folder: Path) -> 
         # all input_folders is being passed to .zarr creation?
         # See: https://github.com/gerlichlab/looptrace/issues/118
         z = image_io.create_zarr_store(
-            path=output_folder,
+            path = output_folder,
             name = os.path.basename(output_folder), 
             fov_name = get_fov_name_short(fov_index) + ".zarr",
             shape = imgs.shape, 
             dtype = np.uint16,  
             chunks = (1, 1, 1, imgs.shape[-2], imgs.shape[-1]),
             metadata = folder_metadata,
-            voxel_size = folder_metadata['voxel_size'],
-            )
+            voxel_size = folder_metadata["voxel_size"],
+        )
         n_t = imgs.shape[0]
         for t in tqdm.tqdm(range(n_t)):
             z[t] = imgs[t]
