@@ -671,6 +671,7 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
         current_stack: list[tuple[int, np.ndarray]] = []
         for trace_id, spec_key_pairs in itertools.groupby(vis_group, compose(fst, lambda voxel_spec: voxel_spec.traceId)): # We'll defer sorting by trace ID.
             spec_key_pairs = list(spec_key_pairs) # Avoid iterator exhaustion.
+            # NB: this pattern match is being repeated within the for loop, for which it will always yield the same result, but this will be trivially costly.
             match trace_group_key:
                 case option.Option(tag="none", none=_):
                     # Here we are in the case where the current trace ID is not for a larger group/structure of ROIs.
@@ -762,6 +763,22 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
         
         # Order by trace ID.
         current_stack.sort(key=fst)
+
+        match trace_group_key:
+            case option.Option(tag="none", none=_):
+                logging.info("Trace group key is null; homogenizing array shapes for stacking...")
+                # NB: in theory, we could here use the total num_timepoints as the size bound to which the homogenization is done, but 
+                #     since it could be the case that each array comes from one regional timepoint, e.g., with very few locus timepoints, 
+                #     in the context of a long time course experiment this would be very wasteful data-wise and w.r.t. the user experience 
+                #     when clicking and dragging the resulting data on disk into Napari for visualization. Hence, we use the empirical 
+                #     maximum number of timepoints among the arrays we're going to stack up.
+                max_num_timepoints: int = max(a.shape[0] for _, a in current_stack)
+                current_stack: list[tuple[int, np.ndarray]] = [
+                    (tid, arr if max_num_timepoints == arr.shape[0] else backfill_array(arr, num_places=max_num_timepoints - arr.shape[0]))
+                    for tid, arr in current_stack
+                ]
+            case option.Option(tag="some", some=non_null_key):
+                logging.debug("Trace group key is non-null (%s), no need to homogenize array shapes", non_null_key)
 
         # TODO: store the reindexed the trace IDs, so that we can map mentally back-and-forth when viewing in Napari.
         # Stack up each trace's voxel stack, creating a 5D array from a list of 4D arrays. The new dimension represents the trace ID.
