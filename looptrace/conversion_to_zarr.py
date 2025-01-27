@@ -37,8 +37,8 @@ def workflow(n_pos: int, input_folders: Iterable[Path], output_folder: Path) -> 
             name = os.path.basename(output_folder), 
             fov_name = get_fov_name_short(fov_index) + ".zarr",
             shape = imgs.shape, 
-            dtype = np.uint16,  
-            chunks = (1, 1, 1, imgs.shape[-2], imgs.shape[-1]),
+            dtype = np.uint16, 
+            chunks = (1, 1, 1, imgs.shape[-2], imgs.shape[-1]), # 1 chunk per xy-plane (z-slice)
             metadata = folder_metadata,
             voxel_size = VoxelSize.from_list(folder_metadata["voxel_size"]),
         )
