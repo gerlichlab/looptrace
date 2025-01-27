@@ -29,6 +29,7 @@ from looptrace import FIELD_OF_VIEW_COLUMN
 from looptrace.ImageHandler import ImageHandler
 from looptrace.bead_roi_generation import BeadRoiParameters, extract_single_bead
 from looptrace.gaussfit import fitSymmetricGaussian3D
+from looptrace import image_io
 from looptrace.numeric_types import FloatLike, NumberLike
 from looptrace.wrappers import phase_xcor
 
@@ -570,13 +571,13 @@ class Drifter():
             proj_img = da.max(fov_img, axis=2)
             zarr_out_path = os.path.join(self.image_handler.image_save_path, self.image_handler.reg_input_moving + '_max_proj_dc')
             z = image_io.create_zarr_store(
-                path=zarr_out_path,
-                name = self.image_handler.reg_input_moving + '_max_proj_dc', 
+                path = zarr_out_path,
+                name = self.image_handler.reg_input_moving + "_max_proj_dc", 
                 fov_name = fov,
                 shape = proj_img.shape, 
                 dtype = np.uint16,  
                 chunks = (1,1,proj_img.shape[-2], proj_img.shape[-1]),
-                )
+            )
 
             n_t = proj_img.shape[0]
             
@@ -605,12 +606,14 @@ class Drifter():
             fov_img = self.images[fov_index]
             #proj_img = da.max(fov_img, axis=2)
             zarr_out_path = os.path.join(self.image_handler.image_save_path, self.image_handler.reg_input_moving + '_coarse_dc')
-            z = image_io.create_zarr_store(path=zarr_out_path,
-                                            name = self.image_handler.reg_input_moving + '_dc_images', 
-                                            fov_name = fov,
-                                            shape = fov_img.shape, 
-                                            dtype = np.uint16,  
-                                            chunks = (1,1,1,fov_img.shape[-2], fov_img.shape[-1]))
+            z = image_io.create_zarr_store(
+                path = zarr_out_path,
+                name = self.image_handler.reg_input_moving + "_dc_images", 
+                fov_name = fov,
+                shape = fov_img.shape, 
+                dtype = np.uint16,  
+                chunks = (1, 1, 1, fov_img.shape[-2], fov_img.shape[-1]),
+            )
 
             n_t = fov_img.shape[0]
             
