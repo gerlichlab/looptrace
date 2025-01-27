@@ -576,7 +576,7 @@ class Drifter():
                 fov_name = fov,
                 shape = proj_img.shape, 
                 dtype = np.uint16,  
-                chunks = (1,1,proj_img.shape[-2], proj_img.shape[-1]),
+                chunks = (1, 1, proj_img.shape[-2], proj_img.shape[-1]),
             )
 
             n_t = proj_img.shape[0]

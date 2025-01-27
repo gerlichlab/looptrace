@@ -11,11 +11,9 @@ import dataclasses
 import itertools
 import json
 import logging
-from operator import itemgetter
 from pathlib import Path
 from typing import *
 
-import attrs
 from expression import Option, Result, compose, fst, option, result, snd
 from expression.collections import Seq, seq
 from joblib import Parallel, delayed
@@ -38,7 +36,7 @@ from looptrace.numeric_types import FloatLike, NumberLike
 from looptrace.trace_metadata import LocusSpotViewingKey, LocusSpotViewingReindexingDetermination, PotentialTraceMetadata, TraceGroupName, trace_group_option_to_string
 from looptrace.tracing_qc_support import apply_timepoint_names_and_spatial_information
 from looptrace.utilities import traverse_through_either
-from looptrace.voxel_stack import VoxelStackSpecification
+from looptrace.voxel_stack import VoxelSize, VoxelStackSpecification
 
 BOX_Z_COL = "spot_box_z"
 BOX_Y_COL = "spot_box_y"
@@ -465,35 +463,6 @@ def process_voxel(
             ),
         )
     )
-
-
-def _is_pos_int(_, attribute: attrs.Attribute, value: Any) -> None:
-    if not isinstance(value, int):
-        raise TypeError(f"Value for attribute {attribute.name} isn't int, but {type(value).__name__}")
-    if value < 1:
-        raise ValueError(f"Value for attribute {attribute.name} isn't positive: {value}")
-
-
-@attrs.define(frozen=True, kw_only=True)
-class VoxelSize:
-    z = attrs.field(validator=_is_pos_int) # type: int
-    y = attrs.field(validator=_is_pos_int) # type: int
-    x = attrs.field(validator=_is_pos_int) # type: int
-
-    def __post_init__(self) -> None:
-        bad_values = {}
-        for attr, in (f.name for f in dataclasses.fields(self)):
-            value = getattr(self, attr)
-            if not isinstance(value, int):
-                bad_values[attr] = TypeError(f"Alleged '{attr}' attribute for voxel size isn't integer, but {type(value).__name__}")
-            elif value < 1:
-                bad_values[attr] = ValueError(f"Value for 'z' attribute for voxek size isn't positive: {value}")
-        if bad_values:
-            raise Exception(f"{len(bad_values)} problem(s) building voxel size instance: {bad_values}")
-        
-    @property
-    def to_tuple(self) -> tuple[int, int, int]:
-        return attrs.astuple(self)
 
 
 def _get_voxel_size(roi_img: np.ndarray) -> Result["VoxelSize", VoxelProcessingError]:

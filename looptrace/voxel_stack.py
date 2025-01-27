@@ -1,7 +1,7 @@
 """Data types related to defining and using stacks of voxels, e.g. data from multiple timepoints for the same ROI"""
 
 import attrs
-from expression import Option, option, result
+from expression import Option, Result, option, result
 from typing import Any, Mapping, Union
 
 import pandas as pd
@@ -12,6 +12,13 @@ from looptrace.trace_metadata import TraceGroupName, trace_group_option_to_strin
 NUMBER_OF_DIGITS_FOR_ROI_ID = 5
 
 is_nonnegative = attrs.validators.ge(0)
+
+
+def _is_pos_int(_, attribute: attrs.Attribute, value: Any) -> None:
+    if not isinstance(value, int):
+        raise TypeError(f"Value for attribute {attribute.name} isn't int, but {type(value).__name__}")
+    if value < 1:
+        raise ValueError(f"Value for attribute {attribute.name} isn't positive: {value}")
 
 
 def _is_valid_optional_trace_group(_, attribute: attrs.Attribute, value: Any):
@@ -26,6 +33,41 @@ def _is_valid_optional_trace_group(_, attribute: attrs.Attribute, value: Any):
     if not isinstance(value, Option):
         raise TypeError(f"Value for {attribute.name} isn't Option, but {type(value).__name__}")
     
+
+@attrs.define(frozen=True, kw_only=True)
+class VoxelSize:
+    z = attrs.field(validator=_is_pos_int) # type: int
+    y = attrs.field(validator=_is_pos_int) # type: int
+    x = attrs.field(validator=_is_pos_int) # type: int
+
+    def __post_init__(self) -> None:
+        bad_values = {}
+        for attr, in (f.name for f in attrs.fields(self)):
+            value = getattr(self, attr)
+            if not isinstance(value, int):
+                bad_values[attr] = TypeError(f"Alleged '{attr}' attribute for voxel size isn't integer, but {type(value).__name__}")
+            elif value < 1:
+                bad_values[attr] = ValueError(f"Value for 'z' attribute for voxel size isn't positive: {value}")
+        if bad_values:
+            raise Exception(f"{len(bad_values)} problem(s) building voxel size instance: {bad_values}")
+    
+    @classmethod
+    def from_list(cls, values: object) -> Result["VoxelSize", str]:
+        match values:
+            case [z, y, x]:
+                try:
+                    return cls(z=z, y=y, x=x)
+                except (TypeError, ValueError) as e:
+                    return Result.Error(f"Failed to build {cls.__name__} instance from given values ({values}): {e}")
+            case list():
+                return Result.Error(f"Failed to build {cls.__name__} instance; 3 values are required, not {len(values)}")
+            case _:
+                return Result.Error(f"Failed to build {cls.__name__} instance via from_list; argument was of type {type(values).__name__}")
+
+    @property
+    def to_tuple(self) -> tuple[int, int, int]:
+        return attrs.astuple(self)
+
 
 @attrs.define(frozen=True, kw_only=True)
 class VoxelStackSpecification:

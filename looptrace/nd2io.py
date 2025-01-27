@@ -67,7 +67,7 @@ def parse_nd2_metadata(image_file: str) -> Mapping[str, Any]:
     metadata = {}
     with nd2.ND2File(image_file) as sample:
         voxels = sample.voxel_size()
-        metadata['voxel_size'] = [voxels.z, voxels.y, voxels.x]
+        metadata["voxel_size"] = [voxels.z, voxels.y, voxels.x]
         microscope = sample.metadata.channels[0].microscope
         metadata['microscope'] = {
             'objectiveMagnification': microscope.objectiveMagnification,

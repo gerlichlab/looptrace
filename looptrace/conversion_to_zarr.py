@@ -17,6 +17,7 @@ from gertils import ExtantFile, ExtantFolder
 from looptrace import image_io, nd2io
 from looptrace.ImageHandler import ImageHandler
 from looptrace.integer_naming import get_fov_name_short
+from looptrace.voxel_stack import VoxelSize
 
 
 def workflow(n_pos: int, input_folders: Iterable[Path], output_folder: Path) -> None:
@@ -39,7 +40,7 @@ def workflow(n_pos: int, input_folders: Iterable[Path], output_folder: Path) -> 
             dtype = np.uint16,  
             chunks = (1, 1, 1, imgs.shape[-2], imgs.shape[-1]),
             metadata = folder_metadata,
-            voxel_size = folder_metadata["voxel_size"],
+            voxel_size = VoxelSize.from_list(folder_metadata["voxel_size"]),
         )
         n_t = imgs.shape[0]
         for t in tqdm.tqdm(range(n_t)):
