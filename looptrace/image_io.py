@@ -324,6 +324,7 @@ def images_to_ome_zarr(
 
 
 def create_zarr_store(
+    *, 
     path: Union[str, Path],
     name: str, 
     fov_name: str,
