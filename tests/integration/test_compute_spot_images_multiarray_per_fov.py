@@ -24,7 +24,7 @@ from looptrace.voxel_stack import VoxelStackSpecification
 
 DEFAULT_MIN_NUM_PASSING = 500 # 5x the hypothesis default to ensure we really explore the search space
 HYPOTHESIS_HEALTH_CHECK_SUPPRESSIONS = (hyp.HealthCheck.function_scoped_fixture, hyp.HealthCheck.too_slow, )
-MIN_NUM_PASSING_FOR_SLOW_TEST_OF_ERROR_CASE = 10
+MIN_NUM_PASSING_FOR_SLOW_TEST_OF_ERROR_CASE = 20
 MAX_RAW_FOV = IndexToNaturalNumberText.TenThousand.value - 2 # Normal N digits accommodate 10^N - 1, and -1 more for 0-based
 MAX_RAW_TRACE_ID = IndexToNaturalNumberText.TenThousand.value - 2 # Normal N digits accommodate 10^N - 1, and -1 more for 0-based
 NO_SHRINK_PHASES = tuple(p for p in hyp.Phase if p != hyp.Phase.shrink)
