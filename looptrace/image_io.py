@@ -356,8 +356,13 @@ def create_zarr_store(
 
     compressor = numcodecs.Blosc(cname="zstd", clevel=5, shuffle=numcodecs.Blosc.BITSHUFFLE)
 
-    level_store = root.create_dataset(name=str(0), compressor=compressor, shape=shape, chunks=chunks, dtype=dtype)
-    return level_store
+    try:
+        return root.create_dataset(name=str(0), compressor=compressor, shape=shape, chunks=chunks, dtype=dtype)
+    except ValueError as e:
+        logging.error(
+            f"Failed to create ZARR dataset. Are shape and chunks incompatible perhaps? Shape = {shape}. Chunks = {chunks}. Error: {e}"
+        )
+        raise
 
 
 def zip_folder(folder, out_file, compression = zipfile.ZIP_STORED, remove_folder=False, retry_if_fails: bool = True) -> str:
