@@ -262,7 +262,7 @@ def gen_input_with_missing_timepoint_counts(draw):
     fnkey_image_pairs, locus_grouping = draw(gen_legal_input(allow_empty_spots=False, allow_empty_locus_grouping=False))
     real_regional_times: set[TimepointFrom0] = set(get_locus_time_count_by_reg_time(fnkey_image_pairs).keys())
     hyp.assume(len(set(locus_grouping.keys()).intersection(real_regional_times)) > 1) # need at least 2 in common so 1 can be dropped)
-    new_locus_grouping = draw(st.lists(st.sampled_from(tuple(locus_grouping.items())), min_size=1, max_size=len(real_regional_times) - 1).map(dict))
+    new_locus_grouping = draw(st.lists(st.sampled_from(list(locus_grouping.items())), min_size=1, max_size=len(real_regional_times) - 1).map(dict))
     return fnkey_image_pairs, new_locus_grouping
 
 
@@ -275,6 +275,14 @@ def gen_input_with_missing_timepoint_counts(draw):
 def test_regional_time_with_data_but_absent_from_nonempty_locus_grouping__causes_expected_error(tmp_path, fnkey_image_pairs_and_locus_grouping):
     """If there's a regional timepoint for which we don't have expected locus time count, it's an error."""
     fnkey_image_pairs, locus_grouping = fnkey_image_pairs_and_locus_grouping
+
+    # for diagnostic aid in case of a failed test case
+    import json
+    print("locus grouping (below):")
+    print(json.dumps({rt.get: [t.get for t in lts] for rt, lts in locus_grouping.items()}, indent=2))
+    print("sizes (below)")
+    print(json.dumps({k.name_roi_file: list(img.shape) for k, img in fnkey_image_pairs}, indent=2))
+    
     npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
     with pytest.raises(RuntimeError) as error_context:
         compute_locus_spot_voxel_stacks_for_visualisation(
