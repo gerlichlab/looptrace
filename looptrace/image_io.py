@@ -26,6 +26,8 @@ import numpy.typing as npt
 import tqdm
 import zarr
 
+from looptrace.voxel_stack import VoxelSize
+
 
 POSITION_EXTRACTION_REGEX = r"(Point\d+)"
 TIME_EXTRACTION_REGEX = r"(Time\d+)"
@@ -332,16 +334,17 @@ def create_zarr_store(
     dtype: str,  
     chunks: tuple,   
     metadata: Optional[dict] = None,
-    voxel_size: list = [1, 1, 1],
+    voxel_size: Optional[VoxelSize] = None,
 ):
     store = zarr.NestedDirectoryStore(os.path.join(path, fov_name))
     root = zarr.group(store=store, overwrite=True)
 
+    raw_voxel_size = [1.0, 1.0, 1.0] if voxel_size is None else [float(getattr(voxel_size, dim)) for dim in ("z", "y", "x")]
     root.attrs["multiscales"] = [{"version": "0.4", 
                                     "name": name + "_" + fov_name, 
                                     "datasets": [{"path": "0",                     
                                                     "coordinateTransformations": [{"type": "scale",
-                                                                                    "scale": [1.0, 1.0] + voxel_size}]},],
+                                                                                    "scale": [1.0, 1.0] + raw_voxel_size}]},],
                                     "axes": [
                                         {"name": "t", "type": "time", "unit": "minute"},
                                         {"name": "c", "type": "channel"},
