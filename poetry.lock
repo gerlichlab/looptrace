@@ -26,7 +26,7 @@ files = [
 name = "annotated-types"
 version = "0.7.0"
 description = "Reusable constraint types to use with typing.Annotated"
-optional = true
+optional = false
 python-versions = ">=3.8"
 files = [
     {file = "annotated_types-0.7.0-py3-none-any.whl", hash = "sha256:1f02e8b43a8fbbc3f3e0d4f0f4bfc8131bcb4eebe8849b8e5c773f3a1c582a53"},
@@ -2340,42 +2340,27 @@ icu = ["PyICU (>=1.0.0)"]
 
 [[package]]
 name = "nd2"
-version = "0.5.3"
+version = "0.10.1"
 description = "Yet another nd2 (Nikon NIS Elements) file reader"
 optional = false
-python-versions = "<3.12,>=3.7"
+python-versions = ">=3.8"
 files = [
-    {file = "nd2-0.5.3-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:9dbec7104842eac4520ba251c30d4ccf4476afabf795af5e67a7afeb6bee6566"},
-    {file = "nd2-0.5.3-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:2961f7c7264fe46e509ef42d41e5b467dbe0691a0a718ff9534fc455a509b314"},
-    {file = "nd2-0.5.3-cp310-cp310-manylinux_2_24_x86_64.whl", hash = "sha256:360f880668db86d195cffbe872b1b560b823d9825e86fe561cd50ee5ace7aecf"},
-    {file = "nd2-0.5.3-cp310-cp310-win_amd64.whl", hash = "sha256:864b484709b8b77f64455f890698d67210fc8c2b7053f2062a097c89258c4d8e"},
-    {file = "nd2-0.5.3-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:7d9b76fdef0886126ae107fca2703bcfbde5aca9b1c19438ddae029bdcde4507"},
-    {file = "nd2-0.5.3-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:8b1bc81c23c30b158904b0bd68f4b404e9932e045dda5ac1cb40c71f1612d826"},
-    {file = "nd2-0.5.3-cp311-cp311-manylinux_2_24_x86_64.whl", hash = "sha256:a03250db6393c9f8ef543116145396ec415256f5aa25f98e29bd9987ea7d7da9"},
-    {file = "nd2-0.5.3-cp311-cp311-win_amd64.whl", hash = "sha256:8a0a7210766a2ca46f49d86718cb26a86d7550ca0dd42b46085680504ac7a469"},
-    {file = "nd2-0.5.3-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:d0921024ea23bab9a1dd53f945e81390fb2fb33d76dfebb6936d158f7d52b734"},
-    {file = "nd2-0.5.3-cp37-cp37m-manylinux_2_24_x86_64.whl", hash = "sha256:0f9f447be3092b597522bc1ca0128b00405bb226f227c456b07f9624606adc4b"},
-    {file = "nd2-0.5.3-cp37-cp37m-win_amd64.whl", hash = "sha256:00648cad83fdbd3c1fcb086a9ac6ab451f8d43bcd4d286d19bd6c7bf1592aa7c"},
-    {file = "nd2-0.5.3-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:3c7ffa3be6966383c11f0781e140315bf90123d48d83cf71e52f2752cbe72970"},
-    {file = "nd2-0.5.3-cp38-cp38-macosx_11_0_arm64.whl", hash = "sha256:c2985f5a70b96298b30c39ffb4e803eb0277f12028f4276ff905f70a09d85dd7"},
-    {file = "nd2-0.5.3-cp38-cp38-manylinux_2_24_x86_64.whl", hash = "sha256:2ea44255ae733bfd45387e5ca1ca190226f8393c825288ea7f25ec0061bd80ab"},
-    {file = "nd2-0.5.3-cp38-cp38-win_amd64.whl", hash = "sha256:4b5cdb9de3723d1c0c791304b26f5816b27ea50b46fd80ac4d6f3eed6d165218"},
-    {file = "nd2-0.5.3-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:828102f4a77eb7b5e4551f58cd2e067228e095854faea707dea5636404a60b79"},
-    {file = "nd2-0.5.3-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:f2cb8c4dabd97a0159bffd0e213922835f14d1903ff0a4928e35bc45ea659fcd"},
-    {file = "nd2-0.5.3-cp39-cp39-manylinux_2_24_x86_64.whl", hash = "sha256:713d9d9dabed3f8d6046446e83726c48787202a19924ef91a2b48887ad693afd"},
-    {file = "nd2-0.5.3-cp39-cp39-win_amd64.whl", hash = "sha256:997564360ab2f5e7a63d88f6af4e28d9efda1705e824aa23d9ead4f5648c646f"},
-    {file = "nd2-0.5.3.tar.gz", hash = "sha256:a9d541719db16acc577565a5aa7941b280ea7acad6b92c574e188f1d774a1f0f"},
+    {file = "nd2-0.10.1-py3-none-any.whl", hash = "sha256:52458bc09a43390429c60e0103fc9bdc21432714d98c23ca86fce4eb80473aa0"},
+    {file = "nd2-0.10.1.tar.gz", hash = "sha256:88ee60f6ba39392722a162da58fb81bf0cdb8ed6c772772e4db91e90f97e490a"},
 ]
 
 [package.dependencies]
-numpy = {version = ">=1.23.2", markers = "python_version == \"3.11\""}
+numpy = "*"
+ome-types = ">=0.5.1"
 resource-backed-dask-array = "*"
 typing-extensions = "*"
 
 [package.extras]
-dev = ["Cython", "aicsimageio", "black", "dask[array]", "imagecodecs", "ipython", "mypy", "pre-commit", "psutil", "pytest", "pytest-cov", "rich", "ruff", "wurlitzer", "xarray"]
-legacy = ["imagecodecs", "wurlitzer"]
-test = ["Cython", "aicsimageio", "dask[array]", "imagecodecs", "lxml", "psutil", "pytest (>=6.0)", "pytest-cov", "wurlitzer", "xarray"]
+dev = ["aicsimageio", "dask[array]", "imagecodecs", "ipython", "lxml", "mypy", "numpy", "pre-commit", "psutil", "pytest (>=6.0)", "pytest-codspeed", "pytest-cov", "pytest-pretty", "rich", "ruff", "tifffile", "types-lxml", "xarray"]
+docs = ["mkdocs", "mkdocs-material", "mkdocstrings-python"]
+legacy = ["imagecodecs"]
+test = ["aicsimageio", "dask[array]", "imagecodecs", "lxml", "numpy", "psutil", "pytest (>=6.0)", "pytest-codspeed", "pytest-cov", "pytest-pretty", "tifffile", "xarray"]
+tiff = ["tifffile"]
 
 [[package]]
 name = "nest-asyncio"
@@ -2761,6 +2746,31 @@ files = [
     {file = "nvidia_nvtx_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl", hash = "sha256:781e950d9b9f60d8241ccea575b32f5105a5baf4c2351cab5256a24869f12a1a"},
     {file = "nvidia_nvtx_cu12-12.4.127-py3-none-win_amd64.whl", hash = "sha256:641dccaaa1139f3ffb0d3164b4b84f9d253397e38246a4f2f36728b48566d485"},
 ]
+
+[[package]]
+name = "ome-types"
+version = "0.5.3"
+description = "Python dataclasses for the OME data model"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "ome_types-0.5.3-py3-none-any.whl", hash = "sha256:081d8e42bdacbbaf3de65dff3f4d73f809822c8ac6b422fd46c34fdd28a76ea8"},
+    {file = "ome_types-0.5.3.tar.gz", hash = "sha256:f19a7e6021f798117d342a52629ce4137ab9a9bc45b7707abd7f26191a3899be"},
+]
+
+[package.dependencies]
+pydantic = ">=1.10.16,<2.0 || >2.0,<2.1 || >2.1,<2.2 || >2.2,<2.3 || >2.3"
+pydantic-compat = ">=0.1.0"
+xsdata = ">=23.6,<24.4"
+
+[package.extras]
+build = ["ruff (==0.3.0)", "xsdata[cli] (==24.2.1)"]
+dev = ["lxml", "mkdocs-material", "mkdocstrings-python", "mypy", "numpy", "pdbpp", "pint", "pre-commit", "pytest", "pytest-codspeed", "pytest-cov", "pytest-mypy-plugins", "ruff", "ruff (==0.3.0)", "types-lxml", "xmlschema (<2.5)", "xsdata[cli]", "xsdata[cli] (==24.2.1)"]
+docs = ["mkdocs-material", "mkdocstrings-python"]
+lxml = ["lxml (>=4.8.0)"]
+pint = ["pint (>=0.15)"]
+test = ["lxml", "mypy", "numpy", "pdbpp", "pint", "pytest", "pytest-codspeed", "pytest-cov", "pytest-mypy-plugins", "ruff", "types-lxml", "xmlschema (<2.5)", "xsdata[cli]"]
+test-qt = ["pytest-qt", "qtpy"]
 
 [[package]]
 name = "opencv-python-headless"
@@ -3430,7 +3440,7 @@ files = [
 name = "pydantic"
 version = "2.10.0"
 description = "Data validation using Python type hints"
-optional = true
+optional = false
 python-versions = ">=3.8"
 files = [
     {file = "pydantic-2.10.0-py3-none-any.whl", hash = "sha256:5e7807ba9201bdf61b1b58aa6eb690916c40a47acfb114b1b4fef3e7fd5b30fc"},
@@ -3450,7 +3460,7 @@ timezone = ["tzdata"]
 name = "pydantic-compat"
 version = "0.1.2"
 description = "Compatibility layer for pydantic v1/v2"
-optional = true
+optional = false
 python-versions = ">=3.7"
 files = [
     {file = "pydantic_compat-0.1.2-py3-none-any.whl", hash = "sha256:37a4df48565a35aedc947f0fde5edbdff270a30836d995923287292bb59d5677"},
@@ -3468,7 +3478,7 @@ test = ["pytest (>=6.0)", "pytest-cov"]
 name = "pydantic-core"
 version = "2.27.0"
 description = "Core functionality for Pydantic validation and serialization"
-optional = true
+optional = false
 python-versions = ">=3.8"
 files = [
     {file = "pydantic_core-2.27.0-cp310-cp310-macosx_10_12_x86_64.whl", hash = "sha256:cd2ac6b919f7fed71b17fe0b4603c092a4c9b5bae414817c9c81d3c22d1e1bcc"},
@@ -5287,6 +5297,27 @@ files = [
 ]
 
 [[package]]
+name = "xsdata"
+version = "24.3.1"
+description = "Python XML Binding"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "xsdata-24.3.1-py3-none-any.whl", hash = "sha256:2f4a00ec33fb6ff41fca95f3fac826b83fc34d8644e2f3da830ad393defb5705"},
+    {file = "xsdata-24.3.1.tar.gz", hash = "sha256:cf6c6895616260cbe2a4eff6f8f906cd16f9c1dba8fd8561e500b91269b86616"},
+]
+
+[package.dependencies]
+typing-extensions = "*"
+
+[package.extras]
+cli = ["click (>=5.0)", "click-default-group (>=1.2)", "docformatter (>=1.7.2)", "jinja2 (>=2.10)", "ruff (>=0.3.0)", "toposort (>=1.5)"]
+docs = ["markdown-exec[ansi]", "mkdocs", "mkdocs-gen-files", "mkdocs-literate-nav", "mkdocs-material", "mkdocs-minify-plugin", "mkdocstrings[python]", "pymdownx-superfence-filter-lines"]
+lxml = ["lxml (>=4.5.0)"]
+soap = ["requests"]
+test = ["pre-commit", "pytest", "pytest-benchmark", "pytest-cov"]
+
+[[package]]
 name = "yacman"
 version = "0.9.3"
 description = "A standardized configuration object for reference genome assemblies"
@@ -5358,4 +5389,4 @@ test = ["hypothesis", "more-itertools", "pytest"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.11, < 3.12"
-content-hash = "d16de0d0433ea31b356cca82de08eacfc85b73cc89667c40a0e229a5ee61812e"
+content-hash = "8bc65de0af7cdd79e93fb9f36970d83b2b79474a7fde7849a66bf87132918235"
