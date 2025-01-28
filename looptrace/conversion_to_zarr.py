@@ -29,30 +29,29 @@ def workflow(n_pos: int, input_folders: Iterable[Path], output_folder: Path) -> 
             imgs.append(folder_imgs[0])
         imgs = da.concatenate(imgs, axis=0)
         print(folder_metadata)
-        voxel_size: VoxelSize
         match VoxelSize.from_list(folder_metadata["voxel_size"]):
-            case result.Result(tag="ok", ok=vox_sz):
-                voxel_size = vox_sz
+            case result.Result(tag="ok", ok=voxel_size):
+                # TODO: why is it justified to use just the last folder_metadata value (associated with a 
+                # single f in input_folders) in a function call where the concatenation of values from 
+                # all input_folders is being passed to .zarr creation?
+                # See: https://github.com/gerlichlab/looptrace/issues/118
+                z = image_io.create_zarr_store(
+                    path = output_folder,
+                    name = os.path.basename(output_folder), 
+                    fov_name = get_fov_name_short(fov_index) + ".zarr",
+                    shape = imgs.shape, 
+                    dtype = np.uint16, 
+                    chunks = (1, 1, 1, imgs.shape[-2], imgs.shape[-1]), # 1 chunk per xy-plane (z-slice)
+                    metadata = folder_metadata,
+                    voxel_size = voxel_size,
+                )
+                n_t = imgs.shape[0]
+                for t in tqdm.tqdm(range(n_t)):
+                    z[t] = imgs[t]
             case result.Result(tag="error", error=err_msg):
                 raise RuntimeError(f"Could not parse voxel size; message: {err_msg}")
-        # TODO: why is it justified to use just the last folder_metadata value (associated with a 
-        # single f in input_folders) in a function call where the concatenation of values from 
-        # all input_folders is being passed to .zarr creation?
-        # See: https://github.com/gerlichlab/looptrace/issues/118
-        z = image_io.create_zarr_store(
-            path = output_folder,
-            name = os.path.basename(output_folder), 
-            fov_name = get_fov_name_short(fov_index) + ".zarr",
-            shape = imgs.shape, 
-            dtype = np.uint16, 
-            chunks = (1, 1, 1, imgs.shape[-2], imgs.shape[-1]), # 1 chunk per xy-plane (z-slice)
-            metadata = folder_metadata,
-            voxel_size = voxel_size,
-        )
-        n_t = imgs.shape[0]
-        for t in tqdm.tqdm(range(n_t)):
-            z[t] = imgs[t]
-
+            case parse_result:
+                raise RuntimeError(f"Unexpected voxel size parse result: {parse_result}")
 
 def one_to_one(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder):
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
