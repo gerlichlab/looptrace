@@ -150,6 +150,9 @@ def parse_times_from_text(s: str) -> List[str]:
     return re.findall(TIME_EXTRACTION_REGEX, s)
 
 
+_DEFAULT_ZARR_AXES = ("t", "c", "z", "y", "x")
+
+
 def single_fov_to_zarr(
     *, 
     images: np.ndarray | list, 
@@ -157,7 +160,7 @@ def single_fov_to_zarr(
     name: str, 
     fov_name: str, 
     dtype: Type, 
-    axes = ('t','c',"z","y","x"), 
+    axes = _DEFAULT_ZARR_AXES, 
     chunk_axes = ("y", "x"), 
     chunk_split = (2,2),  
     metadata: dict = None,
@@ -186,12 +189,11 @@ def single_fov_to_zarr(
     # Namely, different readers may not like the fact that the shape and chunks don't match underlying data.
     # This can happen when one or more dimensions collapses down flat, to a trivial single dimension.
     # See: https://github.com/gerlichlab/looptrace/issues/245
-    default_axes = ("t", "c", "z", "y", "x")
     try:
         print(f"Building metdata for image with shape {images.shape}")
     except AttributeError:
         pass
-    for ax in default_axes:
+    for ax in _DEFAULT_ZARR_AXES:
         sz: int
         ck: int
         if ax in axes:
@@ -208,8 +210,8 @@ def single_fov_to_zarr(
     print(f"Shape metadata: {size}")
     print(f"Shape metadata: {chunk_dict}")
 
-    shape = tuple([size[ax] for ax in default_axes])
-    chunks = tuple([chunk_dict[ax] for ax in default_axes])
+    shape = tuple([size[ax] for ax in _DEFAULT_ZARR_AXES])
+    chunks = tuple([chunk_dict[ax] for ax in _DEFAULT_ZARR_AXES])
     images = np.reshape(images, shape)
 
     root.attrs["multiscale"] = {
@@ -237,16 +239,25 @@ def single_fov_to_zarr(
                                                             (multiscale_level, i, images[i]) for i in range(size["t"]))
 
 
-def nuc_multipos_single_time_max_z_proj_zarr(
+def write_nuc_multipos_single_time_zarr(
+    *,
     name_img_pairs: List[Tuple[str, np.ndarray]], 
     root_path: str, 
     dtype: Type, 
+    num_dim: Literal[2] | Literal[3],
     metadata: Optional[dict] = None,
     overwrite: bool = True,
     ):
     if not isinstance(name_img_pairs, (list, tuple)):
         raise TypeError(f"Sequence of pairs of name and image data must be list or tuple, not {type(name_img_pairs).__name__}")
-    axes = ("y", "x")
+    if not isinstance(num_dim, int):
+        raise TypeError(f"Dimension count for nuclei ZARR isn't int, but {type(num_dim).__name__}")
+    if num_dim == 2:
+        axes = ("y", "x")
+    elif num_dim == 3:
+        axes = ("z", "y", "x")
+    else:
+        raise ValueError(f"Illegal number of dimensions for nuclei ZARR write: {num_dim}")
     bad_name_shape_pairs = [(name, img.shape) for name, img in name_img_pairs if len(img.shape) != len(axes)]
     if bad_name_shape_pairs:
         raise ValueError(f"{len(bad_name_shape_pairs)}/{len(name_img_pairs)} images with bad shape given {len(axes)} axes: {bad_name_shape_pairs}")

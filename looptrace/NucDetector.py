@@ -270,21 +270,12 @@ class NucDetector:
             for i, fov_name in tqdm.tqdm(enumerate(self.fov_list))
         ]
         print("Generating and saving nuclei images...")
-        if self.do_in_3d:
-            for fov_name, subimg in tqdm.tqdm(name_img_pairs):
-                image_io.single_fov_to_zarr(
-                    images=subimg, 
-                    path=self.nuclear_segmentation_images_path, 
-                    name=self.SEGMENTATION_IMAGES_KEY, 
-                    fov_name=fov_name, 
-                    axes=axes, 
-                    dtype=np.uint16, 
-                    chunk_split=(1,1),
-                    # TODO: reactivate if using netcdf-java or similar. #127
-                    # compressor=numcodecs.Zlib(),
-                    )
-        else:
-            image_io.nuc_multipos_single_time_max_z_proj_zarr(name_img_pairs, root_path=self.nuclear_segmentation_images_path, dtype=np.uint16)
+        image_io.write_nuc_multipos_single_time_zarr(
+            name_img_pairs=name_img_pairs, 
+            root_path=self.nuclear_segmentation_images_path, 
+            dtype=np.uint16,
+            num_dim=3 if self.do_in_3d else 2,
+        )
     
     def segment_nuclei(self) -> Path:
         '''
@@ -344,9 +335,9 @@ class NucDetector:
             zarr_axes = ("z", "y", "x")
         else:
             scale_for_rescaling = (self.ds_xy, self.ds_xy)
-            def scale_down_img(img_zyx: np.ndarray) -> np.ndarray:
-                assert len(img_zyx.shape) == 2, f"Bad shape for alleged 3D image: {img_zyx.shape}"
-                return img_zyx[::self.ds_xy, ::self.ds_xy]
+            def scale_down_img(img_yx: np.ndarray) -> np.ndarray:
+                assert len(img_yx.shape) == 2, f"Bad shape for alleged 2D image: {img_yx.shape}"
+                return img_yx[::self.ds_xy, ::self.ds_xy]
             get_masks = lambda imgs: _nuc_segmentation_cellpose_2d(imgs, diameter=diameter)
             zarr_axes = ("y", "x")
         
