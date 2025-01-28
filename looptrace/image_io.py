@@ -75,7 +75,7 @@ class NPZ_wrapper():
         return [self.npz[self.files[j]] for j in list(range(len(self.files))[s])]
 
 
-def multi_ome_zarr_to_dask(folder: str, remove_unused_dims: bool = True):
+def multi_ome_zarr_to_dask(folder: str, remove_unused_dims: bool = False):
     """
     The multi_ome_zarr_to_dask function takes a folder path and returns a list of dask arrays and a list of image folders.
     
@@ -86,7 +86,7 @@ def multi_ome_zarr_to_dask(folder: str, remove_unused_dims: bool = True):
     ----------
     folder : str
         Input folder path
-    remove_unused_dims : bool, default True
+    remove_unused_dims : bool, default False
         Whether to collapse each trivial (length-1) dimension, e.g. (1, 1, 1, 2044, 2048) -> (2044, 2048)
     
     Returns
