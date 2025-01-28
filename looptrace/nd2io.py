@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 from typing import *
 
-import attrs
 import dask.array as da
 import nd2
 import tqdm
