@@ -13,6 +13,7 @@ import dask.array as da
 import numpy as np
 import tqdm
 
+from expression import result
 from gertils import ExtantFile, ExtantFolder
 from looptrace import image_io, nd2io
 from looptrace.ImageHandler import ImageHandler
@@ -28,6 +29,12 @@ def workflow(n_pos: int, input_folders: Iterable[Path], output_folder: Path) -> 
             imgs.append(folder_imgs[0])
         imgs = da.concatenate(imgs, axis=0)
         print(folder_metadata)
+        voxel_size: VoxelSize
+        match VoxelSize.from_list(folder_metadata["voxel_size"]):
+            case result.Result(tag="ok", ok=vox_sz):
+                voxel_size = vox_sz
+            case result.Result(tag="error", error=err_msg):
+                raise RuntimeError(f"Could not parse voxel size; message: {err_msg}")
         # TODO: why is it justified to use just the last folder_metadata value (associated with a 
         # single f in input_folders) in a function call where the concatenation of values from 
         # all input_folders is being passed to .zarr creation?
@@ -40,7 +47,7 @@ def workflow(n_pos: int, input_folders: Iterable[Path], output_folder: Path) -> 
             dtype = np.uint16, 
             chunks = (1, 1, 1, imgs.shape[-2], imgs.shape[-1]), # 1 chunk per xy-plane (z-slice)
             metadata = folder_metadata,
-            voxel_size = VoxelSize.from_list(folder_metadata["voxel_size"]),
+            voxel_size = voxel_size,
         )
         n_t = imgs.shape[0]
         for t in tqdm.tqdm(range(n_t)):
