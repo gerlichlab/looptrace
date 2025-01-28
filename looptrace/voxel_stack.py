@@ -50,17 +50,15 @@ class VoxelSize:
     ]) # type: int | float
 
     @classmethod
-    def from_list(cls, values: object) -> Result["VoxelSize", str]:
-        match values:
-            case [z, y, x]:
-                try:
-                    return Result.Ok(cls(z=z, y=y, x=x))
-                except (TypeError, ValueError) as e:
-                    return Result.Error(f"Failed to build {cls.__name__} instance from given values ({values}): {e}")
-            case list():
-                return Result.Error(f"Failed to build {cls.__name__} instance; 3 values are required, not {len(values)}")
-            case _:
-                return Result.Error(f"Failed to build {cls.__name__} instance via from_list; argument was of type {type(values).__name__}")
+    def from_mapping(cls, m: Mapping[str, Any]) -> Result["VoxelSize", Exception]:
+        try:
+            return Result.Ok(cls.unsafe_from_mapping(m))
+        except Exception as e:
+            return Result.Error(e)
+
+    @classmethod
+    def unsafe_from_mapping(cls, m: Mapping[str, Any]) -> "VoxelSize":
+        return cls(**m)
 
     @property
     def to_tuple(self) -> tuple[int | float, int | float, int | float]:

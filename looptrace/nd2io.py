@@ -7,12 +7,14 @@ import os
 from pathlib import Path
 from typing import *
 
+import attrs
 import dask.array as da
 import nd2
 import tqdm
 
 from looptrace.image_io import parse_fields_of_view_from_text, parse_times_from_text
 from looptrace.integer_naming import get_fov_names_N
+from looptrace.voxel_stack import VoxelSize
 
 __author__ = "Vince Reuter"
 __all__ = [
@@ -63,11 +65,15 @@ def key_image_file_names_by_point_and_time(image_files: Iterable[Union[str, Path
     return result
 
 
+def parse_voxel_size(nd2_file: nd2.ND2File, channel: int = 0) -> VoxelSize:
+    voxels = nd2_file.voxel_size(channel=channel)
+    return VoxelSize(**{dim: getattr(voxels, dim) for dim in ("z", "y", "x")})
+
+
 def parse_nd2_metadata(image_file: str) -> Mapping[str, Any]:
     metadata = {}
     with nd2.ND2File(image_file) as sample:
-        voxels = sample.voxel_size()
-        metadata["voxel_size"] = [voxels.z, voxels.y, voxels.x]
+        metadata["voxel_size"] = parse_voxel_size(sample)
         microscope = sample.metadata.channels[0].microscope
         metadata['microscope'] = {
             'objectiveMagnification': microscope.objectiveMagnification,
