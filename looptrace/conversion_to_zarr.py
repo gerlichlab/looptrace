@@ -13,7 +13,6 @@ import dask.array as da
 import numpy as np
 import tqdm
 
-from expression import result
 from gertils import ExtantFile, ExtantFolder
 from looptrace import image_io, nd2io
 from looptrace.ImageHandler import ImageHandler
