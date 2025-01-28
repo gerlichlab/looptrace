@@ -54,7 +54,7 @@ class VoxelSize:
         match values:
             case [z, y, x]:
                 try:
-                    return cls(z=z, y=y, x=x)
+                    return Result.Ok(cls(z=z, y=y, x=x))
                 except (TypeError, ValueError) as e:
                     return Result.Error(f"Failed to build {cls.__name__} instance from given values ({values}): {e}")
             case list():
