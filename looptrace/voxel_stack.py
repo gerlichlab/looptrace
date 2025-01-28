@@ -36,21 +36,19 @@ def _is_valid_optional_trace_group(_, attribute: attrs.Attribute, value: Any):
 
 @attrs.define(frozen=True, kw_only=True)
 class VoxelSize:
-    z = attrs.field(validator=_is_pos_int) # type: int
-    y = attrs.field(validator=_is_pos_int) # type: int
-    x = attrs.field(validator=_is_pos_int) # type: int
+    z = attrs.field(validator=[
+        attrs.validators.instance_of((int, float)),
+        attrs.validators.gt(0)
+    ]) # type: int | float
+    y = attrs.field(validator=[
+        attrs.validators.instance_of((int, float)),
+        attrs.validators.gt(0)
+    ]) # type: int | float
+    x = attrs.field(validator=[
+        attrs.validators.instance_of((int, float)),
+        attrs.validators.gt(0)
+    ]) # type: int | float
 
-    def __post_init__(self) -> None:
-        bad_values = {}
-        for attr, in (f.name for f in attrs.fields(self)):
-            value = getattr(self, attr)
-            if not isinstance(value, int):
-                bad_values[attr] = TypeError(f"Alleged '{attr}' attribute for voxel size isn't integer, but {type(value).__name__}")
-            elif value < 1:
-                bad_values[attr] = ValueError(f"Value for 'z' attribute for voxel size isn't positive: {value}")
-        if bad_values:
-            raise Exception(f"{len(bad_values)} problem(s) building voxel size instance: {bad_values}")
-    
     @classmethod
     def from_list(cls, values: object) -> Result["VoxelSize", str]:
         match values:
@@ -65,7 +63,7 @@ class VoxelSize:
                 return Result.Error(f"Failed to build {cls.__name__} instance via from_list; argument was of type {type(values).__name__}")
 
     @property
-    def to_tuple(self) -> tuple[int, int, int]:
+    def to_tuple(self) -> tuple[int | float, int | float, int | float]:
         return attrs.astuple(self)
 
 
