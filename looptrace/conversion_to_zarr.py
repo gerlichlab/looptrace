@@ -14,7 +14,7 @@ import numpy as np
 import tqdm
 
 from gertils import ExtantFile, ExtantFolder
-from looptrace import image_io, nd2io
+from looptrace import image_io, nd2io, ArrayDimensionalityError
 from looptrace.ImageHandler import ImageHandler
 from looptrace.integer_naming import get_fov_name_short
 from looptrace.voxel_stack import VoxelSize
@@ -27,7 +27,14 @@ def workflow(n_pos: int, input_folders: Iterable[Path], output_folder: Path) -> 
             folder_imgs, _, folder_metadata = nd2io.stack_nd2_to_dask(f, fov_index=fov_index)
             imgs.append(folder_imgs[0])
         imgs = da.concatenate(imgs, axis=0)
+        if len(imgs.shape) == 5:
+            chunks = (1, 1, 1, imgs.shape[-2], imgs.shape[-1]), # 1 chunk per xy-plane (z-slice)
+        else:
+            raise ArrayDimensionalityError(
+                f"Expected a 5D array to write to ZARR, but got {len(imgs.shape)}D; shape: {imgs.shape}"
+            )
         voxel_size: VoxelSize = folder_metadata["voxel_size"]
+
         # TODO: why is it justified to use just the last folder_metadata value (associated with a 
         # single f in input_folders) in a function call where the concatenation of values from 
         # all input_folders is being passed to .zarr creation?
@@ -38,7 +45,7 @@ def workflow(n_pos: int, input_folders: Iterable[Path], output_folder: Path) -> 
             fov_name = get_fov_name_short(fov_index) + ".zarr",
             shape = imgs.shape, 
             dtype = np.uint16, 
-            chunks = (1, 1, 1, imgs.shape[-2], imgs.shape[-1]), # 1 chunk per xy-plane (z-slice)
+            chunks = chunks,
             metadata = folder_metadata,
             voxel_size = voxel_size,
         )
