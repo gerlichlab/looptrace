@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import *
 
 import dask.array as da
+from expression import Result, result
 import nd2
 import tqdm
 
@@ -24,6 +25,9 @@ __all__ = [
     "parse_nd2_metadata", 
     "stack_nd2_to_dask",
     ]
+
+
+_AXIS_SIZES_KEY = "axis_sizes"
 
 
 class EmptyImagesError(Exception):
@@ -73,6 +77,7 @@ def parse_nd2_metadata(image_file: str) -> Mapping[str, Any]:
     metadata = {}
     with nd2.ND2File(image_file) as sample:
         metadata["voxel_size"] = parse_voxel_size(sample)
+        metadata[_AXIS_SIZES_KEY] = sample.sizes
         microscope = sample.metadata.channels[0].microscope
         metadata['microscope'] = {
             'objectiveMagnification': microscope.objectiveMagnification,
@@ -144,13 +149,30 @@ def stack_nd2_to_dask(folder: str, fov_index: Optional[int] = None):
     if errors:
         raise Nd2FileError(f"{len(errors)} error(s) reading ND2 files from {folder}: {errors}")
 
-    out = da.stack(pos_stack)
-    out = da.moveaxis(out, 2, 3)
-    print(f"Loaded nd2 arrays of shape {out.shape}")
-    
-    return out, pos_names, metadata
+    match _shift_axes_of_stacked_array_from_nd2(arr=da.stack(pos_stack), metadata=metadata):
+        case result.Result(tag="error", error=err_msg):
+            raise RuntimeError(f"Failed to finalize stacked array from ND2 parse -- {err_msg}")
+        case result.Result(tag="ok", ok=final_array):
+            print(f"Loaded nd2 arrays of shape {final_array.shape}")
+            return final_array, pos_names, metadata
+        case unexpected_structure:
+            raise RuntimeError(f"Expected a Result-wrapped value, but got a value of type {type(unexpected_structure).__name__}")
 
 
 def read_nd2(path: Path) -> da.Array:
     with nd2.ND2File(path, validate_frames=False) as imgdat:
         return imgdat.to_dask()
+
+
+def _shift_axes_of_stacked_array_from_nd2(
+    *,
+    arr: da.Array, 
+    metadata: Mapping[str, Any],
+) -> Result[da.Array, str]:
+    match list(metadata[_AXIS_SIZES_KEY].keys()):
+        case ["Z", "C", "Y", "X"]:
+            return Result.Ok(da.moveaxis(arr, -4, -3))
+        case ["Z", "Y", "X"]:
+            return Result.Ok(arr)
+        case axis_names:
+            return Result.Error(f"Unxepected axis names from sample ND2: {axis_names}")
