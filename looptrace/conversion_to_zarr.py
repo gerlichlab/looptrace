@@ -49,7 +49,7 @@ def workflow(n_pos: int, input_folders: Iterable[Path], output_folder: Path) -> 
         imgs = finalize_image_stack(imgs)
         
         voxel_size: VoxelSize = sample_file_metadata[VOXEL_SIZE_KEY]
-        chunks = (1, 1, 1, imgs.shape[-2], imgs.shape[-1]), # 1 chunk per xy-plane (z-slice)
+        chunks = (1, 1, 1, imgs.shape[-2], imgs.shape[-1]) # 1 chunk per xy-plane (z-slice)
 
         # TODO: why is it justified to use just the last sample_file_metadata value (associated with a 
         # single f in input_folders) in a function call where the concatenation of values from 
