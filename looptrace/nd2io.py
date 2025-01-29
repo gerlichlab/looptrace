@@ -1,6 +1,6 @@
 """I/O operations with ND2 files"""
 
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 import itertools
 from operator import itemgetter
 import os
@@ -78,7 +78,7 @@ def parse_nd2_metadata(image_file: str) -> Mapping[str, Any]:
     metadata = {}
     with nd2.ND2File(image_file) as sample:
         metadata["voxel_size"] = parse_voxel_size(sample)
-        metadata[AXIS_SIZES_KEY] = sample.sizes
+        metadata[AXIS_SIZES_KEY] = OrderedDict(sample.sizes)
         metadata[CHANNEL_COUNT_KEY] = getattr(sample.attributes, CHANNEL_COUNT_KEY)
         microscope = sample.metadata.channels[0].microscope
         metadata['microscope'] = {
