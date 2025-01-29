@@ -1,9 +1,9 @@
 """Data types related to defining and using stacks of voxels, e.g. data from multiple timepoints for the same ROI"""
 
-import attrs
-from expression import Option, Result, option, result
 from typing import Any, Mapping, Union
 
+import attrs
+from expression import Option, Result, option, result
 import pandas as pd
 
 from looptrace import FIELD_OF_VIEW_COLUMN
@@ -63,7 +63,7 @@ class VoxelSize:
     @property
     def to_tuple(self) -> tuple[int | float, int | float, int | float]:
         return attrs.astuple(self)
-
+    
 
 @attrs.define(frozen=True, kw_only=True)
 class VoxelStackSpecification:
