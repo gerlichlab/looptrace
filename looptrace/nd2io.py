@@ -27,7 +27,8 @@ __all__ = [
     ]
 
 
-_AXIS_SIZES_KEY = "axis_sizes"
+AXIS_SIZES_KEY = "axis_sizes"
+CHANNEL_COUNT_KEY = "channelCount"
 
 
 class EmptyImagesError(Exception):
@@ -77,7 +78,8 @@ def parse_nd2_metadata(image_file: str) -> Mapping[str, Any]:
     metadata = {}
     with nd2.ND2File(image_file) as sample:
         metadata["voxel_size"] = parse_voxel_size(sample)
-        metadata[_AXIS_SIZES_KEY] = sample.sizes
+        metadata[AXIS_SIZES_KEY] = sample.sizes
+        metadata[CHANNEL_COUNT_KEY] = getattr(sample.attributes, CHANNEL_COUNT_KEY)
         microscope = sample.metadata.channels[0].microscope
         metadata['microscope'] = {
             'objectiveMagnification': microscope.objectiveMagnification,
@@ -169,7 +171,7 @@ def _shift_axes_of_stacked_array_from_nd2(
     arr: da.Array, 
     metadata: Mapping[str, Any],
 ) -> Result[da.Array, str]:
-    match list(metadata[_AXIS_SIZES_KEY].keys()):
+    match list(metadata[AXIS_SIZES_KEY].keys()):
         case ["Z", "C", "Y", "X"]:
             return Result.Ok(da.moveaxis(arr, -4, -3))
         case ["Z", "Y", "X"]:

@@ -12,7 +12,7 @@ __author__ = "Vince Reuter"
 __email__ = "vincent.reuter@imba.oeaw.ac.at"
 
 from looptrace.nd2io import *
-from looptrace.nd2io import _AXIS_SIZES_KEY
+from looptrace.nd2io import AXIS_SIZES_KEY
 from looptrace.integer_naming import get_fov_names_N
 
 POSITION_PREFIX = "Point000"
@@ -179,7 +179,7 @@ def test_underscore_prefixed_and_or_non_nd2_files_are_skipped_and_good_ones_have
             unique_fields_of_view.add(p)
     # Patch the metadata parser to be a no-op, the ND2 reader to be context manager-like, 
     # and dask call to be identity.
-    with mock.patch("looptrace.nd2io.parse_nd2_metadata", return_value={_AXIS_SIZES_KEY: OrderedDict((dim, 0) for dim in ["Z", "C", "Y", "X"])}), \
+    with mock.patch("looptrace.nd2io.parse_nd2_metadata", return_value={AXIS_SIZES_KEY: OrderedDict((dim, 0) for dim in ["Z", "C", "Y", "X"])}), \
         mock.patch("looptrace.nd2io.nd2.ND2File", side_effect=lambda *_, **__: mocked_nd2_handle()) as mock_nd2_read, \
         mock.patch("looptrace.nd2io.da.stack", side_effect=lambda arrs: arrs), \
         mock.patch("looptrace.nd2io.da.moveaxis", side_effect=lambda _1, _2, _3: mock.Mock(shape=None)):

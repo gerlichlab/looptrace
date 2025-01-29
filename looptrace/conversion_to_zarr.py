@@ -6,6 +6,7 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+from collections import OrderedDict
 import os
 from pathlib import *
 from typing import *
@@ -17,6 +18,7 @@ from gertils import ExtantFile, ExtantFolder
 from looptrace import image_io, nd2io, ArrayDimensionalityError
 from looptrace.ImageHandler import ImageHandler
 from looptrace.integer_naming import get_fov_name_short
+from looptrace.nd2io import CHANNEL_COUNT_KEY
 from looptrace.voxel_stack import VoxelSize
 
 
@@ -24,18 +26,28 @@ def workflow(n_pos: int, input_folders: Iterable[Path], output_folder: Path) -> 
     for fov_index in tqdm.tqdm(range(int(n_pos))):
         imgs = []
         for f in input_folders:
-            folder_imgs, _, folder_metadata = nd2io.stack_nd2_to_dask(f, fov_index=fov_index)
+            folder_imgs, _, sample_file_metadata = nd2io.stack_nd2_to_dask(f, fov_index=fov_index)
             imgs.append(folder_imgs[0])
         imgs = da.concatenate(imgs, axis=0)
-        if len(imgs.shape) == 5:
-            chunks = (1, 1, 1, imgs.shape[-2], imgs.shape[-1]), # 1 chunk per xy-plane (z-slice)
+        
+        num_channels: int = sample_file_metadata[CHANNEL_COUNT_KEY]
+        exp_num_dim: int
+        if num_channels == 1:
+            exp_num_dim = 4
+            imgs = imgs.reshape((imgs.shape[0], 1) + imgs.shape[1:]) # Create channel axis.
+        elif num_channels > 1:
+            exp_num_dim = 5
         else:
+            raise RuntimeError(f"Channel count isn't positive: {num_channels}")
+        if len(imgs.shape) != exp_num_dim:
             raise ArrayDimensionalityError(
-                f"Expected a 5D array to write to ZARR, but got {len(imgs.shape)}D; shape: {imgs.shape}"
+                f"Expected a {exp_num_dim}-D array to write to ZARR, but got {len(imgs.shape)}-D; shape: {imgs.shape}"
             )
-        voxel_size: VoxelSize = folder_metadata["voxel_size"]
+        
+        voxel_size: VoxelSize = sample_file_metadata["voxel_size"]
+        chunks = (1, 1, 1, imgs.shape[-2], imgs.shape[-1]), # 1 chunk per xy-plane (z-slice)
 
-        # TODO: why is it justified to use just the last folder_metadata value (associated with a 
+        # TODO: why is it justified to use just the last sample_file_metadata value (associated with a 
         # single f in input_folders) in a function call where the concatenation of values from 
         # all input_folders is being passed to .zarr creation?
         # See: https://github.com/gerlichlab/looptrace/issues/118
@@ -46,7 +58,7 @@ def workflow(n_pos: int, input_folders: Iterable[Path], output_folder: Path) -> 
             shape = imgs.shape, 
             dtype = np.uint16, 
             chunks = chunks,
-            metadata = folder_metadata,
+            metadata = sample_file_metadata,
             voxel_size = voxel_size,
         )
         n_t = imgs.shape[0]
