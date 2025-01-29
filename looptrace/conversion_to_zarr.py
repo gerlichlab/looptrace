@@ -14,6 +14,7 @@ import dask.array as da
 import numpy as np
 import tqdm
 
+from expression import identity
 from gertils import ExtantFile, ExtantFolder
 from looptrace import image_io, nd2io, ArrayDimensionalityError
 from looptrace.ImageHandler import ImageHandler
@@ -32,17 +33,20 @@ def workflow(n_pos: int, input_folders: Iterable[Path], output_folder: Path) -> 
         
         num_channels: int = sample_file_metadata[CHANNEL_COUNT_KEY]
         exp_num_dim: int
+        finalize_image_stack: Callable[[da.Array], da.Array]
         if num_channels == 1:
             exp_num_dim = 4
-            imgs = imgs.reshape((imgs.shape[0], 1) + imgs.shape[1:]) # Create channel axis.
+            finalize_image_stack = lambda a: a.reshape((a.shape[0], 1) + a.shape[1:]) # Create channel axis.
         elif num_channels > 1:
             exp_num_dim = 5
+            finalize_image_stack = identity
         else:
             raise RuntimeError(f"Channel count isn't positive: {num_channels}")
         if len(imgs.shape) != exp_num_dim:
             raise ArrayDimensionalityError(
                 f"Expected a {exp_num_dim}-D array to write to ZARR, but got {len(imgs.shape)}-D; shape: {imgs.shape}"
             )
+        imgs = finalize_image_stack(imgs)
         
         voxel_size: VoxelSize = sample_file_metadata["voxel_size"]
         chunks = (1, 1, 1, imgs.shape[-2], imgs.shape[-1]), # 1 chunk per xy-plane (z-slice)
