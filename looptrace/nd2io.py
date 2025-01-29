@@ -12,7 +12,7 @@ from expression import Result, result
 import nd2
 import tqdm
 
-from looptrace.image_io import parse_fields_of_view_from_text, parse_times_from_text
+from looptrace.image_io import VOXEL_SIZE_KEY, parse_fields_of_view_from_text, parse_times_from_text
 from looptrace.integer_naming import get_fov_names_N
 from looptrace.voxel_stack import VoxelSize
 
@@ -28,6 +28,7 @@ __all__ = [
 
 
 AXIS_SIZES_KEY = "axis_sizes"
+
 CHANNEL_COUNT_KEY = "channelCount"
 
 
@@ -77,7 +78,7 @@ def parse_voxel_size(nd2_file: nd2.ND2File, channel: int = 0) -> VoxelSize:
 def parse_nd2_metadata(image_file: str) -> Mapping[str, Any]:
     metadata = {}
     with nd2.ND2File(image_file) as sample:
-        metadata["voxel_size"] = parse_voxel_size(sample)
+        metadata[VOXEL_SIZE_KEY] = parse_voxel_size(sample)
         metadata[AXIS_SIZES_KEY] = OrderedDict(sample.sizes)
         metadata[CHANNEL_COUNT_KEY] = getattr(sample.attributes, CHANNEL_COUNT_KEY)
         microscope = sample.metadata.channels[0].microscope

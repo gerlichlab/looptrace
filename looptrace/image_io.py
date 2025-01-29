@@ -30,7 +30,10 @@ from looptrace.voxel_stack import VoxelSize
 
 
 POSITION_EXTRACTION_REGEX = r"(Point\d+)"
+
 TIME_EXTRACTION_REGEX = r"(Time\d+)"
+
+VOXEL_SIZE_KEY = "voxel_size"
 
 
 def ignore_path(p: Union[str, os.DirEntry, Path]) -> bool:
@@ -363,7 +366,7 @@ def create_zarr_store(
                                         {"name": "y", "type": "space", "unit": "micrometer"},
                                         {"name": "x", "type": "space", "unit": "micrometer"}],}]
     if metadata is not None:
-        root.attrs["metadata"] = metadata
+        root.attrs["metadata"] = {k: v for k, v in metadata.items() if k != VOXEL_SIZE_KEY}
 
     compressor = numcodecs.Blosc(cname="zstd", clevel=5, shuffle=numcodecs.Blosc.BITSHUFFLE)
 
