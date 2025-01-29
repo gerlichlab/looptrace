@@ -6,7 +6,6 @@ Ellenberg group
 EMBL Heidelberg
 """
 
-from collections import OrderedDict
 import os
 from pathlib import *
 from typing import *
@@ -18,6 +17,7 @@ from expression import identity
 from gertils import ExtantFile, ExtantFolder
 from looptrace import image_io, nd2io, ArrayDimensionalityError
 from looptrace.ImageHandler import ImageHandler
+from looptrace.image_io import VOXEL_SIZE_KEY
 from looptrace.integer_naming import get_fov_name_short
 from looptrace.nd2io import CHANNEL_COUNT_KEY
 from looptrace.voxel_stack import VoxelSize
@@ -48,7 +48,7 @@ def workflow(n_pos: int, input_folders: Iterable[Path], output_folder: Path) -> 
             )
         imgs = finalize_image_stack(imgs)
         
-        voxel_size: VoxelSize = sample_file_metadata["voxel_size"]
+        voxel_size: VoxelSize = sample_file_metadata[VOXEL_SIZE_KEY]
         chunks = (1, 1, 1, imgs.shape[-2], imgs.shape[-1]), # 1 chunk per xy-plane (z-slice)
 
         # TODO: why is it justified to use just the last sample_file_metadata value (associated with a 
