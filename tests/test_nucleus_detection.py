@@ -119,12 +119,12 @@ def test_fov_names_images_list_relationship(dummy_rounds_config, complete_config
         # Then, the bad case where there's no channel dimension.
         (
             {"P0002.zarr": np.zeros(shape=(2, 2, 2)), "P0001.zarr": np.ones(shape=(2, 2, 2))}, 
-            ArrayDimensionalityError("2 images with bad shape (length not equal to 4)")
+            ArrayDimensionalityError(f"Nuclei images for segmentation are 3-dimensional")
         ), 
         # Finally, the bad case where there's time dimension in addition to the 4 required ones.
         (
             {"P0002.zarr": np.zeros(shape=(2, 2, 2, 2, 2)), "P0001.zarr": np.ones(shape=(2, 2, 2, 2, 2))}, 
-            ArrayDimensionalityError("2 images with bad shape (length not equal to 4)")
+            ArrayDimensionalityError(f"Image arrays are 5D, but the first dimension isn't always trivial; unique values: [2]")
         ), 
     ]
     )
