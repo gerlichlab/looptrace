@@ -145,8 +145,9 @@ class NucDetector:
             If the underlying image handler lacks the key for the nuclei images
         looptrace.ArrayDimensionalityError
             If the number of FOV names doesn't match the number of image stacks, or
-            if any of the image stacks isn't 4-dimensional (1 for channel, and 1 each for (z, y, x))
+            if any of the image stacks isn't of the proper dimensionality
         """
+        missing_images_message = f"No images available ({self._input_name}) as raw input for nuclei segmentation!"
         try:
             all_imgs = self.image_handler.images
         except AttributeError as e:
@@ -154,15 +155,32 @@ class NucDetector:
         try:
             imgs = all_imgs[self._input_name]
         except KeyError as e:
-            raise MissingImagesError(f"No images available ({self._input_name}) as raw input for nuclei segmentation!") from e
+            raise MissingImagesError(missing_images_message) from e
         if len(imgs) != len(self.fov_list):
             raise ArrayDimensionalityError(f"{len(imgs)} image(s) and {len(self.fov_list)} FOV(s); these should be equal!")
-        exp_shape_len = 4 # (ch, z, y, x) -- no time dimension since only 1 timepoint's imaged for nuclei.
-        bad_images = {p: i.shape for p, i in zip(self.fov_list, imgs) if len(i.shape) != exp_shape_len}
-        if bad_images:
-            item_list_text = ", ".join(f"{p}: {shape}" for p, shape in sorted(bad_images.items(), key=itemgetter(0)))
-            raise ArrayDimensionalityError(f"{len(bad_images)} images with bad shape (length not equal to {exp_shape_len}): {item_list_text}")
-        return imgs
+        match list(set(len(i.shape) for i in imgs)):
+            case [4]:
+                # (c, z, y, x) -- no time dimension since only 1 timepoint's imaged for nuclei.
+                return imgs
+            case [5]:
+                # (t, c, z, y, x) ?
+                match list(set(i.shape[0] for i in imgs)):
+                    case [1]:
+                        # Collapse the (proven trivial) first dimension (time).
+                        return [i[0] for i in imgs]
+                    case unique_first_dimension_lengths:
+                        raise ArrayDimensionalityError(
+                            f"Image arrays are 5D, but the first dimension isn't always trivial; unique values: {unique_first_dimension_lengths}"
+                        )
+            case [k]:
+                raise ArrayDimensionalityError(f"Nuclei images for segmentation are {k}-dimensional")
+            case []:
+                return []
+            case shape_lengths:
+                logging.error(f"{len(shape_lengths)} unique dimension counts among nuclei images: {shape_lengths}")
+                bad_images = {p: i.shape for p, i in zip(self.fov_list, imgs) if len(i.shape) not in [4, 5]}
+                item_list_text = ", ".join(f"{p}: {shape}" for p, shape in sorted(bad_images.items(), key=itemgetter(0)))
+                raise ArrayDimensionalityError(f"{len(bad_images)} images with bad shape: {item_list_text}")
 
     @property
     def images_for_segmentation(self) -> Sequence[np.ndarray]:
