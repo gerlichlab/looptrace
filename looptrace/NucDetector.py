@@ -255,10 +255,8 @@ class NucDetector:
         if self.do_in_3d:
             if self._defines_z_slice:
                 print(f"INFO: z-slice for nuclear segmentation is defined but won't be used for method '{self.segmentation_method}'.")
-            axes = ("z", "y", "x")
             prep = lambda img: img
         else:
-            axes = ("y", "x")
             # TODO: encode better the meaning of this sentinel for nuc_slice, and document it (i.e., -1 appears to be max-projection).
             # See: https://github.com/gerlichlab/looptrace/issues/244
             nuc_slice = self.z_slice_for_segmentation
