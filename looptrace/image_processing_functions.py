@@ -50,7 +50,7 @@ def extract_labeled_centroids(img: npt.NDArray[PixelValue]) -> pd.DataFrame:
     # since we don't pass the intensity image, just rather the masks image.
     new_shape: tuple[int, ...] = tuple(itertools.dropwhile(lambda k: k == 1, img.shape))
     logging.info(f"For centroids' extraction, reshaping image: {img.shape} --> {new_shape}")
-    img = img[new_shape]
+    img = img.reshape(new_shape)
     ndim = len(img.shape)
     if ndim == 2:
         newcols = [Y_CENTER_COLNAME, X_CENTER_COLNAME]
