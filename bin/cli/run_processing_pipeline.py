@@ -570,12 +570,12 @@ class LooptracePipeline(pypiper.Pipeline):
                 func=compute_locus_pairwise_distances, 
                 f_kwargs=rounds_params,
             ),
-            # pypiper.Stage(
-            #     name="pairwise_distances__regional", 
-            #     func=compute_region_pairwise_distances, 
-            #     f_kwargs=rounds_params,
-            #     nofail=True,
-            # ),
+            pypiper.Stage(
+                name="pairwise_distances__regional", 
+                func=compute_region_pairwise_distances, 
+                f_kwargs=rounds_params,
+                nofail=True,
+            ),
             pypiper.Stage(
                 name="locus_specific_spots_visualisation_data_prep", 
                 func=prep_locus_specific_spots_visualisation, 
