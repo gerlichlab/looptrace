@@ -7,6 +7,8 @@ Ellenberg group
 EMBL Heidelberg
 """
 
+import itertools
+import logging
 from typing import *
 import numpy as np
 import numpy.typing as npt
@@ -44,15 +46,18 @@ PixelValue = Union[np.uint8, np.uint16]
 # )
 def extract_labeled_centroids(img: npt.NDArray[PixelValue]) -> pd.DataFrame:
     centroid_key = "centroid"
-    ndim = len(img.shape)
     # Here we need to account for 2D or 3D image, and the fact that these centroids can't be weighted, 
     # since we don't pass the intensity image, just rather the masks image.
+    new_shape: tuple[int, ...] = tuple(itertools.dropwhile(lambda k: k == 1, img.shape))
+    logging.info(f"For centroids' extraction, reshaping image: {img.shape} --> {new_shape}")
+    img = img[new_shape]
+    ndim = len(img.shape)
     if ndim == 2:
         newcols = [Y_CENTER_COLNAME, X_CENTER_COLNAME]
     elif ndim == 3:
         newcols = [Z_CENTER_COLNAME, Y_CENTER_COLNAME, X_CENTER_COLNAME]
     else:
-        raise ValueError("Image from which to extract region centroids is neither 2- nor 3-D, but {ndim}-D!")
+        raise ValueError(f"Image for regional centroid e xtraction is neither 2D nor 3D, but {ndim}D; shape: {img.shape}")
     colname_mapping = {f"{centroid_key}-{i}": newcol for i, newcol in enumerate(newcols)}
     props = regionprops_table(img, properties=("label", centroid_key))
     table = pd.DataFrame(props)
