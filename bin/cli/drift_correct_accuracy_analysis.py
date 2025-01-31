@@ -1,9 +1,9 @@
 """Quality control / analysis of the drift correction step"""
 
 import argparse
-import dataclasses
 from joblib import Parallel, delayed
 import json
+import logging
 import os
 from pathlib import Path
 import subprocess
@@ -11,6 +11,7 @@ import sys
 from typing import *
 import warnings
 
+import attrs
 import numpy as np
 import pandas as pd
 import tqdm
@@ -32,94 +33,66 @@ class IllegalParametersError(Exception):
         super().__init__(f"{len(errors)} error(s): {', '.join(errors)}")
 
 
-@dataclasses.dataclass
+_CHECK_NONNEGATIVE_INT = [attrs.validators.instance_of(int), attrs.validators.ge(0)]
+
+
+@attrs.define(frozen=True, kw_only=True)
 class BeadDetectionParameters:
     """A bundle of parameters related to bead detection for assessment of drift correction accuracy"""
-    reference_timepoint: int
-    reference_channel: int
-    threshold: int
-    min_intensity: int
-    roi_pixels: int
+    reference_timepoint = attrs.field(validator=_CHECK_NONNEGATIVE_INT) # type: int
+    reference_channel = attrs.field(validator=_CHECK_NONNEGATIVE_INT) # type: int
+    threshold = attrs.field(validator=_CHECK_NONNEGATIVE_INT) # type: int
+    min_intensity = attrs.field(validator=_CHECK_NONNEGATIVE_INT) # type: int
+    roi_pixels = attrs.field(validator=_CHECK_NONNEGATIVE_INT) # type: int
 
-    def _invalidate(self):
-        int_valued_attributes = ("reference_timepoint", "reference_channel", "threshold", "min_intensity", "roi_pixels")
-        errors = []
-        for attr_name in int_valued_attributes:
-            attr_value = getattr(self, attr_name)
-            if not isinstance(attr_value, int):
-                errors.append(TypeError(f"Value for '{attr_name}' attribute is not int, but {type(attr_value).__name__}"))
-            elif attr_value < 0:
-                errors.append(ValueError(f"Value for '{attr_name}' attribute is negative: {attr_value}"))
-        return errors
-        
-    def __post_init__(self):
-        errors = self._invalidate()
-        if errors:
-            raise IllegalParametersError(errors)
-        
 
-@dataclasses.dataclass
+@attrs.define(frozen=True, kw_only=True)
 class BeadFiltrationParameters:
     """A bundle of parameters related to filtration of beads for this fiducial accuracy analysis"""
-    max_num_rois: int
-    min_signal_to_noise: Union[int, float]
 
-    def _invalidate(self):
-        errors = []
-        if not isinstance(self.max_num_rois, int):
-            errors.append(TypeError(f"ROI count must be natural number, but got {type(self.max_num_rois).__name__}"))
-        elif self.max_num_rois < 1:
-            errors.append(ValueError(f"ROI count must be natural number, but got {self.max_num_rois}"))
-        if not isinstance(self.min_signal_to_noise, (int, float)):
-            errors.append(TypeError(f"Min signal-to-noise ratio must be int or float, but got {type(self.min_signal_to_noise).__name__}"))
-        elif self.min_signal_to_noise < 0:
-            errors.append(ValueError(f"Min signal-to-noise ratio cannot be negative: {self.min_signal_to_noise}"))
-        return errors
-
-    def __post_init__(self):
-        errors = self._invalidate()
-        if errors:
-            raise IllegalParametersError(errors)
+    max_num_rois = attrs.field(validator=[
+        attrs.validators.instance_of(int), 
+        attrs.validators.ge(1),
+    ]) # type: int
+    min_signal_to_noise = attrs.field(validator=[
+        attrs.validators.instance_of((int, float)), 
+        attrs.validators.ge(0)
+    ]) # type: int | float
 
 
-@dataclasses.dataclass
+@attrs.define(frozen=True, kw_only=True)
 class CameraParameters:
     """A bundle of parameters related to properties of the camera used for imaging"""
-    nanometers_xy: Union[int, float]
-    nanometers_z: Union[int, float]
-
-    def _invalidate(self):
-        errors = []
-        for attr_name in ("nanometers_xy", "nanometers_xy"):
-            attr_value = getattr(self, attr_name)
-            if not isinstance(attr_value, (int, float)):
-                errors.append(TypeError(f"'{attr_name}' value must be int or float, but got {type(attr_value).__name__}"))
-            elif not attr_value > 0:
-                errors.append(ValueError(f"'{attr_name}' value must be positive, but got {attr_value}"))
-
-    def __post_init__(self):
-        errors = self._invalidate()
-        if errors:
-            raise IllegalParametersError(errors)
+    nanometers_xy = attrs.field(validator=[
+        attrs.validators.instance_of((int, float)),
+        attrs.validators.gt(0),
+    ]) # type: int | float
+    nanometers_z = attrs.field(validator=[
+        attrs.validators.instance_of((int, float)),
+        attrs.validators.gt(0),
+    ]) # type: int | float
 
 
-class DataclassCapableEncoder(json.JSONEncoder):
-    """Facilitate serialisation of the parameters dataclasses in this module, for data provenance."""
+class AttrsCapableEncoder(json.JSONEncoder):
+    """Facilitate serialisation of the parameter bundles in this module, for data provenance."""
     def default(self, obj):
-        if dataclasses.is_dataclass(obj):
-            return dataclasses.asdict(obj)
+        if attrs.has(obj):
+            return attrs.asdict(obj)
         return super().default(obj)
 
 
-@dataclasses.dataclass
-class ReferenceImageStackDefinition:
-    index: int # TODO: refine as nonnegative
-    image_stack: np.ndarray
+def _is_five_dimensional_array(_, attribute: attrs.Attribute, value: Any) -> None:
+    if not isinstance(value, np.ndarray):
+        raise TypeError(f"For attribute {attribute.name}, alleged numpy array is actually of type {type(value).__name__}")
+    if len(value.shape) != 5:
+        raise TypeError(f"For attribute {attribute.name}, alleged 5D array is actually {len(value.shape)}-dimensional")
 
-    def __post_init__(self):
-        if 5 != len(self.image_stack.shape):
-            raise TypeError(f"A reference image stack should be a 5-dimensional array; got {len(self.image_stack.shape)}")
-    
+
+@attrs.define(frozen=True, kw_only=True)
+class ReferenceImageStackDefinition:
+    index = attrs.field(validator=_CHECK_NONNEGATIVE_INT) # type: int
+    image_stack = attrs.field(validator=_is_five_dimensional_array) # type: np.ndarray
+
     @property
     def num_channels(self) -> int:
         return self.image_stack.shape[1]
@@ -130,12 +103,14 @@ class ReferenceImageStackDefinition:
 
 
 def process_single_FOV_single_reference_timepoint(
-    image_handler: ImageHandler,
+    *,
+    roi_centers: np.ndarray,
     reference_image_stack_definition: ReferenceImageStackDefinition,
     drift_table: pd.DataFrame,
     bead_detection_params: BeadDetectionParameters, 
     bead_filtration_params: BeadFiltrationParameters, 
     camera_params: CameraParameters, 
+    fov_time_pairs_to_skip: set[tuple[int, int]],
     ) -> pd.DataFrame:
     """
     Compute the drift correction accuracy for a single hybridisation round / imaging timepoint, within a single field-of-view.
@@ -161,6 +136,8 @@ def process_single_FOV_single_reference_timepoint(
         The parameters relevant to which beads to use and which to discard
     camera_params : CameraParameters
         The parameters about the camera used to capture the imaging data passed here
+    fov_time_pairs_to_skip : set[tuple[int, int]]
+        Collection (possibly empty) of pairs of FOV index (0-based) and timepoint index (0-based) to ignore during processing
     
     Returns
     -------
@@ -172,20 +149,17 @@ def process_single_FOV_single_reference_timepoint(
     T = reference_image_stack_definition.num_timepoints
     fov_idx = reference_image_stack_definition.index
 
-    skips = image_handler.fov_timepoint_pairs_with_severe_problems
-    print(f"(FOV, time) pairs to skip: {skips}")
-    timepoints = [t for t in range(T) if (fov_idx, t) not in skips]
+    logging.info(f"(FOV, time) pairs to skip: {fov_time_pairs_to_skip}")
+    timepoints = [t for t in range(T) if (fov_idx, t) not in fov_time_pairs_to_skip]
     
-    # Get the bead ROIs for the current combo of FOV and timepoint.
-    roi_centers = image_handler.read_bead_rois_file_accuracy(fov_idx=fov_idx, timepoint=bead_detection_params.reference_timepoint)
-    if len(roi_centers) != image_handler.num_bead_rois_for_drift_correction_accuracy:
-        warnings.warn(RuntimeWarning(f"Fewer ROIs available ({len(roi_centers)}) than requested ({image_handler.num_bead_rois_for_drift_correction_accuracy}) for FOV {fov_idx}"))
+    if len(roi_centers) != bead_filtration_params.max_num_rois:
+        warnings.warn(RuntimeWarning(f"Fewer ROIs available ({len(roi_centers)}) than requested ({bead_filtration_params.max_num_rois}) for FOV {fov_idx}"))
 
     bead_roi_px = bead_detection_params.roi_pixels
     
     # TODO: this requires that the drift table be ordered such that the FOVs are as expected; need flexibility.
     pos = drift_table.fieldOfView.unique()[fov_idx]
-    print(f"Inferred FOV (for reference FOV index {fov_idx}): {pos}")
+    logging.info(f"Inferred FOV (for reference FOV index {fov_idx}): {pos}")
     curr_fov_drift_subtable = drift_table[drift_table.fieldOfView == pos]
 
     # TODO: could type-refine the argument values to these parameters (which should be nonnegative).
@@ -352,7 +326,7 @@ def workflow(
             {"bead_detection": bead_detection_params, "bead_filtration": bead_filtration_params, "camera": camera_params}, 
             fh, 
             indent=2,
-            cls=DataclassCapableEncoder
+            cls=AttrsCapableEncoder
             )
 
     # Read the actual FISH images.
@@ -371,14 +345,17 @@ def workflow(
         refspecs = [ReferenceImageStackDefinition(index=reference_fov, image_stack=imgs[reference_fov])]
     else:
         refspecs = (ReferenceImageStackDefinition(index=i, image_stack=imgs[i]) for i in range(len(drift_table.fieldOfView.unique())))
+    
     fits = (
         process_single_FOV_single_reference_timepoint(
-            image_handler=H,
+            # Get the bead ROIs for the current combo of FOV and timepoint.
+            roi_centers=H.read_bead_rois_file_accuracy(fov_idx=spec.index, timepoint=bead_detection_params.reference_timepoint),
             reference_image_stack_definition=spec, 
             drift_table=drift_table, 
             bead_detection_params=bead_detection_params, 
             bead_filtration_params=bead_filtration_params, 
             camera_params=camera_params, 
+            fov_time_pairs_to_skip=H.fov_timepoint_pairs_with_severe_problems,
             ) 
         for spec in refspecs
         )
