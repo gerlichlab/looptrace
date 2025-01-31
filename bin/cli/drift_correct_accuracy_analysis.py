@@ -12,6 +12,7 @@ from typing import *
 import warnings
 
 import attrs
+import dask.array as da
 import numpy as np
 import pandas as pd
 import tqdm
@@ -82,7 +83,7 @@ class AttrsCapableEncoder(json.JSONEncoder):
 
 
 def _is_five_dimensional_array(_, attribute: attrs.Attribute, value: Any) -> None:
-    if not isinstance(value, np.ndarray):
+    if not isinstance(value, (np.ndarray, da.Array)):
         raise TypeError(f"For attribute {attribute.name}, alleged numpy array is actually of type {type(value).__name__}")
     if len(value.shape) != 5:
         raise TypeError(f"For attribute {attribute.name}, alleged 5D array is actually {len(value.shape)}-dimensional")
