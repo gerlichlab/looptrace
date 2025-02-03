@@ -330,11 +330,6 @@ def workflow(
             cls=AttrsCapableEncoder
             )
 
-    # Read the actual FISH images.
-    seqfish_images_folder = images_folder.path / config["reg_input_moving"] # TODO: reconcile with 'reg_input_template'
-    print(f"Reading zarr to dask: {seqfish_images_folder}")
-    imgs, _ = image_io.multi_ome_zarr_to_dask(str(seqfish_images_folder))
-    
     # Read the table of precomputed drift correction values.
     print(f"Reading drift correction table: {drift_correction_table_file}")
     drift_table = pd.read_csv(drift_correction_table_file, index_col=False)
@@ -343,9 +338,9 @@ def workflow(
     # Whether this is done in just a single FOV or across all FOVs is determined by the command-line specification.
     if reference_fov is not None:
         # TODO: parameterise with config.
-        refspecs = [ReferenceImageStackDefinition(index=reference_fov, image_stack=imgs[reference_fov])]
+        refspecs = [ReferenceImageStackDefinition(index=reference_fov, image_stack=H.spot_images[reference_fov])]
     else:
-        refspecs = (ReferenceImageStackDefinition(index=i, image_stack=imgs[i]) for i in range(len(drift_table.fieldOfView.unique())))
+        refspecs = (ReferenceImageStackDefinition(index=i, image_stack=H.spot_images[i]) for i in range(len(drift_table.fieldOfView.unique())))
     
     fits = (
         process_single_FOV_single_reference_timepoint(

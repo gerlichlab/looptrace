@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 from typing import *
 
+import dask.array as da
 import numpy as np
 from numpydoc_decorator import doc
 import pandas as pd
@@ -418,6 +419,10 @@ class ImageHandler:
     @property
     def spot_image_extraction_skip_reasons_json_file(self) -> Path:
         return Path(self.out_path("_spot_image_extraction_skip_reasons.json"))
+
+    @property
+    def spot_images(self) -> Iterable[da.Array]:
+        return self.images[self.spot_input_name]
 
     @property
     def spot_input_name(self) -> str:
