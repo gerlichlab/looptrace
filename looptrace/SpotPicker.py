@@ -357,8 +357,8 @@ class SpotPicker:
         return self.image_handler.spot_image_extraction_skip_reasons_json_file
     
     @property
-    def images(self) -> List[da.core.Array]:
-        return self.image_handler.images[self.input_name]
+    def images(self) -> List[da.Array]:
+        return self.image_handler.spot_images
 
     @property
     def input_name(self):
