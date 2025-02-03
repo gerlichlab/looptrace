@@ -94,10 +94,6 @@ class ReferenceImageStackDefinition:
     image_stack = attrs.field(validator=_is_five_dimensional_array) # type: np.ndarray
 
     @property
-    def num_channels(self) -> int:
-        return self.image_stack.shape[1]
-
-    @property
     def num_timepoints(self) -> int:
         return self.image_stack.shape[0]
 
