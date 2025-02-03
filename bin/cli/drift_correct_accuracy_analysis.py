@@ -3,7 +3,6 @@
 import argparse
 from joblib import Parallel, delayed
 import json
-import logging
 import os
 from pathlib import Path
 import subprocess
@@ -150,7 +149,7 @@ def process_single_FOV_single_reference_timepoint(
     T = reference_image_stack_definition.num_timepoints
     fov_idx = reference_image_stack_definition.index
 
-    logging.info(f"(FOV, time) pairs to skip: {fov_time_pairs_to_skip}")
+    print(f"(FOV, time) pairs to skip: {fov_time_pairs_to_skip}")
     timepoints = [t for t in range(T) if (fov_idx, t) not in fov_time_pairs_to_skip]
     
     if len(roi_centers) != bead_filtration_params.max_num_rois:
@@ -160,7 +159,7 @@ def process_single_FOV_single_reference_timepoint(
     
     # TODO: this requires that the drift table be ordered such that the FOVs are as expected; need flexibility.
     pos = drift_table.fieldOfView.unique()[fov_idx]
-    logging.info(f"Inferred FOV (for reference FOV index {fov_idx}): {pos}")
+    print(f"Inferred FOV (for reference FOV index {fov_idx}): {pos}")
     curr_fov_drift_subtable = drift_table[drift_table.fieldOfView == pos]
 
     # TODO: could type-refine the argument values to these parameters (which should be nonnegative).
