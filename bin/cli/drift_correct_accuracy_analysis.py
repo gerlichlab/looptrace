@@ -18,7 +18,7 @@ import tqdm
 
 from gertils import ExtantFile, ExtantFolder
 
-from looptrace import image_io, SIGNAL_NOISE_RATIO_NAME
+from looptrace import SIGNAL_NOISE_RATIO_NAME
 from looptrace.configuration import read_parameters_configuration_file
 from looptrace.ImageHandler import ImageHandler
 from looptrace.bead_roi_generation import extract_single_bead
