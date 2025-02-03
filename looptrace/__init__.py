@@ -1,10 +1,8 @@
 """Chromatin tracing in Python, from microscopy images of FISH probes"""
 
-from dataclasses import dataclass
+import attrs
 import importlib.resources
-from pathlib import Path
 from typing import *
-import pandas as pd
 
 __all__ = [
     "FIELD_OF_VIEW_COLUMN",
@@ -35,11 +33,14 @@ SIGNAL_NOISE_RATIO_NAME = "A_to_BG"
 ZARR_CONVERSIONS_KEY = "zarr_conversions"
 
 
-@dataclass
+_IS_POSITIVE_INTEGER = [attrs.validators.instance_of(int), attrs.validators.gt(0)]
+
+
+@attrs.define(kw_only=True, frozen=True)
 class RoiImageSize:
-    z: int
-    y: int
-    x: int
+    z = attrs.field(validator=_IS_POSITIVE_INTEGER)
+    y = attrs.field(validator=_IS_POSITIVE_INTEGER)
+    x = attrs.field(validator=_IS_POSITIVE_INTEGER)
 
     def div_by(self, m: int) -> "RoiImageSize":
         return RoiImageSize(z=self.z // m, y=self.y // m, x=self.x // m)
