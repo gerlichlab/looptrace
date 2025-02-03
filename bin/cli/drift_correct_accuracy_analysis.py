@@ -165,7 +165,7 @@ def process_single_FOV_single_reference_timepoint(
         bead_img = extract_single_bead(centroid, img, bead_roi_px=bead_roi_px, drift_coarse=coarse_shift)
         return fitSymmetricGaussian3D(bead_img, sigma=1, center='max')[0]
 
-    fits = Parallel(n_jobs=-1, prefer='threads')(
+    fits = Parallel(n_jobs=-1, prefer="processes")(
         delayed(lambda t, c, i, roi: [fov_idx, t, c, i] + list(proc1(timepoint_index=t, ref_ch=c, centroid=roi)))(t=t, c=c, i=i, roi=roi) 
         for t in tqdm.tqdm(timepoints)
         for c in [bead_detection_params.reference_channel] 
