@@ -21,6 +21,7 @@ In this case, the hypothetical trace is siphoned off separately and not propagat
 * Sort records in locus pairwise distances file by (after field of view) the name/ID of the tracing structure, then by the locus IDs. 
 This facilitates downstream analysis which group records in a particular way; we anticipate these factors (tracing structure name and locus IDs) as being the most often used for grouping records for downstream analysis.
 * The pipeline no longer distances between all pairs of regional spot centroids. See [Issue 417](https://github.com/gerlichlab/looptrace/issues/417).
+* Filtration of ROIs through the nuclear masks is now done before the merger of ROIs based on proximity.
 
 ## [v0.11.3] - 2024-12-03
 
