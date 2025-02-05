@@ -81,7 +81,7 @@ def test_get_fov_name__is_expected_error_when_input_is_not_int(func_and_prefix__
     (func, exp_msg_prefix), alleged_number = func_and_prefix__num_pair
     with pytest.raises(TypeError) as err_ctx:
         func(alleged_number)
-    exp_msg = f"{exp_msg_prefix} ({alleged_number}) (type={type(alleged_number).__name__}) is not integer-like!"
+    exp_msg = f"{exp_msg_prefix} is of illegal type: {type(alleged_number).__name__}"
     assert str(err_ctx.value) == exp_msg
 
 

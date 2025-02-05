@@ -6,6 +6,7 @@ import logging
 from os import PathLike
 from pathlib import Path
 from typing import Callable, Iterable, Mapping, Optional, ParamSpec, TypeAlias, TypeVar
+
 from expression import Option, Result, compose, curry_flip, snd
 from expression.collections import Seq
 from expression import result

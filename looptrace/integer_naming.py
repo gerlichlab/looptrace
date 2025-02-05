@@ -5,20 +5,15 @@ In particular, tools here are for padding to fixed-length string and going 0-bas
 
 from enum import Enum
 from math import log10
-from typing import *
+from typing import Any, Callable
 
 from expression import Failure, Option, Result, Success
+from gertils.types import FieldOfViewFrom1
 
 from .utilities import find_first_option
 
 __author__ = "Vince Reuter"
 __credits__ = ["Vince Reuter"]
-
-__all__ = [
-    "get_fov_name_short", 
-    "get_fov_names_N", 
-    "parse_semantic_and_value",
-    ]
 
 
 class IndexToNaturalNumberText(Enum):
@@ -40,7 +35,7 @@ class IndexToNaturalNumberText(Enum):
 
     def get_name(self, i: int) -> str:
         """Get the (padded) name for the single value given."""
-        _typecheck(i, ctx="Index to name")
+        _typecheck_as_int(i, ctx="Index to name")
         if i < 0 or i >= self._num_values_possible:
             raise ValueError(f"{i} is out-of-bounds [0, {self._num_values_possible}) for for namer '{self.name}'")
         return self._get_name_unsafe(i)
@@ -62,7 +57,7 @@ class IndexToNaturalNumberText(Enum):
         return str(n + 1).zfill(self._text_size)
 
 
-_DEFAULT_NAMER = IndexToNaturalNumberText.TenThousand
+DEFAULT_INTEGER_NAMER = IndexToNaturalNumberText.TenThousand
 
 
 class NameableSemantic(Enum):
@@ -87,14 +82,22 @@ def _get_short_name(*, semantic: "NameableSemantic", i: int, namer: "IndexToNatu
     return semantic.value + namer.get_name(i)
 
 
-def get_fov_name_short(i: int, *, namer: IndexToNaturalNumberText = _DEFAULT_NAMER) -> str:
+def get_fov_name_short(fov: int | FieldOfViewFrom1, *, namer: IndexToNaturalNumberText = DEFAULT_INTEGER_NAMER) -> str:
     """Get the field of view name for the given index."""
-    return _get_short_name(semantic=NameableSemantic.Point, i=i, namer=namer)
+    def build(i: int) -> str:
+        return _get_short_name(semantic=NameableSemantic.Point, i=i, namer=namer)
+    match fov:
+        case int():
+            return build(fov)
+        case FieldOfViewFrom1():
+            return build(fov.get - 1)
+        case _:
+            raise TypeError(_illegal_type_message(ctx="Index to name", value=fov))
 
 
-def get_fov_names_N(num_names: int, namer: IndexToNaturalNumberText = _DEFAULT_NAMER) -> List[str]:
+def get_fov_names_N(num_names: int, namer: IndexToNaturalNumberText = DEFAULT_INTEGER_NAMER) -> list[str]:
     """Get the field of view name for the first n indices."""
-    _typecheck(num_names, ctx="Number of names")
+    _typecheck_as_int(num_names, ctx="Number of names")
     if num_names < 0:
         raise ValueError(f"Number of names is negative: {num_names}")
     return [get_fov_name_short(i, namer=namer) for i in range(num_names)]
@@ -106,6 +109,30 @@ def parse_semantic_and_value(s: str, *, namer: IndexToNaturalNumberText) -> Resu
         .bind(lambda sem: namer.read_as_index(s.removeprefix(sem.value)).map(lambda z: (sem, z)))
 
 
-def _typecheck(i: int, ctx: str) -> bool:
-    if isinstance(i, bool) or not isinstance(i, int):
-        raise TypeError(f"{ctx} ({i}) (type={type(i).__name__}) is not integer-like!")
+def _build_field_of_view_one_based(*, semantic: "NameableSemantic", raw_value: int) -> Result[FieldOfViewFrom1, str]:
+    match semantic:
+        case NameableSemantic.Point:
+            try:
+                return Result.Ok(FieldOfViewFrom1(raw_value))
+            except Exception as e:
+                return Result.Error(f"Failed to build 1-based FOV; error -- {e}")
+        case _:
+            return Result.Error(f"Cannot build 1-based FOV with given semantic for raw value: {semantic}f")
+
+
+def parse_field_of_view_one_based_from_position_name_representation(
+    s: str, 
+    *, 
+    namer: IndexToNaturalNumberText = DEFAULT_INTEGER_NAMER,
+) -> Result[FieldOfViewFrom1, str]:
+    return parse_semantic_and_value(s, namer=namer)\
+        .bind(lambda sem_val: _build_field_of_view_one_based(semantic=sem_val[0], raw_value=sem_val[1]))
+
+
+def _illegal_type_message(*, ctx: str, value: Any) -> str:
+    return f"{ctx} is of illegal type: {type(value).__name__}"
+
+
+def _typecheck_as_int(i: Any, ctx: str) -> bool:
+    if not isinstance(i, int) or isinstance(i, bool): # Handle the fact that instance check of Boolean against int can be True.
+        raise TypeError(_illegal_type_message(ctx=ctx, value=i))
