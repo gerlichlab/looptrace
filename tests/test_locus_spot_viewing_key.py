@@ -28,6 +28,14 @@ def gen_key() -> SearchStrategy[LocusSpotViewingKey]:
     ))
 
 
+@hyp.given(key=gen_key())
+def test_to_string(key: LocusSpotViewingKey):
+    raw_fov: int = key.field_of_view.get
+    unwrapped_group_name: str = key.trace_group_maybe.map(lambda name: name.get).default_value("")
+    expected: str = "P" + str(raw_fov).zfill(4) + "__" + unwrapped_group_name
+    assert key.to_string == expected
+
+
 @hyp.given(generated_key=gen_key())
 def test_key_roundtrips_through_string(generated_key: LocusSpotViewingKey):
     match LocusSpotViewingKey.from_string(generated_key.to_string):
