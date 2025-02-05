@@ -6,7 +6,7 @@ from typing import Optional
 from unittest import mock
 
 from expression import Option
-from gertils.types import TimepointFrom0, TraceIdFrom0
+from gertils.types import FieldOfViewFrom1, TimepointFrom0, TraceIdFrom0
 import hypothesis as hyp
 from hypothesis import strategies as st
 from hypothesis.strategies import SearchStrategy
@@ -18,7 +18,7 @@ from looptrace import ArrayDimensionalityError
 from looptrace.ImageHandler import LocusGroupingData
 from looptrace.SpotPicker import SPOT_IMAGE_PIXEL_VALUE_TYPE
 from looptrace.Tracer import compute_locus_spot_voxel_stacks_for_visualisation
-from looptrace.integer_naming import IndexToNaturalNumberText, get_fov_name_short
+from looptrace.integer_naming import IndexToNaturalNumberText
 from looptrace.voxel_stack import VoxelStackSpecification
 
 
@@ -40,11 +40,16 @@ gen_spot_box = st.sampled_from([(2, 4, 4), (3, 3, 3)])
 
 gen_trace_id = st.integers(min_value=0, max_value=MAX_RAW_TRACE_ID).map(TraceIdFrom0)
 
-def get_name_for_raw_zero_based_fov(fov: int) -> str:
-    return get_fov_name_short(fov) + ".zarr"
-
-
 BuildInput = tuple[Iterable[VoxelStackSpecification], LocusGroupingData]
+
+
+def lift_zero_based_index_into_FieldOfViewFrom1(i: int) -> FieldOfViewFrom1:
+    build_target = FieldOfViewFrom1
+    if not isinstance(i, int):
+        raise TypeError(f"Value to lift into {build_target.__name__} isn't int, but {type(i).__name__}")
+    if i < 0:
+        raise ValueError(f"Cannot lift negative value ({i}) into {build_target.__name__}")
+    return build_target(i + 1)
 
 
 @st.composite
@@ -86,7 +91,7 @@ def gen_legal_input(
     # Create the Numpy array "filename" for each spot extraction 1 per eligible locus time, per regional spot.
     fn_keys = [
         VoxelStackSpecification(
-            field_of_view=get_name_for_raw_zero_based_fov(fov),
+            field_of_view=lift_zero_based_index_into_FieldOfViewFrom1(fov),
             roiId=tid.get, # For simplicity, just take the ROI ID as the trace ID.
             ref_timepoint=rt,
             traceGroup=Option.Nothing(),

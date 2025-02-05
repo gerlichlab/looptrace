@@ -10,7 +10,7 @@ import subprocess
 import sys
 from typing import *
 
-from expression import Option, Result, option, result
+from expression import Option, Result, fst, result
 from gertils import ExtantFile, ExtantFolder
 import pandas as pd
 import pypiper
@@ -24,7 +24,7 @@ from looptrace.Tracer import Tracer, run_timepoint_name_and_distance_application
 from looptrace.configuration import KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS
 from looptrace.conversion_to_zarr import one_to_one as run_zarr_production
 from looptrace.image_processing_functions import extract_labeled_centroids
-from looptrace.integer_naming import parse_semantic_and_value, IndexToNaturalNumberText, NameableSemantic
+from looptrace.integer_naming import parse_field_of_view_one_based_from_position_name_representation
 from looptrace.trace_metadata import PotentialTraceMetadata
 
 from pipeline_precheck import workflow as pretest
@@ -315,15 +315,12 @@ def prep_nuclear_masks_data(rounds_config: ExtantFile, params_config: ExtantFile
         table = extract_labeled_centroids(img)
         logging.info(f"Finished nuclear mask centroids for FOV: {fov}")
         cleaned_pos_name: str = fov.removesuffix(".zarr")
+        # Note that in what follows, we ignore the actual value from the parse; here we just care about proof that the 
+        # cleaned value corresponds to one with a valid parse as a 1-based FOV.
         fp: Path = \
-            parse_semantic_and_value(cleaned_pos_name, namer=IndexToNaturalNumberText.TenThousand)\
+            parse_field_of_view_one_based_from_position_name_representation(cleaned_pos_name)\
                 .map_error(lambda msg: f"Failed to parse semantic and value from text ({cleaned_pos_name}): {msg}")\
-                .bind(
-                    lambda sem_val: 
-                        Result.Ok(H.nuclear_masks_visualisation_data_path / f"{cleaned_pos_name}.nuclear_masks.csv") 
-                        if sem_val[0] == NameableSemantic.Point else 
-                        Result.Error(f"Parsed not point/FOV, but {sem_val[0]} from FOV name {cleaned_pos_name}")
-                )\
+                .map(lambda _: H.nuclear_masks_visualisation_data_path / f"{cleaned_pos_name}.nuclear_masks.csv")\
                 .default_with(raise_error)
         logging.info(f"Writing data file for nuclei visualisation to file: {fp}")
         fp.parent.mkdir(exist_ok=True)

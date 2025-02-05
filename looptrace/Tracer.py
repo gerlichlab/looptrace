@@ -270,7 +270,7 @@ def _iter_fit_args(
                 raise
     
     for fn in filenames:
-        stack_key: VoxelStackSpecification = VoxelStackSpecification.from_file_name_base(fn)
+        stack_key: VoxelStackSpecification = VoxelStackSpecification.from_file_name_base__unsafe(fn)
         time_stack_of_volumes: np.ndarray = get_data(fn)
         n_times = time_stack_of_volumes.shape[0]
         for i in range(n_times):
@@ -635,7 +635,7 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
     sorted_maximal_voxel_times: Optional[list[TimepointFrom0]]
 
     for (fov, trace_group_key), vis_group in itertools.groupby(keyed, compose(fst, lambda voxel_spec: (voxel_spec.field_of_view, voxel_spec.traceGroup))):
-        logging.info("Computing spot image arrays stack for FOV '%s', trace group %s...", fov, trace_group_key)
+        logging.info(f"Computing spot image arrays stack for FOV {fov}, trace group {trace_group_key}...")
         vis_group = list(vis_group) # Avoid iterator exhaustion.
         current_stack: list[tuple[int, np.ndarray]] = []
         for trace_id, spec_key_pairs in itertools.groupby(vis_group, compose(fst, lambda voxel_spec: voxel_spec.traceId)): # We'll defer sorting by trace ID.
@@ -751,7 +751,7 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
 
         # TODO: store the reindexed the trace IDs, so that we can map mentally back-and-forth when viewing in Napari.
         # Stack up each trace's voxel stack, creating a 5D array from a list of 4D arrays. The new dimension represents the trace ID.
-        arrays.append((LocusSpotViewingKey(fov, trace_group_key), np.stack([arr for _, arr in current_stack])))
+        arrays.append((LocusSpotViewingKey(field_of_view=fov, trace_group_maybe=trace_group_key), np.stack([arr for _, arr in current_stack])))
         trace_group_metadata[trace_group_key] = \
             LocusSpotViewingReindexingDetermination(
                 timepoints=list(map(TimepointFrom0, range(num_timepoints))) if sorted_maximal_voxel_times is None else sorted_maximal_voxel_times,
@@ -773,8 +773,9 @@ def backfill_array(array: np.ndarray, *, num_places: int) -> np.ndarray:
 def _prep_npz_to_zarr(npz: Union[str, Path, NPZ_wrapper]) -> Tuple[NPZ_wrapper, Iterable[Tuple[VoxelStackSpecification, str]]]:
     if isinstance(npz, (str, Path)):
         npz = NPZ_wrapper(npz)
+    # Create a key for each filename contained in the wrapper, and then sort by a subset of key components.
     keyed = sorted(
-        map(lambda fn: (VoxelStackSpecification.from_file_name_base(fn), fn), npz.files), 
+        map(lambda fn: (VoxelStackSpecification.from_file_name_base__unsafe(fn), fn), npz.files), 
         key=compose(fst, lambda spec: (spec.field_of_view, spec.traceGroup, spec.roiId)),
     )
     return npz, keyed

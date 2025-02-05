@@ -537,7 +537,7 @@ class SpotPicker:
             for ch, ch_group in timepoint_group.groupby(SPOT_CHANNEL_COLUMN_NAME):
                 image_stack = np.array(self.images[fov_index][int(timepoint), int(ch)])
                 for _, roi in ch_group.iterrows():
-                    fn_key = VoxelStackSpecification.from_roi(roi)
+                    fn_key = VoxelStackSpecification.from_roi_like__unsafe(roi)
                     roi_img, error = extract_single_roi_img_inmem(
                         single_roi=roi, 
                         image_stack=image_stack, 

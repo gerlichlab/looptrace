@@ -1,17 +1,17 @@
 """Metadata about an individual trace"""
 
-from dataclasses import dataclass
 from itertools import tee
-import json
 from string import whitespace
 from typing import Any, Iterable, Mapping, Optional, TypeAlias, TypeVar
 
 import attrs
-from expression import Option, Result, compose, curry_flip, fst, option, snd
+from expression import Option, Result, compose, curry_flip, fst, option, pipe, snd
 from expression.collections import Seq
 from expression.collections.seq import concat
 from expression import result
-from gertils.types import TimepointFrom0, TraceIdFrom0
+from gertils.types import FieldOfViewFrom1, TimepointFrom0, TraceIdFrom0
+
+from looptrace.integer_naming import DEFAULT_INTEGER_NAMER, IndexToNaturalNumberText, get_fov_name_short, parse_field_of_view_one_based_from_position_name_representation
 from looptrace.utilities import find_counts_of_repeats, list_from_object, traverse_through_either, wrap_error_message, wrap_exception
 
 Errors: TypeAlias = Seq[str]
@@ -222,28 +222,14 @@ def _value_from_map(k: str, m: Mapping[str, Any]) -> Result[Any, str]:
     return Option.of_optional(m.get(k)).to_result(f"Missing key '{k}'")
 
 
-@attrs.define(frozen=True, order=True)
+@attrs.define(frozen=True, kw_only=True, order=True)
 class LocusSpotViewingKey:
-    field_of_view = attrs.field(validator=attrs.validators.instance_of(str)) # type: str
+    field_of_view = attrs.field(validator=attrs.validators.instance_of(FieldOfViewFrom1)) # type: FieldOfViewFrom1
     trace_group_maybe = attrs.field(validator=_is_valid_trace_group_name_option) # type: Option[TraceGroupName]
-
-    @classmethod
-    def from_mapping(cls, m: Mapping[str, object]) -> Result["LocusSpotViewingKey", list[str]]:
-        return traverse_through_either(_value_from_map(m))(["field_of_view", "trace_group_maybe"])\
-            .map_error(list)\
-            .bind(lambda args: TraceGroupName.try_option(snd(args)).map(lambda maybe_name: (fst(args), maybe_name)))\
-            .map(lambda args: cls(field_of_view=fst(args), trace_group_maybe=snd(args)))
-
-    @property
-    def to_mapping(self) -> Mapping[str, str | Option[TraceGroup]]: # TODO: stricter, fixed-values subtype of Mapping here
-        return {
-            "field_of_view": self.field_of_view, 
-            "trace_group_maybe": trace_group_option_to_string(self.trace_group_maybe), 
-        }
 
     @property
     def to_string(self) -> str:
-        fov_part: str = self.field_of_view
+        fov_part: str = get_fov_name_short(self.field_of_view)
         trace_group_name_part: str = trace_group_option_to_string(self.trace_group_maybe)
         return f"{fov_part}{self._delimiter()}{trace_group_name_part}"
 
@@ -261,11 +247,22 @@ class LocusSpotViewingKey:
             return Result.Ok((lhs, rhs))
 
     @classmethod
-    def from_string(cls, s: str) -> Result["LocusSpotViewingKey", str]:
-        return cls._split_raw(s).bind(
-            lambda pair: TraceGroupName.try_option(snd(pair)).map(lambda grp_opt: cls(fst(pair), grp_opt))
-        )
+    def from_string(cls, s: str, *, namer: IndexToNaturalNumberText = DEFAULT_INTEGER_NAMER) -> Result["LocusSpotViewingKey", str]:
+        return cls\
+            ._split_raw(s)\
+            .bind(lambda pair: cls._from_partial(
+                fov_res=parse_field_of_view_one_based_from_position_name_representation(fst(pair), namer=namer), 
+                trace_group=snd(pair),
+            ))
     
+    @classmethod
+    def _from_partial(cls, *, fov_res: Result[FieldOfViewFrom1, str], trace_group: str) -> Result["LocusSpotViewingKey", str]:
+        return fov_res.map2(TraceGroupName.try_option(trace_group), cls._unsafe)
+
+    @classmethod
+    def _unsafe(cls, fov: FieldOfViewFrom1, maybe_group: Option[TraceGroupName]) -> "LocusSpotViewingKey":
+        return cls(field_of_view=fov, trace_group_maybe=maybe_group)
+
     @classmethod
     def unsafe(cls, obj: Any) -> "LocusSpotViewingKey":
         match obj:
