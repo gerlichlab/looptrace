@@ -20,6 +20,7 @@ from typing import *
 import zipfile
 
 import dask.array as da
+from expression import identity
 import numcodecs
 import numpy as np
 import numpy.typing as npt
@@ -265,7 +266,7 @@ def write_nuc_multipos_single_time_zarr(
     if bad_name_shape_pairs:
         raise ValueError(f"{len(bad_name_shape_pairs)}/{len(name_img_pairs)} images with bad shape given {len(axes)} axes: {bad_name_shape_pairs}")
     write_jvm_compatible_zarr_store(
-        name_data_pairs=[(name if name.endswith(".zarr") else name + ".zarr", img) for name, img in name_img_pairs], 
+        name_data_pairs=name_img_pairs,
         root_path=root_path, 
         dtype=dtype, 
         metadata=metadata, 
@@ -279,6 +280,7 @@ def write_jvm_compatible_zarr_store(
     dtype: Type, 
     metadata: Optional[dict] = None,
     overwrite: bool = False,
+    ensure_zarr_extension: bool = True,
     ) -> List[Path]:
     if not name_data_pairs:
         raise ValueError("To write data to zarr, a nonempty sequence of name/data pairs must be passed!")
@@ -287,8 +289,11 @@ def write_jvm_compatible_zarr_store(
     root = zarr.group(store=store, overwrite=overwrite)
     if metadata:
         root.attrs["metadata"] = metadata
+    
+    finalize_name: Callable[[str], str] = (lambda n: n + (".zarr" if not n.endswith(".zarr") else "")) if ensure_zarr_extension else identity
     paths = []
     for name, data in name_data_pairs:
+        name: str = finalize_name(name)
         logging.info("Creating ZARR dataset: %s", name)
         # Use numcodecs.ZLib() as the compressor to ensure readability by cdm-core / netcdf-Java.
         dataset = root.create_dataset(name=name, compressor=numcodecs.Zlib(), shape=data.shape, dtype=dtype)
