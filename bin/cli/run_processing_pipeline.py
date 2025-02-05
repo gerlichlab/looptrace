@@ -299,7 +299,7 @@ def prep_locus_specific_spots_visualisation(rounds_config: ExtantFile, params_co
                     logging.error(msg)
                 raise RuntimeError(f"{len(problem_messages)} error(s) parsing potential trace metadata: {problem_messages}")
             case result.Result(tag="ok", ok=metadata):
-                T.write_all_spot_images_to_viewable_stacks(metadata=metadata)
+                return T.write_all_spot_images_to_viewable_stacks(metadata=metadata)
 
 
 def prep_nuclear_masks_data(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> Dict[str, Path]:
