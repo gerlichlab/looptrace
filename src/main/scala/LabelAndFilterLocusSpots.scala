@@ -520,6 +520,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
             .toEither
 
 
+    /** Write out the CSV-formatted data for points overlay for visualisation of the locus spots in Napari. */
     private def writePointsForNapari(folder: os.Path)(groupedByPos: List[(PositionName, List[TraceRecordPair])], roundsConfig: ImagingRoundsConfiguration) = {
         import NapariSortKey.given
         import NapariSortKey.*
@@ -543,17 +544,19 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
             .map{ (pos, traceRecordPairs) => 
                 val (qcType, addFailCodes): (PointDisplayType, (List[String], List[LocusSpotQC.FailureReason]) => List[String]) = {
                     if (traceRecordPairs.head._2.passesQC) { // These are QC PASS records.
-                        val updateFields = (fields: List[String], codes: List[LocusSpotQC.FailureReason]) => 
-                            if codes.nonEmpty 
-                            then throw new IllegalArgumentException(s"Nonempty fail codes for allegedly QC-passed record (FOV $pos)! $fields")
-                            else fields
-                        (PointDisplayType.QCPass, updateFields)
+                        (PointDisplayType.QCPass, {
+                            (fields: List[String], codes: List[LocusSpotQC.FailureReason]) => 
+                                if codes.nonEmpty 
+                                then throw new IllegalArgumentException(s"Nonempty fail codes for allegedly QC-passed record (FOV $pos)! $fields")
+                                else fields
+                        })
                     } else { // These are QC FAIL records.
-                        val updateFields = (fields: List[String], codes: List[LocusSpotQC.FailureReason]) => 
-                            if codes.isEmpty 
-                            then throw new IllegalArgumentException(s"Empty fail codes for allegedly QC-failed record (FOV $pos)! $fields")
-                            else fields :+ codes.map(_.abbreviation).mkString(" ")
-                        (PointDisplayType.QCFail, updateFields)
+                        (PointDisplayType.QCFail, {
+                            (fields: List[String], codes: List[LocusSpotQC.FailureReason]) => 
+                                if codes.isEmpty 
+                                then throw new IllegalArgumentException(s"Empty fail codes for allegedly QC-failed record (FOV $pos)! $fields")
+                                else fields :+ codes.map(_.abbreviation).mkString(" ")
+                        })
                     }
                 }
                 val (outfile, header) = getOutfileAndHeader(pos, qcType)
