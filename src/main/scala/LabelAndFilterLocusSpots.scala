@@ -9,7 +9,7 @@ import mouse.boolean.*
 import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
 
-import io.github.iltotore.iron.:|
+import io.github.iltotore.iron.{ :|, refineEither }
 import io.github.iltotore.iron.cats.given // for derivation of Order
 import io.github.iltotore.iron.constraint.any.{ StrictEqual, Not }
 import io.github.iltotore.iron.constraint.string.Match
@@ -512,7 +512,11 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
     /** Helpers for working with the String refinement representing field of view name */
     object OneBasedFourDigitPositionName:
         /** Attempt to further refine the position name as one in compliance with using 4 digits for a one-based count */
-        def fromPositionName(name: PositionName): Either[String, OneBasedFourDigitPositionName] = ???
+        def fromPositionName(trimZarr: Boolean): PositionName => Either[String, OneBasedFourDigitPositionName] = 
+            ((_: PositionName).show_) `andThen` fromString(trimZarr)
+        
+        def fromString(trimZarr: Boolean): String => Either[String, OneBasedFourDigitPositionName] = 
+            s => (if trimZarr then s.stripSuffix(".zarr") else s).refineEither[OneBasedFourDigitPositionNameConstraint]
     end OneBasedFourDigitPositionName
 
     /** Composite of the field of view representation and an identifier of the trace group structure to which a record belongs */
@@ -524,11 +528,11 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
             name -> traceGroupMaybe
         
         def fromRecord(r: LocusSpotQC.OutputRecord): Either[String, LocusSpotViewingKey] = 
-            OneBasedFourDigitPositionName.fromPositionName(r.fieldOfView).map(apply(_, r.traceGroupMaybe))
+            OneBasedFourDigitPositionName.fromPositionName(true)(r.fieldOfView).map(apply(_, r.traceGroupMaybe))
         
         def unsafeFomRecord(r: LocusSpotQC.OutputRecord): LocusSpotViewingKey = 
             fromRecord(r).fold(
-                msg => throw new RuntimeException(s"Cannoty determine locus spot viewing key; message: $msg"), 
+                msg => throw new RuntimeException(s"Cannot determine locus spot viewing key; message: $msg"), 
                 identity,
             )
         
