@@ -9,6 +9,11 @@ import mouse.boolean.*
 import scopt.OParser
 import com.typesafe.scalalogging.StrictLogging
 
+import io.github.iltotore.iron.:|
+import io.github.iltotore.iron.cats.given // for derivation of Order
+import io.github.iltotore.iron.constraint.any.{ StrictEqual, Not }
+import io.github.iltotore.iron.constraint.string.Match
+
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.{
     ImagingTimepoint, 
@@ -498,50 +503,60 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
         }
     }
 
-    // Ensure that the .zarr suffix which is sometimes present in the 
-    private[looptrace] def stripZarrPrefixFromPositionName(rawPosName: String): EitherNel[String, String] = 
-        val modified = rawPosName.replaceAll(".zarr", "") // Account for the possibility of the .zarr polluting the true position name.
-        val expPrefix = "P"
-        val hasExpPrefix = 
-            modified.startsWith(expPrefix).validatedNel(s"Missing expected prefix ($expPrefix)", ())
-        val hasExpLength = 
-            val expLength = expPrefix.length + 4 // Expect exactly 4 digits.
-            (modified.length === expLength).validatedNel(s"Unexpected length: ${modified.length}, not $expLength", ())
-        val allDigitsAfterPrefix = 
-            modified.tail
-                .filterNot(_.isDigit)
-                .toList.toNel
-                .toLeft(())
-                .leftMap{ nonDigits => NonEmptyList.one(s"${nonDigits.length} non-digit character after prefix") }
-                .toValidated
-        (hasExpPrefix, hasExpLength, allDigitsAfterPrefix)
-            .tupled
-            .map(_ => modified)
-            .toEither
+    // A 1-based count encoding of the field of view, prefixed with "P" for "position", and 4 digits to hold up to 9999 FOVs
+    private type OneBasedFourDigitPositionNameConstraint = Match["P\\d{4}"] & Not[StrictEqual["P0000"]]
+    
+    // A String which complies with the domain restriction for representing a field of view by a 1-based count
+    private type OneBasedFourDigitPositionName = String :| OneBasedFourDigitPositionNameConstraint
+    
+    /** Helpers for working with the String refinement representing field of view name */
+    object OneBasedFourDigitPositionName:
+        /** Attempt to further refine the position name as one in compliance with using 4 digits for a one-based count */
+        def fromPositionName(name: PositionName): Either[String, OneBasedFourDigitPositionName] = ???
+    end OneBasedFourDigitPositionName
 
+    /** Composite of the field of view representation and an identifier of the trace group structure to which a record belongs */
+    opaque type LocusSpotViewingKey = (OneBasedFourDigitPositionName, TraceGroupMaybe)
+
+    /** Helpers for working with the notion of a grouping key of entities for locus spot visualisation */
+    object LocusSpotViewingKey:
+        def apply(name: OneBasedFourDigitPositionName, traceGroupMaybe: TraceGroupMaybe): LocusSpotViewingKey = 
+            name -> traceGroupMaybe
+        
+        def fromRecord(r: LocusSpotQC.OutputRecord): Either[String, LocusSpotViewingKey] = 
+            OneBasedFourDigitPositionName.fromPositionName(r.fieldOfView).map(apply(_, r.traceGroupMaybe))
+        
+        def unsafeFomRecord(r: LocusSpotQC.OutputRecord): LocusSpotViewingKey = 
+            fromRecord(r).fold(
+                msg => throw new RuntimeException(s"Cannoty determine locus spot viewing key; message: $msg"), 
+                identity,
+            )
+        
+        extension (k: LocusSpotViewingKey)
+            def positionName: OneBasedFourDigitPositionName = k._1
+            def traceGroupMaybe: TraceGroupMaybe = k._2
+            def toStringForFileOrFolder: String = positionName ++ "__" ++ traceGroupMaybe.show_
+    end LocusSpotViewingKey
 
     /** Write out the CSV-formatted data for points overlay for visualisation of the locus spots in Napari. */
     private def writePointsForNapari(folder: os.Path)(groupedByPos: List[(PositionName, List[TraceRecordPair])], roundsConfig: ImagingRoundsConfiguration) = {
-        import NapariSortKey.given
-        import NapariSortKey.*
+        import LocusSpotViewingKey.toStringForFileOrFolder
 
-        val getOutfileAndHeader: (PositionName, PointDisplayType) => EitherNel[String, (os.Path, List[String])] = 
-            (pos: PositionName, qcType: PointDisplayType) => {
-                stripZarrPrefixFromPositionName(pos.show_).map{ posNameBase => 
-                    val fp = folder /  s"$posNameBase.${qcType.toString.toLowerCase}.csv"
-                    val baseHeader = List("regionTime", "traceId", "locusTime", "traceIndex", "timeIndex", "z", "y", "x")
-                    val header = qcType match {
-                        case PointDisplayType.QCPass => baseHeader
-                        case PointDisplayType.QCFail => baseHeader :+ "failCode"
-                        case PointDisplayType.Invisible => throw new RuntimeException("Tried to create output file for invisible point type!")
-                    }
-                    fp -> header
-                }
+        val getOutfileAndHeader = (key: LocusSpotViewingKey, qcType: PointDisplayType) => {
+            val keyText: String = key.toStringForFileOrFolder
+            val fp = folder / keyText / s"${keyText}.${qcType.toString.toLowerCase}.csv"
+            val baseHeader = List("regionTime", "traceId", "locusTime", "traceIndex", "timeIndex", "z", "y", "x")
+            val header = qcType match {
+                case PointDisplayType.QCPass => baseHeader
+                case PointDisplayType.QCFail => baseHeader :+ "failCode"
+                case PointDisplayType.Invisible => throw new RuntimeException("Tried to create output file for invisible point type!")
             }
+            fp -> header
+        }
         
         groupedByPos
-            .flatMap{ (pos, traceRecordPairs) => traceRecordPairs.toNel.map(pos -> _) }
-            .map{ (pos, traceRecordPairs) => 
+            .flatMap{ (pos, traceRecordPairs) => traceRecordPairs.toNel.map(pos -> _) } // Get rid of any empty collections.
+            .foreach{ (pos, traceRecordPairs) => 
                 val (qcType, addFailCodes): (PointDisplayType, (List[String], List[LocusSpotQC.FailureReason]) => List[String]) = {
                     if (traceRecordPairs.head._2.passesQC) { // These are QC PASS records.
                         (PointDisplayType.QCPass, {
@@ -559,31 +574,34 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                         })
                     }
                 }
-                val (outfile, header) = getOutfileAndHeader(pos, qcType)
-                    .leftMap{ problems => 
-                        new Exception(
-                            s"${problems.length} problem(s) getting header and output file for position name $pos: ${problems.mkString_("; ")}"
-                        )
+
+                summon[Order[OneBasedFourDigitPositionName]]
+                summon[Order[TraceGroupMaybe]]
+
+                traceRecordPairs
+                    .groupBy{ (_, rec) => LocusSpotViewingKey.unsafeFomRecord(rec) }
+                    .foreach{ case (key, trs) => 
+                        val (outfile, header) = getOutfileAndHeader(key, qcType)
+                        val outrecs = trs.map{ (t, r) => 
+                            val p = r.centerInPixels                    
+                            val timeIndex = (
+                                for {
+                                    locTimes <- roundsConfig.lookupReindexedImagingTimepoint
+                                        .get(r.regionTime)
+                                        .toRight(s"Missing region time ${r.regionTime} in locusGrouping!")
+                                    ti <- locTimes
+                                        .get(r.locusTime)
+                                        .toRight(s"Missing locus time ${r.locusTime} in locus times for region time ${r.regionTime}!")
+                                } yield ti
+                            ).fold(msg => throw new Exception(msg), identity)
+                            val base = List(r.regionTime.show_, r.traceId.show_, r.locusTime.show_, t.show_, timeIndex.show, p.z.show_, p.y.show_, p.x.show_)
+                            addFailCodes(base, r.failureReasons)
+                        }
+                        logger.debug(s"Writing locus points visualisation file: $outfile")
+                        val outdir = outfile.parent
+                        if (!os.exists(outdir)) { os.makeDir.all(outdir) }
+                        os.write(outfile, (header :: outrecs).map(_.mkString(",") ++ "\n").toList)
                     }
-                    .fold(throw _, identity)
-                val outrecs = traceRecordPairs.map{ (t, r) => 
-                    val p = r.centerInPixels                    
-                    val timeIndex = (
-                        for {
-                            locTimes <- roundsConfig.lookupReindexedImagingTimepoint
-                                .get(r.regionTime)
-                                .toRight(s"Missing region time ${r.regionTime} in locusGrouping!")
-                            ti <- locTimes
-                                .get(r.locusTime)
-                                .toRight(s"Missing locus time ${r.locusTime} in locus times for region time ${r.regionTime}!")
-                        } yield ti
-                    ).fold(msg => throw new Exception(msg), identity)
-                    val base = List(r.regionTime.show_, r.traceId.show_, r.locusTime.show_, t.show_, timeIndex.show, p.z.show_, p.y.show_, p.x.show_)
-                    addFailCodes(base, r.failureReasons)
-                }
-                logger.debug(s"Writing locus points visualisation file: $outfile")
-                os.write(outfile, (header :: outrecs).map(_.mkString(",") ++ "\n").toList)
-                (pos, outfile)
             }
     }
 
@@ -596,27 +614,6 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
     /** From a spot identifier, obtain the elements needed to group it by logical tracing unit. */
     def getGroupId(identifier: LocusSpotQC.SpotIdentifier): (PositionName, RegionId, TraceId) = (identifier.fieldOfView, identifier.regionId, identifier.traceId)
 
-    /**
-     * A type that can be ordered for visualisation with `napari`, ordering along one or more slider bars for the viewer
-     * 
-     * @tparam A The type to be ordered
-     */
-    trait NapariSortable[A]:
-        def getSortKey: A => NapariSortKey
-    
-    object NapariSortable:
-        given contravariantForNapariSortable: Contravariant[NapariSortable] with
-            def contramap[A, B](s: NapariSortable[A])(f: B => A): NapariSortable[B] = 
-                new NapariSortable[B]:
-                    def getSortKey: B => NapariSortKey = f `andThen` s.getSortKey
-
-        given napariSortableForSpotIdentifier: NapariSortable[LocusSpotQC.SpotIdentifier] with
-            def getSortKey = (ident: LocusSpotQC.SpotIdentifier) => NapariSortKey(ident.fieldOfView, ident.traceId, ident.locusId.get)
-        
-        given napariSortableForOutputRecord(using ev: NapariSortable[LocusSpotQC.SpotIdentifier]): NapariSortable[LocusSpotQC.OutputRecord] = 
-            ev.contramap(_.identifier)
-    end NapariSortable
-    
     /** Status of a point to display in napari, based on QC results and its position within the particular spot image timepoint image */
     enum PointDisplayType:
         /** Point that has fulfilled all QC criteria */
@@ -636,12 +633,6 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
             case (_, false) => QCFail 
         }
     end PointDisplayType
-
-    private[LabelAndFilterLocusSpots] final case class NapariSortKey(fieldOfView: PositionName, traceId: TraceId, time: ImagingTimepoint)
-    object NapariSortKey:
-        given orderForNapariSortKey: Order[NapariSortKey] = Order.by{ k => (k.fieldOfView, k.traceId, k.time) }
-        extension [A](as: List[A])(using ev: NapariSortable[A])
-            def sortForNapari: List[A] = as.sortBy(ev.getSortKey)(orderForNapariSortKey.toOrdering)
 
     final case class BoxSizeColumnX(get: String) extends AnyVal
     final case class BoxSizeColumnY(get: String) extends AnyVal

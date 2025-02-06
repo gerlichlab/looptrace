@@ -66,12 +66,14 @@ object LocusSpotQC:
       * @param result The results of the QC filters
       */
     final case class OutputRecord(identifier: SpotIdentifier, centerInPixels: Point3D, qcResult: ResultRecord):
-        final def passesQC: Boolean = qcResult.allPass
         final def canBeDisplayed: Boolean = qcResult.canBeDisplayed
-        final def traceId: TraceId = identifier.traceId
-        final def regionTime: ImagingTimepoint = identifier.regionId.get
-        final def locusTime: ImagingTimepoint = identifier.locusId.get
         final def failureReasons: List[FailureReason] = qcResult.toFailureReasons
+        final def fieldOfView: PositionName = identifier.fieldOfView
+        final def locusTime: ImagingTimepoint = identifier.locusId.get
+        final def passesQC: Boolean = qcResult.allPass
+        final def regionTime: ImagingTimepoint = identifier.regionId.get
+        final def traceGroupMaybe: TraceGroupMaybe = identifier.traceGroup
+        final def traceId: TraceId = identifier.traceId
         
     /** Helpers for working with QC data bundles for locus-specific spots */
     object OutputRecord:
