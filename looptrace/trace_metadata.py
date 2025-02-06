@@ -5,7 +5,7 @@ from string import whitespace
 from typing import Any, Iterable, Mapping, Optional, TypeAlias, TypeVar
 
 import attrs
-from expression import Option, Result, compose, curry_flip, fst, option, pipe, snd
+from expression import Option, Result, compose, curry_flip, fst, option, snd
 from expression.collections import Seq
 from expression.collections.seq import concat
 from expression import result
