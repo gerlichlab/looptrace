@@ -203,12 +203,15 @@ class Tracer:
                 fp=fh, 
                 indent=2
             )
-        return write_jvm_compatible_zarr_store(
-            name_data_pairs, 
-            root_path=self.image_handler.locus_spots_visualisation_folder, 
-            dtype=first_array.dtype, 
-            overwrite=overwrite,
-        )
+        return list(itertools.chain(*(
+            write_jvm_compatible_zarr_store(
+                [(name, data)], 
+                root_path=self.image_handler.locus_spots_visualisation_folder / name,
+                dtype=first_array.dtype, 
+                overwrite=overwrite,
+            ) 
+            for name, data in name_data_pairs)
+        ))
 
     @property
     def _background_wrapper(self) -> Optional[NPZ_wrapper]:
