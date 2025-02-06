@@ -15,6 +15,7 @@ import io.github.iltotore.iron.Not
 import io.github.iltotore.iron.constraint.collection.{ Empty, ForAll }
 import io.github.iltotore.iron.constraint.char.*
 
+import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.{ ImagingTimepoint, PositionName }
 import at.ac.oeaw.imba.gerlich.gerlib.json.JsonValueWriter
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
@@ -132,6 +133,8 @@ package object looptrace {
         given JsonValueWriter[TraceGroupId, ujson.Str] with
             override def apply(i: TraceGroupId): ujson.Str = ujson.Str(i.get)
         
+        given SimpleShow[TraceGroupId] = SimpleShow.instance(_.get)
+
         /** The given name is valid if and only if it's nonempty. */
         def fromString: String => Either[String, TraceGroupId] = 
             ValidTraceGroupName.either.fmap(_.map(TraceGroupId.apply))
@@ -166,6 +169,8 @@ package object looptrace {
                 import TraceGroupId.given
                 import at.ac.oeaw.imba.gerlich.gerlib.json.syntax.asJson
                 groupOpt.toOption.fold(ujson.Null)(_.asJson)
+
+        given SimpleShow[TraceGroupMaybe] = SimpleShow.instance(_.fold("")(_.get))
 
         extension (tg: TraceGroupMaybe)
             def toOption: Option[TraceGroupId] = tg

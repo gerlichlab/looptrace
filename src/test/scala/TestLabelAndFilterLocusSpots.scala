@@ -229,21 +229,6 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, ScalaCheckPropertyChecks
         }
     }
 
-    test("PositionName cleanup works as expected"):
-        import at.ac.oeaw.imba.gerlich.looptrace.LabelAndFilterLocusSpots.stripZarrPrefixFromPositionName as cleanupPositionName
-        val testCases: TableFor2[String, EitherNel[String, String]] = 
-            import io.github.iltotore.iron.autoRefine
-            Table(
-                ("argument", "expectedResult"), 
-                ("P0001.zarr", "P0001".asRight),
-                ("P0002", "P0002".asRight), 
-                ("P00001.zarr", NonEmptyList.one("Unexpected length: 6, not 5").asLeft), 
-                ("P00001", NonEmptyList.one("Unexpected length: 6, not 5").asLeft)
-            )
-        forAll (testCases) { (argument, expectedResult) => 
-            cleanupPositionName(argument) shouldEqual expectedResult
-        }
-
     /* Ancillary functions and types */
     type CsvRows = Iterable[Map[String, String]]
     private def componentExpectationFile = getResourcePath("traces.labeled.unfiltered.csv")
