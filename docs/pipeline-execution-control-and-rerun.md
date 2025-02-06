@@ -79,5 +79,4 @@ Below are the sequential pipeline stage names.
 * pairwise_distances__locus_specific
 * pairwise_distances__regional
 * locus_specific_spots_visualisation_data_prep
-* locus_spot_viewing_prep
 * cross_channel_signal_analysis

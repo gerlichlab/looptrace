@@ -579,11 +579,6 @@ class LooptracePipeline(pypiper.Pipeline):
                 f_kwargs=rounds_params_images,
             ),
             pypiper.Stage(
-                name="locus_spot_viewing_prep", 
-                func=run_locus_spot_viewing_prep, 
-                f_kwargs=rounds_params,
-            ),
-            pypiper.Stage(
                 name="cross_channel_signal_analysis",
                 func=signal_analysis_workflow,
                 f_kwargs={**rounds_params_images, "maybe_signal_config": self.signal_config},
