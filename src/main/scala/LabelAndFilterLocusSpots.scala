@@ -471,7 +471,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                 logger.info("Proceeding with writing Napari-formatted data for overlaying voxel stacks with points")
             
                 /** Points CSVs for visualisation with `napari` */
-                val groupedAndTagged: List[(PositionName, List[(List[(LocusSpotQC.OutputRecord, PointDisplayType)], NonnegativeInt)])] = 
+                val groupedByFieldOfViewAndTagged: List[(PositionName, List[(List[(LocusSpotQC.OutputRecord, PointDisplayType)], NonnegativeInt)])] = 
                     unfiltered.map(_._1)
                         .groupBy(_.identifier.fieldOfView)
                         .view.mapValues(_.fproduct(PointDisplayType.forRecord))
@@ -488,7 +488,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
 
 
                 val (groupedFailQC, groupedPassQC): (List[(PositionName, List[TraceRecordPair])], List[(PositionName, List[TraceRecordPair])]) = 
-                    Alternative[List].separate(groupedAndTagged.flatMap{ (pos, traceGroups) =>
+                    Alternative[List].separate(groupedByFieldOfViewAndTagged.flatMap{ (pos, traceGroups) =>
                         val (failed, passed) = Alternative[List].separate(traceGroups.flatMap((g, t) => g.flatMap{
                             case (_, PointDisplayType.Invisible) => None
                             case (r, PointDisplayType.QCFail) => (t, r).asLeft.some
