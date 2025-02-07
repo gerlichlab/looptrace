@@ -467,6 +467,8 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                 }
                 logger.info(s"Writing filtered output: $filteredOutputFile")
                 writeTextFile(filteredOutputFile, filteredHeader :: recordsToWrite, delimiter, overwrite = overwrite)
+                logger.info(s"Completed: main output writing for locus spot QC assessment")
+                logger.info("Proceeding with writing Napari-formatted data for overlaying voxel stacks with points")
             
                 /** Points CSVs for visualisation with `napari` */
                 val groupedAndTagged: List[(PositionName, List[(List[(LocusSpotQC.OutputRecord, PointDisplayType)], NonnegativeInt)])] = 
