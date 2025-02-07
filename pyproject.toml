@@ -8,7 +8,7 @@ authors = [
 ]
 readme = "README.md"
 include = ["looptrace/looptrace-assembly*.jar"]
-license = "MIT"
+license = "Apache-2.0"
 repository = "https://github.com/gerlichlab/looptrace"
 classifiers = [
     "Development Status :: 1 - Planning",
