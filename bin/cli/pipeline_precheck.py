@@ -141,9 +141,9 @@ def find_config_file_errors(rounds_config: ExtantFile, params_config: ExtantFile
             errors.append(ConfigurationValueError(
                 f"Non-integer ({type(min_pixels_to_avoid_spot_merge).__name__}) value for min pixel count to avoid spot merge: {min_pixels_to_avoid_spot_merge}"
             ))
-        elif min_pixels_to_avoid_spot_merge <= 0:
+        elif min_pixels_to_avoid_spot_merge < 0:
             errors.append(ConfigurationValueError(
-                f"Min pixel count to avoid spot merge must be natural number, not {min_pixels_to_avoid_spot_merge}"
+                f"Min pixel count to avoid spot merge must be nonnegative, not {min_pixels_to_avoid_spot_merge}"
             ))
 
     # Tracing
