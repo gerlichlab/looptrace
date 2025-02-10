@@ -447,7 +447,7 @@ def _merge_useable_voxel_cases(fit_result: FitResult) -> FitValues:
     match fit_result:
         case result.Result(tag="ok", ok=values):
             return values
-        case result.Error(tag="error", error=msg):
+        case result.Result(tag="error", error=msg):
             logging.debug(msg)
             return [-1.0] * len(FIT_COLUMNS)
 
