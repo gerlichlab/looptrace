@@ -532,7 +532,7 @@ class SpotPicker:
 
         num_timepoints_processed: dict[str, int] = {}
         skip_spot_image_reasons = defaultdict(lambda: defaultdict(dict))
-        fov_index = self.image_handler.image_lists[self.input_name].index(fov_group_name)
+        fov_index = self.image_handler.image_lists[self.input_name].index(fov_group_name + ".zarr")
         for timepoint, timepoint_group in tqdm.tqdm(fov_group_data.groupby("timepoint")):
             for ch, ch_group in timepoint_group.groupby(SPOT_CHANNEL_COLUMN_NAME):
                 image_stack = np.array(self.images[fov_index][int(timepoint), int(ch)])
