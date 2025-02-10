@@ -129,11 +129,14 @@ class VoxelStackSpecification:
 
     @classmethod
     def from_roi_like(cls, roi: Union[pd.Series, Mapping[str, Any]]) -> Result["VoxelStackSpecification", str]:
+        raw_traceGroup = roi["traceGroup"]
+        if pd.isna(raw_traceGroup):
+            raw_traceGroup = ""
         return cls._from_raw_values(
             raw_fov=roi[FIELD_OF_VIEW_COLUMN],
             raw_roiId=roi["roiId"], 
             raw_ref_timepoint=roi["ref_timepoint"],
-            raw_traceGroup=roi["traceGroup"],
+            raw_traceGroup=raw_traceGroup,
             raw_traceId=roi["traceId"],
         )
     
