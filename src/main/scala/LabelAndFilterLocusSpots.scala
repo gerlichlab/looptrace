@@ -11,8 +11,6 @@ import com.typesafe.scalalogging.StrictLogging
 
 import io.github.iltotore.iron.{ :|, refineEither }
 import io.github.iltotore.iron.cats.given // for derivation of Order
-import io.github.iltotore.iron.constraint.any.{ StrictEqual, Not }
-import io.github.iltotore.iron.constraint.string.Match
 
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.{
@@ -504,22 +502,6 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
             case (bads, _) => throw new Exception(s"${bads.length} problem(s) with writing results: $bads")
         }
     }
-
-    // A 1-based count encoding of the field of view, prefixed with "P" for "position", and 4 digits to hold up to 9999 FOVs
-    private type OneBasedFourDigitPositionNameConstraint = Match["P\\d{4}"] & Not[StrictEqual["P0000"]]
-    
-    // A String which complies with the domain restriction for representing a field of view by a 1-based count
-    private type OneBasedFourDigitPositionName = String :| OneBasedFourDigitPositionNameConstraint
-    
-    /** Helpers for working with the String refinement representing field of view name */
-    object OneBasedFourDigitPositionName:
-        /** Attempt to further refine the position name as one in compliance with using 4 digits for a one-based count */
-        def fromPositionName(trimZarr: Boolean): PositionName => Either[String, OneBasedFourDigitPositionName] = 
-            ((_: PositionName).show_) `andThen` fromString(trimZarr)
-        
-        def fromString(trimZarr: Boolean): String => Either[String, OneBasedFourDigitPositionName] = 
-            s => (if trimZarr then s.stripSuffix(".zarr") else s).refineEither[OneBasedFourDigitPositionNameConstraint]
-    end OneBasedFourDigitPositionName
 
     /** Composite of the field of view representation and an identifier of the trace group structure to which a record belongs */
     opaque type LocusSpotViewingKey = (OneBasedFourDigitPositionName, TraceGroupMaybe)

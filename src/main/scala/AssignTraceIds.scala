@@ -542,6 +542,15 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                 import OutputRecord.given
                 import InputRecordFate.given
                 
+                given CellEncoder[FieldOfViewLike] with
+                    override def apply(cell: FieldOfViewLike): String = cell match {
+                        case fov: FieldOfView => CellEncoder[FieldOfView].apply(fov)
+                        case pos: PositionName => 
+                            OneBasedFourDigitPositionName.fromPositionName(true)(pos).fold(
+                                msg => throw new RuntimeException(msg),
+                                identity
+                            )
+                    }
                 given CsvRowEncoder[ImagingChannel, String] = 
                     // for derivation of CsvRowEncoder[ImagingContext, String]
                     SpotChannelColumnName.toNamedEncoder
