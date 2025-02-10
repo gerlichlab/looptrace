@@ -478,7 +478,7 @@ class SpotPicker:
         # Set index_col=False so that first column (fieldOfView) doesn't become index.
         rois_table: pd.DataFrame = pd.read_csv(spotfile, index_col=False)
 
-        get_fov_idx = lambda fov: self.image_handler.image_lists[self.input_name].index(fov)
+        get_fov_idx = lambda fov: self.image_handler.image_lists[self.input_name].index(fov + ".zarr")
         get_locus_timepoints = None if not self.image_handler.locus_grouping else self.image_handler.get_locus_timepoints_for_regional_timepoint
         get_zyx = lambda fov_idx, ch: self.images[fov_idx][0, ch].shape[-3:]
         def get_dc_table(fov_idx: int):
