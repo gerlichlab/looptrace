@@ -23,7 +23,7 @@ import scipy.ndimage as ndi
 from tqdm import tqdm
 
 from gertils import ExtantFile, ExtantFolder
-from gertils.types import TimepointFrom0
+from gertils.types import FieldOfViewFrom1, TimepointFrom0
 from numpydoc_decorator import doc
 
 from looptrace import *
@@ -32,6 +32,7 @@ from looptrace.ImageHandler import ImageHandler, LocusGroupingData, Times
 from looptrace.SpotPicker import get_locus_spot_row_order_columns, get_spot_images_zipfile
 from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE, symmetricGaussian3D
 from looptrace.image_io import NPZ_wrapper, write_jvm_compatible_zarr_store
+from looptrace.integer_naming import get_fov_name_short
 from looptrace.numeric_types import FloatLike, NumberLike
 from looptrace.trace_metadata import LocusSpotViewingKey, LocusSpotViewingReindexingDetermination, PotentialTraceMetadata, TraceGroupName, trace_group_option_to_string
 from looptrace.tracing_qc_support import apply_timepoint_names_and_spatial_information
@@ -404,7 +405,7 @@ def find_trace_fits(
                 spot_img = finalise_spot_img(spot_img, single_roi_timecourse)
                 fits.append(fit_single_roi(fit_func_spec=fit_func_spec, roi_img=spot_img, mask=ref_img))
     else:
-        raw_fits: list[tuple[str, int, int, int, Result[tuple["VoxelSize", FitResult], VoxelProcessingError]]] = \
+        raw_fits: list[tuple[FieldOfViewFrom1, int, int, int, Result[tuple["VoxelSize", FitResult], VoxelProcessingError]]] = \
             Parallel(n_jobs=cores or -1)(
                 # NB: don't include regional timepoint and trace group here, since they're not necessary 
                 # to uniquely determine row match between the tables to join, and they'll already be present 
@@ -430,7 +431,7 @@ def find_trace_fits(
         match outcome:
             case result.Result(tag="ok", ok=(size, maybe_fit)):
                 parameter_values: FitValues = _merge_useable_voxel_cases(maybe_fit)
-                rows.append([fov, trace_id, roi_id, time] + parameter_values + list(size.to_tuple))
+                rows.append([get_fov_name_short(fov), trace_id, roi_id, time] + parameter_values + list(size.to_tuple))
             case result.Result(tag="error", error=Exception(e)):
                 raise e
             case unknown:
