@@ -57,15 +57,25 @@ def _filter_rois_in_nucs(
     
     def spot_in_nuc(row: Union[pd.Series, dict], nuc_label_img: np.ndarray):
         base_idx = (int(row["yc"]), int(row["xc"]))
-        if len(nuc_label_img.shape) == 2:
+        num_dim: int = len(nuc_label_img.shape)
+        if num_dim == 2:
             idx = base_idx
         else:
             try:
-                idx_px_z = 1 if nuc_label_img.shape[-3] == 1 else int(row["zc"]) # Flat in z dimension?
+                idx_px_z = 0 if nuc_label_img.shape[-3] == 1 else int(row["zc"]) # Flat in z dimension?
             except IndexError as e:
-                print(f"IndexError ({e}) trying to get z-axis length from images with shape {nuc_label_img}")
+                logging.error(f"IndexError ({e}) trying to get z-axis length from images with shape {nuc_label_img}")
                 raise
-            idx = (idx_px_z, ) + base_idx
+            if num_dim == 3:
+                extra_index = (idx_px_z, )
+            elif num_dim == 5:
+                # TODO: should confirm that the first 2 dimensions (time and channel) are trivial, length 1.
+                extra_index = (0, 0, idx_px_z)
+            else:
+                raise DimensionalityError(
+                    f"Image for nucleus-based filtration of spots has {num_dim} dimensions; shape: {nuc_label_img.shape}"
+                )
+            idx = extra_index + base_idx
         try:
             spot_label = nuc_label_img[idx]
         except IndexError as e: # If, due to drift spot, is outside timepoint?
