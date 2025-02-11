@@ -48,15 +48,6 @@ final case class ImagingRoundsConfiguration private(
     /** The number of imaging rounds is the length of the imagingRounds sequence. */
     final def numberOfRounds: Int = sequence.length
     
-    /** Only compute this when necessary, but retain as val since memory footprint 
-     * will be small (not so many imaging rounds), for faster ordered iteration */
-    private lazy val regionTimeToLocusTimes: NonEmptyMap[ImagingTimepoint, SortedSet[ImagingTimepoint]] = (
-        locusGrouping.toList.toNel match {
-            case None => sequence.regionRounds.map{ rr => rr.time -> SortedSet(sequence.locusRounds.map(_.time)*) }
-            case Some(groups) => groups.map{ case LocusGroup(rt, lts) => rt -> lts.toSortedSet }
-        }
-    ).toNem
-    
     /** Faciliate lookup of reindexed timepoint for visualisation. */
     lazy val lookupReindexedImagingTimepoint: Map[ImagingTimepoint, Map[ImagingTimepoint, Int]] = {
         // First, group timepoints by regional timepoint.
