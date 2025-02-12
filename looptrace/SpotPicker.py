@@ -405,7 +405,7 @@ class SpotPicker:
         return os.path.join(self.image_handler.image_save_path, SPOT_BACKGROUND_SUBFOLDER)
 
     @property
-    def spot_background_zipfile(self) -> str:
+    def spot_background_zipfile(self) -> Path:
         return get_spot_images_zipfile(self.image_handler.image_save_path, is_background=True)
 
     @property
@@ -424,7 +424,7 @@ class SpotPicker:
         return os.path.join(self.image_handler.image_save_path, SPOT_IMAGES_SUBFOLDER)
 
     @property
-    def spot_images_zipfile(self):
+    def spot_images_zipfile(self) -> Path:
         return get_spot_images_zipfile(self.image_handler.image_save_path, is_background=False)
     
     @property
