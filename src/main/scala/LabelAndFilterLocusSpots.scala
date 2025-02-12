@@ -48,7 +48,6 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
     val QcPassColumn = "qcPass"
     
     private type CenterInPixels = Point3D
-    private type TraceRecordPair = (NonnegativeInt, LocusSpotQC.OutputRecord)
 
     /** Deinition of the command-line interface */
     case class CliConfig(
@@ -469,39 +468,47 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                 logger.info("Proceeding with writing Napari-formatted data for overlaying voxel stacks with points")
             
                 /** Points CSVs for visualisation with `napari` */
-                val groupedByFieldOfViewAndTagged: List[(PositionName, List[(List[(LocusSpotQC.OutputRecord, PointDisplayType)], NonnegativeInt)])] = 
+                val groupedByFieldOfViewAndTagged: List[(PositionName, List[(TraceId, List[(LocusSpotQC.OutputRecord, PointDisplayType)])])] = 
                     unfiltered.map(_._1)
                         .groupBy(_.identifier.fieldOfView)
                         .view.mapValues(_.fproduct(PointDisplayType.forRecord))
                         .toList
                         .sortBy(_._1)(using Order[PositionName].toOrdering)
-                        .map{ (pos, posGroup) => 
-                            // Within each field of view, order by trace ID, and reset to start counting 0, 1, 2, ...
-                            val processedGroup = posGroup.groupBy(_._1.traceId)
-                                .toList
-                                .sortBy(_._1)(Order[TraceId].toOrdering)
-                                .map(_._2)
-                            pos -> NonnegativeInt.indexed(processedGroup)
+                        .map{ (pos, posGroup) => pos -> posGroup.groupBy(_._1.traceId).toList }
+
+
+                val (groupedFailQC, groupedPassQC): (List[FieldOfViewRecords], List[FieldOfViewRecords]) = 
+                    Alternative[List].separate(
+                        groupedByFieldOfViewAndTagged.flatMap{ (pos, traceGroups) =>
+                            val (failed, passed) = Alternative[List].separate(
+                                traceGroups.flatMap{ (t, g) => 
+                                    g.flatMap{
+                                        case (_, PointDisplayType.Invisible) => None // Skip over this record. 
+                                        case (r, PointDisplayType.QCFail) => r.asLeft.some // Bin this with the failures.
+                                        case (r, PointDisplayType.QCPass) => r.asRight.some // Bin this with the successes.
+                                    }
+                                }
+                            )
+                            List((pos, failed).asLeft, (pos, passed).asRight)
                         }
-
-
-                val (groupedFailQC, groupedPassQC): (List[(PositionName, List[TraceRecordPair])], List[(PositionName, List[TraceRecordPair])]) = 
-                    Alternative[List].separate(groupedByFieldOfViewAndTagged.flatMap{ (pos, traceGroups) =>
-                        val (failed, passed) = Alternative[List].separate(traceGroups.flatMap((g, t) => g.flatMap{
-                            case (_, PointDisplayType.Invisible) => None
-                            case (r, PointDisplayType.QCFail) => (t, r).asLeft.some
-                            case (r, PointDisplayType.QCPass) => (t, r).asRight.some
-                        }))
-                        List((pos, failed).asLeft, (pos, passed).asRight)
-                    })
+                    )
                 
-                writePointsForNapari(pointsOutfolder)(groupedFailQC, roundsConfig)
-                writePointsForNapari(pointsOutfolder)(groupedPassQC, roundsConfig)
+                // Re-iterate over the full collection of records (including ones to not be displayed). 
+                // This is because this full collection corresponds to the full extraction, and the number of trace IDs should 
+                // therefore match the length of the first axis of the 5D pixel values array for locus spots visualisation 
+                // (stack of voxels stacks).
+                val traceIdsObserved: Map[TraceId, NonnegativeInt] = 
+                    NonnegativeInt.indexed(groupedByFieldOfViewAndTagged.flatMap(_._2.map(_._1)).toSet.toList).toMap
+                
+                writePointsForNapari(pointsOutfolder)(groupedFailQC, traceIdsObserved, roundsConfig)
+                writePointsForNapari(pointsOutfolder)(groupedPassQC, traceIdsObserved, roundsConfig)
                 logger.info("Done!")
 
             case (bads, _) => throw new Exception(s"${bads.length} problem(s) with writing results: $bads")
         }
     }
+
+    private type FieldOfViewRecords = (PositionName, List[LocusSpotQC.OutputRecord])
 
     /** Composite of the field of view representation and an identifier of the trace group structure to which a record belongs */
     opaque type LocusSpotViewingKey = (OneBasedFourDigitPositionName, TraceGroupMaybe)
@@ -527,7 +534,11 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
     end LocusSpotViewingKey
 
     /** Write out the CSV-formatted data for points overlay for visualisation of the locus spots in Napari. */
-    private def writePointsForNapari(folder: os.Path)(groupedByPos: List[(PositionName, List[TraceRecordPair])], roundsConfig: ImagingRoundsConfiguration) = {
+    private def writePointsForNapari(folder: os.Path)(
+        groupedByPos: List[FieldOfViewRecords], 
+        reindexTraceId: Map[TraceId, NonnegativeInt], 
+        roundsConfig: ImagingRoundsConfiguration,
+    ) = {
         import LocusSpotViewingKey.toStringForFileOrFolder
 
         val getOutfileAndHeader = (key: LocusSpotViewingKey, qcType: PointDisplayType) => {
@@ -543,10 +554,10 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
         }
         
         groupedByPos
-            .flatMap{ (pos, traceRecordPairs) => traceRecordPairs.toNel.map(pos -> _) } // Get rid of any empty collections.
-            .foreach{ (pos, traceRecordPairs) => 
+            .flatMap{ (pos, records) => records.toNel.map(pos -> _) } // Get rid of any empty collections.
+            .foreach{ (pos, records) => 
                 val (qcType, addFailCodes): (PointDisplayType, (List[String], List[LocusSpotQC.FailureReason]) => List[String]) = {
-                    if (traceRecordPairs.head._2.passesQC) { // These are QC PASS records.
+                    if (records.head.passesQC) { // These are QC PASS records.
                         (PointDisplayType.QCPass, {
                             (fields: List[String], codes: List[LocusSpotQC.FailureReason]) => 
                                 if codes.nonEmpty 
@@ -563,28 +574,37 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                     }
                 }
 
-                summon[Order[OneBasedFourDigitPositionName]]
-                summon[Order[TraceGroupMaybe]]
-
-                traceRecordPairs
-                    .groupBy{ (_, rec) => LocusSpotViewingKey.unsafeFomRecord(rec) }
-                    .foreach{ case (key, trs) => 
+                // Group the records by viewing key, then sort 
+                records
+                    .groupBy(LocusSpotViewingKey.unsafeFomRecord)
+                    .toList
+                    .sortBy(_._1)(Order[LocusSpotViewingKey].toOrdering)
+                    .foreach{ (key, currRecs) => 
                         val (outfile, header) = getOutfileAndHeader(key, qcType)
-                        val outrecs = trs.map{ (t, r) => 
-                            val p = r.centerInPixels                    
-                            val timeIndex = (
-                                for {
-                                    locTimes <- roundsConfig.lookupReindexedImagingTimepoint
-                                        .get(r.regionTime)
-                                        .toRight(s"Missing region time ${r.regionTime} in locusGrouping!")
-                                    ti <- locTimes
-                                        .get(r.locusTime)
-                                        .toRight(s"Missing locus time ${r.locusTime} in locus times for region time ${r.regionTime}!")
-                                } yield ti
-                            ).fold(msg => throw new Exception(msg), identity)
-                            val base = List(r.regionTime.show_, r.traceId.show_, r.locusTime.show_, t.show_, timeIndex.show, p.z.show_, p.y.show_, p.x.show_)
-                            addFailCodes(base, r.failureReasons)
-                        }
+                        val outrecs = currRecs
+                            // Here we sort, by trace ID, the groups (by trace ID) of records within the current key, then reindex the trace IDs to 0.
+                            .groupBy(_.traceId)
+                            .toList
+                            .map{ (tid, rs) => rs -> reindexTraceId(tid) }
+                            .flatMap{ (rs, t) => // This is a pair of a collection of output records and the reindexed (to 0) trace ID.
+                                rs.toList.map{ r => 
+                                    val p = r.centerInPixels                    
+                                    val timeIndex = 
+                                        import LocusSpotViewingKey.traceGroupMaybe
+                                        roundsConfig.lookupReindexedImagingTimepoint(key.traceGroupMaybe, r.regionTime, r.locusTime)
+                                    val base = List(
+                                        r.regionTime.show_, 
+                                        r.traceId.show_, 
+                                        r.locusTime.show_, 
+                                        t.show_, // NB: this is the "locally" (relative to the current key's records) reindexed (0-based) trace ID.
+                                        timeIndex.show, // NB: this is the "locally" (relative the current key's tracing structure) reindexed (0-based) timepoint.
+                                        p.z.show_, 
+                                        p.y.show_, 
+                                        p.x.show_,
+                                    )
+                                    addFailCodes(base, r.failureReasons)
+                                }
+                            }
                         logger.debug(s"Writing locus points visualisation file: $outfile")
                         val outdir = outfile.parent
                         if (!os.exists(outdir)) { os.makeDir.all(outdir) }
