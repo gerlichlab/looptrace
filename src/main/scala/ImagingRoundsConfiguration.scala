@@ -36,7 +36,27 @@ final case class ImagingRoundsConfiguration private(
     tracingExclusions: Set[ImagingTimepoint], // Timepoints of imaging rounds to not use for tracing
 ):
     import ImagingRoundsConfiguration.given
+    import at.ac.oeaw.imba.gerlich.gerlib.collections.AtLeast2.syntax.*
+
+    private type Reindex = NonnegativeInt
     
+    private lazy val reindexedTimesByTraceGroup: Option[NonEmptyMap[TraceGroupId, NonEmptyMap[ImagingTimepoint, Reindex]]] = 
+        mergeRules.map(_.map{ rule => 
+            val byRegion = locusGrouping.foldLeft(Map.empty[ImagingTimepoint, NonEmptySet[ImagingTimepoint]]){ (acc, group) => 
+                acc + (group.regionalTimepoint -> (group.locusTimepoints.add(group.regionalTimepoint)))
+            }
+            val lookup = rule.mergeGroup
+                .members
+                .toNes
+                .toNonEmptyList
+                .flatMap{ rt => byRegion(rt).toNonEmptyList }
+                .sorted
+                .zipWithIndex
+                .map{ (t, i) => t -> NonnegativeInt.unsafe(i) }
+                .toNem
+            rule.name -> lookup
+        }.toNem)
+
     /** Simply take the rounds from the contained imagingRounds sequence. */
     final def allRounds: NonEmptyList[ImagingRound] = sequence.allRounds
         
@@ -48,21 +68,48 @@ final case class ImagingRoundsConfiguration private(
     /** The number of imaging rounds is the length of the imagingRounds sequence. */
     final def numberOfRounds: Int = sequence.length
     
-    /** Faciliate lookup of reindexed timepoint for visualisation. */
-    lazy val lookupReindexedImagingTimepoint: Map[ImagingTimepoint, Map[ImagingTimepoint, Int]] = {
-        // First, group timepoints by regional timepoint.
-        val sets = locusGrouping.toList.toNel match {
-            case None => 
-                // When the locus grouping is absent/empty, then for each regional timepoint 
-                // we're interested in the full sequence of imaging timepoints from the experiment.
-                sequence.regionRounds.map{ rr => rr.time -> SortedSet(sequence.locusRounds.map(_.time)*) }
-            case Some(groups) => 
-                // If the locusGrouping is nonempty, then the timepoints associated with each 
-                // regional timepoint are its locus timepoints and the regional timepoint itself.
-                groups.map{ case LocusGroup(rt, lts) => rt -> (lts.toSortedSet + rt) }
+    final def lookupReindexedImagingTimepoint(
+        traceGroupMaybe: TraceGroupMaybe, 
+        regionalTimepoint: ImagingTimepoint, 
+        locusTimepoint: ImagingTimepoint,
+    ): Reindex = (traceGroupMaybe.toOption match {
+        case None => timeIndexRelativeToSingleRegion match {
+            case None => unsafeGetAbsoluteReindexedImagingTimepoint(locusTimepoint).asRight
+            case Some(indicesByRegion) => indicesByRegion
+                .lookup(regionalTimepoint)
+                .toRight(s"Missing regional timepoint ${regionalTimepoint}")
+                .flatMap(_.lookup(locusTimepoint).toRight(s"Missing timepoint ${locusTimepoint}"))
         }
-        sets.toList.map{ (rt, lts) => rt -> lts.toList.zipWithIndex.toMap }.toMap
-    }
+        case Some(traceGroup) => lookupRelativeReindexedImagingTimepoint(traceGroup, locusTimepoint)
+    }).fold(msg => throw new NoSuchElementException(msg), identity)
+
+    final def lookupRelativeReindexedImagingTimepoint(traceGroup: TraceGroupId, timepoint: ImagingTimepoint): Either[String, Reindex] = 
+        reindexedTimesByTraceGroup
+            .toRight("Per-trace-group timepoint reindexing is undefined")
+            .flatMap(_.lookup(traceGroup).toRight(s"Unknown trace group ID: ${traceGroup}"))
+            .flatMap(_.lookup(timepoint).toRight(s"Unknown timepoint: $timepoint"))
+
+    private lazy val timeIndexRelativeToSingleRegion: Option[NonEmptyMap[ImagingTimepoint, NonEmptyMap[ImagingTimepoint, Reindex]]] = 
+        locusGrouping.toList
+            .toNel
+            .map(_.map{ group => 
+                val indexed = group.locusTimepoints
+                    .add(group.regionalTimepoint)
+                    .toNonEmptyList
+                    .sorted
+                    .zipWithIndex.map{ (t, i) => t -> NonnegativeInt.unsafe(i) }
+                    .toNem
+                group.regionalTimepoint -> indexed
+            }.toNem)
+
+    // Mapping from imaging timepoint to its integer value. Works around the fact that the wrapped integer is a private member.
+    private lazy val absoluteReindexedImagingTimepoints: NonEmptyMap[ImagingTimepoint, Reindex] = 
+        allRounds.map(_.time).sorted.zipWithIndex.map{ (t, i) => t -> NonnegativeInt.unsafe(i) }.toNem
+
+    private def unsafeGetAbsoluteReindexedImagingTimepoint(t: ImagingTimepoint): Reindex = 
+        absoluteReindexedImagingTimepoints.lookup(t).getOrElse{ 
+            throw new NoSuchElementException(s"Unknown timepoint: $t")
+        }
 end ImagingRoundsConfiguration
 
 /** Tools for working with declaration of imaging rounds and how to use them within an experiment */
