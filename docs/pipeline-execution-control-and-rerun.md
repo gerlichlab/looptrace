@@ -59,10 +59,10 @@ Below are the sequential pipeline stage names.
 * drift_correction_accuracy_analysis
 * drift_correction_accuracy_visualisation
 * spot_detection
-* spot_nucleus_assignment
 * spot_merge_determination
 * spot_merge_execution
 * spot_proximity_filtration
+* spot_nucleus_assignment
 * trace_id_assignment
 * spot_nuclei_filtration
 * regional_spots_visualisation_data_prep
