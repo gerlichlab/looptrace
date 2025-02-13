@@ -591,7 +591,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                                     val p = r.centerInPixels                    
                                     val timeIndex = 
                                         import LocusSpotViewingKey.traceGroupMaybe
-                                        roundsConfig.lookupReindexedImagingTimepoint(key.traceGroupMaybe, r.regionTime, r.locusTime)
+                                        roundsConfig.lookupReindexedImagingTimepoint(r.regionTime)(r.locusTime)
                                     val base = List(
                                         r.regionTime.show_, 
                                         r.traceId.show_, 

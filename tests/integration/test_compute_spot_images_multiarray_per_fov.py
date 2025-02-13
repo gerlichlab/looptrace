@@ -168,7 +168,7 @@ def test_fields_of_view__are_correct_and_in_order(tmp_path, fnkey_image_pairs_an
     fnkey_image_pairs, locus_grouping = fnkey_image_pairs_and_locus_grouping
     npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
     kwargs = {"locus_grouping": locus_grouping} if locus_grouping else {}
-    result, _ = compute_locus_spot_voxel_stacks_for_visualisation(
+    result = compute_locus_spot_voxel_stacks_for_visualisation(
         npz=npz_wrapper, bg_npz=None, 
         num_timepoints=max(img.shape[0] for _, img in fnkey_image_pairs), 
         potential_trace_metadata=None, 
@@ -208,7 +208,7 @@ def test_spot_images_finish_by_all_having_the_max_number_of_timepoints(tmp_path,
     # Mock the input and make the call under test.
     npz_wrapper = mock_npz_wrapper(temp_folder=tmp_path, fnkey_image_pairs=fnkey_image_pairs)
     kwargs = {"locus_grouping": locus_grouping} if locus_grouping else {}
-    result, _ = compute_locus_spot_voxel_stacks_for_visualisation(
+    result = compute_locus_spot_voxel_stacks_for_visualisation(
         npz=npz_wrapper, 
         bg_npz=None, 
         num_timepoints=max(img.shape[0] for _, img in fnkey_image_pairs),
@@ -221,7 +221,7 @@ def test_spot_images_finish_by_all_having_the_max_number_of_timepoints(tmp_path,
         next(iter(result))
     except StopIteration:
         pytest.fail("Empty result!")
-    assert [expected_num_timepoints] * len(result) == [img.shape[1] for _, img in result]
+    assert [expected_num_timepoints] * len(result) == [img.shape[2] for _, img in result]
 
 @st.composite
 def gen_input_with_bad_timepoint_counts(draw) -> BuildInput:

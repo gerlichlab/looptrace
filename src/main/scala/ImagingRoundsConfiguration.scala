@@ -68,26 +68,14 @@ final case class ImagingRoundsConfiguration private(
     /** The number of imaging rounds is the length of the imagingRounds sequence. */
     final def numberOfRounds: Int = sequence.length
     
-    final def lookupReindexedImagingTimepoint(
-        traceGroupMaybe: TraceGroupMaybe, 
-        regionalTimepoint: ImagingTimepoint, 
-        locusTimepoint: ImagingTimepoint,
-    ): Reindex = (traceGroupMaybe.toOption match {
-        case None => timeIndexRelativeToSingleRegion match {
-            case None => unsafeGetAbsoluteReindexedImagingTimepoint(locusTimepoint).asRight
-            case Some(indicesByRegion) => indicesByRegion
-                .lookup(regionalTimepoint)
-                .toRight(s"Missing regional timepoint ${regionalTimepoint}")
-                .flatMap(_.lookup(locusTimepoint).toRight(s"Missing timepoint ${locusTimepoint}"))
+    def lookupReindexedImagingTimepoint(regionTime: ImagingTimepoint)(locusTime: ImagingTimepoint): Reindex = (
+        timeIndexRelativeToSingleRegion match {
+            case None => absoluteReindexedImagingTimepoints.lookup(locusTime).toRight(s"Unknown timepoint: $locusTime")
+            case Some(byRegion) => byRegion.lookup(regionTime)
+                .toRight(s"Unknown regional timepoint ${regionTime}")
+                .flatMap(_.lookup(locusTime).toRight(s"Unknown timepoint: $locusTime"))
         }
-        case Some(traceGroup) => lookupRelativeReindexedImagingTimepoint(traceGroup, locusTimepoint)
-    }).fold(msg => throw new NoSuchElementException(msg), identity)
-
-    final def lookupRelativeReindexedImagingTimepoint(traceGroup: TraceGroupId, timepoint: ImagingTimepoint): Either[String, Reindex] = 
-        reindexedTimesByTraceGroup
-            .toRight("Per-trace-group timepoint reindexing is undefined")
-            .flatMap(_.lookup(traceGroup).toRight(s"Unknown trace group ID: ${traceGroup}"))
-            .flatMap(_.lookup(timepoint).toRight(s"Unknown timepoint: $timepoint"))
+    ).fold(msg => throw new NoSuchElementException(msg), identity)
 
     private lazy val timeIndexRelativeToSingleRegion: Option[NonEmptyMap[ImagingTimepoint, NonEmptyMap[ImagingTimepoint, Reindex]]] = 
         locusGrouping.toList
