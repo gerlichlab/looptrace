@@ -493,15 +493,8 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                         }
                     )
                 
-                // Re-iterate over the full collection of records (including ones to not be displayed). 
-                // This is because this full collection corresponds to the full extraction, and the number of trace IDs should 
-                // therefore match the length of the first axis of the 5D pixel values array for locus spots visualisation 
-                // (stack of voxels stacks).
-                val traceIdsObserved: Map[TraceId, NonnegativeInt] = 
-                    NonnegativeInt.indexed(groupedByFieldOfViewAndTagged.flatMap(_._2.map(_._1)).toSet.toList).toMap
-                
-                writePointsForNapari(pointsOutfolder)(groupedFailQC, traceIdsObserved, roundsConfig)
-                writePointsForNapari(pointsOutfolder)(groupedPassQC, traceIdsObserved, roundsConfig)
+                writePointsForNapari(pointsOutfolder)(groupedFailQC, roundsConfig)
+                writePointsForNapari(pointsOutfolder)(groupedPassQC, roundsConfig)
                 logger.info("Done!")
 
             case (bads, _) => throw new Exception(s"${bads.length} problem(s) with writing results: $bads")
@@ -536,7 +529,6 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
     /** Write out the CSV-formatted data for points overlay for visualisation of the locus spots in Napari. */
     private def writePointsForNapari(folder: os.Path)(
         groupedByPos: List[FieldOfViewRecords], 
-        reindexTraceId: Map[TraceId, NonnegativeInt], 
         roundsConfig: ImagingRoundsConfiguration,
     ) = {
         import LocusSpotViewingKey.toStringForFileOrFolder
@@ -581,6 +573,14 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                     .sortBy(_._1)(Order[LocusSpotViewingKey].toOrdering)
                     .foreach{ (key, currRecs) => 
                         val (outfile, header) = getOutfileAndHeader(key, qcType)
+                        val reindexTraceId = currRecs.map(_.traceId)
+                            .toList
+                            .toSet
+                            .toList
+                            .sorted(Order[TraceId].toOrdering)
+                            .zipWithIndex
+                            .map{ (t, i) => t -> NonnegativeInt.unsafe(i) }
+                            .toMap
                         val outrecs = currRecs
                             // Here we sort, by trace ID, the groups (by trace ID) of records within the current key, then reindex the trace IDs to 0.
                             .groupBy(_.traceId)
