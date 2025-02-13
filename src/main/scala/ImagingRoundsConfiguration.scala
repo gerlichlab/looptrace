@@ -68,7 +68,7 @@ final case class ImagingRoundsConfiguration private(
     /** The number of imaging rounds is the length of the imagingRounds sequence. */
     final def numberOfRounds: Int = sequence.length
     
-    def lookupReindexedImagingTimepoint(regionTime: ImagingTimepoint)(locusTime: ImagingTimepoint): Reindex = (
+    def unsafeLookupReindexedImagingTimepoint(regionTime: ImagingTimepoint)(locusTime: ImagingTimepoint): Reindex = (
         timeIndexRelativeToSingleRegion match {
             case None => absoluteReindexedImagingTimepoints.lookup(locusTime).toRight(s"Unknown timepoint: $locusTime")
             case Some(byRegion) => byRegion.lookup(regionTime)
