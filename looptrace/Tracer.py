@@ -14,7 +14,7 @@ import logging
 from pathlib import Path
 from typing import *
 
-from expression import Option, Result, compose, fst, option, result, snd
+from expression import Option, Result, compose, fst, identity, option, result, snd
 from expression.collections import Seq, seq
 from joblib import Parallel, delayed
 import numpy as np
@@ -190,7 +190,7 @@ class Tracer:
         if self.image_handler.locus_grouping:
             # This will be used to determine the max numbers of timepoints.
             kwargs["locus_grouping"] = self.image_handler.locus_grouping
-        key_data_pairs, trace_group_metadata = compute_locus_spot_voxel_stacks_for_visualisation(*args, **kwargs)
+        key_data_pairs = compute_locus_spot_voxel_stacks_for_visualisation(*args, **kwargs)
         assert isinstance(key_data_pairs, list), f"Result of computation of per-FOV spot images arrays isn't list, but {type(key_data_pairs).__name__}"
         name_data_pairs: list[(str, np.ndarray)] = [(fst(pair).to_string, snd(pair)) for pair in key_data_pairs]
         if len(name_data_pairs) == 0:
@@ -626,8 +626,7 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
         return Option.of_optional(locus_grouping.get(t)).to_result(t)
     
     arrays: list[tuple[LocusSpotViewingKey, np.ndarray]] = []
-    lookup_maximal_regional_time_locus_times_pairs: Mapping[TraceGroupName, tuple[Mapping[TimepointFrom0, Times], list[TimepointFrom0]]] = {}
-    trace_group_metadata: Mapping[Option[TraceGroupName], LocusSpotViewingReindexingDetermination] = {}
+    lookup_maximal_regional_time_locus_times_pairs: Mapping[TraceGroupName, tuple[Mapping[TimepointFrom0, Times], int]] = {}
 
     for (fov, trace_group_key), vis_group in itertools.groupby(keyed, compose(fst, lambda voxel_spec: (voxel_spec.field_of_view, voxel_spec.traceGroup))):
         logging.info(f"Computing spot image arrays stack for FOV {fov}, trace group {trace_group_key}...")
@@ -636,9 +635,11 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
         for raw_tid, spec_key_pairs in itertools.groupby(vis_group, compose(fst, lambda voxel_spec: voxel_spec.traceId)): # We'll defer sorting by trace ID.
             trace_id: TraceIdFrom0 = TraceIdFrom0(raw_tid)
             spec_key_pairs = list(spec_key_pairs) # Avoid iterator exhaustion.
+            max_num_timepoints: int
             # NB: this pattern match is being repeated within the for loop, for which it will always yield the same result, but this will be trivially costly.
             match trace_group_key:
                 case option.Option(tag="none", none=_):
+                    max_num_timepoints = num_timepoints
                     # Here we are in the case where the current trace ID is not for a larger group/structure of ROIs.
                     match spec_key_pairs:
                         case []:
@@ -666,9 +667,8 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
                             raise ValueError(f"{len(stacks)} voxel stacks (not just 1), but the trace group/structure is null")
                 case option.Option(tag="some", some=trace_group):
                     maximal_regional_locus_times_pairs: Mapping[TimepointFrom0, Times]
-                    sorted_maximal_voxel_times: list[TimepointFrom0]
                     try:
-                        maximal_regional_locus_times_pairs, sorted_maximal_voxel_times = lookup_maximal_regional_time_locus_times_pairs[trace_group]
+                        maximal_regional_locus_times_pairs, max_num_timepoints = lookup_maximal_regional_time_locus_times_pairs[trace_group]
                     except KeyError:
                         # This is the non-empty side of the option, so we have the implication that the trace metadata must be non-null
                         if potential_trace_metadata is None:
@@ -688,13 +688,8 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
                                         raise ValueError(f"Failed to find locus times for {len(unfound_regional_times)} regional timepoint(s) in trace group {trace_group}: {unfound_regional_times}")
                                     case result.Result(tag="ok", ok=pairs):
                                         maximal_regional_locus_times_pairs = dict(pairs.to_list())
-                                        sorted_maximal_voxel_times = []
-                                        for rt, lts in maximal_regional_locus_times_pairs.items():
-                                            if not isinstance(lts, set):
-                                                raise TypeError(f"Collection of locus times isn't set, but {type(lts).__name__}: {lts}")
-                                            sorted_maximal_voxel_times.extend({rt, *lts})
-                                        sorted_maximal_voxel_times = list(sorted(sorted_maximal_voxel_times))
-                                        lookup_maximal_regional_time_locus_times_pairs[trace_group] = (maximal_regional_locus_times_pairs, sorted_maximal_voxel_times)
+                                        max_num_timepoints = max(len({rt, *lts}) for rt, lts in maximal_regional_locus_times_pairs.items())
+                                        lookup_maximal_regional_time_locus_times_pairs[trace_group] = (maximal_regional_locus_times_pairs, max_num_timepoints)
                     
                     # For each (this) spec...
                     # 1. Get the locus times (through the regional times)
@@ -719,41 +714,50 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
                                 logging.error(msg)
                                 raise RuntimeError(msg) from e
                             voxel_shape: tuple[int, int, int] = first_voxel.shape
-                            voxel_dtype: type = first_voxel.dtype
                             if len(voxel_shape) != 3:
                                 raise ArrayDimensionalityError(f"For trace {trace_id} (group: {trace_group}), first voxel has not 3 dimensions, but {len(voxel_shape)}")                            
                             # Stack up the voxels (1 per timepoint in the trace), creating a time dimension. 3D arrays --> single 4D array
-                            stack_for_single_viz_unit.append((trace_id, np.stack([exploded_group.get(t, np.zeros(shape=voxel_shape, dtype=voxel_dtype)) for t in sorted_maximal_voxel_times])))
+                            # NB: by virtue of the way in which the variable's initialization is done, the (Optional) sorted_maximal_voxel_times 
+                            #     must not here be null, but rather a list[TimepointFrom0].
+                            stack_for_single_viz_unit.extend((trace_id, t, s) for t, s in sorted(exploded_group.items(), key=fst))
         
-        # Order by trace ID.
-        stack_for_single_viz_unit.sort(key=fst)
+        # Determine how to finalize each stacked array.
+        def finalize_voxel_stack(arr: np.ndarray) -> np.ndarray:
+            return arr if arr.shape[0] == max_num_timepoints else backfill_array(arr, num_places=max_num_timepoints - arr.shape[0])
 
-        match trace_group_key:
-            case option.Option(tag="none", none=_):
-                logging.info("Trace group key is null; homogenizing array shapes for stacking...")
-                # NB: in theory, we could here use the total num_timepoints as the size bound to which the homogenization is done, but 
-                #     since it could be the case that each array comes from one regional timepoint, e.g., with very few locus timepoints, 
-                #     in the context of a long time course experiment this would be very wasteful data-wise and w.r.t. the user experience 
-                #     when clicking and dragging the resulting data on disk into Napari for visualization. Hence, we use the empirical 
-                #     maximum number of timepoints among the arrays we're going to stack up.
-                max_num_timepoints: int = max(a.shape[0] for _, a in stack_for_single_viz_unit)
-                stack_for_single_viz_unit: list[tuple[TraceIdFrom0, np.ndarray]] = [
-                    (tid, arr if max_num_timepoints == arr.shape[0] else backfill_array(arr, num_places=max_num_timepoints - arr.shape[0]))
-                    for tid, arr in stack_for_single_viz_unit
-                ]
-            case option.Option(tag="some", some=non_null_key):
-                logging.debug("Trace group key is non-null (%s), no need to homogenize array shapes", non_null_key)
+        # Stack up voxel stacks (per regional timepoint) within each trace ID, and then stack up the data for each trace ID for the current viewing key.
+        restacked: list[tuple[TraceIdFrom0, np.ndarray]] = []
+        for tid, tid_reg_data_triplets in itertools.groupby(stack_for_single_viz_unit, key=lambda triplet: triplet[0]):
+            curr: list[tuple[TimepointFrom0, np.ndarray]] = []
+            for reg_time, subgroup in itertools.groupby(list(tid_reg_data_triplets), key=lambda triplet: triplet[1]):
+                for _, _, voxel_stack in subgroup:
+                    curr.append((reg_time, finalize_voxel_stack(voxel_stack)))
+            restacked.append((tid, np.stack([a for _, a in sorted(curr, key=fst)])))
+        restacked: np.ndarray = np.stack([a for _, a in sorted(restacked, key=fst)])
+
+        # restacked: np.ndarray = np.stack([
+        #     np.stack([
+        #         finalize_voxel_stack(voxel_stack)
+        #         for _, (_, _, voxel_stack) 
+        #         in sorted(list(itertools.groupby(list(tid_reg_data_triplets), key=lambda triplet: triplet[1])), key=fst) # Stack up by regional timepoint.
+        #     ]) 
+        #     for _, tid_reg_data_triplets 
+        #     in sorted(list(itertools.groupby(stack_for_single_viz_unit, key=lambda triplet: triplet[0])), key=fst) # Stack up by trace ID.
+        # ])
+
+        # Validate the dimensionality of the resulting array.
+        expect_num_dim = 6
+        if len(restacked.shape) != expect_num_dim:
+            # (trace ID, regional timepoint, local/regional timepoint, z, y, x)
+            raise ArrayDimensionalityError(
+                f"Data for key {trace_group_key} doesn't have {expect_num_dim} dimensions as expected, but rather {len(restacked.shape)}; shape: {restacked.shape}"
+            )
 
         # TODO: store the reindexed the trace IDs, so that we can map mentally back-and-forth when viewing in Napari.
         # Stack up each trace's voxel stack, creating a 5D array from a list of 4D arrays. The new dimension represents the trace ID.
-        arrays.append((LocusSpotViewingKey(field_of_view=fov, trace_group_maybe=trace_group_key), np.stack([arr for _, arr in stack_for_single_viz_unit])))
-        trace_group_metadata[trace_group_key] = \
-            LocusSpotViewingReindexingDetermination(
-                timepoints=list(map(TimepointFrom0, range(num_timepoints))) if sorted_maximal_voxel_times is None else sorted_maximal_voxel_times,
-                traces=list(map(fst, stack_for_single_viz_unit)),
-            )
+        arrays.append((LocusSpotViewingKey(field_of_view=fov, trace_group_maybe=trace_group_key), restacked))
         
-    return arrays, trace_group_metadata
+    return arrays
 
 
 def backfill_array(array: np.ndarray, *, num_places: int) -> np.ndarray:
