@@ -458,10 +458,6 @@ class ImageHandler:
         return names
 
     @property
-    def trace_group_metadata_file(self) -> Path:
-        return Path(self.analysis_path) / "trace_group_metadata.json"
-
-    @property
     def trace_id_assignment_skipped_rois_file(self) -> Path:
         """File to write records of ROIs skipped for trace ID assignment (and not, then, present in downstream analysis)"""
         return self.rois_with_trace_ids_file.with_suffix(".skips.json")

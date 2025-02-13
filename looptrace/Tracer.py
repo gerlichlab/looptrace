@@ -34,7 +34,7 @@ from looptrace.gaussfit import fitSymmetricGaussian3D, fitSymmetricGaussian3DMLE
 from looptrace.image_io import NPZ_wrapper, write_jvm_compatible_zarr_store
 from looptrace.integer_naming import get_fov_name_short
 from looptrace.numeric_types import FloatLike, NumberLike
-from looptrace.trace_metadata import LocusSpotViewingKey, LocusSpotViewingReindexingDetermination, PotentialTraceMetadata, TraceGroupName, trace_group_option_to_string
+from looptrace.trace_metadata import LocusSpotViewingKey, LocusSpotViewingReindexingDetermination, PotentialTraceMetadata, TraceGroupName
 from looptrace.tracing_qc_support import apply_timepoint_names_and_spatial_information
 from looptrace.utilities import traverse_through_either
 from looptrace.voxel_stack import VoxelSize, VoxelStackSpecification
@@ -196,14 +196,6 @@ class Tracer:
         if len(name_data_pairs) == 0:
             return []
         _, first_array = name_data_pairs[0]
-        metadata_file: Path = self.image_handler.trace_group_metadata_file
-        logging.info("Writing trace group metadata to file: %s", metadata_file)
-        with metadata_file.open(mode="w") as fh:
-            json.dump(
-                obj={trace_group_option_to_string(k): v.to_json for k, v in trace_group_metadata.items()}, 
-                fp=fh, 
-                indent=2
-            )
         return list(itertools.chain(*(
             write_jvm_compatible_zarr_store(
                 [(name, data)], 
