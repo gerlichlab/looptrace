@@ -631,7 +631,7 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
     def get_viewing_key(spec: VoxelStackSpecification) -> LocusSpotViewingKey:
         return LocusSpotViewingKey(field_of_view=spec.field_of_view, trace_group_maybe=spec.traceGroup)
 
-    for viewing_key, vis_group in itertools.groupby(sorted(keyed, key=get_viewing_key), compose(fst, get_viewing_key)):
+    for viewing_key, vis_group in itertools.groupby(sorted(keyed, key=compose(fst, get_viewing_key)), compose(fst, get_viewing_key)):
         fov: FieldOfViewFrom1 = viewing_key.field_of_view
         trace_group_key: Option[TraceGroupName] = viewing_key.trace_group_maybe
         logging.info(f"Computing spot image arrays stack for FOV {fov}, trace group {trace_group_key}...")
