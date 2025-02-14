@@ -637,7 +637,10 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
         logging.info(f"Computing spot image arrays stack for FOV {fov}, trace group {trace_group_key}...")
         vis_group = list(vis_group) # Avoid iterator exhaustion.
         stack_for_single_viz_unit: list[tuple[TraceIdFrom0, TimepointFrom0, np.ndarray]] = []
-        for raw_tid, spec_key_pairs in itertools.groupby(sorted(vis_group, key=lambda voxel_spec: voxel_spec.traceId), compose(fst, lambda voxel_spec: voxel_spec.traceId)):
+        for raw_tid, spec_key_pairs in itertools.groupby(
+            sorted(vis_group, key=compose(fst, lambda voxel_spec: voxel_spec.traceId)), 
+            compose(fst, lambda voxel_spec: voxel_spec.traceId)
+        ):
             trace_id: TraceIdFrom0 = TraceIdFrom0(raw_tid)
             spec_key_pairs = list(spec_key_pairs) # Avoid iterator exhaustion.
             max_num_timepoints: int
