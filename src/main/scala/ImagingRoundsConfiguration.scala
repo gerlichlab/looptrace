@@ -46,9 +46,8 @@ final case class ImagingRoundsConfiguration private(
                 acc + (group.regionalTimepoint -> (group.locusTimepoints.add(group.regionalTimepoint)))
             }
             val lookup = rule.mergeGroup
-                .members
-                .toNes
-                .toNonEmptyList
+                .members // Get the timepoints grouped together for this rule.
+                .toNes.toNonEmptyList // Set up for .flatMap
                 .flatMap{ rt => byRegion(rt).toNonEmptyList }
                 .sorted
                 .zipWithIndex
@@ -100,13 +99,16 @@ final case class ImagingRoundsConfiguration private(
         }
 
     private lazy val maybeReindexedRegionalTimes: Option[NonEmptyMap[TraceGroupId, NonEmptyMap[ImagingTimepoint, Reindex]]] = 
-        reindexedTimesByTraceGroup.map(_.map(_.keys
-            .toNonEmptyList
-            .sorted
-            .zipWithIndex
-            .map{ (t, i) => t -> NonnegativeInt.unsafe(i) }
-            .toNem
-        ))
+        mergeRules.map(_.map{ rule => 
+            val lookup = rule
+                .mergeGroup
+                .members.toNes.toNonEmptyList
+                .sorted
+                .zipWithIndex
+                .map{ (t, i) => t -> NonnegativeInt.unsafe(i) }
+                .toNem
+            rule.name -> lookup
+        }.toNem)
 
     def unsafeReindexRegionalTimepoint(traceGroupId: TraceGroupId)(regTime: ImagingTimepoint): Reindex = 
         maybeReindexedRegionalTimes
