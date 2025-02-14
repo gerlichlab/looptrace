@@ -686,7 +686,7 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
                                     case result.Result(tag="error", error=unfound_regional_times):
                                         raise ValueError(f"Failed to find locus times for {len(unfound_regional_times)} regional timepoint(s) in trace group {trace_group}: {unfound_regional_times}")
                                     case result.Result(tag="ok", ok=pairs):
-                                        max_num_timepoints = max(len({rt, *lts}) for rt, lts in pairs.to_list)
+                                        max_num_timepoints = max(len({rt, *lts}) for rt, lts in pairs.to_list())
                                         lookup_max_num_timepoints[trace_group] = max_num_timepoints
                     # Stack up the voxels (1 per timepoint in the trace), creating a time dimension. 3D arrays --> single 4D array
                     # NB: by virtue of the way in which the variable's initialization is done, the (Optional) sorted_maximal_voxel_times 
