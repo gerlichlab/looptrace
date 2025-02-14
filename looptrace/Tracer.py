@@ -717,7 +717,6 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
         except ValueError as e:
             if "all input arrays must have the same shape" in str(e):
                 logging.error(f"Count by shape: {Counter(a.shape for _, a in restacked)}")
-                logging.error(f"Shape by trace ID: {tid: a.shape for tid, a in restacked}")
             raise
 
         # Validate the dimensionality of the resulting array.
