@@ -615,6 +615,7 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
             trace_id: TraceIdFrom0 = TraceIdFrom0(raw_tid)
             spec_key_pairs = list(spec_key_pairs) # Avoid iterator exhaustion.
             max_num_timepoints: int
+            sorted_regional_times: list[TimepointFrom0]
             # NB: this pattern match is being repeated within the for loop, for which it will always yield the same result, but this will be trivially costly.
             match trace_group_key:
                 case option.Option(tag="none", none=_):
@@ -626,6 +627,7 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
                         case [(filename_key, filename)]:
                             pixel_array = get_pixel_array(filename)
                             reg_time: TimepointFrom0 = TimepointFrom0(filename_key.ref_timepoint)
+                            sorted_regional_times = [reg_time]
                             obs_num_times: int = pixel_array.shape[0]
                             exp_num_times: int
                             if locus_grouping:
@@ -644,29 +646,30 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
                             stack_for_single_viz_unit.append((trace_id, reg_time, pixel_array))
                         case stacks:
                             raise ValueError(f"{len(stacks)} voxel stacks (not just 1), but the trace group/structure is null")
-                case option.Option(tag="some", some=trace_group):
+                case option.Option(tag="some", some=group_name):
                     try:
-                        max_num_timepoints = lookup_max_num_timepoints[trace_group]
+                        max_num_timepoints = lookup_max_num_timepoints[group_name]
                     except KeyError:
                         # This is the non-empty side of the option, so we have the implication that the trace metadata must be non-null
                         if potential_trace_metadata is None:
-                            raise ValueError(f"Processing data from trace group {trace_group}, but there's no trace metadata to reference")
+                            raise ValueError(f"Processing data from trace group {group_name}, but there's no trace metadata to reference")
                         # Here we have the possibility of a multi-ROI trace, so we're combining voxel stacks which correspond to different ROIs, 
                         # and which are therefore composed of different timepoints.
                         # Here we extract the arrays for the relevant voxel stacks, meld them together in appropriate order, and 
                         # determine how to index the timepoints. We also take care of dimensionality concerns here.
                         if locus_grouping is None:
-                            raise NotImplementedError("At the moment, merging ROIs for tracing is only supported locus_grouping")
-                        match potential_trace_metadata.get_group_times(trace_group):
+                            raise NotImplementedError("At the moment, merging ROIs for tracing is only supported when using locus grouping")
+                        match potential_trace_metadata.get_group_times(group_name):
                             case option.Option(tag="none", none=_):
-                                raise ValueError(f"Failed to lookup group times for trace group {trace_group}")
+                                raise ValueError(f"Failed to lookup group times for trace group {group_name}")
                             case option.Option(tag="some", some=group_regional_times):
+                                sorted_regional_times = list(sorted(group_regional_times.get))
                                 match traverse_through_either(lambda rt: get_locus_times(rt).map(lambda lts: (rt, lts)))(group_regional_times.get):
                                     case result.Result(tag="error", error=unfound_regional_times):
-                                        raise ValueError(f"Failed to find locus times for {len(unfound_regional_times)} regional timepoint(s) in trace group {trace_group}: {unfound_regional_times}")
+                                        raise ValueError(f"Failed to find locus times for {len(unfound_regional_times)} regional timepoint(s) in trace group {group_name}: {unfound_regional_times}")
                                     case result.Result(tag="ok", ok=pairs):
                                         max_num_timepoints = max(len({rt, *lts}) for rt, lts in pairs.to_list())
-                                        lookup_max_num_timepoints[trace_group] = max_num_timepoints
+                                        lookup_max_num_timepoints[group_name] = max_num_timepoints
                     # Stack up the voxels (1 per timepoint in the trace), creating a time dimension. 3D arrays --> single 4D array
                     # NB: by virtue of the way in which the variable's initialization is done, the (Optional) sorted_maximal_voxel_times 
                     #     must not here be null, but rather a list[TimepointFrom0].
@@ -682,7 +685,21 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
         # Stack up voxel stacks (per regional timepoint) within each trace ID, and then stack up the data for each trace ID for the current viewing key.
         restacked: list[tuple[TraceIdFrom0, np.ndarray]] = []
         for tid, tid_reg_data_triplets in itertools.groupby(sorted(stack_for_single_viz_unit, key=lambda triplet: triplet[0]), key=lambda triplet: triplet[0]):
-            restacked.append((tid, np.stack([finalize_voxel_stack(a) for _, _, a in sorted(list(tid_reg_data_triplets), key=lambda triplet: triplet[1])])))
+            tid_reg_data_triplets = list(tid_reg_data_triplets) # Avoid burning iterator.
+            lookup: Mapping[TimepointFrom0, np.ndarray] = {}
+            tmp: list[np.ndarray] = []
+            for _, rt, arr in tid_reg_data_triplets:
+                if rt in lookup:
+                    raise KeyError(f"Duplicate regional time in trace {tid}: {rt}")
+                lookup[rt] = arr
+            try:
+                _, _, first_array = next(iter(tid_reg_data_triplets))
+            except StopIteration:
+                logging.error(f"No data for trace {tid}")
+                raise
+            for rt in sorted_regional_times:
+                tmp.append(finalize_voxel_stack(lookup.get(rt, np.zeros(shape=first_array.shape, dtype=first_array.dtype))))
+            restacked.append((tid, np.stack(tmp)))
         try:
             restacked: np.ndarray = np.stack([a for _, a in sorted(restacked, key=fst)])
         except ValueError as e:
