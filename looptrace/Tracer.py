@@ -532,35 +532,6 @@ def apply_pixels_to_nanometers(traces: pd.DataFrame, z_nm_per_px: float, xy_nm_p
     return traces
 
 
-def explode_voxel_stack(
-    spec: VoxelStackSpecification, 
-    stack: np.ndarray, 
-    locus_times_by_regional_time: Mapping[TimepointFrom0, Times],
-) -> Result[Iterable[tuple[TimepointFrom0, np.ndarray]], str]:
-    def get_locus_times(rt: TimepointFrom0) -> Result[Times, str]:
-        return Option.of_optional(locus_times_by_regional_time.get(rt)).to_result(f"No locus times for regional time: {rt}")
-    num_voxels: int = stack.shape[0]
-    rt: TimepointFrom0 = TimepointFrom0(spec.ref_timepoint)
-    return get_locus_times(rt).bind(
-        lambda lts: (
-            Result.Ok(zip(sorted(list({rt, *lts})), iter(stack)))
-            if num_voxels == len(lts) + 1 
-            else Result.Error(f"Unexpected voxel count ({num_voxels}) for ROI from regional timepoint with {len(lts)} locus timepoints")
-        )
-    )
-
-
-def explode_voxels_within_trace(
-    specs_and_stacks: list[tuple[VoxelStackSpecification, np.ndarray]], 
-    locus_times_by_regional_time: Mapping[TimepointFrom0, Times],
-) -> Result[Mapping[TimepointFrom0, np.ndarray], Seq[str]]:
-    return traverse_through_either(
-        lambda tup: explode_voxel_stack(spec=fst(tup), stack=snd(tup), locus_times_by_regional_time=locus_times_by_regional_time)
-    )(specs_and_stacks)\
-        .map(lambda exploded_substacks: seq.concat(*exploded_substacks))\
-        .map(dict)
-
-
 @doc(
     summary="Compute a list of multiarrays, grouping and stacking by visualisation unit (drag-and-drop for Napari).",
     extended_summary="""
