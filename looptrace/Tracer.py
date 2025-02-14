@@ -628,11 +628,16 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
     arrays: list[tuple[LocusSpotViewingKey, np.ndarray]] = []
     lookup_max_num_timepoints: Mapping[TraceGroupName, int] = {}
 
-    for (fov, trace_group_key), vis_group in itertools.groupby(keyed, compose(fst, lambda voxel_spec: (voxel_spec.field_of_view, voxel_spec.traceGroup))):
+    def get_viewing_key(spec: VoxelStackSpecification) -> LocusSpotViewingKey:
+        return LocusSpotViewingKey(field_of_view=spec.field_of_view, trace_group_maybe=spec.traceGroup)
+
+    for viewing_key, vis_group in itertools.groupby(sorted(keyed, key=get_viewing_key), compose(fst, get_viewing_key)):
+        fov: FieldOfViewFrom1 = viewing_key.field_of_view
+        trace_group_key: Option[TraceGroupName] = viewing_key.trace_group_maybe
         logging.info(f"Computing spot image arrays stack for FOV {fov}, trace group {trace_group_key}...")
         vis_group = list(vis_group) # Avoid iterator exhaustion.
         stack_for_single_viz_unit: list[tuple[TraceIdFrom0, TimepointFrom0, np.ndarray]] = []
-        for raw_tid, spec_key_pairs in itertools.groupby(vis_group, compose(fst, lambda voxel_spec: voxel_spec.traceId)): # We'll defer sorting by trace ID.
+        for raw_tid, spec_key_pairs in itertools.groupby(sorted(vis_group, key=lambda voxel_spec: voxel_spec.traceId), compose(fst, lambda voxel_spec: voxel_spec.traceId)):
             trace_id: TraceIdFrom0 = TraceIdFrom0(raw_tid)
             spec_key_pairs = list(spec_key_pairs) # Avoid iterator exhaustion.
             max_num_timepoints: int
@@ -702,7 +707,7 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
 
         # Stack up voxel stacks (per regional timepoint) within each trace ID, and then stack up the data for each trace ID for the current viewing key.
         restacked: list[tuple[TraceIdFrom0, np.ndarray]] = []
-        for tid, tid_reg_data_triplets in itertools.groupby(stack_for_single_viz_unit, key=lambda triplet: triplet[0]):
+        for tid, tid_reg_data_triplets in itertools.groupby(sorted(stack_for_single_viz_unit, key=lambda triplet: triplet[0]), key=lambda triplet: triplet[0]):
             restacked.append((tid, np.stack([finalize_voxel_stack(a) for _, _, a in sorted(list(tid_reg_data_triplets), key=lambda triplet: triplet[1])])))
         try:
             restacked: np.ndarray = np.stack([a for _, a in sorted(restacked, key=fst)])
