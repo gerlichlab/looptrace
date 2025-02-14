@@ -742,7 +742,7 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
             restacked: np.ndarray = np.stack([a for _, a in sorted(restacked, key=fst)])
         except ValueError as e:
             if "all input arrays must have the same shape" in str(e):
-                logging.error(f"Count by shape: {Counter(a.shape for _, a in curr)}")
+                logging.error(f"Count by shape: {Counter(a.shape for _, a in restacked)}")
             raise
 
         # Validate the dimensionality of the resulting array.
