@@ -731,29 +731,19 @@ def compute_locus_spot_voxel_stacks_for_visualisation(
             curr: list[tuple[TimepointFrom0, np.ndarray]] = []
             for reg_time, subgroup in itertools.groupby(list(tid_reg_data_triplets), key=lambda triplet: triplet[1]):
                 for _, _, voxel_stack in subgroup:
-                    try:
-                        curr.append((reg_time, finalize_voxel_stack(voxel_stack)))
-                    except ValueError as e:
-                        if "all input arrays must have the same shape" in str(e):
-                            logging.error(f"Count by shape: {Counter(a.shape for _, a in curr)}")
-                        raise
+                    curr.append((reg_time, finalize_voxel_stack(voxel_stack)))
             try:
                 restacked.append((tid, np.stack([a for _, a in sorted(curr, key=fst)])))
             except ValueError as e:
                 if "all input arrays must have the same shape" in str(e):
                     logging.error(f"Count by shape: {Counter(a.shape for _, a in curr)}")
                 raise
-        restacked: np.ndarray = np.stack([a for _, a in sorted(restacked, key=fst)])
-
-        # restacked: np.ndarray = np.stack([
-        #     np.stack([
-        #         finalize_voxel_stack(voxel_stack)
-        #         for _, (_, _, voxel_stack) 
-        #         in sorted(list(itertools.groupby(list(tid_reg_data_triplets), key=lambda triplet: triplet[1])), key=fst) # Stack up by regional timepoint.
-        #     ]) 
-        #     for _, tid_reg_data_triplets 
-        #     in sorted(list(itertools.groupby(stack_for_single_viz_unit, key=lambda triplet: triplet[0])), key=fst) # Stack up by trace ID.
-        # ])
+        try:
+            restacked: np.ndarray = np.stack([a for _, a in sorted(restacked, key=fst)])
+        except ValueError as e:
+            if "all input arrays must have the same shape" in str(e):
+                logging.error(f"Count by shape: {Counter(a.shape for _, a in curr)}")
+            raise
 
         # Validate the dimensionality of the resulting array.
         expect_num_dim = 6
