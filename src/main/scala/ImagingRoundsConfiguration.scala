@@ -98,6 +98,22 @@ final case class ImagingRoundsConfiguration private(
         absoluteReindexedImagingTimepoints.lookup(t).getOrElse{ 
             throw new NoSuchElementException(s"Unknown timepoint: $t")
         }
+
+    private lazy val maybeReindexedRegionalTimes: Option[NonEmptyMap[TraceGroupId, NonEmptyMap[ImagingTimepoint, Reindex]]] = 
+        reindexedTimesByTraceGroup.map(_.map(_.keys
+            .toNonEmptyList
+            .sorted
+            .zipWithIndex
+            .map{ (t, i) => t -> NonnegativeInt.unsafe(i) }
+            .toNem
+        ))
+
+    def unsafeReindexRegionalTimepoint(traceGroupId: TraceGroupId)(regTime: ImagingTimepoint): Reindex = 
+        maybeReindexedRegionalTimes
+            .toRight("No merge rules are defined!")
+            .flatMap(_.lookup(traceGroupId).toRight(s"Unknown trace group ID ($traceGroupId)"))
+            .flatMap(_.lookup(regTime).toRight(s"Unknown regional time for trace group $traceGroupId: $regTime"))
+            .fold(msg => throw new RuntimeException(msg), identity)
 end ImagingRoundsConfiguration
 
 /** Tools for working with declaration of imaging rounds and how to use them within an experiment */

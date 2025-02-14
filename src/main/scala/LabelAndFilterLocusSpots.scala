@@ -531,12 +531,12 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
         groupedByPos: List[FieldOfViewRecords], 
         roundsConfig: ImagingRoundsConfiguration,
     ) = {
-        import LocusSpotViewingKey.toStringForFileOrFolder
+        import LocusSpotViewingKey.*
 
         val getOutfileAndHeader = (key: LocusSpotViewingKey, qcType: PointDisplayType) => {
             val keyText: String = key.toStringForFileOrFolder
             val fp = folder / keyText / s"${keyText}.${qcType.toString.toLowerCase}.csv"
-            val baseHeader = List("regionTime", "traceId", "locusTime", "traceIndex", "timeIndex", "z", "y", "x")
+            val baseHeader = List("regionTime", "traceId", "locusTime", "traceIndex", "regionIndex", "timeIndex", "z", "y", "x")
             val header = qcType match {
                 case PointDisplayType.QCPass => baseHeader
                 case PointDisplayType.QCFail => baseHeader :+ "failCode"
@@ -573,7 +573,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                     .sortBy(_._1)(Order[LocusSpotViewingKey].toOrdering)
                     .foreach{ (key, currRecs) => 
                         val (outfile, header) = getOutfileAndHeader(key, qcType)
-                        val reindexTraceId = currRecs.map(_.traceId)
+                        val reindexTraceId: TraceId => NonnegativeInt = currRecs.map(_.traceId)
                             .toList
                             .toSet
                             .toList
@@ -581,23 +581,28 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                             .zipWithIndex
                             .map{ (t, i) => t -> NonnegativeInt.unsafe(i) }
                             .toMap
+                        val reindexRegionTime: ImagingTimepoint => NonnegativeInt = 
+                            key.traceGroupMaybe.toOption match {
+                                case None => Function.const{ NonnegativeInt(0) }
+                                case Some(groupId) => roundsConfig.unsafeReindexRegionalTimepoint(groupId)
+                            }
                         val outrecs = currRecs
                             // Here we sort, by trace ID, the groups (by trace ID) of records within the current key, then reindex the trace IDs to 0.
                             .groupBy(_.traceId)
                             .toList
                             .map{ (tid, rs) => rs -> reindexTraceId(tid) }
-                            .flatMap{ (rs, t) => // This is a pair of a collection of output records and the reindexed (to 0) trace ID.
+                            .flatMap{ (rs, rawTid) => // This is a pair of a collection of output records and the reindexed (to 0) trace ID.
                                 rs.toList.map{ r => 
                                     val p = r.centerInPixels                    
                                     val timeIndex = 
-                                        import LocusSpotViewingKey.traceGroupMaybe
                                         roundsConfig.unsafeLookupReindexedImagingTimepoint(r.regionTime)(r.locusTime)
                                     val base = List(
                                         r.regionTime.show_, 
                                         r.traceId.show_, 
                                         r.locusTime.show_, 
-                                        t.show_, // NB: this is the "locally" (relative to the current key's records) reindexed (0-based) trace ID.
-                                        timeIndex.show, // NB: this is the "locally" (relative the current key's tracing structure) reindexed (0-based) timepoint.
+                                        rawTid.show_, // NB: this is the "locally" (relative to the current key's records) reindexed (0-based) trace ID.
+                                        reindexRegionTime(r.regionTime).show_,
+                                        timeIndex.show_, // NB: this is the "locally" (relative the current key's tracing structure) reindexed (0-based) timepoint.
                                         p.z.show_, 
                                         p.y.show_, 
                                         p.x.show_,
