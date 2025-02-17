@@ -557,7 +557,7 @@ def read_images(image_name_path_pairs: Iterable[Tuple[str, str]]) -> Tuple[Dict[
                 def parse(p):
                     arrays, pos_names, _ = stack_nd2_to_dask(p)
                     return arrays, pos_names
-            elif sample_ext in [".tif", ".tiff"]:
+            elif sample_ext in (".tif", ".tiff"):
                 raise NotImplementedError(
                     f"Parsing TIFF-like isn't supported! Found extension '{sample_ext}' in folder {images_folder}"
                     )
