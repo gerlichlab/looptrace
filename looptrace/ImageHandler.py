@@ -409,7 +409,7 @@ class ImageHandler:
 
     @property
     def spots_prefiltered_through_nuclei_file(self) -> Path:
-        return Path(str(self.raw_spots_file).replace(".csv", "prefiltered_through_nuclei.csv"))
+        return Path(str(self.raw_spots_file).replace(".csv", ".prefiltered_through_nuclei.csv"))
 
     @property
     def spot_in_nuc(self) -> bool:
