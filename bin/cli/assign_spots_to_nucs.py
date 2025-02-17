@@ -156,7 +156,7 @@ def run_labeling(*, rois: pd.DataFrame, image_handler: ImageHandler, nuc_detecto
     return _add_nucleus_labels(
         rois_table=rois, 
         mask_images=(NucDetector(image_handler) if nuc_detector is None else nuc_detector).mask_images, 
-        fov_names=sorted(image_handler.image_lists[image_handler.spot_input_name].keys()), 
+        fov_names=image_handler.image_lists[image_handler.spot_input_name], 
         nuclei_drift_file=nuc_detector.drift_correction_file__coarse, 
         spots_drift_file=image_handler.drift_correction_file__coarse,
     )
