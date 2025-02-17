@@ -23,7 +23,7 @@ import yaml
 from gertils import ExtantFile
 from gertils.types import TimepointFrom0
 
-from looptrace import FIELD_OF_VIEW_COLUMN, ZARR_CONVERSIONS_KEY, RoiImageSize
+from looptrace import FIELD_OF_VIEW_COLUMN, ZARR_CONVERSIONS_KEY, ConfigurationValueError, RoiImageSize
 from looptrace.configuration import get_minimum_regional_spot_separation
 from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, FilePathLike, FolderPathLike, get_analysis_path, simplify_path
 from looptrace.image_io import ignore_path, NPZ_wrapper
@@ -262,7 +262,7 @@ class ImageHandler:
             raise TypeError(f"Illegal type ({type(regional_timepoint).__name__}) for regional timepoint for which to lookup locus timepoints!")
         grouping: Optional[LocusGroupingData] = self.locus_grouping
         if grouping is None:
-            raise NotImplementedError("No locus grouping present!")
+            raise ConfigurationValueError("No locus grouping present!")
         return self.locus_grouping.get(regional_timepoint, set())
 
     def iter_imaging_rounds(self) -> Iterable[Mapping[str, object]]:
