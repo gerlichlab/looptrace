@@ -469,7 +469,7 @@ def prefilter_spots_for_nuclei(rounds_config: ExtantFile, params_config: ExtantF
     logging.info(f"Reading ROIs file for pre-merge filtration: {rois_file}")
     rois: pd.DataFrame = pd.read_csv(rois_file, index_col=False)
     logging.debug(f"Initial ROI count: {rois.shape[0]}")
-    rois: pd.DataFrame = label_spots_with_nuclei(rois=rois, image_handle=H)
+    rois: pd.DataFrame = label_spots_with_nuclei(rois=rois, image_handler=H)
     rois = rois[rois[NUC_LABEL_COL] != 0]
     logging.debug(f"ROIs remaining after prefiltration through nuclei: {rois.shape[0]}")
     rois = rois.drop([NUC_LABEL_COL], axis="columns")
