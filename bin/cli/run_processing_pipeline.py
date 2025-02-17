@@ -561,6 +561,7 @@ class LooptracePipeline(pypiper.Pipeline):
                 name="spot_counts_visualisation__regional", 
                 func=plot_spot_counts, 
                 f_kwargs={**rounds_params, "spot_type": SpotType.REGIONAL},
+                nofail=True,
             ), 
             # computes pad_x_min, etc.; writes *_dc_rois.csv (much bigger, since regional spots x timepoints)
             pypiper.Stage(name="spot_bounding", func=run_spot_bounding, f_kwargs=rounds_params_images),
@@ -583,6 +584,7 @@ class LooptracePipeline(pypiper.Pipeline):
                 name="spot_counts_visualisation__locus_specific", 
                 func=plot_spot_counts, 
                 f_kwargs={**rounds_params, "spot_type": SpotType.LOCUS_SPECIFIC},
+                nofail=True,
             ), 
             pypiper.Stage(
                 name="pairwise_distances__locus_specific", 
