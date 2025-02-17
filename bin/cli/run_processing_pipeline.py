@@ -532,7 +532,7 @@ class LooptracePipeline(pypiper.Pipeline):
             pypiper.Stage(
                 name="pre_merge_filtration_through_nuclei", 
                 func=prefilter_spots_for_nuclei, 
-                f_kwargs=rounds_params_images, # images are needed since H.image_lists is iterated in workflow.
+                f_kwargs=rounds_params_images, # Images are needed since H.image_lists is iterated in workflow.
             ), 
             pypiper.Stage(name="spot_merge_determination", func=run_spot_merge_determination, f_kwargs=rounds_params),
             pypiper.Stage(name="spot_merge_execution", func=run_spot_merge_execution, f_kwargs=rounds_params),
@@ -540,7 +540,7 @@ class LooptracePipeline(pypiper.Pipeline):
             pypiper.Stage(
                 name="spot_nucleus_assignment", 
                 func=run_spot_nucleus_assignment, 
-                f_kwargs=rounds_params_images, # images are needed since H.image_lists is iterated in workflow.
+                f_kwargs=rounds_params_images, # Images are needed since H.image_lists is iterated in workflow.
             ), 
             pypiper.Stage(
                 name="trace_id_assignment",
@@ -550,7 +550,7 @@ class LooptracePipeline(pypiper.Pipeline):
             pypiper.Stage(
                 name="spot_nuclei_filtration", 
                 func=filter_spots_for_nuclei,
-                f_kwargs=rounds_params_images,
+                f_kwargs=rounds_params, # Images are NOT needed here since the actual labeling/assignment has already been done.
             ),
             pypiper.Stage(
                 name="regional_spots_visualisation_data_prep", 
