@@ -10,7 +10,7 @@ import subprocess
 import sys
 from typing import *
 
-from expression import Option, Result, fst, result
+from expression import Option, result
 from gertils import ExtantFile, ExtantFolder
 import pandas as pd
 import pypiper
@@ -35,7 +35,7 @@ from analyse_detected_bead_rois import workflow as run_all_bead_roi_detection_an
 from decon import workflow as run_deconvolution
 from drift_correct_accuracy_analysis import workflow as run_drift_correction_analysis, run_visualisation as run_drift_correction_accuracy_visualisation
 from detect_spots import workflow as run_spot_detection
-from assign_spots_to_nucs import NUC_LABEL_COL, workflow as run_spot_nucleus_assignment
+from assign_spots_to_nucs import NUC_LABEL_COL, Context as NucleiFiltrationContext, workflow as run_spot_nucleus_assignment
 from partition_regional_spots_by_field_of_view import workflow as prep_regional_spots_visualisation
 from extract_spots_table import workflow as run_spot_bounding
 from extract_spots import workflow as run_spot_extraction
@@ -531,7 +531,7 @@ class LooptracePipeline(pypiper.Pipeline):
             pypiper.Stage(
                 name="pre_merge_filtration_through_nuclei", 
                 func=run_spot_nucleus_assignment, 
-                f_kwargs=rounds_params_images, # images are needed since H.image_lists is iterated in workflow.
+                f_kwargs={"context": NucleiFiltrationContext.PRE_MERGE, **rounds_params_images}, # images are needed since H.image_lists is iterated in workflow.
             ), 
             pypiper.Stage(name="spot_merge_determination", func=run_spot_merge_determination, f_kwargs=rounds_params),
             pypiper.Stage(name="spot_merge_execution", func=run_spot_merge_execution, f_kwargs=rounds_params),
@@ -539,7 +539,7 @@ class LooptracePipeline(pypiper.Pipeline):
             pypiper.Stage(
                 name="spot_nucleus_assignment", 
                 func=run_spot_nucleus_assignment, 
-                f_kwargs=rounds_params_images, # images are needed since H.image_lists is iterated in workflow.
+                f_kwargs={"context": NucleiFiltrationContext.POST_MERGE, **rounds_params_images}, # images are needed since H.image_lists is iterated in workflow.
             ), 
             pypiper.Stage(
                 name="trace_id_assignment",

@@ -1,7 +1,9 @@
 """Filter detected spots for overlap with detected nuclei."""
 
 import argparse
+from enum import Enum
 import logging
+from pathlib import Path
 from typing import *
 
 import numpy as np
@@ -16,8 +18,6 @@ from looptrace.NucDetector import NucDetector
 
 __author__ = "Kai Sandvold Beckwith"
 __credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
-
-logger = logging.getLogger()
 
 
 NUC_LABEL_COL = "nucleusNumber"
@@ -108,10 +108,17 @@ def _filter_rois_in_nucs(
     return new_rois
 
 
+class Context(Enum):
+    PRE_MERGE = "pre"
+    POST_MERGE = "post"
+
+
 def workflow(
+    *,
     rounds_config: ExtantFile, 
     params_config: ExtantFile, 
     images_folder: ExtantFolder, 
+    context: Context,
     image_save_path: Optional[ExtantFolder] = None,
     ) -> None:
     
@@ -127,23 +134,31 @@ def workflow(
     def query_table_for_fov(table: pd.DataFrame) -> Callable[[str], pd.DataFrame]:
         return (lambda fov: table.query('fieldOfView == @fov'))
 
-    logger.info(f"Reading coarse-drift file for nuclei: {N.drift_correction_file__coarse}")
+    logging.info(f"Reading coarse-drift file for nuclei: {N.drift_correction_file__coarse}")
     drift_table_nuclei = pd.read_csv(N.drift_correction_file__coarse, index_col=False)
     get_nuc_drifts: Callable[[str], pd.DataFrame] = query_table_for_fov(drift_table_nuclei)
     
-    logger.info(f"Reading coarse-drift file for spots: {H.drift_correction_file__coarse}")
+    logging.info(f"Reading coarse-drift file for spots: {H.drift_correction_file__coarse}")
     drift_table_spots = pd.read_csv(H.drift_correction_file__coarse, index_col=False)
     get_spot_drifts = query_table_for_fov(drift_table_spots)
     
-    rois_table = pd.read_csv(H.proximity_accepted_spots_file_path, index_col=False)
+    rois_file: Path
+    if context == Context.PRE_MERGE:
+        rois_file = H.raw_spots_file
+    elif context == Context.POST_MERGE:
+        rois_file = H.proximity_accepted_spots_file_path
+    else:
+        raise ValueError(f"Illegal value for nuclei filtration context: {context}")
+    logging.info("Reading ROIs file: %s", rois_file)
+    rois_table = pd.read_csv(rois_file, index_col=False)
     get_rois = query_table_for_fov(rois_table)
 
-    logger.info("Assigning spots to nuclei labels...")
+    logging.info("Assigning spots to nuclei labels...")
     all_rois = []
     for i, pos in tqdm.tqdm(enumerate(H.image_lists[H.spot_input_name])):
         rois = get_rois(pos)
         if len(rois) == 0:
-            logger.warning(f"No ROIs for FOV: {pos}")
+            logging.warning(f"No ROIs for FOV: {pos}")
             continue
 
         nuc_drifts: pd.DataFrame = get_nuc_drifts(pos)
@@ -152,22 +167,22 @@ def workflow(
         filter_kwargs = {"nuc_drifts": nuc_drifts, "spot_drifts": spot_drifts}
         # TODO: this array indexing is sensitive to whether the mask and class images have the dummy time and channel dimensions or not.
         # See: https://github.com/gerlichlab/looptrace/issues/247
-        logger.info(f"Assigning nuclei labels for spots from FOV: {pos}")
+        logging.info(f"Assigning nuclei labels for spots from FOV: {pos}")
         rois = _filter_rois_in_nucs(rois, nuc_label_img=N.mask_images[i].compute(), new_col=NUC_LABEL_COL, **filter_kwargs)
         if N.class_images is not None:
             raise NotImplementedError("Nuclear classification isn't supported.")
-            logger.info(f"Assigning nuclei classes for spots from FOV: {pos}")
+            logging.info(f"Assigning nuclei classes for spots from FOV: {pos}")
             rois = _filter_rois_in_nucs(rois, nuc_label_img=N.class_images[i].compute(), new_col="nuc_class", **filter_kwargs)
         all_rois.append(rois.copy())
     
     if len(all_rois) == 0:
-        logger.warning(f"No ROIs! Cannot write nuclei-labeled spots file")
+        logging.warning(f"No ROIs! Cannot write nuclei-labeled spots file")
     else:
         all_rois = pd.concat(all_rois).sort_values([FIELD_OF_VIEW_COLUMN, "timepoint"])
-        logger.info(f"Writing nuclei-labeled spots file: {H.nuclei_labeled_spots_file_path}")
+        logging.info(f"Writing nuclei-labeled spots file: {H.nuclei_labeled_spots_file_path}")
         all_rois.to_csv(H.nuclei_labeled_spots_file_path, index=False)
 
-    logger.info("Done!")
+    logging.info("Done!")
 
 
 if __name__ == "__main__":
