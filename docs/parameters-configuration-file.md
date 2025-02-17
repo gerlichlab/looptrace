@@ -39,3 +39,4 @@ Judge in accordance with how many beads you anticipate having per image.
     * For `sigma_z_max`, 400 is often a good setting.
     * For `max_dist`, 800 is often a good setting.
 * If you want the Numpy arrays representing the spot images for tracing (the `*.npy` files) to be kept even after zipping, set `keep_spot_images_folder` to `True`.
+* To filter spots for inclusion in nuclei _even before_ attempting to determine which spots to merge, set `filter_spots_before_merge` to `True`.
