@@ -460,8 +460,8 @@ def filter_spots_for_nuclei(rounds_config: ExtantFile, params_config: ExtantFile
     logging.info("Done with nuclei-based spot filtration")
 
 
-def prefilter_spots_for_nuclei(rounds_config: ExtantFile, params_config: ExtantFile) -> None:
-    H = ImageHandler(rounds_config=rounds_config, params_config=params_config)
+def prefilter_spots_for_nuclei(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> None:
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     if not H.filter_spots_before_merge:
         logging.info("filter_spots_before_merge is False, nothing to do, skipping nuclei-based prefiltration")
         return
