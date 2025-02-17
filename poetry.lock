@@ -1811,7 +1811,7 @@ setuptools = "*"
 
 [[package]]
 name = "looptrace-loci-vis"
-version = "0.2.2"
+version = "0.3.0"
 description = "This project facilitates viewing, in `napari`, locus-specific spots from `looptrace`."
 optional = true
 python-versions = "<3.13,>=3.10"
@@ -1819,6 +1819,7 @@ files = []
 develop = false
 
 [package.dependencies]
+expression = ">=5.0.2"
 gertils = {git = "https://github.com/gerlichlab/gertils.git", rev = "v0.5.1"}
 napari = [
     {version = ">=0.4.19", markers = "sys_platform == \"darwin\""},
@@ -1831,15 +1832,15 @@ pyqt6 = {version = ">=6.5.0", markers = "sys_platform == \"darwin\""}
 zarr = ">=2.4.12"
 
 [package.extras]
-formatting = ["codespell (>=2.2.4)", "ruff (>=0.4.6)"]
-linting = ["mypy (>=1.0.1)", "pandas-stubs", "ruff (>=0.3)"]
+formatting = ["codespell (>=2.2.4)", "ruff (>=0.8.0)"]
+linting = ["mypy (>=1.0.1)", "pandas-stubs", "ruff (>=0.8.0)"]
 testsuite = ["npe2", "pytest (>=7.1.0)", "pytest-cov (>=5.0.0)", "typer"]
 
 [package.source]
 type = "git"
 url = "https://github.com/gerlichlab/looptrace-loci-vis"
-reference = "v0.2.3"
-resolved_reference = "7e9777a1c4925f61dbf13b49322e87ed68c645a9"
+reference = "v0.3.0"
+resolved_reference = "25889e07eb6ef0fc15f4bfe3fa79ab9ce77b4c57"
 
 [[package]]
 name = "looptrace-regionals-vis"
@@ -5389,4 +5390,4 @@ test = ["hypothesis", "more-itertools", "pytest"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.11, < 3.12"
-content-hash = "8bc65de0af7cdd79e93fb9f36970d83b2b79474a7fde7849a66bf87132918235"
+content-hash = "04e8d26c3f27e608b06b26a9531b49c304484905e439e79239b871c3735d5661"
