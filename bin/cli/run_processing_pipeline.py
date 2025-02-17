@@ -35,7 +35,7 @@ from analyse_detected_bead_rois import workflow as run_all_bead_roi_detection_an
 from decon import workflow as run_deconvolution
 from drift_correct_accuracy_analysis import workflow as run_drift_correction_analysis, run_visualisation as run_drift_correction_accuracy_visualisation
 from detect_spots import workflow as run_spot_detection
-from assign_spots_to_nucs import NUC_LABEL_COL, Context as NucleiFiltrationContext, workflow as run_spot_nucleus_assignment
+from assign_spots_to_nucs import NUC_LABEL_COL, run_labeling as label_spots_with_nuclei, workflow as run_spot_nucleus_assignment
 from partition_regional_spots_by_field_of_view import workflow as prep_regional_spots_visualisation
 from extract_spots_table import workflow as run_spot_bounding
 from extract_spots import workflow as run_spot_extraction
@@ -469,9 +469,10 @@ def prefilter_spots_for_nuclei(rounds_config: ExtantFile, params_config: ExtantF
     logging.info(f"Reading ROIs file for pre-merge filtration: {rois_file}")
     rois: pd.DataFrame = pd.read_csv(rois_file, index_col=False)
     logging.debug(f"Initial ROI count: {rois.shape[0]}")
+    rois: pd.DataFrame = label_spots_with_nuclei(rois=rois, image_handle=H)
     rois = rois[rois[NUC_LABEL_COL] != 0]
-    rois = rois.drop([NUC_LABEL_COL], axis="columns")
     logging.debug(f"ROIs remaining after prefiltration through nuclei: {rois.shape[0]}")
+    rois = rois.drop([NUC_LABEL_COL], axis="columns")
     logging.debug(f"Writing ROIs: {H.spots_prefiltered_through_nuclei_file}")
     rois.to_csv(H.spots_prefiltered_through_nuclei_file, index=False)
     logging.info("Done with nuclei-based spot prefiltration")
@@ -530,8 +531,8 @@ class LooptracePipeline(pypiper.Pipeline):
             pypiper.Stage(name=SPOT_DETECTION_STAGE_NAME, func=run_spot_detection, f_kwargs=rounds_params_images), # generates *_rois.csv (regional spots)
             pypiper.Stage(
                 name="pre_merge_filtration_through_nuclei", 
-                func=run_spot_nucleus_assignment, 
-                f_kwargs={"context": NucleiFiltrationContext.PRE_MERGE, **rounds_params_images}, # images are needed since H.image_lists is iterated in workflow.
+                func=prefilter_spots_for_nuclei, 
+                f_kwargs=rounds_params_images, # images are needed since H.image_lists is iterated in workflow.
             ), 
             pypiper.Stage(name="spot_merge_determination", func=run_spot_merge_determination, f_kwargs=rounds_params),
             pypiper.Stage(name="spot_merge_execution", func=run_spot_merge_execution, f_kwargs=rounds_params),
@@ -539,7 +540,7 @@ class LooptracePipeline(pypiper.Pipeline):
             pypiper.Stage(
                 name="spot_nucleus_assignment", 
                 func=run_spot_nucleus_assignment, 
-                f_kwargs={"context": NucleiFiltrationContext.POST_MERGE, **rounds_params_images}, # images are needed since H.image_lists is iterated in workflow.
+                f_kwargs=rounds_params_images, # images are needed since H.image_lists is iterated in workflow.
             ), 
             pypiper.Stage(
                 name="trace_id_assignment",
@@ -549,7 +550,7 @@ class LooptracePipeline(pypiper.Pipeline):
             pypiper.Stage(
                 name="spot_nuclei_filtration", 
                 func=filter_spots_for_nuclei,
-                f_kwargs=rounds_params,
+                f_kwargs=rounds_params_images,
             ),
             pypiper.Stage(
                 name="regional_spots_visualisation_data_prep", 
