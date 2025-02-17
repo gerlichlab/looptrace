@@ -22,6 +22,7 @@ In this case, the hypothetical trace is siphoned off separately and not propagat
 This facilitates downstream analysis which group records in a particular way; we anticipate these factors (tracing structure name and locus IDs) as being the most often used for grouping records for downstream analysis.
 * The pipeline no longer distances between all pairs of regional spot centroids. See [Issue 417](https://github.com/gerlichlab/looptrace/issues/417).
 * Filtration of ROIs through the nuclear masks is now done before the merger of ROIs based on proximity.
+* Bumped the lower bound on the `nd2` dependency up from 0.5.3 to 0.10.1. See [Issue 423](https://github.com/gerlichlab/looptrace/issues/423).
 
 ## [v0.11.3] - 2024-12-03
 
