@@ -411,7 +411,7 @@ def run_spot_merge_determination(rounds_config: ExtantFile, params_config: Extan
         str(LOOPTRACE_JAR_PATH),
         prog_path, 
         "-I",
-        str(H.raw_spots_file),
+        str(H.spots_prefiltered_through_nuclei_file if H.filter_spots_before_merge else H.raw_spots_file),
         "-D", 
         str(H.config[KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS]),
         "-O",
@@ -454,10 +454,27 @@ def filter_spots_for_nuclei(rounds_config: ExtantFile, params_config: ExtantFile
     rois: pd.DataFrame = pd.read_csv(rois_file, index_col=False)
     logging.debug(f"Initial ROI count: {rois.shape[0]}")
     rois = rois[rois[NUC_LABEL_COL] != 0]
-    logging.debug(f"ROIs remaining after filtration for nuclei: {rois.shape[0]}")
+    logging.debug(f"ROIs remaining after filtration through nuclei: {rois.shape[0]}")
     logging.debug(f"Writing ROIs: {H.nuclei_filtered_spots_file_path}")
     rois.to_csv(H.nuclei_filtered_spots_file_path, index=False)
     logging.info("Done with nuclei-based spot filtration")
+
+
+def prefilter_spots_for_nuclei(rounds_config: ExtantFile, params_config: ExtantFile) -> None:
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config)
+    if not H.filter_spots_before_merge:
+        logging.info("filter_spots_before_merge is False, nothing to do, skipping nuclei-based prefiltration")
+        return
+    rois_file: Path = H.raw_spots_file
+    logging.info(f"Reading ROIs file for pre-merge filtration: {rois_file}")
+    rois: pd.DataFrame = pd.read_csv(rois_file, index_col=False)
+    logging.debug(f"Initial ROI count: {rois.shape[0]}")
+    rois = rois[rois[NUC_LABEL_COL] != 0]
+    rois = rois.drop([NUC_LABEL_COL], axis="columns")
+    logging.debug(f"ROIs remaining after prefiltration through nuclei: {rois.shape[0]}")
+    logging.debug(f"Writing ROIs: {H.spots_prefiltered_through_nuclei_file}")
+    rois.to_csv(H.spots_prefiltered_through_nuclei_file, index=False)
+    logging.info("Done with nuclei-based spot prefiltration")
 
 
 class LooptracePipeline(pypiper.Pipeline):
@@ -511,6 +528,11 @@ class LooptracePipeline(pypiper.Pipeline):
                 f_kwargs={"params_config": self.params_config},
             ), 
             pypiper.Stage(name=SPOT_DETECTION_STAGE_NAME, func=run_spot_detection, f_kwargs=rounds_params_images), # generates *_rois.csv (regional spots)
+            pypiper.Stage(
+                name="pre_merge_filtration_through_nuclei", 
+                func=run_spot_nucleus_assignment, 
+                f_kwargs=rounds_params_images, # images are needed since H.image_lists is iterated in workflow.
+            ), 
             pypiper.Stage(name="spot_merge_determination", func=run_spot_merge_determination, f_kwargs=rounds_params),
             pypiper.Stage(name="spot_merge_execution", func=run_spot_merge_execution, f_kwargs=rounds_params),
             pypiper.Stage(name="spot_proximity_filtration", func=run_spot_proximity_filtration, f_kwargs=rounds_params_images),

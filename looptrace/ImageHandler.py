@@ -254,6 +254,10 @@ class ImageHandler:
     def drift_correction_reference_images(self) -> Sequence[np.ndarray]:
         return self.images[self.reg_input_template]
 
+    @property
+    def filter_spots_before_merge(self) -> bool:
+        return self.config.get("filter_spots_before_merge", False)
+
     def get_dc_filepath(self, prefix: str, suffix: str) -> Path:
         return Path(self.out_path(prefix + "_drift_correction" + suffix))
 
@@ -402,6 +406,10 @@ class ImageHandler:
     @property
     def rois_with_trace_ids_file(self) -> Path:
         return self.raw_spots_file.with_suffix(".with_trace_ids.csv")
+
+    @property
+    def spots_prefiltered_through_nuclei_file(self) -> Path:
+        return Path(str(self.raw_spots_file).replace(".csv", "prefiltered_through_nuclei.csv"))
 
     @property
     def spot_in_nuc(self) -> bool:
