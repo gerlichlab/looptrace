@@ -4,13 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v0.12.0] - Unreleased
+## [v0.12.0] - 2025-02-18
 
 ### Added
 * Test for behavior when any timepoint to participate in a merger for tracing is not a regional timepoint
 
 ### Changed
-* `os-lib` is now at version 0.11.3.
+* Single-channel tracing is supported, with a prefiltration step triggered by setting `filter_spots_before_merge` to `True` in the parameters config file in order to prevent a huge number of beads from being regarded as FISH spots. See [Issue 422](https://github.com/gerlichlab/looptrace/issues/422) and [Issue 403](https://github.com/gerlichlab/looptrace/issues/403).
+* Reindexed (to 0) trace IDs, regional barcode timepoints, and true timepoints are now stored as extra columns in the CSV files backing the locus spots visualisation, for better user experience when using Napari, which has 0-based integer-indexed sliders.
+* Locus spot visualisation data preparation now stacks by regional barcode imaging timepoint in addition to trace ID and true imaging timepoint.
+* Locus spot visualisation better handles cases of ROI mergers into a common tracing structure, grouping data and points by (field of view, structure) pairs rather than simply by field of view.
 * It's now prohibited to declare merger of regional imaging timepoints for which the locus timepoint sets overlap. 
 See [Issue 384](https://github.com/gerlichlab/looptrace/issues/384).
 * Groups of regional timepoints to "merge" for tracing must now be named, for clear identification and interpretation in downstream analysis. 
@@ -20,9 +23,12 @@ This case can arise if spots from the same regional timepoint occur in sufficien
 In this case, the hypothetical trace is siphoned off separately and not propagated forward in the processing for analysis like the rest of the traces.
 * Sort records in locus pairwise distances file by (after field of view) the name/ID of the tracing structure, then by the locus IDs. 
 This facilitates downstream analysis which group records in a particular way; we anticipate these factors (tracing structure name and locus IDs) as being the most often used for grouping records for downstream analysis.
-* The pipeline no longer distances between all pairs of regional spot centroids. See [Issue 417](https://github.com/gerlichlab/looptrace/issues/417).
+* Several visualisation-related data preparation steps of the main pipeline are now no-fail to mitigate risk of unnecessarily halting processing.
+
+__Dependency changes (non-exhaustive)__:
 * Filtration of ROIs through the nuclear masks is now done before the merger of ROIs based on proximity.
 * Bumped the lower bound on the `nd2` dependency up from 0.5.3 to 0.10.1. See [Issue 423](https://github.com/gerlichlab/looptrace/issues/423).
+* `os-lib` is now at version 0.11.3.
 
 ## [v0.11.3] - 2024-12-03
 
