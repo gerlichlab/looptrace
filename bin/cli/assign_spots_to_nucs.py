@@ -1,7 +1,6 @@
 """Filter detected spots for overlap with detected nuclei."""
 
 import argparse
-from enum import Enum
 import logging
 from pathlib import Path
 from typing import *
@@ -24,14 +23,14 @@ __credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 NUC_LABEL_COL = "nucleusNumber"
 
 
-def _filter_rois_in_nucs(
+def _determine_labels(
     rois: pd.DataFrame, 
     nuc_label_img: np.ndarray, 
     new_col: str, 
     *,
     nuc_drifts: pd.DataFrame, 
     spot_drifts: pd.DataFrame,
-    ) -> pd.DataFrame:
+) -> pd.DataFrame:
     """
     Check if a spot is in inside a segmented nucleus.
 
@@ -56,7 +55,7 @@ def _filter_rois_in_nucs(
     # We're only interested here in adding a nucelus (or other region) ID column, so keep all other data.
     new_rois = rois.copy()
     
-    def spot_in_nuc(row: Union[pd.Series, dict], nuc_label_img: np.ndarray):
+    def spot_in_nuc(row: Union[pd.Series, dict], nuc_label_img: np.ndarray) -> int:
         base_idx = (int(row["yc"]), int(row["xc"]))
         num_dim: int = len(nuc_label_img.shape)
         if num_dim == 2:
@@ -109,7 +108,7 @@ def _filter_rois_in_nucs(
     return new_rois
 
 
-def _add_nucleus_labels(
+def add_nucleus_labels(
     *, 
     rois_table: pd.DataFrame, 
     mask_images: Sequence[da.Array], 
@@ -146,7 +145,7 @@ def _add_nucleus_labels(
         # TODO: this array indexing is sensitive to whether the mask and class images have the dummy time and channel dimensions or not.
         # See: https://github.com/gerlichlab/looptrace/issues/247
         logging.info(f"Assigning nuclei labels for spots from FOV: {pos}")
-        rois = _filter_rois_in_nucs(rois, nuc_label_img=mask_images[i].compute(), new_col=NUC_LABEL_COL, **filter_kwargs)
+        rois = _determine_labels(rois, nuc_label_img=mask_images[i].compute(), new_col=NUC_LABEL_COL, **filter_kwargs)
         subtables.append(rois.copy())
     
     return pd.concat(subtables).sort_values([FIELD_OF_VIEW_COLUMN, "timepoint"])
@@ -155,7 +154,7 @@ def _add_nucleus_labels(
 def run_labeling(*, rois: pd.DataFrame, image_handler: ImageHandler, nuc_detector: Optional[NucDetector] = None) -> pd.DataFrame:
     if nuc_detector is None:
         nuc_detector = NucDetector(image_handler)
-    return _add_nucleus_labels(
+    return add_nucleus_labels(
         rois_table=rois, 
         mask_images=nuc_detector.mask_images, 
         fov_names=image_handler.image_lists[image_handler.spot_input_name], 

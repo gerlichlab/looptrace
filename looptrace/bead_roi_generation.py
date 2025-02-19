@@ -29,6 +29,13 @@ from gertils import ExtantFolder
 from looptrace import ArrayDimensionalityError
 from looptrace.ImageHandler import bead_rois_filename
 from looptrace.filepaths import simplify_path
+from looptrace.image_processing_functions import (
+    CENTROID_KEY, 
+    X_CENTER_COLNAME, 
+    Y_CENTER_COLNAME, 
+    Z_CENTER_COLNAME,
+    get_centroid_column_name_remapping,
+)
 from looptrace.numeric_types import NumberLike
 
 PathLike = Union[str, Path]
@@ -36,6 +43,7 @@ PathLike = Union[str, Path]
 
 AREA_COLUMN_NAME = "area"
 FAIL_CODE_COLUMN_NAME = "fail_code"
+INDEX_COLUMN_NAME = "beadIndex"
 INTENSITY_COLUMN_NAME = "max_intensity"
 
 
@@ -124,10 +132,10 @@ def generate_all_bead_rois_from_getter(
         fn: str = bead_rois_filename(fov_idx=fov_idx, timepoint=timepoint_idx, purpose=None)
         return output_folder / fn
     
-    def proc1(img: np.ndarray, outfile: Path) -> Tuple[Path, pd.DataFrame]:
+    def proc1(img: np.ndarray, outfile: Path) -> tuple[Path, pd.DataFrame]:
         rois = params.compute_labeled_regions(img=img)
         print(f"Writing ROIs: {outfile}")
-        rois.to_csv(outfile) # This call generates each bead_rois__<FOV>_<TIME>.csv file.
+        rois.to_csv(outfile, index_label=INDEX_COLUMN_NAME) # This call generates each bead_rois__<FOV>_<TIME>.csv file.
         return outfile, rois
     
     return Parallel(**joblib_kwargs)(
@@ -207,7 +215,7 @@ class BeadRoiParameters:
         if unfiltered_filepath:
             print(f"Writing unfiltered bead ROIs: {unfiltered_filepath}")
             unfiltered_filepath.parent.mkdir(parents=False, exist_ok=True)
-            img_maxima.to_csv(unfiltered_filepath)
+            img_maxima.to_csv(unfiltered_filepath, index_label=INDEX_COLUMN_NAME)
 
         print("Filtering bead ROIs")
         num_unfiltered = len(img_maxima)
@@ -231,9 +239,9 @@ class BeadRoiParameters:
         
         if filtered_filepath:
             print(f"Writing sampled bead ROIs: {filtered_filepath}")
-            img_maxima.to_csv(filtered_filepath)
+            img_maxima.to_csv(filtered_filepath, index_label=INDEX_COLUMN_NAME)
 
-        return np.round(img_maxima[["centroid-0", "centroid-1", "centroid-2"]].to_numpy()).astype(int)
+        return np.round(img_maxima[[Z_CENTER_COLNAME, Y_CENTER_COLNAME, X_CENTER_COLNAME]].to_numpy()).astype(int)
 
     def compute_labeled_regions(self, img: np.ndarray) -> pd.DataFrame:
         """Find contiguous regions (according to instance settings) within given image, and assign fail code(s)."""
@@ -243,7 +251,11 @@ class BeadRoiParameters:
             raise TypeError(f"Image must be 3D array; got dimension of {len(img.shape)}")
         
         # Segment the image into contiguous regions of signal above the current threshold.
-        img_maxima = self._extract_regions(img)
+        img_maxima: pd.DataFrame = self._extract_regions(img)
+
+        # Convert the scikit-image property names to more meaningful column names.
+        colname_remapping: Mapping[str, str] = get_centroid_column_name_remapping(ndim=3)
+        img_maxima = img_maxima.rename(columns=colname_remapping)
         
         # Apply failure code labels based on the regional filtration criteria.
         img_maxima[FAIL_CODE_COLUMN_NAME] = self._compute_discard_reasons(regions=img_maxima)
@@ -255,7 +267,7 @@ class BeadRoiParameters:
         img_label, num_labels = self._segment_image(img)
         print("Number of unfiltered beads found: ", num_labels)
         # Extract the relevant data for each of the segmented regions.
-        return pd.DataFrame(regionprops_table(img_label, img, properties=("centroid", INTENSITY_COLUMN_NAME, AREA_COLUMN_NAME)))
+        return pd.DataFrame(regionprops_table(img_label, img, properties=(CENTROID_KEY, INTENSITY_COLUMN_NAME, AREA_COLUMN_NAME)))
 
     def _compute_discard_reasons(self, regions: pd.DataFrame) -> pd.Series:
         # TODO: why divide-by-2 here?
@@ -264,9 +276,9 @@ class BeadRoiParameters:
         too_high = (lambda _: False) if self.max_intensity_for_detection is None \
             else (lambda row: row [INTENSITY_COLUMN_NAME] > self.max_intensity_for_detection)
         invalidation_label_pairs = [
-            (lambda row: row["centroid-0"] <= roi_px, self.BeadFailReason.OutOfBoundsZ), 
-            (lambda row: row["centroid-1"] <= roi_px, self.BeadFailReason.OutOfBoundsY), 
-            (lambda row: row["centroid-2"] <= roi_px, self.BeadFailReason.OutOfBoundsX), 
+            (lambda row: row[Z_CENTER_COLNAME] <= roi_px, self.BeadFailReason.OutOfBoundsZ), 
+            (lambda row: row[Y_CENTER_COLNAME] <= roi_px, self.BeadFailReason.OutOfBoundsY), 
+            (lambda row: row[X_CENTER_COLNAME] <= roi_px, self.BeadFailReason.OutOfBoundsX), 
             (lambda row: row[AREA_COLUMN_NAME] > self.max_region_size, self.BeadFailReason.TooBig), 
             (lambda row: row[INTENSITY_COLUMN_NAME] < self.min_intensity_for_detection, self.BeadFailReason.TooDim), 
             (too_high, self.BeadFailReason.TooBright), 

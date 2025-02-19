@@ -24,16 +24,30 @@ from looptrace.wrappers import phase_xcor
 __author__ = "Kai Sandvold Beckwith"
 __credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 
+CENTROID_KEY = "centroid"
 X_CENTER_COLNAME = "xc"
 Y_CENTER_COLNAME = "yc"
 Z_CENTER_COLNAME = "zc"
 CENTROID_COLUMNS_REMAPPING = {
-    "centroid_weighted-0": Z_CENTER_COLNAME, 
-    "centroid_weighted-1": Y_CENTER_COLNAME, 
-    "centroid_weighted-2": X_CENTER_COLNAME,
+    f"{CENTROID_KEY}_weighted-0": Z_CENTER_COLNAME, 
+    f"{CENTROID_KEY}_weighted-1": Y_CENTER_COLNAME, 
+    f"{CENTROID_KEY}_weighted-2": X_CENTER_COLNAME,
     }
 
 PixelValue = Union[np.uint8, np.uint16]
+
+
+def get_centroid_column_name_remapping(ndim: int) -> Mapping[str, str]:
+    if not isinstance(ndim, int):
+        raise TypeError(f"Dimension count isn't int, but {type(ndim).__name__}")
+    if ndim == 2:
+        newcols = [Y_CENTER_COLNAME, X_CENTER_COLNAME]
+    elif ndim == 3:
+        newcols = [Z_CENTER_COLNAME, Y_CENTER_COLNAME, X_CENTER_COLNAME]
+    else:
+        raise ValueError(f"Image for regional centroid e xtraction is neither 2D nor 3D, but {ndim}D; shape: {img.shape}")
+    colname_mapping = {f"{CENTROID_KEY}-{i}": newcol for i, newcol in enumerate(newcols)}
+    return colname_mapping    
 
 
 # TODO: integrate numpydoc_decorator.
@@ -45,21 +59,14 @@ PixelValue = Union[np.uint8, np.uint16]
 #     see_also=dict(regionprops_table="Function from scikit-image which computes the centroids"),
 # )
 def extract_labeled_centroids(img: npt.NDArray[PixelValue]) -> pd.DataFrame:
-    centroid_key = "centroid"
     # Here we need to account for 2D or 3D image, and the fact that these centroids can't be weighted, 
     # since we don't pass the intensity image, just rather the masks image.
     new_shape: tuple[int, ...] = tuple(itertools.dropwhile(lambda k: k == 1, img.shape))
     logging.info(f"For centroids' extraction, reshaping image: {img.shape} --> {new_shape}")
     img = img.reshape(new_shape)
     ndim = len(img.shape)
-    if ndim == 2:
-        newcols = [Y_CENTER_COLNAME, X_CENTER_COLNAME]
-    elif ndim == 3:
-        newcols = [Z_CENTER_COLNAME, Y_CENTER_COLNAME, X_CENTER_COLNAME]
-    else:
-        raise ValueError(f"Image for regional centroid e xtraction is neither 2D nor 3D, but {ndim}D; shape: {img.shape}")
-    colname_mapping = {f"{centroid_key}-{i}": newcol for i, newcol in enumerate(newcols)}
-    props = regionprops_table(img, properties=("label", centroid_key))
+    colname_mapping = get_centroid_column_name_remapping(ndim)
+    props = regionprops_table(img, properties=("label", CENTROID_KEY))
     table = pd.DataFrame(props)
     return table.rename(columns=colname_mapping, errors="raise", inplace=False)
 
