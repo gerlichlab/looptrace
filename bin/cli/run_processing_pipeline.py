@@ -36,7 +36,7 @@ from decon import workflow as run_deconvolution
 from drift_correct_accuracy_analysis import workflow as run_drift_correction_analysis, run_visualisation as run_drift_correction_accuracy_visualisation
 from detect_spots import workflow as run_spot_detection
 from assign_spots_to_nucs import NUC_LABEL_COL, run_labeling as label_spots_with_nuclei, workflow as run_spot_nucleus_assignment
-from partition_regional_spots_by_field_of_view import workflow as prep_regional_spots_visualisation
+from partition_regional_spots_for_locus_spots_visualisation import workflow as prep_regional_spots_visualisation
 from extract_spots_table import workflow as run_spot_bounding
 from extract_spots import workflow as run_spot_extraction
 from zip_spot_image_files_for_tracing import workflow as run_spot_zipping
