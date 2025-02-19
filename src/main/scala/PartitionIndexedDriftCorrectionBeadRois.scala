@@ -539,10 +539,10 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
 
     /** Helpers for working with the parser configuration */
     object ParserConfig:
-        val indexCol = "" // This is the pandas.DataFrame.to_csv way to write the index by default.
-        val xCol = XColumn("centroid-2")
-        val yCol = YColumn("centroid-1")
-        val zCol = ZColumn("centroid-0")
+        val indexCol = "beadIndex"
+        val xCol = XColumn("xc")
+        val yCol = YColumn("yc")
+        val zCol = ZColumn("zc")
         val qcCol = "fail_code"
         val coordinateSequence = CoordinateSequence.Reverse
     end ParserConfig
