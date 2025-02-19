@@ -181,6 +181,7 @@ def workflow(
                         by_raw_channel: Mapping[int, list[dict]] = defaultdict(list)
                         # TODO: refactor with https://github.com/gerlichlab/gertils/issues/32
                         for fov, raw_img in N.iterate_over_pairs_of_fov_name_and_original_image():
+                            fov: str = fov.removesuffix(".zarr")
                             img = raw_img.compute()
                             logging.info(f"Analysing signal for FOV: {fov}")
                             nuc_drift: DriftRecord = all_nuclei_drifts[fov]
@@ -244,10 +245,10 @@ def read_drift_file(drift_file: Path, get_key: Callable[[pd.Series], _K]) -> Map
     
 
 read_signal_drifts_file: Callable[[Path], Mapping[FieldOfViewName, "DriftRecord"]] = \
-    read_drift_file(lambda row: row[FIELD_OF_VIEW_COLUMN])
+    read_drift_file(lambda row: row[FIELD_OF_VIEW_COLUMN].removesuffix(".zarr"))
 
 read_spot_drifts_file: Callable[[Path], Mapping[tuple[FieldOfViewName, RawTimepoint], "DriftRecord"]] = \
-    read_drift_file(lambda row: (row[FIELD_OF_VIEW_COLUMN], row[TIMEPOINT_COLUMN]))
+    read_drift_file(lambda row: (row[FIELD_OF_VIEW_COLUMN].removesuffix(".zarr"), row[TIMEPOINT_COLUMN]))
 
 
 
