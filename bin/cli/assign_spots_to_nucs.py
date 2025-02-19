@@ -134,7 +134,7 @@ def add_nucleus_labels(
     if labeling_target_type == LabelingTargetType.FISH:
         get_rois = query_table_for_fov(rois_table)
     elif labeling_target_type == LabelingTargetType.Bead:
-        get_rois = identity
+        get_rois = lambda _: rois_table
     else:
         raise RuntimeError(f"Unexpected value for labeling target type (type {type(labeling_target_type).__name__}): {labeling_target_type}")
 
