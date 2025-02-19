@@ -1,11 +1,13 @@
 """Filter detected spots for overlap with detected nuclei."""
 
 import argparse
+from enum import Enum
 import logging
 from pathlib import Path
 from typing import *
 
 import dask.array as da
+from expression import identity
 import numpy as np
 import pandas as pd
 import tqdm
@@ -110,26 +112,39 @@ def _determine_labels(
     return new_rois
 
 
+class LabelingTargetType(Enum):
+    """Which type of ROI is being labeled with nucleus ID; determines how to filter"""
+    Bead = "fiducial bead"
+    FISH = "FISH spot"
+
+
 def add_nucleus_labels(
     *, 
     rois_table: pd.DataFrame, 
     mask_images: list[tuple[FieldOfViewName, da.Array]], 
     nuclei_drift_file: Path, 
     spots_drift_file: Path, 
+    labeling_target_type: LabelingTargetType,
 ) -> pd.DataFrame:
     
-    def query_table_for_fov(table: pd.DataFrame) -> Callable[[str], pd.DataFrame]:
+    def query_table_for_fov(table: pd.DataFrame) -> Callable[[FieldOfViewName], pd.DataFrame]:
         return (lambda fov: table.query('fieldOfView == @fov'))
 
-    get_rois: Callable[[str], pd.DataFrame] = query_table_for_fov(rois_table)
+    get_rois: Callable[[FieldOfViewName], pd.DataFrame]
+    if labeling_target_type == LabelingTargetType.FISH:
+        get_rois = query_table_for_fov(rois_table)
+    elif labeling_target_type == LabelingTargetType.Bead:
+        get_rois = identity
+    else:
+        raise RuntimeError(f"Unexpected value for labeling target type (type {type(labeling_target_type).__name__}): {labeling_target_type}")
 
     logging.info("Reading drift file for nuclei: %s", nuclei_drift_file)
     drift_table_nuclei = pd.read_csv(nuclei_drift_file, index_col=False)
-    get_nuc_drifts: Callable[[str], pd.DataFrame] = query_table_for_fov(drift_table_nuclei)
+    get_nuc_drifts: Callable[[FieldOfViewName], pd.DataFrame] = query_table_for_fov(drift_table_nuclei)
     
     logging.info("Reading coarse-drift file for spots: %s", spots_drift_file)
     drift_table_spots = pd.read_csv(spots_drift_file, index_col=False)
-    get_spot_drifts: Callable[[str], pd.DataFrame] = query_table_for_fov(drift_table_spots)    
+    get_spot_drifts: Callable[[FieldOfViewName], pd.DataFrame] = query_table_for_fov(drift_table_spots)    
     
     subtables: list[pd.DataFrame] = []
 
@@ -152,7 +167,13 @@ def add_nucleus_labels(
     return pd.concat(subtables).sort_values([FIELD_OF_VIEW_COLUMN, "timepoint"])
 
 
-def run_labeling(*, rois: pd.DataFrame, image_handler: ImageHandler, nuc_detector: Optional[NucDetector] = None) -> pd.DataFrame:
+def run_labeling(
+    *, 
+    rois: pd.DataFrame, 
+    image_handler: ImageHandler, 
+    labeling_target_type: LabelingTargetType, 
+    nuc_detector: Optional[NucDetector] = None,
+) -> pd.DataFrame:
     if nuc_detector is None:
         nuc_detector = NucDetector(image_handler)
     fov_names: Iterable[str] = image_handler.image_lists[image_handler.spot_input_name]
@@ -161,6 +182,7 @@ def run_labeling(*, rois: pd.DataFrame, image_handler: ImageHandler, nuc_detecto
         mask_images=[(pos, nuc_detector.mask_images[i]) for i, pos in enumerate(fov_names)], 
         nuclei_drift_file=nuc_detector.drift_correction_file__coarse, 
         spots_drift_file=image_handler.drift_correction_file__coarse,
+        labeling_target_type=labeling_target_type,
     )
 
 

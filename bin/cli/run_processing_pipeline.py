@@ -38,7 +38,13 @@ from analyse_detected_bead_rois import workflow as run_all_bead_roi_detection_an
 from decon import workflow as run_deconvolution
 from drift_correct_accuracy_analysis import workflow as run_drift_correction_analysis, run_visualisation as run_drift_correction_accuracy_visualisation
 from detect_spots import workflow as run_spot_detection
-from assign_spots_to_nucs import NUC_LABEL_COL, add_nucleus_labels, run_labeling as label_spots_with_nuclei, workflow as run_spot_nucleus_assignment
+from assign_spots_to_nucs import (
+    NUC_LABEL_COL, 
+    LabelingTargetType, 
+    add_nucleus_labels, 
+    run_labeling as label_spots_with_nuclei, 
+    workflow as run_spot_nucleus_assignment,
+)
 from partition_regional_spots_for_locus_spots_visualisation import workflow as prep_regional_spots_visualisation
 from extract_spots_table import workflow as run_spot_bounding
 from extract_spots import workflow as run_spot_extraction
@@ -506,6 +512,7 @@ def discard_beads_in_nuclei(
             mask_images=[fov_mask_pairs[fov_idx]],
             nuclei_drift_file=H.nuclei_coarse_drift_correction_file,
             spots_drift_file=H.drift_correction_file__coarse,
+            labeling_target_type=LabelingTargetType.Bead,
         )
         old_num_rois: int = bead_rois.shape[0]
         bead_rois = bead_rois[bead_rois[NUC_LABEL_COL] != 0]
