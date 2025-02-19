@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.12.1] - 2025-02-19
+
+### Fixed
+* Field of view name matching for cross-channel signal analysis. See [Issue 424](https://github.com/gerlichlab/looptrace/issues/424).
+
 ## [v0.12.0] - 2025-02-18
 
 ### Added
@@ -29,6 +34,9 @@ __Dependency changes (non-exhaustive)__:
 * Filtration of ROIs through the nuclear masks is now done before the merger of ROIs based on proximity.
 * Bumped the lower bound on the `nd2` dependency up from 0.5.3 to 0.10.1. See [Issue 423](https://github.com/gerlichlab/looptrace/issues/423).
 * `os-lib` is now at version 0.11.3.
+
+### Known Issues
+* Cross-channel signal analysis won't work. See [Issue 424](https://github.com/gerlichlab/looptrace/issues/424).
 
 ## [v0.11.3] - 2024-12-03
 
