@@ -27,6 +27,7 @@ from looptrace import FIELD_OF_VIEW_COLUMN, ZARR_CONVERSIONS_KEY, ConfigurationV
 from looptrace.configuration import get_minimum_regional_spot_separation
 from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, FilePathLike, FolderPathLike, get_analysis_path, simplify_path
 from looptrace.image_io import ignore_path, NPZ_wrapper
+from looptrace.image_processing_functions import CENTROID_KEY
 from looptrace.numeric_types import NumberLike
 from looptrace.utilities import read_csv_maybe_empty
 
@@ -121,7 +122,7 @@ def bead_rois_filename(fov_idx: int, timepoint: int, purpose: Optional[str]) -> 
 def _read_bead_rois_file(fp: ExtantFile) -> np.ndarray[int]:
     with open(fp, "r") as fh:
         data = json.load(fh)
-    return np.round(np.array(list(map(lambda obj: np.array(obj["centroid"]), data)))).astype(int)
+    return np.round(np.array(list(map(lambda obj: np.array(obj[CENTROID_KEY]), data)))).astype(int)
 
 
 class ImageHandler:

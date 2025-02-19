@@ -10,7 +10,9 @@ import subprocess
 import sys
 from typing import *
 
+import dask.array as da
 from expression import Option, result
+from expression.collections import Seq
 from gertils import ExtantFile, ExtantFolder
 import pandas as pd
 import pypiper
@@ -18,9 +20,10 @@ import yaml
 
 from looptrace import *
 from looptrace.Drifter import coarse_correction_workflow, fine_correction_workflow as run_fine_drift_correction
-from looptrace.ImageHandler import ImageHandler
+from looptrace.ImageHandler import BeadRoisFilenameSpecification, ImageHandler
 from looptrace.NucDetector import NucDetector
 from looptrace.Tracer import Tracer, run_timepoint_name_and_distance_application
+from looptrace.bead_roi_generation import INDEX_COLUMN_NAME as BEAD_INDEX_COLUMN_NAME
 from looptrace.configuration import KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS
 from looptrace.conversion_to_zarr import one_to_one as run_zarr_production
 from looptrace.image_processing_functions import extract_labeled_centroids
@@ -35,7 +38,12 @@ from analyse_detected_bead_rois import workflow as run_all_bead_roi_detection_an
 from decon import workflow as run_deconvolution
 from drift_correct_accuracy_analysis import workflow as run_drift_correction_analysis, run_visualisation as run_drift_correction_accuracy_visualisation
 from detect_spots import workflow as run_spot_detection
-from assign_spots_to_nucs import NUC_LABEL_COL, run_labeling as label_spots_with_nuclei, workflow as run_spot_nucleus_assignment
+from assign_spots_to_nucs import (
+    NUC_LABEL_COL, 
+    add_nucleus_labels, 
+    run_labeling as label_spots_with_nuclei, 
+    workflow as run_spot_nucleus_assignment,
+)
 from partition_regional_spots_for_locus_spots_visualisation import workflow as prep_regional_spots_visualisation
 from extract_spots_table import workflow as run_spot_bounding
 from extract_spots import workflow as run_spot_extraction
@@ -50,6 +58,8 @@ NO_TEE_LOGS_OPTNAME = "--do-not-tee-logs"
 PIPE_NAME = "looptrace"
 SPOT_DETECTION_STAGE_NAME = "spot_detection"
 TRACING_QC_STAGE_NAME = "tracing_QC"
+
+FieldOfViewName: TypeAlias = str
 
 
 class SpotType(Enum):
@@ -469,13 +479,49 @@ def prefilter_spots_for_nuclei(rounds_config: ExtantFile, params_config: ExtantF
     logging.info(f"Reading ROIs file for pre-merge filtration: {rois_file}")
     rois: pd.DataFrame = pd.read_csv(rois_file, index_col=False)
     logging.debug(f"Initial ROI count: {rois.shape[0]}")
-    rois: pd.DataFrame = label_spots_with_nuclei(rois=rois, image_handler=H)
+    rois: pd.DataFrame = label_spots_with_nuclei(rois=rois, image_handler=H, timepoint=Option.Nothing())
     rois = rois[rois[NUC_LABEL_COL] != 0]
     logging.debug(f"ROIs remaining after prefiltration through nuclei: {rois.shape[0]}")
     rois = rois.drop([NUC_LABEL_COL], axis="columns")
     logging.debug(f"Writing ROIs: {H.spots_prefiltered_through_nuclei_file}")
     rois.to_csv(H.spots_prefiltered_through_nuclei_file, index=False)
     logging.info("Done with nuclei-based spot prefiltration")
+
+
+def discard_beads_in_nuclei(
+    rounds_config: ExtantFile, 
+    params_config: ExtantFile, 
+    images_folder: ExtantFolder,
+) -> None:
+    def get_spec_opt(fn: str) -> Option[tuple[BeadRoisFilenameSpecification, Path]]:
+        return Option.of_optional(BeadRoisFilenameSpecification.from_filename(fn)).map(lambda spec: (spec, H.bead_rois_path / fn))
+    
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
+    fov_mask_pairs: list[tuple[FieldOfViewName, da.Array]] = list(zip(H.image_lists[H.spot_input_name], H.images[NucDetector.MASKS_KEY], strict=True))
+    
+    spec_file_pairs: list[tuple[BeadRoisFilenameSpecification, Path]] = \
+        Seq.of_iterable(os.listdir(H.bead_rois_path)).choose(get_spec_opt).to_list()
+    
+    logging.info("Bead files count: %d", len(spec_file_pairs))
+    for bead_spec, rois_file in spec_file_pairs:
+        fov_idx: int = bead_spec.fov
+        bead_rois: pd.DataFrame = pd.read_csv(rois_file, index_col=BEAD_INDEX_COLUMN_NAME)
+        bead_rois: pd.DataFrame = add_nucleus_labels(
+            rois_table=bead_rois, 
+            mask_images=[fov_mask_pairs[fov_idx]],
+            nuclei_drift_file=H.nuclei_coarse_drift_correction_file,
+            spots_drift_file=H.drift_correction_file__coarse,
+            timepoint=Option.Some(bead_spec.timepoint),
+        )
+        old_num_rois: int = bead_rois.shape[0]
+        bead_rois = bead_rois[bead_rois[NUC_LABEL_COL] != 0]
+        new_num_rois: int = bead_rois.shape[0]
+        logging.info("%s: %d --> %d", rois_file, old_num_rois, new_num_rois)
+        bead_rois.reset_index().to_csv(rois_file, index_label=BEAD_INDEX_COLUMN_NAME)
+
+
+def discard_spots_close_to_beads(rounds_config: ExtantFile, params_config: ExtantFile) -> None:
+    raise NotImplementedError("Spot discard by bead proximity isn't yet implemented.")
 
 
 class LooptracePipeline(pypiper.Pipeline):
@@ -518,6 +564,7 @@ class LooptracePipeline(pypiper.Pipeline):
             pypiper.Stage(name="drift_correction__coarse", func=run_coarse_drift_correction, f_kwargs=rounds_params_images), 
             # Find/define all the bead ROIs in each (FOV, timepoint) pair.
             pypiper.Stage(name="bead_roi_generation", func=gen_all_bead_rois, f_kwargs=rounds_params_images),
+            pypiper.Stage(name="bead_filtration_through_nuclei", func=discard_beads_in_nuclei, f_kwargs=rounds_params_images),
             # Count detected bead ROIs for each timepoint, mainly to see if anything went awry during some phase of the imaging, e.g. air bubble.
             pypiper.Stage(name="bead_roi_detection_analysis", func=run_all_bead_roi_detection_analysis, f_kwargs=rounds_params_images),
             pypiper.Stage(name="bead_roi_partition", func=partition_bead_rois, f_kwargs=rounds_params_images),
@@ -533,6 +580,11 @@ class LooptracePipeline(pypiper.Pipeline):
                 name="pre_merge_filtration_through_nuclei", 
                 func=prefilter_spots_for_nuclei, 
                 f_kwargs=rounds_params_images, # Images are needed since H.image_lists is iterated in workflow.
+            ), 
+            pypiper.Stage(
+                name="spot_bead_proximity_filtration", 
+                func=discard_spots_close_to_beads, 
+                f_kwargs=rounds_params, # Images are not needed since only bead coordinates and spot coordinates are needed.
             ), 
             pypiper.Stage(name="spot_merge_determination", func=run_spot_merge_determination, f_kwargs=rounds_params),
             pypiper.Stage(name="spot_merge_execution", func=run_spot_merge_execution, f_kwargs=rounds_params),
