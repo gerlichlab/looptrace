@@ -10,7 +10,8 @@ import subprocess
 import sys
 from typing import *
 
-from expression import Option, option, result
+import dask.array as da
+from expression import Option, result
 from expression.collections import Seq
 from gertils import ExtantFile, ExtantFolder
 import pandas as pd
@@ -37,7 +38,7 @@ from analyse_detected_bead_rois import workflow as run_all_bead_roi_detection_an
 from decon import workflow as run_deconvolution
 from drift_correct_accuracy_analysis import workflow as run_drift_correction_analysis, run_visualisation as run_drift_correction_accuracy_visualisation
 from detect_spots import workflow as run_spot_detection
-from assign_spots_to_nucs import NUC_LABEL_COL, run_labeling as label_spots_with_nuclei, workflow as run_spot_nucleus_assignment
+from assign_spots_to_nucs import NUC_LABEL_COL, add_nucleus_labels, run_labeling as label_spots_with_nuclei, workflow as run_spot_nucleus_assignment
 from partition_regional_spots_for_locus_spots_visualisation import workflow as prep_regional_spots_visualisation
 from extract_spots_table import workflow as run_spot_bounding
 from extract_spots import workflow as run_spot_extraction
@@ -52,6 +53,8 @@ NO_TEE_LOGS_OPTNAME = "--do-not-tee-logs"
 PIPE_NAME = "looptrace"
 SPOT_DETECTION_STAGE_NAME = "spot_detection"
 TRACING_QC_STAGE_NAME = "tracing_QC"
+
+FieldOfViewName: TypeAlias = str
 
 
 class SpotType(Enum):
@@ -489,14 +492,20 @@ def discard_beads_in_nuclei(
         return Option.of_optional(BeadRoisFilenameSpecification.from_filename(fn)).map(lambda spec: (spec, H.bead_rois_path / fn))
     
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
+    fov_mask_pairs: list[tuple[FieldOfViewName, da.Array]] = list(zip(H.image_lists[H.spot_input_name], H.images[NucDetector.MASKS_KEY], strict=True))
+    
     spec_file_pairs: list[tuple[BeadRoisFilenameSpecification, Path]] = \
         Seq.of_iterable(os.listdir(H.bead_rois_path)).choose(get_spec_opt).to_list()
+    
     logging.info("Bead files count: %d", len(spec_file_pairs))
-    for _, rois_file in spec_file_pairs:
+    for bead_spec, rois_file in spec_file_pairs:
+        fov_idx: int = bead_spec.fov
         bead_rois: pd.DataFrame = pd.read_csv(rois_file, index_col=BEAD_INDEX_COLUMN_NAME)
-        bead_rois: pd.DataFrame = label_spots_with_nuclei(
+        bead_rois: pd.DataFrame = add_nucleus_labels(
             rois_table=bead_rois, 
-            image_handler=H,
+            mask_images=[fov_mask_pairs[fov_idx]],
+            nuclei_drift_file=H.nuclei_coarse_drift_correction_file,
+            spots_drift_file=H.drift_correction_file__coarse,
         )
         old_num_rois: int = bead_rois.shape[0]
         bead_rois = bead_rois[bead_rois[NUC_LABEL_COL] != 0]
