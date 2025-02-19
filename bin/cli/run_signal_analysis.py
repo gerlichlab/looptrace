@@ -200,18 +200,21 @@ def workflow(
                                 except ValueError as e:
                                     logging.error(f"Can't compute shifted center for original center {pt0}: {e}")
                                 else:
-                                    # TODO: need to be robust to bounding box with negative coordinate(s)
-                                    # TODO: https://github.com/gerlichlab/gertils/issues/34
-                                    for stats in compute_pixel_statistics(
-                                        img=img,
-                                        pt=dc_pt,
-                                        channels=spec.channels, 
-                                        diameter=spec.roi_diameter,
-                                        channel_column=SIGNAL_CHANNEL_COLUMN,
-                                    ):
-                                        ch: int = stats[SIGNAL_CHANNEL_COLUMN]
-                                        # Add the original record and signal stats to the growing collection for this channel.
-                                        by_raw_channel[ch].append({**r.to_dict(), **stats})
+                                    if dc_pt.z < 0:
+                                        logging.error(f"Can't extract signal for negative z-coordinate: {dc_pt.z}")
+                                    else:
+                                        # TODO: need to be robust to bounding box with negative coordinate(s)
+                                        # TODO: https://github.com/gerlichlab/gertils/issues/34
+                                        for stats in compute_pixel_statistics(
+                                            img=img,
+                                            pt=dc_pt,
+                                            channels=spec.channels, 
+                                            diameter=spec.roi_diameter,
+                                            channel_column=SIGNAL_CHANNEL_COLUMN,
+                                        ):
+                                            ch: int = stats[SIGNAL_CHANNEL_COLUMN]
+                                            # Add the original record and signal stats to the growing collection for this channel.
+                                            by_raw_channel[ch].append({**r.to_dict(), **stats})
                         
                         # Write the output file for this ROI type, across all FOVs.
                         for raw_channel, records in sorted(by_raw_channel.items(), key=itemgetter(0)):

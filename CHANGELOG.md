@@ -8,6 +8,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 
 ### Fixed
 * Field of view name matching for cross-channel signal analysis. See [Issue 424](https://github.com/gerlichlab/looptrace/issues/424).
+* Safety against negative z-slice in cross-channel signal analysis
 
 ## [v0.12.0] - 2025-02-18
 
