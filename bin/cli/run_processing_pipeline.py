@@ -581,11 +581,11 @@ class LooptracePipeline(pypiper.Pipeline):
                 func=prefilter_spots_for_nuclei, 
                 f_kwargs=rounds_params_images, # Images are needed since H.image_lists is iterated in workflow.
             ), 
-            pypiper.Stage(
-                name="spot_bead_proximity_filtration", 
-                func=discard_spots_close_to_beads, 
-                f_kwargs=rounds_params, # Images are not needed since only bead coordinates and spot coordinates are needed.
-            ), 
+            # pypiper.Stage(
+            #     name="spot_bead_proximity_filtration", 
+            #     func=discard_spots_close_to_beads, 
+            #     f_kwargs=rounds_params, # Images are not needed since only bead coordinates and spot coordinates are needed.
+            # ), 
             pypiper.Stage(name="spot_merge_determination", func=run_spot_merge_determination, f_kwargs=rounds_params),
             pypiper.Stage(name="spot_merge_execution", func=run_spot_merge_execution, f_kwargs=rounds_params),
             pypiper.Stage(name="spot_proximity_filtration", func=run_spot_proximity_filtration, f_kwargs=rounds_params_images),
