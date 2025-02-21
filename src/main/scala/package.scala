@@ -198,10 +198,10 @@ package object looptrace {
     /** Helpers for working with the String refinement representing field of view name */
     object OneBasedFourDigitPositionName:
         /** Attempt to further refine the position name as one in compliance with using 4 digits for a one-based count */
-        def fromPositionName(trimZarr: Boolean): PositionName => Either[String, OneBasedFourDigitPositionName] = 
-            ((_: PositionName).show_) `andThen` fromString(trimZarr)
+        def fromPositionName: PositionName => Either[String, OneBasedFourDigitPositionName] = 
+            ((_: PositionName).show_) `andThen` fromString(true)
         
-        def fromString(trimZarr: Boolean): String => Either[String, OneBasedFourDigitPositionName] = 
+        private def fromString(trimZarr: Boolean): String => Either[String, OneBasedFourDigitPositionName] = 
             s => (if trimZarr then s.stripSuffix(".zarr") else s).refineEither[OneBasedFourDigitPositionNameConstraint]
     end OneBasedFourDigitPositionName
 }

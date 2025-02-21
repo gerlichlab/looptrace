@@ -546,7 +546,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                     override def apply(cell: FieldOfViewLike): String = cell match {
                         case fov: FieldOfView => CellEncoder[FieldOfView].apply(fov)
                         case pos: PositionName => 
-                            OneBasedFourDigitPositionName.fromPositionName(true)(pos).fold(
+                            OneBasedFourDigitPositionName.fromPositionName(pos).fold(
                                 msg => throw new RuntimeException(msg),
                                 identity
                             )
