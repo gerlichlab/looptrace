@@ -155,7 +155,7 @@ def _determine_labels(
     center_column_names = [Z_CENTER_COLNAME, Y_CENTER_COLNAME, X_CENTER_COLNAME]
     drift_column_names = ["zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels"]
 
-    for _, row in rois_shifted.iterrows():
+    for _, row in tqdm.tqdm(rois_shifted.iterrows()):
         drift_target = nuc_drift[drift_column_names].to_numpy()
         drift_roi = spot_drifts[spot_drifts["timepoint"] == get_roi_time(row)][drift_column_names].to_numpy()
         shift = drift_target - drift_roi
