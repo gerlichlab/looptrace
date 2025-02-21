@@ -512,7 +512,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
             name -> traceGroupMaybe
         
         def fromRecord(r: LocusSpotQC.OutputRecord): Either[String, LocusSpotViewingKey] = 
-            OneBasedFourDigitPositionName.fromPositionName(true)(r.fieldOfView).map(apply(_, r.traceGroupMaybe))
+            OneBasedFourDigitPositionName.fromPositionName(r.fieldOfView).map(apply(_, r.traceGroupMaybe))
         
         def unsafeFomRecord(r: LocusSpotQC.OutputRecord): LocusSpotViewingKey = 
             fromRecord(r).fold(

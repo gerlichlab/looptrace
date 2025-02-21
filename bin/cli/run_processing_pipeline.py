@@ -479,7 +479,12 @@ def prefilter_spots_for_nuclei(rounds_config: ExtantFile, params_config: ExtantF
     logging.info(f"Reading ROIs file for pre-merge filtration: {rois_file}")
     rois: pd.DataFrame = pd.read_csv(rois_file, index_col=False)
     logging.debug(f"Initial ROI count: {rois.shape[0]}")
-    rois: pd.DataFrame = label_spots_with_nuclei(rois=rois, image_handler=H, timepoint=Option.Nothing())
+    rois: pd.DataFrame = label_spots_with_nuclei(
+        rois=rois, 
+        image_handler=H, 
+        timepoint=Option.Nothing(),
+        remove_zarr_suffix=True,
+    )
     rois = rois[rois[NUC_LABEL_COL] != 0]
     logging.debug(f"ROIs remaining after prefiltration through nuclei: {rois.shape[0]}")
     rois = rois.drop([NUC_LABEL_COL], axis="columns")
@@ -512,6 +517,7 @@ def discard_beads_in_nuclei(
             nuclei_drift_file=H.nuclei_coarse_drift_correction_file,
             spots_drift_file=H.drift_correction_file__coarse,
             timepoint=Option.Some(bead_spec.timepoint),
+            remove_zarr_suffix=False,
         )
         old_num_rois: int = bead_rois.shape[0]
         bead_rois = bead_rois[bead_rois[NUC_LABEL_COL] == 0] # Here, we want NON-nuclear beads.

@@ -10,6 +10,11 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 * Add a proximity filter between beads and FISH spots. In other words, discard any "FISH spot" which is too close to a bead. Again, this is related to the idea of mixing up the two, especially during single-channel tracing. 
 See [Issue 400](https://github.com/gerlichlab/looptrace/issues/400) and [Issue 403](https://github.com/gerlichlab/looptrace/issues/403).
 
+## [v0.13.1] - 2025-02-21
+
+### Fixed
+* Bug whereby matching of field of view name in main ROIs file to field of view name from ROIs table in prefiltering-through-nuclei could fail
+
 ## [v0.13.0] - 2025-02-21
 
 ### Added

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import *
 
 import dask.array as da
-from expression import Option
+from expression import Option, identity
 import numpy as np
 import pandas as pd
 import tqdm
@@ -40,6 +40,7 @@ def _determine_labels(
     nuc_drift: pd.DataFrame, 
     spot_drifts: pd.DataFrame,
     timepoint: Option[int],
+    remove_zarr_suffix_on_fov_name: bool, 
 ) -> pd.DataFrame:
     """
     Check if a spot is in inside a segmented nucleus.
@@ -64,6 +65,9 @@ def _determine_labels(
         Optionally, a single timepoint from which the given ROIs table comes; 
         this will be the case (single timepoint) when it's a bead ROIs subtable 
         which is being passed to this function
+    remove_zarr_suffix_on_fov_name : bool
+        Whether to tolerate mismatch on FOV name between what's given and what's observed, 
+        modulo the presence or absence of a .zarr suffix
 
     Returns
     -------
@@ -106,9 +110,12 @@ def _determine_labels(
         raise TypeError(f"Spots table is not a data frame, but {type(rois).__name__}")
     if FIELD_OF_VIEW_COLUMN in rois.columns:
         logging.debug("Checking field of view column (%s) against given value: %s", FIELD_OF_VIEW_COLUMN, field_of_view)
+        get_obs_fov_to_match: Callable[[FieldOfViewName], FieldOfViewName] = \
+            (lambda s: s.removesuffix(".zarr")) if remove_zarr_suffix_on_fov_name else identity
         match list(rois[FIELD_OF_VIEW_COLUMN].unique()):
             case [obs_spot_fov]:
                 # NB: here we do NOT .removesuffix(".zarr"), beacuse this should already have been done if this field is present for this table.
+                obs_spot_fov = get_obs_fov_to_match(obs_spot_fov)
                 if obs_spot_fov != field_of_view:
                     raise ValueError(f"Given FOV is {field_of_view}, but FOV (from column {FIELD_OF_VIEW_COLUMN}) in ROIs table is different: {obs_spot_fov}")
             case obs_fovs:
@@ -169,6 +176,7 @@ def add_nucleus_labels(
     nuclei_drift_file: Path, 
     spots_drift_file: Path, 
     timepoint: Option[int], 
+    remove_zarr_suffix: bool,
 ) -> pd.DataFrame:
     
     def query_table_for_fov(table: pd.DataFrame) -> Callable[[FieldOfViewName], pd.DataFrame]:
@@ -216,6 +224,7 @@ def add_nucleus_labels(
             nuc_drift=get_nuc_drift(pos), 
             spot_drifts=get_spot_drifts(pos),
             timepoint=timepoint,
+            remove_zarr_suffix_on_fov_name=remove_zarr_suffix,
         )
         subtables.append(rois.copy())
     
@@ -228,6 +237,7 @@ def run_labeling(
     image_handler: ImageHandler, 
     timepoint: Option[int],
     nuc_detector: Optional[NucDetector] = None,
+    remove_zarr_suffix: bool,
 ) -> pd.DataFrame:
     if nuc_detector is None:
         nuc_detector = NucDetector(image_handler)
@@ -238,6 +248,7 @@ def run_labeling(
         nuclei_drift_file=nuc_detector.drift_correction_file__coarse, 
         spots_drift_file=image_handler.drift_correction_file__coarse,
         timepoint=timepoint,
+        remove_zarr_suffix=remove_zarr_suffix,
     )
 
 
