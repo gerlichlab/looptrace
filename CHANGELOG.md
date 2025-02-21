@@ -10,11 +10,14 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 * Add a proximity filter between beads and FISH spots. In other words, discard any "FISH spot" which is too close to a bead. Again, this is related to the idea of mixing up the two, especially during single-channel tracing. 
 See [Issue 400](https://github.com/gerlichlab/looptrace/issues/400) and [Issue 403](https://github.com/gerlichlab/looptrace/issues/403).
 
-## [v0.13.0] - 2025-02-19
+## [v0.13.0] - 2025-02-21
 
 ### Added
 * Discard detected beads which are in nuclear regions. See [Issue 401](https://github.com/gerlichlab/looptrace/issues/400) and [Issue 403](https://github.com/gerlichlab/looptrace/issues/403). 
 This is designed to prevent accidentally using a FISH spot as a bead, which is especially likely when doing single-channel tracing, in which beads and FISH signal are captured at the same wavelength.
+
+### Changed
+* Bump bundled version of the regional spots plugin up to v0.5.0.
 
 ## [v0.12.1] - 2025-02-19
 
