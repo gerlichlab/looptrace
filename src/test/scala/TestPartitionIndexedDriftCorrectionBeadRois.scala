@@ -234,7 +234,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     test("ANY bad row fails the parse.") {
         /* Inter-field delimiter and header for the ROIs file */
         val delimiter = Delimiter.CommaSeparator
-        val headLine = ",label,zc,yc,xc,max_intensity,area,fail_code"
+        val headLine = "beadIndex,label,zc,yc,xc,max_intensity,area,fail_code"
 
         // Pairs of ROIs file lines and corresponding expectation
         val inputAndExpPairs = Table(
