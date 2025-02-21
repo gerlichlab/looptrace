@@ -514,7 +514,7 @@ def discard_beads_in_nuclei(
             timepoint=Option.Some(bead_spec.timepoint),
         )
         old_num_rois: int = bead_rois.shape[0]
-        bead_rois = bead_rois[bead_rois[NUC_LABEL_COL] != 0]
+        bead_rois = bead_rois[bead_rois[NUC_LABEL_COL] == 0] # Here, we want NON-nuclear beads.
         new_num_rois: int = bead_rois.shape[0]
         logging.info("%s: %d --> %d", rois_file, old_num_rois, new_num_rois)
         bead_rois.reset_index().to_csv(rois_file, index_label=BEAD_INDEX_COLUMN_NAME)
