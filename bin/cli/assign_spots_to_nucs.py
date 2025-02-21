@@ -257,6 +257,7 @@ def workflow(
     rounds_config: ExtantFile, 
     params_config: ExtantFile, 
     images_folder: ExtantFolder, 
+    remove_zarr_suffix: bool,
     image_save_path: Optional[ExtantFolder] = None,
     ) -> None:
     
@@ -280,6 +281,7 @@ def workflow(
         image_handler=H, 
         nuc_detector=N,
         timepoint=Option.Nothing(),
+        remove_zarr_suffix=remove_zarr_suffix,
     )
 
     if all_rois.shape[0] == 0:
@@ -296,11 +298,13 @@ if __name__ == "__main__":
     parser.add_argument("rounds_config", type=ExtantFile.from_string, help="Imaging rounds config file path")
     parser.add_argument("params_config", type=ExtantFile.from_string, help="Looptrace parameters config file path")
     parser.add_argument("images_folder", type=ExtantFolder.from_string, help="Path to folder with images to read.")
+    parser.add_argument("--remove-zarr-suffix", action="store_true", help="Remove the .zarr suffix on ROI FOV names for matching")
     parser.add_argument("--image_save_path", type=ExtantFolder.from_string, help="(Optional): Path to folder to save images to.")
     args = parser.parse_args()
     workflow(
         rounds_config=args.rounds_config,
         params_config=args.params_config, 
         images_folder=args.images_folder, 
+        remove_zarr_suffix=args.remove_zarr_suffix,
         image_save_path=args.image_save_path,
         )

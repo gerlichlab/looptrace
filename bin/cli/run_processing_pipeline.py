@@ -598,7 +598,7 @@ class LooptracePipeline(pypiper.Pipeline):
             pypiper.Stage(
                 name="spot_nucleus_assignment", 
                 func=run_spot_nucleus_assignment, 
-                f_kwargs=rounds_params_images, # Images are needed since H.image_lists is iterated in workflow.
+                f_kwargs={"remove_zarr_suffix": False, **rounds_params_images}, # Images are needed since H.image_lists is iterated in workflow.
             ), 
             pypiper.Stage(
                 name="trace_id_assignment",
