@@ -8,7 +8,11 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 
 ### Added
 * Add a proximity filter between beads and FISH spots. In other words, discard any "FISH spot" which is too close to a bead. Again, this is related to the idea of mixing up the two, especially during single-channel tracing. 
+This can be used by setting `timepointForProximityFiltrationBetweenBeadsAndSpots` in the pipeline parameters configuration file
 See [Issue 400](https://github.com/gerlichlab/looptrace/issues/400) and [Issue 403](https://github.com/gerlichlab/looptrace/issues/403).
+
+### Changed
+* Forbid `crosstalk_ch` in the parameters configuration file, as the purpose of inter-channel crosstalk subtraction is superseded by the [proximity-based filtration between beads and FISH spots](https://github.com/gerlichlab/looptrace/issues/403).
 
 ## [v0.13.2] - 2024-03-06
 

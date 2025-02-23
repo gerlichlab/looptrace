@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "looptrace"
-version = "0.13.2"
+version = "0.14.0dev"
 description = "Library and programs for tracing chromatin loops from microscopy images"
 authors = [
     "Kai Sandvold Beckwith",

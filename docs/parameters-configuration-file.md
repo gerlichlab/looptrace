@@ -23,7 +23,6 @@ Judge in accordance with how many beads you anticipate having per image.
 * `num_bead_rois_for_drift_correction_accuracy` should be set to 100.
 * `coarse_drift_downsampling` should be set to 2; use 1 for no downsampling.
 * `detection_method` should be set to `dog`, and `spot_threshold` to 15. If using `intensity`, a much higher `spot_threshold` will be needed.
-* `subtract_crosstalk` should be set to `False`, rendering `crosstalk_ch` irrelevant.
 * `pixelSeparationBeneathWhichSpotRoisWillMerge` should be set to a positive value if you want to do mergers of regional barcode spot ROIs which are close together. If you don't wish to do that merger, omit this configuration key. The value will be interpreted as being in pixel (and $z$ slice) units, and represents a Euclidean distance.
 * `parallelise_spot_detection` should be set to `False`.
 * `spot_downsample` should be a small integer, often just 2 or even 1 (no downsampling).
@@ -32,7 +31,7 @@ Judge in accordance with how many beads you anticipate having per image.
 * `tracing_cores` should be a value no more than the number of CPUs on the machine on which the processing will run.
 * `mask_fits` should be set to `False`.
 * `roi_image_size` should be a 3-element list and should most likely be (8, 16, 16) or (16, 32, 32).
-* `subtract_background` should be set to 0.
+* `subtract_background` should be set to 0 (or whatever imaging timepoint has is to be used as the reference for the notion of "only noise").
 * Check that the tracing QC parameters are as desired:
     * For `A_to_BG`, 2 is often a good setting.
     * For `sigma_xy_max`, 150 is often a good setting.
@@ -40,3 +39,6 @@ Judge in accordance with how many beads you anticipate having per image.
     * For `max_dist`, 800 is often a good setting.
 * If you want the Numpy arrays representing the spot images for tracing (the `*.npy` files) to be kept even after zipping, set `keep_spot_images_folder` to `True`.
 * To filter spots for inclusion in nuclei _even before_ attempting to determine which spots to merge, set `filter_spots_before_merge` to `True`.
+* `timepointForProximityFiltrationBetweenBeadsAndSpots` should be either...
+    * A Boolean, which when `True` implies that `subtract_background` must be used and correspond to an imaging timepoint / round
+    * A nonnegative integer corresponding to an imaging timepoint / round
