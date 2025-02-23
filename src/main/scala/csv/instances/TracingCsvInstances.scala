@@ -25,6 +25,9 @@ trait TracingCsvInstances:
             TraceGroupMaybe.fromString(s).leftMap{ msg => new DecoderError(msg) }
         }
 
+    given cellDecoderForTraceId(using dec: CellDecoder[NonnegativeInt]): CellDecoder[TraceId] = 
+        dec.map(TraceId.apply)
+
     /** Encode the trace ID by encoding simply the underlying value. */
     given cellEncoderForTraceId(
         using enc: CellEncoder[NonnegativeInt]
