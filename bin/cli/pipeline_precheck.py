@@ -116,13 +116,28 @@ def find_config_file_errors(rounds_config: ExtantFile, params_config: ExtantFile
         pass # The key SHOULD be missing, all good.
     else:
         errors.append(ConfigurationValueError("From version 0.7, spot_frame is prohibited; use the imaging rounds configuration file."))
+    
+    try:
+        subtract_crosstalk = parameters[CROSSTALK_SUBTRACTION_KEY]
+    except KeyError:
+        pass
+    else:
+        pass
+    try:
+        crosstalk_channel = parameters["crosstalk_ch"]
+    except KeyError:
+        pass
+    else:
+        pass
     if parameters.get(CROSSTALK_SUBTRACTION_KEY, False):
         errors.append(ConfigurationValueError(f"Crosstalk subtraction ('{CROSSTALK_SUBTRACTION_KEY}') isn't currently supported."))
+    
     spot_detection_method = parameters.get(SPOT_DETECTION_METHOD_KEY)
     if spot_detection_method is None:
         errors.append(ConfigurationValueError(f"No spot detection method ('{SPOT_DETECTION_METHOD_KEY}') specified!"))
     elif spot_detection_method == DetectionMethod.INTENSITY.value:
         errors.append(ConfigurationValueError(f"Prohibited (or unsupported) spot detection method: '{spot_detection_method}'"))
+    
     try:
         min_sep = get_minimum_regional_spot_separation(rounds_config)
     except KeyError:

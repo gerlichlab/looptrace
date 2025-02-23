@@ -22,7 +22,7 @@ __all__ = [
 
 
 # This is put into place by the docker build, as declared in the Dockerfile.
-LOOPTRACE_JAR_PATH = importlib.resources.files(__name__).joinpath("looptrace-assembly-0.13.2.jar")
+LOOPTRACE_JAR_PATH = importlib.resources.files(__name__).joinpath("looptrace-assembly-0.14.0-SNAPSHOT.jar")
 LOOPTRACE_JAVA_PACKAGE = "at.ac.oeaw.imba.gerlich.looptrace"
 
 FIELD_OF_VIEW_COLUMN = "fieldOfView"
