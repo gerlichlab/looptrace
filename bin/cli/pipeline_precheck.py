@@ -9,7 +9,7 @@ import warnings
 from gertils import ExtantFile
 
 from looptrace import ConfigurationValueError, Drifter, LOOPTRACE_JAR_PATH, ZARR_CONVERSIONS_KEY
-from looptrace.configuration import KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS, get_minimum_regional_spot_separation, read_parameters_configuration_file
+from looptrace.configuration import IMAGING_ROUNDS_KEY, KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS, get_minimum_regional_spot_separation, read_parameters_configuration_file
 from looptrace.Deconvolver import REQ_GPU_KEY
 from looptrace.NucDetector import NucDetector, SegmentationMethod as NucSegMethod
 from looptrace.SpotPicker import DetectionMethod, CROSSTALK_SUBTRACTION_KEY, DETECTION_METHOD_KEY as SPOT_DETECTION_METHOD_KEY
@@ -110,34 +110,21 @@ def find_config_file_errors(rounds_config: ExtantFile, params_config: ExtantFile
         errors.append(ConfigurationValueError(f"The key for the timepoint as reference for drift correction has changed from reg_ref_frame to reg_ref_timepoint; update your config."))
     
     # Spot detection
-    try:
-        parameters["spot_frame"]
-    except KeyError:
-        pass # The key SHOULD be missing, all good.
-    else:
-        errors.append(ConfigurationValueError("From version 0.7, spot_frame is prohibited; use the imaging rounds configuration file."))
-    
-    try:
-        subtract_crosstalk = parameters[CROSSTALK_SUBTRACTION_KEY]
-    except KeyError:
-        pass
-    else:
-        pass
-    try:
-        crosstalk_channel = parameters["crosstalk_ch"]
-    except KeyError:
-        pass
-    else:
-        pass
-    if parameters.get(CROSSTALK_SUBTRACTION_KEY, False):
-        errors.append(ConfigurationValueError(f"Crosstalk subtraction ('{CROSSTALK_SUBTRACTION_KEY}') isn't currently supported."))
-    
+    detection_timepoints_key: Literal["spot_frame"] = "spot_frame"
+    if detection_timepoints_key in parameters:
+        errors.append(ConfigurationValueError(f"From version 0.7, {detection_timepoints_key} is prohibited; use the imaging rounds configuration file."))
+    # As of v0.14.0, no longer allow crosstalk subtraction since FISH spots will be filtered by proximity to beads.
+    if CROSSTALK_SUBTRACTION_KEY in parameters:
+        errors.append(ConfigurationValueError(f"Crosstalk subtraction ('{CROSSTALK_SUBTRACTION_KEY}') is no longer supported."))
+    crosstalk_channel_key: Literal["crosstalk_ch"] = "crosstalk_ch"
+    if crosstalk_channel_key in parameters:
+        errors.append(ConfigurationValueError(f"Crosstalk subtraction channel ('{crosstalk_channel_key}') is no longer supported."))
+    # Detection methods and parameters
     spot_detection_method = parameters.get(SPOT_DETECTION_METHOD_KEY)
     if spot_detection_method is None:
         errors.append(ConfigurationValueError(f"No spot detection method ('{SPOT_DETECTION_METHOD_KEY}') specified!"))
     elif spot_detection_method == DetectionMethod.INTENSITY.value:
         errors.append(ConfigurationValueError(f"Prohibited (or unsupported) spot detection method: '{spot_detection_method}'"))
-    
     try:
         min_sep = get_minimum_regional_spot_separation(rounds_config)
     except KeyError:
@@ -160,6 +147,22 @@ def find_config_file_errors(rounds_config: ExtantFile, params_config: ExtantFile
             errors.append(ConfigurationValueError(
                 f"Min pixel count to avoid spot merge must be nonnegative, not {min_pixels_to_avoid_spot_merge}"
             ))
+
+    # Spot filtration
+    bead_spot_filtration_key: Literal["proximityFiltrationBetweenBeadsAndSpots"] = "proximityFiltrationBetweenBeadsAndSpots"
+    match parameters.get(bead_spot_filtration_key):
+        case (None | bool()):
+            pass # No problem for validation, the proximity-based merge b/w beads and FISH spots simply won't be done.
+        case int(t):
+            num_timepoints: int = len(rounds_config[IMAGING_ROUNDS_KEY])
+            if t < 0 or t >= num_timepoints:
+                errors.append(ConfigurationValueError(
+                    f"Timepoint for proximity-based filtration between beads and FISH spots is illegal, given that there are {num_timepoints} timepoints: {t}"
+                ))
+        case obj:
+            errors.append(ConfigurationValueError(
+                f"Bead-to-spot proximity-based filtration key ({bead_spot_filtration_key}) has value of illegal type: {type(obj).__name__}")
+            )
 
     # Tracing
     if parameters.get("mask_fits", False):

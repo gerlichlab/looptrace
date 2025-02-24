@@ -24,7 +24,7 @@ from gertils import ExtantFile
 from gertils.types import TimepointFrom0
 
 from looptrace import FIELD_OF_VIEW_COLUMN, ZARR_CONVERSIONS_KEY, ConfigurationValueError, RoiImageSize
-from looptrace.configuration import get_minimum_regional_spot_separation
+from looptrace.configuration import IMAGING_ROUNDS_KEY, get_minimum_regional_spot_separation
 from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, FilePathLike, FolderPathLike, get_analysis_path, simplify_path
 from looptrace.image_io import ignore_path, NPZ_wrapper
 from looptrace.image_processing_functions import CENTROID_KEY
@@ -271,7 +271,7 @@ class ImageHandler:
         return self.locus_grouping.get(regional_timepoint, set())
 
     def iter_imaging_rounds(self) -> Iterable[Mapping[str, object]]:
-        return sorted(self.config["imagingRounds"], key=lambda r: r["time"])
+        return sorted(self.config[IMAGING_ROUNDS_KEY], key=lambda r: r["time"])
 
     def list_all_regional_timepoints(self) -> list[TimepointFrom0]:
         return list(sorted(TimepointFrom0(r["time"]) for r in self.iter_imaging_rounds() if r.get("isRegional", False)))

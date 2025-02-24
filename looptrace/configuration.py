@@ -17,6 +17,7 @@ __all__ = [
     ]
 
 
+IMAGING_ROUNDS_KEY = "imagingRounds"
 KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS = "pixelSeparationBeneathWhichSpotRoisWillMerge"
 MINIMUM_SPOT_SEPARATION_KEY = "minimumPixelLikeSeparation"
 SEMANTIC_KEY = "semantic"
