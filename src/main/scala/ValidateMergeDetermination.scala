@@ -62,7 +62,7 @@ object ValidateMergeDetermination extends ScoptCliReaders, StrictLogging:
     case class CliConfig(
         inputFile: os.Path = null, // required
         mergeType: MergeType = null, // required
-        differentTimepointDistanceThreshold: EuclideanDistance.Threshold = null, // required
+        differentTimepointDistanceThreshold: Option[EuclideanDistance.Threshold] = None, 
         sameTimepointDistanceThreshold: Option[EuclideanDistance.Threshold] = None
     )
 
@@ -87,24 +87,32 @@ object ValidateMergeDetermination extends ScoptCliReaders, StrictLogging:
                 .action((m, c) => c.copy(mergeType = m))
                 .text(s"Type of merge determination file being analyzed; choose from: ${MergeType.values.mkString(", ")}"),
             opt[EuclideanDistance.Threshold]("differentTimepointDistanceThreshold")
-                .required()
-                .action((t, c) => c.copy(differentTimepointDistanceThreshold = t))
+                .action((t, c) => c.copy(differentTimepointDistanceThreshold = t.some))
                 .text("Distance threshold which was used to define the merge partners for ROIs from DIFFERENT timepoints"), 
             opt[EuclideanDistance.Threshold]("sameTimepointDistanceThreshold")
                 .action((t, c) => c.copy(sameTimepointDistanceThreshold = t.some))
                 .text("Distance threshold which was used to define the merge partners for ROIs from the SAME timepoint"), 
             checkConfig{ c => 
-                (c.mergeType, c.sameTimepointDistanceThreshold) match {
-                    case (MergeType.SameTimepoint, None) => 
-                        failure(getIllegalMergeTypeAndThresholdCombinationMessage())
-                    case (_, _) => success //
+                (c.mergeType, c.sameTimepointDistanceThreshold, c.differentTimepointDistanceThreshold) match {
+                    case (MergeType.SameTimepoint, same, diff) => 
+                        List(
+                            same.isEmpty.option("the same-timepoint distance threshold is required"), 
+                            diff.nonEmpty.option("the different-timepoint distance threshold is prohibited")
+                        )
+                        .flatten
+                        .map("For same-timepoint ROI merge determination analysis, " ++ _)
+                        .toNel
+                        .fold(success){ messages => failure(messages.mkString_("; ")) }
+                    case (MergeType.DifferentTimepoint, _, diff) => 
+                        if diff.nonEmpty then success 
+                        else failure("For different-timepoint ROI merge determination analysis, different-timepoint threshold is required.")
                 }
             }
         )
 
         def getDecoderAndThreshold(
             mergeType: MergeType, 
-            diffTimeThreshold: EuclideanDistance.Threshold, 
+            diffTimeThreshold: Option[EuclideanDistance.Threshold], 
             sameTimeThreshold: Option[EuclideanDistance.Threshold],
         ): (RowDec[InputRecord], EuclideanDistance.Threshold) = 
             import SameTimepointRecord.given
@@ -114,11 +122,15 @@ object ValidateMergeDetermination extends ScoptCliReaders, StrictLogging:
                 case MergeType.SameTimepoint => 
                     val dec: RowDec[InputRecord] = new:
                         override def apply(row: Row): DecoderResult[InputRecord] = summon[RowDec[SameTimepointRecord]](row)
-                    (dec, sameTimeThreshold.getOrElse{ throw new RuntimeException(getIllegalMergeTypeAndThresholdCombinationMessage()) })
+                    (dec, sameTimeThreshold.getOrElse{ 
+                        throw new RuntimeException("Merge type is same-timepoint, but there's no same-timepoint threshold!") 
+                    })
                 case MergeType.DifferentTimepoint => 
                     val dec: RowDec[InputRecord] = new:
                         override def apply(row: Row): DecoderResult[InputRecord] = summon[RowDec[DifferentTimepointRecord]](row)
-                    (dec, diffTimeThreshold)
+                    (dec, diffTimeThreshold.getOrElse{
+                        throw new RuntimeException("Merge type is different-timepoint, but there's no different-timepoint threshold!") 
+                    })
             }
 
         OParser.parse(parser, args, CliConfig()) match {
@@ -321,9 +333,6 @@ object ValidateMergeDetermination extends ScoptCliReaders, StrictLogging:
 
     def emitIdPairIfProximal[R <: InputRecord](threshold: EuclideanDistance.Threshold): List[R] => Option[IdPair] = 
         pairFuncOntoList(ifProximal(threshold){ (r1: R, r2: R, d: EuclideanDistance) => r1.roiId -> r2.roiId })
-
-    private def getIllegalMergeTypeAndThresholdCombinationMessage(): String = 
-        "For same-timepoint ROI merge determination analysis, the same-timepoint distance threshold is required."
 
     def parseCentroid(row: Row): ValidatedNel[String, Centroid[Double]] = 
         summon[RowDec[Centroid[Double]]](row)
