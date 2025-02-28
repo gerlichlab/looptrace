@@ -278,12 +278,16 @@ def drift_correct_nuclei(rounds_config: ExtantFile, params_config: ExtantFile, i
     return N.coarse_drift_correction_workflow()
 
 
+def get_merge_rules_for_tracing(H: ImageHandler) -> Mapping[str, object]:
+    return H.config["mergeRulesForTracing"]
+
+
 def prep_locus_specific_spots_visualisation(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> list[Path]:
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
     T = Tracer(H)
     
     try:
-        raw_config_metadata: Mapping[str, object] = H.config["mergeRulesForTracing"]
+        raw_config_metadata: Mapping[str, object] = get_merge_rules_for_tracing(H)
     except KeyError:
         # This was the original case, before the addition of merger of ROIs to tracing structures.
         # NB: This does no accounting of structural difference which occurs when there's merger of ROIs for tracing.
@@ -530,6 +534,35 @@ def discard_spots_close_to_beads(rounds_config: ExtantFile, params_config: Extan
     raise NotImplementedError("Spot discard by bead proximity isn't yet implemented.")
 
 
+def validate_roi_mergers(rounds_config: ExtantFile, params_config: ExtantFile) -> None:
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config)
+
+    same_timepoint_threshold = H.config[KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS]
+
+    prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.ValidateMergeDetermination"
+    cmd_base_parts: list[str] = [
+        "java", 
+        "-cp", 
+        str(LOOPTRACE_JAR_PATH), 
+        prog_path,
+        "--sameTimepointDistanceThreshold", 
+        str(same_timepoint_threshold),
+    ]
+
+    if same_timepoint_threshold == 0:
+        logging.info("ROI separation threshold for same-timepoint merge is 0, so no validation to do")
+    else:
+        logging.info(f"Same-timepoint mergers will be validated according to threshold: {same_timepoint_threshold}")
+        cmd_parts = cmd_base_parts + [
+            "--inputFile", 
+            str(H.proximity_rejected_spots_file_path),
+            "--mergeType", 
+            "same",
+        ]
+        logging.info(f"Validating same-timepoint ROI mergers: {' '.join(cmd_parts)}")
+        subprocess.check_call(cmd_parts)
+
+
 class LooptracePipeline(pypiper.Pipeline):
     """Main looptrace processing pipeline"""
 
@@ -666,6 +699,12 @@ class LooptracePipeline(pypiper.Pipeline):
                 func=signal_analysis_workflow,
                 f_kwargs={**rounds_params_images, "maybe_signal_config": self.signal_config},
             ),
+            pypiper.Stage(
+                name="merge_validation", 
+                func=validate_roi_mergers, 
+                f_kwargs=rounds_params,
+                nofail=True,
+            )
         ]
 
 
