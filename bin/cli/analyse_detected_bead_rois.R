@@ -18,7 +18,7 @@ cli_parser$add_argument("--counts-files-prefix", default = "bead_rois__", help =
 cli_parser$add_argument("--counts-files-extension", default = "csv", help = "Extension for files to fine to count ROIs")
 cli_parser$add_argument("--do-not-modify-counts", action = "store_true", help = "Indicate that counts are real counts not line counts (no header, e.g.)")
 cli_parser$add_argument("--fov-timepoint-delimiter", default = "_", help = "Delimiter between FOV and timepoint in filename")
-cli_parser$add_argument("--qc-code-column", type = "integer", default = 7, help="Column index (1-based) of the field with the QC value (empty for QC pass) in each bead ROIs file")
+cli_parser$add_argument("--qc-code-column", default = "fail_code", help="Name of the column with the QC value (empty for QC pass) in each bead ROIs file")
 ## Parse the CLI arguments.
 opts <- cli_parser$parse_args()
 
@@ -53,7 +53,11 @@ parseFieldOfViewAndTimepoint <- function(fn) {
 countPassingQC <- function(f) {
     fn <- basename(f)
     p_and_t <- parseFieldOfViewAndTimepoint(fn)
-    codes <- fread(f, sep = delimiter)[[opts$qc_code_column]]
+    rois <- fread(f, sep = delimiter)
+    if (! opts$qc_code_column %in% colnames(rois)) {
+        stop(sprintf("QC code column (%s) is missing in file %s", opts$qc_code_column, f))
+    }
+    codes <- rois[[opts$qc_code_column]]
     n_qc_pass <- sum(codes == "") + sum(is.na(codes))
     list(fieldOfView = p_and_t[["fieldOfView"]], timepoint = p_and_t[["timepoint"]], filename = fn, count = n_qc_pass)
 }
