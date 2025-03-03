@@ -6,6 +6,10 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 
 ## [v0.14.0] - Unreleased
 
+### Fixed
+* Removed incorrect extra `beadIndex` column from each bead ROIs file; see [Issue 436](https://github.com/gerlichlab/looptrace/issues/436).
+* Fixed all-0s error in filtered bead ROIs count plotting; see [Issue 437](https://github.com/gerlichlab/looptrace/issues/437).
+
 ### Added
 * Add a proximity filter between beads and FISH spots. In other words, discard any "FISH spot" which is too close to a bead. Again, this is related to the idea of mixing up the two, especially during single-channel tracing. 
 This can be used by setting `proximityFiltrationBetweenBeadsAndSpots` in the pipeline parameters configuration file
