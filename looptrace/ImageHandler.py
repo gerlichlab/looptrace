@@ -186,12 +186,12 @@ class ImageHandler:
         return ExtantFile(folder / filename)
 
     def read_bead_rois_file_accuracy(self, fov_idx: int, timepoint: int) -> np.ndarray[np.ndarray]:
-        fp = self.get_bead_rois_file(fov_idx=fov_idx, timepoint=timepoint, purpose="accuracy").path
-        return _read_bead_rois_file(fp)
+        fp = self.get_bead_rois_file(fov_idx=fov_idx, timepoint=timepoint, purpose="accuracy")
+        return _read_bead_rois_file(fp.path)
 
     def read_bead_rois_file_shifting(self, fov_idx: int, timepoint: int) -> ExtantFile:
-        fp = self.get_bead_rois_file(fov_idx=fov_idx, timepoint=timepoint, purpose="shifting").path
-        return _read_bead_rois_file(fp)
+        fp = self.get_bead_rois_file(fov_idx=fov_idx, timepoint=timepoint, purpose="shifting")
+        return _read_bead_rois_file(fp.path)
     
     @property
     def _severe_bead_roi_partition_problems_file(self) -> Optional[ExtantFile]:
