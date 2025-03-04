@@ -189,7 +189,7 @@ class ImageHandler:
         fp = self.get_bead_rois_file(fov_idx=fov_idx, timepoint=timepoint, purpose="accuracy")
         return _read_bead_rois_file(fp.path)
 
-    def read_bead_rois_file_shifting(self, fov_idx: int, timepoint: int) -> ExtantFile:
+    def read_bead_rois_file_shifting(self, fov_idx: int, timepoint: int) -> np.ndarray[np.ndarray]:
         fp = self.get_bead_rois_file(fov_idx=fov_idx, timepoint=timepoint, purpose="shifting")
         return _read_bead_rois_file(fp.path)
     
