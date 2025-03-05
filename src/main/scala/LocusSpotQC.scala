@@ -48,16 +48,6 @@ object LocusSpotQC:
             case OutOfBounds => "O"
         }
 
-    /** A roundtrip through JSON for a 3D point, in the context of locus spot QC */
-    object PointCodec:
-        private[LocusSpotQC] def toJsonObject(p: Point3D): ujson.Obj = 
-            ujson.Obj(
-                "x" -> Coordinate.getJsonWriter[XCoordinate](p.x),
-                "y" -> Coordinate.getJsonWriter[YCoordinate](p.y),
-                "z" -> Coordinate.getJsonWriter[ZCoordinate](p.z),
-            )
-    end PointCodec
-
     /**
       * Bundle of data that uniquely identifies a spot and gives its coordinates and QC result.
       *
@@ -74,18 +64,6 @@ object LocusSpotQC:
         final def regionTime: ImagingTimepoint = identifier.regionId.get
         final def traceGroupMaybe: TraceGroupMaybe = identifier.traceGroup
         final def traceId: TraceId = identifier.traceId
-        
-    /** Helpers for working with QC data bundles for locus-specific spots */
-    object OutputRecord:
-        /** JSON codec for a locus spot QC output record */
-        def rwForOutputRecord: ReadWriter[OutputRecord] = readwriter[ujson.Value].bimap(
-            record => ujson.Obj(
-                "identifier" -> SpotIdentifier.toJsonObject(record.identifier), 
-                "point" -> PointCodec.toJsonObject(record.centerInPixels), 
-                "qcResult" -> ResultRecord.toJsonObject(record.qcResult),
-            ), 
-            json => ???
-        )
 
     /**
       * Bundle of data with which to uniquely identify a locus-specific spot in an experiment
@@ -114,32 +92,6 @@ object LocusSpotQC:
           */
         final class DecodingError(messages: NonEmptyList[String], json: ujson.Value) 
             extends ujson.Value.InvalidData(json, s"Error(s) decoding locus spot identifier: ${messages.mkString_("; ")}")
-        
-        /** Create a [[ujson.Obj]] representation of the given spot identifier, mapping each of its field names to simplified value. */
-        private[LocusSpotQC] def toJsonObject(spotId: SpotIdentifier): ujson.Obj = 
-            import TraceGroupMaybe.given
-            ujson.Obj(
-                FieldOfViewColumnName.value -> spotId.fieldOfView.asJson,
-                TraceGroupColumnName.value -> spotId.traceGroup.asJson,
-                "regionId" -> spotId.regionId.get.asJson,
-                "traceId" -> spotId.traceId.get.asJson,
-                "locusId" -> spotId.locusId.get.asJson,
-            )
-
-        /** A JSON codec which unwraps the components and maps field names to the refined values */
-        def rwForSpotIdentifier: ReadWriter[SpotIdentifier] = readwriter[ujson.Value].bimap(
-            toJsonObject,
-            json => 
-                val fovNel = safeExtractE(FieldOfViewColumnName.value, PositionName.parse)(json)
-                val traceGroupNel = safeExtractE(TraceGroupColumnName.value, TraceGroupMaybe.fromString)(json)
-                val regIdNel = safeExtractE("regionId", safeParseInt >>> RegionId.fromInt)(json)
-                val traceIdNel = safeExtractE("traceId", safeParseInt >>> TraceId.fromInt)(json)
-                val locusIdNel = safeExtractE("locusId", safeParseInt >>> LocusId.fromInt)(json)
-                (fovNel, traceGroupNel, regIdNel, traceIdNel, locusIdNel).mapN(SpotIdentifier.apply) match {
-                    case Invalid(messages) => throw new DecodingError(messages, json)
-                    case Valid(spotId) => spotId
-                }
-        )
     end SpotIdentifier
 
     /**
@@ -277,21 +229,6 @@ object LocusSpotQC:
             (!denseZ).option(FailureReason.DiffuseZ),
             (!(inBoundsX && inBoundsY && inBoundsZ)).option(FailureReason.OutOfBounds),
         ).flatten
-    end ResultRecord
-
-    /** Helpers for working with a bundle of QC result components for a single locus-specific spot */
-    object ResultRecord:
-        /** Write the record to a JSON object. */
-        private[LocusSpotQC] def toJsonObject(r: ResultRecord): ujson.Obj = ujson.Obj(
-            "withinRegion" -> ujson.Bool(r.withinRegion),
-            "sufficientSNR" -> ujson.Bool(r.sufficientSNR), 
-            "denseXY" -> ujson.Bool(r.denseXY), 
-            "denseZ" -> ujson.Bool(r.denseZ), 
-            "inBoundsX" -> ujson.Bool(r.inBoundsX),
-            "inBoundsY" -> ujson.Bool(r.inBoundsY),
-            "inBoundsZ" -> ujson.Bool(r.inBoundsZ),
-            "canBeDisplayed" -> ujson.Bool(r.canBeDisplayed),
-        )
     end ResultRecord
 
     /** The (Euclidean)  distance between a locus-specific spot's center and the center of its associated regional spot */

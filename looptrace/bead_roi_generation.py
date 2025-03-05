@@ -29,6 +29,7 @@ from gertils import ExtantFolder
 from looptrace import ArrayDimensionalityError
 from looptrace.ImageHandler import bead_rois_filename
 from looptrace.filepaths import simplify_path
+from looptrace.geometry import Point3D
 from looptrace.image_processing_functions import (
     CENTROID_KEY, 
     X_CENTER_COLNAME, 
@@ -48,23 +49,23 @@ INTENSITY_COLUMN_NAME = "max_intensity"
 
 
 def extract_single_bead(
-        point: Union[np.ndarray, Iterable[int]], 
-        img: np.ndarray, 
-        bead_roi_px: int = 16, 
-        drift_coarse: Union[None, np.ndarray, Iterable[int]] = None
-        ) -> np.ndarray:
+    point: Point3D, 
+    img: np.ndarray, 
+    bead_roi_px: int = 16, 
+    drift_coarse: Optional[Point3D] = None,
+) -> np.ndarray:
     """
     Extract a cropped region of a single fiducial in an image, optionally including a pre-calucalated coarse drift to shift the cropped region.
 
     Parameters
     ----------
-    point : np.ndarray or Iterable of int
+    point : Point3D
         Coordinates representing the center of a detected bead
     img : np.ndarray
         An array of values representing an image in which a fiducial bead is detected
     bead_roi_px : int
         The number of pixels for the side length of the bead ROI
-    drift_coarse : None or np.ndarray or Iterable of int
+    drift_coarse : None or Point3D
         The coarse-grained drift correction already computed
 
     Returns
@@ -79,7 +80,16 @@ def extract_single_bead(
     #     we subtract the shift from the reference point.
     # See: https://github.com/gerlichlab/looptrace/issues/194
     roi_px = bead_roi_px // 2
-    coords = point if drift_coarse is None else (x - int(dx) for x, dx in zip(point, drift_coarse))
+    # The image from which to pull the voxel is in (z, y, x) sequence.
+    flatten_point = lambda p: [p.z, p.y, p.x]
+    point = flatten_point(point)
+    coords: list[int | float] = [
+        int(round(c)) 
+        for c in (
+            point if drift_coarse is None else \
+            [x - dx for x, dx in zip(point, flatten_point(drift_coarse), strict=True)]
+        )
+    ]
     s = tuple([slice(p - roi_px, p + roi_px) for p in coords])
     bead = img[s]
     side_length = 2 * roi_px
@@ -145,26 +155,28 @@ def generate_all_bead_rois_from_getter(
 
 
 def generate_bead_rois(
-        t_img: np.ndarray, 
-        threshold: NumberLike, 
-        min_bead_int: NumberLike, 
-        bead_roi_px: int = 16, 
-        n_points: int = 200, 
-        max_size: NumberLike = 500, 
-        max_bead_int: Optional[NumberLike] = None, 
-        **kwargs,
-        ) -> np.ndarray[int]:
+    t_img: np.ndarray, 
+    threshold: NumberLike, 
+    min_bead_int: NumberLike, 
+    bead_roi_px: int = 16, 
+    n_points: int = 200, 
+    max_size: NumberLike = 500, 
+    max_bead_int: Optional[NumberLike] = None, 
+    **kwargs,
+) -> list[Point3D]:
     '''Function for finding positions of beads in an image based on manually set thresholds in config file.
 
     Parameters
     ----------
-    t_img (3D ndarray): Image
-    threshold (float): Threshold for initial bead segmentation
-    min_bead_int (float): Secondary filtering of segmented maxima.
-    n_points (int): How many bead positions to return
+    t_img (3D ndarray): The image from which to generate the bead ROIs
+    threshold (float): Minimum value needed to count a pixel as potentially part of a bead
+    min_bead_int (float): Minimum value (average, or maximum?) in segmented region needed for it to be counted as a bead
+    n_points (int): How many bead ROIs to return
+    max_size (int): The maximum area of a bead region
+    max_bead_int (int): Optionally, the maximum value to tolerate and still count a segmented region as a bead
 
     Returns:
-    t_img_maxima: 3XN ndarray of 3D bead coordinates in t_img.
+    t_img_maxima: a collection of 3D bead coordinates in t_img
     '''
     params = BeadRoiParameters(
         min_intensity_for_segmentation=threshold, 
@@ -184,7 +196,13 @@ class BeadRoiParameters:
     max_region_size: NumberLike
     max_intensity_for_detection: Optional[NumberLike] = None
 
-    def generate_image_rois(self, img: np.ndarray, num_points: int, filtered_filepath: Optional[PathLike] = None, unfiltered_filepath: Optional[PathLike] = None) -> np.ndarray[int]:
+    def generate_image_rois(
+        self, 
+        img: np.ndarray, 
+        num_points: int, 
+        filtered_filepath: Optional[PathLike] = None, 
+        unfiltered_filepath: Optional[PathLike] = None,
+    ) -> list[Point3D]:
         """
         Parameters
         ----------
@@ -201,10 +219,8 @@ class BeadRoiParameters:
 
         Returns
         -------
-        np.ndarray
-            (num_points x 3) array of 3D bead coordinates in given image; that is, 
-            this value is a 2D array in which there are num_points rows, each of which 
-            is a 1D array of 3 values
+        Iterable of Point3D
+            3D bead coordinates in given image
         """
         
         # Add the fail_code field, based on reason(s) to exclude a detected bead from selection.
@@ -241,7 +257,14 @@ class BeadRoiParameters:
             print(f"Writing sampled bead ROIs: {filtered_filepath}")
             img_maxima.to_csv(filtered_filepath, index_label=INDEX_COLUMN_NAME)
 
-        return np.round(img_maxima[[Z_CENTER_COLNAME, Y_CENTER_COLNAME, X_CENTER_COLNAME]].to_numpy()).astype(int)
+        return [
+            Point3D(
+                z=roi[Z_CENTER_COLNAME], 
+                y=roi[Y_CENTER_COLNAME], 
+                x=roi[X_CENTER_COLNAME],
+            )
+            for _, roi in img_maxima.iterrows()
+        ]
 
     def compute_labeled_regions(self, img: np.ndarray) -> pd.DataFrame:
         """Find contiguous regions (according to instance settings) within given image, and assign fail code(s)."""

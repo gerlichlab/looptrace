@@ -1,6 +1,7 @@
 package at.ac.oeaw.imba.gerlich.looptrace
 
 import scala.util.NotGiven
+import scala.util.chaining.*
 import upickle.default.*
 
 import at.ac.oeaw.imba.gerlich.gerlib.json.instances.all.{*, given}
@@ -66,33 +67,28 @@ object SelectedRoi:
             }
 
     /** Serialise the index as a simple integer, and centroid as a simple array of Double, sequenced as requested. */
-    def toJsonSimple(coordseq: CoordinateSequence)(roi: SelectedRoi): ujson.Obj = 
+    def toJsonSimple(roi: SelectedRoi): ujson.Obj = 
+        import Point3D.given // for JsonValueWriter
         ujson.Obj(
             indexKey -> ujson.Num(roi.index.get), 
-            pointKey -> ujson.Arr.from(Point3D.toList(coordseq)(roi.centroid).toList)
+            pointKey -> roi.centroid.asJson,
         )
 
     /** Serialise the index as a simple integer, and centroid as a simple array of Double, sequenced as requested. */
-    private def simpleJsonReadWriter[R <: SelectedRoi : [R] =>> NotGiven[R =:= SelectedRoi]](
-        coordseq: CoordinateSequence, build: (RoiIndex, Point3D) => R
-        ): ReadWriter[R] = {
+    private def simpleJsonReadWriter[R <: SelectedRoi : [R] =>> NotGiven[R =:= SelectedRoi]](build: (RoiIndex, Point3D) => R): ReadWriter[R] = 
+        import Point3D.given // for Reader[Point3D]
         readwriter[ujson.Value].bimap[R](
-            toJsonSimple(coordseq), 
+            toJsonSimple, 
             json => {
-                val rawIndex = NonnegativeInt.unsafe(json(indexKey).num.toInt)
-                val idx = RoiIndex.unsafe(rawIndex)
-                val coords = json(pointKey).arr.map(_.num.toDouble)
-                val pt = Point3D.fromList(coordseq)(coords.toList).fold(msg => throw new Exception(msg), identity)
-                build(idx, pt)
+                val i = json(indexKey).num.toInt.pipe(RoiIndex.unsafe)
+                val p = json(pointKey).pipe(read[Point3D](_, false))
+                build(i, p)
             }
         )
-    }
 
     /** JSON reader/writer for shifting-selected ROI, based on given coordinate sequencer */
-    def simpleShiftingRW(coordseq: CoordinateSequence): ReadWriter[RoiForShifting] = 
-        simpleJsonReadWriter(coordseq, RoiForShifting.apply)
+    def simpleShiftingRW: ReadWriter[RoiForShifting] = simpleJsonReadWriter(RoiForShifting.apply)
     
     /** JSON reader/writer for accuracy-selected ROI, based on given coordinate sequencer */
-    def simpleAccuracyRW(coordseq: CoordinateSequence): ReadWriter[RoiForAccuracy] = 
-        simpleJsonReadWriter(coordseq, RoiForAccuracy.apply)
+    def simpleAccuracyRW: ReadWriter[RoiForAccuracy] = simpleJsonReadWriter(RoiForAccuracy.apply)
 

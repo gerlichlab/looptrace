@@ -514,10 +514,8 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
                     .map{ case ((p, t), _) => (p -> t) -> getOutputFilepath(tempdir)(p, t, Purpose.Accuracy) }
                     .filter((_, fp) => os.isFile(fp))
                     .toMap
-                given rwForShifting: ReadWriter[RoiForShifting] = 
-                    SelectedRoi.simpleShiftingRW(ParserConfig.coordinateSequence)
-                given rwForAccuracy: ReadWriter[RoiForAccuracy] = 
-                    SelectedRoi.simpleAccuracyRW(ParserConfig.coordinateSequence)
+                given rwForShifting: ReadWriter[RoiForShifting] = SelectedRoi.simpleShiftingRW
+                given rwForAccuracy: ReadWriter[RoiForAccuracy] = SelectedRoi.simpleAccuracyRW
                 val obsRoisShifting = expFilesShifting.view.mapValues(readJsonFile[List[RoiForShifting]]).toMap
                 val obsRoisAccuracy = obsFilesAccuracy.view.mapValues(readJsonFile[List[RoiForAccuracy]]).toMap
                 val observedIntersections = obsRoisShifting.toList.flatMap{ 
@@ -659,7 +657,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
                 workflow(tempdir, numReqShifting, numReqAccuracy, None)
                 /* Finally, make assertions. */
                 expAccuracyFiles.filterNot((_, f) => os.isFile(f)) shouldEqual List()
-                given roiReader: Reader[RoiForAccuracy] = simpleAccuracyRW(ParserConfig.coordinateSequence)
+                given roiReader: Reader[RoiForAccuracy] = simpleAccuracyRW
                 // Every (FOV, time) pair should have an accuracy ROIs file, but it should be empty.
                 expAccuracyFiles.map{ (pt, f) => pt -> readJsonFile[List[RoiForAccuracy]](f) } shouldEqual expAccuracyFiles.map(_._1 -> List())
             }
@@ -705,8 +703,8 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
                 val obsFilesAll = obsFilesShifting | obsFilesAccuracy
                 expAllOutFiles.flatMap(_._2).toSet shouldEqual obsFilesAll
                 
-                given readerForShifting: Reader[RoiForShifting] = simpleShiftingRW(ParserConfig.coordinateSequence)
-                given readerForAccuracy: Reader[RoiForAccuracy] = simpleAccuracyRW(ParserConfig.coordinateSequence)
+                given readerForShifting: Reader[RoiForShifting] = simpleShiftingRW
+                given readerForAccuracy: Reader[RoiForAccuracy] = simpleAccuracyRW
                 val obsRoisShifting = allFovTimeRois.map{ 
                     case ((p, t), _) => 
                         val raw = readJsonFile[List[RoiForShifting]](getOutputFilepath(tempdir)(p, t, Purpose.Shifting))

@@ -26,8 +26,8 @@ from gertils.types import TimepointFrom0
 from looptrace import FIELD_OF_VIEW_COLUMN, ZARR_CONVERSIONS_KEY, ConfigurationValueError, RoiImageSize
 from looptrace.configuration import IMAGING_ROUNDS_KEY, get_minimum_regional_spot_separation
 from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, FilePathLike, FolderPathLike, get_analysis_path, simplify_path
+from looptrace.geometry import Point3D
 from looptrace.image_io import ignore_path, NPZ_wrapper
-from looptrace.image_processing_functions import CENTROID_KEY
 from looptrace.numeric_types import NumberLike
 from looptrace.utilities import read_csv_maybe_empty
 
@@ -119,10 +119,16 @@ def bead_rois_filename(fov_idx: int, timepoint: int, purpose: Optional[str]) -> 
     return BeadRoisFilenameSpecification(fov=fov_idx, timepoint=timepoint, purpose=purpose).get_filename
 
 
-def _read_bead_rois_file(fp: ExtantFile) -> np.ndarray[int]:
+def _read_bead_rois_file(fp: ExtantFile) -> Iterable[tuple[int, Point3D]]:
     with open(fp, "r") as fh:
-        data = json.load(fh)
-    return np.round(np.array(list(map(lambda obj: np.array(obj[CENTROID_KEY]), data)))).astype(int)
+        for obj in json.load(fh):
+            i = obj["index"]
+            p = Point3D(
+                x=obj["x"], 
+                y=obj["y"], 
+                z=obj["z"],
+            )
+            yield i, p
 
 
 class ImageHandler:
@@ -185,11 +191,11 @@ class ImageHandler:
         folder = self.bead_rois_path if purpose is None else self.bead_rois_path / purpose
         return ExtantFile(folder / filename)
 
-    def read_bead_rois_file_accuracy(self, fov_idx: int, timepoint: int) -> np.ndarray[np.ndarray]:
+    def read_bead_rois_file_accuracy(self, fov_idx: int, timepoint: int) -> Iterable[tuple[int, Point3D]]:
         fp = self.get_bead_rois_file(fov_idx=fov_idx, timepoint=timepoint, purpose="accuracy")
         return _read_bead_rois_file(fp.path)
 
-    def read_bead_rois_file_shifting(self, fov_idx: int, timepoint: int) -> np.ndarray[np.ndarray]:
+    def read_bead_rois_file_shifting(self, fov_idx: int, timepoint: int) -> Iterable[tuple[int, Point3D]]:
         fp = self.get_bead_rois_file(fov_idx=fov_idx, timepoint=timepoint, purpose="shifting")
         return _read_bead_rois_file(fp.path)
     

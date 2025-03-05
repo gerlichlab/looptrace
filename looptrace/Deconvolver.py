@@ -16,6 +16,7 @@ try:
 except ModuleNotFoundError:
     def count_tensorflow_gpus(): print("GPU utility module isn't available to count GPUs.")
 from looptrace.exceptions import GpusUnavailableException, MissingInputException
+from looptrace.geometry import Point3D
 from looptrace.point_spread_function import PointSpreadFunctionStrategy
 
 
@@ -135,7 +136,13 @@ class Deconvolver:
         print(f"Using image for empirical PSF computation: {bead_images_folder}")
         
         bead_img = bead_image_data[t_slice, ch].compute()
-        bead_pos = generate_bead_rois(t_img=bead_img, threshold=threshold, min_bead_int=min_bead_int, bead_roi_px=bead_d, n_points=self.num_beads)
+        bead_pos: list[Point3D] = generate_bead_rois(
+            t_img=bead_img, 
+            threshold=threshold, 
+            min_bead_int=min_bead_int, 
+            bead_roi_px=bead_d, 
+            n_points=self.num_beads,
+        )
         beads = [extract_single_bead(point=point, img=bead_img, bead_roi_px=bead_d) for point in bead_pos]
         
         intensities = np.sum(np.array(beads), axis = (1, 2, 3))

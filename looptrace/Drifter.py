@@ -14,7 +14,9 @@ import os
 from pathlib import Path
 import sys
 from typing import *
+import warnings
 
+from expression import fst
 import numpy as np
 import pandas as pd
 import dask.array as da
@@ -25,11 +27,11 @@ import tqdm
 
 from gertils import ExtantFile, ExtantFolder, PathWrapperException
 
-from looptrace import FIELD_OF_VIEW_COLUMN
+from looptrace import FIELD_OF_VIEW_COLUMN, image_io
 from looptrace.ImageHandler import ImageHandler
 from looptrace.bead_roi_generation import BeadRoiParameters, extract_single_bead
 from looptrace.gaussfit import fitSymmetricGaussian3D
-from looptrace import image_io
+from looptrace.geometry import Point3D
 from looptrace.numeric_types import FloatLike, NumberLike
 from looptrace.wrappers import phase_xcor
 
@@ -309,8 +311,17 @@ def iter_coarse_drifts_by_field_of_view(filepath: Union[str, Path, ExtantFile]) 
     return coarse_table.groupby(FIELD_OF_VIEW_COLUMN)
 
 
-def _get_timepoint_and_coarse(row) -> Tuple[int, Tuple[int, int, int]]:
-    return row[TIMEPOINT_COLUMN], tuple(row[COARSE_DRIFT_COLUMNS])
+
+def get_coarse_drift_from_row(row: Mapping[str, int | float]) -> Point3D:
+    return Point3D(
+        x=row[X_PX_COARSE],
+        y=row[Y_PX_COARSE],
+        z=row[Z_PX_COARSE],
+    )
+
+
+def _get_timepoint_and_coarse(row) -> tuple[int, Point3D]:
+    return row[TIMEPOINT_COLUMN], get_coarse_drift_from_row(row)
 
 
 def compute_fine_drifts(drifter: "Drifter") -> None:
@@ -327,7 +338,6 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
         Data for each row of the fine/full drift correction table
     """
     roi_px = drifter.bead_roi_px
-    beads_exp_shape = (drifter.num_bead_rois_for_drift_correction, 3)
     fov_time_problems = drifter.image_handler.fov_timepoint_pairs_with_severe_problems
     for fov, fov_group in iter_coarse_drifts_by_field_of_view(filepath=drifter.image_handler.drift_correction_file__coarse):
         fov_idx = drifter.full_fov_list.index(fov)
@@ -338,19 +348,27 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
         ref_img = drifter.get_reference_image(fov_idx)
         get_no_partition_message = lambda t: f"No bead ROIs partition for (fov={fov_idx}, timepoint={t})"
         
-        bead_rois = drifter.image_handler.read_bead_rois_file_shifting(fov_idx=fov_idx, timepoint=drifter.reference_timepoint)
-        
-        if bead_rois.shape != beads_exp_shape:
-            msg_base = f"Unexpected bead ROIs shape for reference (fov={fov_idx}, timepoint={drifter.reference_timepoint})! ({bead_rois.shape}), expecting {beads_exp_shape}"
-            if len(bead_rois.shape) == 2 and bead_rois.shape[1] == beads_exp_shape[1]:
-                print(f"WARNING: {msg_base}")
-            else:
-                raise Exception(msg_base)
+        exp_num_beads: int = drifter.num_bead_rois_for_drift_correction
+        bead_rois: list[tuple[int, Point3D]] = list(
+            drifter.image_handler.read_bead_rois_file_shifting(
+                fov_idx=fov_idx, 
+                timepoint=drifter.reference_timepoint,
+            )
+        )
+        obs_num_beads: int = len(bead_rois)
+
+        if obs_num_beads != exp_num_beads:
+            msg_base = f"Unexpected number of bead ROIs for reference (fov={fov_idx}, timepoint={drifter.reference_timepoint})! ({obs_num_beads}), expecting {exp_num_beads}"
+            warnings.warn(msg_base)
         
         curr_fov_rows = []
         if drifter.method_name == Methods.FIT_NAME.value:
             print("Computing reference bead fits")
-            ref_bead_subimgs = Parallel(n_jobs=-1, prefer='threads')(delayed(extract_single_bead)(pt, ref_img, bead_roi_px=roi_px) for pt in tqdm.tqdm(bead_rois))
+            ref_bead_subimgs = Parallel(n_jobs=-1, prefer='threads')(
+                # No coarse drift specification here for the bead extraction, since these are beads from the reference (unshifted) timepoint.
+                delayed(extract_single_bead)(pt, ref_img, bead_roi_px=roi_px) 
+                for _, pt in tqdm.tqdm(bead_rois)
+            )
             ref_bead_fits = Parallel(n_jobs=-1, prefer='threads')(delayed(fit_bead_coordinates)(rbi) for rbi in tqdm.tqdm(ref_bead_subimgs))
             print("Iterating over timepoints/hybridisations")
             # Exactly 1 row per FOV per timepoint; here, we iterate over timepoints for current FOV.
@@ -370,14 +388,17 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
                 else:
                     mov_img = drifter.get_moving_image(fov_idx=fov_idx, timepoint_idx=timepoint)
                     print(f"Computing fine drifts: ({fov}, {timepoint})")
-                    mov_bead_subimgs = Parallel(n_jobs=-1, prefer='threads')(delayed(extract_single_bead)(pt, mov_img, bead_roi_px=roi_px, drift_coarse=coarse) for pt in tqdm.tqdm(bead_rois))
+                    mov_bead_subimgs = Parallel(n_jobs=-1, prefer='threads')(
+                        delayed(extract_single_bead)(pt, mov_img, bead_roi_px=roi_px, drift_coarse=coarse) 
+                        for _, pt in tqdm.tqdm(bead_rois)
+                    )
                     mov_bead_fits = Parallel(n_jobs=-1, prefer='threads')(delayed(fit_bead_coordinates)(mbi) for mbi in tqdm.tqdm(mov_bead_subimgs))
                     fine_drifts = [subtract_point_fits(ref, mov) for ref, mov in zip(ref_bead_fits, mov_bead_fits)]
                     fine = finalise_fine_drift(fine_drifts)
                 curr_fov_rows.append((timepoint, fov) + coarse + fine)
         elif drifter.method_name == Methods.CROSS_CORRELATION_NAME.value:
             print("Extracting reference bead images")
-            ref_bead_subimgs = [extract_single_bead(point, ref_img, bead_roi_px=roi_px) for point in bead_rois]
+            ref_bead_subimgs = [extract_single_bead(point, ref_img, bead_roi_px=roi_px) for _, point in bead_rois]
             print("Iterating over timepoints/hybridisations")
             for _, row in fov_group.iterrows():
                 # This should be unique now in timepoint, since we're iterating within a single FOV.
@@ -396,9 +417,13 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
                     mov_img = drifter.get_moving_image(fov_idx=fov_idx, timepoint_idx=timepoint)
                     print(f"Computing fine drifts: ({fov}, {timepoint})")
                     fine_drifts = Parallel(n_jobs=-1, prefer='threads')(
-                        delayed(lambda point, ref_bead_img: correlate_single_bead(ref_bead_img, extract_single_bead(point, mov_img, bead_roi_px=roi_px, drift_coarse=coarse), 100))(*args)
-                        for args in tqdm.tqdm(zip(bead_rois, ref_bead_subimgs))
-                        )
+                        delayed(lambda point, ref_bead_img: correlate_single_bead(
+                            ref_bead_img, 
+                            extract_single_bead(point, mov_img, bead_roi_px=roi_px, drift_coarse=coarse), 
+                            100
+                        ))(*args)
+                        for args in tqdm.tqdm(zip(list(map(fst, bead_rois)), ref_bead_subimgs, strict=True))
+                    )
                     fine = finalise_fine_drift(fine_drifts)
                 curr_fov_rows.append((timepoint, fov) + coarse + fine)
         else:
