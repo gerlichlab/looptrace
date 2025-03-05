@@ -18,6 +18,7 @@ See [Issue 400](https://github.com/gerlichlab/looptrace/issues/400) and [Issue 4
 
 ### Changed
 * Forbid `crosstalk_ch` in the parameters configuration file, as the purpose of inter-channel crosstalk subtraction is superseded by the [proximity-based filtration between beads and FISH spots](https://github.com/gerlichlab/looptrace/issues/403).
+* Bump Haoyi JSON dependencies up to 4.1.0.
 
 ## [v0.13.2] - 2024-03-06
 
