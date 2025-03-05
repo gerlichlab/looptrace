@@ -16,16 +16,16 @@ class TestRois extends AnyFunSuite, ScalaCheckPropertyChecks, should.Matchers, P
     override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
     
     test("ROI for shifting roundtrips through JSON.") {
-        forAll { (original: RoiForShifting, coordseq: CoordinateSequence) =>
-            given rw: ReadWriter[RoiForShifting] = SelectedRoi.simpleShiftingRW(coordseq)
+        forAll { (original: RoiForShifting) =>
+            given rw: ReadWriter[RoiForShifting] = SelectedRoi.simpleShiftingRW
             val json = write(original)
             original shouldEqual read[RoiForShifting](json)
         }
     }
 
     test("ROI for accuracy roundtrips through JSON.") {
-        forAll { (original: RoiForAccuracy, coordseq: CoordinateSequence) =>
-            given rw: ReadWriter[RoiForAccuracy] = SelectedRoi.simpleAccuracyRW(coordseq)
+        forAll { (original: RoiForAccuracy) =>
+            given rw: ReadWriter[RoiForAccuracy] = SelectedRoi.simpleAccuracyRW
             val json = write(original)
             original shouldEqual read[RoiForAccuracy](json)
         }

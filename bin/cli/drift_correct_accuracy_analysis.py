@@ -18,12 +18,14 @@ import tqdm
 
 from gertils import ExtantFile, ExtantFolder
 
-from looptrace import SIGNAL_NOISE_RATIO_NAME
-from looptrace.configuration import read_parameters_configuration_file
+from looptrace import SIGNAL_NOISE_RATIO_NAME, DimensionalityError
+from looptrace.Drifter import get_coarse_drift_from_row
 from looptrace.ImageHandler import ImageHandler
+from looptrace.configuration import read_parameters_configuration_file
 from looptrace.bead_roi_generation import extract_single_bead
 from looptrace.filepaths import get_analysis_path
 from looptrace.gaussfit import fitSymmetricGaussian3D
+from looptrace.geometry import Point3D
 from looptrace.numeric_types import NumberLike
 
 
@@ -100,7 +102,7 @@ class ReferenceImageStackDefinition:
 
 def process_single_FOV_single_reference_timepoint(
     *,
-    roi_centers: np.ndarray,
+    rois: list[tuple[int, Point3D]],
     reference_image_stack_definition: ReferenceImageStackDefinition,
     drift_table: pd.DataFrame,
     bead_detection_params: BeadDetectionParameters, 
@@ -113,6 +115,8 @@ def process_single_FOV_single_reference_timepoint(
 
     Parameters
     ----------
+    rois: Iterable of (int, Point3D)
+        Pairs of bead index and bead centroid
     reference_image_stack_definition : Sequence of np.ndarray
         The full collection of imaging data; nasmely, a list-/array-like indexed by FOV, in which each element is a 
         five-dimensional array itself (t, c, z, y, x) -- that is, a stack (z) of 2D images (y, x) for each imaging channel (c) 
@@ -148,8 +152,8 @@ def process_single_FOV_single_reference_timepoint(
     print(f"(FOV, time) pairs to skip: {fov_time_pairs_to_skip}")
     timepoints = [t for t in range(T) if (fov_idx, t) not in fov_time_pairs_to_skip]
     
-    if len(roi_centers) != bead_filtration_params.max_num_rois:
-        warnings.warn(RuntimeWarning(f"Fewer ROIs available ({len(roi_centers)}) than requested ({bead_filtration_params.max_num_rois}) for FOV {fov_idx}"))
+    if len(rois) != bead_filtration_params.max_num_rois:
+        warnings.warn(RuntimeWarning(f"Fewer ROIs available ({len(rois)}) than requested ({bead_filtration_params.max_num_rois}) for FOV {fov_idx}"))
 
     bead_roi_px = bead_detection_params.roi_pixels
     
@@ -159,17 +163,21 @@ def process_single_FOV_single_reference_timepoint(
     curr_fov_drift_subtable = drift_table[drift_table.fieldOfView == pos]
 
     # TODO: could type-refine the argument values to these parameters (which should be nonnegative).
-    def proc1(timepoint_index: int, ref_ch: int, centroid: np.ndarray) -> Iterable[NumberLike]:
-        coarse_shift = curr_fov_drift_subtable[curr_fov_drift_subtable.timepoint == timepoint_index][["zDriftCoarsePixels", "yDriftCoarsePixels", "xDriftCoarsePixels"]].values[0]
-        img = image_stack[timepoint_index, ref_ch].compute()
-        bead_img = extract_single_bead(centroid, img, bead_roi_px=bead_roi_px, drift_coarse=coarse_shift)
-        return fitSymmetricGaussian3D(bead_img, sigma=1, center='max')[0]
+    def proc1(timepoint_index: int, ref_ch: int, centroid: Point3D) -> Iterable[NumberLike]:
+        match curr_fov_drift_subtable[curr_fov_drift_subtable.timepoint == timepoint_index].to_dict("records"):
+            case [record]:
+                coarse_shift: Point3D = get_coarse_drift_from_row(record)
+                img = image_stack[timepoint_index, ref_ch].compute()
+                bead_img = extract_single_bead(centroid, img, bead_roi_px=bead_roi_px, drift_coarse=coarse_shift)
+                return fitSymmetricGaussian3D(bead_img, sigma=1, center="max")[0]
+            case records:
+                raise DimensionalityError(f"Subtable for single-FOV, single-timepoint ({timepoint_index}) drift isn't just 1 row, but {len(records)}")
 
     fits = Parallel(n_jobs=-1, prefer="processes")(
         delayed(lambda t, c, i, roi: [fov_idx, t, c, i] + list(proc1(timepoint_index=t, ref_ch=c, centroid=roi)))(t=t, c=c, i=i, roi=roi) 
         for t in tqdm.tqdm(timepoints)
         for c in [bead_detection_params.reference_channel] 
-        for i, roi in enumerate(roi_centers)
+        for i, roi in rois
         )
     fits = pd.DataFrame(fits, columns=["reference_fov", "t", "c", "roi", "BG", "A", "z_loc", "y_loc", "x_loc", "sigma_z", "sigma_xy"])
     fits = express_pixel_columns_as_nanometers(fits=fits, xy_cols=("y_loc", "x_loc", "sigma_xy"), z_cols=("z_loc", "sigma_z"), camera_params=camera_params)
@@ -340,7 +348,10 @@ def workflow(
     fits = (
         process_single_FOV_single_reference_timepoint(
             # Get the bead ROIs for the current combo of FOV and timepoint.
-            roi_centers=H.read_bead_rois_file_accuracy(fov_idx=spec.index, timepoint=bead_detection_params.reference_timepoint),
+            rois=list(H.read_bead_rois_file_accuracy(
+                fov_idx=spec.index, 
+                timepoint=bead_detection_params.reference_timepoint,
+            )),
             reference_image_stack_definition=spec, 
             drift_table=drift_table, 
             bead_detection_params=bead_detection_params, 

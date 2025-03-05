@@ -56,20 +56,10 @@ object ColumnNames:
     val TracePartnersColumName: ColumnName[Set[RoiIndex]] = ColumnName("tracePartners")
 
     private def coarseDriftColumnName[A <: EuclideanAxis](a: A): ColumnName[CoarseDriftComponent[A]] = 
-        val coarseDriftColumnSuffix: String = "DriftCoarsePixels"
-        ColumnName(a match {
-            case EuclideanAxis.X => "x" ++ coarseDriftColumnSuffix
-            case EuclideanAxis.Y => "y" ++ coarseDriftColumnSuffix
-            case EuclideanAxis.Z => "z" ++ coarseDriftColumnSuffix
-        })
+        ColumnName(a.toString.toLowerCase ++ "DriftCoarsePixels")
 
-    def fineDriftColumnName[A <: EuclideanAxis](a: A): ColumnName[FineDriftComponent[A]] = 
-        val fineDriftColumnSuffix: String = "DriftFinePixels"
-        ColumnName(a match {
-            case EuclideanAxis.X => "x" ++ fineDriftColumnSuffix
-            case EuclideanAxis.Y => "y" ++ fineDriftColumnSuffix
-            case EuclideanAxis.Z => "z" ++ fineDriftColumnSuffix
-        })
+    private def fineDriftColumnName[A <: EuclideanAxis](a: A): ColumnName[FineDriftComponent[A]] = 
+        ColumnName(a.toString.toLowerCase ++ "DriftFinePixels")
 
     private def mergeContributorsName: String = "mergePartners"
 end ColumnNames

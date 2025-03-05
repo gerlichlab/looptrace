@@ -111,7 +111,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
         // Write a specific subtype of selected ROI, but not a mix and not the general (non-leaf) type.
         def writeRois[R <: SelectedRoi : [R] =>> NotGiven[R =:= SelectedRoi]](rois: Set[R], outpath: os.Path): Unit = {
             logger.info(s"Writing: $outpath")
-            val jsonObjs = rois.toList.map(SelectedRoi.toJsonSimple(ParserConfig.coordinateSequence))
+            val jsonObjs = rois.toList.map(SelectedRoi.toJsonSimple)
             os.makeDir.all(outpath.parent)
             os.write.over(outpath, ujson.write(jsonObjs, indent = 4))
         }

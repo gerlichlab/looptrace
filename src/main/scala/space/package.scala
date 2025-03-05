@@ -7,6 +7,7 @@ import cats.syntax.all.*
 import mouse.boolean.*
 import squants.MetricSystem
 import squants.space.{ Length, LengthUnit, Nanometers }
+import upickle.core.Abort
 import upickle.default.*
 
 import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow
@@ -67,7 +68,6 @@ package object space:
 
     /** Helpers for working with points in 3D space */
     object Point3D:
-        import CoordinateSequence.*
 
         def apply(x: XCoordinate, y: YCoordinate, z: ZCoordinate): Point3D = 
             geometry.Point3D(x = x, y = y, z = z)
@@ -75,30 +75,30 @@ package object space:
         /** Order component-wise, (z, y, x) */
         given orderForPoint3D: Order[Point3D] = Order.by(pt => (pt.z, pt.y, pt.x))
 
-        /** Try to parse a list of coordinates into a point, failing if wrong dimensionality. */
-        def fromList(coordseq: CoordinateSequence)(pt: List[Double]): Either[String, Point3D] = {
-            pt match {
-                case _1 :: _2 :: _3 :: Nil => {
-                    val y = YCoordinate(_2)
-                    val (x, z) = coordseq match {
-                        case Forward => XCoordinate(_1) -> ZCoordinate(_3)
-                        case Reverse => XCoordinate(_3) -> ZCoordinate(_1)
-                    }
-                    Point3D(x, y, z).asRight
+        private val jsonKeyX = "xc"
+        private val jsonKeyY = "yc"
+        private val jsonKeyZ = "zc"
+
+        given JsonValueWriter[Point3D, ujson.Obj] with
+            override def apply(p: Point3D): ujson.Obj = 
+                import at.ac.oeaw.imba.gerlich.gerlib.json
+                ujson.Obj(
+                    jsonKeyX -> Coordinate.getJsonWriter[XCoordinate](p.x), 
+                    jsonKeyY -> Coordinate.getJsonWriter[YCoordinate](p.y),
+                    jsonKeyZ -> Coordinate.getJsonWriter[ZCoordinate](p.z),
+                )
+
+        given upickle.default.Reader[Point3D] = 
+            summon[upickle.default.Reader[Map[String, Double]]].map(
+                _.toList.sortBy(_._1) match {
+                    case (`jsonKeyX`, x) :: (`jsonKeyY`, y) :: (`jsonKeyZ`, z) :: Nil => 
+                        Point3D(XCoordinate(x), YCoordinate(y), ZCoordinate(z))
+                    case kvs => 
+                        val msg = s"Unexpected collection of keys for reading point from JSON: ${kvs.map(_._1).mkString("; ")}"
+                        throw new Abort(msg)
                 }
-                case _ => s"Expected 3 coordinates for a 3D point, but got ${pt.length}".asLeft
-            }
-        }
-
-        /** Represent the point's coordinates as a list, based on the ordering/sequence given. */
-        def toList(coordseq: CoordinateSequence)(pt: Point3D): NonEmptyList[Coordinate] = {
-            val (head, tail) = coordseq match {
-                case Forward => (pt.x, pt.z)
-                case Reverse => (pt.z, pt.x)
-            }
-            NonEmptyList(head, List(pt.y, tail))
-        }
-
+            )
+    
     /** Length in nanometers, restricted to be nonnegative */
     opaque type LengthInNanometers = NonnegativeReal
 
