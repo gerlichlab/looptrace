@@ -10,6 +10,11 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 * Add a proximity filter between beads and FISH spots. In other words, discard any "FISH spot" which is too close to a bead. Again, this is related to the idea of mixing up the two, especially during single-channel tracing. 
 See [Issue 400](https://github.com/gerlichlab/looptrace/issues/400) and [Issue 403](https://github.com/gerlichlab/looptrace/issues/403).
 
+## [v0.13.2] - 2024-03-06
+
+### Fixed
+* Safeguarded the cross-channel signal analysis against accidental attempt to extract signal from outside of the feasible voxel space (e.g., a `z` coordinate equal to or greater than the number of slices). See [Issue 438](https://github.com/gerlichlab/looptrace/issues/438).
+
 ## [v0.13.1] - 2025-02-21
 
 ### Fixed
