@@ -68,7 +68,7 @@ object MergeAndSplitRoiTools extends LazyLogging:
     def assessForMerge(minDist: DistanceThreshold)(rois: List[IndexedDetectedSpot]): EitherNel[String, List[MergerAssessedRoi]] = 
         import ProximityComparable.proximal
         given proxComp: ProximityComparable[IndexedDetectedSpot] = 
-            DistanceThreshold.defineProximityPointwise(minDist)(_.centroid.asPoint)
+            DistanceThreshold.defineProximityPointwise[IndexedDetectedSpot, Double](minDist)(_.centroid.asPoint)
         val lookup: Map[RoiIndex, Set[RoiIndex]] = 
             rois.groupBy(_.context) // Only merge ROIs from the same context (FOV, time, channel).
                 .values
@@ -93,7 +93,7 @@ object MergeAndSplitRoiTools extends LazyLogging:
         getItemKey: A => K,
     ): (List[((K, K), NonEmptyList[String])], Map[K, NonEmptySet[K]]) = 
         import ProximityComparable.proximal
-        given proxComp: ProximityComparable[A] = DistanceThreshold.defineProximityPointwise(minDist)(getPoint)
+        given proxComp: ProximityComparable[A] = DistanceThreshold.defineProximityPointwise[A, Double](minDist)(getPoint)
         val (errors, indexes): (List[((K, K), NonEmptyList[String])], Map[K, NonEmptySet[K]]) = 
             items.groupBy(getGroupKey)
                 .values
