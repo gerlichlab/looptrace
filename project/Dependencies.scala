@@ -4,7 +4,7 @@ import sbt._
 object Dependencies {
     /** Get a typelevel cats dependency specification. */
     object Cats {
-        def getModuleId(name: String) = "org.typelevel" %% s"cats-$name" % "2.12.0"
+        def getModuleId(name: String) = "org.typelevel" %% s"cats-$name" % "2.13.0"
     }
 
     /** gerlichlab dependency declaration helper */
@@ -12,7 +12,7 @@ object Dependencies {
         def getModuleId(name: String) = groupId %% artifact(name) % version
         private val groupId = "com.github.gerlichlab"
         private def artifact(module: String): String = s"gerlib-$module"
-        private val version = "0.3.2"
+        private val version = "0.4.1"
     }
 
     /** Bundle data related to getting ModuleID for an iron subproject. */
@@ -35,11 +35,11 @@ object Dependencies {
     }
 
     object PureConfig {
-        def getModuleId(name: String): ModuleID = "com.github.pureconfig" %% s"pureconfig-$name" % "0.17.7"
+        def getModuleId(name: String): ModuleID = "com.github.pureconfig" %% s"pureconfig-$name" % "0.17.8"
     }
 
     /* versions */
-    lazy val scalatestVersion = "3.2.18"
+    lazy val scalatestVersion = "3.2.19"
     
     /* core libraries */
     lazy val catsCore = Cats.getModuleId("core")
@@ -51,7 +51,7 @@ object Dependencies {
         "pan",
     ).map(Gerlib.getModuleId)
     lazy val logging = Seq(
-        "ch.qos.logback" % "logback-classic" % "1.5.6", 
+        "ch.qos.logback" % "logback-classic" % "1.5.17", 
         "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
     )
     lazy val mouse = "org.typelevel" %% "mouse" % "1.3.2"
@@ -63,12 +63,12 @@ object Dependencies {
     lazy val ironScalacheck = Iron.getModuleID("scalacheck")
     
     /* IO-related dependencies */
-    lazy val fs2Csv = "org.gnieh" %% "fs2-data-csv" % "1.11.1"
-    lazy val fs2IO = "co.fs2" %% "fs2-io" % "3.10.2"
-    lazy val os = "com.lihaoyi" %% "os-lib" % "0.11.3"
+    lazy val fs2Csv = "org.gnieh" %% "fs2-data-csv" % "1.11.2"
+    lazy val fs2IO = "co.fs2" %% "fs2-io" % "3.11.0"
+    lazy val os = "com.lihaoyi" %% "os-lib" % "0.11.4"
     lazy val pureconfigCore = PureConfig.getModuleId("core")
     lazy val pureconfigGeneric = PureConfig.getModuleId("generic-scala3")
-    lazy val scalaCsv = "com.github.tototoshi" %% "scala-csv" % "1.3.10"
+    lazy val scalaCsv = "com.github.tototoshi" %% "scala-csv" % "1.4.1"
     lazy val scopt = "com.github.scopt" %% "scopt" % "4.1.0"
     lazy val uJson = HaoyiJson.getModuleId("ujson")
     lazy val uPickle = HaoyiJson.getModuleId("upickle")
@@ -76,10 +76,10 @@ object Dependencies {
     /* testing-related dependencies */
     lazy val catsLaws = Cats.getModuleId("laws")
     lazy val gerlibTesting = Gerlib.getModuleId("testing")
-    lazy val scalacheck = "org.scalacheck" %% "scalacheck" % "1.18.0"
+    lazy val scalacheck = "org.scalacheck" %% "scalacheck" % "1.18.1"
     lazy val scalacheckOps = "com.rallyhealth" %% "scalacheck-ops_1" % "2.12.0"
     lazy val scalactic = "org.scalactic" %% "scalactic" % scalatestVersion
     lazy val scalatest = "org.scalatest" %% "scalatest" % scalatestVersion
-    lazy val scalatestScalacheck = "org.scalatestplus" %% "scalacheck-1-17" % "3.2.18.0"
+    lazy val scalatestScalacheck = "org.scalatestplus" %% "scalacheck-1-18" % "3.2.19.0"
 
 }

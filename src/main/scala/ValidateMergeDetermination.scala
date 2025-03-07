@@ -231,7 +231,7 @@ object ValidateMergeDetermination extends ScoptCliReaders, StrictLogging:
         extension [R <: InputRecord](r: R)
             infix def dist(that: R): EuclideanDistance = 
                 import Centroid.asPoint
-                EuclideanDistance.between[R](_.centroid.asPoint)(r, that)
+                EuclideanDistance.between((_: R).centroid.asPoint)(r, that)
         
         given RowDec[InputRecord] with
             override def apply(row: Row): DecoderResult[InputRecord] = 
