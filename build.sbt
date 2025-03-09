@@ -60,7 +60,9 @@ lazy val root = (project in file("."))
       // https://contributors.scala-lang.org/t/for-comprehension-requires-withfilter-to-destructure-tuples/5953
       "-source:future", // for tuples in for comprehension; see above link
       "-unchecked",
-      "-Werror",
+      // https://www.scala-lang.org/2021/01/12/configuring-and-suppressing-warnings.html
+      // Turn any compiler warning into error, then make exceptions for a couple expected messages.
+      "-Wconf:any:e,msg=old given syntax is no longer supported:w,msg=Given member definitions starting with:w",
     ),
     libraryDependencies ++= Seq(
       catsCore,
