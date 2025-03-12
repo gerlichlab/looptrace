@@ -210,13 +210,15 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
         def tryReadThruNN[A](f: NonnegativeInt => A): String => Option[A] = s => Try(s.toInt).toOption >>= NonnegativeInt.maybe.fmap(_.map(f))
         val prepFileMeta: os.Path => Option[InitFile] = filepath => {
             val filename = filepath.last
-            if filename.startsWith(BeadRoisPrefix) then {
+            if filename.startsWith(BeadRoisPrefix) 
+            then {
                 filename.split("\\.").head.stripPrefix(BeadRoisPrefix).split("_").toList match {
                     case "" :: rawPosIdx :: rawTime :: Nil => 
                         (tryReadThruNN(FieldOfView.apply)(rawPosIdx), tryReadThruNN(ImagingTimepoint.apply)(rawTime)).tupled.map(_ -> filepath)
                     case _ => None
                 }
-            } else { None }
+            } 
+            else { None }
         }
         val results = os.list(inputsFolder).filter(os.isFile).toList.flatMap(prepFileMeta)
         val histogram = results.groupBy(_._1).filter(_._2.length > 1)
