@@ -546,7 +546,6 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
         val yCol = YColumn("yc")
         val zCol = ZColumn("zc")
         val qcCol = "fail_code"
-        val coordinateSequence = CoordinateSequence.Reverse
     end ParserConfig
 
     /** Encode FOV, timepoint, and intended purpose of ROI in filename. */
