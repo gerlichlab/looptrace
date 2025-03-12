@@ -113,7 +113,7 @@ package object looptrace {
                 }
             )
         
-        given RowIndexAdmission[RoiIndex, Id] with
+        given RowIndexAdmission[RoiIndex, Id]:
             override def getRowIndex: RoiIndex => Id[NonnegativeInt] = _.get
     end RoiIndex
 
@@ -129,11 +129,11 @@ package object looptrace {
 
     /** Helpers for working with identifiers of tracing groups/structures */
     object TraceGroupId:
-        given orderForTraceGroupId(using Order[String]): Order[TraceGroupId] = 
+        given (Order[String]) => Order[TraceGroupId] = 
             import io.github.iltotore.iron.cats.given
             Order.by(_.get)
 
-        given JsonValueWriter[TraceGroupId, ujson.Str] with
+        given JsonValueWriter[TraceGroupId, ujson.Str]:
             override def apply(i: TraceGroupId): ujson.Str = ujson.Str(i.get)
         
         given SimpleShow[TraceGroupId] = SimpleShow.instance(_.get)
@@ -164,10 +164,10 @@ package object looptrace {
             if s.isEmpty then empty.asRight
             else TraceGroupId.fromString(s).map(apply)
 
-        given orderForTraceGroupMaybe(using Order[TraceGroupId]): Order[TraceGroupMaybe] = Order.by(_.toOption)
+        given (Order[TraceGroupId]) => Order[TraceGroupMaybe] = Order.by(_.toOption)
 
         /** The JSON representation is {@code ujson.Null} exactly when the optional ID is empty. */
-        given JsonValueWriter[TraceGroupMaybe, ujson.Str | ujson.Null.type] with
+        given JsonValueWriter[TraceGroupMaybe, ujson.Str | ujson.Null.type]:
             override def apply(groupOpt: TraceGroupMaybe): ujson.Str | ujson.Null.type = 
                 import TraceGroupId.given
                 import at.ac.oeaw.imba.gerlich.gerlib.json.syntax.asJson

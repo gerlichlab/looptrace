@@ -107,7 +107,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
 
     test("Any nonempty subset of missing/incorrect columns from input file causes expected error.") {
         type ExpectedHeader = List[String]
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         
         def genExpHeadAndMiss: Gen[(ExpectedHeader, NonEmptySet[String])] = {
             def genDeletions: Gen[(ExpectedHeader, NonEmptySet[String])] = Gen.choose(1, AllRequiredColumns.length - 1)
@@ -116,14 +116,14 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
                     val (expHead, expMiss) = AllRequiredColumns.zipWithIndex.partition((_, i) => !indices.contains(i))
                     expHead.map(_._1) -> expMiss.map(_._1).toNel.get.toNes
                 }
-            def genSubstitutions: Gen[(ExpectedHeader, NonEmptySet[String])] = for {
+            def genSubstitutions: Gen[(ExpectedHeader, NonEmptySet[String])] = for
                 indicesToChange <- Gen.atLeastOne((0 until AllRequiredColumns.length)).map(_.toSet) // Choose header fields to change.
                 expHead <- AllRequiredColumns.zipWithIndex.traverse{ (col, idx) => 
                     if indicesToChange contains idx 
                     then Gen.alphaNumStr.suchThat(_ =!= col) // Ensure the replacement differs from original.
                     else Gen.const(col) // Use the original value since this index isn't one at which to update.
                 }
-            } yield (expHead, indicesToChange.toList.toNel.get.toNes.map(AllRequiredColumns.zipWithIndex.map(_.swap).toMap.apply))            
+            yield (expHead, indicesToChange.toList.toNel.get.toNes.map(AllRequiredColumns.zipWithIndex.map(_.swap).toMap.apply))            
             Gen.oneOf(genSubstitutions, genDeletions).suchThat{ (head, miss) => (head.toSet & miss.toSortedSet).isEmpty }
         }
         
@@ -175,7 +175,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
             Gen.oneOf(genBadPoint, genBadLocus, genBadTrace, genBadPosition)
         }
         
-        def genBadRecords: Gen[(NonEmptyList[Int], NonEmptyList[List[String]])] = for {
+        def genBadRecords: Gen[(NonEmptyList[Int], NonEmptyList[List[String]])] = for
             goods <- arbitrary[NonEmptyList[Input.GoodRecord]].map(_.map(recordToTextFields))
             indices <- Gen.atLeastOne((0 until goods.length)).map(_.toList.sorted.toNel.get)
             mutations <- indices.toList
@@ -183,7 +183,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
                 // and the distribution is biased towards selection of elements earlier in the sequence.
                 .traverse{ i => Gen.oneOf(genImproperlyTyped, genAdditions, genDrops).map(i -> _) }
                 .map(_.toMap)
-        } yield (indices, goods.zipWithIndex.map{ (r, i) => mutations.get(i).fold(r)(_(r)) })
+        yield (indices, goods.zipWithIndex.map{ (r, i) => mutations.get(i).fold(r)(_(r)) })
         
         forAll (genBadRecords) { (expBadRows, textRecords) =>
             withTempDirectory{ (tempdir: os.Path) => 
@@ -371,14 +371,14 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
         }
 
     /** Treat trace ID generation equivalently to ROI index generation. */
-    given arbitraryForTraceId(using arbRoiIdx: Arbitrary[RoiIndex]): Arbitrary[TraceId] = arbRoiIdx.map(TraceId.fromRoiIndex)
+    given (arbRoiIdx: Arbitrary[RoiIndex]) => Arbitrary[TraceId] = arbRoiIdx.map(TraceId.fromRoiIndex)
     
-    given arbitraryForGoodInputRecord(using 
+    given (
         arbPosAndTrace: Arbitrary[(PositionName, TraceId)],
         arbRegion: Arbitrary[RegionId], 
         arbLocus: Arbitrary[LocusId], 
         arbPoint: Arbitrary[Point3D], 
-    ): Arbitrary[Input.GoodRecord] = 
+    ) => Arbitrary[Input.GoodRecord] = 
         (arbPosAndTrace, arbRegion, arbLocus, arbPoint)
             .mapN{ case ((pos, trace), reg, loc, pt) => 
                 Input.GoodRecord(pos, TraceGroupMaybe.empty, trace, reg, loc, pt) 

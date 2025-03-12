@@ -25,13 +25,10 @@ trait TracingCsvInstances:
             TraceGroupMaybe.fromString(s).leftMap{ msg => new DecoderError(msg) }
         }
 
-    given cellDecoderForTraceId(using dec: CellDecoder[NonnegativeInt]): CellDecoder[TraceId] = 
-        dec.map(TraceId.apply)
+    given (dec: CellDecoder[NonnegativeInt]) => CellDecoder[TraceId] = dec.map(TraceId.apply)
 
     /** Encode the trace ID by encoding simply the underlying value. */
-    given cellEncoderForTraceId(
-        using enc: CellEncoder[NonnegativeInt]
-    ): CellEncoder[TraceId] = enc.contramap(_.get)
+    given (enc: CellEncoder[NonnegativeInt]) => CellEncoder[TraceId] = enc.contramap(_.get)
 
     /** Encoder a (possibly empty) trace group ID by the wrapped value, or empty string. */
     given CellEncoder[TraceGroupMaybe] = 
@@ -82,7 +79,7 @@ trait TracingCsvInstances:
                 case merged: TraceIdAssignment.GroupedAndMerged => 
                     (merged.groupId.some, merged.partners.some, merged.hasAllPartners.some)
             }
-            given cellEncoderOptional[A: CellEncoder]: CellEncoder[Option[A]] = new:
+            given [A : CellEncoder] => CellEncoder[Option[A]] = new:
                 override def apply(cell: Option[A]): String = cell.fold("")(CellEncoder[A].apply)
             val groupIdRow: NamedRow = TraceGroupColumnName.write(TraceGroupMaybe(groupIdOpt))
             val partnersRow: NamedRow = TracePartnersColumName.write(partnersOpt.fold(Set())(_.toSortedSet))

@@ -128,7 +128,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
     }
 
     private def checkTraceId(offLimits: NonEmptySet[TraceId])(tid: TraceId): Unit = 
-        if (offLimits contains tid) {
+        if offLimits contains tid then {
             throw new Exception(s"Trace ID is already a ROI index and can't be used: ${tid.show_}")
         }
 
@@ -215,7 +215,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                 }
                 .toMap
         val edgeEndpoints: Set[(RoiIndex, RoiIndex)] = 
-            given Order[FieldOfViewLike] with
+            given Order[FieldOfViewLike]:
                 override def compare(x: FieldOfViewLike, y: FieldOfViewLike): Int = (x, y) match {
                     case (fov1: FieldOfView, fov2: FieldOfView) => fov1 compare fov2
                     case (pos1: PositionName, pos2: PositionName) => pos1 compare pos2
@@ -264,7 +264,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
         
         val lookupRule: TimepointExpectationLookup = 
             // Provide a way to get the expected group members and requirement stringency for a given timepoint.
-            given orderForKeyValuePairs[V]: Order[(ImagingTimepoint, V)] = Order.by(_._1)
+            given [V] => Order[(ImagingTimepoint, V)] = Order.by(_._1)
             given semigroup: Semigroup[TimepointExpectationLookup] = 
                 Semigroup.instance{ (x, y) => 
                     val collisions = x.keys & y.keys
@@ -384,7 +384,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                                 .toNel
                                 .map{ rules => 
                                     val nUniqueRules = rules.toList.toSet.size
-                                    if (nUniqueRules =!= 1) {
+                                    if nUniqueRules =!= 1 then {
                                         throw new Exception(
                                             // This would be what would happen if one or more elements (timepoints) "bridge" 
                                             // the groups, i.e. one or more timepoints is used in more than one merge group, 
@@ -398,7 +398,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                                         val rule = rules.head
                                         val expectedTimes = rule.mergeGroup.members.toNes
                                         val extraTimes = observedTimes -- expectedTimes
-                                        if (extraTimes.nonEmpty) {
+                                        if extraTimes.nonEmpty then {
                                             // This should be protected against by the construction of the neighbors graph; 
                                             // namely, we only draw an edge between points for which the pair of timepoints 
                                             // are part of the same group of timepoints to merge.
@@ -456,10 +456,10 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
         import at.ac.oeaw.imba.gerlich.gerlib.json.JsonValueWriter
         import at.ac.oeaw.imba.gerlich.gerlib.json.instances.all.given
 
-        given writerForImpossibleAssignment(using 
-            writeCollision: upickle.default.Writer[TimepointCollisionWithinTrace],
-            writeAmbiguous: upickle.default.Writer[TraceGroupNameAmbiguity],
-        ): upickle.default.Writer[AssignmentNotPossible] = 
+        given (
+            upickle.default.Writer[TimepointCollisionWithinTrace],
+            upickle.default.Writer[TraceGroupNameAmbiguity],
+        ) => upickle.default.Writer[AssignmentNotPossible] = 
             upickle.default.writer[ujson.Obj].comap(toJson)
 
         private def toJson(impossibility: AssignmentNotPossible): ujson.Obj = impossibility match {
@@ -490,10 +490,10 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                     }
             )
 
-        given writerForAmbiguity(using w: upickle.default.Writer[AssignmentNotPossible]): upickle.default.Writer[TraceGroupNameAmbiguity] = 
+        given (w: upickle.default.Writer[AssignmentNotPossible]) => upickle.default.Writer[TraceGroupNameAmbiguity] = 
             w.narrow
 
-        given writerForCollision(using w: upickle.default.Writer[AssignmentNotPossible]): upickle.default.Writer[TimepointCollisionWithinTrace] = 
+        given (w: upickle.default.Writer[AssignmentNotPossible]) => upickle.default.Writer[TimepointCollisionWithinTrace] = 
             w.narrow
 
         given writerForImpossibleAssignments: upickle.default.Writer[List[AssignmentNotPossible]] = 
@@ -511,10 +511,10 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
         given CsvRowDecoder[ImagingChannel, String] = 
             getCsvRowDecoderForImagingChannel(SpotChannelColumnName)
         
-        val readRois: IO[List[InputRecord]] = for {
+        val readRois: IO[List[InputRecord]] = for
             _ <- IO{ logger.info(s"Reading ROIs file: $roisFile") }
             rois <- readCsvToCaseClasses[InputRecord](roisFile)
-        } yield rois
+        yield rois
 
         val assignIds: List[InputRecord] => IO[List[InputRecordFate]] = _.toNel match {
             case None => 
@@ -542,7 +542,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                 import OutputRecord.given
                 import InputRecordFate.given
                 
-                given CellEncoder[FieldOfViewLike] with
+                given CellEncoder[FieldOfViewLike]:
                     override def apply(cell: FieldOfViewLike): String = cell match {
                         case fov: FieldOfView => CellEncoder[FieldOfView].apply(fov)
                         case pos: PositionName => 
@@ -557,31 +557,31 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
                 
                 val (skips, records) = Alternative[List].separate(inputFates)
                 
-                val writeMainOutput: IO[os.Path] = for {
+                val writeMainOutput: IO[os.Path] = for
                     _ <- IO{ logger.info(s"Writing main output file: $outputFile") }
                     _ <- fs2.Stream
                         .emits(records.sortBy(_.inputRecord.index)(using Order[RoiIndex].toOrdering).toList)
                         .through(writeCaseClassesToCsv[OutputRecord](outputFile))
                         .compile
                         .drain
-                } yield outputFile
+                yield outputFile
                 
                 val writeSkipsOutput: IO[os.Path] = 
                     import InputRecordFate.given
-                    for {
+                    for
                         _ <- IO { logger.info(s"Writing skips file: $skipsFile") }
                         _ <- IO { os.write(skipsFile, upickle.default.write(skips), createFolders = true) }
-                    } yield skipsFile
+                    yield skipsFile
 
                 List(writeMainOutput, writeSkipsOutput).sequence
         }
    
-        val prog = for {
+        val prog = for
             rois <- readRois
             fates <- assignIds(rois)
             outpaths <- writeOutputs(fates)
             _ <- IO{ logger.info(s"Wrote ${outpaths.length} path(s): ${outpaths mkString ", "}") }
-        } yield ()
+        yield ()
 
         prog.unsafeRunSync()
         logger.info("Done!")
@@ -597,7 +597,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
         def box: BoundingBox = inputRecord.box
 
     object OutputRecord:
-        given csvRowEncoderForOutputRecord(using 
+        given ( 
             encRoiId: CellEncoder[RoiIndex],
             encContext: CsvRowEncoder[ImagingContext, String],
             encCentroid: CsvRowEncoder[Centroid[Double], String],
@@ -606,7 +606,7 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
             encTid: CellEncoder[TraceId],
             encTraceGroupId: CellEncoder[TraceGroupMaybe],
             encPartnersFlag: CellEncoder[Boolean],
-        ): CsvRowEncoder[OutputRecord, String] = new:
+        ) => CsvRowEncoder[OutputRecord, String] = new:
             override def apply(elem: OutputRecord): RowF[Some, String] = 
                 val idRow = RoiIndexColumnName.write(elem.index)
                 val ctxRow = encContext(elem.context)
@@ -641,13 +641,13 @@ object AssignTraceIds extends ScoptCliReaders, StrictLogging:
 
     /** Helpers for working with this program's input records */
     object InputRecord:
-        given rowDecoderForInputRecord(using 
+        given ( 
             decIndex: CellDecoder[RoiIndex],
             decContext: CsvRowDecoder[ImagingContext, String], 
             decCentroid: CsvRowDecoder[Centroid[Double], String],
             decBox: CsvRowDecoder[BoundingBox, String],
             decNuclus: CellDecoder[NuclearDesignation],
-        ): CsvRowDecoder[InputRecord, String] = new:
+        ) => CsvRowDecoder[InputRecord, String] = new:
             override def apply(row: RowF[Some, String]): DecoderResult[InputRecord] = 
                 val spotNel = summon[CsvRowDecoder[IndexedDetectedSpot, String]](row)
                     .leftMap(e => s"Cannot decode spot from row ($row): ${e.getMessage}")

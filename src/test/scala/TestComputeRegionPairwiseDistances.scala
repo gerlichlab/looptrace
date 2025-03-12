@@ -223,7 +223,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
         given Arbitrary[ImagingChannel] = Gen.const(ImagingChannel.unsafe(0)).toArbitrary
         given Arbitrary[ImagingTimepoint] = Gen.oneOf(40, 41, 42).map(ImagingTimepoint.unsafe).toArbitrary
         
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny // Do absolutely no example shrinking.
+        given [A] => Shrink[A] = Shrink.shrinkAny // Do absolutely no example shrinking.
 
         forAll (Gen.choose(5, 10).flatMap(Gen.listOfN(_, arbitrary[Input.GoodRecord]))) { (records: List[Input.GoodRecord]) => 
             // Pretest: must be multiple records of same timepoint even within same FOV.
@@ -249,13 +249,13 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
     }
 
     /** Use arbitrary instances for components to derive an an instance for the sum type. */
-    given arbitraryForGoodInputRecord(using 
+    given ( 
         arbId: Arbitrary[RoiIndex],
         arbPos: Arbitrary[PositionName], 
         arbTimepoint: Arbitrary[ImagingTimepoint],
         arbChannel: Arbitrary[ImagingChannel],
         arbPoint: Arbitrary[Point3D], 
         arbTraceGroup: Arbitrary[TraceGroupMaybe],
-    ): Arbitrary[Input.GoodRecord] = 
+    ) => Arbitrary[Input.GoodRecord] = 
         (arbId, arbPos, arbTimepoint, arbChannel, arbPoint, arbTraceGroup).mapN(Input.GoodRecord.apply)
 end TestComputeRegionPairwiseDistances

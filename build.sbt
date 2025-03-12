@@ -62,7 +62,10 @@ lazy val root = (project in file("."))
       "-unchecked",
       // https://www.scala-lang.org/2021/01/12/configuring-and-suppressing-warnings.html
       // Turn any compiler warning into error, then make exceptions for a couple expected messages.
-      "-Wconf:any:e,msg=old given syntax is no longer supported:w,msg=Given member definitions starting with:w",
+      //"-Wconf:any:e,msg=old given syntax is no longer supported:w,msg=Given member definitions starting with:w",
+      "-rewrite", 
+      "-new-syntax",
+      "-Werror",
     ),
     libraryDependencies ++= Seq(
       catsCore,

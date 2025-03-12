@@ -35,7 +35,7 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
     ImagingRoundsConfigurationSuite, 
     should.Matchers:
     test("Parse succeeds when all parts are present and correctly structured"):
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
             
         forAll (minSuccessful(1000)): (
             threshold: EuclideanDistance.Threshold, 
@@ -254,7 +254,7 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
     test("No group may be a mapping."):
         pending
 
-    private given arbGrouping(using Arbitrary[ImagingTimepoint]): Arbitrary[NonEmptyMap[String, AtLeast2[Set, ImagingTimepoint]]] = {
+    private given (Arbitrary[ImagingTimepoint]) => Arbitrary[NonEmptyMap[String, AtLeast2[Set, ImagingTimepoint]]] = {
         def genGroup(using arbTime: Arbitrary[ImagingTimepoint]): Gen[AtLeast2[Set, ImagingTimepoint]] =
             Gen.choose(2, 10)
                 .flatMap(n => Gen.containerOfN[Set, ImagingTimepoint](n, arbTime.arbitrary))
@@ -271,14 +271,14 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
         
         def genGroupingOfTwo: Gen[NonEmptyList[AtLeast2[Set, ImagingTimepoint]]] = 
             val indices = (0 to 10).map(ImagingTimepoint.unsafeLift)
-            for {
+            for
                 ts1 <- Gen.choose(2, 5)
                     .flatMap(n => Gen.pick(n, indices))
                     .map(g => AtLeast2.unsafe(g.toSet))
                 ts2 <- Gen.choose(2, indices.size - ts1.size)
                     .flatMap(n => Gen.pick(n, indices.toSet -- ts1.toSet))
                     .map(g => AtLeast2.unsafe(g.toSet))
-            } yield NonEmptyList.of(ts1, ts2)
+            yield NonEmptyList.of(ts1, ts2)
 
         given Arbitrary[String] = // Generate nonempty, reasonable keys.
             Gen.nonEmptyListOf(
@@ -290,12 +290,12 @@ class TestParseDifferentTimepointsRoiMergeSectionOfImagingRoundsConfig extends
             .map(_.mkString(""))
             .toArbitrary
         
-        def gen = for {
+        def gen = for
             groups <- Gen.oneOf(genGroupingOfOne, genGroupingOfTwo)
             keys <- Gen.listOfN(groups.length, Arbitrary.arbitrary[String])
                 .suchThat(ks => ks.length === ks.toSet.size)
                 .map(_.toNel.getOrElse{ throw new Exception("Generated empty list from nonempty!") })
-        } yield NonEmptyMap.of(keys.head -> groups.head, keys.tail.zip(groups.tail)*)
+        yield NonEmptyMap.of(keys.head -> groups.head, keys.tail.zip(groups.tail)*)
         gen.toArbitrary
     }
 

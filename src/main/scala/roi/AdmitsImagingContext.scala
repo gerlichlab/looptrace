@@ -13,7 +13,7 @@ object AdmitsImagingContext:
     def instance[T](f: T => ImagingContext): AdmitsImagingContext[T] = new:
         override def getImagingContext: T => ImagingContext = f
 
-    given Contravariant[AdmitsImagingContext] with
+    given Contravariant[AdmitsImagingContext]:
         override def contramap[A, B](fa: AdmitsImagingContext[A])(f: B => A): AdmitsImagingContext[B] = new:
             override def getImagingContext: B => ImagingContext = f `andThen` fa.getImagingContext
 

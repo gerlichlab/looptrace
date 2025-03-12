@@ -23,9 +23,9 @@ class TestDistanceThresholds extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
     type PtPair = (Point3D, Point3D)
 
     test("Positive: Conjunctive component proximity implies disjunctive component proximity.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         def genProximalPoints: Gen[(NonnegativeReal, Point3D, Point3D)] = {
-            for {
+            for
                 (a, b) <- {
                     given arbRawCoord: Arbitrary[Double] = genReasonableCoordinate.toArbitrary // Prevent Euclidean overflow.
                     arbitrary[(Point3D, Point3D)]
@@ -36,7 +36,7 @@ class TestDistanceThresholds extends AnyFunSuite, ScalaCheckPropertyChecks, Dist
                     1 + List(dist.getX, dist.getY, dist.getZ).max
                 }
                 t <- Gen.choose(tMin, Double.MaxValue).map(NonnegativeReal.unsafe)
-            } yield (t, a, b)
+            yield (t, a, b)
         }
 
         forAll (genProximalPoints) { case (t, a, b) =>

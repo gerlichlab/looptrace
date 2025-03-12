@@ -54,7 +54,7 @@ package object space:
 
     object CoordinateSequence:
         /** Conversion of a coordinate sequence member value to JSON value, routing through text representation */
-        given toJson(using liftStr: String => ujson.Value): (CoordinateSequence => ujson.Value) = cs => liftStr(cs.toString)
+        given (liftStr: String => ujson.Value) => (CoordinateSequence => ujson.Value) = cs => liftStr(cs.toString)
 
         /** Try to parse given text as enum instance. */
         def parse(s: String): Either[Throwable, CoordinateSequence] = Try{ CoordinateSequence.valueOf(s) }.toEither
@@ -79,7 +79,7 @@ package object space:
         private val jsonKeyY = "yc"
         private val jsonKeyZ = "zc"
 
-        given JsonValueWriter[Point3D, ujson.Obj] with
+        given JsonValueWriter[Point3D, ujson.Obj]:
             override def apply(p: Point3D): ujson.Obj = 
                 import at.ac.oeaw.imba.gerlich.gerlib.json
                 ujson.Obj(
@@ -133,7 +133,7 @@ package object space:
             import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
             summon[Order[NonnegativeReal]].contramap(l => l: NonnegativeReal)
 
-        given simpleShowForLengthInNanometers(using showX: SimpleShow[NonnegativeReal]): SimpleShow[LengthInNanometers] = 
+        given (showX: SimpleShow[NonnegativeReal]) => SimpleShow[LengthInNanometers] = 
             showX.contramap(l => l: NonnegativeReal)
 
         given LengthLike[LengthInNanometers] = LengthLike.instance(l => Nanometers(l.toDouble))

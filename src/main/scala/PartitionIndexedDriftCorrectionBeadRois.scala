@@ -57,7 +57,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
 
     def main(args: Array[String]): Unit = {
         import parserBuilder.*
-        given readForShiftingCount(using intRead: Read[Int]): Read[ShiftingCount] = 
+        given (intRead: Read[Int]) => Read[ShiftingCount] = 
             intRead.map(ShiftingCount.unsafe)
 
         val parser = OParser.sequence(
@@ -137,7 +137,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
             )
         
         // Here, write (severe) warnings (if in development mode) or raise an exception.
-        val zeroAccuracyProblems = if (bads.nonEmpty) {
+        val zeroAccuracyProblems = if bads.nonEmpty then {
             Alternative[List].separate(bads.map{ // Partition the list of problems by type of error.
                 case kv@(_, _: RoisFileParseError) => kv.asLeft
                 case ((pt, _), e: RoisSplit.TooFewShifting) => (pt, e).asRight
@@ -210,7 +210,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
         def tryReadThruNN[A](f: NonnegativeInt => A): String => Option[A] = s => Try(s.toInt).toOption >>= NonnegativeInt.maybe.fmap(_.map(f))
         val prepFileMeta: os.Path => Option[InitFile] = filepath => {
             val filename = filepath.last
-            if (filename.startsWith(BeadRoisPrefix)) {
+            if filename.startsWith(BeadRoisPrefix) then {
                 filename.split("\\.").head.stripPrefix(BeadRoisPrefix).split("_").toList match {
                     case "" :: rawPosIdx :: rawTime :: Nil => 
                         (tryReadThruNN(FieldOfView.apply)(rawPosIdx), tryReadThruNN(ImagingTimepoint.apply)(rawTime)).tupled.map(_ -> filepath)
@@ -220,8 +220,8 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
         }
         val results = os.list(inputsFolder).filter(os.isFile).toList.flatMap(prepFileMeta)
         val histogram = results.groupBy(_._1).filter(_._2.length > 1)
-        if (histogram.nonEmpty) {
-            given writeFiles: (Iterable[os.Path] => ujson.Value) with
+        if histogram.nonEmpty then {
+            given writeFiles: (Iterable[os.Path] => ujson.Value):
                 def apply(paths: Iterable[os.Path]) = paths.map(_.last)
             val errMsg = s"Non-unique filenames for key(s): ${posTimeMapToJson("filepaths", histogram.view.mapValues(_.map(_._2)).toMap)}"
             throw new IllegalStateException(errMsg)
@@ -278,7 +278,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
       */
     def sampleDetectedRois(numShifting: ShiftingCount, numAccuracy: PositiveInt)(rois: Iterable[FiducialBeadRoi]): RoisSplit.Result = {
         val sampleSize = numShifting + numAccuracy
-        if (sampleSize < numShifting || sampleSize < numAccuracy) {
+        if sampleSize < numShifting || sampleSize < numAccuracy then {
             val msg = s"Appears overflow occurred computing sample size: ${numShifting} + ${numAccuracy} = ${sampleSize}"
             throw new IllegalArgumentException(msg)
         }
@@ -360,7 +360,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
             def asNonnegative: NonnegativeInt = NonnegativeInt.unsafe(n)
             def asPositive: PositiveInt = PositiveInt.unsafe(n)
         def unsafe(z: Int): ShiftingCount = 
-            if (z < AbsoluteMinimumShifting) 
+            if z < AbsoluteMinimumShifting then 
                 throw new IllegalArgumentException("Insufficient value (< 10) for shifting count!")
             else (z: ShiftingCount) 
     end ShiftingCount
@@ -368,7 +368,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
     /** Tools for working with a fundamental grouping entity -- pair of FOV and imaging timepoint */
     object FovTimePair:
         private[PartitionIndexedDriftCorrectionBeadRois] val timeKey = "time"
-        given jsonMappableForFovTimePair: JsonMappable[FovTimePair] with
+        given jsonMappableForFovTimePair: JsonMappable[FovTimePair]:
             override def toJsonMap = (fov, time) => 
                 Map(FieldOfViewColumnName.value -> fov.asJson, timeKey -> time.asJson)
     end FovTimePair
@@ -397,9 +397,9 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
 
         final case class Problem private(numRequested: PositiveInt, numRealized: NonnegativeInt, purpose: Purpose):
             /* Validation of reasonableness of arguments given that this is an alleged error / problem value being created */
-            if (numRealized > numRequested) 
+            if numRealized > numRequested then 
                 throw new IllegalArgumentException(s"Realized more ROIs than requested: $numRealized > $numRequested")
-            if (numRealized === numRequested.asNonnegative)
+            if numRealized === numRequested.asNonnegative then
                 throw new IllegalArgumentException(s"Alleged too few ROIs, but $numRealized = $numRequested")
 
         object Problem:
@@ -490,13 +490,13 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
                         val accuracyCounts = accuracy.toList.groupBy(identity).view.mapValues(_.length).toMap
                         val shiftingRepeats = shiftingCounts.filter(_._2 > 1)
                         val accuracyRepeats = accuracyCounts.filter(_._2 > 1)
-                        if (shiftingRepeats.nonEmpty || accuracyRepeats.nonEmpty) {
+                        if shiftingRepeats.nonEmpty || accuracyRepeats.nonEmpty then {
                             throw RepeatedRoisWithinPartError(shiftingRepeats.toMap, accuracyRepeats.toMap)
                         }
                         val partition = new Partition(shiftingCounts.keySet.toNonEmptySetUnsafe, accuracyCounts.keySet)
-                        if (partition.numShifting < reqShifting) {
+                        if partition.numShifting < reqShifting then {
                             TooFewAccuracyRescued(partition, reqShifting, reqAccuracy)
-                        } else if (partition.numAccuracy < reqAccuracy) {
+                        } else if partition.numAccuracy < reqAccuracy then {
                             TooFewAccuracyHealthy(partition, reqAccuracy)
                         } else { partition }
                     case (_, numShifting) => RoisSplit.TooFewShifting(reqShifting, numShifting, reqAccuracy)
@@ -519,7 +519,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
     final case class ZColumn(get: String) extends ColumnName
     
     object ColumnName:
-        given toJson(using liftStr: String => ujson.Value): (ColumnName => ujson.Value) = cn => liftStr(cn.get)
+        given (liftStr: String => ujson.Value) => (ColumnName => ujson.Value) = cn => liftStr(cn.get)
 
     final case class BadRecord(index: NonnegativeInt, record: List[String], problems: ErrorMessages)
     object BadRecord:

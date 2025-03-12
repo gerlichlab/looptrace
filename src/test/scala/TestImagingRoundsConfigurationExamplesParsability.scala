@@ -108,7 +108,7 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
         )) { (subfolder, filename, expectError) => 
             val configFile = getResourcePath(subfolder = subfolder, filename = filename)
             val safeParseResult = ImagingRoundsConfiguration.fromJsonFile(configFile)
-            if (expectError) {
+            if expectError then {
                 safeParseResult match {
                     case Left(errorMessages) => countExpectedErrors(errorMessages) shouldEqual 1
                     case Right(_) => fail(s"Expected parse failure for $configFile but succeeded.")
@@ -139,7 +139,7 @@ class TestImagingRoundsConfigurationExamplesParsability extends AnyFunSuite with
         )) { (subfolder, filename, expectError) =>
             val configFile = getResourcePath(subfolder = subfolder, filename = filename)
             val safeParseResult = ImagingRoundsConfiguration.fromJsonFile(configFile)
-            if (expectError) {
+            if expectError then {
                 safeParseResult match {
                     case Left(errorMessages) => 
                         errorMessages.count(_ === "2 locus timepoint(s) in imagingRounds and not found in locusGrouping (nor in tracingExclusions): 3, 4") shouldEqual 1

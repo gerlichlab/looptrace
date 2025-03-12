@@ -45,11 +45,11 @@ class TestMergeRois extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuit
         Arbitrary[ImagingContext],
         Arbitrary[Centroid[Double]],
         Arbitrary[BoundingBox],
-    ): Gen[MergerAssessedRoi] = for {
+    ): Gen[MergerAssessedRoi] = for
         context <- Arbitrary.arbitrary[ImagingContext]
         center <- Arbitrary.arbitrary[Centroid[Double]]
         box <- Arbitrary.arbitrary[BoundingBox]
-    } yield MergerAssessedRoi
+    yield MergerAssessedRoi
         .build(
             idx, 
             context, 
@@ -104,7 +104,7 @@ class TestMergeRois extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuit
         
         val takeFirstBox = (_: Point3D, boxes: NonEmptyList[BoundingBox]) => boxes.head
         
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny
+        given [A] => Shrink[A] = Shrink.shrinkAny
 
         forAll (Table("mergerCase", squarePlusTwo, hexagon)) { mergerCase => 
             forAll (genRois(mergerCase.adjacencies)) { rois =>
