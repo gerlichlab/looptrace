@@ -12,7 +12,7 @@ object Dependencies {
         def getModuleId(name: String) = groupId %% artifact(name) % version
         private val groupId = "com.github.gerlichlab"
         private def artifact(module: String): String = s"gerlib-$module"
-        private val version = "0.4.1"
+        private val version = "0.4.0"
     }
 
     /** Bundle data related to getting ModuleID for an iron subproject. */
