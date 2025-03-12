@@ -802,7 +802,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
             .map { case ((p1, f1), (p2, f2)) => (FieldOfView(p1) -> ImagingTimepoint(f1), FieldOfView(p2) -> ImagingTimepoint(f2)) }
     
     /** Infer detected bead ROIs filename for particular field of view (@code pos) and timepoint ({@code time}). */
-    def getInputFilename(pos: FieldOfView, time: ImagingTimepoint): String = s"bead_rois__${pos.show_}_${time.show_}.csv"
+    def getInputFilename(pos: FieldOfView, time: ImagingTimepoint): String = s"${BeadRoisPrefix}_${pos.show_}_${time.show_}.csv"
     
     /** Limit the number of ROIs generated to keep test cases (relatively) small even without shrinking. */
     def maxNumRoisSmallTests: ShiftingCount = ShiftingCount.unsafe(2 * ShiftingCount.AbsoluteMinimumShifting)
