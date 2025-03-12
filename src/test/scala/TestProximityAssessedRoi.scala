@@ -23,16 +23,15 @@ import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.IndexedDetect
 class TestMergerAssessedRoi extends AnyFunSuite, LooptraceSuite, ScalaCheckPropertyChecks, should.Matchers:
     test("MergerAssessedRoi.build correctly passes through the proximal ROI indices.") {
         // Generate legal combination of main ROI index, too-close ROIs, and ROIs to merge.
-        given arbRoiIndexAndRoiBag(using Arbitrary[RoiIndex]): Arbitrary[(RoiIndex, Set[RoiIndex])] = Arbitrary{
-            for {
+        given (Arbitrary[RoiIndex]) => Arbitrary[(RoiIndex, Set[RoiIndex])] = Arbitrary:
+            for
                 idx <- Arbitrary.arbitrary[RoiIndex]
                 raw <- Gen.listOf(Arbitrary.arbitrary[RoiIndex])
-            } yield (idx, raw.toSet - idx)
-        }
+            yield (idx, raw.toSet - idx)
 
         // Avoid shrinking so that the invariant about the main index being in the set of 
         // ROI indices "too close together" remains respected.
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny
+        given [A] => Shrink[A] = Shrink.shrinkAny
 
         forAll { (indexAndMerge: (RoiIndex, Set[RoiIndex]), spot: IndexedDetectedSpot) => 
             val (index, forMerge) = indexAndMerge
@@ -46,16 +45,16 @@ class TestMergerAssessedRoi extends AnyFunSuite, LooptraceSuite, ScalaCheckPrope
     
     test("MergerAssessedRoi.build correctly enforces exclusion of ROI index from for-merge ROIs.") {
         // Generate ROI index in the collection of too-close ROIs, to trigger expected error.
-        given arbRoiIndexAndRoiBags(using Arbitrary[RoiIndex]): Arbitrary[(RoiIndex, Set[RoiIndex])] = Arbitrary{
-            for {
+        given (Arbitrary[RoiIndex]) => Arbitrary[(RoiIndex, Set[RoiIndex])] = Arbitrary{
+            for
                 idx <- Arbitrary.arbitrary[RoiIndex]
                 raw <- Gen.listOf(Arbitrary.arbitrary[RoiIndex])
-            } yield (idx, raw.toSet + idx)
+            yield (idx, raw.toSet + idx)
         }
 
         // Avoid shrinking so that the invariant about the main index being in the set of 
         // ROI indices "too close together" remains respected.
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny
+        given [A] => Shrink[A] = Shrink.shrinkAny
 
         forAll { (indexAndMerge: (RoiIndex, Set[RoiIndex]), spot: IndexedDetectedSpot) => 
             val (index, forMerge) = indexAndMerge

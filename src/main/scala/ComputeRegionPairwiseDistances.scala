@@ -124,15 +124,15 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
             getCsvRowDecoderForImagingChannel(SpotChannelColumnName)
 
         /* Read input, then throw exception or write output. */
-        val readInput: IO[List[Input.GoodRecord]] = for {
+        val readInput: IO[List[Input.GoodRecord]] = for
             _ <- IO{ logger.info(s"Reading ROIs file: ${inputFile}") }
             records <- readCsvToCaseClasses[Input.GoodRecord](inputFile)
-        } yield records
+        yield records
 
         val readDrifts: IO[Option[List[DriftRecord]]] = 
             maybeDriftFile.traverse(readCsvToCaseClasses[DriftRecord])
 
-        val program: IO[Unit] = for {
+        val program: IO[Unit] = for
             inrecs <- readInput
             maybeDrifts <- readDrifts
             outrecs = inputRecordsToOutputRecords(inrecs, maybeDrifts, pixels)
@@ -142,21 +142,21 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
                 Delimiter.CommaSeparator,
             ).filepath
             _ <- writeOutput(outfile, outrecs)
-        } yield ()
+        yield ()
         
         program.unsafeRunSync()
         logger.info("Done!")
     }
 
-    def writeOutput(outputFile: os.Path, outputRecords: List[OutputRecord]): IO[Unit] = for {
+    def writeOutput(outputFile: os.Path, outputRecords: List[OutputRecord]): IO[Unit] = for
         _ <- IO{ logger.info(s"Writing output file: $outputFile") }
         outputFolder = outputFile.parent
-        _ <- IO{ if (!os.exists(outputFolder)) os.makeDir.all(outputFolder) }
+        _ <- IO{ if !os.exists(outputFolder) then os.makeDir.all(outputFolder) }
         _ <- fs2.Stream.emits(outputRecords.toList)
             .through(writeCaseClassesToCsv(outputFile))
             .compile
             .drain
-    } yield ()
+    yield ()
 
     def inputRecordsToOutputRecords(
         inrecs: List[Input.GoodRecord], 
@@ -229,14 +229,14 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
         )
 
         private[looptrace] object GoodRecord:
-            given csvDecoderForGoodRecord(using 
+            given ( 
                 decId: RowDec[RoiIndex],
                 decPos: CellDecoder[PositionName], 
                 decTime: RowDec[ImagingTimepoint], 
                 decChannel: RowDec[ImagingChannel], 
                 decPoint: RowDec[Centroid[Double]],
                 decTraceGroup: CellDecoder[TraceGroupMaybe],
-            ): RowDec[GoodRecord] = new:
+            ) => RowDec[GoodRecord] = new:
                 override def apply(row: RowF[Some, String]): DecoderResult[GoodRecord] = 
                     val idNel = decId(row)
                         .leftMap{ e => s"Cannot decode ROI ID from row ($row): ${e.getMessage}" }
@@ -300,7 +300,7 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
 
         given CellEncoder[LengthInNanometers] = CellEncoder.fromSimpleShow[LengthInNanometers]
 
-        given CsvRowEncoder[OutputRecord, String] with
+        given CsvRowEncoder[OutputRecord, String]:
             override def apply(elem: OutputRecord): RowF[Some, String] = 
                 val fovText: NamedRow = FieldOfViewColumnName.write(elem.fieldOfView)
                 val channelText: NamedRow = SpotChannelColumnName.write(elem.channel)

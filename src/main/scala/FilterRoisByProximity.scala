@@ -221,7 +221,7 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
 
         // Account for the fact that field of view may be either text-like or integer-like, 
         // and it therefore needs a special sort of equality/equivalence test.
-        given Eq[FieldOfViewLike] with
+        given Eq[FieldOfViewLike]:
             override def eqv(a: FieldOfViewLike, b: FieldOfViewLike): Boolean = (a, b) match {
                 case (fov1: PositionName, fov2: PositionName) => fov1 === fov2
                 case (fov1: FieldOfView, fov2: FieldOfView) => fov1 === fov2
@@ -241,12 +241,12 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
                     .through(writeCaseClassesToCsv(fileForKeepers))
                     .compile
                     .drain
-                for {
+                for
                     _ <- writeDiscards
                     _ <- writeKeepers
-                } yield (fileForDiscards, fileForKeepers)
+                yield (fileForDiscards, fileForKeepers)
 
-        val program: IO[Unit] = for {
+        val program: IO[Unit] = for
             rois <- readRois
             maybeDrifts <- readKeyedDrifts.map(_.leftMap(msg => new Exception(msg)))
             shiftedRois = maybeDrifts.flatMap(keyedDrifts => applyDrifts(keyedDrifts)(rois)).leftMap(NonEmptyList.one)
@@ -277,7 +277,7 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
             }
             _ <- IO{ logger.info(s"Wrote unidentifiable ROIs to file: ${unidentifiablesFile}") }
             _ <- IO{ logger.info(s"Wrote well-separated ROIs to file: ${wellSeparatedsFile}") }
-        } yield ()
+        yield ()
 
         program.unsafeRunSync()
 

@@ -13,7 +13,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionBeadRois
 trait PartitionRoisSuite extends LooptraceSuite:
 
     /** Arbitrary point, index, and usability flag lifted into detected ROI data type value */
-    given detectedRoiArbitrary(using arbComponents: Arbitrary[(RoiIndex, Point3D, RoiFailCode)]): Arbitrary[FiducialBeadRoi] = 
+    given (arbComponents: Arbitrary[(RoiIndex, Point3D, RoiFailCode)]) => Arbitrary[FiducialBeadRoi] = 
         arbComponents.fmap(FiducialBeadRoi.apply.tupled)
     
     /** Arbitrary point, index, and lifted into shifting ROI data type value */
@@ -28,7 +28,7 @@ trait PartitionRoisSuite extends LooptraceSuite:
     given zColArb: Arbitrary[ZColumn] = Arbitrary{ Gen.alphaNumStr.suchThat(_.nonEmpty).map(ZColumn.apply) }
 
     /** Generate a point and an index, then lift these arguments into a (isomorphic) case class instance. */
-    private def genSelectedRoi[R <: SelectedRoi](build: (RoiIndex, Point3D) => R): Gen[R] = for {
+    private def genSelectedRoi[R <: SelectedRoi](build: (RoiIndex, Point3D) => R): Gen[R] = for
         i <- arbitrary[RoiIndex]
         p <- arbitrary[Point3D]
-    } yield build(i, p)
+    yield build(i, p)

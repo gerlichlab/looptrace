@@ -101,7 +101,7 @@ object CombineImagingFolders extends ScoptCliReaders with StrictLogging:
                 checkSrcDstPairs(pairs)
                 logger.info(s"Writing script: $script")
                 os.write(script, pairs.map((src, dst) => s"mv '$src' '$dst'\n"))
-                if (execute) {
+                if execute then {
                     logger.info(s"Executing ${pairs.length} moves")
                     pairs.foreach(os.move(_, _))
                 } else {
@@ -123,7 +123,7 @@ object CombineImagingFolders extends ScoptCliReaders with StrictLogging:
             getReps("dst", dsts), 
             crossover.isEmpty.either(s"src-dst crossover: $crossover", ())
             ))
-        if (errors.nonEmpty) throw new Exception(s"${errors.length} error(s) validating move pairs: $errors")
+        if errors.nonEmpty then throw new Exception(s"${errors.length} error(s) validating move pairs: $errors")
     }
 
     def makeSrcDstPair(targetFolder: os.Path, sep: String)(newTime: ImagingTimepoint, oldPath: os.Path): Either[UnusableTimepointUpdateException, (os.Path, os.Path)] = {

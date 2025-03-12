@@ -56,9 +56,9 @@ object SelectedRoi:
     /** The key for the ROI's point/centroid in JSON representation */
     private val pointKey: String = "centroid"
 
-    given coord2Value: (Coordinate => ujson.Value) with
+    given coord2Value: (Coordinate => ujson.Value):
         override def apply(c: Coordinate): ujson.Value = 
-            given writerForCoordinate[C <: Coordinate: [C] =>> NotGiven[C =:= Coordinate]]: JsonValueWriter[C, ujson.Num] = 
+            given [C <: Coordinate: [C] =>> NotGiven[C =:= Coordinate]] => JsonValueWriter[C, ujson.Num] = 
                 getPlainJsonValueWriter[Double, C, ujson.Num]
             c match {
                 case x: XCoordinate => x.asJson

@@ -76,10 +76,10 @@ object HeadedFileWriter:
     /** Helpers for working with delimited text file targets */
     object DelimitedTextTarget:
         /** Provide an instance of the target-like typeclass for this more specific type. */
-        given TargetForDelimitedTextTarget: Target[DelimitedTextTarget] with
+        given TargetForDelimitedTextTarget: Target[DelimitedTextTarget]:
             override def getLineMaker: DelimitedTextTarget => (List[String] => String) = _.fieldsToLine
             override def getFile: DelimitedTextTarget => os.Path = _.filepath
-        given eqForDelimitedTextTarget(using Eq[os.Path]): Eq[DelimitedTextTarget] = Eq.by{
+        given (Eq[os.Path]) => Eq[DelimitedTextTarget] = Eq.by{
             target => (target.folder, target.nameBase, target.delimiter)
         }
     end DelimitedTextTarget

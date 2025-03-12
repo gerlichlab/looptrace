@@ -35,7 +35,7 @@ class TestImagingSequence extends AnyFunSuite, ScalaCheckPropertyChecks, Imaging
     }
     
     test("Sequence of timepoints other than 0, 1, ..., N-1 gives expected error.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         given arbName: Arbitrary[String] = genNameForJson.toArbitrary
         def genRoundsSeq: Gen[List[ImagingRound]] = 
             given Ordering[ImagingTimepoint] = summon[Order[ImagingTimepoint]].toOrdering // to check sorted list
@@ -62,7 +62,7 @@ class TestImagingSequence extends AnyFunSuite, ScalaCheckPropertyChecks, Imaging
     }
     
     test("Non-unique names is an error.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         def genRoundsWithNameCollision = {
             val namePool = List("firstName", "secondName")
             given arbName: Arbitrary[String] = Gen.oneOf(namePool).toArbitrary
@@ -78,7 +78,7 @@ class TestImagingSequence extends AnyFunSuite, ScalaCheckPropertyChecks, Imaging
     }
     
     test("List of imaging round declarations can roundtrip through JSON.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         given rw: ReadWriter[ImagingRound] = ImagingRound.rwForImagingRound
         def genRounds = Gen.choose(1, 100)
             /* Force satisfaction of the requirement that the timepoints form sequence [0, ..., N-1]. */
@@ -94,7 +94,7 @@ class TestImagingSequence extends AnyFunSuite, ScalaCheckPropertyChecks, Imaging
     }
 
     test("Through JSON is identical to directly from rounds.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         given arbName: Arbitrary[String] = genNameForJson.toArbitrary
         given rw: ReadWriter[ImagingRound] = ImagingRound.rwForImagingRound
         pending

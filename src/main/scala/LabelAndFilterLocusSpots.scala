@@ -24,7 +24,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.* // for .show_ syntax
 
-import at.ac.oeaw.imba.gerlich.looptrace.HeadedFileWriter.DelimitedTextTarget.eqForDelimitedTextTarget
+import at.ac.oeaw.imba.gerlich.looptrace.HeadedFileWriter.DelimitedTextTarget.given_Eq_DelimitedTextTarget
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.*
 import at.ac.oeaw.imba.gerlich.looptrace.cli.ScoptCliReaders
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
@@ -410,8 +410,8 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
         delimiter: Delimiter,
         overwrite: Boolean = false,
     ): Unit = {
-        if (!os.isDir(analysisOutfolder)) { os.makeDir.all(analysisOutfolder) }
-        if (!os.isDir(pointsOutfolder)) { os.makeDir.all(pointsOutfolder) }
+        if !os.isDir(analysisOutfolder) then { os.makeDir.all(analysisOutfolder) }
+        if !os.isDir(pointsOutfolder) then { os.makeDir.all(pointsOutfolder) }
         // Include placeholder for field for label displayability column, which we don't need for CSV writing (only JSON, handled via codec).
         val (withinRegionCol, snrCol, denseXYCol, denseZCol, inBoundsXCol, inBoundsYCol, inBoundsZCol, _) = labelsOf[LocusSpotQC.ResultRecord]
         Alternative[List].separate(NonnegativeInt.indexed(records.toList).map { case (rec@(_, arr), recnum) => 
@@ -549,7 +549,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
             .flatMap{ (pos, records) => records.toNel.map(pos -> _) } // Get rid of any empty collections.
             .foreach{ (pos, records) => 
                 val (qcType, addFailCodes): (PointDisplayType, (List[String], List[LocusSpotQC.FailureReason]) => List[String]) = {
-                    if (records.head.passesQC) { // These are QC PASS records.
+                    if records.head.passesQC then { // These are QC PASS records.
                         (PointDisplayType.QCPass, {
                             (fields: List[String], codes: List[LocusSpotQC.FailureReason]) => 
                                 if codes.nonEmpty 
@@ -612,7 +612,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                             }
                         logger.debug(s"Writing locus points visualisation file: $outfile")
                         val outdir = outfile.parent
-                        if (!os.exists(outdir)) { os.makeDir.all(outdir) }
+                        if !os.exists(outdir) then { os.makeDir.all(outdir) }
                         os.write(outfile, (header :: outrecs).map(_.mkString(",") ++ "\n").toList)
                     }
             }

@@ -10,22 +10,20 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.*
 
 /** PureConfig typeclasses instances for looptrace domain-specific types */
 trait PureConfigLooptraceInstances:
-    given configReaderForLengthInNanometers(using readLength: ConfigReader[Length]): ConfigReader[LengthInNanometers] = 
+    given (readLength: ConfigReader[Length]) => ConfigReader[LengthInNanometers] = 
         readLength.emap{ l => 
             LengthInNanometers.fromSquants(l).leftMap{ msg => 
                 CannotConvert(value = l.toString, toType = "LengthInNanometers", because = msg) 
             }
         }
 
-    given configReaderForPixelDefinition(
-        using readLengthInNanometers: ConfigReader[LengthInNanometers]
-    ): ConfigReader[PixelDefinition] = 
+    given (readLengthInNanometers: ConfigReader[LengthInNanometers]) => ConfigReader[PixelDefinition] = 
         readLengthInNanometers.emap{ l => 
             PixelDefinition.tryToDefine(l).leftMap{ msg => 
                 CannotConvert(value = l.toString, toType = "looptrace.space.PixelDefinition", because = msg) 
             }
         }
 
-    given configReaderForPixels3D(using ConfigReader[PixelDefinition]): ConfigReader[Pixels3D] = 
+    given (ConfigReader[PixelDefinition]) => ConfigReader[Pixels3D] = 
         deriveReader[Pixels3D]
 end PureConfigLooptraceInstances

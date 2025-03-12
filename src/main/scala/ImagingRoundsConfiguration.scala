@@ -350,7 +350,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
                     case Right(maybeGrouping) => maybeGrouping.toList.toNel match {
                         case None => Set().validNel
                         case Some(grouping) => grouping.traverse{ (regionTimeRaw, lociTimesRaw) => 
-                            (for {
+                            (for
                                 regTime <- ImagingTimepoint.fromInt(regionTimeRaw).leftMap("Bad region time as key in locus group! " ++ _)
                                 maybeLociTimes <- lociTimesRaw.traverse(ImagingTimepoint.fromInt).leftMap("Bad locus time(s) in locus group! " ++ _)
                                 lociTimes <- maybeLociTimes.toNel.toRight(s"Empty locus times for region time $regionTimeRaw!").map(_.toNes)
@@ -359,7 +359,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
                                     then s"Regional time ${regTime.show_} is contained in its own locus times group!".asLeft 
                                     else ().asRight
                                 )
-                            } yield LocusGroup(regTime, lociTimes)).toValidatedNel
+                            yield LocusGroup(regTime, lociTimes)).toValidatedNel
                         }.map(_.toNes.toSortedSet)
                     }
                 }

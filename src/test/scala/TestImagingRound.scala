@@ -57,7 +57,7 @@ class TestImagingRound extends AnyFunSuite, ScalaCheckPropertyChecks, ImagingRou
     }
 
     test("Blank round is parsed from name + time + blank flag.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         forAll (genNameForJson, arbitrary[ImagingTimepoint]) { (name, time) => 
             val data = s"""{\"name\": \"$name\", \"time\": ${time.show_}, \"isBlank\": true}"""
             given reader: Reader[ImagingRound] = ImagingRound.rwForImagingRound
@@ -132,7 +132,7 @@ class TestImagingRound extends AnyFunSuite, ScalaCheckPropertyChecks, ImagingRou
     }
 
     test("Repeat index is correctly added to locus round name...if and only if name isn't explicitly provided.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         given arbName: Arbitrary[String] = genNameForJson.toArbitrary
         given reader: Reader[ImagingRound] = ImagingRound.rwForImagingRound
         
@@ -154,7 +154,7 @@ class TestImagingRound extends AnyFunSuite, ScalaCheckPropertyChecks, ImagingRou
     }
 
     test("Specifying that a blank timepoint is a repeat is an error, since doing so would have no effect.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         given arbName: Arbitrary[String] = genNameForJson.toArbitrary
         given reader: Reader[ImagingRound] = ImagingRound.rwForImagingRound
 

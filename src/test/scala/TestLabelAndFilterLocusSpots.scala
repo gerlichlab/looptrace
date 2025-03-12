@@ -146,7 +146,7 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, ScalaCheckPropertyChecks
     }
 
     test("Probe exclusion is correct.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
 
         // Taken from the timepoint column of the traces input file
         // Regional time 5 has rows where it's the "locus time" also, but regional time 4 doesn't have this.
@@ -170,7 +170,7 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, ScalaCheckPropertyChecks
                 // Now, first, just do basic existence check of files...
                 List(infile, expUnfilteredPath, expFilteredPath).map(os.isFile) shouldEqual List(true, true, true)
 
-                if (exclusions === expectedTimepoints) {
+                if exclusions === expectedTimepoints then {
                     /* Each file should be just a header. */
                     withCsvData(expUnfilteredPath)((_: CsvRows).isEmpty shouldBe true)
                     withCsvData(expFilteredPath)((_: CsvRows).isEmpty shouldBe true)
@@ -302,7 +302,7 @@ class TestLabelAndFilterLocusSpots extends AnyFunSuite, ScalaCheckPropertyChecks
             reader1 = CSVReader.open(f1.toIO)
             code(reader1.allWithHeaders(), reader2.allWithHeaders())
         } finally {
-            if (reader1 != null) { reader1.close() }
+            if reader1 != null then { reader1.close() }
             reader2.close()
         }
     }

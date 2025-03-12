@@ -139,7 +139,7 @@ object ValidateMergeDetermination extends ScoptCliReaders, StrictLogging:
                 throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help")
             case Some(opts) => 
                 given RowDec[Option[MergePartners]] = 
-                    given CellDecoder[Option[MergePartners]] with
+                    given CellDecoder[Option[MergePartners]]:
                         override def apply(cell: String): DecoderResult[Option[MergePartners]] = cell match {
                             case "" => None.asRight
                             case _ => cell.split(" ")
@@ -184,7 +184,7 @@ object ValidateMergeDetermination extends ScoptCliReaders, StrictLogging:
                     }
 
                 parsedAndDigested.flatMap{ (ungroupedResult, groupedResult) => 
-                    for {
+                    for
                         _ <- IO{
                             val msg = ungroupedResult match {
                                 case Left(pairs) => s"${pairs.length} pair(s) of proximal records: $pairs"
@@ -202,7 +202,7 @@ object ValidateMergeDetermination extends ScoptCliReaders, StrictLogging:
                             }
                             logger.info(msg)
                         }
-                    } yield ()
+                    yield ()
                 }
                 .unsafeRunSync()
         }
@@ -233,7 +233,7 @@ object ValidateMergeDetermination extends ScoptCliReaders, StrictLogging:
                 import Centroid.asPoint
                 EuclideanDistance.between((_: R).centroid.asPoint)(r, that)
         
-        given RowDec[InputRecord] with
+        given RowDec[InputRecord]:
             override def apply(row: Row): DecoderResult[InputRecord] = 
                 val fovNel = ColumnName[PositionName](FieldOfViewColumnName.value).from(row)
                 val roiIdNel = RoiIndexColumnName.from(row)
@@ -282,7 +282,7 @@ object ValidateMergeDetermination extends ScoptCliReaders, StrictLogging:
         def fromBaseRecord = (base: InputRecord) => 
             SameTimepointRecord(base.fieldOfView, base.roiId, base.timepoint, base.centroid)
         
-        given decoderForRecord(using decBase: RowDec[InputRecord]): RowDec[SameTimepointRecord] = decBase.map(fromBaseRecord)
+        given (decBase: RowDec[InputRecord]) => RowDec[SameTimepointRecord] = decBase.map(fromBaseRecord)
     end SameTimepointRecord
 
     object NoBadUngrouped:

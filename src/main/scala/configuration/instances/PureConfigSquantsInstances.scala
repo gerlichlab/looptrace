@@ -11,7 +11,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.LengthInNanometers
 
 /** PureConfig t ypeclass instances for squants */
 trait PureConfigSquantsInstances:
-    given configReaderForLength(using readString: ConfigReader[String]): ConfigReader[Length] = 
+    given (readString: ConfigReader[String]) => ConfigReader[Length] = 
         readString.emap: s => 
             Length.parseString(s)
                 .toEither

@@ -9,7 +9,5 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeReal
 /** CSV-related typeclass instances for data types related to geometry */
 trait GeometryInstances:
     /** Unwrap the semntically wrapped value and encode it by the simple numeric value. */
-    given cellEncoderForEuclideanDistance(
-        using enc: CellEncoder[NonnegativeReal]
-    ): CellEncoder[EuclideanDistance] = enc.contramap(_.get)
+    given (enc: CellEncoder[NonnegativeReal]) => CellEncoder[EuclideanDistance] = enc.contramap(_.get)
 end GeometryInstances

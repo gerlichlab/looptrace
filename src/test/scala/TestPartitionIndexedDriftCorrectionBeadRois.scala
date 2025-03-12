@@ -92,7 +92,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     }
 
     test("Attempt to partition ROIs when there are repeats in parts fails expectedly.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         type RoisAndReps[R] = (List[R], Map[R, Int])
         def genRoisAndReps[R](base: List[R]): Gen[RoisAndReps[R]] = 
             if base.isEmpty then List() -> Map()
@@ -100,7 +100,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
             else Gen.resize(5, Gen.listOf(Gen.oneOf(base))).fproduct(_.groupBy(identity).view.mapValues(_.length + 1).toMap)
         def genWithRepeats: Gen[(RoisAndReps[RoiForShifting], RoisAndReps[RoiForAccuracy])] = {
             val maxNumRois = 50
-            for {
+            for
                 // NB: relying on randomness of Point3D and zero-probability of collision there to mitigate risk that repeats 
                 //     are generated in the baseX collections, which would throw off the counting of expected repeats.
                 baseShifting <- Gen.choose(ShiftingCount.AbsoluteMinimumShifting, maxNumRois).flatMap(Gen.listOfN(_, arbitrary[RoiForShifting]))
@@ -113,7 +113,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
                         Random.shuffle(repAcc ::: baseAccuracy).toList -> expAcc
                         )
                     }
-            } yield (shifting, accuracy)
+            yield (shifting, accuracy)
         }
         def genNumShift = Gen.choose(ShiftingCount.AbsoluteMinimumShifting, Int.MaxValue).map(ShiftingCount.unsafe)
 
@@ -170,15 +170,15 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     }
 
     test("Bad ROIs file extension causes expected error.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
 
         def genInvalidExt: Gen[String] = Gen.alphaNumStr.suchThat{ ext => Delimiter.fromExtension(ext).isEmpty }.map("." ++ _)
         def genHeaderAndGetExtraErrorOpt: Gen[(String, Option[os.Path => String])] = Gen.choose(0, 5).flatMap{
             case 0 => Gen.const(("", ((p: os.Path) => s"No lines in file! $p").some))
-            case n => for {
+            case n => for
                 delim <- arbitrary[Delimiter]
                 fields <- Gen.listOfN(n, Gen.alphaNumStr.suchThat(_.nonEmpty))
-            } yield (delim.join(fields.toArray), None)
+            yield (delim.join(fields.toArray), None)
         }
 
         forAll (genInvalidExt, genHeaderAndGetExtraErrorOpt) { 
@@ -192,7 +192,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     }
 
     test("Any missing column name in header causes error.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny
+        given [A] => Shrink[A] = Shrink.shrinkAny
         
         // Create the parser config and a strict subset of the column names.
         def genHeadFieldSubset: Gen[List[String]] = 
@@ -206,13 +206,13 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
                 .suchThat(_ =!= List(""))
 
         // Optionally, generate some additional column names, limiting to relatively few columns.
-        def genHeaderAndDelimiter = for {
+        def genHeaderAndDelimiter = for
             headerSubset <- genHeadFieldSubset
             usefulColumns = ColumnNamesToParse.toSet
             genCol = Gen.alphaNumStr.suchThat(!usefulColumns.contains(_))
             extras <- Gen.choose(0, 5).flatMap(Gen.listOfN(_, genCol))
             delimiter <- arbitrary[Delimiter]
-        } yield (Random.shuffle(headerSubset ::: extras), delimiter)
+        yield (Random.shuffle(headerSubset ::: extras), delimiter)
         
         forAll (genHeaderAndDelimiter) { 
             case (headerFields, delimiter) =>
@@ -343,16 +343,16 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     }
 
     test("Sampling result accords with expectation based on relation between usable ROI count and requested ROI counts.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         type InputsAndValidate = (ShiftingCount, PositiveInt, List[FiducialBeadRoi], RoisSplit.Result => Any)
         
-        def genFewerThanAbsoluteMinimum: Gen[InputsAndValidate] = for {
+        def genFewerThanAbsoluteMinimum: Gen[InputsAndValidate] = for
             numShifting <- Gen.choose[Int](ShiftingCount.AbsoluteMinimumShifting, maxNumRoisSmallTests).map(ShiftingCount.unsafe)
             numAccuracy <- Gen.choose(PositiveInt(1), maxNumRoisSmallTests.asPositive)
-            (usable, unusable) <- (for {
+            (usable, unusable) <- (for
                 goods <- genUsableRois(0, ShiftingCount.AbsoluteMinimumShifting - 1)
                 bads <- genUnusableRois(0, maxNumRoisSmallTests - goods.length)
-            } yield (goods, bads)).suchThat{ (goods, bads) => // Ensure uniqueness among ROIs.
+            yield (goods, bads)).suchThat{ (goods, bads) => // Ensure uniqueness among ROIs.
                 (goods.toSet ++ bads.toSet).size === goods.size + bads.size 
             }
             rois = Random.shuffle(usable ::: unusable).toList
@@ -364,9 +364,9 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
                     tooFew.requestedAccuracy shouldBe numAccuracy
                 case res => fail(s"Expected TooFewShifting but got $res")
             }
-        } yield (numShifting, numAccuracy, rois, validate)
+        yield (numShifting, numAccuracy, rois, validate)
         
-        def genAtLeastMinButLessThanShiftingRequest: Gen[InputsAndValidate] = for {
+        def genAtLeastMinButLessThanShiftingRequest: Gen[InputsAndValidate] = for
             numShifting <- // 1 more than absolute min, so that minimum can be hit while not hitting request.
                 Gen.choose[Int](ShiftingCount.AbsoluteMinimumShifting + 1, maxNumRoisSmallTests).map(ShiftingCount.unsafe)
             numAccuracy <- Gen.choose(PositiveInt(1), maxNumRoisSmallTests.asPositive)
@@ -382,9 +382,9 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
                     tooFew.realizedAccuracy shouldBe NonnegativeInt(0)
                 case res => fail(s"Expected TooFewAccuracyRescued but got $res")
             }
-        } yield (numShifting, numAccuracy, rois, validate)
+        yield (numShifting, numAccuracy, rois, validate)
         
-        def genAtLeastShiftingButNotAccuracy: Gen[InputsAndValidate] = for {
+        def genAtLeastShiftingButNotAccuracy: Gen[InputsAndValidate] = for
             numShifting <- Gen.choose[Int](ShiftingCount.AbsoluteMinimumShifting, maxNumRoisSmallTests).map(ShiftingCount.unsafe)
             numAccuracy <- Gen.choose(PositiveInt(1), maxNumRoisSmallTests.asPositive)
             maxUsable = scala.math.min(maxNumRoisSmallTests, numShifting + numAccuracy - 1)
@@ -398,9 +398,9 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
                     tooFew.realizedAccuracy shouldBe NonnegativeInt.unsafe(usable.size - numShifting)
                 case res => fail(s"Expected TooFewAccuracyHealthy but got $res")
             }
-        } yield (numShifting, numAccuracy, rois, validate)
+        yield (numShifting, numAccuracy, rois, validate)
         
-        def genEnoughForBoth: Gen[InputsAndValidate] = for {
+        def genEnoughForBoth: Gen[InputsAndValidate] = for
             numShifting <- Gen.choose(ShiftingCount.AbsoluteMinimumShifting, maxNumRoisSmallTests - 1).map(ShiftingCount.unsafe)
             numAccuracy <- Gen.choose(1, maxNumRoisSmallTests - numShifting).map(PositiveInt.unsafe)
             usable <- genUsableRois(numShifting + numAccuracy, maxNumRoisSmallTests)
@@ -412,7 +412,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
                     partition.numAccuracy shouldBe numAccuracy
                 case res => fail(s"Expected Partition but got $res")
             }
-        } yield (numShifting, numAccuracy, rois, validate)
+        yield (numShifting, numAccuracy, rois, validate)
         
         forAll (
             Gen.oneOf(
@@ -429,7 +429,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     }
 
     test("Cases of TooFewHealthyRoisRescued are correct and generate expected (implied) too-few-accuracy-ROIs records.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => FieldOfView.unsafeLift(p) -> ImagingTimepoint.unsafe(t))
@@ -437,13 +437,13 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
         def genDetected(ptPairs: List[FovTimePair])(lo: Int, hi: Int): Gen[List[PosTimeRois]] = 
             ptPairs.traverse{ pt => genUsableRois(lo, hi).map(pt -> _) }
         val maxReqShifting = 2 * ShiftingCount.AbsoluteMinimumShifting
-        def genArgs: Gen[(List[PosTimeRois], ShiftingCount, List[PosTimeRois])] = for {
+        def genArgs: Gen[(List[PosTimeRois], ShiftingCount, List[PosTimeRois])] = for
             nTooFewShift <- Gen.choose(1, posTimePairs.length)
             (tooFewFovTimePairs, enoughFovTimePairs) = posTimePairs.splitAt(nTooFewShift)
             tooFew <- genDetected(tooFewFovTimePairs)(ShiftingCount.AbsoluteMinimumShifting + 1, maxReqShifting - 1)
             numReqShifting <- Gen.choose(tooFew.map(_._2.length).max + 1, maxReqShifting).map(ShiftingCount.unsafe)
             enough <- genDetected(enoughFovTimePairs)(maxReqShifting, 2 * maxReqShifting)
-        } yield (tooFew, numReqShifting, enough)
+        yield (tooFew, numReqShifting, enough)
         forAll (genArgs, arbitrary[PositiveInt].suchThat(_ < PositiveInt(1e15.toInt))) { // some huge value, but not so big to cause overflow
             case ((tooFew, reqShifting, enough), reqAccuracy) =>
                 tooFew.map(_._2.length).max < reqShifting shouldBe true
@@ -481,17 +481,17 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     }
 
     test("A ROI is never used for more than one purpose.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => FieldOfView.unsafeLift(p) -> ImagingTimepoint.unsafe(t))
         val maxReqShifting = 2 * ShiftingCount.AbsoluteMinimumShifting
-        def genArgs: Gen[(ShiftingCount, PositiveInt, List[(FovTimePair, List[FiducialBeadRoi])])] = for {
+        def genArgs: Gen[(ShiftingCount, PositiveInt, List[(FovTimePair, List[FiducialBeadRoi])])] = for
             numReqShifting <- Gen.choose(ShiftingCount.AbsoluteMinimumShifting, maxReqShifting).map(ShiftingCount.unsafe)
             numReqAccuracy <- Gen.choose(1, 100).map(PositiveInt.unsafe)
             numReq = numReqShifting + numReqAccuracy
             rois <- posTimePairs.traverse{ pt => genMixedUsabilityRois(ShiftingCount.AbsoluteMinimumShifting, 2 * numReq).map(pt -> _) }
-        } yield (numReqShifting, numReqAccuracy, rois)
+        yield (numReqShifting, numReqAccuracy, rois)
         forAll (genArgs) { (reqShifting, reqAccuracy, ptRoisPairs) => 
             withTempDirectory{ (tempdir: os.Path) => 
                 /* First, write the input data files. */
@@ -531,20 +531,20 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     }
 
     test("ROI counts fewer than absolute minimum results in expected warnings.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => FieldOfView.unsafeLift(p) -> ImagingTimepoint.unsafe(t))
         def genDetected(lo: Int, hi: Int) = 
             (_: List[FovTimePair]).traverse{ pt => genMixedUsabilityRoisEachSize(lo, hi).map(pt -> _) }
-        def genArgs = for {
+        def genArgs = for
             numTooFew <- Gen.choose(1, posTimePairs.length)
             numReqShifting <- Gen.choose(ShiftingCount.AbsoluteMinimumShifting, 50).map(ShiftingCount.unsafe)
             numReqAccuracy <- Gen.choose(1, 50).map(PositiveInt.unsafe)
             (posTimePairsForTooFew, posTimePairsForEnough) = Random.shuffle(posTimePairs).splitAt(numTooFew)
             tooFew <- genDetected(1, ShiftingCount.AbsoluteMinimumShifting - 1)(posTimePairsForTooFew)
             enough <- genDetected(ShiftingCount.AbsoluteMinimumShifting, 2 * (numReqShifting + numReqAccuracy))(posTimePairsForEnough)
-        } yield (numReqShifting, numReqAccuracy, tooFew, enough)
+        yield (numReqShifting, numReqAccuracy, tooFew, enough)
         forAll (genArgs) { (numReqShifting, numReqAccuracy, tooFew, enough) => 
             withTempDirectory{ (tempdir: os.Path) => 
                 /* First, write the input data files. */
@@ -567,7 +567,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     }
 
     test("Warnings file is correct and produced IF AND ONLY IF there is at least one case of too-few-ROIs.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => FieldOfView.unsafeLift(p) -> ImagingTimepoint.unsafe(t))
@@ -575,7 +575,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
             // Make all ROIs usable so that the math about how many will be realized (used) is easier; 
             // in particular, we don't want that math dependent on counting the number of usable vs. unusable ROIs.
             (_: List[FovTimePair]).traverse{ pt => genUsableRois(lo, hi).map(pt -> _) }
-        def genArgs = for {
+        def genArgs = for
             numTooFewReqShifting <- Gen.oneOf(Gen.const(0), Gen.choose(1, posTimePairs.length))
             numTooFewReqAccuracy <- Gen.oneOf(Gen.const(0), Gen.choose(posTimePairs.length - numTooFewReqShifting, posTimePairs.length))
             // Add one here to the lower bound to leave open--ALWAYS--the possibility of generating too few shifting.
@@ -587,7 +587,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
             tooFewShifting <- genDetected(ShiftingCount.AbsoluteMinimumShifting, numReqShifting - 1)(posTimePairsTooFewShifting)
             tooFewAccuracy <- genDetected(numReqShifting, numReq - 1)(posTimePairsTooFewAccuracy)
             enough <- genDetected(numReq, 2 * numReq)(posTimePairsEnough)
-        } yield (numReqShifting, numReqAccuracy, tooFewShifting, tooFewAccuracy, enough)
+        yield (numReqShifting, numReqAccuracy, tooFewShifting, tooFewAccuracy, enough)
         forAll (genArgs, minSuccessful(200)) { (numReqShifting, numReqAccuracy, tooFewShifting, tooFewAccuracy, enough) => 
             val tooFew = tooFewShifting ::: tooFewAccuracy
             withTempDirectory{ (tempdir: os.Path) => 
@@ -638,15 +638,15 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     }
 
     test("When shifting request takes up all usable ROIs available, JSON files are still written for accuracy but are empty.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => FieldOfView.unsafeLift(p) -> ImagingTimepoint.unsafe(t))
-        def genArgs = for {
+        def genArgs = for
             rois <- posTimePairs.traverse{ pt => genUsableRois(ShiftingCount.AbsoluteMinimumShifting, maxNumRoisSmallTests).map(pt -> _) }
             numShifting <- Gen.choose(rois.map(_._2.length).max, 1000).map(ShiftingCount.unsafe)
             numAccuracy <- Gen.choose(1, 1000).map(PositiveInt.unsafe)
-        } yield (numShifting, numAccuracy, rois)
+        yield (numShifting, numAccuracy, rois)
         forAll (genArgs, minSuccessful(500)) { (numReqShifting, numReqAccuracy, allFovTimeRois) =>
             withTempDirectory{ (tempdir: os.Path) => 
                 /* First, write the input data files and do pretest. */
@@ -665,7 +665,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     }
 
     test("No unusable ROI is ever used, and ROI indices and coordiantes are preserved during partition.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         def genSinglePosTimeRois = {
             given arbPt: Arbitrary[Point3D] = {
                 given arbX: Arbitrary[XCoordinate] = Gen.choose(-3e3, 3e3).map(XCoordinate.apply).toArbitrary
@@ -673,19 +673,19 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
                 given arbZ: Arbitrary[ZCoordinate] = Gen.choose(-3e3, 3e3).map(ZCoordinate.apply).toArbitrary
                 Gen.zip(arbitrary[XCoordinate], arbitrary[YCoordinate], arbitrary[ZCoordinate]).map(Point3D.apply.tupled).toArbitrary
             }
-            for {
+            for
                 usable <- genUsableRois(ShiftingCount.AbsoluteMinimumShifting, 50)
                 unusable <- genUnusableRois(1, 50)
-            } yield Random.shuffle(usable ::: unusable).toList
+            yield Random.shuffle(usable ::: unusable).toList
         }
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => FieldOfView.unsafeLift(p) -> ImagingTimepoint.unsafe(t))
-        def genArgs = for {
+        def genArgs = for
             numShifting <- Gen.choose(ShiftingCount.AbsoluteMinimumShifting, 50).map(ShiftingCount.unsafe)
             numAccuracy <- Gen.choose(1, 50).map(PositiveInt.unsafe)
             rois <- posTimePairs.traverse{ pt => genSinglePosTimeRois.map(pt -> _) }
-        } yield (numShifting, numAccuracy, rois)
+        yield (numShifting, numAccuracy, rois)
         val simplifyRoi = (roi: RoiLike) => roi.index -> roi.centroid
         forAll (genArgs, minSuccessful(200)) { (numShifting, numAccuracy, allFovTimeRois) => 
             withTempDirectory{ (tempdir: os.Path) =>
@@ -756,10 +756,10 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
      * @param hi The maximum number of ROIs in the output collection
      * @return A generator of a collection of detected ROIs
      */
-    def genMixedUsabilityRois(lo: Int, hi: Int)(using Arbitrary[RoiIndex], Arbitrary[Point3D]) = for {
+    def genMixedUsabilityRois(lo: Int, hi: Int)(using Arbitrary[RoiIndex], Arbitrary[Point3D]) = for
         usable <- genUsableRois(lo, hi)
         unusable <- genUnusableRois(math.max(0, lo - usable.length), hi - usable.length)
-    } yield Random.shuffle(usable ::: unusable).toList
+    yield Random.shuffle(usable ::: unusable).toList
 
     /**
      * Generate collection of detected ROIs in which usability is mixed, for tests where percentage/ratio should be irrelevant.
@@ -771,10 +771,10 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
      * @param hi The maximum number of ROIs in _each_ of the subcollections (usable and unusable)
      * @return A generator of a collection of detected ROIs
      */
-    def genMixedUsabilityRoisEachSize(lo: Int, hi: Int)(using Arbitrary[RoiIndex], Arbitrary[Point3D]) = for {
+    def genMixedUsabilityRoisEachSize(lo: Int, hi: Int)(using Arbitrary[RoiIndex], Arbitrary[Point3D]) = for
         usable <- genUsableRois(lo, hi)
         unusable <- genUnusableRois(lo, hi)
-    } yield Random.shuffle(usable ::: unusable).toList
+    yield Random.shuffle(usable ::: unusable).toList
 
     /** Generate {@code [lo, hi]} detected ROIs with nonempty fail code. */
     def genUnusableRois(lo: Int, hi: Int)(using Arbitrary[RoiIndex], Arbitrary[Point3D]) = 
@@ -785,11 +785,11 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
         genUnusableRois(lo, hi).map(_.map(_.setUsable))
 
     /** Generate a single {@code FiducialBeadRoi} with nonempty fail code. */
-    def genUnusableDetectedRoi(using Arbitrary[Point3D], Arbitrary[RoiIndex]): Gen[FiducialBeadRoi] = for {
+    def genUnusableDetectedRoi(using Arbitrary[Point3D], Arbitrary[RoiIndex]): Gen[FiducialBeadRoi] = for
         i <- arbitrary[RoiIndex]
         pt <- arbitrary[Point3D]
         failCode <- Gen.choose(1, 5).flatMap(Gen.listOfN(_, Gen.alphaChar).map(_.mkString("")))
-    } yield FiducialBeadRoi(i, pt, RoiFailCode(failCode))
+    yield FiducialBeadRoi(i, pt, RoiFailCode(failCode))
 
     /** Syntax additions on a detected ROI to set its usability flag */
     extension (roi: FiducialBeadRoi)

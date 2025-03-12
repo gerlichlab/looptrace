@@ -80,7 +80,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
             case (Some(bads), _) => throw Input.BadRecordsException(bads)
             case (None, outputRecords) => 
                 logger.info(s"Writing output file: $outputFile")
-                if (!os.exists(outputFile.parent)){ os.makeDir.all(outputFile.parent) }
+                if !os.exists(outputFile.parent) then { os.makeDir.all(outputFile.parent) }
                 fs2.Stream.emits(outputRecords)
                     .through(writeCaseClassesToCsv(outputFile))
                     .compile
@@ -109,7 +109,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
                     val fov = 
                         val fov1 = r1.fieldOfView
                         val fov2 = r2.fieldOfView
-                        if (fov1 =!= fov2) {
+                        if fov1 =!= fov2 then {
                             throw new Exception(s"Different FOVs ($fov1 and $fov2) for records from the same trace ($tid)! Record 1: $r1, Record 2: $r2")
                         }
                         fov1
@@ -118,13 +118,13 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
                     val maybeGroup = 
                         val tg1 = r1.traceGroup
                         val tg2 = r2.traceGroup
-                        if (tg1 =!= tg2) {
+                        if tg1 =!= tg2 then {
                             throw new Exception(
                                 s"Different trace groups ($tg1 and $tg2) for records from the same trace ($tid) in FOV $fov! Record 1: $r1, Record 2: $r2"
                             )
                         }
                         tg1
-                    if (r1.locus === r2.locus) {
+                    if r1.locus === r2.locus then {
                         throw new Exception(
                             s"Records (from FOV ${fov.show_}) grouped for locus pairwise distance computation have the same locus ID (${r1.locus.show_})! Record 1: $r1. Record 2: $r2"
                         )
@@ -257,7 +257,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
     object OutputRecord:
         import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
 
-        given CsvRowEncoder[OutputRecord, String] with
+        given CsvRowEncoder[OutputRecord, String]:
             override def apply(elem: OutputRecord): RowF[Some, String] = 
                 val fovText: NamedRow = FieldOfViewColumnName.write(elem.fieldOfView)
                 val traceGroupText: NamedRow = TraceGroupColumnName.write(elem.traceGroup)

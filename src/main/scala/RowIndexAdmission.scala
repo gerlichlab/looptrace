@@ -10,7 +10,7 @@ end RowIndexAdmission
 
 /** Tools for working with getters of row index */
 object RowIndexAdmission:
-    given contravariantForRowIndexAdmission[Out[_]]: Contravariant[[In] =>> RowIndexAdmission[In, Out]] with
+    given [Out[_]] => Contravariant[[In] =>> RowIndexAdmission[In, Out]]:
         override def contramap[A, B](fa: RowIndexAdmission[A, Out])(f: B => A): RowIndexAdmission[B, Out] = new:
             override def getRowIndex: B => Out[NonnegativeInt] = f `andThen` fa.getRowIndex
 

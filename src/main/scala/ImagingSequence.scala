@@ -21,11 +21,11 @@ final case class ImagingSequence private(
     final def get(name: String): Option[ImagingRound] = {
         val findIn = (_: List[ImagingRound]).find(_.name === name).toLeft(())
         lookup.get(name).orElse{
-            (for {
+            (for
                 _ <- findIn(locusRounds)
                 _ <- findIn(regionRounds.toList)
                 _ <- findIn(blankRounds)
-            } yield ()).swap.toOption.flatMap(lookup.put(name, _))
+            yield ()).swap.toOption.flatMap(lookup.put(name, _))
         }
     }
     def allRounds: NonEmptyList[ImagingRound] = (regionRounds ++ locusRounds ++ blankRounds).sortBy(_.time)

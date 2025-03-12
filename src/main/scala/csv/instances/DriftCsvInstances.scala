@@ -15,10 +15,11 @@ import at.ac.oeaw.imba.gerlich.looptrace.drift.*
 trait DriftCsvInstances:
     private trait Buildable
 
-    given cellDecoderForCoarseComponent[A <: EuclideanAxis: [A] =>> NotGiven[A =:= EuclideanAxis]](using 
+    given [A <: EuclideanAxis] => (
+        nonGeneric: NotGiven[A =:= EuclideanAxis], 
         decInt: CellDecoder[Int], 
         decDecimal: CellDecoder[Double],
-    ): CellDecoder[CoarseDriftComponent[A]] = 
+    ) => CellDecoder[CoarseDriftComponent[A]] = 
         val decimalIsInt = (x: Double) => x.floor.toInt === x.ceil.toInt
         val decimalIntDecoder: CellDecoder[Int] = new:
             override def apply(cell: String): DecoderResult[Int] = 
@@ -30,12 +31,13 @@ trait DriftCsvInstances:
                 }
         decInt.orElse(decimalIntDecoder).map(DriftComponent.coarse)
 
-    given cellDecoderForFineComponent[A <: EuclideanAxis: [A] =>> NotGiven[A =:= EuclideanAxis]](
-        using decDecimal: CellDecoder[Double]
-    ): CellDecoder[FineDriftComponent[A]] = 
+    given [A <: EuclideanAxis] => (
+        nonGeneric: NotGiven[A =:= EuclideanAxis],
+        decDecimal: CellDecoder[Double]
+    ) => CellDecoder[FineDriftComponent[A]] = 
         decDecimal.map(DriftComponent.fine)
     
-    given csvRowDecoderForCoarseDrift(using CellDecoder[Int]): CsvRowDecoder[CoarseDrift, String] with
+    given (CellDecoder[Int]) => CsvRowDecoder[CoarseDrift, String]:
         override def apply(row: RowF[Some, String]): DecoderResult[CoarseDrift] = 
             val xNel = ColumnNames.CoarseDriftColumnNameX.from(row)
             val yNel = ColumnNames.CoarseDriftColumnNameY.from(row)
@@ -47,7 +49,7 @@ trait DriftCsvInstances:
                     s"Tried to parse coarse drift from CSV row, but got ${messages.length} error(s): ${messages.mkString_("; ")}"
                 ) }
 
-    given csvRowDecoderForFineDrift(using CellDecoder[Double]): CsvRowDecoder[FineDrift, String] with
+    given (CellDecoder[Double]) => CsvRowDecoder[FineDrift, String]:
         override def apply(row: RowF[Some, String]): DecoderResult[FineDrift] = 
             val xNel = ColumnNames.FineDriftColumnNameX.from(row)
             val yNel = ColumnNames.FineDriftColumnNameY.from(row)
@@ -59,12 +61,12 @@ trait DriftCsvInstances:
                     s"Tried to parse coarse drift from CSV row, but got ${messages.length} error(s): ${messages.mkString_("; ")}"
                 ) }
 
-    given decoderForDriftRecord(using 
+    given ( 
         CsvRowDecoder[FieldOfViewLike, String], 
         CsvRowDecoder[ImagingTimepoint, String],
         CsvRowDecoder[CoarseDrift, String], 
         CsvRowDecoder[FineDrift, String],
-    ): CsvRowDecoder[DriftRecord, String] with
+    ) => CsvRowDecoder[DriftRecord, String]:
         override def apply(row: RowF[Some, String]): DecoderResult[DriftRecord] = 
             val fovNel = parseFromRow[FieldOfViewLike]("Error(s) reading field of view from CSV row")(row)
             val timeNel = parseFromRow[ImagingTimepoint]("Error(s) reading timepoint from CSV row")(row)

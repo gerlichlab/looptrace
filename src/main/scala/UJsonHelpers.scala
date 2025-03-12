@@ -34,7 +34,7 @@ object UJsonHelpers:
     object UPickleCatsInstances:
         import cats.*
         import upickle.default.*
-        given contravariantForJsonWriter[T]: Contravariant[Writer] with
+        given [T] => Contravariant[Writer]:
             override def contramap[A, B](wa: Writer[A])(f: B => A): Writer[B] = 
                 new Writer[B] { override def write0[V](out: Visitor[?, V], v: B): V = wa.write0(out, f(v)) }
     end UPickleCatsInstances
@@ -45,7 +45,7 @@ object UJsonHelpers:
             def empty: JMap = Map()
         
         /** A JMap is already itself a JMap, so just return itself. */
-        given jsonMappableForJsonMap: JsonMappable[JMap] with
+        given jsonMappableForJsonMap: JsonMappable[JMap]:
             override def toJsonMap = identity
         
         extension [A](a: A)(using ev: JsonMappable[A])

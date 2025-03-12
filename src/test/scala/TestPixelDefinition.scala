@@ -79,7 +79,7 @@ class TestPixelDefinition extends AnyFunSuite, ScalaCheckPropertyChecks, should.
                 updated -> expSuccess
             }
 
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny // no shrinking whatsoever
+        given [A] => Shrink[A] = Shrink.shrinkAny // no shrinking whatsoever
 
         forAll (genInputAndExpectation, minSuccessful(1000)) { (rawConfigData, shouldSucceed) => 
             ConfigSource.string(rawConfigData).load[Pixels3D] match {

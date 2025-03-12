@@ -7,5 +7,4 @@ import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 
 trait RegionIdInstances:
-    given simpleShowForRegionId(using ev: SimpleShow[ImagingTimepoint]): SimpleShow[RegionId] = 
-        ev.contramap(_.get)
+    given (ev: SimpleShow[ImagingTimepoint]) => SimpleShow[RegionId] = ev.contramap(_.get)

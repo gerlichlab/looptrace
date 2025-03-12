@@ -52,7 +52,7 @@ object MergeAndSplitRoiTools extends LazyLogging:
                     case merged: MergedRoiRecord => merged.imagingContext
                 }
 
-        given AdmitsRoiIndex[PostMergeRoi] with
+        given AdmitsRoiIndex[PostMergeRoi]:
             override def getRoiIndex = (_: PostMergeRoi) match {
                 case roi: IndexedDetectedSpot => roi.index
                 case roi: MergedRoiRecord => roi.index
@@ -269,7 +269,7 @@ object MergeAndSplitRoiTools extends LazyLogging:
                                             val newCenter: Point3D = groupRois.map(_.centroid.asPoint).centroid
                                             val newBox: BoundingBox = buildNewBox(newCenter, groupRois.map(_.box))
                                             val contexts = groupRois.map(_.context).toList.toSet
-                                            val errorOrRecord = for {
+                                            val errorOrRecord = for
                                                 ctx <- (contexts.size === 1).either(
                                                     s"${contexts.size} unique imaging contexts (not just 1) in ROI group to merge",
                                                     groupRois.head.context
@@ -279,7 +279,7 @@ object MergeAndSplitRoiTools extends LazyLogging:
                                                     if pool contains currentMergeIndex 
                                                     then s"Cannot use ${currentMergeIndex.show_} as merge record index; it's already used".asLeft
                                                     else ().asRight
-                                            } yield MergedRoiRecord(
+                                            yield MergedRoiRecord(
                                                 currentMergeIndex, 
                                                 ctx, 
                                                 Centroid.fromPoint(newCenter), 

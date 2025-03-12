@@ -49,59 +49,58 @@ trait LooptraceSuite extends GenericSuite, GeometricInstances, ImagingInstances,
 
     given arbitraryForDelimiter: Arbitrary[Delimiter] = Arbitrary{ Gen.oneOf(Delimiter.CommaSeparator, Delimiter.TabSeparator) }
 
-    given arbitraryForEuclideanThreshold(using arbT: Arbitrary[NonnegativeReal]): Arbitrary[EuclideanDistance.Threshold] = 
+    given (arbT: Arbitrary[NonnegativeReal]) => Arbitrary[EuclideanDistance.Threshold] = 
         arbT.map(EuclideanDistance.Threshold.apply)
 
-    given arbitraryForLocusId(using arbTime: Arbitrary[ImagingTimepoint]): Arbitrary[LocusId] = arbTime.map(LocusId.apply)
+    given (arbTime: Arbitrary[ImagingTimepoint]) => Arbitrary[LocusId] = arbTime.map(LocusId.apply)
 
-    given arbitraryForProbeName(using arbName: Arbitrary[String]): Arbitrary[ProbeName] = arbName.suchThat(_.nonEmpty).map(ProbeName.apply)
+    given (arbName: Arbitrary[String]) => Arbitrary[ProbeName] = arbName.suchThat(_.nonEmpty).map(ProbeName.apply)
 
-    given arbitraryForRegionId(using arbTime: Arbitrary[ImagingTimepoint]): Arbitrary[RegionId] = arbTime.map(RegionId.apply)
+    given (arbTime: Arbitrary[ImagingTimepoint]) => Arbitrary[RegionId] = arbTime.map(RegionId.apply)
 
-    given arbitraryForRoiIndex(using idx: Arbitrary[Int]): Arbitrary[RoiIndex] = 
+    given (Arbitrary[Int]) => Arbitrary[RoiIndex] = 
         Arbitrary{ Gen.choose(0, Int.MaxValue).map(RoiIndex.unsafe) }
 
     given Arbitrary[TraceGroupId] = summon[Arbitrary[ValidTraceGroupName]].map(TraceGroupId.apply)
 
-    given arbitraryForTraceGroupMaybe(using Arbitrary[TraceGroupId]): Arbitrary[TraceGroupMaybe] = 
+    given (Arbitrary[TraceGroupId]) => Arbitrary[TraceGroupMaybe] = 
         summon[Arbitrary[Option[TraceGroupId]]].map(TraceGroupMaybe.apply)
 
-    given arbitraryForBlankImagingRound(using arbName: Arbitrary[String], arbTime: Arbitrary[ImagingTimepoint]): Arbitrary[BlankImagingRound] = 
+    given (arbName: Arbitrary[String], arbTime: Arbitrary[ImagingTimepoint]) => Arbitrary[BlankImagingRound] = 
         (arbName, arbTime).mapN(BlankImagingRound.apply)
 
-    given arbitraryForRegionalImagingRound(using 
+    given (
         arbName: Arbitrary[String], 
         arbTime: Arbitrary[ImagingTimepoint], 
         arbProbe: Arbitrary[ProbeName]
-        ): Arbitrary[RegionalImagingRound] = (arbName, arbTime, arbProbe).mapN(RegionalImagingRound.apply)
+    ) => Arbitrary[RegionalImagingRound] = (arbName, arbTime, arbProbe).mapN(RegionalImagingRound.apply)
 
-    given arbitraryForLocusImagingRound(using 
+    given ( 
         arbName: Arbitrary[String], 
         arbTime: Arbitrary[ImagingTimepoint], 
         arbProbe: Arbitrary[ProbeName], 
         arbRepeat: Arbitrary[PositiveInt]
-        ): Arbitrary[LocusImagingRound] = {
-            val arbRepOpt = Gen.option(arbitrary(arbRepeat)).toArbitrary
-            (arbName, arbTime, arbProbe, arbRepOpt).mapN(LocusImagingRound.apply)
-        }
+    ) => Arbitrary[LocusImagingRound] = 
+        val arbRepOpt = Gen.option(arbitrary(arbRepeat)).toArbitrary
+        (arbName, arbTime, arbProbe, arbRepOpt).mapN(LocusImagingRound.apply)
 
-    given arbitraryForDetectedSpotRoi(using 
+    given (
         arbSpot: Arbitrary[DetectedSpot[Double]], 
         arbBox: Arbitrary[BoundingBox[Double]],
-    ): Arbitrary[DetectedSpotRoi] = (arbSpot, arbBox).mapN(DetectedSpotRoi.apply)
+    ) => Arbitrary[DetectedSpotRoi] = (arbSpot, arbBox).mapN(DetectedSpotRoi.apply)
 
-    given arbitraryForIndexedDetectedSpot(using 
+    given (
         arbIndex: Arbitrary[RoiIndex],
         arbContext: Arbitrary[ImagingContext], 
         arbCentroid: Arbitrary[Centroid[Double]], 
         arbBox: Arbitrary[BB], 
-    ): Arbitrary[IndexedDetectedSpot] = 
+    ) => Arbitrary[IndexedDetectedSpot] = 
         (arbIndex, arbContext, arbCentroid, arbBox).mapN(IndexedDetectedSpot.apply)
 
-    given arbitraryForPostMergeRoi(using 
+    given ( 
         Arbitrary[IndexedDetectedSpot], 
         Arbitrary[MergedRoiRecord],
-    ): Arbitrary[PostMergeRoi] = 
+    ) => Arbitrary[PostMergeRoi] = 
         Arbitrary.oneOf[IndexedDetectedSpot, MergedRoiRecord]
     
     /************************
@@ -118,9 +117,9 @@ trait LooptraceSuite extends GenericSuite, GeometricInstances, ImagingInstances,
       * @param f The path to the file to read as CSV
       * @return Either a [[scala.util.Left]]-wrapped exception or a [[scala.util.Right]]-wrapped pair of columns and list of row records
       */
-    protected def safeReadAllWithOrderedHeaders(f: os.Path): Either[Throwable, (List[String], List[Map[String, String]])] = for {
+    protected def safeReadAllWithOrderedHeaders(f: os.Path): Either[Throwable, (List[String], List[Map[String, String]])] = for
         reader <- Try{ CSVReader.open(f.toIO) }.toEither
         result <- Try{ reader.allWithOrderedHeaders() }.toEither
         _ = reader.close()
-    } yield result
+    yield result
 end LooptraceSuite

@@ -151,7 +151,7 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
                         outputRecords.length shouldEqual inputRecords.length
                         // Check the actual equality, element-by-element.-
                         val unequal = inputRecords.toList.zip(outputRecords).filter{ (in, out) => in != out }
-                        if (unequal.nonEmpty) {
+                        if unequal.nonEmpty then {
                             fail(s"Unequal records pairs (below):\n${unequal.map{ (in, out) => in.toString ++ "\n" ++ out.toString }.mkString("\n\n")}")
                         } else {
                             succeed
@@ -272,20 +272,19 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
     test("MergerAssessedRoi records roundtrip through CSV.") {
         // Generate legal combination of main ROI index, too-close ROIs, and ROIs to merge.
         def genRoiIndexAndMergeIndices(using Arbitrary[RoiIndex]): Gen[(RoiIndex, Set[RoiIndex])] = 
-            for {
+            for
                 idx <- Arbitrary.arbitrary[RoiIndex]
                 forMergeRaw <- Gen.listOf(Arbitrary.arbitrary[RoiIndex])
-            } yield (idx, forMergeRaw.toSet - idx)
+            yield (idx, forMergeRaw.toSet - idx)
 
-        given arbRoi(using Arbitrary[RoiIndex], Arbitrary[IndexedDetectedSpot]): Arbitrary[MergerAssessedRoi] = 
-            Arbitrary{
-                for {
+        given (Arbitrary[RoiIndex], Arbitrary[IndexedDetectedSpot]) => Arbitrary[MergerAssessedRoi] = 
+            Arbitrary:
+                for
                     roi <- Arbitrary.arbitrary[IndexedDetectedSpot]
                     (index, forMerge) <- genRoiIndexAndMergeIndices
-                } yield MergerAssessedRoi
+                yield MergerAssessedRoi
                     .build(roi.copy(index = index), forMerge)
                     .fold(errors => throw new Exception(s"ROI build error(s): $errors"), identity)
-            }
 
         forAll { (inputRecords: NonEmptyList[MergerAssessedRoi]) => 
             given CsvRowDecoder[ImagingChannel, String] = getCsvRowDecoderForImagingChannel(SpotChannelColumnName)
@@ -308,7 +307,7 @@ class TestParseRoisCsv extends AnyFunSuite, LooptraceSuite, should.Matchers, Sca
                         outputRecords.length shouldEqual inputRecords.length
                         // Check the actual equality, element-by-element.-
                         val unequal = inputRecords.toList.zip(outputRecords).filter{ (in, out) => in != out }
-                        if (unequal.nonEmpty) {
+                        if unequal.nonEmpty then {
                             fail(s"Unequal records pairs (below):\n${unequal.map{ (in, out) => in.toString ++ "\n" ++ out.toString }.mkString("\n\n")}")
                         } else {
                             succeed

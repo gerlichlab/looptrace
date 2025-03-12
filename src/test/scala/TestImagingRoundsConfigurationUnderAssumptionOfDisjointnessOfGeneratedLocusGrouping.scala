@@ -49,16 +49,16 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
     }
 
     test("Trivial region grouping with groups specified is an error.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         
-        def mygen = for {
+        def mygen = for
             (seq, optLocusGrouping, exclusions) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt(10))
             (semantic, expectedMessage) <- Gen.oneOf(
                 "UniversalProximityPermission" -> s"For universal proximity permission, both threshold and groups must be absent.", 
                 "UniversalProximityProhibition" -> "For universal proximity prohibition, threshold must be present and groups must be absent.",
                 )
             proximityFilterStrategy <- genValidParitionForRegionGrouping(seq)
-        } yield (seq, optLocusGrouping, semantic, expectedMessage, proximityFilterStrategy, exclusions)
+        yield (seq, optLocusGrouping, semantic, expectedMessage, proximityFilterStrategy, exclusions)
         
         forAll (mygen, arbitrary[NonnegativeReal]) { case ((seq, optLocusGrouping, semantic, expectedMessage, proximityFilterStrategy, exclusions), rawThreshold) => 
             val baseData: Map[String, ujson.Value] = {
@@ -87,9 +87,9 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
     }
 
     test("Region grouping missing semantic gives error, regardless of presence of groups or minimum separation distance.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         
-        def mygen = for {
+        def mygen = for
             (seq, optLocusGrouping, exclusions) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt(10))
             optRegionGrouping <- Gen.option(genValidParitionForRegionGrouping(seq))
             optRawThreshold <- optRegionGrouping match {
@@ -98,7 +98,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
                 case None => arbitrary[NonnegativeReal].map(_.some)
                 case _ => Gen.option(arbitrary[NonnegativeReal])
             }
-        } yield (seq, optLocusGrouping, optRegionGrouping, optRawThreshold, exclusions)
+        yield (seq, optLocusGrouping, optRegionGrouping, optRawThreshold, exclusions)
         
         forAll (mygen) { (seq, optLocusGrouping, optRegionGrouping, optRawThreshold, exclusions) => 
             val baseData = {
@@ -129,11 +129,11 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
     }
 
     test("With or without other elements present, invalid semantic is an error.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         type BadSemanticValue = String // Give context-specific meaning to bare String.
         type RawThreshold = NonnegativeReal
 
-        def mygen: Gen[(ImagingSequence, BadSemanticValue, Option[NonEmptyList[NonEmptySet[ImagingTimepoint]]], Option[RawThreshold], Option[NonEmptyList[LocusGroup]], Set[ImagingTimepoint])] = for {
+        def mygen: Gen[(ImagingSequence, BadSemanticValue, Option[NonEmptyList[NonEmptySet[ImagingTimepoint]]], Option[RawThreshold], Option[NonEmptyList[LocusGroup]], Set[ImagingTimepoint])] = for
             (seq, locusGroupingOpt, exclusions) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt(10))
             semantic <- Gen.alphaNumStr.suchThat{
                 s => ! Set(
@@ -146,7 +146,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
                 }
             optRegionGrouping <- Gen.option(genValidParitionForRegionGrouping(seq))
             optRawThreshold <- Gen.option(arbitrary[NonnegativeReal])
-        } yield (seq, semantic, optRegionGrouping, optRawThreshold, locusGroupingOpt, exclusions)
+        yield (seq, semantic, optRegionGrouping, optRawThreshold, locusGroupingOpt, exclusions)
 
         forAll (mygen, minSuccessful(1000)) { case (seq, semantic, optRegionGrouping, optRawThreshold, locusGroupingOpt, exclusions) => 
             val baseData: Map[String, ujson.Value] = {
@@ -179,11 +179,11 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
     }
 
     test("Without groups present, region grouping semantic must be trivial.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         type RawSemanticValue = String // Give context-specific meaning to bare String.
         type RawThreshold = PositiveReal
 
-        def mygen: Gen[(ImagingSequence, RawSemanticValue, RawThreshold, Option[NonEmptyList[LocusGroup]], Set[ImagingTimepoint], String)] = for {
+        def mygen: Gen[(ImagingSequence, RawSemanticValue, RawThreshold, Option[NonEmptyList[LocusGroup]], Set[ImagingTimepoint], String)] = for
             (seq, locusGroupingOpt, exclusions) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt(10))
             (semantic, expectedMessage) <- Gen.oneOf(
                 Gen.oneOf(
@@ -206,7 +206,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
                     .map(s => s -> s"Illegal value for proximity filter semantic: $s"),
             )
             threshold <- arbitrary[PositiveReal]
-        } yield (seq, semantic, threshold, locusGroupingOpt, exclusions, expectedMessage)
+        yield (seq, semantic, threshold, locusGroupingOpt, exclusions, expectedMessage)
 
         forAll (mygen, minSuccessful(1000)) { case (seq, semantic, rawThreshold, locusGroupingOpt, exclusions, expectedMessage) => 
             val baseData: Map[String, ujson.Value] = {
@@ -231,13 +231,13 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
     }
 
     test("Nontrivial region grouping must specify groups that constitute a partition of regional round timepoints from the imaging sequence.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         val maxTime = 100
         given arbTime: Arbitrary[ImagingTimepoint] = 
             // Limit range to encourage overlap b/w regional rounds in sequence and grouping.
             Gen.choose(0, maxTime).map(ImagingTimepoint.unsafe).toArbitrary
 
-        def mygen = for {
+        def mygen = for
             (seq, optLocusGrouping, exclusions) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt.unsafe(maxTime / 2))
             regionalTimes = seq.regionRounds.map(_.time).toList.toSet
             semantic <- Gen.oneOf("SelectiveProximityPermission", "SelectiveProximityProhibition")
@@ -245,7 +245,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
                 .map(_.toNel.get)
                 // Ensure that subsets fail uniqueness, disjointness, fail to cover regionals, or fail to be covered by regionals
                 // In the process, determine the expected error message.
-                .map{ gs => (for {
+                .map{ gs => (for
                     // First, try for duplicates within an alleged subset of the grouping.
                     _ <- gs.toList.traverse{ ts => 
                         if ts.toList.toSet.size === ts.length then ().asRight
@@ -270,10 +270,10 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
                             )}
                         ).flatten.toNel.toLeft(())
                     }
-                } yield ()).leftMap(gs -> _) }
+                yield ()).leftMap(gs -> _) }
                 .suchThat(_.isLeft)
                 .map(_.swap.getOrElse{ throw new IllegalStateException("Allegedly generated a Left but then failed to get value after .swap!") })
-        } yield (seq, optLocusGrouping, semantic, regionGroups, exclusions, findExpMessages)
+        yield (seq, optLocusGrouping, semantic, regionGroups, exclusions, findExpMessages)
         
         forAll (mygen, arbitrary[NonnegativeReal], minSuccessful(10000)) {
             case ((seq, optLocusGrouping, semantic, regionGroups, exclusions, findExpMessages), threshold) =>
@@ -306,13 +306,13 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
     }
 
     test("Locus grouping must either be absent or be identical--in union over timepoints--to timepoints from locus imaging rounds from imaging sequence.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         val maxTime = 100
         given arbTime: Arbitrary[ImagingTimepoint] = 
             // Limit range to encourage overlap b/w regional rounds in sequence and grouping.
             Gen.choose(0, maxTime).map(ImagingTimepoint.unsafe).toArbitrary
 
-        def mygen = for {
+        def mygen = for
             // First, generate the basic imaging rounds sequence, with (maybe empty) locus grouping, and round exclusions.
             (seq, optLocusGrouping, exclusions) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt.unsafe(maxTime / 2))
             /* Collect all regional and local timepoint for set-theoretic comparisons. */
@@ -326,10 +326,10 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
                         Gen.const(None -> ().asRight), // Absence of locus grouping is always valid.
                         {
                             // Here, we generate dummy "locus" timepoints and assign to one of the real regional times.
-                            val gen = for {
+                            val gen = for
                                 ts <- Gen.nonEmptyListOf(arbitrary[ImagingTimepoint].suchThat{ t => !isExtantTimepoint(t) })
                                 r <- Gen.oneOf(regionalTimes)
-                            } yield NonEmptyList.one(LocusGroup(r, ts.toNel.get.toNes))
+                            yield NonEmptyList.one(LocusGroup(r, ts.toNel.get.toNes))
                             gen.map{ g => 
                                 // Since each timepoint is generated to NOT be in the imaging sequence, anything added here is to be expected as extra.
                                 val numExtra = g.head.locusTimepoints.size
@@ -354,7 +354,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
                                 }
                             groups.some -> msgTest
                         }
-                        else for {
+                        else for
                             // We have at least 1 group and more than 1 locus timepoint in total, so we can 
                             // definitely generate at least 1 to remove and still have a structurally (nonempty-of-nonempty) grouping.
                             // First, remove a single locus timepoint in the imaging rounds sequence from the locus grouping.
@@ -380,7 +380,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
                                 },
                                 ("Extra in grouping 3", (_: String).startsWith(s"${subtractedAndAdded.length} timepoint(s) in locus grouping and not found as locus imaging timepoints")).some
                             ).flatten.toNel.get
-                        } yield (subtractedAndAdded.toNel.get.some, missingPointTests.asLeft[Unit])
+                        yield (subtractedAndAdded.toNel.get.some, missingPointTests.asLeft[Unit])
                     )
                 }
             }
@@ -391,7 +391,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
                 "SelectiveProximityProhibition",
                 )
             regionGroups <- genValidParitionForRegionGrouping(seq)
-        } yield (seq, modLocusGrouping, semantic, regionGroups, exclusions, altMessagesTests)
+        yield (seq, modLocusGrouping, semantic, regionGroups, exclusions, altMessagesTests)
         
         forAll (mygen, arbitrary[NonnegativeReal], minSuccessful(10000)) {
             case ((seq, optLocusGrouping, semantic, regionGroups, exclusions, altMessagesTests), threshold) =>
@@ -435,13 +435,13 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
     }
 
     test("Each of the locus grouping's keys must be a regional round timepoint from the imaging sequence") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         val maxTime = 100
         given arbTime: Arbitrary[ImagingTimepoint] = 
             // Limit range to encourage overlap b/w regional rounds in sequence and grouping.
             Gen.choose(0, maxTime).map(ImagingTimepoint.unsafe).toArbitrary
 
-        def mygen = for {
+        def mygen = for
             (seq, locusGrouping, exclusions) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt.unsafe(maxTime / 2))
                 .suchThat(_._2.nonEmpty)
                 .map((seq, optGrouping, exclusions) => (seq, optGrouping.get, exclusions))
@@ -453,7 +453,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
                 "SelectiveProximityProhibition",
                 )
             regionGroups <- genValidParitionForRegionGrouping(seq)
-        } yield (seq, locusGrouping, exclusions, semantic, regionGroups, badRegionKey)
+        yield (seq, locusGrouping, exclusions, semantic, regionGroups, badRegionKey)
 
         forAll (mygen, arbitrary[NonnegativeReal]) { 
             case ((seq, locusGrouping, exclusions, semantic, regionGroups, badRegionKey), threshold) =>
@@ -500,13 +500,13 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
     }
 
     test("Any timepoint to exclude from tracing must be a timepoint in the imaging sequence.") {
-        given noShrink[A]: Shrink[A] = Shrink.shrinkAny[A]
+        given [A] => Shrink[A] = Shrink.shrinkAny[A]
         val maxTime = 100
         given arbTime: Arbitrary[ImagingTimepoint] = 
             // Limit range to encourage overlap b/w regional rounds in sequence and grouping.
             Gen.choose(0, maxTime).map(ImagingTimepoint.unsafe).toArbitrary
 
-        def mygen = for {
+        def mygen = for
             (seq, optLocusGrouping, _) <- genValidSeqAndLocusGroupOptAndExclusions(PositiveInt.unsafe(maxTime / 2))
             semantic <- Gen.oneOf(
                 "UniversalProximityPermission",
@@ -516,7 +516,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
                 )
             regionGroups <- genValidParitionForRegionGrouping(seq)
             exclusions <- arbitrary[List[ImagingTimepoint]].suchThat(_.exists(t => !seq.allTimepoints.contains(t)))
-        } yield (seq, optLocusGrouping, semantic, regionGroups, exclusions.toSet)
+        yield (seq, optLocusGrouping, semantic, regionGroups, exclusions.toSet)
 
         forAll (mygen, arbitrary[NonnegativeReal]) { 
             case ((seq, optLocusGrouping, semantic, regionGroups, exclusions), threshold) => 
@@ -581,7 +581,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
         ).flatten
     }
 
-    def genValidSeqAndLocusGroupOptAndExclusions(maxNumRounds: PositiveInt): Gen[(ImagingSequence, Option[NonEmptyList[LocusGroup]], Set[ImagingTimepoint])] = for {
+    def genValidSeqAndLocusGroupOptAndExclusions(maxNumRounds: PositiveInt): Gen[(ImagingSequence, Option[NonEmptyList[LocusGroup]], Set[ImagingTimepoint])] = for
         seq <- genTimeValidSequence(Gen.choose(1, maxNumRounds).map(PositiveInt.unsafe))
         locusGroupingOpt: Option[NonEmptyList[LocusGroup]] <- seq.locusRounds.toNel match {
             case None => Gen.const(None)
@@ -591,11 +591,11 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
                 else {
                     val numLoci = seq.locusRounds.length
                     val numRegions: PositiveInt = seq.numberOfRegionRounds
-                    (for {
+                    (for
                         // >= locus and >= 1 region, per the pattern match and conditional
                         k <- Gen.choose(1, math.min(numRegions, numLoci))
                         breaks <- Gen.pick(k - 1, 0 to numLoci).map(_.sorted :+ numLoci) // Ensure all loci are accounted for.
-                    } yield breaks.zip(seq.regionRounds.toList).foldRight(loci.toList.map(_.time) -> List.empty[LocusGroup]){
+                    yield breaks.zip(seq.regionRounds.toList).foldRight(loci.toList.map(_.time) -> List.empty[LocusGroup]){
                         case (_, (Nil, acc)) => Nil -> acc
                         case ((pt, reg), (remaining, acc)) => 
                             val (maybeNewGroup, newRemaining) = remaining.splitAt(pt)
@@ -607,7 +607,7 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
                 }
         }
         exclusions <- genExclusions(seq)
-    } yield (seq, locusGroupingOpt, exclusions)
+    yield (seq, locusGroupingOpt, exclusions)
 
     private def genExclusions(sequence: ImagingSequence): Gen[Set[ImagingTimepoint]] = 
         Gen.choose(0, sequence.length)
@@ -625,10 +625,10 @@ class TestImagingRoundsConfigurationUnderAssumptionOfDisjointnessOfGeneratedLocu
     }
 
     private def genValidParitionForRegionGrouping(sequence: ImagingSequence): Gen[NonEmptyList[NonEmptySet[ImagingTimepoint]]] = {
-        for {
+        for
             k <- Gen.choose(1, sequence.regionRounds.length)
             (g1, g2) = Random.shuffle(sequence.regionRounds.toList).toList.splitAt(k)
-        } yield List(g1, g2).flatMap(_.toNel).map(_.map(_.time).toNes).toNel.get
+        yield List(g1, g2).flatMap(_.toNel).map(_.map(_.time).toNes).toNel.get
     }
 
     private def genTimeValidSequence(genSize: Gen[PositiveInt])(using arbName: Arbitrary[String]): Gen[ImagingSequence] = 

@@ -131,7 +131,7 @@ object MergeRois extends StrictLogging:
                             .map(Function.const(outfile))
 
                 logger.info(s"Will read ROIs from file: ${opts.inputFile}")
-                val prog: IO[Unit] = for {
+                val prog: IO[Unit] = for
                     rois <- {
                         given CsvRowDecoder[ImagingChannel, String] = getCsvRowDecoderForImagingChannel(SpotChannelColumnName)
                         readCsvToCaseClasses[MergerAssessedRoi](opts.inputFile)
@@ -141,7 +141,7 @@ object MergeRois extends StrictLogging:
                     _ <- IO{ logger.info(s"Wrote merge contributors file: ${contributorsFile}") }
                     resultRoisFile <- writeUsable(individuals, merged)
                     _ <- IO{ logger.info(s"Wrote post-merge file: ${resultRoisFile}") }
-                } yield ()
+                yield ()
                 prog.unsafeRunSync()
                 logger.info("Done!")
         }
@@ -153,7 +153,7 @@ object MergeRois extends StrictLogging:
                 s"${errorMessages.length} error(s) creating max bounding box. First one: ${errorMessages.head}"
             ),
             dimensions => 
-                given Semigroup[BBox.Dimensions] with
+                given Semigroup[BBox.Dimensions]:
                     override def combine(a: BBox.Dimensions, b: BBox.Dimensions): BBox.Dimensions = 
                         BBox.Dimensions(a.x max b.x, a.y max b.y, a.z max b.z)
                 val maxDim = dimensions.reduce
