@@ -23,7 +23,7 @@ from looptrace.Drifter import coarse_correction_workflow, fine_correction_workfl
 from looptrace.ImageHandler import BeadRoisFilenameSpecification, ImageHandler
 from looptrace.NucDetector import NucDetector
 from looptrace.Tracer import Tracer, run_timepoint_name_and_distance_application
-from looptrace.bead_roi_generation import INDEX_COLUMN_NAME as BEAD_INDEX_COLUMN_NAME
+from looptrace.bead_roi_generation import FAIL_CODE_COLUMN_NAME, INDEX_COLUMN_NAME as BEAD_INDEX_COLUMN_NAME
 from looptrace.configuration import KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS
 from looptrace.conversion_to_zarr import one_to_one as run_zarr_production
 from looptrace.image_processing_functions import extract_labeled_centroids
@@ -473,7 +473,7 @@ def filter_spots_for_nuclei(rounds_config: ExtantFile, params_config: ExtantFile
     logging.info("Done with nuclei-based spot filtration")
 
 
-def discard_beads_in_nuclei(
+def filter_beads(
     rounds_config: ExtantFile, 
     params_config: ExtantFile, 
     images_folder: ExtantFolder,
@@ -491,6 +491,11 @@ def discard_beads_in_nuclei(
     for bead_spec, rois_file in spec_file_pairs:
         fov_idx: int = bead_spec.fov
         bead_rois: pd.DataFrame = pd.read_csv(rois_file, index_col=None)
+        old_num_rois: int = bead_rois.shape[0]
+        logging.info("Detected bead count: %d", old_num_rois)
+        # After filtering by the fail code, we no longer need that column name.
+        bead_rois = bead_rois[(bead_rois[FAIL_CODE_COLUMN_NAME] == "") | (bead_rois[FAIL_CODE_COLUMN_NAME].isna())].drop(columns=[FAIL_CODE_COLUMN_NAME])
+        logging.info("QC-pass bead count: %d", bead_rois.shape[0])
         bead_rois: pd.DataFrame = add_nucleus_labels(
             rois_table=bead_rois, 
             mask_images=[fov_mask_pairs[fov_idx]],
@@ -499,10 +504,12 @@ def discard_beads_in_nuclei(
             timepoint=Option.Some(bead_spec.timepoint),
             remove_zarr_suffix=False,
         )
-        old_num_rois: int = bead_rois.shape[0]
-        bead_rois = bead_rois[bead_rois[NUC_LABEL_COL] == 0] # Here, we want NON-nuclear beads.
+        
+        # For beads (not FISH spots), we want things OUTside the nucelus; after filtration, we can drop the nucleus label.
+        bead_rois = bead_rois[bead_rois[NUC_LABEL_COL] == 0].drop(columns=[NUC_LABEL_COL])
         new_num_rois: int = bead_rois.shape[0]
-        logging.info("%s: %d --> %d", rois_file, old_num_rois, new_num_rois)
+        filtered_rois_file: Path = rois_file.with_suffix(".filtered.csv")
+        logging.info("%s -> %s: %d --> %d", rois_file, filtered_rois_file, old_num_rois, new_num_rois)
         bead_rois.to_csv(filtered_rois_file, index=False)
 
 
@@ -605,7 +612,7 @@ class LooptracePipeline(pypiper.Pipeline):
             pypiper.Stage(name="bead_roi_generation", func=gen_all_bead_rois, f_kwargs=rounds_params_images),
             # Count detected bead ROIs for each timepoint, mainly to see if anything went awry during some phase of the imaging, e.g. air bubble.
             pypiper.Stage(name="bead_roi_detection_analysis", func=run_all_bead_roi_detection_analysis, f_kwargs=rounds_params_images),
-            pypiper.Stage(name="bead_filtration_through_nuclei", func=discard_beads_in_nuclei, f_kwargs=rounds_params_images),
+            pypiper.Stage(name="bead_filtration", func=filter_beads, f_kwargs=rounds_params_images),
             pypiper.Stage(name="bead_roi_partition", func=partition_bead_rois, f_kwargs=rounds_params_images),
             pypiper.Stage(name="drift_correction__fine", func=run_fine_drift_correction, f_kwargs=rounds_params_images),
             pypiper.Stage(name="drift_correction_accuracy_analysis", func=run_drift_correction_analysis, f_kwargs=rounds_params_images), 

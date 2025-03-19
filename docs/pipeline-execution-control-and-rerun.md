@@ -54,7 +54,7 @@ Below are the sequential pipeline stage names.
 * drift_correction__coarse
 * bead_roi_generation
 * bead_roi_detection_analysis
-* bead_filtration_through_nuclei
+* bead_filtration
 * bead_roi_partition
 * drift_correction__fine
 * drift_correction_accuracy_analysis
