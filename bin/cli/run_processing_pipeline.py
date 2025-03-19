@@ -490,7 +490,7 @@ def discard_beads_in_nuclei(
     logging.info("Bead files count: %d", len(spec_file_pairs))
     for bead_spec, rois_file in spec_file_pairs:
         fov_idx: int = bead_spec.fov
-        bead_rois: pd.DataFrame = pd.read_csv(rois_file, index_col=BEAD_INDEX_COLUMN_NAME)
+        bead_rois: pd.DataFrame = pd.read_csv(rois_file, index_col=None)
         bead_rois: pd.DataFrame = add_nucleus_labels(
             rois_table=bead_rois, 
             mask_images=[fov_mask_pairs[fov_idx]],
@@ -503,7 +503,7 @@ def discard_beads_in_nuclei(
         bead_rois = bead_rois[bead_rois[NUC_LABEL_COL] == 0] # Here, we want NON-nuclear beads.
         new_num_rois: int = bead_rois.shape[0]
         logging.info("%s: %d --> %d", rois_file, old_num_rois, new_num_rois)
-        bead_rois.to_csv(rois_file, index=False) # Use the previously dedicated column as the "index".
+        bead_rois.to_csv(filtered_rois_file, index=False)
 
 
 def discard_spots_close_to_beads(rounds_config: ExtantFile, params_config: ExtantFile) -> None:
