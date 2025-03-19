@@ -53,8 +53,8 @@ Below are the sequential pipeline stage names.
 * move_nuclear_masks_visualisation_data
 * drift_correction__coarse
 * bead_roi_generation
-* bead_filtration_through_nuclei
 * bead_roi_detection_analysis
+* bead_filtration_through_nuclei
 * bead_roi_partition
 * drift_correction__fine
 * drift_correction_accuracy_analysis

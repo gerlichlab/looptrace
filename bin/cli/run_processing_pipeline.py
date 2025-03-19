@@ -603,9 +603,9 @@ class LooptracePipeline(pypiper.Pipeline):
             pypiper.Stage(name="drift_correction__coarse", func=run_coarse_drift_correction, f_kwargs=rounds_params_images), 
             # Find/define all the bead ROIs in each (FOV, timepoint) pair.
             pypiper.Stage(name="bead_roi_generation", func=gen_all_bead_rois, f_kwargs=rounds_params_images),
-            pypiper.Stage(name="bead_filtration_through_nuclei", func=discard_beads_in_nuclei, f_kwargs=rounds_params_images),
             # Count detected bead ROIs for each timepoint, mainly to see if anything went awry during some phase of the imaging, e.g. air bubble.
             pypiper.Stage(name="bead_roi_detection_analysis", func=run_all_bead_roi_detection_analysis, f_kwargs=rounds_params_images),
+            pypiper.Stage(name="bead_filtration_through_nuclei", func=discard_beads_in_nuclei, f_kwargs=rounds_params_images),
             pypiper.Stage(name="bead_roi_partition", func=partition_bead_rois, f_kwargs=rounds_params_images),
             pypiper.Stage(name="drift_correction__fine", func=run_fine_drift_correction, f_kwargs=rounds_params_images),
             pypiper.Stage(name="drift_correction_accuracy_analysis", func=run_drift_correction_analysis, f_kwargs=rounds_params_images), 
