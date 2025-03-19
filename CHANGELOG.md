@@ -6,20 +6,23 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 
 ## [v0.14.0] - Unreleased
 
-### Fixed
-* Removed incorrect extra `beadIndex` column from each bead ROIs file; see [Issue 436](https://github.com/gerlichlab/looptrace/issues/436).
-* Fixed all-0s error in filtered bead ROIs count plotting; see [Issue 437](https://github.com/gerlichlab/looptrace/issues/437).
-
 ### Added
 * Add a proximity filter between beads and FISH spots. In other words, discard any "FISH spot" which is too close to a bead. Again, this is related to the idea of mixing up the two, especially during single-channel tracing. 
-This can be used by setting `proximityFiltrationBetweenBeadsAndSpots` in the pipeline parameters configuration file
-See [Issue 400](https://github.com/gerlichlab/looptrace/issues/400) and [Issue 403](https://github.com/gerlichlab/looptrace/issues/403).
+This can be used by setting `proximityFiltrationBetweenBeadsAndSpots` in the pipeline parameters configuration file.
+See [Issue 401](https://github.com/gerlichlab/looptrace/issues/401) and [Issue 403](https://github.com/gerlichlab/looptrace/issues/403).
 * Validation program (`ValidateMergeDetermination`) for the determination of which ROIs (from the same timepoint) to merge on account of proximity.
 
 ### Changed
 * Forbid `crosstalk_ch` in the parameters configuration file, as the purpose of inter-channel crosstalk subtraction is superseded by the [proximity-based filtration between beads and FISH spots](https://github.com/gerlichlab/looptrace/issues/403).
 * Scala version bumped up to 3.6.4, and all project dependencies updated
 * Big syntax update especially regarding `given`s, per SIP-64
+* Removed step of prefiltration of FISH spots through nuclei, as it's obviated by the [filtration of FISH spots by proximity to fiducial beads](https://github.com/gerlichlab/looptrace/issues/401).
+* The location component (a 3D point) of bead ROIs is now encoded in JSON more explicitly as such.
+Namely, rather than an array of three elements, in which the (x, y, z) order of the coordinates/components may be ambiguous (e.g., whether the components follow the typical (x, y, z), or the (z, y, x) sequence more familiar in image analysis), a point is encoded as a collection of key-value pairs, with each key being a coordinate/component name ("x", "y", or "z").
+
+### Fixed
+* Removed incorrect extra `beadIndex` column from each bead ROIs file; see [Issue 436](https://github.com/gerlichlab/looptrace/issues/436).
+* Fixed all-0s error in filtered bead ROIs count plotting; see [Issue 437](https://github.com/gerlichlab/looptrace/issues/437).
 
 ## [v0.13.2] - 2024-03-06
 
