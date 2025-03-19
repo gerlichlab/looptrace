@@ -38,6 +38,6 @@ Judge in accordance with how many beads you anticipate having per image.
     * For `sigma_z_max`, 400 is often a good setting.
     * For `max_dist`, 800 is often a good setting.
 * If you want the Numpy arrays representing the spot images for tracing (the `*.npy` files) to be kept even after zipping, set `keep_spot_images_folder` to `True`.
-* `proximityFiltrationBetweenBeadsAndSpots` should be either...
+* `proximityFiltrationBetweenBeadsAndSpots` must be set (for now) and should be either...
     * A Boolean, which for now must be `True`, implying that `subtract_background` must be used and correspond to an imaging timepoint / round. In the future this step will be skippable, and this key could be omitted or set to `False`.
     * A nonnegative integer corresponding to an imaging timepoint / round
