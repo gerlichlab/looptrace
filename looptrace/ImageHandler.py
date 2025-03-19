@@ -50,8 +50,10 @@ _BACKGROUND_SUBTRACTION_TIMEPOINT_KEY = "subtract_background"
 def _get_bead_timepoint_for_spot_filtration(params_config: Mapping[str, object]) -> Result[Option[int], str]:
     bead_spot_filtration_key: Literal["proximityFiltrationBetweenBeadsAndSpots"] = "proximityFiltrationBetweenBeadsAndSpots"
     match params_config.get(bead_spot_filtration_key):
-        case (None | False):
-            return Result.Ok(Option.Nothing())
+        case None:
+            return Result.Error(f"Configuration is missing key for bead-to-spot proximity-based filtration: {bead_spot_filtration_key}")
+        case False:
+            return Result.Error(f"Bead-to-spot proximity-based filtration key ({bead_spot_filtration_key}) is set to False")
         case True:
             return Option\
                 .of_optional(params_config.get(_BACKGROUND_SUBTRACTION_TIMEPOINT_KEY))\
