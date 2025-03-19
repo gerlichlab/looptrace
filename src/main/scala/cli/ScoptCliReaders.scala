@@ -2,6 +2,8 @@ package at.ac.oeaw.imba.gerlich.looptrace.cli
 
 import scopt.Read
 import cats.syntax.all.*
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.EuclideanDistance
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.looptrace.ImagingRoundsConfiguration
 import at.ac.oeaw.imba.gerlich.looptrace.space.Pixels3D
@@ -19,7 +21,13 @@ trait ScoptCliReaders:
     given (intRead: Read[Int]) => Read[PositiveInt] = intRead.map(PositiveInt.unsafe)
     
     given (numRead: Read[Double]) => Read[PositiveReal] = numRead.map(PositiveReal.unsafe)
-    
+
+    given (numRead: Read[Double]) => Read[EuclideanDistance.Threshold] = 
+        numRead.map(NonnegativeReal.unsafe `andThen` EuclideanDistance.Threshold.apply)
+
+    given (intRead: Read[Int]) => Read[ImagingTimepoint] = 
+        intRead.map(NonnegativeInt.unsafe `andThen` ImagingTimepoint.apply)
+
     /** Parse content of JSON file path to imaging rounds configuration instance. */
     given readForImagingRoundsConfiguration: scopt.Read[ImagingRoundsConfiguration] = scopt.Read.reads{ file => 
         ImagingRoundsConfiguration.fromJsonFile(os.Path(file)) match {

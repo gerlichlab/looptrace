@@ -40,5 +40,5 @@ Judge in accordance with how many beads you anticipate having per image.
 * If you want the Numpy arrays representing the spot images for tracing (the `*.npy` files) to be kept even after zipping, set `keep_spot_images_folder` to `True`.
 * To filter spots for inclusion in nuclei _even before_ attempting to determine which spots to merge, set `filter_spots_before_merge` to `True`.
 * `proximityFiltrationBetweenBeadsAndSpots` should be either...
-    * A Boolean, which when `True` implies that `subtract_background` must be used and correspond to an imaging timepoint / round
+    * A Boolean, which for now must be `True`, implying that `subtract_background` must be used and correspond to an imaging timepoint / round. In the future this step will be skippable, and this key could be omitted or set to `False`.
     * A nonnegative integer corresponding to an imaging timepoint / round

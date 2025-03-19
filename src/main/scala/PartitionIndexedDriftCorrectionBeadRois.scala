@@ -207,19 +207,8 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
     }
 
     def discoverInputs(inputsFolder: os.Path): Set[InitFile] = {
-        def tryReadThruNN[A](f: NonnegativeInt => A): String => Option[A] = s => Try(s.toInt).toOption >>= NonnegativeInt.maybe.fmap(_.map(f))
-        val prepFileMeta: os.Path => Option[InitFile] = filepath => {
-            val filename = filepath.last
-            if filename.startsWith(BeadRoisPrefix) 
-            then {
-                filename.split("\\.").head.stripPrefix(BeadRoisPrefix).split("_").toList match {
-                    case "" :: rawPosIdx :: rawTime :: Nil => 
-                        (tryReadThruNN(FieldOfView.apply)(rawPosIdx), tryReadThruNN(ImagingTimepoint.apply)(rawTime)).tupled.map(_ -> filepath)
-                    case _ => None
-                }
-            } 
-            else { None }
-        }
+        val prepFileMeta: os.Path => Option[InitFile] = filepath => 
+            BeadsFilenameDefinition.fromPath(filepath).map{ fnDef => (fnDef.fieldOfView -> fnDef.timepoint) -> filepath }
         val results = os.list(inputsFolder).filter(os.isFile).toList.flatMap(prepFileMeta)
         val histogram = results.groupBy(_._1).filter(_._2.length > 1)
         if histogram.nonEmpty then {
@@ -347,6 +336,33 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
                 }
         )
     }
+
+    final case class BeadsFilenameDefinition(fieldOfView: FieldOfView, timepoint: ImagingTimepoint):
+        final def getInputFilename: String = getFilenameBase ++ ".csv"
+        final def getOutputFilename(purpose: Purpose): String = getFilenameBase ++ "." ++ purpose.lowercase ++ ".json"
+        private def getFilenameBase: String = s"${BeadRoisPrefix}_${fieldOfView.show_}_${timepoint.show_}"
+    end BeadsFilenameDefinition
+
+    object BeadsFilenameDefinition:        
+        def fromPath: os.Path => Option[BeadsFilenameDefinition] = p => fromFilename(p.last)
+
+        private def fromFilename: String => Option[BeadsFilenameDefinition] = s => 
+            for
+                _ <- s.startsWith(BeadRoisPrefix).option(()) // Check for proper prefix. 
+                (rawFoV, rawTime) <- 
+                    s.split("\\.").head.stripPrefix(BeadRoisPrefix).split("_").toList match {
+                        case "" :: p :: t :: Nil => (p, t).some
+                        case _ => None
+                    }
+                fov <- readNonNegInt(rawFoV).map(FieldOfView.apply) // Parse the field of view.
+                tp <- readNonNegInt(rawTime).map(ImagingTimepoint.apply) // Parse the timepoint.
+            yield BeadsFilenameDefinition(fov, tp)
+
+        private def readNonNegInt: String => Option[NonnegativeInt] = s => 
+            Try(s.toInt).toOption.flatMap(NonnegativeInt.maybe)
+    end BeadsFilenameDefinition
+
+
     /** Refinement type for nonnegative integers */
     opaque type ShiftingCount <: Int = Int
     
@@ -536,9 +552,6 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
     object Purpose:
         given eqForPurpose: Eq[Purpose] = Eq.fromUniversalEquals[Purpose]
     
-    /** Designate a text value as representing a filename. */
-    final case class Filename(get: String)
-
     /** Helpers for working with the parser configuration */
     object ParserConfig:
         val indexCol = "beadIndex"
@@ -548,16 +561,12 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
         val qcCol = "fail_code"
     end ParserConfig
 
-    /** Encode FOV, timepoint, and intended purpose of ROI in filename. */
-    def getOutputFilename(fov: FieldOfView, time: ImagingTimepoint, purpose: Purpose): Filename =
-        Filename(s"${BeadRoisPrefix}_${fov.show_}_${time.show_}.${purpose.lowercase}.json")
-
     /** Name ROIs subfolder according to how the selected ROIs are to be used. */
     def getOutputSubfolder(root: os.Path) = root / (_: Purpose).lowercase
 
     /** Name ROIs subfolder according to how the selected ROIs are to be used, and encode the purpose in the filename also. */
     def getOutputFilepath(root: os.Path)(pos: FieldOfView, time: ImagingTimepoint, purpose: Purpose): os.Path = 
-        getOutputSubfolder(root)(purpose) / getOutputFilename(pos, time, purpose).get
+        getOutputSubfolder(root)(purpose) / BeadsFilenameDefinition(pos, time).getOutputFilename(purpose)
 
     /** Infer delimiter and get header + data lines. */
     private def prepFileRead(roisFile: os.Path): ValidatedNel[String, (Delimiter, String, List[String])] = {

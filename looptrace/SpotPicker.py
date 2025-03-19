@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import *
 
 import dask.array as da
+from expression import fst, result
 from joblib import Parallel, delayed
 import numpy as np
 from numpy.lib.format import open_memmap
@@ -32,6 +33,7 @@ from spotfishing_looptrace import DifferenceOfGaussiansSpecificationForLooptrace
 
 from looptrace import FIELD_OF_VIEW_COLUMN, ArrayDimensionalityError, RoiImageSize, image_processing_functions as ip
 from looptrace.filepaths import SPOT_BACKGROUND_SUBFOLDER, SPOT_IMAGES_SUBFOLDER, simplify_path
+from looptrace.integer_naming import get_fov_name_short, parse_field_of_view_one_based_from_position_name_representation
 from looptrace.numeric_types import NumberLike
 from looptrace.voxel_stack import VoxelStackSpecification
 
@@ -185,7 +187,13 @@ def build_spot_prop_table(
         spot_threshold=timepoint_spec.threshold, 
         detection_parameters=detection_parameters,
         )
-    return finalise_single_spot_props_table(spot_props=spot_props, field_of_view=field_of_view, timepoint=timepoint, channel=channel)
+    spot_props = finalise_single_spot_props_table(
+        spot_props=spot_props, 
+        field_of_view=field_of_view, 
+        timepoint=timepoint, 
+        channel=channel,
+    )
+    return field_of_view, spot_props
 
 
 def detect_spots_multiple(
@@ -197,9 +205,9 @@ def detect_spots_multiple(
     **joblib_kwargs
 ) -> pd.DataFrame:
     """Detect spots in each relevant channel and for each given timepoint for the given whole-FOV images."""
-    kwargs = copy.copy(joblib_kwargs)
-    kwargs.setdefault("n_jobs", -1)
     if parallelise:
+        kwargs = copy.copy(joblib_kwargs)
+        kwargs.setdefault("n_jobs", -1)
         subframes = Parallel(**kwargs)(
             delayed(build_spot_prop_table)(
                 img=img, field_of_view=fov, channel=ch, timepoint_spec=spec, detection_parameters=spot_detection_parameters
@@ -370,7 +378,7 @@ class SpotPicker:
         for i, t in self._iter_timepoints():
             yield SingleTimepointDetectionSpec(timepoint=t, threshold=self.spot_threshold[i])
 
-    def iter_fov_img_pairs(self) -> Iterable[Tuple[str, np.ndarray]]:
+    def iter_fov_img_pairs(self) -> Iterable[tuple[str, np.ndarray]]:
         """Iterate over pairs of FOV name, and corresponding 5-tensor (t, c, z, y, x) of images."""
         for i, fov in enumerate(self.fov_list):
             yield fov, self.images[i]
@@ -384,7 +392,7 @@ class SpotPicker:
         return self.config.get("padding_method", "edge")
 
     @property
-    def parallelise(self) -> bool:
+    def _parallelise(self) -> bool:
         return self.config.get("parallelise_spot_detection", False)
 
     @property
@@ -392,7 +400,7 @@ class SpotPicker:
         return Path(self.image_handler.analysis_path) / "detected_spot_images"
 
     @property
-    def fov_list(self) -> List[str]:
+    def fov_list(self) -> list[str]:
         return self.image_handler.image_lists[self.input_name]
 
     @property
@@ -409,7 +417,7 @@ class SpotPicker:
         return get_spot_images_zipfile(self.image_handler.image_save_path, is_background=True)
 
     @property
-    def spot_channel(self) -> List[int]:
+    def spot_channel(self) -> list[int]:
         """The imaging channel in which spot detection is to be done"""
         spot_ch = self.config["spot_ch"]
         return spot_ch if isinstance(spot_ch, list) else [spot_ch]
@@ -436,37 +444,67 @@ class SpotPicker:
             return [threshold] * len(self._spot_times)
         raise TypeError(f"Spot detection threshold is neither int nor list, but {type(threshold).__name__}")
 
-    def rois_from_spots(self, outfile: Optional[Union[str, Path]] = None) -> Union[str, Path]:
+    def rois_from_spots(self) -> list[tuple[str, Path]]:
         """Detect regions of interest (ROIs) from regional barcode FISH spots.
 
-        Parameters
-        ----------
-        outfile : str or Path, optional
-            Path to output file to which to write ROIs; will use default path from 
-            underlying image handler if no path is passed to this function
-        
         Returns
         ---------
-        Path to file containing ROI centers
+        list of str, Path
+            List of pairs of FOV name and path to file with its detected spots
         """
         params = self.detection_parameters
         logger.info(f"Using '{self.detection_method_name}' for spot detection, threshold = {self.spot_threshold}, downsampling = {params.downsampling}")
-        output = detect_spots_multiple(
-            fov_img_pairs=self.iter_fov_img_pairs(), 
-            timepoint_specs=list(self.iter_timepoint_threshold_pairs()), 
-            channels=list(self.spot_channel), 
-            spot_detection_parameters=params, 
-            parallelise=self.parallelise,
+        
+        def get_fov_img_pairs() -> Iterable[tuple[str, np.ndarray]]:
+            for raw_fov, img in self.iter_fov_img_pairs():
+                match parse_field_of_view_one_based_from_position_name_representation(raw_fov.removesuffix(".zarr")):
+                    case result.Result(tag="error", error=err_msg):
+                        raise Exception(f"Could not parse FOV (from {raw_fov}): {err_msg}")
+                    case result.Result(tag="ok", ok=fov):
+                        yield get_fov_name_short(fov), img
+        
+        time_specs: list[SingleTimepointDetectionSpec] = list(self.iter_timepoint_threshold_pairs())
+        channels: list[int] = list(self.spot_channel)
+        subframes: list[tuple[str, pd.DataFrame]] = []
+
+        if self._parallelise:
+            logging.info("Running spot detection in parallel")
+            subframes = Parallel(n_jobs=-1)(
+                delayed(build_spot_prop_table)(
+                    img=img, 
+                    field_of_view=fov, 
+                    channel=ch, 
+                    timepoint_spec=spec, 
+                    detection_parameters=self.detection_parameters,
+                    )
+                for fov, img in tqdm.tqdm(get_fov_img_pairs()) 
+                for spec in time_specs for ch in channels
             )
-        outfile = outfile or self.image_handler.raw_spots_file
-        n_spots = output.shape[0]
-        (logger.warning if n_spots == 0 else logger.info)(f"Writing initial spot ROIs with {n_spots} spot(s): {outfile}")
+        else:
+            logging.info("Running spot detection serially")
+            for fov, img in tqdm.tqdm(get_fov_img_pairs()):
+                for spec in tqdm.tqdm(time_specs):
+                    for ch in channels:
+                        fov, spots = build_spot_prop_table(
+                            img=img, 
+                            field_of_view=fov, 
+                            channel=ch, 
+                            timepoint_spec=spec, 
+                            detection_parameters=self.detection_parameters
+                        )
+                        print(f"Spot count ({fov}): {len(spots)}")
+                        subframes.append((fov, spots))
         
-        # Here we introduce the RoiIndexColumnName field, giving each ROI an ID.
-        # TODO: update with https://github.com/gerlichlab/looptrace/issues/354
-        output.to_csv(outfile, index_label="index")
-        
-        return outfile
+        whole_spots_table: pd.DataFrame = pd.concat(map(fst, subframes)).reset_index(drop=True)
+        output_files: list[tuple[str, Path]] = []
+        for fov, subtab in whole_spots_table.groupby(FIELD_OF_VIEW_COLUMN):
+            outfile = self.image_handler.fish_spots_folder / (fov + "_rois" + ".csv")
+            # Here we introduce the RoiIndexColumnName field, giving each ROI an ID.
+            # TODO: update with https://github.com/gerlichlab/looptrace/issues/354
+            subtab.to_csv(outfile, index_label="index")
+            output_files.append((fov, outfile))
+                
+        return output_files
 
     def make_dc_rois_all_timepoints(self) -> str:
         #Precalculate all ROIs for extracting spot images, based on identified ROIs and precalculated drifts between timepoints.

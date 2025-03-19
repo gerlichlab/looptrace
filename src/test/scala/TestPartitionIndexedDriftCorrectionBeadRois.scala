@@ -281,7 +281,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     test("Input discovery works as expected for folder with no other contents.") {
         forAll (genDistinctNonnegativePairs) { case (pt1, pt2) => {
             withTempDirectory{ (p: os.Path) => 
-                val expected = Set(pt1, pt2).map(pt => pt -> (p / getInputFilename(pt._1, pt._2)))
+                val expected = Set(pt1, pt2).map{ pt => pt -> (p / getInputFilename(pt._1, pt._2)) }
 
                 /* Check that inputs don't already exist, then establish them and check existence. */
                 val expPaths = expected.map(_._2)
@@ -747,6 +747,8 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
         ParserConfig.qcCol,
     )
 
+    def getInputFilename = (p: FieldOfView, t: ImagingTimepoint) => BeadsFilenameDefinition(p, t).getInputFilename
+
     /**
      * Generate collection of detected ROIs in which usability is mixed, for tests where percentage/ratio should be irrelevant.
      * 
@@ -800,10 +802,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
         Gen.zip(arbitrary[(NonnegativeInt, NonnegativeInt)], arbitrary[(NonnegativeInt, NonnegativeInt)])
             .suchThat{ case (p1, p2) => p1 =!= p2 }
             .map { case ((p1, f1), (p2, f2)) => (FieldOfView(p1) -> ImagingTimepoint(f1), FieldOfView(p2) -> ImagingTimepoint(f2)) }
-    
-    /** Infer detected bead ROIs filename for particular field of view (@code pos) and timepoint ({@code time}). */
-    def getInputFilename(pos: FieldOfView, time: ImagingTimepoint): String = s"${BeadRoisPrefix}_${pos.show_}_${time.show_}.csv"
-    
+        
     /** Limit the number of ROIs generated to keep test cases (relatively) small even without shrinking. */
     def maxNumRoisSmallTests: ShiftingCount = ShiftingCount.unsafe(2 * ShiftingCount.AbsoluteMinimumShifting)
 

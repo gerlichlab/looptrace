@@ -28,10 +28,9 @@ def workflow(
     params_config: ExtantFile, 
     images_folder: ExtantFolder, 
     image_save_path: Optional[ExtantFolder] = None, 
-    outfile: Optional[Union[str, Path]] = None,
     # for additional provenance if desired, to see what the ImageHandler's config looked like
     write_config_path: Optional[str] = None, 
-    ) -> Optional[Path]:
+) -> list[tuple[str, Path]]:
     image_handler = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder, image_save_path=image_save_path)
     if write_config_path:
         # for additional provenance if desired, to see what the ImageHandler's config looked like
@@ -39,7 +38,7 @@ def workflow(
         with open(write_config_path, 'w') as fh:
             json.dump(image_handler.config, fh, indent=4)
     S = SpotPicker(image_handler)
-    return S.rois_from_spots(outfile=outfile)
+    return S.rois_from_spots()
 
 
 if __name__ == "__main__":
