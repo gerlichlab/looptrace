@@ -322,10 +322,6 @@ class ImageHandler:
         return self.images[self.reg_input_template]
 
     @property
-    def filter_spots_before_merge(self) -> bool:
-        return self.config.get("filter_spots_before_merge", False)
-
-    @property
     def fish_spots_folder(self) -> Path:
         return Path(self.analysis_path) / "fish_spots"
 

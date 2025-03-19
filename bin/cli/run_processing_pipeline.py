@@ -41,7 +41,6 @@ from detect_spots import workflow as run_spot_detection
 from assign_spots_to_nucs import (
     NUC_LABEL_COL, 
     add_nucleus_labels, 
-    run_labeling as label_spots_with_nuclei, 
     workflow as run_spot_nucleus_assignment,
 )
 from partition_regional_spots_for_locus_spots_visualisation import workflow as prep_regional_spots_visualisation
@@ -425,7 +424,7 @@ def run_spot_merge_determination(rounds_config: ExtantFile, params_config: Extan
         str(LOOPTRACE_JAR_PATH),
         prog_path, 
         "-I",
-        str(H.spots_prefiltered_through_nuclei_file if H.filter_spots_before_merge else H.raw_spots_file),
+        str(H.raw_spots_file),
         "-D", 
         str(H.config[KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS]),
         "-O",
@@ -472,29 +471,6 @@ def filter_spots_for_nuclei(rounds_config: ExtantFile, params_config: ExtantFile
     logging.debug(f"Writing ROIs: {H.nuclei_filtered_spots_file_path}")
     rois.to_csv(H.nuclei_filtered_spots_file_path, index=False)
     logging.info("Done with nuclei-based spot filtration")
-
-
-def prefilter_spots_for_nuclei(rounds_config: ExtantFile, params_config: ExtantFile, images_folder: ExtantFolder) -> None:
-    H = ImageHandler(rounds_config=rounds_config, params_config=params_config, images_folder=images_folder)
-    if not H.filter_spots_before_merge:
-        logging.info("filter_spots_before_merge is False, nothing to do, skipping nuclei-based prefiltration")
-        return
-    rois_file: Path = H.raw_spots_file
-    logging.info(f"Reading ROIs file for pre-merge filtration: {rois_file}")
-    rois: pd.DataFrame = pd.read_csv(rois_file, index_col=False)
-    logging.debug(f"Initial ROI count: {rois.shape[0]}")
-    rois: pd.DataFrame = label_spots_with_nuclei(
-        rois=rois, 
-        image_handler=H, 
-        timepoint=Option.Nothing(),
-        remove_zarr_suffix=True,
-    )
-    rois = rois[rois[NUC_LABEL_COL] != 0]
-    logging.debug(f"ROIs remaining after prefiltration through nuclei: {rois.shape[0]}")
-    rois = rois.drop([NUC_LABEL_COL], axis="columns")
-    logging.debug(f"Writing ROIs: {H.spots_prefiltered_through_nuclei_file}")
-    rois.to_csv(H.spots_prefiltered_through_nuclei_file, index=False)
-    logging.info("Done with nuclei-based spot prefiltration")
 
 
 def discard_beads_in_nuclei(
@@ -643,11 +619,6 @@ class LooptracePipeline(pypiper.Pipeline):
                 name="spot_bead_proximity_filtration", 
                 func=discard_spots_close_to_beads, 
                 f_kwargs=rounds_params, # Images are not needed since only bead coordinates and spot coordinates are needed.
-            ), 
-            pypiper.Stage(
-                name="pre_merge_filtration_through_nuclei", 
-                func=prefilter_spots_for_nuclei, 
-                f_kwargs=rounds_params_images, # Images are needed since H.image_lists is iterated in workflow.
             ), 
             pypiper.Stage(name="spot_merge_determination", func=run_spot_merge_determination, f_kwargs=rounds_params),
             pypiper.Stage(name="spot_merge_execution", func=run_spot_merge_execution, f_kwargs=rounds_params),
