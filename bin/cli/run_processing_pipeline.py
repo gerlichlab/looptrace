@@ -531,7 +531,31 @@ def discard_beads_in_nuclei(
 
 
 def discard_spots_close_to_beads(rounds_config: ExtantFile, params_config: ExtantFile) -> None:
-    raise NotImplementedError("Spot discard by bead proximity isn't yet implemented.")
+    H = ImageHandler(rounds_config=rounds_config, params_config=params_config)
+    
+    # Command construction, printing, and execution
+    prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.FilterSpotsByBeads"
+    cmd_parts = [
+        "java", 
+        "-cp",
+        str(LOOPTRACE_JAR_PATH),
+        prog_path, 
+        "--spotsFolder",
+        str(H.fish_spots_folder),
+        "--beadsFolder",
+        str(H.bead_rois_path),
+        "--driftFile",
+        str(H.drift_correction_file__fine),
+        "--filteredOutputFile",
+        str(H.raw_spots_file),
+        "--distanceThreshold",
+        str(H.config["beadSpotProximityDistance"]),
+        "--spotlessTimepoint",
+        str(H.bead_timepoint_for_spot_filtration.get),
+        "--overwrite"
+    ]
+    logging.info(f"Filtering FISH spots by proximity to beads: {' '.join(cmd_parts)}")
+    subprocess.check_call(cmd_parts)
 
 
 def validate_roi_mergers(rounds_config: ExtantFile, params_config: ExtantFile) -> None:
@@ -616,15 +640,15 @@ class LooptracePipeline(pypiper.Pipeline):
             ), 
             pypiper.Stage(name=SPOT_DETECTION_STAGE_NAME, func=run_spot_detection, f_kwargs=rounds_params_images), # generates *_rois.csv (regional spots)
             pypiper.Stage(
+                name="spot_bead_proximity_filtration", 
+                func=discard_spots_close_to_beads, 
+                f_kwargs=rounds_params, # Images are not needed since only bead coordinates and spot coordinates are needed.
+            ), 
+            pypiper.Stage(
                 name="pre_merge_filtration_through_nuclei", 
                 func=prefilter_spots_for_nuclei, 
                 f_kwargs=rounds_params_images, # Images are needed since H.image_lists is iterated in workflow.
             ), 
-            # pypiper.Stage(
-            #     name="spot_bead_proximity_filtration", 
-            #     func=discard_spots_close_to_beads, 
-            #     f_kwargs=rounds_params, # Images are not needed since only bead coordinates and spot coordinates are needed.
-            # ), 
             pypiper.Stage(name="spot_merge_determination", func=run_spot_merge_determination, f_kwargs=rounds_params),
             pypiper.Stage(name="spot_merge_execution", func=run_spot_merge_execution, f_kwargs=rounds_params),
             pypiper.Stage(name="spot_proximity_filtration", func=run_spot_proximity_filtration, f_kwargs=rounds_params_images),

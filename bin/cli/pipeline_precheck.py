@@ -6,11 +6,13 @@ from pathlib import Path
 from typing import *
 import warnings
 
+from expression import result
 from gertils import ExtantFile
 
 from looptrace import ConfigurationValueError, Drifter, LOOPTRACE_JAR_PATH, ZARR_CONVERSIONS_KEY
-from looptrace.configuration import IMAGING_ROUNDS_KEY, KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS, get_minimum_regional_spot_separation, read_parameters_configuration_file
+from looptrace.configuration import KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS, get_minimum_regional_spot_separation, read_parameters_configuration_file
 from looptrace.Deconvolver import REQ_GPU_KEY
+from looptrace.ImageHandler import determine_bead_timepoint_for_spot_filtration
 from looptrace.NucDetector import NucDetector, SegmentationMethod as NucSegMethod
 from looptrace.SpotPicker import DetectionMethod, CROSSTALK_SUBTRACTION_KEY, DETECTION_METHOD_KEY as SPOT_DETECTION_METHOD_KEY
 from looptrace.Tracer import MASK_FITS_ERROR_MESSAGE
@@ -149,20 +151,13 @@ def find_config_file_errors(rounds_config: ExtantFile, params_config: ExtantFile
             ))
 
     # Spot filtration
-    bead_spot_filtration_key: Literal["proximityFiltrationBetweenBeadsAndSpots"] = "proximityFiltrationBetweenBeadsAndSpots"
-    match parameters.get(bead_spot_filtration_key):
-        case (None | bool()):
-            pass # No problem for validation, the proximity-based merge b/w beads and FISH spots simply won't be done.
-        case int(t):
-            num_timepoints: int = len(rounds_config[IMAGING_ROUNDS_KEY])
-            if t < 0 or t >= num_timepoints:
-                errors.append(ConfigurationValueError(
-                    f"Timepoint for proximity-based filtration between beads and FISH spots is illegal, given that there are {num_timepoints} timepoints: {t}"
-                ))
-        case obj:
-            errors.append(ConfigurationValueError(
-                f"Bead-to-spot proximity-based filtration key ({bead_spot_filtration_key}) has value of illegal type: {type(obj).__name__}")
-            )
+    match determine_bead_timepoint_for_spot_filtration(params_config=parameters, rounds_config=rounds_config):
+        case result.Result(tag="ok", ok=_):
+            pass # OK, nothing to do
+        case result.Result(tag="error", error=err):
+            errors.append(err)
+        case outcome:
+            raise Exception(f"Unexpected outcome from determination of beads timepoint for spot filtration: {outcome}")
 
     # Tracing
     if parameters.get("mask_fits", False):

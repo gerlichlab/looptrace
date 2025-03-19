@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import *
 
 import dask.array as da
+from expression import Option, Result, result
 import numpy as np
 from numpydoc_decorator import doc
 import pandas as pd
@@ -41,6 +42,52 @@ logger = logging.getLogger()
 Times: TypeAlias = set[TimepointFrom0]
 LocusGroupingData: TypeAlias = dict[TimepointFrom0, Times]
 PathFilter: TypeAlias = Callable[[Union[os.DirEntry, Path]], bool]
+ImageRound: TypeAlias = Mapping[str, object]
+
+_BACKGROUND_SUBTRACTION_TIMEPOINT_KEY = "subtract_background"
+
+
+def _get_bead_timepoint_for_spot_filtration(params_config: Mapping[str, object]) -> Result[Option[int], str]:
+    bead_spot_filtration_key: Literal["proximityFiltrationBetweenBeadsAndSpots"] = "proximityFiltrationBetweenBeadsAndSpots"
+    match params_config.get(bead_spot_filtration_key):
+        case (None | False):
+            return Result.Ok(Option.Nothing())
+        case True:
+            return Option\
+                .of_optional(params_config.get(_BACKGROUND_SUBTRACTION_TIMEPOINT_KEY))\
+                .to_result(
+                    f"Bead spot filtration key ({bead_spot_filtration_key}) is True, but backgrond subtraction timepoint key ({_BACKGROUND_SUBTRACTION_TIMEPOINT_KEY}) is absent"
+                )\
+                .map(Option.Some)
+        case int(t):
+            return Result.Ok(Option.Some(t))
+        case obj:
+            return Result.Error(
+                f"Bead-to-spot proximity-based filtration key ({bead_spot_filtration_key}) has value of illegal type: {type(obj).__name__}"
+            )
+
+
+def _invalidate_beads_timepoint_for_spot_filtration(
+    *, 
+    beads_timepoint: int, 
+    rounds: Iterable[ImageRound],
+) -> Result[int, str]:
+    for r in rounds:
+        if r["time"] == beads_timepoint:
+            if r.get("isBlank", False):
+                return Result.Ok(beads_timepoint)
+            return Result.Error(f"The imaging round for beads timepoint {beads_timepoint} isn't tagged as being blank")
+    return Result.Error(f"No imaging round corresponds to the given beads timepoint ({beads_timepoint})")
+
+
+def determine_bead_timepoint_for_spot_filtration(
+    *, 
+    params_config: Mapping[str, object], 
+    image_rounds: Iterable[ImageRound],
+) -> Result[int, ConfigurationValueError]:
+    return _get_bead_timepoint_for_spot_filtration(params_config)\
+        .bind(lambda maybe_time: maybe_time.to_result("Could not get timepoint for filtration of spots by bead proximity"))\
+        .bind(lambda t: _invalidate_beads_timepoint_for_spot_filtration(beads_timepoint=t, rounds=image_rounds))
 
 
 @doc(
@@ -180,11 +227,24 @@ class ImageHandler:
 
     @property
     def background_subtraction_timepoint(self) -> Optional[int]:
-        return self.config.get("subtract_background")
+        return self.config.get(_BACKGROUND_SUBTRACTION_TIMEPOINT_KEY)
     
     @property
     def bead_rois_path(self) -> Path:
         return Path(self.analysis_path) / "bead_rois"
+
+    @property
+    def bead_timepoint_for_spot_filtration(self) -> TimepointFrom0:
+        match determine_bead_timepoint_for_spot_filtration(
+            params_config=self.config, 
+            image_rounds=self.config[IMAGING_ROUNDS_KEY],
+        ):
+            case result.Result(tag="ok", ok=t):
+                return TimepointFrom0(t)
+            case result.Result(tag="error", error=err):
+                raise err
+            case outcome:
+                raise Exception(f"Unexpected outcome of determination of bead timepoint for spot filtration: {outcome}")
 
     def get_bead_rois_file(self, fov_idx: int, timepoint: int, purpose: Optional[str]) -> ExtantFile:
         filename = bead_rois_filename(fov_idx=fov_idx, timepoint=timepoint, purpose=purpose)
@@ -265,6 +325,10 @@ class ImageHandler:
     def filter_spots_before_merge(self) -> bool:
         return self.config.get("filter_spots_before_merge", False)
 
+    @property
+    def fish_spots_folder(self) -> Path:
+        return Path(self.analysis_path) / "fish_spots"
+
     def get_dc_filepath(self, prefix: str, suffix: str) -> Path:
         return Path(self.out_path(prefix + "_drift_correction" + suffix))
 
@@ -276,7 +340,7 @@ class ImageHandler:
             raise ConfigurationValueError("No locus grouping present!")
         return self.locus_grouping.get(regional_timepoint, set())
 
-    def iter_imaging_rounds(self) -> Iterable[Mapping[str, object]]:
+    def iter_imaging_rounds(self) -> Iterable[ImageRound]:
         return sorted(self.config[IMAGING_ROUNDS_KEY], key=lambda r: r["time"])
 
     def list_all_regional_timepoints(self) -> list[TimepointFrom0]:

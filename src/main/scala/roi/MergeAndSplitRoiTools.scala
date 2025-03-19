@@ -339,7 +339,8 @@ object MergeAndSplitRoiTools extends LazyLogging:
         context: ImagingContext, 
         centroid: Centroid[Double],
         box: BoundingBox, 
-    )
+    ):
+        final def timepoint: ImagingTimepoint = context.timepoint
 
     private[looptrace] object IndexedDetectedSpot:
         given AdmitsRoiIndex[IndexedDetectedSpot] = AdmitsRoiIndex.instance(_.index)

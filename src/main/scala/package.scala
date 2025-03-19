@@ -10,14 +10,15 @@ import mouse.boolean.*
 import scopt.Read
 
 import upickle.default.{ Reader as JsonReader }
-import io.github.iltotore.iron.{ :|, refineEither }
+import io.github.iltotore.iron.{ :|, refineEither, refineUnsafe }
 import io.github.iltotore.iron.constraint.any.{ StrictEqual, Not }
-import io.github.iltotore.iron.constraint.string.Match
-import io.github.iltotore.iron.constraint.collection.{ Empty, ForAll }
 import io.github.iltotore.iron.constraint.char.*
+import io.github.iltotore.iron.constraint.collection.{ Empty, ForAll }
+import io.github.iltotore.iron.constraint.numeric.{ GreaterEqual, Less }
+import io.github.iltotore.iron.constraint.string.Match
 
 import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow
-import at.ac.oeaw.imba.gerlich.gerlib.imaging.{ ImagingTimepoint, PositionName }
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.{ FieldOfView, ImagingTimepoint, PositionName }
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.json.JsonValueWriter
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
@@ -189,6 +190,15 @@ package object looptrace {
         def unsafe = NonnegativeInt.unsafe.andThen(TraceId.apply)
     end TraceId
 
+    private type FourDigitOneBasedRepresentableFieldOfViewConstraint = GreaterEqual[0] & Less[9999]
+
+    type FourDigitOneBasedRepresentableFieldOfView = Int :| FourDigitOneBasedRepresentableFieldOfViewConstraint
+
+    object FourDigitOneBasedRepresentableFieldOfView:
+        def fromFieldOfView(fov: FieldOfView): Either[String, FourDigitOneBasedRepresentableFieldOfView] = 
+            (fov.getRawValue : Int).refineEither[FourDigitOneBasedRepresentableFieldOfViewConstraint]
+    end FourDigitOneBasedRepresentableFieldOfView
+
     // A 1-based count encoding of the field of view, prefixed with "P" for "position", and 4 digits to hold up to 9999 FOVs
     private type OneBasedFourDigitPositionNameConstraint = Match["P\\d{4}"] & Not[StrictEqual["P0000"]]
     
@@ -201,7 +211,17 @@ package object looptrace {
         def fromPositionName: PositionName => Either[String, OneBasedFourDigitPositionName] = 
             ((_: PositionName).show_) `andThen` fromString(true)
         
-        private def fromString(trimZarr: Boolean): String => Either[String, OneBasedFourDigitPositionName] = 
+        def fromString(trimZarr: Boolean): String => Either[String, OneBasedFourDigitPositionName] = 
             s => (if trimZarr then s.stripSuffix(".zarr") else s).refineEither[OneBasedFourDigitPositionNameConstraint]
+
+        def fromFieldOfView(fov: FieldOfView): Either[String, OneBasedFourDigitPositionName] = 
+            FourDigitOneBasedRepresentableFieldOfView
+                .fromFieldOfView(fov)
+                .map(refFov => ("P" ++ "%04d".format(refFov)).refineUnsafe[OneBasedFourDigitPositionNameConstraint])
+
+        extension (pn: OneBasedFourDigitPositionName)
+            def toFieldOfView: FieldOfView = pn match {
+                case s"P$rawFov" => FieldOfView.unsafeLift(rawFov.toInt - 1)
+            }
     end OneBasedFourDigitPositionName
 }
