@@ -10,7 +10,7 @@ from expression import result
 from gertils import ExtantFile
 
 from looptrace import ConfigurationValueError, Drifter, LOOPTRACE_JAR_PATH, ZARR_CONVERSIONS_KEY
-from looptrace.configuration import KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS, get_minimum_regional_spot_separation, read_parameters_configuration_file
+from looptrace.configuration import IMAGING_ROUNDS_KEY, KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS, get_minimum_regional_spot_separation, read_parameters_configuration_file
 from looptrace.Deconvolver import REQ_GPU_KEY
 from looptrace.ImageHandler import determine_bead_timepoint_for_spot_filtration
 from looptrace.NucDetector import NucDetector, SegmentationMethod as NucSegMethod
@@ -151,7 +151,10 @@ def find_config_file_errors(rounds_config: ExtantFile, params_config: ExtantFile
             ))
 
     # Spot filtration
-    match determine_bead_timepoint_for_spot_filtration(params_config=parameters, rounds_config=rounds_config):
+    match determine_bead_timepoint_for_spot_filtration(
+        params_config=parameters, 
+        image_rounds=rounds_config[IMAGING_ROUNDS_KEY],
+    ):
         case result.Result(tag="ok", ok=_):
             pass # OK, nothing to do
         case result.Result(tag="error", error=err):
