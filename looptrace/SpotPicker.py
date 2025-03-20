@@ -496,6 +496,9 @@ class SpotPicker:
                         subframes.append(spots)
         
         whole_spots_table: pd.DataFrame = pd.concat(subframes).reset_index(drop=True)
+        
+        if not self.image_handler.fish_spots_folder.exists():
+            self.image_handler.fish_spots_folder.mkdir()
         output_files: list[tuple[str, Path]] = []
         for fov, subtab in whole_spots_table.groupby(FIELD_OF_VIEW_COLUMN):
             outfile = self.image_handler.fish_spots_folder / (fov + "_rois" + ".csv")
