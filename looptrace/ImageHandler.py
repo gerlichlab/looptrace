@@ -173,9 +173,9 @@ def _read_bead_rois_file(fp: ExtantFile) -> Iterable[tuple[int, Point3D]]:
         for obj in json.load(fh):
             i = obj["index"]
             p = Point3D(
-                x=obj["x"], 
-                y=obj["y"], 
-                z=obj["z"],
+                x=obj["xc"], 
+                y=obj["yc"], 
+                z=obj["zc"],
             )
             yield i, p
 
