@@ -208,7 +208,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
 
     def discoverInputs(inputsFolder: os.Path): Set[InitFile] = {
         val prepFileMeta: os.Path => Option[InitFile] = filepath => 
-            BeadsFilenameDefinition.fromPath(filepath).map{ fnDef => (fnDef.fieldOfView -> fnDef.timepoint) -> filepath }
+            BeadsFilenameDefinition.fromFilteredPath(filepath).map{ fnDef => (fnDef.fieldOfView -> fnDef.timepoint) -> filepath }
         val results = os.list(inputsFolder).filter(os.isFile).toList.flatMap(prepFileMeta)
         val histogram = results.groupBy(_._1).filter(_._2.length > 1)
         if histogram.nonEmpty then {
@@ -344,19 +344,25 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
     end BeadsFilenameDefinition
 
     object BeadsFilenameDefinition:        
-        def fromPath: os.Path => Option[BeadsFilenameDefinition] = p => fromFilename(p.last)
+        def fromFilteredPath = (_: os.Path).last match {
+            case s"$prefix.filtered.csv" => fromPrefix(prefix)
+            case _ => None
+        }
+        
+        def fromUnfilteredPath = (_: os.Path).last match {
+            case s"$prefix.csv" => fromPrefix(prefix)
+            case _ => None
+        }
 
-        private def fromFilename: String => Option[BeadsFilenameDefinition] = s => 
-            for
-                _ <- s.startsWith(BeadRoisPrefix).option(()) // Check for proper prefix. 
-                (rawFoV, rawTime) <- 
-                    s.split("\\.").head.stripPrefix(BeadRoisPrefix).split("_").toList match {
-                        case "" :: p :: t :: Nil => (p, t).some
-                        case _ => None
-                    }
-                fov <- readNonNegInt(rawFoV).map(FieldOfView.apply) // Parse the field of view.
-                tp <- readNonNegInt(rawTime).map(ImagingTimepoint.apply) // Parse the timepoint.
-            yield BeadsFilenameDefinition(fov, tp)
+        private def fromPrefix = (_: String) match {
+            case s"bead_rois__${fov}_${time}" => fromRaw(fov, time)
+            case _ => None
+        }
+
+        private def fromRaw(fov: String, time: String): Option[BeadsFilenameDefinition] = (
+            readNonNegInt(fov).map(FieldOfView.apply), 
+            readNonNegInt(time).map(ImagingTimepoint.apply)
+        ).mapN(BeadsFilenameDefinition.apply)
 
         private def readNonNegInt: String => Option[NonnegativeInt] = s => 
             Try(s.toInt).toOption.flatMap(NonnegativeInt.maybe)
