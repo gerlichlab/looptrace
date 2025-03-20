@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import *
 
 import dask.array as da
-from expression import Option, Result, result
+from expression import Option, Result, option, result
 import numpy as np
 from numpydoc_decorator import doc
 import pandas as pd
@@ -24,7 +24,6 @@ import yaml
 from gertils import ExtantFile
 from gertils.types import TimepointFrom0
 
-from looptrace.configuration import IMAGING_ROUNDS_KEY, get_minimum_regional_spot_separation
 from looptrace import (
     FIELD_OF_VIEW_COLUMN, 
     X_CENTER_COLNAME,
@@ -34,6 +33,7 @@ from looptrace import (
     ConfigurationValueError, 
     RoiImageSize,
 )
+from looptrace.configuration import IMAGING_ROUNDS_KEY, TRACING_SUPPORT_EXCLUSIONS_KEY, get_minimum_regional_spot_separation
 from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, FilePathLike, FolderPathLike, get_analysis_path, simplify_path
 from looptrace.geometry import Point3D
 from looptrace.image_io import ignore_path, NPZ_wrapper
@@ -249,7 +249,7 @@ class ImageHandler:
     def bead_timepoint_for_spot_filtration(self) -> TimepointFrom0:
         match determine_bead_timepoint_for_spot_filtration(
             params_config=self.config, 
-            image_rounds=self.config[IMAGING_ROUNDS_KEY],
+            image_rounds=self.iter_imaging_rounds(),
         ):
             case result.Result(tag="ok", ok=t):
                 return TimepointFrom0(t)
@@ -353,6 +353,13 @@ class ImageHandler:
 
     def list_all_regional_timepoints(self) -> list[TimepointFrom0]:
         return list(sorted(TimepointFrom0(r["time"]) for r in self.iter_imaging_rounds() if r.get("isRegional", False)))
+
+    def list_locus_specific_imaging_timepoints_eligible_for_extraction(self) -> list[TimepointFrom0]:
+        match Option.of_optional(self.locus_grouping):
+            case option.Option(tag="none", none=_):
+                return [TimepointFrom0(r["time"]) for r in self.iter_imaging_rounds() if not r.get("isRegional", False)]
+            case option.Option(tag="some", some=grouping):
+                return list(sorted(t for ts in grouping.values() for t in ts))
 
     def list_regional_imaging_timepoints_eligible_for_extraction(self) -> list[TimepointFrom0]:
         lg = self.locus_grouping
@@ -571,6 +578,10 @@ class ImageHandler:
         # Written by the label-and-filter traces QC program, consumed by the spots plotter
         # Should not contain things like blank timepoints and regional barcode timepoints
         return self.traces_path.with_suffix(".enriched.unfiltered.csv")
+
+    @property
+    def tracing_exclusions(self) -> set[TimepointFrom0]:
+        return set(map(TimepointFrom0, self.config.get(TRACING_SUPPORT_EXCLUSIONS_KEY, [])))
 
     @property
     def zarr_conversions(self) -> Mapping[str, str]:

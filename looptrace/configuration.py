@@ -21,6 +21,7 @@ IMAGING_ROUNDS_KEY = "imagingRounds"
 KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS = "pixelSeparationBeneathWhichSpotRoisWillMerge"
 MINIMUM_SPOT_SEPARATION_KEY = "minimumPixelLikeSeparation"
 SEMANTIC_KEY = "semantic"
+TRACING_SUPPORT_EXCLUSIONS_KEY = "tracingExclusions"
 
 
 def get_minimum_regional_spot_separation(conf_data: Mapping[str, object]) -> int:
