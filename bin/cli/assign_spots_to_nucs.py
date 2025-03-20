@@ -12,15 +12,15 @@ import pandas as pd
 import tqdm
 
 from gertils import ExtantFile, ExtantFolder
-from looptrace import DimensionalityError
-from looptrace import FIELD_OF_VIEW_COLUMN
-from looptrace.ImageHandler import ImageHandler
-from looptrace.NucDetector import NucDetector
-from looptrace.image_processing_functions import (
+from looptrace import (
+    FIELD_OF_VIEW_COLUMN,
     X_CENTER_COLNAME, 
     Y_CENTER_COLNAME, 
     Z_CENTER_COLNAME, 
+    DimensionalityError,
 )
+from looptrace.ImageHandler import ImageHandler
+from looptrace.NucDetector import NucDetector
 
 __author__ = "Kai Sandvold Beckwith"
 __credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]

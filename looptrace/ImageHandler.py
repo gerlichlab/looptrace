@@ -24,8 +24,16 @@ import yaml
 from gertils import ExtantFile
 from gertils.types import TimepointFrom0
 
-from looptrace import FIELD_OF_VIEW_COLUMN, ZARR_CONVERSIONS_KEY, ConfigurationValueError, RoiImageSize
 from looptrace.configuration import IMAGING_ROUNDS_KEY, get_minimum_regional_spot_separation
+from looptrace import (
+    FIELD_OF_VIEW_COLUMN, 
+    X_CENTER_COLNAME,
+    Y_CENTER_COLNAME, 
+    Z_CENTER_COLNAME, 
+    ZARR_CONVERSIONS_KEY, 
+    ConfigurationValueError, 
+    RoiImageSize,
+)
 from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, FilePathLike, FolderPathLike, get_analysis_path, simplify_path
 from looptrace.geometry import Point3D
 from looptrace.image_io import ignore_path, NPZ_wrapper
@@ -175,9 +183,9 @@ def _read_bead_rois_file(fp: ExtantFile) -> Iterable[tuple[int, Point3D]]:
             i = obj["index"]
             centroid = obj[CENTROID_KEY]
             p = Point3D(
-                x=centroid["xc"], 
-                y=centroid["yc"], 
-                z=centroid["zc"],
+                x=centroid[X_CENTER_COLNAME], 
+                y=centroid[Y_CENTER_COLNAME], 
+                z=centroid[Z_CENTER_COLNAME],
             )
             yield i, p
 

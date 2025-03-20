@@ -31,7 +31,7 @@ from gertils.types import TimepointFrom0
 import spotfishing
 from spotfishing_looptrace import DifferenceOfGaussiansSpecificationForLooptrace, ORIGINAL_LOOPTRACE_DOG_SPECIFICATION
 
-from looptrace import FIELD_OF_VIEW_COLUMN, ArrayDimensionalityError, RoiImageSize, image_processing_functions as ip
+from looptrace import FIELD_OF_VIEW_COLUMN, Z_CENTER_COLNAME, Y_CENTER_COLNAME, X_CENTER_COLNAME, ArrayDimensionalityError, RoiImageSize, image_processing_functions as ip
 from looptrace.filepaths import SPOT_BACKGROUND_SUBFOLDER, SPOT_IMAGES_SUBFOLDER, simplify_path
 from looptrace.integer_naming import get_fov_name_short, parse_field_of_view_one_based_from_position_name_representation
 from looptrace.numeric_types import NumberLike
@@ -166,7 +166,7 @@ def detect_spot_single_fov_single_timepoint(
     spot_detection_result: spotfishing.DetectionResult = detection_parameters.detection_function(img, threshold=spot_threshold)
     spot_props: pd.DataFrame = spot_detection_result.table
     spot_props = detection_parameters.try_centering_spot_box_coordinates(spots_table=spot_props)
-    columns_to_scale = ["zMin", "yMin", "xMin", "zMax", "yMax", "xMax", "zc", "yc", "xc"]
+    columns_to_scale = ["zMin", "yMin", "xMin", "zMax", "yMax", "xMax", Z_CENTER_COLNAME, Y_CENTER_COLNAME, X_CENTER_COLNAME]
     spot_props[columns_to_scale] = spot_props[columns_to_scale] * detection_parameters.downsampling
     return spot_props
 
@@ -792,12 +792,12 @@ def extract_single_roi_img_inmem(
 def roi_center_to_bbox(rois: pd.DataFrame, roi_size: RoiImageSize):
     """Make bounding box coordinates around centers of regions of interest, based on box dimensions."""
     halved = roi_size.div_by(2)
-    rois["zMin"] = rois["zc"] - halved.z
-    rois["zMax"] = rois["zc"] + halved.z
-    rois["yMin"] = rois["yc"] - halved.y
-    rois["yMax"] = rois["yc"] + halved.y
-    rois["xMin"] = rois["xc"] - halved.x
-    rois["xMax"] = rois["xc"] + halved.x
+    rois["zMin"] = rois[Z_CENTER_COLNAME] - halved.z
+    rois["zMax"] = rois[Z_CENTER_COLNAME] + halved.z
+    rois["yMin"] = rois[Y_CENTER_COLNAME] - halved.y
+    rois["yMax"] = rois[Y_CENTER_COLNAME] + halved.y
+    rois["xMin"] = rois[X_CENTER_COLNAME] - halved.x
+    rois["xMax"] = rois[X_CENTER_COLNAME] + halved.x
     return rois
 
 

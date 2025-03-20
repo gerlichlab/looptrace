@@ -11,8 +11,8 @@ import pandas as pd
 from pandas.testing import assert_frame_equal
 import pytest
 
+from looptrace import Z_CENTER_COLNAME, Y_CENTER_COLNAME, X_CENTER_COLNAME
 from looptrace.SpotPicker import detect_spots_dog, detect_spots_int
-from looptrace.image_processing_functions import Z_CENTER_COLNAME, Y_CENTER_COLNAME, X_CENTER_COLNAME
 
 
 __author__ = "Vince Reuter"
