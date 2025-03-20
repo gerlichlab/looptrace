@@ -4,6 +4,8 @@ import attrs
 import importlib.resources
 from typing import *
 
+from spotfishing import RoiCenterKeys
+
 __all__ = [
     "FIELD_OF_VIEW_COLUMN",
     "LOOPTRACE_JAR_PATH", 
@@ -12,6 +14,9 @@ __all__ = [
     "SIGMA_XY_MAX_NAME",
     "SIGMA_Z_MAX_NAME",
     "SIGNAL_NOISE_RATIO_NAME",
+    "X_CENTER_COLNAME", 
+    "Y_CENTER_COLNAME", 
+    "Z_CENTER_COLNAME",
     "ZARR_CONVERSIONS_KEY",
     "ArrayDimensionalityError",
     "ConfigurationValueError",
@@ -30,6 +35,9 @@ MAX_DISTANCE_SPOT_FROM_REGION_NAME = "max_dist"
 SIGMA_XY_MAX_NAME = "sigma_xy_max"
 SIGMA_Z_MAX_NAME = "sigma_z_max"
 SIGNAL_NOISE_RATIO_NAME = "A_to_BG"
+X_CENTER_COLNAME = RoiCenterKeys.X.value
+Y_CENTER_COLNAME = RoiCenterKeys.Y.value
+Z_CENTER_COLNAME = RoiCenterKeys.Z.value
 ZARR_CONVERSIONS_KEY = "zarr_conversions"
 
 

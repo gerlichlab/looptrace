@@ -26,15 +26,17 @@ import tqdm
 
 from gertils import ExtantFolder
 
-from looptrace import ArrayDimensionalityError
+from looptrace import (
+    X_CENTER_COLNAME, 
+    Y_CENTER_COLNAME, 
+    Z_CENTER_COLNAME,
+    ArrayDimensionalityError,
+)
 from looptrace.ImageHandler import bead_rois_filename
 from looptrace.filepaths import simplify_path
 from looptrace.geometry import Point3D
 from looptrace.image_processing_functions import (
     CENTROID_KEY, 
-    X_CENTER_COLNAME, 
-    Y_CENTER_COLNAME, 
-    Z_CENTER_COLNAME,
     get_centroid_column_name_remapping,
 )
 from looptrace.numeric_types import NumberLike

@@ -19,15 +19,17 @@ from skimage.segmentation import clear_border
 from skimage.filters import gaussian, threshold_otsu
 from skimage.measure import regionprops_table
 
+from looptrace import (
+    Z_CENTER_COLNAME, 
+    Y_CENTER_COLNAME, 
+    X_CENTER_COLNAME,
+)
 from looptrace.wrappers import phase_xcor
 
 __author__ = "Kai Sandvold Beckwith"
 __credits__ = ["Kai Sandvold Beckwith", "Vince Reuter"]
 
 CENTROID_KEY = "centroid"
-X_CENTER_COLNAME = "xc"
-Y_CENTER_COLNAME = "yc"
-Z_CENTER_COLNAME = "zc"
 CENTROID_COLUMNS_REMAPPING = {
     f"{CENTROID_KEY}_weighted-0": Z_CENTER_COLNAME, 
     f"{CENTROID_KEY}_weighted-1": Y_CENTER_COLNAME, 
