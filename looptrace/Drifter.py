@@ -444,8 +444,8 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
             pass
 
 
-def _build_drift_row(*, timepoint: int, fov: str, coarse: Point3D, fine: Point3D) -> tuple[int, str, float, float, float, float, float, float]:
-    return (timepoint, fov, coarse.z, coarse.y, coarse.x, fine.z, fine.y, fine.x)
+def _build_drift_row(*, timepoint: int, fov: str, coarse: Point3D, fine: tuple[float, float, float]) -> tuple[int, str, float, float, float, float, float, float]:
+    return (timepoint, fov, coarse.z, coarse.y, coarse.x) + fine
 
 
 def finalise_fine_drift(drift: Iterable[np.ndarray]) -> Tuple[FloatLike, FloatLike, FloatLike]:
