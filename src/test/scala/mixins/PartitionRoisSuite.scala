@@ -13,7 +13,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionBeadRois
 trait PartitionRoisSuite extends LooptraceSuite:
 
     /** Arbitrary point, index, and usability flag lifted into detected ROI data type value */
-    given (arbComponents: Arbitrary[(RoiIndex, Point3D, RoiFailCode)]) => Arbitrary[FiducialBead] = 
+    given (arbComponents: Arbitrary[(RoiIndex, Point3D)]) => Arbitrary[FiducialBead] = 
         arbComponents.fmap(FiducialBead.apply.tupled)
     
     /** Arbitrary point, index, and lifted into shifting ROI data type value */

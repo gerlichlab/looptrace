@@ -334,7 +334,8 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
     }
 
     final case class BeadsFilenameDefinition(fieldOfView: FieldOfView, timepoint: ImagingTimepoint):
-        final def getInputFilename: String = getFilenameBase ++ ".csv"
+        final def getUnfilteredInputFilename: String = getFilenameBase ++ ".csv"
+        final def getFilteredInputFilename: String = getFilenameBase ++ ".filtered.csv"
         final def getOutputFilename(purpose: Purpose): String = getFilenameBase ++ "." ++ purpose.lowercase ++ ".json"
         private def getFilenameBase: String = s"${BeadRoisPrefix}_${fieldOfView.show_}_${timepoint.show_}"
     end BeadsFilenameDefinition
@@ -560,7 +561,6 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
         val xCol = XColumn("xc")
         val yCol = YColumn("yc")
         val zCol = ZColumn("zc")
-        val qcCol = "fail_code"
     end ParserConfig
 
     /** Name ROIs subfolder according to how the selected ROIs are to be used. */

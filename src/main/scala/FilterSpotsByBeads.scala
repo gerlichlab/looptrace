@@ -130,7 +130,7 @@ object FilterSpotsByBeads extends StrictLogging, ScoptCliReaders:
                         case (fovName, (spotsFileDef, beadsFileDef)) => 
                             val beadDrift = lookupTotalDrift(fovName -> opts.spotlessTimepoint)
                             val spotsFile = opts.spotsFolder / spotsFileDef.getInputFilename
-                            val beadsFile = opts.beadsFolder / beadsFileDef.getInputFilename
+                            val beadsFile = opts.beadsFolder / beadsFileDef.getUnfilteredInputFilename
                             
                             logger.info(s"Reading beads file: $beadsFile")
                             val beads = readCsvToCaseClasses[FiducialBead](beadsFile)
