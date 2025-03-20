@@ -388,7 +388,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
                                     header, 
                                     analysisOutfolder, 
                                     pointsOutfolder,
-                                    tracesFile.baseName, 
+                                    tracesFile.baseName, // This will give all of the filename up until the final extension.
                                     delimiter, 
                                     overwrite = overwrite,
                                     )
