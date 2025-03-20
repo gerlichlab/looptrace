@@ -29,6 +29,7 @@ from looptrace.configuration import IMAGING_ROUNDS_KEY, get_minimum_regional_spo
 from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, FilePathLike, FolderPathLike, get_analysis_path, simplify_path
 from looptrace.geometry import Point3D
 from looptrace.image_io import ignore_path, NPZ_wrapper
+from looptrace.image_processing_functions import CENTROID_KEY
 from looptrace.numeric_types import NumberLike
 from looptrace.utilities import read_csv_maybe_empty
 
@@ -172,10 +173,11 @@ def _read_bead_rois_file(fp: ExtantFile) -> Iterable[tuple[int, Point3D]]:
     with open(fp, "r") as fh:
         for obj in json.load(fh):
             i = obj["index"]
+            centroid = obj[CENTROID_KEY]
             p = Point3D(
-                x=obj["xc"], 
-                y=obj["yc"], 
-                z=obj["zc"],
+                x=centroid["xc"], 
+                y=centroid["yc"], 
+                z=centroid["zc"],
             )
             yield i, p
 
