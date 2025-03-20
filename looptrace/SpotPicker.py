@@ -193,7 +193,7 @@ def build_spot_prop_table(
         timepoint=timepoint, 
         channel=channel,
     )
-    return field_of_view, spot_props
+    return spot_props
 
 
 def detect_spots_multiple(
@@ -465,7 +465,7 @@ class SpotPicker:
         
         time_specs: list[SingleTimepointDetectionSpec] = list(self.iter_timepoint_threshold_pairs())
         channels: list[int] = list(self.spot_channel)
-        subframes: list[tuple[str, pd.DataFrame]] = []
+        subframes: list[pd.DataFrame] = []
 
         if self._parallelise:
             logging.info("Running spot detection in parallel")
@@ -485,7 +485,7 @@ class SpotPicker:
             for fov, img in tqdm.tqdm(get_fov_img_pairs()):
                 for spec in tqdm.tqdm(time_specs):
                     for ch in channels:
-                        fov, spots = build_spot_prop_table(
+                        spots = build_spot_prop_table(
                             img=img, 
                             field_of_view=fov, 
                             channel=ch, 
@@ -493,9 +493,9 @@ class SpotPicker:
                             detection_parameters=self.detection_parameters
                         )
                         print(f"Spot count ({fov}): {len(spots)}")
-                        subframes.append((fov, spots))
+                        subframes.append(spots)
         
-        whole_spots_table: pd.DataFrame = pd.concat(map(fst, subframes)).reset_index(drop=True)
+        whole_spots_table: pd.DataFrame = pd.concat(subframes).reset_index(drop=True)
         output_files: list[tuple[str, Path]] = []
         for fov, subtab in whole_spots_table.groupby(FIELD_OF_VIEW_COLUMN):
             outfile = self.image_handler.fish_spots_folder / (fov + "_rois" + ".csv")
