@@ -395,7 +395,9 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
                     mov_bead_fits = Parallel(n_jobs=-1, prefer='threads')(delayed(fit_bead_coordinates)(mbi) for mbi in tqdm.tqdm(mov_bead_subimgs))
                     fine_drifts = [subtract_point_fits(ref, mov) for ref, mov in zip(ref_bead_fits, mov_bead_fits)]
                     fine = finalise_fine_drift(fine_drifts)
-                curr_fov_rows.append((timepoint, fov) + coarse + fine)
+                # The order of the drift components MUST correspond to the column names to be applied to the table.
+                new_row = _build_drift_row(timepoint=timepoint, fov=fov, coarse=coarse, fine=fine)
+                curr_fov_rows.append(new_row)
         elif drifter.method_name == Methods.CROSS_CORRELATION_NAME.value:
             print("Extracting reference bead images")
             ref_bead_subimgs = [extract_single_bead(point, ref_img, bead_roi_px=roi_px) for _, point in bead_rois]
@@ -425,7 +427,9 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
                         for args in tqdm.tqdm(zip(list(map(fst, bead_rois)), ref_bead_subimgs, strict=True))
                     )
                     fine = finalise_fine_drift(fine_drifts)
-                curr_fov_rows.append((timepoint, fov) + coarse + fine)
+                # The order of the drift components MUST correspond to the column names to be applied to the table.
+                new_row = _build_drift_row(timepoint=timepoint, fov=fov, coarse=coarse, fine=fine)
+                curr_fov_rows.append(new_row)
         else:
             raise Exception(f"Unknown drift correction method: {drifter.method_name}")
         
@@ -438,6 +442,10 @@ def compute_fine_drifts(drifter: "Drifter") -> None:
         print(f"Touching checkpoint: {checkpoint_file}")
         with open(checkpoint_file, 'w'): # Just create the empty file.
             pass
+
+
+def _build_drift_row(*, timepoint: int, fov: str, coarse: Point3D, fine: Point3D) -> tuple[int, str, float, float, float, float, float, float]:
+    return (timepoint, fov, coarse.z, coarse.y, coarse.x, fine.z, fine.y, fine.x)
 
 
 def finalise_fine_drift(drift: Iterable[np.ndarray]) -> Tuple[FloatLike, FloatLike, FloatLike]:
