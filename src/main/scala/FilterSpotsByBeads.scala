@@ -260,7 +260,7 @@ object FilterSpotsByBeads extends StrictLogging, ScoptCliReaders:
 
     def findBeadsFiles(beadsFolder: os.Path): List[BeadsFilenameDefinition] = 
         require(os.isDir(beadsFolder), s"Alleged beads folder isn't an extant folder: $beadsFolder")
-        os.list(beadsFolder).toList.flatMap(BeadsFilenameDefinition.fromPath)
+        os.list(beadsFolder).toList.flatMap(BeadsFilenameDefinition.fromUnfilteredPath)
 
     def findNeighbors[C: Numeric, Ref, Query](
         refs: Map[RoiIndex, Point3D[C]], 
