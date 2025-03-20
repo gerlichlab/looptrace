@@ -162,7 +162,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
             withTempFile("", delimiter){ (roisFile: os.Path) => 
                 os.isFile(roisFile) shouldBe true
                 val expErrorMessages = NonEmptyList.one(s"No lines in file! $roisFile")
-                val expected = RoisFileParseFailedSetup(expErrorMessages).asLeft[Iterable[FiducialBeadRoi]]
+                val expected = RoisFileParseFailedSetup(expErrorMessages).asLeft[Iterable[FiducialBead]]
                 val observed = readRoisFile(roisFile)
                 observed shouldEqual expected
             }
@@ -344,7 +344,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
 
     test("Sampling result accords with expectation based on relation between usable ROI count and requested ROI counts.") {
         given [A] => Shrink[A] = Shrink.shrinkAny[A]
-        type InputsAndValidate = (ShiftingCount, PositiveInt, List[FiducialBeadRoi], RoisSplit.Result => Any)
+        type InputsAndValidate = (ShiftingCount, PositiveInt, List[FiducialBead], RoisSplit.Result => Any)
         
         def genFewerThanAbsoluteMinimum: Gen[InputsAndValidate] = for
             numShifting <- Gen.choose[Int](ShiftingCount.AbsoluteMinimumShifting, maxNumRoisSmallTests).map(ShiftingCount.unsafe)
@@ -433,7 +433,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
         val posTimePairs = Random.shuffle(
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => FieldOfView.unsafeLift(p) -> ImagingTimepoint.unsafe(t))
-        type PosTimeRois = (FovTimePair, List[FiducialBeadRoi])
+        type PosTimeRois = (FovTimePair, List[FiducialBead])
         def genDetected(ptPairs: List[FovTimePair])(lo: Int, hi: Int): Gen[List[PosTimeRois]] = 
             ptPairs.traverse{ pt => genUsableRois(lo, hi).map(pt -> _) }
         val maxReqShifting = 2 * ShiftingCount.AbsoluteMinimumShifting
@@ -486,7 +486,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
             (0 to 1).flatMap{ p => (0 to 2).map(p -> _) }
         ).toList.map((p, t) => FieldOfView.unsafeLift(p) -> ImagingTimepoint.unsafe(t))
         val maxReqShifting = 2 * ShiftingCount.AbsoluteMinimumShifting
-        def genArgs: Gen[(ShiftingCount, PositiveInt, List[(FovTimePair, List[FiducialBeadRoi])])] = for
+        def genArgs: Gen[(ShiftingCount, PositiveInt, List[(FovTimePair, List[FiducialBead])])] = for
             numReqShifting <- Gen.choose(ShiftingCount.AbsoluteMinimumShifting, maxReqShifting).map(ShiftingCount.unsafe)
             numReqAccuracy <- Gen.choose(1, 100).map(PositiveInt.unsafe)
             numReq = numReqShifting + numReqAccuracy
@@ -786,16 +786,16 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     def genUsableRois(lo: Int, hi: Int)(using Arbitrary[RoiIndex], Arbitrary[Point3D]) = 
         genUnusableRois(lo, hi).map(_.map(_.setUsable))
 
-    /** Generate a single {@code FiducialBeadRoi} with nonempty fail code. */
-    def genUnusableDetectedRoi(using Arbitrary[Point3D], Arbitrary[RoiIndex]): Gen[FiducialBeadRoi] = for
+    /** Generate a single {@code FiducialBead} with nonempty fail code. */
+    def genUnusableDetectedRoi(using Arbitrary[Point3D], Arbitrary[RoiIndex]): Gen[FiducialBead] = for
         i <- arbitrary[RoiIndex]
         pt <- arbitrary[Point3D]
         failCode <- Gen.choose(1, 5).flatMap(Gen.listOfN(_, Gen.alphaChar).map(_.mkString("")))
-    yield FiducialBeadRoi(i, pt, RoiFailCode(failCode))
+    yield FiducialBead(i, pt, RoiFailCode(failCode))
 
     /** Syntax additions on a detected ROI to set its usability flag */
-    extension (roi: FiducialBeadRoi)
-        def setUsable: FiducialBeadRoi = roi.copy(failCode = RoiFailCode.success)
+    extension (roi: FiducialBead)
+        def setUsable: FiducialBead = roi.copy(failCode = RoiFailCode.success)
 
     /** Generate a pair of pairs of nonnegative integers such that the first pair isn't the same as the second. */
     def genDistinctNonnegativePairs: Gen[(FovTimePair, FovTimePair)] = 
@@ -807,7 +807,7 @@ class TestPartitionIndexedDriftCorrectionBeadRois extends
     def maxNumRoisSmallTests: ShiftingCount = ShiftingCount.unsafe(2 * ShiftingCount.AbsoluteMinimumShifting)
 
     /** Write the ROIs to file, with minimal data required to parse the fields consumed by the partition program under test here. */
-    def writeMinimalInputRoisCsv(rois: List[FiducialBeadRoi], f: os.Path): Unit = {
+    def writeMinimalInputRoisCsv(rois: List[FiducialBead], f: os.Path): Unit = {
         val (header, getPointFields) = (
             Array(ParserConfig.indexCol, ParserConfig.xCol.get, ParserConfig.yCol.get, ParserConfig.zCol.get, ParserConfig.qcCol),
             (p: Point3D) => Array(p.x.show_, p.y.show_, p.z.show_)

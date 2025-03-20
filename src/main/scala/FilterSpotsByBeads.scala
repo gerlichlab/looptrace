@@ -131,16 +131,18 @@ object FilterSpotsByBeads extends StrictLogging, ScoptCliReaders:
                             val beadDrift = lookupTotalDrift(fovName -> opts.spotlessTimepoint)
                             val spotsFile = opts.spotsFolder / spotsFileDef.getInputFilename
                             val beadsFile = opts.beadsFolder / beadsFileDef.getInputFilename
+                            
                             logger.info(s"Reading beads file: $beadsFile")
-                            val beads = readCsvToCaseClasses[Bead](beadsFile)
+                            val beads = readCsvToCaseClasses[FiducialBead](beadsFile)
                                 .unsafeRunSync()
                                 .foldLeft(Map.empty[RoiIndex, Point3D[Double]]){
                                     (acc, bead) => 
                                         val i = bead.index
                                         if acc contains i
                                         then throw new Exception(s"Repeated index in beads: $i")
-                                        else acc + (i -> Movement.addDrift(beadDrift)(bead.centroid.asPoint))
+                                        else acc + (i -> Movement.addDrift(beadDrift)(bead.centroid))
                                 }
+                            
                             
                             logger.info(s"Reading and processing spots from $spotsFile")
                             val (keeps, discards) = 
@@ -215,27 +217,6 @@ object FilterSpotsByBeads extends StrictLogging, ScoptCliReaders:
             ),
             identity
         )
-
-    final case class Bead(index: RoiIndex, centroid: Centroid[Double])
-
-    object Bead:
-        given (
-            decIdx: CellDecoder[RoiIndex], 
-            decCenter: CsvRowDecoder[Centroid[Double], String],
-        ) => CsvRowDecoder[Bead, String] = 
-            new:
-                override def apply(row: RowF[Some, String]): DecoderResult[Bead] = 
-                    val indexNel = ColumnName[RoiIndex]("beadIndex").from(row)
-                    val centerNel = decCenter(row)
-                        .leftMap(err => NonEmptyList.one(err.getMessage))
-                        .toValidated
-                    (indexNel, centerNel)
-                        .mapN(Bead.apply)
-                        .toEither
-                        .leftMap(messages => 
-                            DecoderError(s"Problem(s) decoding bead: ${messages.mkString_("; ")}")
-                        )
-    end Bead
 
     final case class SpotsFileDefinition(fovName: OneBasedFourDigitPositionName):
         def getInputFilename: String = fovName ++ "_rois.csv"

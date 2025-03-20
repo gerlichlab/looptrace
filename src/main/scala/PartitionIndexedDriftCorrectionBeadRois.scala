@@ -43,7 +43,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
     type FovTimePair = (FieldOfView, ImagingTimepoint)
     type KeyedProblem = (FovTimePair, RoisSplit.Problem)
     type InitFile = (FovTimePair, os.Path)
-    type IndexedRoi = FiducialBeadRoi | SelectedRoi
+    type IndexedRoi = FiducialBead | SelectedRoi
     type JsonWriter[*] = upickle.default.Writer[*]
 
     final case class CliConfig(
@@ -180,16 +180,15 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
         logger.info("Done!")
     }
 
-    def createParser(header: RawRecord): ErrMsgsOr[RawRecord => ErrMsgsOr[FiducialBeadRoi]] = {
+    def createParser(header: RawRecord): ErrMsgsOr[RawRecord => ErrMsgsOr[FiducialBead]] = {
         import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.* // for >>> and >>, generally
         val maybeParseIndex = buildFieldParse(ParserConfig.indexCol, safeParseInt >>> RoiIndex.fromInt)(header)
         val maybeParseX = buildFieldParse(ParserConfig.xCol.get, safeParseDouble.andThen(_.map(XCoordinate.apply)))(header)
         val maybeParseY = buildFieldParse(ParserConfig.yCol.get, safeParseDouble.andThen(_.map(YCoordinate.apply)))(header)
         val maybeParseZ = buildFieldParse(ParserConfig.zCol.get, safeParseDouble.andThen(_.map(ZCoordinate.apply)))(header)
         // The QC flag parser maps empty String to true and nonempty String to false (nonempty indicates QC fail reasons.)
-        val maybeParseFailCode = buildFieldParse(ParserConfig.qcCol, RoiFailCode(_).asRight)(header)
-        (maybeParseIndex, maybeParseX, maybeParseY, maybeParseZ, maybeParseFailCode).tupled.toEither.map{
-            case (parseIndex, parseX, parseY, parseZ, parseFailCode) => { 
+        (maybeParseIndex, maybeParseX, maybeParseY, maybeParseZ).tupled.toEither.map{
+            case (parseIndex, parseX, parseY, parseZ) => { 
                 (record: RawRecord) => (record.length === header.length)
                     .either(NonEmptyList.one(s"Header has ${header.length} fields but record has ${record.length}"), ())
                     .flatMap{ _ => 
@@ -197,9 +196,8 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
                         val maybeX = parseX(record)
                         val maybeY = parseY(record)
                         val maybeZ = parseZ(record)
-                        val maybeFailCode = parseFailCode(record)
-                        (maybeIndex, maybeX, maybeY, maybeZ, maybeFailCode).mapN(
-                            (i, x, y, z, failCode) => FiducialBeadRoi(i, Point3D(x, y, z), failCode)
+                        (maybeIndex, maybeX, maybeY, maybeZ).mapN(
+                            (i, x, y, z) => FiducialBead(i, Point3D(x, y, z))
                         ).toEither
                     }
             }
@@ -241,7 +239,7 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
       * @param roisFile The file to parse
       * @return A collection of ROIs, representing what was detected for a particular (FOV, time) combo
       */
-    def readRoisFile(roisFile: os.Path): Either[RoisFileParseError, Iterable[FiducialBeadRoi]] = {
+    def readRoisFile(roisFile: os.Path): Either[RoisFileParseError, Iterable[FiducialBead]] = {
         prepFileRead(roisFile)
             .toEither
             .flatMap{ case (sep, head, lines) => createParser(sep `split` head).map(_ -> lines.map(sep.split)) }
@@ -267,14 +265,13 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
       * @param rois Collection of detected bead ROIs, from a single (FOV, time) pair
       * @return An explanation of failure if partition isn't possible, or a partition with perhaps a warning
       */
-    def sampleDetectedRois(numShifting: ShiftingCount, numAccuracy: PositiveInt)(rois: Iterable[FiducialBeadRoi]): RoisSplit.Result = {
+    def sampleDetectedRois(numShifting: ShiftingCount, numAccuracy: PositiveInt)(rois: Iterable[FiducialBead]): RoisSplit.Result = 
         val sampleSize = numShifting + numAccuracy
         if sampleSize < numShifting || sampleSize < numAccuracy then {
             val msg = s"Appears overflow occurred computing sample size: ${numShifting} + ${numAccuracy} = ${sampleSize}"
             throw new IllegalArgumentException(msg)
         }
-        val pool = rois.filter(_.isUsable)
-        val (inSample, _) = Random.shuffle(pool.toList) `splitAt` sampleSize
+        val (inSample, _) = Random.shuffle(rois.toList) `splitAt` sampleSize
         val (shifting, remaining) = inSample `splitAt` numShifting
         val accuracy = remaining `take` numAccuracy
         RoisSplit.Partition.build(
@@ -283,7 +280,6 @@ object PartitionIndexedDriftCorrectionBeadRois extends ScoptCliReaders, StrictLo
             numAccuracy, 
             accuracy.map(roi => RoiForAccuracy(roi.index, roi.centroid))
         )
-    }
 
     /******************************/
     /* Helper types and functions */

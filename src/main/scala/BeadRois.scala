@@ -2,8 +2,13 @@ package at.ac.oeaw.imba.gerlich.looptrace
 
 import scala.util.NotGiven
 import scala.util.chaining.*
+
+import cats.data.NonEmptyList
+import cats.syntax.all.*
 import upickle.default.*
 
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.Centroid
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnName
 import at.ac.oeaw.imba.gerlich.gerlib.json.instances.all.{*, given}
 import at.ac.oeaw.imba.gerlich.gerlib.json.syntax.*
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
@@ -34,8 +39,28 @@ sealed trait RoiLike:
     def centroid: Point3D
 
 /** Type representing a detected fiducial bead region of interest (ROI) */
-final case class FiducialBeadRoi(index: RoiIndex, centroid: Point3D, failCode: RoiFailCode) extends RoiLike:
-    def isUsable: Boolean = failCode.indicatesSuccess
+final case class FiducialBead(index: RoiIndex, centroid: Point3D) extends RoiLike
+
+object FiducialBead:
+    import fs2.data.csv.*
+    
+    given (
+        decIdx: CellDecoder[RoiIndex], 
+        decCenter: CsvRowDecoder[Centroid[Double], String],
+    ) => CsvRowDecoder[FiducialBead, String] = 
+        new:
+            override def apply(row: RowF[Some, String]): DecoderResult[FiducialBead] = 
+                val indexNel = ColumnName[RoiIndex]("beadIndex").from(row)
+                val centerNel = decCenter(row)
+                    .bimap(err => NonEmptyList.one(err.getMessage), _.asPoint)
+                    .toValidated
+                (indexNel, centerNel)
+                    .mapN(FiducialBead.apply)
+                    .toEither
+                    .leftMap(messages => 
+                        DecoderError(s"Problem(s) decoding bead: ${messages.mkString_("; ")}")
+                    )
+end FiducialBead
 
 /** A region of interest (ROI) selected for use in some process */
 sealed trait SelectedRoi extends RoiLike {
