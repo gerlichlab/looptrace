@@ -10,7 +10,13 @@ from expression import result
 from gertils import ExtantFile
 
 from looptrace import ConfigurationValueError, Drifter, LOOPTRACE_JAR_PATH, ZARR_CONVERSIONS_KEY
-from looptrace.configuration import IMAGING_ROUNDS_KEY, KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS, get_minimum_regional_spot_separation, read_parameters_configuration_file
+from looptrace.configuration import (
+    IMAGING_ROUNDS_KEY, 
+    KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS, 
+    TRACING_SUPPORT_EXCLUSIONS_KEY, 
+    get_minimum_regional_spot_separation, 
+    read_parameters_configuration_file,
+)
 from looptrace.Deconvolver import REQ_GPU_KEY
 from looptrace.ImageHandler import determine_bead_timepoint_for_spot_filtration
 from looptrace.NucDetector import NucDetector, SegmentationMethod as NucSegMethod
@@ -19,8 +25,6 @@ from looptrace.Tracer import MASK_FITS_ERROR_MESSAGE
 
 __author__ = "Vince Reuter"
 __credits__ = ["Vince Reuter"]
-
-TRACING_SUPPORT_EXCLUSIONS_KEY = "tracingExclusions"
 
 
 class ConfigFileCrash(Exception):

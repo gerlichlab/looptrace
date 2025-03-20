@@ -16,7 +16,7 @@ from expression.collections import Seq, seq
 from expression.core import option, result
 from gertils import ExtantFile, ExtantFolder, compute_pixel_statistics
 from gertils.geometry import ImagePoint3D
-from gertils.types import ImagingChannel
+from gertils.types import ImagingChannel, TimepointFrom0
 import pandas as pd
 from spotfishing.roi_tools import get_centroid_from_record
 
@@ -66,14 +66,60 @@ def _parse_cmdl(cmdl: list[str]) -> argparse.Namespace:
     return parser.parse_args(cmdl)
 
 
+@dataclass(kw_only=True, frozen=True)
+class DriftRecord:
+    x: float
+    y: float
+    z: float
+
+
 class RoiType(Enum):
     """Based on ROI type, decide which pool of ROIs (by file path attribute on ImageHandler) to grab."""
     LocusSpecific = "traces_file_qc_filtered"
     Regional = "spots_for_voxels_definition_file"
 
-    @property
-    def file_attribute_on_image_handler(self) -> str:
-        return self.value
+    def get_legal_timepoint_pool(self, image_handler: ImageHandler) -> set[RawTimepoint]:
+        timepoints: list[TimepointFrom0]
+        if self == RoiType.LocusSpecific:
+            timepoints = image_handler.list_locus_specific_imaging_timepoints_eligible_for_extraction()
+        elif self == RoiType.Regional:
+            timepoints = image_handler.list_regional_imaging_timepoints_eligible_for_extraction()
+        else:
+            self._raise_unexpected_match_error()
+        return set(t.get for t in timepoints if t not in image_handler.tracing_exclusions)
+
+    def get_roi_center_in_pixels(self, roi_rec: pd.Series) -> ImagePoint3D:
+        if self == RoiType.LocusSpecific:
+            center = ImagePoint3D(
+                # Create the point by taking the relative (to bounding box) center, 
+                # and then shifting by the redefined origin.
+                x=roi_rec["x_px_dc"] + roi_rec["xMin"],
+                y=roi_rec["y_px_dc"] + roi_rec["yMin"],
+                z=roi_rec["z_px_dc"] + roi_rec["zMin"],
+            )
+        elif self == RoiType.Regional:
+            center = get_centroid_from_record(roi_rec)
+        else:
+            self._raise_unexpected_match_error()
+        return center
+
+    def get_rois_file(self, image_handler: ImageHandler) -> Path:
+        return getattr(image_handler, self._file_attribute_on_image_handler)
+
+    def shift_roi_center(
+        self, 
+        *, 
+        point: ImagePoint3D, 
+        nuc_drift: DriftRecord, 
+        spot_drift: DriftRecord,
+    ) -> ImagePoint3D:
+        if self == RoiType.LocusSpecific:
+            shifted = point - nuc_drift # Spot drift will have already been applied.
+        elif self == RoiType.Regional:
+            shifted = point - nuc_drift + spot_drift # Spot drift won't yet have been applied.
+        else:
+            self._raise_unexpected_match_error()
+        return shifted
 
     @classmethod
     def parse(cls, s: str) -> Option["RoiType"]:
@@ -91,6 +137,15 @@ class RoiType(Enum):
                 return cls.from_string(obj).to_result(f"Not valid as a ROI type: {obj}")
             case _:
                 return Result.Error(f"Object to parse as ROI type isn't string, but {type(obj).__name__}: {obj}")
+
+    @property
+    def _file_attribute_on_image_handler(self) -> str:
+        return self.value
+    
+    def _raise_unexpected_match_error(self) -> None:
+        raise RuntimeError(f"Unexpected value of ROI type: (type {type(self).__name__}) {self}")
+
+
 
 
 @dataclass(kw_only=True, frozen=True)
@@ -166,15 +221,10 @@ def workflow(
                     for spec in analysis_specs:
                         # Get the ROIs of this type.
                         roi_type: RoiType = spec.roi_type
-                        if roi_type == RoiType.LocusSpecific:
-                            # TODO: implement
-                            # TODO: discard regional spot timepoints from the bigger collection: https://github.com/gerlichlab/looptrace/issues/376
-                            # TODO: will need to account for pixels vs. nanometers
-                            # TODO: will need to account for different headers (e.g., z_px and z rather than zc, yc, etc.)
-                            logging.error("Cross-channel analysis for locus-specific spots isn't yet supported, skipping!")
-                            continue
+                        time_pool: set[RawTimepoint] = roi_type.get_legal_timepoint_pool(image_handler=H)
+                        
                         logging.info("Analyzing signal for ROI type '%s'", roi_type.name)
-                        rois_file: Path = getattr(H, roi_type.file_attribute_on_image_handler)
+                        rois_file: Path = roi_type.get_rois_file(image_handler=H)
                         all_rois: pd.DataFrame = pd.read_csv(rois_file, index_col=False)
                         
                         # Build up the records for this ROI type, for all FOVs.
@@ -189,14 +239,12 @@ def workflow(
                             logging.info("ROI count: %d", rois.shape[0])
                             for _, r in rois.iterrows():
                                 timepoint: RawTimepoint = r[TIMEPOINT_COLUMN]
+                                if timepoint not in time_pool:
+                                    raise RuntimeError(f"Illegal timepoint for ROI allegedly of type {roi_type}: {timepoint}")
                                 spot_drift: DriftRecord = all_spot_drifts[(fov, timepoint)]
-                                pt0: ImagePoint3D = get_centroid_from_record(r)
+                                pt0: ImagePoint3D = roi_type.get_roi_center_in_pixels(r)
                                 try:
-                                    dc_pt: ImagePoint3D = ImagePoint3D(
-                                        z=pt0.z - nuc_drift.z + spot_drift.z, 
-                                        y=pt0.y - nuc_drift.y + spot_drift.y, 
-                                        x=pt0.x - nuc_drift.x + spot_drift.x, 
-                                    )
+                                    dc_pt: ImagePoint3D = roi_type.shift_roi_center(point=pt0, nuc_drift=nuc_drift, spot_drift=spot_drift)
                                 except ValueError as e:
                                     logging.error(f"Can't compute shifted center for original center {pt0}: {e}")
                                 else:
@@ -228,13 +276,6 @@ def workflow(
                             outfile: Path = Path(H.analysis_path) / fn
                             logging.info("Writing output file: %s", outfile)
                             stats_frame.to_csv(outfile, index=False)
-
-
-@dataclass(kw_only=True, frozen=True)
-class DriftRecord:
-    x: float
-    y: float
-    z: float
 
 
 @curry_flip(1)
