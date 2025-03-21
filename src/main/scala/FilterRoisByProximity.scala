@@ -5,7 +5,6 @@ import upickle.default.*
 import cats.*
 import cats.data.*
 import cats.effect.IO
-import cats.effect.unsafe.IORuntime
 import cats.effect.unsafe.implicits.global // needed for cats.effect.IORuntime
 import cats.syntax.all.*
 import fs2.Stream
@@ -261,13 +260,20 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
         logger.info("Done!")
     }
 
+    private def forceFovLikeToRefinedPositionName: FieldOfViewLike => OneBasedFourDigitPositionName = 
+        import OneBasedFourDigitPositionName.syntax.*
+        (_: FieldOfViewLike) match {
+            case pn: PositionName => pn.unsafeNarrowToOneBasedFourDigitPositionName
+            case fov: FieldOfView => throw new RuntimeException(s"Field of view isn't a position name, but rather $fov")
+        }
+
     private def readDrifts: os.Path => IO[Either[String, Map[DriftKey, DriftRecord]]] = driftFile => 
         val keyDrifts: List[DriftRecord] => Either[String, Map[DriftKey, DriftRecord]] = drifts => 
             val (recordNumbersByKey, keyed) = 
                 NonnegativeInt.indexed(drifts)
                     .foldLeft(Map.empty[DriftKey, NonEmptySet[NonnegativeInt]] -> Map.empty[DriftKey, DriftRecord]){ 
                         case ((reps, acc), (drift, recnum)) =>  
-                            val fov = drift.fieldOfView
+                            val fov = forceFovLikeToRefinedPositionName(drift.fieldOfView)
                             val t = drift.time
                             val k = fov -> t
                             reps.get(k) match {
@@ -283,12 +289,15 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
             }
         readCsvToCaseClasses[DriftRecord](driftFile).map(keyDrifts)
 
-    private def applyDrifts(keyedDrifts: Map[DriftKey, DriftRecord])(using Eq[FieldOfViewLike]): List[PostMergeRoi] => Either[Throwable, List[PostMergeRoi]] = 
-        val tryApp: PostMergeRoi => Either[Throwable, PostMergeRoi] = r => 
-            val fovTimePair = r.context.fieldOfView -> r.context.timepoint
-            keyedDrifts.get(fovTimePair)
-                .toRight(DriftRecordNotFoundError(fovTimePair))
-                .flatMap{ drift => Try{ applyDrift(r, drift) }.toEither }
+    private def applyDrifts(keyedDrifts: Map[DriftKey, DriftRecord]): List[PostMergeRoi] => Either[Throwable, List[PostMergeRoi]] = 
+        import OneBasedFourDigitPositionName.syntax.*
+        val tryApp: PostMergeRoi => Either[Throwable, PostMergeRoi] = oldRoi => 
+            for
+                pn <- Try(forceFovLikeToRefinedPositionName(oldRoi.context.fieldOfView)).toEither
+                posTimePair = pn -> oldRoi.context.timepoint
+                drift <- keyedDrifts.get(posTimePair).toRight(DriftRecordNotFoundError(posTimePair))
+                newRoi <- Try(applyDrift(oldRoi, drift)).toEither
+            yield newRoi
         _.traverse(tryApp)
 
     /****************************************************************************************************************
@@ -297,11 +306,7 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
     final case class DriftRecordNotFoundError(key: DriftKey) extends NoSuchElementException(s"key not found: ($key)")
 
     /** Add the given total drift (coarse + fine) to the given ROI, updating its centroid and its bounding box accordingly. */
-    private def applyDrift(roi: PostMergeRoi, drift: DriftRecord)(using Eq[FieldOfViewLike]): PostMergeRoi = {
-        require(
-            roi.context.fieldOfView === drift.fieldOfView && roi.context.timepoint === drift.time, 
-            s"ROI and drift don't match on (FOV, time): (${roi.context.fieldOfView -> roi.context.timepoint} and (${drift.fieldOfView -> drift.time})"
-            )
+    private def applyDrift(roi: PostMergeRoi, drift: DriftRecord): PostMergeRoi = {
         val (center, box) = PostMergeRoi.getCenterAndBox(roi)
         val newCenter = Centroid.fromPoint(Movement.addDrift(drift.total)(center.asPoint))
         val newBox = Movement.addDrift(drift.total)(box)
@@ -312,5 +317,5 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
     }
 
     /* Type aliases */
-    private type DriftKey = (FieldOfViewLike, ImagingTimepoint)
+    private type DriftKey = (OneBasedFourDigitPositionName, ImagingTimepoint)
 end FilterRoisByProximity

@@ -219,9 +219,17 @@ package object looptrace {
                 .fromFieldOfView(fov)
                 .map(refFov => ("P" ++ "%04d".format(refFov)).refineUnsafe[OneBasedFourDigitPositionNameConstraint])
 
-        extension (pn: OneBasedFourDigitPositionName)
-            def toFieldOfView: FieldOfView = pn match {
-                case s"P$rawFov" => FieldOfView.unsafeLift(rawFov.toInt - 1)
-            }
+        object syntax:
+            extension (pn: OneBasedFourDigitPositionName)
+                def toFieldOfView: FieldOfView = pn match {
+                    case s"P$rawFov" => FieldOfView.unsafeLift(rawFov.toInt - 1)
+                }
+            
+            extension (pn: PositionName)
+                def unsafeNarrowToOneBasedFourDigitPositionName: OneBasedFourDigitPositionName = 
+                    OneBasedFourDigitPositionName.fromPositionName(pn).fold(
+                        msg => throw new IllegalArgumentException(msg),
+                        identity
+                    )
     end OneBasedFourDigitPositionName
 }
