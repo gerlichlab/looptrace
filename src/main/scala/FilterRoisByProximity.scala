@@ -196,29 +196,6 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
             given CsvRowDecoder[ImagingChannel, String] = getCsvRowDecoderForImagingChannel(SpotChannelColumnName)
             readCsvToCaseClasses[PostMergeRoi](spotsFile)
 
-        val keyDrifts: List[DriftRecord] => Either[String, Map[DriftKey, DriftRecord]] = drifts => 
-            val (recordNumbersByKey, keyed) = 
-                NonnegativeInt.indexed(drifts)
-                    .foldLeft(Map.empty[DriftKey, NonEmptySet[NonnegativeInt]] -> Map.empty[DriftKey, DriftRecord]){ 
-                        case ((reps, acc), (drift, recnum)) =>  
-                            val fov = drift.fieldOfView
-                            val t = drift.time
-                            val k = fov -> t
-                            reps.get(k) match {
-                                case None => (reps + (k -> NonEmptySet.one(recnum)), acc + (k -> drift))
-                                case Some(prevLineNums) => (reps + (k -> prevLineNums.add(recnum)), acc)
-                            }
-                    }
-            val repeats = recordNumbersByKey.filter(_._2.size > 1)
-            if repeats.isEmpty then keyed.asRight
-            else { 
-                val simpleReps = repeats.toList.map{ (k, lineNums) => k -> lineNums.toList.sorted }
-                s"${simpleReps.length} repeated (FOV, time) pairs: ${simpleReps}".asLeft
-            }
-
-        val readKeyedDrifts: IO[Either[String, Map[DriftKey, DriftRecord]]] = 
-            readCsvToCaseClasses[DriftRecord](driftFile).map(keyDrifts)
-
         // Account for the fact that field of view may be either text-like or integer-like, 
         // and it therefore needs a special sort of equality/equivalence test.
         given Eq[FieldOfViewLike]:
@@ -248,8 +225,8 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
 
         val program: IO[Unit] = for
             rois <- readRois
-            maybeDrifts <- readKeyedDrifts.map(_.leftMap(msg => new Exception(msg)))
-            shiftedRois = maybeDrifts.flatMap(keyedDrifts => applyDrifts(keyedDrifts)(rois)).leftMap(NonEmptyList.one)
+            maybeDrifts <- readDrifts(driftFile).map(_.leftMap(msg => new Exception(msg)))
+            shiftedRois = maybeDrifts.flatMap(applyDrifts(_)(rois)).leftMap(NonEmptyList.one)
             (unidentifiablesFile, wellSeparatedsFile) <- 
                 shiftedRois.map(assessForMutualExclusion(proximityFilterStrategy)) match {
                     case Left(errors) => 
@@ -283,6 +260,28 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
 
         logger.info("Done!")
     }
+
+    private def readDrifts: os.Path => IO[Either[String, Map[DriftKey, DriftRecord]]] = driftFile => 
+        val keyDrifts: List[DriftRecord] => Either[String, Map[DriftKey, DriftRecord]] = drifts => 
+            val (recordNumbersByKey, keyed) = 
+                NonnegativeInt.indexed(drifts)
+                    .foldLeft(Map.empty[DriftKey, NonEmptySet[NonnegativeInt]] -> Map.empty[DriftKey, DriftRecord]){ 
+                        case ((reps, acc), (drift, recnum)) =>  
+                            val fov = drift.fieldOfView
+                            val t = drift.time
+                            val k = fov -> t
+                            reps.get(k) match {
+                                case None => (reps + (k -> NonEmptySet.one(recnum)), acc + (k -> drift))
+                                case Some(prevLineNums) => (reps + (k -> prevLineNums.add(recnum)), acc)
+                            }
+                    }
+            val repeats = recordNumbersByKey.filter(_._2.size > 1)
+            if repeats.isEmpty then keyed.asRight
+            else { 
+                val simpleReps = repeats.toList.map{ (k, lineNums) => k -> lineNums.toList.sorted }
+                s"${simpleReps.length} repeated (FOV, time) pairs: ${simpleReps}".asLeft
+            }
+        readCsvToCaseClasses[DriftRecord](driftFile).map(keyDrifts)
 
     private def applyDrifts(keyedDrifts: Map[DriftKey, DriftRecord])(using Eq[FieldOfViewLike]): List[PostMergeRoi] => Either[Throwable, List[PostMergeRoi]] = 
         val tryApp: PostMergeRoi => Either[Throwable, PostMergeRoi] = r => 
