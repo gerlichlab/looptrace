@@ -108,7 +108,7 @@ object FilterSpotsByBeads extends StrictLogging, ScoptCliReaders:
                 // CLI parser gives error message.
                 throw new Exception(s"Illegal CLI use of '${ProgramName}' program. Check --help")
             case Some(opts) => 
-                import OneBasedFourDigitPositionName.toFieldOfView
+                import OneBasedFourDigitPositionName.syntax.*
                 import ImagingChannelImplicits.given
 
                 logger.info(s"Seeking spots files: ${opts.spotsFolder}")
