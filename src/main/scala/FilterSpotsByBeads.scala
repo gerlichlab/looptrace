@@ -3,6 +3,7 @@ package at.ac.oeaw.imba.gerlich.looptrace
 import java.nio.file.FileAlreadyExistsException
 import scala.collection.immutable.SortedSet
 import scala.collection.mutable.ListBuffer
+import scala.math.{ pow, sqrt }
 import scala.util.Try
 import cats.*
 import cats.data.{ NonEmptyList, NonEmptySet }
@@ -12,13 +13,16 @@ import fs2.data.csv.*
 import fs2.data.text.utf8.byteStreamCharLike // for CharLikeChunks typeclass instances
 import mouse.boolean.*
 import scopt.*
+import squants.space.Length
 import com.typesafe.scalalogging.StrictLogging
+
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.{ Centroid, DistanceThreshold, EuclideanDistance, Point3D, ProximityComparable }
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.{ FieldOfView, FieldOfViewLike, ImagingChannel, ImagingTimepoint, PositionName }
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.SpotChannelColumnName
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{ ColumnName, getCsvRowEncoderForProduct2, readCsvToCaseClasses, writeCaseClassesToCsv }
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.{ NonnegativeInt, NonnegativeReal, PositiveInt, PositiveReal }
+import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionBeadRois.{
     BeadRoisPrefix,
     BeadsFilenameDefinition, 
@@ -30,19 +34,23 @@ import at.ac.oeaw.imba.gerlich.looptrace.csv.getCsvRowDecoderForImagingChannel
 import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.roi.AdmitsRoiIndex
 import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.IndexedDetectedSpot
+import at.ac.oeaw.imba.gerlich.looptrace.space.Pixels3D
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** Filtration of FISH spots when they're too close to one or more fiducial beads */
 object FilterSpotsByBeads extends StrictLogging, ScoptCliReaders:
     val ProgramName = "FilterSpotsByBeads"
     
+    private val defaultThreshold: NonnegativeReal = NonnegativeReal(0)
+
     case class CliConfig(
         spotsFolder: os.Path = null, // required
         beadsFolder: os.Path = null, // required
         driftFile: os.Path = null, // required
         filteredOutputFile: os.Path = null, // required
-        distanceThreshold: EuclideanDistance.Threshold = null, // required
+        distanceThreshold: NonnegativeReal = defaultThreshold, // required
         spotlessTimepoint: ImagingTimepoint = null, // required
+        pixels: Pixels3D = null, // required
         overwrite: Boolean = false,
     )
 
@@ -72,18 +80,27 @@ object FilterSpotsByBeads extends StrictLogging, ScoptCliReaders:
                 .required()
                 .action((f, c) => c.copy(filteredOutputFile = f))
                 .text("Path to which to write the filtered spots (after discarding those proximal to a bead)"),
-            opt[EuclideanDistance.Threshold]("distanceThreshold")
+            opt[NonnegativeReal]("distanceThreshold")
                 .required()
                 .action((dt, c) => c.copy(distanceThreshold = dt))
-                .text("Definition of Euclidean distance beneath which a bead and a spot are considered proximal"),
+                .text("Euclidean distance (in nanometers) beneath which a bead and a spot are considered proximal"),
             opt[ImagingTimepoint]("spotlessTimepoint")
                 .required()
                 .action((t, c) => c.copy(spotlessTimepoint = t))
                 .text("Timepoint in which no FISH is done, such that all signal should be just beads (ideally)"),
+            opt[Pixels3D]("pixels")
+                .required()
+                .action((px, c) => c.copy(pixels = px))
+                .text("How many nanometers per unit in each direction (x, y, z)"),
             opt[Unit]("overwrite")
                 .action((_, c) => c.copy(overwrite = true))
                 .text("Authorise overwrite of any existing output file"),
-            checkConfig(c => invalidateMainOutputState(c.overwrite, c.filteredOutputFile).fold(success)(failure))
+            checkConfig(c => invalidateMainOutputState(c.overwrite, c.filteredOutputFile).fold(success)(failure)), 
+            checkConfig(c => 
+                if c.distanceThreshold =!= defaultThreshold 
+                then success 
+                else failure("Distance threshold wasn't changed from its default value")
+            )
         )
 
         OParser.parse(parser, args, CliConfig()) match
@@ -152,7 +169,7 @@ object FilterSpotsByBeads extends StrictLogging, ScoptCliReaders:
                                         val spotDrift = lookupTotalDrift(fovName -> spot.timepoint)
                                         val dcCenter = Movement.addDrift(spotDrift)(spot.centroid.asPoint)
                                         val nearBeads = 
-                                            findNeighbors[Double, Point3D[Double], Point3D[Double]](beads, opts.distanceThreshold)(dcCenter)
+                                            findNeighbors[Double, Point3D[Double], Point3D[Double]](beads, opts.pixels, opts.distanceThreshold)(dcCenter)
                                         NonEmptySet.fromSet(SortedSet.from(nearBeads)(Order[RoiIndex].toOrdering))
                                             .toRight(spot)
                                             .map(spot -> _)
@@ -245,22 +262,27 @@ object FilterSpotsByBeads extends StrictLogging, ScoptCliReaders:
 
     def findNeighbors[C: Numeric, Ref, Query](
         refs: Map[RoiIndex, Point3D[C]], 
-        threshold: DistanceThreshold
+        pixels: Pixels3D, 
+        threshold: NonnegativeReal
     )(using CenterFinder[Query, C]) = 
+        import scala.math.Numeric.Implicits.infixNumericOps
         import CenterFinder.syntax.*
-        import ProximityComparable.proximal
-        given ProximityComparable[Point3D[C]] = DistanceThreshold.defineProximityPointwise(threshold)
-        (query: Query) => 
-            refs.foldLeft(Set.empty[RoiIndex]){ 
-                case (acc, (i, p)) => if query.locateCenter.asPoint `proximal` p then acc + i else acc 
-            }
+        (query: Query) => refs.foldLeft(Set.empty[RoiIndex]){ case (acc, (i, p)) => 
+            val q = query.locateCenter.asPoint
+            val delX = pixels.liftX(q.x.value - p.x.value)
+            val delY = pixels.liftY(q.y.value - p.y.value)
+            val delZ = pixels.liftZ(q.z.value - p.z.value)
+            val d = sqrt(List(delX, delY, delZ).foldLeft(0.0){ (acc, del) => acc + pow(del.value, 2) })
+            if d < threshold then acc + i else acc 
+        }
 
     def findNeighbors[C: Numeric, Ref, Query](
         refs: Map[RoiIndex, Ref], 
-        threshold: DistanceThreshold
+        pixels: Pixels3D,
+        threshold: NonnegativeReal
     )(using CenterFinder[Ref, C], CenterFinder[Query, C]): Query => Set[RoiIndex] = 
         import CenterFinder.syntax.*
-        findNeighbors(refs.map{ (i, r) => i -> r.locateCenter.asPoint }, threshold)
+        findNeighbors(refs.map{ (i, r) => i -> r.locateCenter.asPoint }, pixels, threshold)
 
     trait CenterFinder[A, C]:
         def locate(a: A): Centroid[C]

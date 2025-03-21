@@ -532,9 +532,11 @@ def discard_spots_close_to_beads(rounds_config: ExtantFile, params_config: Extan
         "--filteredOutputFile",
         str(H.raw_spots_file),
         "--distanceThreshold",
-        str(H.config["beadSpotProximityDistance"]),
+        str(H.config["beadSpotProximityDistanceInNanometers"]),
         "--spotlessTimepoint",
         str(H.bead_timepoint_for_spot_filtration.get),
+        "--pixels",
+        build_pixels_config(H),
         "--overwrite"
     ]
     logging.info(f"Filtering FISH spots by proximity to beads: {' '.join(cmd_parts)}")
