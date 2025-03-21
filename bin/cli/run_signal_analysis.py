@@ -223,7 +223,7 @@ def workflow(
                         roi_type: RoiType = spec.roi_type
                         time_pool: set[RawTimepoint] = roi_type.get_legal_timepoint_pool(image_handler=H)
                         
-                        logging.info("Analyzing signal for ROI type '%s'", roi_type.name)
+                        logging.info("Analysing signal for ROI type '%s'", roi_type.name)
                         rois_file: Path = roi_type.get_rois_file(image_handler=H)
                         all_rois: pd.DataFrame = pd.read_csv(rois_file, index_col=False)
                         
@@ -240,7 +240,10 @@ def workflow(
                             for _, r in rois.iterrows():
                                 timepoint: RawTimepoint = r[TIMEPOINT_COLUMN]
                                 if timepoint not in time_pool:
-                                    raise RuntimeError(f"Illegal timepoint for ROI allegedly of type {roi_type}: {timepoint}")
+                                    raise RuntimeError(
+                                        f"Illegal timepoint ({timepoint}) for ROI allegedly of type {roi_type}; "
+                                        f"legal timepoints: {', '.join(map(str, sorted(time_pool)))}"
+                                    )
                                 spot_drift: DriftRecord = all_spot_drifts[(fov, timepoint)]
                                 pt0: ImagePoint3D = roi_type.get_roi_center_in_pixels(r)
                                 try:
