@@ -210,7 +210,7 @@ def add_nucleus_labels(
 
     for pos, nuc_mask_image in tqdm.tqdm(mask_images):
         fov_name: FieldOfViewName = pos.removesuffix(".zarr")
-        rois = get_rois(pos)
+        rois = get_rois(fov_name) # Here we use the refined FOV name.
         if len(rois) == 0:
             logging.warning("No ROIs for FOV: %s", fov_name)
             continue
@@ -221,8 +221,8 @@ def add_nucleus_labels(
             rois=rois, 
             nuc_label_img=nuc_mask_image, 
             new_col=NUC_LABEL_COL, 
-            nuc_drift=get_nuc_drift(pos), 
-            spot_drifts=get_spot_drifts(pos),
+            nuc_drift=get_nuc_drift(pos), # Here we use the raw, unrefined FOV name.
+            spot_drifts=get_spot_drifts(pos), # Here we use the raw, unrefined FOV name.
             timepoint=timepoint,
             remove_zarr_suffix_on_fov_name=remove_zarr_suffix,
         )
