@@ -363,7 +363,12 @@ class ImageHandler:
 
     def list_regional_imaging_timepoints_eligible_for_extraction(self) -> list[TimepointFrom0]:
         lg = self.locus_grouping
-        return self.list_all_regional_timepoints() if lg is None else list(sorted(lg.keys()))
+        if lg is None:
+            logging.debug("Null locus grouping, all regional timepoints are eligible")
+            return self.list_all_regional_timepoints()
+        else:
+            logging.debug("Using locus grouping to determine eligible regional timepoints")
+            return list(sorted(lg.keys()))
 
     @property
     def locus_grouping(self) -> Optional[LocusGroupingData]:
