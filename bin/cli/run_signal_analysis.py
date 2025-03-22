@@ -116,13 +116,21 @@ class RoiType(Enum):
         nuc_drift: DriftRecord, 
         spot_drift: DriftRecord,
     ) -> ImagePoint3D:
+        dc_pt  = ImagePoint3D(
+            z=point.z - nuc_drift.z, 
+            y=point.y - nuc_drift.y, 
+            x=point.x - nuc_drift.x, 
+        )
         if self == RoiType.LocusSpecific:
-            shifted = point - nuc_drift # Spot drift will have already been applied.
+            return dc_pt # Spot drift will have already been applied.
         elif self == RoiType.Regional:
-            shifted = point - nuc_drift + spot_drift # Spot drift won't yet have been applied.
-        else:
-            self._raise_unexpected_match_error()
-        return shifted
+            return ImagePoint3D(
+                # Spot drift won't yet have been applied.
+                z=dc_pt.z + spot_drift.z,
+                y=dc_pt.y + spot_drift.y,
+                x=dc_pt.x + spot_drift.x,
+            )
+        self._raise_unexpected_match_error()
 
     @classmethod
     def parse(cls, s: str) -> Option["RoiType"]:
