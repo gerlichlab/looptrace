@@ -373,12 +373,13 @@ class ImageHandler:
     @property
     def locus_grouping(self) -> Optional[LocusGroupingData]:
         section_key = "locusGrouping"
-        result: LocusGroupingData = {}
+        result: Optional[LocusGroupingData] = None
         try:
             data = self.config[section_key]
         except KeyError:
             logging.warning("Did not find locus grouping section key ('%s') in config data", section_key)
         else:
+            result = {}
             for reg_time, locus_times in data.items():
                 # Put the raw timepoint values into their semantic (and domain-narrowing) wrapper.
                 curr: Times = {TimepointFrom0(t) for t in locus_times}
@@ -393,7 +394,11 @@ class ImageHandler:
                     raise
                 else:
                     result[reg_time] = curr
-        return dict(sorted(result.items(), key=itemgetter(0))) if result else None
+        match result:
+            case None:
+                return None
+            case _:
+                return dict(sorted(result.items(), key=itemgetter(0)))
     
     @property
     def locus_spots_visualisation_folder(self) -> Path:
