@@ -89,7 +89,7 @@ class RoiType(Enum):
             timepoints = image_handler.list_regional_imaging_timepoints_eligible_for_extraction()
         else:
             self._raise_unexpected_match_error()
-        return set(timepoints)
+        return set(t.get for t in timepoints)
 
     def get_roi_center_in_pixels(self, roi_rec: pd.Series) -> ImagePoint3D:
         if self == RoiType.LocusSpecific:
