@@ -79,14 +79,17 @@ class RoiType(Enum):
     Regional = "spots_for_voxels_definition_file"
 
     def get_legal_timepoint_pool(self, image_handler: ImageHandler) -> set[RawTimepoint]:
-        timepoints: list[TimepointFrom0]
+        timepoints: Iterable[TimepointFrom0]
         if self == RoiType.LocusSpecific:
-            timepoints = image_handler.list_locus_specific_imaging_timepoints_eligible_for_extraction()
+            timepoints = map(
+                lambda t: t not in image_handler.tracing_exclusions, 
+                image_handler.list_locus_specific_imaging_timepoints_eligible_for_extraction()
+            )
         elif self == RoiType.Regional:
             timepoints = image_handler.list_regional_imaging_timepoints_eligible_for_extraction()
         else:
             self._raise_unexpected_match_error()
-        return set(t.get for t in timepoints if t not in image_handler.tracing_exclusions)
+        return set(timepoints)
 
     def get_roi_center_in_pixels(self, roi_rec: pd.Series) -> ImagePoint3D:
         if self == RoiType.LocusSpecific:
