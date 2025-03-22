@@ -81,7 +81,7 @@ class RoiType(Enum):
     def get_legal_timepoint_pool(self, image_handler: ImageHandler) -> set[RawTimepoint]:
         timepoints: Iterable[TimepointFrom0]
         if self == RoiType.LocusSpecific:
-            timepoints = map(
+            timepoints = filter(
                 lambda t: t not in image_handler.tracing_exclusions, 
                 image_handler.list_locus_specific_imaging_timepoints_eligible_for_extraction()
             )
