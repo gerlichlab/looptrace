@@ -221,7 +221,7 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
          */
         private[looptrace] final case class GoodRecord(
             index: RoiIndex, 
-            fieldOfView: PositionName, 
+            fieldOfView: OneBasedFourDigitPositionName, 
             timepoint: ImagingTimepoint, 
             channel: ImagingChannel, 
             point: Point3D,
