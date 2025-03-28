@@ -3,7 +3,47 @@
     url = "https://github.com/NixOS/nixpkgs/";
     ref = "release-24.05";
     rev = "a417c003326c9a0cdebb62157466603313ffd47e";
-  }) {}, 
+  }) { overlays = [ (self: super: {
+    pkginfo = super.python311Packages.pkginfo.overrideAttrs (oldAttrs: {
+      version = "1.12.0";
+      src = super.fetchPypi {
+        pname = "pkginfo";
+        version = "1.12.0";
+        sha256 = "sha256-itkaBEWgNngrk2bvi4wsUCkfg6VTR4uoWAxz0yFXAM8";
+      };
+    });
+
+    poetry-core = super.python311Packages.poetry-core.overrideAttrs (oldAttrs: {
+      version = "1.9.1";
+      src = super.fetchFromGitHub {
+        owner = "python-poetry";
+        repo = "poetry-core";
+        rev = "1.9.1";
+        sha256 = "sha256-L8lR9sUdRYqjkDCQ0XHXZm5X6xD40t1gxlGiovvb/+8";
+      };
+    });
+
+    virtualenv = super.virtualenv.overrideAttrs (oldAttrs: {
+      version = "20.26.6";
+      src = super.fetchPypi {
+        pname = "virtualenv";
+        version = "20.26.6";
+        sha256 = "sha256-KArt4JoqXDF+QJoAEC5wd8ZDLFo48O+TjmQ4BaetLEg";
+      };
+    });
+
+    poetry = super.poetry.overrideAttrs (oldAttrs: {
+      version = "1.8.5";
+      src = super.fetchFromGitHub {
+        owner = "python-poetry";
+        repo = "poetry";
+        rev = "1.8.5";
+        sha256 = "sha256-YR0IgDhmpbe8TyTMP1cjUxGRnrfV8CNHkPlZrNcnof0";
+      };
+      buildInputs = oldAttrs.buildInputs or [] ++ [ self.poetry-core self.virtualenv self.pkginfo ];
+    });
+  })];
+  }, 
   pipeline ? false,
   test ? true,
   deconvolution ? false,
@@ -41,11 +81,7 @@ pkgs.mkShell {
   name = "looptrace-env";
   buildInputs = [ myR ] ++ 
     (if absolutelyOnlyR then [ ] else baseBuildInputs ++ 
-        (if pipeline then [
-          py311
-          pkgs.zlib
-          pkgs.stdenv.cc.cc.lib
-        ] else [ ]) ++ 
+        (if pipeline then [ py311 ] else [ ]) ++ 
         (if scalaDev then scalaDevTools else [ ]));
   shellHook = if absolutelyOnlyR then "" else ''
     # To get this working on the lab machine, we need to modify Poetry's keyring interaction:
