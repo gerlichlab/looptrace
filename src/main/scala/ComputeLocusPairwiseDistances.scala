@@ -92,6 +92,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
 
     def inputRecordsToOutputRecords(inrecs: Iterable[(Input.GoodRecord, NonnegativeInt)]): List[OutputRecord] = {
         import at.ac.oeaw.imba.gerlich.gerlib.syntax.tuple2.*
+        import OneBasedFourDigitPositionName.given
         
         inrecs.groupBy{ (r, _) => Input.getGroupingKey(r) }
             .toList
@@ -211,7 +212,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
          * @param point The 3D spatial coordinates of the center of a FISH spot
          */
         final case class GoodRecord(
-            fieldOfView: PositionName, 
+            fieldOfView: OneBasedFourDigitPositionName, 
             traceGroup: TraceGroupMaybe, 
             trace: TraceId, 
             region: RegionId, 
@@ -241,7 +242,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
 
     /** Bundler of data which represents a single output record (pairwise distance) */
     final case class OutputRecord(
-        fieldOfView: PositionName, 
+        fieldOfView: OneBasedFourDigitPositionName, 
         traceGroup: TraceGroupMaybe,
         trace: TraceId, 
         region1: RegionId, 

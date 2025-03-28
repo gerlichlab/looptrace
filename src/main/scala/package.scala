@@ -18,7 +18,7 @@ import io.github.iltotore.iron.constraint.numeric.{ GreaterEqual, Less }
 import io.github.iltotore.iron.constraint.string.Match
 
 import at.ac.oeaw.imba.gerlich.gerlib.SimpleShow
-import at.ac.oeaw.imba.gerlich.gerlib.imaging.{ FieldOfView, ImagingTimepoint, PositionName }
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.{ FieldOfView, FieldOfViewLike, ImagingTimepoint, PositionName }
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.json.JsonValueWriter
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
@@ -218,6 +218,17 @@ package object looptrace {
             FourDigitOneBasedRepresentableFieldOfView
                 .fromFieldOfView(fov)
                 .map(refFov => ("P" ++ "%04d".format(refFov)).refineUnsafe[OneBasedFourDigitPositionNameConstraint])
+
+        def unsafeFromFieldOfViewLike: FieldOfViewLike => OneBasedFourDigitPositionName = 
+            import syntax.*
+            (_: FieldOfViewLike) match {
+                case pn: PositionName => pn.unsafeNarrowToOneBasedFourDigitPositionName
+                case fov: FieldOfView => throw new RuntimeException(s"Field of view isn't a position name, but rather $fov")
+            }
+
+        given (Order[String]) => Order[OneBasedFourDigitPositionName] = 
+            import io.github.iltotore.iron.cats.given_Order_:|
+            Order.by(identity)
 
         object syntax:
             extension (pn: OneBasedFourDigitPositionName)

@@ -260,20 +260,13 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
         logger.info("Done!")
     }
 
-    private def forceFovLikeToRefinedPositionName: FieldOfViewLike => OneBasedFourDigitPositionName = 
-        import OneBasedFourDigitPositionName.syntax.*
-        (_: FieldOfViewLike) match {
-            case pn: PositionName => pn.unsafeNarrowToOneBasedFourDigitPositionName
-            case fov: FieldOfView => throw new RuntimeException(s"Field of view isn't a position name, but rather $fov")
-        }
-
     private def readDrifts: os.Path => IO[Either[String, Map[DriftKey, DriftRecord]]] = driftFile => 
         val keyDrifts: List[DriftRecord] => Either[String, Map[DriftKey, DriftRecord]] = drifts => 
             val (recordNumbersByKey, keyed) = 
                 NonnegativeInt.indexed(drifts)
                     .foldLeft(Map.empty[DriftKey, NonEmptySet[NonnegativeInt]] -> Map.empty[DriftKey, DriftRecord]){ 
                         case ((reps, acc), (drift, recnum)) =>  
-                            val fov = forceFovLikeToRefinedPositionName(drift.fieldOfView)
+                            val fov = OneBasedFourDigitPositionName.unsafeFromFieldOfViewLike(drift.fieldOfView)
                             val t = drift.time
                             val k = fov -> t
                             reps.get(k) match {
@@ -293,7 +286,7 @@ object FilterRoisByProximity extends ScoptCliReaders, StrictLogging:
         import OneBasedFourDigitPositionName.syntax.*
         val tryApp: PostMergeRoi => Either[Throwable, PostMergeRoi] = oldRoi => 
             for
-                pn <- Try(forceFovLikeToRefinedPositionName(oldRoi.context.fieldOfView)).toEither
+                pn <- Try(OneBasedFourDigitPositionName.unsafeFromFieldOfViewLike(oldRoi.context.fieldOfView)).toEither
                 posTimePair = pn -> oldRoi.context.timepoint
                 drift <- keyedDrifts.get(posTimePair).toRight(DriftRecordNotFoundError(posTimePair))
                 newRoi <- Try(applyDrift(oldRoi, drift)).toEither
