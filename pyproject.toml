@@ -35,7 +35,7 @@ looptrace-regionals-vis = { git = "https://github.com/gerlichlab/looptrace-regio
 matplotlib = { version = "^3.7.0", optional = true }
 more-itertools = { version = "^10.2.0", optional = true }
 #napari = { version = "^0.4.19", extras = ["all", "pyqt"], optional = true } # most computers
-napari = { version = "^0.4.19", optional = true } # newer Macs (M1, M2)
+napari = { version = "^0.4.19.post1", optional = true } # newer Macs (M1, M2)
 nd2 = "^0.10.1"
 nuclei-vis-napari = { git = "https://github.com/gerlichlab/nuclei-vis-napari", tag = "v0.1.8", optional = true }
 numba = { version = "^0.57.0", optional = true }

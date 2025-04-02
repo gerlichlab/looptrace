@@ -21,6 +21,7 @@ See [Issue 337](https://github.com/gerlichlab/looptrace/issues/337).
 * Removed step of prefiltration of FISH spots through nuclei, as it's obviated by the [filtration of FISH spots by proximity to fiducial beads](https://github.com/gerlichlab/looptrace/issues/401).
 * The location component (a 3D point) of bead ROIs is now encoded in JSON more explicitly as such.
 Namely, rather than an array of three elements, in which the (x, y, z) order of the coordinates/components may be ambiguous (e.g., whether the components follow the typical (x, y, z), or the (z, y, x) sequence more familiar in image analysis), a point is encoded as a collection of key-value pairs, with each key being a coordinate/component name ("x", "y", or "z").
+* Pin Napari version for Nix shell instances using Napari to 0.4.19.post1, to match what's tested in with our individual plugins.
 
 ### Fixed
 * Removed incorrect extra `beadIndex` column from each bead ROIs file; see [Issue 436](https://github.com/gerlichlab/looptrace/issues/436).
