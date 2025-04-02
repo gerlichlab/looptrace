@@ -229,9 +229,9 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
     test("Trace ID is unique globally for an experiment: records with the same trace ID but different fields of view (FOVs) causes expected error. Issue #390"):
         import at.ac.oeaw.imba.gerlich.gerlib.syntax.tuple2.*
         
-        val posNames = List("P0001.zarr", "P0002.zarr").map(PositionName.unsafe)
+        val posNames = List("P0001", "P0002").map(unsafeLiftStringToOneBasedFourDigitPositionName)
         
-        given Arbitrary[(PositionName, TraceId)] = 
+        given Arbitrary[(OneBasedFourDigitPositionName, TraceId)] = 
             // Restrict to relatively few choices of trace ID and position name, to boost collision probability.
             Gen.oneOf(posNames.map(_ -> TraceId.unsafe(8))).toArbitrary
 
@@ -261,7 +261,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
         // Generate records such that there's at least one which has a different region ID, but all have the same trace ID.
         // This ensures that the number of output records differs w.r.t. whether or not the computation does or does not pair up records with the same trace ID but different region ID.
         given Arbitrary[TraceId] = Gen.const(TraceId.unsafe(10)).toArbitrary
-        given Arbitrary[PositionName] = Gen.const(PositionName.unsafe("P0001.zarr")).toArbitrary
+        given Arbitrary[OneBasedFourDigitPositionName] = Gen.const(unsafeLiftStringToOneBasedFourDigitPositionName("P0001")).toArbitrary
 
         def genInputs: Gen[Inputs] = 
             // Here, use a small input size so that the search for unique locus IDs doesn't exhause the max failure count for Gen.setOfN.
@@ -298,7 +298,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
 
     test("Any output record's original record indices map them back to input records with identical grouping elements.") {
         /* To encourage collisions, narrow the choices for grouping components. */
-        given arbPosAndTrace: Arbitrary[(PositionName, TraceId)] = genPosTracePairOneOrOther.toArbitrary
+        given arbPosAndTrace: Arbitrary[(OneBasedFourDigitPositionName, TraceId)] = genPosTracePairOneOrOther.toArbitrary
         given arbRegion: Arbitrary[RegionId] = Gen.oneOf(40, 41).map(RegionId.unsafe).toArbitrary
 
         given Arbitrary[Inputs] = getArbitraryForGoodInputRecords(RequestForArbitraryInputs.repeatsForbidden)
@@ -313,7 +313,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
 
     test("Any trace ID with more than one instance of a particular locus ID causes the expected error.") {
         /* To encourage collisions, narrow the choices for grouping components. */
-        given arbPosAndTrace: Arbitrary[(PositionName, TraceId)] = genPosTracePairOneOrOther.toArbitrary
+        given arbPosAndTrace: Arbitrary[(OneBasedFourDigitPositionName, TraceId)] = genPosTracePairOneOrOther.toArbitrary
         given arbRegion: Arbitrary[RegionId] = Gen.oneOf(40, 41).map(RegionId.unsafe).toArbitrary
         given arbTime: Arbitrary[ImagingTimepoint] = Gen.const(ImagingTimepoint(NonnegativeInt(10))).toArbitrary
         
@@ -332,7 +332,8 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
 
     test("Record count / number of records is as expected -- locus ID pairs are unordered (equivalent when reflected). Issue #395"):
         // For this test, fix the randomisation to use a single field of view and a single trace ID.
-        given Arbitrary[(PositionName, TraceId)] = Gen.const(PositionName.unsafe("P0001.zarr") -> TraceId.unsafe(0)).toArbitrary
+        given Arbitrary[(OneBasedFourDigitPositionName, TraceId)] = 
+            Gen.const(unsafeLiftStringToOneBasedFourDigitPositionName("P0001") -> TraceId.unsafe(0)).toArbitrary
         given Arbitrary[Inputs] = arbitrary[Inputs].flatMap(makeTraceUniqueInLoci).toArbitrary
 
         forAll (Gen.resize(15, arbitrary[Inputs])) { inputs =>  
@@ -345,7 +346,8 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
 
     test("The pairs of locus IDs are as expected; namely, each record has the pair of locus IDs ordered with the lesser one first, and within a trace, these pairs are properly sorted."):
         // For this test, fix the randomisation to use a single field of view and a single trace ID.
-        given Arbitrary[(PositionName, TraceId)] = Gen.const(PositionName.unsafe("P0001.zarr") -> TraceId.unsafe(0)).toArbitrary
+        given Arbitrary[(OneBasedFourDigitPositionName, TraceId)] = 
+            Gen.const(unsafeLiftStringToOneBasedFourDigitPositionName("P0001") -> TraceId.unsafe(0)).toArbitrary
         given Arbitrary[Inputs] = arbitrary[Inputs].flatMap(makeTraceUniqueInLoci).toArbitrary
 
         forAll (Gen.resize(15, arbitrary[Inputs])) { inputs => 
@@ -433,8 +435,8 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
             case rs => throw new Exception(s"Got ${rs.length} records when taking combinations of 2!")
         }
 
-    private def genPosTracePairOneOrOther: Gen[(PositionName, TraceId)] = 
-        val posNames = List("P0001.zarr", "P0002.zarr") map PositionName.unsafe
+    private def genPosTracePairOneOrOther: Gen[(OneBasedFourDigitPositionName, TraceId)] = 
+        val posNames = List("P0001", "P0002") map unsafeLiftStringToOneBasedFourDigitPositionName
         val traceIds = List(2, 3) map TraceId.unsafe
         Gen.oneOf(posNames zip traceIds)
 
