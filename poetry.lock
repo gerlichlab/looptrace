@@ -5259,4 +5259,4 @@ test = ["hypothesis", "more-itertools", "pytest"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">= 3.11, < 3.12"
-content-hash = "3e708b32354e84c5360c51645cb7742243cec163d993308532eab76a62ce7743"
+content-hash = "75fd3250ea9046c04acd46f7c92801e022d3e71ca307a93fdec459f56716d89d"
