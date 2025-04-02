@@ -55,9 +55,8 @@ trait LooptraceSuite extends GenericSuite, GeometricInstances, ImagingInstances,
     given (arbTime: Arbitrary[ImagingTimepoint]) => Arbitrary[LocusId] = arbTime.map(LocusId.apply)
 
     given Arbitrary[OneBasedFourDigitPositionName] = 
-        val rawString = (p: Int) => "P" ++ "%4d".format(p)
-        val refine = OneBasedFourDigitPositionName.fromString(false).fmap(_.fold(msg => throw new Exception(msg), identity))
-        Arbitrary(Gen.choose(1, 9999).map(rawString andThen refine))
+        val rawString = (p: Int) => "P" ++ "%04d".format(p)
+        Arbitrary(Gen.choose(1, 9999).map(rawString andThen unsafeLiftStringToOneBasedFourDigitPositionName))
 
     given (arbName: Arbitrary[String]) => Arbitrary[ProbeName] = arbName.suchThat(_.nonEmpty).map(ProbeName.apply)
 
@@ -115,6 +114,10 @@ trait LooptraceSuite extends GenericSuite, GeometricInstances, ImagingInstances,
     
     protected def genPosReal(limit: PositiveReal): Gen[PositiveReal] = Gen.choose(0.0, limit).suchThat(_ > 0).map(PositiveReal.unsafe)
 
+    protected def unsafeLiftStringToOneBasedFourDigitPositionName(s: String): OneBasedFourDigitPositionName =
+        OneBasedFourDigitPositionName
+            .fromString(false)(s)
+            .fold(msg => throw new IllegalArgumentException(s"Failed to refine value ($s): $msg"), identity)
 
     /**
       * Read given file as CSV with header, and handle resource safety.

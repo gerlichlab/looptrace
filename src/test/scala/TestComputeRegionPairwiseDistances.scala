@@ -220,7 +220,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
             factorial(n) / (factorial(k) * factorial(n - k))
 
         /* To encourage collisions, narrow the choices for grouping components. */
-        given Arbitrary[PositionName] = Gen.const(PositionName("P0002.zarr")).toArbitrary
+        given Arbitrary[OneBasedFourDigitPositionName] = Gen.const(unsafeLiftStringToOneBasedFourDigitPositionName("P0002")).toArbitrary
         given Arbitrary[ImagingChannel] = Gen.const(ImagingChannel.unsafe(0)).toArbitrary
         given Arbitrary[ImagingTimepoint] = Gen.oneOf(40, 41, 42).map(ImagingTimepoint.unsafe).toArbitrary
         
