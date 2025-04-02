@@ -4,13 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v0.14.0] - Unreleased
+## [v0.14.0] - 2025-04-02
 
 ### Added
-* Add a proximity filter between beads and FISH spots. In other words, discard any "FISH spot" which is too close to a bead. Again, this is related to the idea of mixing up the two, especially during single-channel tracing. 
+* Validation program (`ValidateMergeDetermination`) for the determination of which ROIs (from the same timepoint) to merge on account of proximity.
+* Add a proximity filter between beads and FISH spots. 
+In other words, discard any "FISH spot" which is too close to a bead. Again, this is related to the idea of mixing up the two, especially during single-channel tracing. 
 This can be used by setting `proximityFiltrationBetweenBeadsAndSpots` in the pipeline parameters configuration file.
 See [Issue 401](https://github.com/gerlichlab/looptrace/issues/401) and [Issue 403](https://github.com/gerlichlab/looptrace/issues/403).
-* Validation program (`ValidateMergeDetermination`) for the determination of which ROIs (from the same timepoint) to merge on account of proximity.
+* Filter putative fiducial beads by nuclear masks, insisting that only instances _outside_ a nuclear mask may be considered candidate beads for drift correction. 
+This is based on the fact that the nuclear membrane should be refractory / impermeable to the beads. 
 * Support for cross-channel signal analysis for locus-specific spots, extending what was already in place for regional spots. 
 See [Issue 337](https://github.com/gerlichlab/looptrace/issues/337).
 
