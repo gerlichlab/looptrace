@@ -146,7 +146,7 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
                 .toList
                 .sortBy{ r => 
                     (r.fieldOfView, r.traceGroup, r.locus1, r.locus2, r.trace, r.region1, r.region2)
-                }(Order[(PositionName, TraceGroupMaybe, LocusId, LocusId, TraceId, RegionId, RegionId)].toOrdering)
+                }(Order[(OneBasedFourDigitPositionName, TraceGroupMaybe, LocusId, LocusId, TraceId, RegionId, RegionId)].toOrdering)
             }
     }
 
@@ -191,7 +191,10 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
                     Alternative[List].separate(NonnegativeInt.indexed(records).map{ 
                         (r, i) => validateRecordLength(r).flatMap(Function.const{
                             (parseFOV(r), parseTraceGroup(r), parseTrace(r), parseRegion(r), parseLocus(r), parseX(r), parseY(r), parseZ(r)).mapN(
-                                (fov, traceGroup, trace, region, locus, x, y, z) => GoodRecord(fov, traceGroup, trace, region, locus, Point3D(x, y, z))
+                                (fov, traceGroup, trace, region, locus, x, y, z) => 
+                                    import OneBasedFourDigitPositionName.syntax.*
+                                    val pos = fov.unsafeNarrowToOneBasedFourDigitPositionName
+                                    GoodRecord(pos, traceGroup, trace, region, locus, Point3D(x, y, z))
                             ).toEither
                         }).bimap(msgs => BadInputRecord(i, r.toList, msgs), _ -> i)
                     })
@@ -260,7 +263,9 @@ object ComputeLocusPairwiseDistances extends PairwiseDistanceProgram, ScoptCliRe
 
         given CsvRowEncoder[OutputRecord, String]:
             override def apply(elem: OutputRecord): RowF[Some, String] = 
-                val fovText: NamedRow = FieldOfViewColumnName.write(elem.fieldOfView)
+                val fovText: NamedRow = 
+                    import OneBasedFourDigitPositionName.given
+                    FovColumnName.write(elem.fieldOfView)
                 val traceGroupText: NamedRow = TraceGroupColumnName.write(elem.traceGroup)
                 val traceIdText: NamedRow = TraceIdColumnName.write(elem.trace)
                 val reg1Text: NamedRow = ColumnName[RegionId]("region1").write(elem.region1)

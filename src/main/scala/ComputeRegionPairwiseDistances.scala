@@ -44,11 +44,11 @@ import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.TraceGroupColumnName
  * 
  * @author Vince Reuter
  */
-object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
+object ComputeRegionPairwiseDistances extends PairwiseDistanceProgram, ScoptCliReaders, StrictLogging:
     /* Constants */
     private val ProgramName = "ComputeRegionPairwiseDistances"
     private val MaxBadRecordsToShow = 3
-    
+
     /** CLI definition */
     final case class CliConfig(
         roisFile: os.Path = null, // required
@@ -165,7 +165,11 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
     ): List[OutputRecord] = 
         val getPoint: Input.GoodRecord => Point3D = 
             maybeDrifts.fold((_: Input.GoodRecord).point){ driftRecords => 
-                val keyed = driftRecords.map{ d => (d.fieldOfView, d.time) -> d }.toMap
+                val keyed = driftRecords.map{ d => 
+                    val p = OneBasedFourDigitPositionName.unsafeFromFieldOfViewLike(d.fieldOfView)
+                    val t = d.time
+                    (p -> t) -> d 
+                }.toMap
                 (roi: Input.GoodRecord) => 
                     keyed.get(roi.fieldOfView -> roi.timepoint) match {
                         case None => throw new Exception(s"No drift for input record $roi")
@@ -180,6 +184,8 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
             val zDiff = (OurPixels.liftZ(p1.z.value - p2.z.value) in MyUnit).value
             val d = MyUnit(scala.math.sqrt(xDiff * xDiff + yDiff * yDiff + zDiff * zDiff))
             LengthInNanometers.unsafeFromSquants(d)
+        
+        import OneBasedFourDigitPositionName.given // to derive the Order for tuples of which one component is of this type
         inrecs.groupBy(Input.getGroupingKey)
             .toList
             .flatMap{ case ((fov, channel), groupedRecords) => 
@@ -200,7 +206,7 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
                 }
             }
             .sortBy{ r => (r.fieldOfView, r.channel, r.timepoint1, r.timepoint2, r.distance) }(using 
-                summon[Order[(PositionName, ImagingChannel, ImagingTimepoint, ImagingTimepoint, LengthInNanometers)]].toOrdering
+                summon[Order[(OneBasedFourDigitPositionName, ImagingChannel, ImagingTimepoint, ImagingTimepoint, LengthInNanometers)]].toOrdering
             )
 
     private type RowDec[A] = CsvRowDecoder[A, String]
@@ -231,7 +237,7 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
         private[looptrace] object GoodRecord:
             given ( 
                 decId: RowDec[RoiIndex],
-                decPos: CellDecoder[PositionName], 
+                decPos: CellDecoder[OneBasedFourDigitPositionName], 
                 decTime: RowDec[ImagingTimepoint], 
                 decChannel: RowDec[ImagingChannel], 
                 decPoint: RowDec[Centroid[Double]],
@@ -241,7 +247,7 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
                     val idNel = decId(row)
                         .leftMap{ e => s"Cannot decode ROI ID from row ($row): ${e.getMessage}" }
                         .toValidatedNel
-                    val posNel = ColumnName[PositionName](FieldOfViewColumnName.value).from(row)
+                    val posNel = FovColumnName.from(row)
                     val timeNel = decTime(row)
                         .leftMap{ e => s"Cannot decode timepoint from row ($row): ${e.getMessage}" }
                         .toValidatedNel
@@ -283,7 +289,7 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
 
     /** Bundler of data which represents a single output record (pairwise distance) */
     final case class OutputRecord(
-        fieldOfView: PositionName, 
+        fieldOfView: OneBasedFourDigitPositionName, 
         channel: ImagingChannel,
         timepoint1: ImagingTimepoint, 
         timepoint2: ImagingTimepoint, 
@@ -302,7 +308,9 @@ object ComputeRegionPairwiseDistances extends ScoptCliReaders, StrictLogging:
 
         given CsvRowEncoder[OutputRecord, String]:
             override def apply(elem: OutputRecord): RowF[Some, String] = 
-                val fovText: NamedRow = FieldOfViewColumnName.write(elem.fieldOfView)
+                val fovText: NamedRow = 
+                    import OneBasedFourDigitPositionName.given
+                    FovColumnName.write(elem.fieldOfView)
                 val channelText: NamedRow = SpotChannelColumnName.write(elem.channel)
                 val r1Text: NamedRow = ColumnName[ImagingTimepoint]("timepoint1").write(elem.timepoint1)
                 val r2Text: NamedRow = ColumnName[ImagingTimepoint]("timepoint2").write(elem.timepoint2)

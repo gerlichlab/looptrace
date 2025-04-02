@@ -242,5 +242,7 @@ package object looptrace {
                         msg => throw new IllegalArgumentException(msg),
                         identity
                     )
+        
+        given SimpleShow[OneBasedFourDigitPositionName] = SimpleShow.instance(identity)
     end OneBasedFourDigitPositionName
 }
