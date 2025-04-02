@@ -54,6 +54,11 @@ trait LooptraceSuite extends GenericSuite, GeometricInstances, ImagingInstances,
 
     given (arbTime: Arbitrary[ImagingTimepoint]) => Arbitrary[LocusId] = arbTime.map(LocusId.apply)
 
+    given Arbitrary[OneBasedFourDigitPositionName] = 
+        val rawString = (p: Int) => "P" ++ "%4d".format(p)
+        val refine = OneBasedFourDigitPositionName.fromString(false).fmap(_.fold(msg => throw new Exception(msg), identity))
+        Arbitrary(Gen.choose(1, 9999).map(rawString andThen refine))
+
     given (arbName: Arbitrary[String]) => Arbitrary[ProbeName] = arbName.suchThat(_.nonEmpty).map(ProbeName.apply)
 
     given (arbTime: Arbitrary[ImagingTimepoint]) => Arbitrary[RegionId] = arbTime.map(RegionId.apply)
