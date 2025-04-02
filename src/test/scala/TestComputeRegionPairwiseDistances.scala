@@ -37,6 +37,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.ComputeRegionPairwiseDistances.*
+import at.ac.oeaw.imba.gerlich.looptrace.OneBasedFourDigitPositionName.given
 import at.ac.oeaw.imba.gerlich.looptrace.collections.*
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
@@ -96,7 +97,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
         
         def buildPoint(x: Double, y: Double, z: Double) = Point3D(XCoordinate(x), YCoordinate(y), ZCoordinate(z))
         
-        val pos = PositionName("P0001.zarr")
+        val pos = OneBasedFourDigitPositionName.fromString(false)("P0001").fold(msg => throw new Exception(msg), identity)
         val channel = ImagingChannel.unsafe(0)
         val inputRecords = NonnegativeInt.indexed(List((2.0, 1.0, -1.0), (1.0, 5.0, 0.0), (3.0, 0.0, 2.0))).map{
             (pt, i) => Input.GoodRecord(
@@ -204,7 +205,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
                 val observed = inputRecordsToOutputRecords(records, None, ToNanometersIdentity)
                 val expected = observed.toList.sortBy{ r => 
                     (r.fieldOfView, r.channel, r.timepoint1, r.timepoint2, r.distance) 
-                }(using summon[Order[(PositionName, ImagingChannel, ImagingTimepoint, ImagingTimepoint, LengthInNanometers)]].toOrdering)
+                }(using summon[Order[(OneBasedFourDigitPositionName, ImagingChannel, ImagingTimepoint, ImagingTimepoint, LengthInNanometers)]].toOrdering)
                 observed.toList shouldEqual expected
         }
 
@@ -251,7 +252,7 @@ class TestComputeRegionPairwiseDistances extends AnyFunSuite, ScalaCheckProperty
     /** Use arbitrary instances for components to derive an an instance for the sum type. */
     given ( 
         arbId: Arbitrary[RoiIndex],
-        arbPos: Arbitrary[PositionName], 
+        arbPos: Arbitrary[OneBasedFourDigitPositionName], 
         arbTimepoint: Arbitrary[ImagingTimepoint],
         arbChannel: Arbitrary[ImagingChannel],
         arbPoint: Arbitrary[Point3D], 

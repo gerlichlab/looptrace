@@ -28,9 +28,11 @@ import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.* // for .show_ syntax
 import at.ac.oeaw.imba.gerlich.gerlib.testing.instances.all.given
 
 import at.ac.oeaw.imba.gerlich.looptrace.ComputeLocusPairwiseDistances.*
+import at.ac.oeaw.imba.gerlich.looptrace.OneBasedFourDigitPositionName.given
 import at.ac.oeaw.imba.gerlich.looptrace.collections.*
 import at.ac.oeaw.imba.gerlich.looptrace.csv.ColumnNames.TraceGroupColumnName
 import at.ac.oeaw.imba.gerlich.looptrace.instances.all.given
+import at.ac.oeaw.imba.gerlich.looptrace.csv.instances.all.given
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 import at.ac.oeaw.imba.gerlich.looptrace.ComputeLocusPairwiseDistances.Input.getGroupingKey
@@ -206,9 +208,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
 
     test("Distances computed are accurately Euclidean.") {
         def buildPoint(x: Double, y: Double, z: Double) = Point3D(XCoordinate(x), YCoordinate(y), ZCoordinate(z))
-        val pos = 
-            import io.github.iltotore.iron.autoRefine
-            PositionName("P0001.zarr")
+        val pos = OneBasedFourDigitPositionName.fromString(false)("P0001").fold(msg => throw new Exception(msg), identity)
         val traceGroup = TraceGroupMaybe.empty
         val tid = TraceId(NonnegativeInt(1))
         val reg = RegionId(ImagingTimepoint(NonnegativeInt(40)))
@@ -374,7 +374,7 @@ class TestComputeLocusPairwiseDistances extends AnyFunSuite, ScalaCheckPropertyC
     given (arbRoiIdx: Arbitrary[RoiIndex]) => Arbitrary[TraceId] = arbRoiIdx.map(TraceId.fromRoiIndex)
     
     given (
-        arbPosAndTrace: Arbitrary[(PositionName, TraceId)],
+        arbPosAndTrace: Arbitrary[(OneBasedFourDigitPositionName, TraceId)],
         arbRegion: Arbitrary[RegionId], 
         arbLocus: Arbitrary[LocusId], 
         arbPoint: Arbitrary[Point3D], 
