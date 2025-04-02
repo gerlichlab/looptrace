@@ -2,6 +2,8 @@ package at.ac.oeaw.imba.gerlich.looptrace
 
 import cats.data.*
 import cats.syntax.all.*
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnName
+import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.FieldOfViewColumnName
 import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
 
 /**
@@ -10,6 +12,8 @@ import at.ac.oeaw.imba.gerlich.looptrace.CsvHelpers.*
  * @author Vince Reuter
  */
 private[looptrace] trait PairwiseDistanceProgram:
+    protected val FovColumnName = ColumnName[OneBasedFourDigitPositionName](FieldOfViewColumnName.value)
+
     protected def getColParser[A](header: Array[String])(col: String, lift: String => Either[String, A]): ValidatedNel[String, Array[String] => ValidatedNel[String, A]] =
         header.zipWithIndex
             .find(_._1 === col)
