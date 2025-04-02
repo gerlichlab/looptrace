@@ -12,8 +12,6 @@ and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2
 In other words, discard any "FISH spot" which is too close to a bead. Again, this is related to the idea of mixing up the two, especially during single-channel tracing. 
 This can be used by setting `proximityFiltrationBetweenBeadsAndSpots` in the pipeline parameters configuration file.
 See [Issue 401](https://github.com/gerlichlab/looptrace/issues/401) and [Issue 403](https://github.com/gerlichlab/looptrace/issues/403).
-* Filter putative fiducial beads by nuclear masks, insisting that only instances _outside_ a nuclear mask may be considered candidate beads for drift correction. 
-This is based on the fact that the nuclear membrane should be refractory / impermeable to the beads. 
 * Support for cross-channel signal analysis for locus-specific spots, extending what was already in place for regional spots. 
 See [Issue 337](https://github.com/gerlichlab/looptrace/issues/337).
 
@@ -45,6 +43,7 @@ Namely, rather than an array of three elements, in which the (x, y, z) order of 
 ### Added
 * Discard detected beads which are in nuclear regions. See [Issue 401](https://github.com/gerlichlab/looptrace/issues/400) and [Issue 403](https://github.com/gerlichlab/looptrace/issues/403). 
 This is designed to prevent accidentally using a FISH spot as a bead, which is especially likely when doing single-channel tracing, in which beads and FISH signal are captured at the same wavelength.
+This is based on the fact that the nuclear membrane should be refractory / impermeable to the beads. 
 
 ### Changed
 * Bump bundled version of the regional spots plugin up to v0.5.0.
