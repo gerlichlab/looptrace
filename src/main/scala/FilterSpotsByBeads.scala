@@ -41,7 +41,7 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 object FilterSpotsByBeads extends StrictLogging, ScoptCliReaders:
     val ProgramName = "FilterSpotsByBeads"
     
-    private val defaultThreshold: NonnegativeReal = NonnegativeReal(0)
+    private val defaultThreshold: NonnegativeReal = NonnegativeReal(Double.MaxValue)
 
     case class CliConfig(
         spotsFolder: os.Path = null, // required
