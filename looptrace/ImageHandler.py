@@ -98,7 +98,8 @@ def determine_bead_timepoint_for_spot_filtration(
 ) -> Result[int, ConfigurationValueError]:
     return _get_bead_timepoint_for_spot_filtration(params_config)\
         .bind(lambda maybe_time: maybe_time.to_result("Could not get timepoint for filtration of spots by bead proximity"))\
-        .bind(lambda t: _invalidate_beads_timepoint_for_spot_filtration(beads_timepoint=t, rounds=image_rounds))
+        .bind(lambda t: _invalidate_beads_timepoint_for_spot_filtration(beads_timepoint=t, rounds=image_rounds))\
+        .map_error(lambda msg: ConfigurationValueError(msg))
 
 
 @doc(
