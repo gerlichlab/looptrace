@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v0.14.0] - 2025-04-02
+## [v0.14.0] - 2025-04-03
 
 ### Added
 * Validation program (`ValidateMergeDetermination`) for the determination of which ROIs (from the same timepoint) to merge on account of proximity.
