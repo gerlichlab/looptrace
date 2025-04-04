@@ -48,20 +48,6 @@ package object space:
     object ZCoordinate:
         def apply(z: Double): ZCoordinate = geometry.ZCoordinate(z)
 
-    /** Designate the ordering of coordinates for a point (e.g. xyz for Forward or zyx for Reverse). */
-    enum CoordinateSequence derives ReadWriter:
-        case Forward, Reverse
-
-    object CoordinateSequence:
-        /** Conversion of a coordinate sequence member value to JSON value, routing through text representation */
-        given (liftStr: String => ujson.Value) => (CoordinateSequence => ujson.Value) = cs => liftStr(cs.toString)
-
-        /** Try to parse given text as enum instance. */
-        def parse(s: String): Either[Throwable, CoordinateSequence] = Try{ CoordinateSequence.valueOf(s) }.toEither
-
-        /** Try to parse given JSON value as enum instance. */
-        def fromJsonSafe(json: ujson.Value): Either[Throwable, CoordinateSequence] = Try(json.str).toEither.flatMap(parse)
-
     type BoundingBox = geometry.BoundingBox[Wrapped]
 
     type Point3D = geometry.Point3D[Wrapped]

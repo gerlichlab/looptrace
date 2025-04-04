@@ -31,7 +31,7 @@ import at.ac.oeaw.imba.gerlich.gerlib.testing.syntax.SyntaxForScalacheck
 import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionBeadRois.*
 import at.ac.oeaw.imba.gerlich.looptrace.PathHelpers.listPath
 import at.ac.oeaw.imba.gerlich.looptrace.UJsonHelpers.readJsonFile
-import at.ac.oeaw.imba.gerlich.looptrace.space.{ CoordinateSequence, Point3D, XCoordinate, YCoordinate, ZCoordinate }
+import at.ac.oeaw.imba.gerlich.looptrace.space.{ Point3D, XCoordinate, YCoordinate, ZCoordinate }
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** Tests for the partitioning of regions of interest (ROIs) for drift correction */

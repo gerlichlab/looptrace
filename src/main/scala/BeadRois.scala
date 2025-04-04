@@ -15,7 +15,6 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.space.{
     Coordinate, 
-    CoordinateSequence, 
     Point3D, 
     XCoordinate, 
     YCoordinate, 
