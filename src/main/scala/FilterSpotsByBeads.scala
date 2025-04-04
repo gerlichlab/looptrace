@@ -166,7 +166,6 @@ object FilterSpotsByBeads extends StrictLogging, ScoptCliReaders:
                                 Alternative[List].separate(readCsvToCaseClasses[IndexedDetectedSpot](spotsFile)
                                     .unsafeRunSync()
                                     .map(spot => 
-                                        logger.info(s"Finding beads close to spot: ${spot.index}")
                                         val spotDrift = lookupTotalDrift(fovName -> spot.timepoint)
                                         val dcCenter = Movement.addDrift(spotDrift)(spot.centroid.asPoint)
                                         val nearBeads = 
@@ -269,24 +268,12 @@ object FilterSpotsByBeads extends StrictLogging, ScoptCliReaders:
         import scala.math.Numeric.Implicits.infixNumericOps
         import CenterFinder.syntax.*
         (query: Query) => refs.foldLeft(Set.empty[RoiIndex]){ case (acc, (i, p)) => 
-            logger.debug(s"p: $p")
             val q = query.locateCenter.asPoint
-            logger.debug(s"q: $query")
             val delX = pixels.liftX(q.x.value - p.x.value)
-            logger.debug(s"dx: $delX")
             val delY = pixels.liftY(q.y.value - p.y.value)
-            logger.debug(s"dy: $delY")
             val delZ = pixels.liftZ(q.z.value - p.z.value)
-            logger.debug(s"dz: $delZ")
-            val d = sqrt(List(delX, delY, delZ).foldLeft(0.0){ (acc, del) => acc + pow(del.value, 2) })
-            logger.debug(s"distance: $d")
-            if d < threshold 
-            then 
-                logger.info("HIT")
-                acc + i 
-            else 
-                logger.debug("no hit")
-                acc 
+            val d = sqrt(List(delX, delY, delZ).foldLeft(0.0){ (acc, del) => acc + pow(del.toNanometers, 2) })
+            if d < threshold then acc + i else acc
         }
 
     def findNeighbors[C: Numeric, Ref, Query](
