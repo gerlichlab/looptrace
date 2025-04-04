@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.14.1] - 2025-04-05
+
+### Fixed
+* Distance computation between FISH spots and beads is now (correctly) in physical space, not image space.
+
 ## [v0.14.0] - 2025-04-03
 
 ### Added
