@@ -6,7 +6,7 @@ import cats.syntax.functor.*
 import org.scalacheck.{ Arbitrary, Gen }
 import org.scalacheck.Arbitrary.arbitrary
 
-import at.ac.oeaw.imba.gerlich.looptrace.space.{ CoordinateSequence, Point3D }
+import at.ac.oeaw.imba.gerlich.looptrace.space.Point3D
 import at.ac.oeaw.imba.gerlich.looptrace.PartitionIndexedDriftCorrectionBeadRois.{ XColumn, YColumn, ZColumn, ParserConfig }
 
 /** Types and helpers for testing partitioning of regions of interest (ROIs) */

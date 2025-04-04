@@ -7,8 +7,6 @@ import org.scalatest.matchers.*
 import org.scalatest.prop.Configuration.PropertyCheckConfiguration
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
-import at.ac.oeaw.imba.gerlich.looptrace.space.CoordinateSequence
-
 /** Tests for the partitioning of regions of interest (ROIs) for drift correction */
 class TestRois extends AnyFunSuite, ScalaCheckPropertyChecks, should.Matchers, PartitionRoisSuite {
     import SelectedRoi.*

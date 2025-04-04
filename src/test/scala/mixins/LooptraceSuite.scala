@@ -30,7 +30,6 @@ import at.ac.oeaw.imba.gerlich.looptrace.roi.MergeAndSplitRoiTools.{
 import at.ac.oeaw.imba.gerlich.looptrace.space.{
     BoundingBox as BB,
     Coordinate, 
-    CoordinateSequence,
     Point3D,
     XCoordinate, 
     YCoordinate, 
@@ -44,9 +43,6 @@ trait LooptraceSuite extends GenericSuite, GeometricInstances, ImagingInstances,
     /************************/
     /* Givens ("implicits") */
     /************************/
-    given arbitraryForCoordinateSequence: Arbitrary[CoordinateSequence] = 
-        Arbitrary{ Gen.oneOf(CoordinateSequence.Forward, CoordinateSequence.Reverse) }
-
     given arbitraryForDelimiter: Arbitrary[Delimiter] = Arbitrary{ Gen.oneOf(Delimiter.CommaSeparator, Delimiter.TabSeparator) }
 
     given (arbT: Arbitrary[NonnegativeReal]) => Arbitrary[EuclideanDistance.Threshold] = 
