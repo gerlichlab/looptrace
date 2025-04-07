@@ -90,6 +90,10 @@ package object space:
 
     /** Helpers for working with length in nanometers */
     object LengthInNanometers:
+        def fromSquants(l: Length): Either[String, LengthInNanometers] = 
+            NonnegativeReal.either((l in Nanometers).value)
+                .leftMap(msg => s"Error converting length ($l) to (nonnegative) nanometers: $msg")
+
         def parseString(s: String): EitherNel[String, LengthInNanometers] = 
             given Eq[LengthUnit] = Eq.fromUniversalEquals
             Length.parseString(s)
@@ -107,10 +111,6 @@ package object space:
                         .toValidatedNel
                     (checkUnitNel, refinedNel).mapN((_, l) => l).toEither
                 }
-
-        def fromSquants(l: Length): Either[String, LengthInNanometers] = 
-            NonnegativeReal.either((l in Nanometers).value)
-                .leftMap(msg => s"Error converting length ($l) to (nonnegative) nanometers: $msg")
 
         def unsafeFromSquants(l: Length): LengthInNanometers = 
             fromSquants(l).fold(msg => throw new Exception(msg), identity)
