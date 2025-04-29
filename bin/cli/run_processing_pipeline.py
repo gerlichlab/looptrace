@@ -23,7 +23,7 @@ from looptrace.Drifter import coarse_correction_workflow, fine_correction_workfl
 from looptrace.ImageHandler import BeadRoisFilenameSpecification, ImageHandler
 from looptrace.NucDetector import NucDetector
 from looptrace.Tracer import Tracer, run_timepoint_name_and_distance_application
-from looptrace.bead_roi_generation import FAIL_CODE_COLUMN_NAME, INDEX_COLUMN_NAME as BEAD_INDEX_COLUMN_NAME
+from looptrace.bead_roi_generation import FAIL_CODE_COLUMN_NAME
 from looptrace.configuration import KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS
 from looptrace.conversion_to_zarr import one_to_one as run_zarr_production
 from looptrace.image_processing_functions import extract_labeled_centroids
