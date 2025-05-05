@@ -8,15 +8,18 @@ import at.ac.oeaw.imba.gerlich.gerlib.roi.measurement.*
 
 import at.ac.oeaw.imba.gerlich.looptrace.space.*
 
-/** Bundle of imaging context, ROI centroid, size, mean pixel intensity, and a 3D bounding box */
+/** Bundle of imaging context, ROI centroid, size, mean pixel intensity, and a
+  * 3D bounding box
+  */
 final case class DetectedSpotRoi(
     spot: DetectedSpot[Double],
-    box: BoundingBox,
+    box: BoundingBox
 ):
-    def centroid: Centroid[Double] = spot.centroid
-    def context: ImagingContext = spot.context
+  def centroid: Centroid[Double] = spot.centroid
+  def context: ImagingContext = spot.context
 end DetectedSpotRoi
 
 object DetectedSpotRoi:
-    given AdmitsImagingContext[DetectedSpotRoi] = AdmitsImagingContext.instance(_.context)
+  given AdmitsImagingContext[DetectedSpotRoi] =
+    AdmitsImagingContext.instance(_.context)
 end DetectedSpotRoi

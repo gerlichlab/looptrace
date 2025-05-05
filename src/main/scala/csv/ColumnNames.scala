@@ -12,54 +12,66 @@ import at.ac.oeaw.imba.gerlich.looptrace.space.RawCoordinate
 
 /** Collection of names of critical columns from which to parse data */
 object ColumnNames:
-    /** Each merge input is associated with at least one merge output. */
-    val MergeOutputColumnName: ColumnName[RoiIndex] = 
-        ColumnName("mergeOutput")
+  /** Each merge input is associated with at least one merge output. */
+  val MergeOutputColumnName: ColumnName[RoiIndex] =
+    ColumnName("mergeOutput")
 
-    /** The associated collection may be empty (nothing to merge with). */
-    val MergeContributorsColumnNameForAssessedRecord: ColumnName[Set[RoiIndex]] = 
-        ColumnName(mergeContributorsName)
+  /** The associated collection may be empty (nothing to merge with). */
+  val MergeContributorsColumnNameForAssessedRecord: ColumnName[Set[RoiIndex]] =
+    ColumnName(mergeContributorsName)
 
-    /** Distinguished from [[MergedRoisColumnName]] by static guarantee of at least 2 members */
-    val MergeContributorsColumnNameForMergedRecord: ColumnName[AtLeast2[Set, RoiIndex]] = 
-        ColumnName(mergeContributorsName)
+  /** Distinguished from [[MergedRoisColumnName]] by static guarantee of at
+    * least 2 members
+    */
+  val MergeContributorsColumnNameForMergedRecord
+      : ColumnName[AtLeast2[Set, RoiIndex]] =
+    ColumnName(mergeContributorsName)
 
-    val RoiIndexColumnName: ColumnName[RoiIndex] = ColumnName("index")
+  val RoiIndexColumnName: ColumnName[RoiIndex] = ColumnName("index")
 
-    val CoarseDriftColumnNameX: ColumnName[CoarseDriftComponent[AxisX]] = 
-        coarseDriftColumnName[AxisX](EuclideanAxis.X)
-    
-    val CoarseDriftColumnNameY: ColumnName[CoarseDriftComponent[AxisY]] = 
-        coarseDriftColumnName[AxisY](EuclideanAxis.Y)
+  val CoarseDriftColumnNameX: ColumnName[CoarseDriftComponent[AxisX]] =
+    coarseDriftColumnName[AxisX](EuclideanAxis.X)
 
-    val CoarseDriftColumnNameZ: ColumnName[CoarseDriftComponent[AxisZ]] = 
-        coarseDriftColumnName[AxisZ](EuclideanAxis.Z)
+  val CoarseDriftColumnNameY: ColumnName[CoarseDriftComponent[AxisY]] =
+    coarseDriftColumnName[AxisY](EuclideanAxis.Y)
 
-    val FineDriftColumnNameX: ColumnName[FineDriftComponent[AxisX]] = 
-        fineDriftColumnName[AxisX](EuclideanAxis.X)
-    
-    val FineDriftColumnNameY: ColumnName[FineDriftComponent[AxisY]] = 
-        fineDriftColumnName[AxisY](EuclideanAxis.Y)
+  val CoarseDriftColumnNameZ: ColumnName[CoarseDriftComponent[AxisZ]] =
+    coarseDriftColumnName[AxisZ](EuclideanAxis.Z)
 
-    val FineDriftColumnNameZ: ColumnName[FineDriftComponent[AxisZ]] = 
-        fineDriftColumnName[AxisZ](EuclideanAxis.Z)
+  val FineDriftColumnNameX: ColumnName[FineDriftComponent[AxisX]] =
+    fineDriftColumnName[AxisX](EuclideanAxis.X)
 
-    val TooCloseRoisColumnName: ColumnName[NonEmptySet[RoiIndex]] = 
-        ColumnName("tooCloseRois")
+  val FineDriftColumnNameY: ColumnName[FineDriftComponent[AxisY]] =
+    fineDriftColumnName[AxisY](EuclideanAxis.Y)
 
-    val TraceGroupColumnName: ColumnName[TraceGroupMaybe] = ColumnName("traceGroup")
+  val FineDriftColumnNameZ: ColumnName[FineDriftComponent[AxisZ]] =
+    fineDriftColumnName[AxisZ](EuclideanAxis.Z)
 
-    val TraceIdColumnName: ColumnName[TraceId] = ColumnName("traceId")
+  val TooCloseRoisColumnName: ColumnName[NonEmptySet[RoiIndex]] =
+    ColumnName("tooCloseRois")
 
-    val TracePartnersAreAllPresentColumnName: ColumnName[Option[Boolean]] = ColumnName("hasAllTracePartners")
-    
-    val TracePartnersColumName: ColumnName[Set[RoiIndex]] = ColumnName("tracePartners")
+  val TraceGroupColumnName: ColumnName[TraceGroupMaybe] = ColumnName(
+    "traceGroup"
+  )
 
-    private def coarseDriftColumnName[A <: EuclideanAxis](a: A): ColumnName[CoarseDriftComponent[A]] = 
-        ColumnName(a.toString.toLowerCase ++ "DriftCoarsePixels")
+  val TraceIdColumnName: ColumnName[TraceId] = ColumnName("traceId")
 
-    private def fineDriftColumnName[A <: EuclideanAxis](a: A): ColumnName[FineDriftComponent[A]] = 
-        ColumnName(a.toString.toLowerCase ++ "DriftFinePixels")
+  val TracePartnersAreAllPresentColumnName: ColumnName[Option[Boolean]] =
+    ColumnName("hasAllTracePartners")
 
-    private def mergeContributorsName: String = "mergePartners"
+  val TracePartnersColumName: ColumnName[Set[RoiIndex]] = ColumnName(
+    "tracePartners"
+  )
+
+  private def coarseDriftColumnName[A <: EuclideanAxis](
+      a: A
+  ): ColumnName[CoarseDriftComponent[A]] =
+    ColumnName(a.toString.toLowerCase ++ "DriftCoarsePixels")
+
+  private def fineDriftColumnName[A <: EuclideanAxis](
+      a: A
+  ): ColumnName[FineDriftComponent[A]] =
+    ColumnName(a.toString.toLowerCase ++ "DriftFinePixels")
+
+  private def mergeContributorsName: String = "mergePartners"
 end ColumnNames

@@ -3,6 +3,13 @@ package csv
 
 /** Aggregation of CSV-related typeclass instances */
 package object instances:
-    object all extends AllCsvInstances
+  object all extends AllCsvInstances
 
-    trait AllCsvInstances extends DriftCsvInstances, GeometryInstances, ImagingCsvInstances, LocusIdInstances, RegionIdInstances, RoiCsvInstances, TracingCsvInstances
+  trait AllCsvInstances
+      extends DriftCsvInstances,
+        GeometryInstances,
+        ImagingCsvInstances,
+        LocusIdInstances,
+        RegionIdInstances,
+        RoiCsvInstances,
+        TracingCsvInstances

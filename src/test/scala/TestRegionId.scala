@@ -13,32 +13,48 @@ import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
 import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 
 /** Tests for region ID wrapper type */
-class TestRegionId extends AnyFunSuite, ScalaCheckPropertyChecks, LooptraceSuite, RefinementWrapperSuite, should.Matchers:
-    override implicit val generatorDrivenConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 100)
-    
-    test("RegionId.fromInt works; region ID must be nonnegative.") {
-        forAll { (z: Int) => RegionId.fromInt(z) match {
-            case Left(msg) if z < 0 => msg shouldEqual ironNonnegativityFailureMessage
-            case Right(rid@RegionId(ImagingTimepoint(t))) if z >= 0 => 
-                t shouldEqual z
-                rid.get shouldEqual ImagingTimepoint.unsafe(z)
-            case result => fail(s"Unexpected result parsing region ID from int ($z): $result")
-        } }
-    }
+class TestRegionId
+    extends AnyFunSuite,
+      ScalaCheckPropertyChecks,
+      LooptraceSuite,
+      RefinementWrapperSuite,
+      should.Matchers:
+  override implicit val generatorDrivenConfig: PropertyCheckConfiguration =
+    PropertyCheckConfiguration(minSuccessful = 100)
 
-    test("RegionId.fromNonnegative works; region ID must be nonnegative.") {
-        forAll { (z: NonnegativeInt) => 
-            RegionId.fromNonnegative(z).get shouldEqual ImagingTimepoint(z)
-        }
+  test("RegionId.fromInt works; region ID must be nonnegative.") {
+    forAll { (z: Int) =>
+      RegionId.fromInt(z) match {
+        case Left(msg) if z < 0 =>
+          msg shouldEqual ironNonnegativityFailureMessage
+        case Right(rid @ RegionId(ImagingTimepoint(t))) if z >= 0 =>
+          t shouldEqual z
+          rid.get shouldEqual ImagingTimepoint.unsafe(z)
+        case result =>
+          fail(s"Unexpected result parsing region ID from int ($z): $result")
+      }
     }
+  }
 
-    test("Region IDs are equivalent on their wrapped values.") {
-        forAll (genEquivalenceInputAndExpectation(RegionId.apply)) { case (f1, f2, exp) => f1 === f2 shouldBe exp }
+  test("RegionId.fromNonnegative works; region ID must be nonnegative.") {
+    forAll { (z: NonnegativeInt) =>
+      RegionId.fromNonnegative(z).get shouldEqual ImagingTimepoint(z)
     }
+  }
 
-    test("Set respects region ID equivalence.") {
-        forAll (genValuesAndNumUnique(Arbitrary.arbitrary[NonnegativeInt])(RegionId.fromNonnegative)) { 
-            case (ids, exp) => ids.toSet shouldEqual exp
-        }
+  test("Region IDs are equivalent on their wrapped values.") {
+    forAll(genEquivalenceInputAndExpectation(RegionId.apply)) {
+      case (f1, f2, exp) => f1 === f2 shouldBe exp
     }
+  }
+
+  test("Set respects region ID equivalence.") {
+    forAll(
+      genValuesAndNumUnique(Arbitrary.arbitrary[NonnegativeInt])(
+        RegionId.fromNonnegative
+      )
+    ) { case (ids, exp) =>
+      ids.toSet shouldEqual exp
+    }
+  }
 end TestRegionId

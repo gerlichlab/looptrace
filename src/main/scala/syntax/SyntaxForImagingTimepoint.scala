@@ -10,36 +10,68 @@ import mouse.boolean.*
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.*
+import at.ac.oeaw.imba.gerlich.gerlib.refinement.IllegalRefinement
 import at.ac.oeaw.imba.gerlich.gerlib.syntax.all.*
 
-/** Helpers for working with [[at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint]] values */
+/** Helpers for working with
+  * [[at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint]] values
+  */
 trait SyntaxForImagingTimepoint:
-    /** The text prefix before the encoding of the numeric timepoint value in a filename */
-    private val PrefixInFilename = "Time"
-    
-    extension (IT: ImagingTimepoint.type)
-        /** Attempt to parse a timepoint value from the fields in name of given filepath. */
-        def parseValueIndexPairFromPath(p: os.Path, filenameFieldSep: String): Either[String, (ImagingTimepoint, Int)] =
-            p.last.split(filenameFieldSep).toList
-                .zipWithIndex
-                .flatMap{ (s, idx) => parseFilenameField(s).toOption.map(_ -> idx) } match {
-                    case pair :: Nil => pair.asRight
-                    case times => s"${times.length} timepoints detected from path ($p): $times".asLeft
-                }
+  /** The text prefix before the encoding of the numeric timepoint value in a
+    * filename
+    */
+  private val PrefixInFilename = "Time"
 
-        /** Parse timepoint from text (typically, a chunk of a delimited filename). */
-        private def parseFilenameField(s: String): Either[String, ImagingTimepoint] = s.startsWith(PrefixInFilename)
-            .either(s"Timepoint parse input lacks correct prefix ($PrefixInFilename): $s", s.stripPrefix(PrefixInFilename))
-                // Read first to Double and then to Int, to ensure no decimal gets through via truncation.
-                >>= { (s: String) => Try(s.toDouble).toEither.leftMap(_.getMessage) }
-                >>= tryToInt
-                >>= IT.fromInt
+  extension (IT: ImagingTimepoint.type)
+    /** Attempt to parse a timepoint value from the fields in name of given
+      * filepath.
+      */
+    def parseValueIndexPairFromPath(
+        p: os.Path,
+        filenameFieldSep: String
+    ): Either[String, (ImagingTimepoint, Int)] =
+      p.last
+        .split(filenameFieldSep)
+        .toList
+        .zipWithIndex
+        .flatMap { (s, idx) =>
+          parseFilenameField(s).toOption.map(_ -> idx)
+        } match {
+        case pair :: Nil => pair.asRight
+        case times =>
+          s"${times.length} timepoints detected from path ($p): $times".asLeft
+      }
 
-        /** Like a {@code Show}, but to display the value for use in a filename. */
-        def printForFilename(t: ImagingTimepoint): String = 
-            val rawTimeRep: String = t.show_
-            val lpad = "0" * (5 - rawTimeRep.length)
-            PrefixInFilename ++ lpad ++ rawTimeRep
+    /** Parse timepoint from text (typically, a chunk of a delimited filename).
+      */
+    private def parseFilenameField(
+        s: String
+    ): Either[String, ImagingTimepoint] = s
+      .startsWith(PrefixInFilename)
+      .either(
+        s"Timepoint parse input lacks correct prefix ($PrefixInFilename): $s",
+        s.stripPrefix(PrefixInFilename)
+      )
+    // Read first to Double and then to Int, to ensure no decimal gets through via truncation.
+      >>= { (s: String) => Try(s.toDouble).toEither.leftMap(_.getMessage) }
+      >>= tryToInt
+      >>= IT.fromInt
 
-        /** Assume given integer is nonnegative and lift it into the type for timepoints. */
-        def unsafe: Int => ImagingTimepoint = NonnegativeInt.unsafe `andThen` ImagingTimepoint.apply
+    /** Like a {@code Show}, but to display the value for use in a filename. */
+    def printForFilename(t: ImagingTimepoint): String =
+      val rawTimeRep: String = t.show_
+      val lpad = "0" * (5 - rawTimeRep.length)
+      PrefixInFilename ++ lpad ++ rawTimeRep
+
+    /** Assume given integer is nonnegative and lift it into the type for
+      * timepoints.
+      */
+    def unsafe: Int => ImagingTimepoint = z =>
+      NonnegativeInt.option(z) match {
+        case None =>
+          throw IllegalRefinement(
+            z,
+            s"Alleged imaging timepoint value ($z) is not nonnegative"
+          )
+        case Some(n) => ImagingTimepoint(n)
+      }

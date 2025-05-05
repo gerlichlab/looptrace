@@ -8,5 +8,6 @@ import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingTimepoint
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.imagingTimepoint.given
 
 trait LocusIdInstances:
-    import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.imagingTimepoint.given
-    given SimpleShow[LocusId] = summon[SimpleShow[ImagingTimepoint]].contramap(_.get)
+  import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.imagingTimepoint.given
+  given SimpleShow[LocusId] =
+    summon[SimpleShow[ImagingTimepoint]].contramap(_.get)

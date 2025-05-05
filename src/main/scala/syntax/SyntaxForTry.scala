@@ -6,5 +6,5 @@ import cats.data.ValidatedNel
 import cats.syntax.all.*
 
 trait SyntaxForTry:
-    extension [A](t: Try[A])
-        def toValidatedNel: ValidatedNel[Throwable, A] = t.toEither.toValidatedNel
+  extension [A](t: Try[A])
+    def toValidatedNel: ValidatedNel[Throwable, A] = t.toEither.toValidatedNel

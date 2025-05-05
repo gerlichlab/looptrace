@@ -5,8 +5,8 @@ import scala.util.Try
 
 /** Extra syntax on JSON-related values */
 trait SyntaxForJson:
-    extension (v: ujson.Value)
-        def int: Int = tryToInt(v.num).fold(msg => throw new ujson.Value.InvalidData(v, msg), identity)
+  extension (v: ujson.Value)
+    def int: Int = tryToInt(v.num)
+      .fold(msg => throw new ujson.Value.InvalidData(v, msg), identity)
 
-    extension (v: ujson.Value)
-        def safeInt = Try{ v.int }.toEither
+  extension (v: ujson.Value) def safeInt = Try { v.int }.toEither

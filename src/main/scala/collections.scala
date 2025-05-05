@@ -5,19 +5,23 @@ import scala.collection.SeqOps
 import cats.*
 import cats.data.*
 import cats.syntax.all.*
-import io.github.iltotore.iron.{ :|, Constraint, refineEither, refineUnsafe }
+import io.github.iltotore.iron.{:|, Constraint, refineEither, refineUnsafe}
 import io.github.iltotore.iron.constraint.collection.MinLength
 
 /** Tools for working with collections */
 package object collections:
-    /** Syntax helpers for working with various Set implementations */
-    extension [X : Ordering](xs: Set[X])
-        def toNonEmptySet: Option[NonEmptySet[X]] = NonEmptySet.fromSet(xs.toSortedSet)
-        def toNonEmptySetUnsafe: NonEmptySet[X] = xs.toNonEmptySet.getOrElse {
-            throw new IllegalArgumentException("Cannot create NonEmptySet from empty set")
-        }
-        def toSortedSet: SortedSet[X] = SortedSet.from(xs)
+  /** Syntax helpers for working with various Set implementations */
+  extension [X: Ordering](xs: Set[X])
+    def toNonEmptySet: Option[NonEmptySet[X]] =
+      NonEmptySet.fromSet(xs.toSortedSet)
+    def toNonEmptySetUnsafe: NonEmptySet[X] = xs.toNonEmptySet.getOrElse {
+      throw new IllegalArgumentException(
+        "Cannot create NonEmptySet from empty set"
+      )
+    }
+    def toSortedSet: SortedSet[X] = SortedSet.from(xs)
 
-    extension [X](xs: NonEmptySet[X])
-        def ++(ys: Set[X])(using Ordering[X]): NonEmptySet[X] = ys.toNonEmptySet.fold(xs)(xs | _)
+  extension [X](xs: NonEmptySet[X])
+    def ++(ys: Set[X])(using Ordering[X]): NonEmptySet[X] =
+      ys.toNonEmptySet.fold(xs)(xs | _)
 end collections
