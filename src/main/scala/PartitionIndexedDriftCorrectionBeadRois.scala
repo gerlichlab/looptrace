@@ -47,7 +47,7 @@ object PartitionIndexedDriftCorrectionBeadRois
   /* Type aliases */
   type RawRecord = Array[String]
   type FovTimePair = (FieldOfView, ImagingTimepoint)
-  type KeyedProblem = (FovTimePair, RoisSplit.Problem)
+  type KeyedProblem = (FovTimePair, RoisSplit.Problem[?])
   type InitFile = (FovTimePair, os.Path)
   type IndexedRoi = FiducialBead | SelectedRoi
   type JsonWriter[*] = upickle.default.Writer[*]
@@ -191,7 +191,10 @@ object PartitionIndexedDriftCorrectionBeadRois
             (pt, tooFew) =>
               (pt -> tooFew.shiftingProblem, pt -> tooFew.accuracyProblem)
           }.unzip
-          os.write(warningsFile, write(problemsToWrite, indent = 2))
+          os.write(
+            warningsFile, 
+            write(problemsToWrite.asInstanceOf[List[KeyedProblem]], indent = 2)
+          )
           problemsToPropagate
         case _ =>
           // Here we have all parse errors or mixed error types and can't combine them.
@@ -409,18 +412,21 @@ object PartitionIndexedDriftCorrectionBeadRois
     timeByFov.toList.map(proc1.tupled)
   }
 
+  private def writeOneKeyedProblemPair: KeyedProblem => JsonMappable.JMap = 
+    import FovTimePair.given
+    import JsonMappable.toJsonMap
+    (pair, problem) => 
+      JsonMappable
+        .combineSafely(List(pair.toJsonMap, problem.toJsonMap))
+        .fold(reps => throw RepeatedKeysException(reps), identity)
+
   /** Write, to JSON, a pair of (FOV, image time) and a case of too-few-ROIs for
     * shifting for drift correction.
     */
   private[looptrace] def readWriterForKeyedTooFewProblem
       : ReadWriter[KeyedProblem] = {
-    import FovTimePair.given
-    import JsonMappable.toJsonMap
     readwriter[ujson.Value].bimap(
-      (pair, problem) =>
-        JsonMappable
-          .combineSafely(List(pair.toJsonMap, problem.toJsonMap))
-          .fold(reps => throw RepeatedKeysException(reps), identity),
+      (pair, problem) => writeOneKeyedProblemPair(pair, problem),
       json =>
         val fovNel = Try {
           FieldOfView.unsafeLift(json(FieldOfViewColumnName.value).int)
@@ -446,10 +452,15 @@ object PartitionIndexedDriftCorrectionBeadRois
           (fov, time, requested, realized, purpose) =>
             val problem = purpose match {
               case Purpose.Shifting =>
-                RoisSplit.Problem.shifting(requested, realized)
+                RoisSplit.Problem.Shifting(requested, realized)
               case Purpose.Accuracy =>
-                import ShiftingCount.asPositive
-                RoisSplit.Problem.accuracy(requested.asPositive, realized)
+                RoisSplit.Problem.Accuracy(
+                  requested
+                    .asInstanceOf[Int]
+                    .refineEither[Positive]
+                    .fold(msg => throw IllegalRefinement(requested, s"Failed to cast requested count as positive: $msg"), identity), 
+                  realized
+                )
             }
             (fov -> time) -> problem
         ) match {
@@ -505,18 +516,12 @@ object PartitionIndexedDriftCorrectionBeadRois
 
   /** Refinement type for nonnegative integers */
   private type ShiftingCountConstraint = GreaterEqual[10]
-  opaque type ShiftingCount = Int :| ShiftingCountConstraint
+  opaque type ShiftingCount <: Int = Int :| ShiftingCountConstraint
 
   /** Helpers for working with nonnegative integers */
   object ShiftingCount:
     inline def apply(n: (Int :| ShiftingCountConstraint)): ShiftingCount = n
-    extension (n: ShiftingCount)
-      def asNonnegative: Int :| Not[Negative] = 
-        import io.github.iltotore.iron.autoRefine
-        n: (Int :| Not[Negative])
-      def asPositive: Int :| Positive = 
-        import io.github.iltotore.iron.autoRefine
-        n: (Int :| Positive)
+    
     def unsafe(z: Int): ShiftingCount = 
         z.refineEither[ShiftingCountConstraint].fold(
             msg => throw IllegalRefinement(z, s"Insufficient value ($z) for shifting count -- $msg"), 
@@ -550,8 +555,6 @@ object PartitionIndexedDriftCorrectionBeadRois
       extends RoisFileParseError
 
   object RoisSplit:
-    import ShiftingCount.asNonnegative
-
     type Failure = RoisFileParseError | TooFewShifting
     type RoiSplitOutcome = Either[Failure, HasPartition]
     type Result = TooFewShifting | HasPartition
@@ -562,12 +565,11 @@ object PartitionIndexedDriftCorrectionBeadRois
       def partition: Partition
 
     sealed trait Problematic:
-      def problems: NonEmptyList[Problem]
+      def problems: NonEmptyList[Problem[?]]
 
-    final case class Problem private (
-        numRequested: Int :| Positive,
-        numRealized: Int :| Not[Negative],
-        purpose: Purpose
+    sealed abstract class Problem[C](
+      val numRequested: Int :| C,
+      val numRealized: Int :| Not[Negative]
     ):
       /* Validation of reasonableness of arguments given that this is an alleged error / problem value being created */
       (Order[Int]
@@ -578,25 +580,28 @@ object PartitionIndexedDriftCorrectionBeadRois
       ).foreach(msg => throw new IllegalArgumentException(msg))
 
     object Problem:
-      import ShiftingCount.asPositive
-      given jsonMappableForProblem: JsonMappable[Problem] =
+      given jsonMappableForProblem: JsonMappable[Problem[?]] =
         JsonMappable.instance { problem =>
+          val purpose = problem match {
+            case _: Problem.Accuracy => "Accuracy"
+            case _: Problem.Shifting => "Shifting"
+          }
           Map(
             "requested" -> ujson.Num(problem.numRequested),
             "realized" -> ujson.Num(problem.numRealized),
-            "purpose" -> ujson.Str(problem.purpose.toString)
+            "purpose" -> ujson.Str(purpose)
           )
         }
-      def accuracy(
-          numRequested: Int :| Positive,
-          numRealized: Int :| Not[Negative]
-      ): Problem =
-        new Problem(numRequested, numRealized, Purpose.Accuracy)
-      def shifting(
-          numRequested: ShiftingCount,
-          numRealized: Int :| Not[Negative]
-      ): Problem =
-        new Problem(numRequested.asPositive, numRealized, Purpose.Shifting)
+      
+      final case class Accuracy(
+        override val numRequested: Int :| Positive,
+        override val numRealized: Int :| Not[Negative]
+      ) extends Problem[Positive](numRequested, numRealized)
+      
+      final case class Shifting(
+        override val numRequested: Int :| ShiftingCountConstraint,
+        override val numRealized: Int :| Not[Negative]
+      ) extends Problem[ShiftingCountConstraint](numRequested, numRealized)
     end Problem
 
     final case class TooFewShifting(
@@ -609,10 +614,10 @@ object PartitionIndexedDriftCorrectionBeadRois
         s"Alleged too few shifting ROIs, but $realizedShifting >= $requestedShifting"
       )
       def shiftingProblem =
-        Problem.shifting(requestedShifting, realizedShifting)
+        Problem.Shifting(requestedShifting, realizedShifting)
       def accuracyProblem =
-        Problem.accuracy(requestedAccuracy, NonnegativeInt(0))
-      override def problems: NonEmptyList[Problem] =
+        Problem.Accuracy(requestedAccuracy, NonnegativeInt(0))
+      override def problems: NonEmptyList[Problem[?]] =
         NonEmptyList.of(shiftingProblem, accuracyProblem)
       def realizedAccuracy = NonnegativeInt(0)
 
@@ -631,11 +636,16 @@ object PartitionIndexedDriftCorrectionBeadRois
         s"Accuracy ROIs count should be 0 when there are too few shifting ROIs; got ${partition.numAccuracy}"
       )
 
-      override def problems: NonEmptyList[Problem] =
-        import ShiftingCount.asNonnegative
+      override def problems: NonEmptyList[Problem[?]] =
         NonEmptyList.of(
-          Problem.shifting(requestedShifting, realizedShifting.asNonnegative),
-          Problem.accuracy(requestedAccuracy, realizedAccuracy)
+          Problem.Shifting(
+            requestedShifting, 
+            realizedShifting
+              .asInstanceOf[Int]
+              .refineEither[Not[Negative]]
+              .fold(msg => throw IllegalRefinement(realizedShifting, s"Failed to cast realized count as nonnegative: $msg"), identity)
+          ),
+          Problem.Accuracy(requestedAccuracy, realizedAccuracy)
         )
 
       def realizedShifting = partition.numShifting
@@ -652,9 +662,9 @@ object PartitionIndexedDriftCorrectionBeadRois
         partition.numAccuracy < requestedAccuracy,
         s"Alleged too few accuracy ROIs but ${partition.numAccuracy} >= $requestedAccuracy"
       )
-      override def problems: NonEmptyList[Problem] =
+      override def problems: NonEmptyList[Problem[?]] =
         NonEmptyList.one(
-          Problem.accuracy(requestedAccuracy, partition.numAccuracy)
+          Problem.Accuracy(requestedAccuracy, partition.numAccuracy)
         )
       def realizedShifting = partition.numShifting
       def realizedAccuracy = partition.numAccuracy
@@ -711,6 +721,15 @@ object PartitionIndexedDriftCorrectionBeadRois
             ), 
             reqAccuracy
           )
+          case (None, Right(numShifting)) => 
+            RoisSplit.TooFewShifting(
+              reqShifting, 
+              numShifting
+                .asInstanceOf[Int]
+                .refineEither[Not[Negative]]
+                .fold(msg => throw IllegalRefinement(numShifting, s"Failed to cast shifting count as nonnegative: $msg"), identity),
+              reqAccuracy
+            )
           case (Some(shiftNel), Right(numShifting)) =>
             val shiftingCounts =
               shiftNel.toList.groupBy(identity).view.mapValues(_.length).toMap

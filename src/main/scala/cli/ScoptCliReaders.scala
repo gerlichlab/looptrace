@@ -53,9 +53,7 @@ trait ScoptCliReaders:
       }
     )
 
-  given Read[Length]:
-    override def reads: String => Length = s =>
-      Length(s).fold(throw _, identity)
+  given Read[Length] = Read.reads(s => Length(s).fold(throw _, identity))
 
   given (lenRead: Read[Length]) => Read[Distance] = lenRead.map { l =>
     Distance

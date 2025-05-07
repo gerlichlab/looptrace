@@ -551,7 +551,6 @@ object ImagingRoundsConfiguration extends LazyLogging:
                     safeReadAs[DistanceLike](json)
                         .flatMap{
                             case d: EuclideanDistance => d.some.asRight
-                            case d => s"Parsed non-Euclidean distance ($d)".asLeft
                         }
                         .toValidatedNel
                 }

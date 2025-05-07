@@ -11,6 +11,7 @@ import scopt.Read
 
 import upickle.default.{Reader as JsonReader}
 import io.github.iltotore.iron.{:|, refineEither, refineUnsafe}
+import io.github.iltotore.iron.cats.given
 import io.github.iltotore.iron.constraint.any.{StrictEqual, Not}
 import io.github.iltotore.iron.constraint.char.*
 import io.github.iltotore.iron.constraint.collection.{Empty, ForAll}
@@ -199,9 +200,7 @@ package object looptrace {
 
   /** Helpers for working with identifiers of tracing groups/structures */
   object TraceGroupId:
-    given (Order[String]) => Order[TraceGroupId] =
-      import io.github.iltotore.iron.cats.given
-      Order.by(_.get)
+    given (Order[String]) => Order[TraceGroupId] = Order.by(_.get)
 
     given JsonValueWriter[TraceGroupId, ujson.Str]:
       override def apply(i: TraceGroupId): ujson.Str = ujson.Str(i.get)

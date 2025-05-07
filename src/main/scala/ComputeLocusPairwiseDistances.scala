@@ -13,7 +13,12 @@ import io.github.iltotore.iron.constraint.any.Not
 import io.github.iltotore.iron.constraint.numeric.Negative
 
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.EuclideanDistance
-import at.ac.oeaw.imba.gerlich.gerlib.imaging.{FieldOfViewLike, PositionName}
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.{
+    FieldOfViewLike, 
+    Pixels3D, 
+    PositionName, 
+    euclideanDistanceBetweenImagePoints,
+}
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.FieldOfViewColumnName
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{
@@ -53,7 +58,8 @@ object ComputeLocusPairwiseDistances
   /** CLI definition */
   final case class CliConfig(
       tracesFile: os.Path = null,
-      outputFolder: os.Path = null
+      outputFolder: os.Path = null, 
+      pixels: Pixels3D = null,
   )
   val cliParseBuilder = OParser.builder[CliConfig]
 
@@ -74,18 +80,23 @@ object ComputeLocusPairwiseDistances
       opt[os.Path]('O', "outputFolder")
         .required()
         .action((f, c) => c.copy(outputFolder = f))
-        .text("Path to output folder in which to write.")
+        .text("Path to output folder in which to write."), 
+      opt[Pixels3D]("pixels")
+        .required()
+        .action((ps, c) => c.copy(pixels = ps))
+        .text("How many nanometers per unit in each direction (x, y, z)"),
     )
     OParser.parse(parser, args, CliConfig()) match {
       case None =>
         throw new Exception(
           s"Illegal CLI use of '${ProgramName}' program. Check --help"
         ) // CLI parser gives error message.
-      case Some(opts) => workflow(opts.tracesFile, opts.outputFolder)
+      case Some(opts) => 
+        workflow(opts.tracesFile, opts.outputFolder)(using opts.pixels)
     }
   }
 
-  def workflow(inputFile: os.Path, outputFolder: os.Path): Unit = {
+  def workflow(inputFile: os.Path, outputFolder: os.Path)(using Pixels3D): Unit = {
     val expOutBaseName =
       s"${inputFile.last.split("\\.").head}.pairwise_distances__locus_specific"
     val outputFile = HeadedFileWriter
@@ -101,7 +112,7 @@ object ComputeLocusPairwiseDistances
     logger.info(s"Reading input file: ${inputFile}")
     val observedOutputFile = Input
       .parseRecords(inputFile)
-      .bimap(_.toNel, inputRecordsToOutputRecords) match {
+      .bimap(_.toNel, recs => inputRecordsToOutputRecords(recs)) match {
       case (Some(bads), _) => throw Input.BadRecordsException(bads)
       case (None, outputRecords) =>
         logger.info(s"Writing output file: $outputFile")
@@ -120,9 +131,12 @@ object ComputeLocusPairwiseDistances
 
   def inputRecordsToOutputRecords(
       inrecs: Iterable[(Input.GoodRecord, Int :| Not[Negative])]
-  ): List[OutputRecord] = {
+  )(using OurPixels: Pixels3D): List[OutputRecord] = {
     import at.ac.oeaw.imba.gerlich.gerlib.syntax.tuple2.*
     import OneBasedFourDigitPositionName.given
+
+    val computeDistance: (Input.GoodRecord, Input.GoodRecord) => EuclideanDistance = 
+        euclideanDistanceBetweenImagePoints(OurPixels)(_.point)
 
     inrecs
       .groupBy { (r, _) => Input.getGroupingKey(r) }
@@ -175,7 +189,7 @@ object ComputeLocusPairwiseDistances
               region2 = r2.region,
               locus1 = r1.locus,
               locus2 = r2.locus,
-              distance = EuclideanDistance.between(r1.point, r2.point),
+              distance = computeDistance(r1, r2),
               inputIndex1 = i1,
               inputIndex2 = i2
             )
