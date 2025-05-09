@@ -32,7 +32,8 @@ import at.ac.oeaw.imba.gerlich.gerlib.imaging.{
   ImagingChannel,
   ImagingTimepoint,
   Pixels3D,
-  PositionName
+  PositionName, 
+  euclideanDistanceBetweenImagePoints
 }
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.ColumnNames.SpotChannelColumnName
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.instances.all.given
@@ -67,16 +68,12 @@ import at.ac.oeaw.imba.gerlich.looptrace.syntax.all.*
 object FilterSpotsByBeads extends StrictLogging, ScoptCliReaders:
   val ProgramName = "FilterSpotsByBeads"
 
-  private val defaultThreshold: Double :| Not[Negative] = NonnegativeReal(
-    Double.MaxValue
-  )
-
   case class CliConfig(
       spotsFolder: os.Path = null, // required
       beadsFolder: os.Path = null, // required
       driftFile: os.Path = null, // required
       filteredOutputFile: os.Path = null, // required
-      distanceThreshold: Double :| Not[Negative] = defaultThreshold, // required
+      distanceThreshold: EuclideanDistance = null, // required
       spotlessTimepoint: ImagingTimepoint = null, // required
       pixels: Pixels3D = null, // required
       overwrite: Boolean = false
@@ -117,7 +114,9 @@ object FilterSpotsByBeads extends StrictLogging, ScoptCliReaders:
         .text(
           "Path to which to write the filtered spots (after discarding those proximal to a bead)"
         ),
-      opt[Double :| Not[Negative]]("distanceThreshold")
+      opt[EuclideanDistance]("distanceThreshold")(using
+        summonEuclideanDistanceReader
+      )
         .required()
         .action((dt, c) => c.copy(distanceThreshold = dt))
         .text(
@@ -140,11 +139,6 @@ object FilterSpotsByBeads extends StrictLogging, ScoptCliReaders:
         invalidateMainOutputState(c.overwrite, c.filteredOutputFile)
           .fold(success)(failure)
       ),
-      checkConfig(c =>
-        if c.distanceThreshold =!= defaultThreshold
-        then success
-        else failure("Distance threshold wasn't changed from its default value")
-      )
     )
 
     OParser.parse(parser, args, CliConfig()) match
@@ -356,26 +350,21 @@ object FilterSpotsByBeads extends StrictLogging, ScoptCliReaders:
   def findNeighbors[C: Numeric, Ref, Query](
       refs: Map[RoiIndex, Point3D[C]],
       pixels: Pixels3D,
-      threshold: Double :| Not[Negative]
+      threshold: EuclideanDistance
   )(using CenterFinder[Query, C]) =
     import scala.math.Numeric.Implicits.infixNumericOps
     import CenterFinder.syntax.*
     (query: Query) =>
       refs.foldLeft(Set.empty[RoiIndex]) { case (acc, (i, p)) =>
         val q = query.locateCenter.asPoint
-        val delX = pixels.liftX(q.x.value - p.x.value)
-        val delY = pixels.liftY(q.y.value - p.y.value)
-        val delZ = pixels.liftZ(q.z.value - p.z.value)
-        val d = sqrt(List(delX, delY, delZ).foldLeft(0.0) { (acc, del) =>
-          acc + pow(del.toNanometers, 2)
-        })
+        val d = euclideanDistanceBetweenImagePoints(pixels)(p, q)
         if d < threshold then acc + i else acc
       }
 
   def findNeighbors[C: Numeric, Ref, Query](
       refs: Map[RoiIndex, Ref],
       pixels: Pixels3D,
-      threshold: Double :| Not[Negative]
+      threshold: EuclideanDistance
   )(using
       CenterFinder[Ref, C],
       CenterFinder[Query, C]

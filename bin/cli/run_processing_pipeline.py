@@ -19,6 +19,7 @@ import pypiper
 import yaml
 
 from looptrace import *
+from looptrace.configuration import BEAD_SPOT_PROXIMITY_FILTRATION_KEY
 from looptrace.Drifter import coarse_correction_workflow, fine_correction_workflow as run_fine_drift_correction
 from looptrace.ImageHandler import BeadRoisFilenameSpecification, ImageHandler
 from looptrace.NucDetector import NucDetector
@@ -532,7 +533,7 @@ def discard_spots_close_to_beads(rounds_config: ExtantFile, params_config: Extan
         "--filteredOutputFile",
         str(H.raw_spots_file),
         "--distanceThreshold",
-        str(H.config["beadSpotProximityDistanceInNanometers"]),
+        H.config[BEAD_SPOT_PROXIMITY_FILTRATION_KEY],
         "--spotlessTimepoint",
         str(H.bead_timepoint_for_spot_filtration.get),
         "--pixels",
