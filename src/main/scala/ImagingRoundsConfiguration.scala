@@ -883,18 +883,9 @@ object ImagingRoundsConfiguration extends LazyLogging:
               case None =>
                 None.validNel[String]
               case Some(v) =>
-                UJsonHelpers
-                  .safeReadAs[String](v)
-                  .flatMap(s =>
-                    Length(s).toOption
-                      .toRight(s"Cannot parse value ($s) as length")
-                  )
-                  .flatMap(l =>
-                    Distance
-                      .option(l)
-                      .toRight(s"Cannot refine length ($l) as distance")
-                  )
-                  .map(d => EuclideanDistance(d).some)
+                import at.ac.oeaw.imba.gerlich.gerlib.json.instances.geometry.given
+                safeReadAs[DistanceLike](v)
+                  .map{ case d: EuclideanDistance => d.some }
                   .toValidatedNel
             }
           val maybeRequirementTypeNel =
