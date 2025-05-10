@@ -23,7 +23,7 @@ Judge in accordance with how many beads you anticipate having per image.
 * `num_bead_rois_for_drift_correction_accuracy` should be set to 100.
 * `coarse_drift_downsampling` should be set to 2; use 1 for no downsampling.
 * `detection_method` should be set to `dog`, and `spot_threshold` to 15. If using `intensity`, a much higher `spot_threshold` will be needed.
-* `pixelSeparationBeneathWhichSpotRoisWillMerge` should be set to a positive value if you want to do mergers of regional barcode spot ROIs which are close together. If you don't wish to do that merger, omit this configuration key. The value will be interpreted as being in pixel (and $z$ slice) units, and represents a Euclidean distance.
+* `distanceBeneathWhichSpotRoisWillMerge` should be set to a positive value if you want to do mergers of regional barcode spot ROIs which are close together. If you don't wish to do that merger, omit this configuration key. The value represents a Euclidean distance and must encode the value itself along with the units, e.g. `1500 nm`.
 * `parallelise_spot_detection` should be set to `False`.
 * `spot_downsample` should be a small integer, often just 2 or even 1 (no downsampling).
 * `spot_in_nuc` should be set to `True`, generally.
@@ -36,12 +36,13 @@ Judge in accordance with how many beads you anticipate having per image.
     * For `A_to_BG`, 2 is often a good setting.
     * For `sigma_xy_max`, 150 is often a good setting.
     * For `sigma_z_max`, 400 is often a good setting.
-    * For `max_dist`, 800 is often a good setting.
+    * For `max_dist`, 800 nm is often a good setting.
+* Note that `max_dist` must be a nonnegative value carrying units, e.g. `800 nm`.
 * If you want the Numpy arrays representing the spot images for tracing (the `*.npy` files) to be kept even after zipping, set `keep_spot_images_folder` to `True`.
 
 ### Filtration of FISH spots by proximity to beads
 * `proximityFiltrationBetweenBeadsAndSpots` must be set (for now) and should be either...
     * A Boolean, which for now must be `True`, implying that `subtract_background` must be used and correspond to an imaging timepoint / round. In the future this step will be skippable, and this key could be omitted or set to `False`.
     * A nonnegative integer corresponding to an imaging timepoint / round
-* `beadSpotProximityDistanceInNanometers` must be set to a physical units value of length in nanometers. 
+* `beadSpotProximityDistanceThreshold` must be set to a physical units value of length in nanometers, e.g. `200 nm`.
 This represents the minimum distance a FISH spot centroid must be from a bead centroid to not be discarded on suspicion of being actually a bead.

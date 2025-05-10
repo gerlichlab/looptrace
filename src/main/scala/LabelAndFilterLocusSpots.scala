@@ -15,6 +15,7 @@ import io.github.iltotore.iron.constraint.any.Not
 import io.github.iltotore.iron.constraint.numeric.{Negative, Positive}
 import io.github.iltotore.iron.cats.given // for derivation of Order
 
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.{Distance, EuclideanDistance}
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.{ImagingTimepoint, PositionName}
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
@@ -70,8 +71,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
         LocusSpotQC.PixelCountY(PositiveInt(1)), // unconditionally required
       roiSizeX: LocusSpotQC.PixelCountX =
         LocusSpotQC.PixelCountX(PositiveInt(1)), // unconditionally required
-      maxDistanceToRegionCenter: LocusSpotQC.DistanceToRegion =
-        LocusSpotQC.DistanceToRegion(NonnegativeReal(Double.MaxValue)),
+      maxDistanceToRegionCenter: EuclideanDistance = null, // unconditionally required
       minSignalToNoise: LocusSpotQC.SignalToNoise =
         LocusSpotQC.SignalToNoise(PositiveReal(1e-10)),
       maxSigmaXY: LocusSpotQC.SigmaXY =
@@ -245,11 +245,9 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
         .required()
         .action((x, c) => c.copy(roiSizeX = LocusSpotQC.PixelCountX(x)))
         .text("Number of pixels of each ROI, in X dimension"),
-      opt[Double :| Not[Negative]]("maxDistanceToRegionCenter")
+      opt[EuclideanDistance]("maxDistanceToRegionCenter")(using summonEuclideanDistanceReader)
         .required()
-        .action((d, c) =>
-          c.copy(maxDistanceToRegionCenter = LocusSpotQC.DistanceToRegion(d))
-        )
+        .action((d, c) => c.copy(maxDistanceToRegionCenter = d))
         .text(
           "Maximum allowed distance between a sigle FISH probe centroid and a regional centroid"
         ),
@@ -326,7 +324,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
       imagingRoundsConfiguration: ImagingRoundsConfiguration,
       parserConfigPathOrConf: os.Path | ParserConfig,
       tracesFile: os.Path,
-      maxDistFromRegion: LocusSpotQC.DistanceToRegion,
+      maxDistFromRegion: EuclideanDistance,
       minSignalToNoise: LocusSpotQC.SignalToNoise,
       maxSigmaXY: LocusSpotQC.SigmaXY,
       maxSigmaZ: LocusSpotQC.SigmaZ,
@@ -386,11 +384,7 @@ object LabelAndFilterLocusSpots extends ScoptCliReaders, StrictLogging:
           )(header)
           val maybeParseRefDist = buildFieldParse(
             pc.distanceToReferenceColumn,
-            safeParseDouble.andThen(
-              _.flatMap(NonnegativeReal.either).map(
-                LocusSpotQC.DistanceToRegion.apply
-              )
-            )
+            s => EuclideanDistance.parse(s)
           )(header)
           val maybeParseSignal = buildFieldParse(
             pc.signalColumn,

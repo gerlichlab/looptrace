@@ -400,7 +400,7 @@ class TestLabelAndFilterLocusSpots
         PixelCountY(PositiveInt(32)),
         PixelCountX(PositiveInt(32))
       ),
-      maxDistFromRegion: DistanceToRegion = DistanceToRegion(
+      maxDistFromRegion: EuclideanDistance = EuclideanDistance(
         NonnegativeReal(800)
       ),
       minSignalToNoise: SignalToNoise = SignalToNoise(PositiveReal(2)),

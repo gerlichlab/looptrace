@@ -10,11 +10,12 @@ import cats.data.Validated.{Invalid, Valid}
 import cats.syntax.all.*
 import io.github.iltotore.iron.:|
 import io.github.iltotore.iron.constraint.any.Not
-import io.github.iltotore.iron.constraint.numeric.{Negative, Positive}
+import io.github.iltotore.iron.constraint.numeric.Positive
 import io.github.iltotore.iron.cats.given
 import mouse.boolean.*
 import upickle.default.*
 
+import at.ac.oeaw.imba.gerlich.gerlib.geometry.EuclideanDistance
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.coordinate.given
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.{ImagingTimepoint, PositionName}
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
@@ -152,7 +153,7 @@ object LocusSpotQC:
       centerInImageUnits: Point3D,
       bounds: BoxUpperBounds,
       centerInPhysicalUnits: Point3D,
-      distanceToRegion: DistanceToRegion,
+      distanceToRegion: EuclideanDistance,
       signal: Signal,
       background: Background,
       sigmaXY: Double,
@@ -162,7 +163,7 @@ object LocusSpotQC:
     /** Whether this record's spot's centroid is within the given distance of
       * the center of the associated regional spot
       */
-    final def isCloseEnoughToRegion(maxDist: DistanceToRegion): Boolean =
+    final def isCloseEnoughToRegion(maxDist: EuclideanDistance): Boolean =
       distanceToRegion < maxDist
 
     /** Whether the 3D Gaussian fit to this spot is less diffuse than the given
@@ -210,7 +211,7 @@ object LocusSpotQC:
       *   of evaluating the overall QC state of the record
       */
     final def toQCResult(
-        maxDistanceToRegion: DistanceToRegion,
+        maxDistanceToRegion: EuclideanDistance,
         minSNR: SignalToNoise,
         maxSigmaXY: SigmaXY,
         maxSigmaZ: SigmaZ
@@ -336,19 +337,6 @@ object LocusSpotQC:
       (!(inBoundsX && inBoundsY && inBoundsZ)).option(FailureReason.OutOfBounds)
     ).flatten
   end ResultRecord
-
-  /** The (Euclidean) distance between a locus-specific spot's center and the
-    * center of its associated regional spot
-    */
-  final case class DistanceToRegion(get: Double :| Not[Negative]) extends AnyVal
-
-  /** Helpers for working with distances between centers of locus-specific and
-    * regional spots
-    */
-  object DistanceToRegion:
-    /** Sort distances by the underlying numerical value. */
-    given distToRegionOrd: Order[DistanceToRegion] = Order.by(_.get)
-  end DistanceToRegion
 
   /** A signal-to-noise ratio */
   final case class SignalToNoise(get: Double :| Positive) extends AnyVal

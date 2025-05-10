@@ -6,15 +6,17 @@ from pathlib import Path
 from typing import *
 import warnings
 
-from expression import result
+from expression import Option, option, result
 from gertils import ExtantFile
 
 from looptrace import ConfigurationValueError, Drifter, LOOPTRACE_JAR_PATH, ZARR_CONVERSIONS_KEY
 from looptrace.configuration import (
     IMAGING_ROUNDS_KEY, 
     KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS, 
+    MAX_DISTANCE_SPOT_FROM_REGION_NAME,
     TRACING_SUPPORT_EXCLUSIONS_KEY, 
     get_minimum_regional_spot_separation, 
+    get_raw_bead_spot_proximity_filtration_threshold,
     read_parameters_configuration_file,
 )
 from looptrace.Deconvolver import REQ_GPU_KEY
@@ -25,6 +27,8 @@ from looptrace.Tracer import MASK_FITS_ERROR_MESSAGE
 
 __author__ = "Vince Reuter"
 __credits__ = ["Vince Reuter"]
+
+_OLD_SPOT_SEPARATION_KEY_TO_AVOID_PROXIMITY_BASED_FILTRATION = "min_spot_dist"
 
 
 class ConfigFileCrash(Exception):
@@ -140,21 +144,31 @@ def find_config_file_errors(rounds_config: ExtantFile, params_config: ExtantFile
             errors.append(ConfigurationValueError(f"Illegal minimum spot separation value in imaging rounds configuration: {min_sep}"))
 
     # Spot merge
-    try:
-        min_pixels_to_avoid_spot_merge = parameters[KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS]
-    except KeyError:
-        errors.append(ConfigurationValueError(f"Missing key ('{KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS}') for minimal ROI separation to avoid merge"))
-    else:
-        if not isinstance(min_pixels_to_avoid_spot_merge, int):
-            errors.append(ConfigurationValueError(
-                f"Non-integer ({type(min_pixels_to_avoid_spot_merge).__name__}) value for min pixel count to avoid spot merge: {min_pixels_to_avoid_spot_merge}"
-            ))
-        elif min_pixels_to_avoid_spot_merge < 0:
-            errors.append(ConfigurationValueError(
-                f"Min pixel count to avoid spot merge must be nonnegative, not {min_pixels_to_avoid_spot_merge}"
-            ))
+    match _invalidate_length_encoding(
+        parameters, 
+        key=KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS, 
+        purpose_context="distance threshold to avoid ROI merger",
+    ):
+        case option.Option(tag="none", none=_):
+            # No error message generated, so all good
+            pass
+        case option.Option(tag="some", some=err_msg):
+            errors.append(ConfigurationValueError(err_msg))
+        case bad_type_value:
+            raise TypeError(
+                f"Unexpected result type ({type(bad_type_value).__name__}, not expression.Option) when checking value for key {KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS}"
+            )
 
-    # Spot filtration
+    # Spot-spot filtration
+    try:
+        parameters[_OLD_SPOT_SEPARATION_KEY_TO_AVOID_PROXIMITY_BASED_FILTRATION]
+    except KeyError:
+        # This is all good, the key name has changed and has moved to a different config file.
+        pass
+    else:
+        errors.append(ConfigurationValueError(f"Deprecated key is present; remove this: '{_OLD_SPOT_SEPARATION_KEY_TO_AVOID_PROXIMITY_BASED_FILTRATION}'"))
+
+    # Proximity-based filtration of spots by beads
     match determine_bead_timepoint_for_spot_filtration(
         params_config=parameters, 
         image_rounds=rounds_config[IMAGING_ROUNDS_KEY],
@@ -165,6 +179,18 @@ def find_config_file_errors(rounds_config: ExtantFile, params_config: ExtantFile
             errors.append(err)
         case outcome:
             raise Exception(f"Unexpected outcome from determination of beads timepoint for spot filtration: {outcome}")
+    
+    match get_raw_bead_spot_proximity_filtration_threshold(parameters):
+        case result.Result(tag="ok", ok=_):
+            # Defer actual validation of the value to where it's consumed.
+            pass
+        case result.Result(tag="error", error=e):
+            # TODO: should check that this is actually a ConfigurationValueError
+            errors.append(e)
+        case unknown:
+            raise TypeError(
+                f"Unexpected result type ({type(unknown).__name__},  not expression.Result) parsng bead-spot proximity threshold"
+            )
 
     # Tracing
     if parameters.get("mask_fits", False):
@@ -180,7 +206,36 @@ def find_config_file_errors(rounds_config: ExtantFile, params_config: ExtantFile
         elif len(probe_trace_exclusions) == 0:
             errors.append(f"List of probes to exclude from tracing support ('{TRACING_SUPPORT_EXCLUSIONS_KEY}') is empty!")
 
+    # Post-tracing
+    match _invalidate_length_encoding(
+        parameters, 
+        key=MAX_DISTANCE_SPOT_FROM_REGION_NAME, 
+        purpose_context="maximum distance between a locus spot and regional spot center",
+    ):
+        case option.Option(tag="none", none=_):
+            # No error message generated, so all good
+            pass
+        case option.Option(tag="some", some=err_msg):
+            errors.append(ConfigurationValueError(err_msg))
+        case bad_type_value:
+            raise TypeError(
+                f"Unexpected result type ({type(bad_type_value).__name__}, not expression.Option) when checking value for key {MAX_DISTANCE_SPOT_FROM_REGION_NAME}"
+            )
+
     return errors
+
+
+def _invalidate_length_encoding(data: Mapping[str, object], *, key: str, purpose_context: str) -> Option[str]:
+    match data.get(key):
+        case None:
+            return Option.Some(f"Missing key ('{key}') for {purpose_context}")
+        case str():
+            # This is the correct case (module validation of the actual value to be done later).
+            return Option.Nothing()
+        case bad_type_value:
+            return Option.Some(
+                f"Value for for key '{key}' has wrong type ({type(bad_type_value).__name__}, not str)"
+            )
 
 
 def workflow(rounds_config: ExtantFile, params_config: ExtantFile) -> None:

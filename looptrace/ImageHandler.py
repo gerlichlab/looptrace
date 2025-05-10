@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import *
 
 import dask.array as da
-from expression import Option, Result, option, result
+from expression import Option, option, result
 import numpy as np
 from numpydoc_decorator import doc
 import pandas as pd
@@ -33,7 +33,15 @@ from looptrace import (
     ConfigurationValueError, 
     RoiImageSize,
 )
-from looptrace.configuration import IMAGING_ROUNDS_KEY, TRACING_SUPPORT_EXCLUSIONS_KEY, get_minimum_regional_spot_separation
+from looptrace.configuration import (
+    BACKGROUND_SUBTRACTION_TIMEPOINT_KEY,
+    IMAGING_ROUNDS_KEY, 
+    TRACING_SUPPORT_EXCLUSIONS_KEY, 
+    ImageRound, 
+    determine_bead_timepoint_for_spot_filtration, 
+    get_minimum_regional_spot_separation, 
+    
+)
 from looptrace.filepaths import SPOT_IMAGES_SUBFOLDER, FilePathLike, FolderPathLike, get_analysis_path, simplify_path
 from looptrace.geometry import Point3D
 from looptrace.image_io import ignore_path, NPZ_wrapper
@@ -51,55 +59,6 @@ logger = logging.getLogger()
 Times: TypeAlias = set[TimepointFrom0]
 LocusGroupingData: TypeAlias = dict[TimepointFrom0, Times]
 PathFilter: TypeAlias = Callable[[Union[os.DirEntry, Path]], bool]
-ImageRound: TypeAlias = Mapping[str, object]
-
-_BACKGROUND_SUBTRACTION_TIMEPOINT_KEY = "subtract_background"
-
-
-def _get_bead_timepoint_for_spot_filtration(params_config: Mapping[str, object]) -> Result[Option[int], str]:
-    bead_spot_filtration_key: Literal["proximityFiltrationBetweenBeadsAndSpots"] = "proximityFiltrationBetweenBeadsAndSpots"
-    match params_config.get(bead_spot_filtration_key):
-        case None:
-            return Result.Error(f"Configuration is missing key for bead-to-spot proximity-based filtration: {bead_spot_filtration_key}")
-        case False:
-            return Result.Error(f"Bead-to-spot proximity-based filtration key ({bead_spot_filtration_key}) is set to False")
-        case True:
-            return Option\
-                .of_optional(params_config.get(_BACKGROUND_SUBTRACTION_TIMEPOINT_KEY))\
-                .to_result(
-                    f"Bead spot filtration key ({bead_spot_filtration_key}) is True, but backgrond subtraction timepoint key ({_BACKGROUND_SUBTRACTION_TIMEPOINT_KEY}) is absent"
-                )\
-                .map(Option.Some)
-        case int(t):
-            return Result.Ok(Option.Some(t))
-        case obj:
-            return Result.Error(
-                f"Bead-to-spot proximity-based filtration key ({bead_spot_filtration_key}) has value of illegal type: {type(obj).__name__}"
-            )
-
-
-def _invalidate_beads_timepoint_for_spot_filtration(
-    *, 
-    beads_timepoint: int, 
-    rounds: Iterable[ImageRound],
-) -> Result[int, str]:
-    for r in rounds:
-        if r["time"] == beads_timepoint:
-            if r.get("isBlank", False):
-                return Result.Ok(beads_timepoint)
-            return Result.Error(f"The imaging round for beads timepoint {beads_timepoint} isn't tagged as being blank")
-    return Result.Error(f"No imaging round corresponds to the given beads timepoint ({beads_timepoint})")
-
-
-def determine_bead_timepoint_for_spot_filtration(
-    *, 
-    params_config: Mapping[str, object], 
-    image_rounds: Iterable[ImageRound],
-) -> Result[int, ConfigurationValueError]:
-    return _get_bead_timepoint_for_spot_filtration(params_config)\
-        .bind(lambda maybe_time: maybe_time.to_result("Could not get timepoint for filtration of spots by bead proximity"))\
-        .bind(lambda t: _invalidate_beads_timepoint_for_spot_filtration(beads_timepoint=t, rounds=image_rounds))\
-        .map_error(lambda msg: ConfigurationValueError(msg))
 
 
 @doc(
@@ -240,7 +199,7 @@ class ImageHandler:
 
     @property
     def background_subtraction_timepoint(self) -> Optional[int]:
-        return self.config.get(_BACKGROUND_SUBTRACTION_TIMEPOINT_KEY)
+        return self.config.get(BACKGROUND_SUBTRACTION_TIMEPOINT_KEY)
     
     @property
     def bead_rois_path(self) -> Path:

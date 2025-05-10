@@ -10,7 +10,7 @@ from looptrace.configuration import SEMANTIC_KEY
 
 _T = TypeVar('_T')
 
-MIN_SEP_KEY = "minimumPixelLikeSeparation"
+MIN_SEP_KEY = "minimumSeparation"
 GROUPS_KEY = "groups"
 
 

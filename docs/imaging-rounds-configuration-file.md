@@ -60,8 +60,8 @@ __Guidance__
 * Other key-value pairs are _conditionally_ required or prohibited, depending on the value given for `semantic`.
 * The value for the semantic must be one of the following:
     * `"UniversalProximityPermission"`: This says that _no_ proximity-based filtration of regional spots should be done, essentially making the proximity filtration step of the pipeline a _no-op_. This behavior corresponds to what, in previous versions of the software, would have been achieved by setting the minimum spot sepearation distance (`min_spot_dist`) to 0. Because of the meaning of this value, _nothing additional_ is permitted in the section.
-    * "UniversalProximityProhibition": This says that _any_ spots which are closer than some threshold should mutually cancel one another. This _requires minimum separation distance_, to be provided as a positive number for the `minimumPixelLikeSeparation` key.
-    * `"SelectiveProximityPermission"`: This says that spots from imaging timepoints which are grouped together may violate the minimum separation threshold. Put differently, the _grouping grants permission_; that is, spots from timepoints which are grouped together are given permission to violate the minimum separation threshold. As such, this requires `groups` in addition to `minimumPixelLikeSeparation`. The value for `groups` must be a _list of lists_, with each element being the integer corresponding to a _regional_ barcode imaging round, in the [imaging rounds section](#imaging-rounds). This strategy is useful, for example, if you're imaging at different timepoints DNA regions that you expect to be in very close proximity (e.g., to to being very close in genomic distance).
+    * "UniversalProximityProhibition": This says that _any_ spots which are closer than some threshold should mutually cancel one another. This _requires minimum separation distance_, to be provided via the `minimumSeparation` key.
+    * `"SelectiveProximityPermission"`: This says that spots from imaging timepoints which are grouped together may violate the minimum separation threshold. Put differently, the _grouping grants permission_; that is, spots from timepoints which are grouped together are given permission to violate the minimum separation threshold. As such, this requires `groups` in addition to `minimumSeparation`. The value for `groups` must be a _list of lists_, with each element being the integer corresponding to a _regional_ barcode imaging round, in the [imaging rounds section](#imaging-rounds). This strategy is useful, for example, if you're imaging at different timepoints DNA regions that you expect to be in very close proximity (e.g., to to being very close in genomic distance).
     * `"SelectiveProximityProhibition"`: This is as for the `"SelectiveProximityPermission"`, but says instead that spots from timepoints which are grouped together are the ones which should mutually exclude each others' spots if they're too close. This strategy is useful, for example, when you're multiplexing and need the regional barcodes to disambiguate loci being targeted with the same locus-specific barcode (i.e., when 2 separate barcodes function jointly as a uniue identifier of a locus).
 * If you're using a strategy for which `groups` is specified, the value for `groups` must satisfy these properties:
     * _No repeats_: Each group must have no repeat value.
@@ -79,10 +79,10 @@ If present, this section _must specify several things_:
     * Whether a spot without a full complement of group members nearby should kept be discarded (`requirementType`)
     * Whether ungrouped spots should be kept or discarded (`discardRoisNotInGroupsOfInterest`)
 
-The `groups` key maps to a list-of-lists, each list representing a group of imaging timepoints.
-    * Each sublist must contain at least two values.
+The `groups` key maps to a JSON object/mapping, each key being a group name and each value being a list of imaging timepoints.
+    * Each list must contain at least two values.
     * Each value must correspond to a _regional_ timepoint declared in the [imaging rounds section](#imaging-rounds).
-    * No value may be repeated, neither within a sublist nor between sublists.
+    * No value may be repeated, neither within a list nor between lists.
 
 The `distanceThreshold` should be a positive value representing a threshold on Euclidean distance. 
 As of v0.11.0, the units are nanometers, but future versions will aim to allow specification of units. 

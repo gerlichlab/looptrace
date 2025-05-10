@@ -19,7 +19,7 @@ import pypiper
 import yaml
 
 from looptrace import *
-from looptrace.configuration import BEAD_SPOT_PROXIMITY_FILTRATION_KEY
+from looptrace.configuration import MAX_DISTANCE_SPOT_FROM_REGION_NAME, get_raw_bead_spot_proximity_filtration_threshold
 from looptrace.Drifter import coarse_correction_workflow, fine_correction_workflow as run_fine_drift_correction
 from looptrace.ImageHandler import BeadRoisFilenameSpecification, ImageHandler
 from looptrace.NucDetector import NucDetector
@@ -187,7 +187,7 @@ def qc_locus_spots_and_prep_points(rounds_config: ExtantFile, params_config: Ext
         "--roiPixelsX",
         str(H.roi_image_size.x),
         "--maxDistanceToRegionCenter", 
-        str(H.config[MAX_DISTANCE_SPOT_FROM_REGION_NAME]),
+        H.config[MAX_DISTANCE_SPOT_FROM_REGION_NAME],
         "--minSNR",
         str(H.config[SIGNAL_NOISE_RATIO_NAME]),
         "--maxSigmaXY",
@@ -427,7 +427,7 @@ def run_spot_merge_determination(rounds_config: ExtantFile, params_config: Extan
         "-I",
         str(H.raw_spots_file),
         "-D", 
-        str(H.config[KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS]),
+        H.config[KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS],
         "-O",
         str(H.pre_merge_spots_file),
         "--overwrite",
@@ -533,7 +533,7 @@ def discard_spots_close_to_beads(rounds_config: ExtantFile, params_config: Extan
         "--filteredOutputFile",
         str(H.raw_spots_file),
         "--distanceThreshold",
-        H.config[BEAD_SPOT_PROXIMITY_FILTRATION_KEY],
+        unsafe_extract_result(get_raw_bead_spot_proximity_filtration_threshold(H.config)),
         "--spotlessTimepoint",
         str(H.bead_timepoint_for_spot_filtration.get),
         "--pixels",
@@ -548,6 +548,9 @@ def validate_roi_mergers(rounds_config: ExtantFile, params_config: ExtantFile) -
     H = ImageHandler(rounds_config=rounds_config, params_config=params_config)
 
     same_timepoint_threshold = H.config[KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS]
+    if same_timepoint_threshold.startswith("0 "):
+        logging.info("ROI separation threshold for same-timepoint merge is 0, so no validation to do")
+        return
 
     prog_path = f"{LOOPTRACE_JAVA_PACKAGE}.ValidateMergeDetermination"
     cmd_base_parts: list[str] = [
@@ -556,21 +559,18 @@ def validate_roi_mergers(rounds_config: ExtantFile, params_config: ExtantFile) -
         str(LOOPTRACE_JAR_PATH), 
         prog_path,
         "--sameTimepointDistanceThreshold", 
-        str(same_timepoint_threshold),
+        same_timepoint_threshold,
     ]
 
-    if same_timepoint_threshold == 0:
-        logging.info("ROI separation threshold for same-timepoint merge is 0, so no validation to do")
-    else:
-        logging.info(f"Same-timepoint mergers will be validated according to threshold: {same_timepoint_threshold}")
-        cmd_parts = cmd_base_parts + [
-            "--inputFile", 
-            str(H.proximity_rejected_spots_file_path),
-            "--mergeType", 
-            "same",
-        ]
-        logging.info(f"Validating same-timepoint ROI mergers: {' '.join(cmd_parts)}")
-        subprocess.check_call(cmd_parts)
+    logging.info(f"Same-timepoint mergers will be validated according to threshold: {same_timepoint_threshold}")
+    cmd_parts = cmd_base_parts + [
+        "--inputFile", 
+        str(H.proximity_rejected_spots_file_path),
+        "--mergeType", 
+        "same",
+    ]
+    logging.info(f"Validating same-timepoint ROI mergers: {' '.join(cmd_parts)}")
+    subprocess.check_call(cmd_parts)
 
 
 class LooptracePipeline(pypiper.Pipeline):
