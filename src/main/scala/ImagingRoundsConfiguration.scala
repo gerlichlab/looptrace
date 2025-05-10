@@ -549,9 +549,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
                   case Some(json) => 
                     import at.ac.oeaw.imba.gerlich.gerlib.json.instances.geometry.given
                     safeReadAs[DistanceLike](json)
-                        .flatMap{
-                            case d: EuclideanDistance => d.some.asRight
-                        }
+                        .map{ case d: EuclideanDistance => d.some }
                         .toValidatedNel
                 }
               val groupsNel: ValidatedNel[String, Option[
@@ -585,7 +583,7 @@ object ImagingRoundsConfiguration extends LazyLogging:
                     case (Left(message), _) =>
                       s"Illegal type of value for regional grouping semantic! Message: $message".invalidNel
                     case (_, fail @ Invalid(_)) => fail
-                    /* Then, the good cases */
+                    /* Then, the better cases */
                     case (
                           Right("UniversalProximityPermission"),
                           Valid((None, None))
