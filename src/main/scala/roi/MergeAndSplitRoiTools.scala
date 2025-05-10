@@ -25,7 +25,11 @@ import at.ac.oeaw.imba.gerlich.gerlib.geometry.{
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.syntax.*
 import at.ac.oeaw.imba.gerlich.gerlib.graph.{SimplestGraph, buildSimpleGraph}
-import at.ac.oeaw.imba.gerlich.gerlib.imaging.ImagingContext
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.{
+  ImagingContext, 
+  Pixels3D, 
+  euclideanDistanceBetweenImagePoints,
+}
 import at.ac.oeaw.imba.gerlich.gerlib.imaging.instances.all.given
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.NonnegativeInt
 import at.ac.oeaw.imba.gerlich.gerlib.numeric.instances.all.given
@@ -77,7 +81,7 @@ object MergeAndSplitRoiTools extends LazyLogging:
     }
   end PostMergeRoi
 
-  def assessForMerge(minDist: EuclideanDistance)(
+  def assessForMerge(pixels: Pixels3D, minDist: EuclideanDistance)(
       rois: List[IndexedDetectedSpot]
   ): EitherNel[String, List[MergerAssessedRoi]] =
     val lookup: Map[RoiIndex, Set[RoiIndex]] =
@@ -88,7 +92,7 @@ object MergeAndSplitRoiTools extends LazyLogging:
         .values
         .flatMap(_.combinations(2).flatMap {
           case r1 :: r2 :: Nil =>
-            areProximal(minDist)(r1, r2).option {
+            areProximal(pixels, minDist)(r1, r2).option {
               Map(r1.index -> Set(r2.index), r2.index -> Set(r1.index))
             }
           case notPair =>
@@ -110,6 +114,7 @@ object MergeAndSplitRoiTools extends LazyLogging:
       getGroupKey: A => G,
       useEligiblePair: (A, A) => EitherNel[String, Boolean],
       getPoint: A => Point3D,
+      pixels: Pixels3D, 
       minDist: EuclideanDistance,
       getItemKey: A => K
   ): (List[((K, K), NonEmptyList[String])], Map[K, NonEmptySet[K]]) =
@@ -132,7 +137,7 @@ object MergeAndSplitRoiTools extends LazyLogging:
                     es =>
                       ((getItemKey(a1) -> getItemKey(a2)) -> es).asLeft.some,
                     continue =>
-                      (continue && areProximal(minDist)(a1, a2)).option {
+                      (continue && areProximal(pixels, minDist)(a1, a2)).option {
                         (getItemKey(a1) -> getItemKey(a2)).asRight
                       }
                   )
@@ -158,7 +163,8 @@ object MergeAndSplitRoiTools extends LazyLogging:
     * identifiability.
     */
   def assessForMutualExclusion(
-      proximityFilterStrategy: NontrivialProximityFilter
+    pixels: Pixels3D,
+    proximityFilterStrategy: NontrivialProximityFilter
   )(rois: List[PostMergeRoi])(using
       Eq[FieldOfViewLike],
       AdmitsRoiIndex[PostMergeRoi]
@@ -215,6 +221,7 @@ object MergeAndSplitRoiTools extends LazyLogging:
       getGroupKey,
       usePair,
       getCenterAndBox.map(_._1.asPoint),
+      pixels,
       proximityFilterStrategy.minSpotSeparation,
       getItemKey
     )
@@ -474,10 +481,18 @@ object MergeAndSplitRoiTools extends LazyLogging:
   private[looptrace] object AdmitsLocation:
     def instance[A](f: A => Point3D): AdmitsLocation[A] = new:
       override def getLocation = f
+    
+    object syntax:
+      extension [A](a: A)(using ev: AdmitsLocation[A])
+        def getLocation: Point3D = ev.getLocation(a)
+  end AdmitsLocation
 
   private def areProximal[A: AdmitsLocation](
-      d: EuclideanDistance
-  )(a1: A, a2: A): Boolean = ???
+    pixels: Pixels3D,
+    threshold: EuclideanDistance
+  )(a1: A, a2: A): Boolean = 
+    import AdmitsLocation.syntax.*
+    euclideanDistanceBetweenImagePoints(pixels)((_: A).getLocation)(a1, a2) < threshold
 
   final case class IndexedDetectedSpot(
       index: RoiIndex,

@@ -12,7 +12,7 @@ import io.github.iltotore.iron.:|
 import io.github.iltotore.iron.constraint.any.Not
 import io.github.iltotore.iron.constraint.numeric.Negative
 import at.ac.oeaw.imba.gerlich.gerlib.geometry.EuclideanDistance
-import at.ac.oeaw.imba.gerlich.gerlib.imaging.{ImagingChannel, ImagingContext}
+import at.ac.oeaw.imba.gerlich.gerlib.imaging.{ImagingChannel, ImagingContext, Pixels3D}
 import at.ac.oeaw.imba.gerlich.gerlib.io.csv.{
   getCsvRowDecoderForTuple2,
   readCsvToCaseClasses,
@@ -42,6 +42,7 @@ object DetermineRoiMerge extends ScoptCliReaders, StrictLogging:
   final case class CliConfig(
       inputFile: os.Path = null, // unconditionally required
       outputFile: os.Path = null, // unconditionally required
+      pixels: Pixels3D = null, // unconditionally required
       distanceThreshold: EuclideanDistance = null, // unconditionally required,
       overwrite: Boolean = false
   )
@@ -73,6 +74,10 @@ object DetermineRoiMerge extends ScoptCliReaders, StrictLogging:
             )
         }
         .text("Path to the output file to write"),
+      opt[Pixels3D]("pixels")
+        .required()
+        .action((ps, c) => c.copy(pixels = ps))
+        .text("How many nanometers per unit in each direction (x, y, z)"),
       opt[EuclideanDistance]('D', "distanceThreshold")(using summonEuclideanDistanceReader)
         .required()
         .action((d, c) => c.copy(distanceThreshold = d))
@@ -128,7 +133,7 @@ object DetermineRoiMerge extends ScoptCliReaders, StrictLogging:
               .drain
           }
         val prog: IO[Unit] = read(opts.inputFile)
-          .map(assessForMerge(opts.distanceThreshold))
+          .map(assessForMerge(opts.pixels, opts.distanceThreshold))
           .flatMap(
             _.fold(
               errors =>

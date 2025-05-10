@@ -426,6 +426,8 @@ def run_spot_merge_determination(rounds_config: ExtantFile, params_config: Extan
         prog_path, 
         "-I",
         str(H.raw_spots_file),
+        "--pixels",
+        build_pixels_config(H),
         "-D", 
         H.config[KEY_FOR_SEPARATION_NEEDED_TO_NOT_MERGE_ROIS],
         "-O",
